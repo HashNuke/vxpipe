@@ -134,6 +134,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
           }
 
           state = %{state | sts_turns: Map.put(state.sts_turns, turn_key, turn)}
+          state = Vxpipe.CallEngine.RoomAuthority.FirstMessage.sts_started(state, turn_key)
 
           event = struct!(AgentSpeechStarted, agent_fields(state, connection, turn))
 
@@ -217,6 +218,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         {:ok, %{source_sequence: ^sequence} = turn} ->
           outcome = if turn.overlapped?, do: :overlapped, else: :completed
           state = publish_terminal(state, turn, AgentTurnCompleted, %{outcome: outcome})
+
+          state =
+            Vxpipe.CallEngine.RoomAuthority.FirstMessage.sts_completed(
+              state,
+              turn_key(provider_turn)
+            )
+
           retire_output(state, provider_turn, sequence)
 
         _unknown_or_stale ->

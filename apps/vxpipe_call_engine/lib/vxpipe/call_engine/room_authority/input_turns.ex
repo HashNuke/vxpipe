@@ -23,10 +23,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     CallerIdle,
     ConnectionLifecycle,
     EventPublisher,
+    FirstMessage,
     SpokenHistory,
     State,
     STTAudioAdmission,
-    TextCapability,
     TurnState
   }
 
@@ -53,8 +53,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
 
     case AgentOutput.interrupt(command, state) do
       {:ok, state} ->
-        case TextCapability.respond(capability, command) do
-          :ok ->
+        case FirstMessage.respond(capability, command, state) do
+          {:ok, state} ->
             state = state |> TurnState.put(command) |> emit_participant_text_turn(command)
             {:reply, :ok, state}
 
@@ -306,8 +306,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
              state.speech_to_speech_capability == nil ->
         case AgentOutput.interrupt(command, state) do
           {:ok, state} ->
-            case TextCapability.respond(state.text_capability, command) do
-              :ok ->
+            case FirstMessage.respond(state.text_capability, command, state) do
+              {:ok, state} ->
                 source_policy =
                   transcript_source_policy(state, command.participant_id, turn.policy_revision)
 

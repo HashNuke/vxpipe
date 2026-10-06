@@ -65,7 +65,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerIdle do
     state.startup_ready? and
       MapSet.size(state.held_participant_ids) == 0 and
       OpeningAudio.admission(state.opening_audio) == :open and
-      state.first_message.status != :pending and
+      state.first_message.status == :completed and
       map_size(state.agent_turns) == 0 and
       map_size(state.background_tool_calls) == 0 and
       TextCapability.ready?(state) and

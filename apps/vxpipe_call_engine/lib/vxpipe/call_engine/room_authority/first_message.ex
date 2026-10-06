@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.FirstMessage do
 
   @derive {Inspect, only: [:mode, :status, :target_participant_id]}
   @enforce_keys [:mode, :status, :target_participant_id, :text]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [turn_key: nil, pending_commands: []]
 
   @type t :: %__MODULE__{
           mode: :wait_for_input | :fixed | :generated,
@@ -108,7 +108,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.FirstMessage do
          {:ok, command} <- greeting_command(connection_id, connection, state),
          :ok <- begin_greeting(command, state) do
       state = TurnState.put(state, command)
-      first_message = %{state.first_message | status: :started}
+      first_message = %{state.first_message | status: :started, turn_key: TurnState.key(command)}
       {:ok, %{state | first_message: first_message}}
     else
       :opening_audio -> {:ok, state}
@@ -155,6 +155,83 @@ defmodule Vxpipe.CallEngine.RoomAuthority.FirstMessage do
 
       :generated ->
         TextCapability.generated_greeting(state.text_capability, command)
+    end
+  end
+
+  def playing?(%{first_message: %__MODULE__{status: status}}), do: status in [:pending, :started]
+
+  def respond(capability, command, state) do
+    if playing?(state) do
+      first = state.first_message
+
+      if length(first.pending_commands) < 16,
+        do:
+          {:ok,
+           %{
+             state
+             | first_message: %{first | pending_commands: first.pending_commands ++ [command]}
+           }},
+        else: {:error, :queue_full}
+    else
+      case TextCapability.respond(capability, command) do
+        :ok -> {:ok, state}
+        error -> error
+      end
+    end
+  end
+
+  def sts_started(%{first_message: %{status: :started, turn_key: nil} = first} = state, turn) do
+    %{state | first_message: %{first | turn_key: {:sts, turn}}}
+  end
+
+  def sts_started(state, _turn), do: state
+
+  def sts_completed(
+        %{first_message: %{status: :started, turn_key: {:sts, turn}} = first} = state,
+        turn
+      ) do
+    %{state | first_message: %{first | status: :completed, turn_key: nil}}
+  end
+
+  def sts_completed(state, _turn), do: state
+
+  def complete(state, command) do
+    first = state.first_message
+
+    if first.status == :started and first.turn_key == TurnState.key(command) do
+      pending = first.pending_commands
+
+      state = %{
+        state
+        | first_message: %{first | status: :completed, pending_commands: [], turn_key: nil}
+      }
+
+      Enum.reduce(pending, state, fn queued, current ->
+        connection = Map.get(current.connections, queued.connection_id)
+
+        if connection != nil and connection.participant_id == queued.participant_id and
+             not MapSet.member?(current.held_participant_ids, queued.participant_id) and
+             TurnState.active?(current, queued) do
+          command = %{queued | deadline: DateTime.add(DateTime.utc_now(), 5, :second)}
+
+          case TextCapability.respond(current.text_capability, command) do
+            :ok ->
+              current
+
+            {:error, reason} ->
+              send(
+                self(),
+                {:vxpipe_capability_failed, current.text_capability.pid, command, reason}
+              )
+
+              current
+          end
+        else
+          current
+        end
+      end)
+    else
+      state
     end
   end
 

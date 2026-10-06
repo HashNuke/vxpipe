@@ -30,6 +30,36 @@ defmodule Vxpipe.Console.ConfiguredTelephonyTransferFixtureTest do
     refute_received {:published_transfer_source, _, _}
   end
 
+  test "the GPT-Live pair dials with a speech-to-speech handler and a carrier receiver" do
+    fixture = %ConfiguredTelephonyFixture{
+      settings: %{numbers: %{"twilio" => "+15550001001", "telnyx" => "+15550001002"}}
+    }
+
+    sources = ConfiguredTelephonyFixture.sts_sources(fixture, "twilio", "telnyx")
+
+    for {name, source} <- sources do
+      assert {:ok, _spec} = CallSpec.new(source, resource_id: "live-sts-#{name}", revision: 1)
+    end
+
+    assistant = sources.outgoing.participants["assistant"]
+
+    assert assistant.capabilities.speech_to_speech == %{
+             provider: "openai",
+             model: "gpt-live-1",
+             credential_name: "live-telephony",
+             options: %{backend_model: "gpt-6-luna"}
+           }
+
+    refute Map.has_key?(assistant.capabilities, :model_inference)
+    refute Map.has_key?(assistant.capabilities, :text_to_speech)
+    assert assistant.first_message == %{mode: "fixed", text: "Alpha."}
+    assert assistant.prompt =~ "Charlie"
+    assert sources.outgoing.outgoing_call.callee == "human"
+    refute Map.has_key?(sources.outgoing.participants["human"].connection, :number)
+    assert sources.incoming.incoming_call.caller == "human"
+    assert sources.incoming.participants["assistant"].first_message.text == "Bravo."
+  end
+
   test "the three-party carrier fixture validates portable receive and private-transfer contracts" do
     fixture = %ConfiguredTelephonyFixture{
       settings: %{numbers: %{"twilio" => "+15550001001", "telnyx" => "+15550001002"}}

@@ -1114,7 +1114,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       }
     })
 
-    assert collect_output(context.sink, []) == pcm
+    assert collect_output(context.sink, []) == :binary.copy(<<1, 0>>, 960)
     assert :ok = TestAudioOutputSink.playback_progress(context.sink, 20, 20)
     assert :ok = TestAudioOutputSink.playback_completed(context.sink)
     assert_receive {:vxpipe_event, %TextOutput{participant_id: ^agent, text: "REPLY"}}, 1_000
@@ -1395,6 +1395,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
   defp collect_output(sink, frames) do
     receive do
       {:test_audio_output, ^sink, frame} ->
+        assert frame.sample_rate == 48_000
         collect_output(sink, [frame.payload | frames])
 
       {:test_audio_output_finish, ^sink, _turn} ->
@@ -1405,7 +1406,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
   end
 
   defp settle_and_assert_reply(context, output) do
-    assert {:ok, decoder} = Decoder.new(context.config)
+    assert {:ok, decoder} = Decoder.new(%{context.config | sample_rate: 48_000})
     assert {:ok, _decoder, events} = Decoder.push(decoder, output)
     assert {:final, "RECEIVED HI"} in events
     assert_receive {:vxpipe_event, %AgentSpeechStarted{} = started}, 1_000
@@ -1413,7 +1414,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     assert String.starts_with?(started.command_id, "cmd_")
     assert started.connection_id == context.command.connection_id
     refute_received {:vxpipe_event, %TextOutput{}}
-    played = div(byte_size(output) * 1_000, 16_000 * 2)
+    played = div(byte_size(output) * 1_000, 48_000 * 2)
     assert :ok = TestAudioOutputSink.playback_progress(context.sink, played, played)
     assert :ok = TestAudioOutputSink.playback_completed(context.sink)
     agent = context.agent

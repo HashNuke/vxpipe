@@ -4,21 +4,25 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.Gateway.Media.{RoomAudioIngress, STSInput}
+  alias Vxpipe.CallEngine.Media.PCMResampler
   alias Vxpipe.Gateway.WebRTC.OpusDecoder
   alias Vxpipe.Providers.Twilio.PCMU.Codec
 
+  # Opus decodes natively at these rates; other PCM rates decode at 48 kHz and resample.
+  @opus_rates [8_000, 12_000, 16_000, 24_000, 48_000]
+
+  # Speech consumers (STT, speech-to-speech) each request their own mono PCM rate.
+  # Carrier audio converts to any positive rate rather than refusing one.
   def speech_track(%{codec: source, sample_rate: source_rate, channels: 1} = track, target)
       when is_map(target) do
     case {source, source_rate, target} do
-      {:opus, 16_000, %{codec: :linear16, sample_rate: 16_000, channels: 1}} ->
-        {:ok, %{track | codec: :linear16}}
-
-      {:pcmu, 8_000, %{codec: :linear16, sample_rate: rate, channels: 1}}
-      when rate in [8_000, 16_000] ->
-        {:ok, %{track | codec: :linear16, sample_rate: rate}}
-
       {codec, rate, %{codec: codec, sample_rate: rate, channels: 1}} ->
         {:ok, track}
+
+      {source, source_rate, %{codec: :linear16, sample_rate: rate, channels: 1}}
+      when (source == :opus or (source == :pcmu and source_rate == 8_000)) and
+             is_integer(rate) and rate > 0 ->
+        {:ok, %{track | codec: :linear16, sample_rate: rate}}
 
       _unsupported ->
         {:error, :unsupported_audio}
@@ -30,8 +34,16 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
   def new_normalizer(frame, target) do
     with {:ok, _track} <- speech_track(frame, target) do
       case {frame.codec, frame.sample_rate, target.codec, target.sample_rate} do
-        {:opus, 16_000, :linear16, 16_000} ->
-          with {:ok, decoder} <- OpusDecoder.new(16_000), do: {:ok, {:opus_to_pcm, decoder}}
+        {codec, rate, codec, rate} ->
+          {:ok, :passthrough}
+
+        {:opus, source, :linear16, rate} when rate in @opus_rates ->
+          with {:ok, decoder} <- OpusDecoder.new(rate),
+               do: {:ok, {:opus_to_pcm, decoder, source, rate}}
+
+        {:opus, source, :linear16, rate} ->
+          with {:ok, decoder} <- OpusDecoder.new(48_000),
+               do: {:ok, {:opus_resample, decoder, source, rate}}
 
         {:pcmu, 8_000, :linear16, 8_000} ->
           {:ok, :pcmu_to_pcm}
@@ -39,8 +51,8 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
         {:pcmu, 8_000, :linear16, 16_000} ->
           {:ok, :pcmu_to_pcm16}
 
-        _same_format ->
-          {:ok, :passthrough}
+        {:pcmu, 8_000, :linear16, rate} ->
+          {:ok, {:pcmu_resample, rate}}
       end
     end
   end
@@ -48,11 +60,41 @@ defmodule Vxpipe.Gateway.Telephony.IncomingAudio do
   def speech_frame(%AudioFrame{} = frame, :passthrough), do: {:ok, frame}
 
   def speech_frame(
-        %AudioFrame{codec: :opus, sample_rate: 16_000} = frame,
-        {:opus_to_pcm, decoder}
+        %AudioFrame{codec: :opus, sample_rate: source} = frame,
+        {:opus_to_pcm, decoder, source, rate}
       ) do
-    with {:ok, payload} <- OpusDecoder.decode(decoder, frame.payload),
-         do: {:ok, %{frame | codec: :linear16, payload: payload}}
+    with {:ok, payload} <- OpusDecoder.decode(decoder, frame.payload) do
+      {:ok,
+       %{
+         frame
+         | codec: :linear16,
+           sample_rate: rate,
+           timestamp: div(frame.timestamp * rate, source),
+           payload: payload
+       }}
+    end
+  end
+
+  def speech_frame(
+        %AudioFrame{codec: :opus, sample_rate: source} = frame,
+        {:opus_resample, decoder, source, rate}
+      ) do
+    with {:ok, pcm} <- OpusDecoder.decode(decoder, frame.payload) do
+      decoded_timestamp = div(frame.timestamp * 48_000, source)
+      {payload, timestamp} = PCMResampler.resample(pcm, decoded_timestamp, 48_000, rate)
+
+      {:ok,
+       %{frame | codec: :linear16, sample_rate: rate, timestamp: timestamp, payload: payload}}
+    end
+  end
+
+  def speech_frame(%AudioFrame{codec: :pcmu, sample_rate: 8_000} = frame, {:pcmu_resample, rate}) do
+    with {:ok, pcm} <- Codec.decode(frame.payload) do
+      {payload, timestamp} = PCMResampler.resample(pcm, frame.timestamp, 8_000, rate)
+
+      {:ok,
+       %{frame | codec: :linear16, sample_rate: rate, timestamp: timestamp, payload: payload}}
+    end
   end
 
   def speech_frame(%AudioFrame{codec: :pcmu, sample_rate: 8_000} = frame, :pcmu_to_pcm) do

@@ -134,11 +134,13 @@ current_funnel_target() {
 start_tailscaled() {
   tailscaled_running && return 0
   mkdir -p "$node_dir/state"
+  # The daemon outlives this script: give it no inherited descriptors (fd 3 carries
+  # progress reports, fd 9 the run lock), or callers piping our output never see EOF.
   nohup "$tailscaled_bin" \
     --tun=userspace-networking \
     --statedir="$node_dir/state" \
     --socket="$ts_socket" \
-    --port=0 > "$node_dir/tailscaled.log" 2>&1 9>&- &
+    --port=0 > "$node_dir/tailscaled.log" 2>&1 3>&- 9>&- &
   printf '%s\n' "$!" > "$ts_pidfile"
 
   local attempt
@@ -202,7 +204,7 @@ tools_up() {
 # (502 while no test listener runs) proves that relay forwards to this node.
 await_public_relays() {
   local dns="$1" deadline relays relay pending
-  deadline=$((SECONDS + ${VXPIPE_LIVETESTS_RELAY_TIMEOUT:-180}))
+  deadline=$((SECONDS + ${VXPIPE_LIVETESTS_RELAY_TIMEOUT:-300}))
 
   while :; do
     relays="$("$curl_bin" -sS -m 5 "https://dns.google/resolve?name=$dns&type=A" < /dev/null 2>/dev/null |
@@ -216,7 +218,7 @@ await_public_relays() {
       return 0
     fi
     if (( SECONDS >= deadline )); then
-      die "public Funnel relays for $dns not reachable after ${VXPIPE_LIVETESTS_RELAY_TIMEOUT:-180}s: ${pending[*]:-no relays in public DNS}"
+      die "public Funnel relays for $dns not reachable after ${VXPIPE_LIVETESTS_RELAY_TIMEOUT:-300}s: ${pending[*]:-no relays in public DNS}"
     fi
     sleep "${VXPIPE_LIVETESTS_RELAY_INTERVAL:-3}"
   done
@@ -513,7 +515,7 @@ telephony_selected() {
   local argument
   for argument in "$@"; do
     case "$argument" in
-      live_telephony|live_twilio|live_telnyx|*integration/*telephony*|*twilio*|*telnyx*) return 0 ;;
+      live_telephony|live_telephony_*|live_twilio|live_telnyx|*integration/*telephony*|*twilio*|*telnyx*) return 0 ;;
     esac
   done
   return 1

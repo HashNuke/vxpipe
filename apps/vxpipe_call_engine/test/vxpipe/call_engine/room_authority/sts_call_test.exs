@@ -71,11 +71,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallTest do
                    1_000
 
     output = collect_output(sink, [])
-    {:ok, decoder} = Decoder.new(config)
+    {:ok, decoder} = Decoder.new(%{config | sample_rate: 48_000})
     assert {:ok, _, decoded} = Decoder.push(decoder, output)
     assert {:final, "RECEIVED HI"} in decoded
     refute_received {:vxpipe_event, %TextOutput{}}
-    played_ms = div(byte_size(output) * 1_000, 16_000 * 2)
+    played_ms = div(byte_size(output) * 1_000, 48_000 * 2)
     :ok = TestAudioOutputSink.playback_progress(sink, played_ms, played_ms)
     :ok = TestAudioOutputSink.playback_completed(sink)
 
@@ -410,6 +410,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallTest do
   defp collect_output(sink, frames) do
     receive do
       {:test_audio_output, ^sink, frame} ->
+        assert frame.sample_rate == 48_000
         collect_output(sink, [frame.payload | frames])
 
       {:test_audio_output_finish, ^sink, _turn} ->

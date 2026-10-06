@@ -119,6 +119,67 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     end
   end
 
+  # One speech-to-speech provider over one carrier pair: GPT-Live answers on a real phone
+  # leg, so carrier audio formats, line audio and opening timing meet a real STS model.
+  @tag :live_providers
+  @tag :live_telephony
+  @tag :live_telephony_sts
+  @tag timeout: 120_000
+  test "GPT-Live handles a real carrier call in both directions of audio", context do
+    System.get_env("OPENAI_API_KEY") ||
+      flunk("set OPENAI_API_KEY in the live providers env file for the GPT-Live case")
+
+    fixture = live_fixture(context)
+    pair = ConfiguredTelephonyFixture.publish_sts(fixture, "twilio", "telnyx")
+
+    try do
+      outgoing = submit(fixture, pair.outgoing, pair.to)
+
+      incoming =
+        await("incoming room", 20_000, fn ->
+          assert {:ok, page} = Calls.list_calls(fixture.principal, fixture.options)
+          Enum.find(page.calls, &(&1.call_spec_id == pair.incoming.call_spec_id))
+        end)
+
+      assert {:ok, incoming} = Calls.fetch_call(fixture.tenant.key, incoming.id, fixture.options)
+
+      try do
+        await("GPT-Live opening heard on the phone", 25_000, fn ->
+          remote_phrase?(fixture, incoming, "alpha")
+        end)
+
+        await("the callee heard by GPT-Live and its reply heard on the phone", 30_000, fn ->
+          remote_phrase?(fixture, outgoing, "bravo") and
+            remote_phrase?(fixture, incoming, "charlie")
+        end)
+      rescue
+        error in ExUnit.AssertionError ->
+          diagnose_media(fixture, outgoing, "outgoing GPT-Live")
+          diagnose_media(fixture, incoming, "incoming")
+          reraise error, __STACKTRACE__
+      end
+
+      first_monitor = monitor_call(fixture, outgoing)
+      second_monitor = monitor_call(fixture, incoming)
+      stop_room(fixture.tenant.key, outgoing.room_id)
+      assert_receive {:DOWN, ^first_monitor, :process, _room, _reason}, 5_000
+      assert_receive {:DOWN, ^second_monitor, :process, _room, _reason}, 10_000
+
+      await("durable closure of both calls", 10_000, fn ->
+        ended?(fixture, outgoing.id) and ended?(fixture, incoming.id)
+      end)
+
+      assert {:ok, final} = Calls.fetch_call(fixture.tenant.key, outgoing.id, fixture.options)
+      assert final.outgoing_outcome == :answered
+
+      IO.puts(
+        "Live GPT-Live twilio -> telnyx: opening heard on the phone; callee heard by the model; model reply heard on the phone; both rooms ended"
+      )
+    after
+      cleanup(fixture.tenant.key)
+    end
+  end
+
   @tag :live_providers
   @tag :live_telephony
   @tag :live_telephony_unanswered
@@ -663,6 +724,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       public_key: System.fetch_env!("TELNYX_PUBLIC_KEY"),
       gemini_key: System.fetch_env!("GEMINI_API_KEY"),
       deepgram_key: System.fetch_env!("DEEPGRAM_API_KEY"),
+      openai_key: System.get_env("OPENAI_API_KEY"),
       numbers: %{
         "twilio" => System.fetch_env!("TWILIO_TEST_FROM"),
         "telnyx" => System.fetch_env!("TELNYX_TEST_FROM")

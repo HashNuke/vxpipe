@@ -3,8 +3,9 @@
 Status: specification frozen on 2026-09-25; checkpoints A through E are
 implemented and locally verified. Checkpoint E includes room-owned STS transfer
 execution and a room-ordered reseed snapshot at concurrent disconnect.
-Checkpoint F has local setup, load, review, and an opt-in hosted harness; its
-authorized service and phone check remain open.
+Checkpoint F has local setup, load, review and an opt-in hosted harness. The
+2026-10-06 direct hosted checks and basic carrier audio slice pass; its remaining
+phone interruption, tool, hold/reseed and speakerphone echo scenarios remain open.
 Checkpoint B was
 reopened by review 3 and closed again after the clock-paced output rework;
 review 4's R4-1 is resolved by the Morse duplex real-time clock. Review 6's
@@ -13,6 +14,21 @@ six code-review findings (R6-1..R6-6) are resolved (see the response to review
 through a recorded amendment in this section, with its reason; for example, a
 checkpoint A finding that contradicts an assumption below. The milestones index
 entry stays unchecked until the acceptance checks below pass.
+
+2026-10-06 amendment: the user requires openings to play fully because they can
+carry regulatory notices. Text agents retain caller input for processing after
+playback; STS drops it. Continuous providers receive synthetic silence to retain
+their clock. All STS sink PCM is converted to 48 kHz; provider credit and recognition
+retain the native format. The [contract decision](../protected-agent-openings.md)
+records alternatives and implications.
+
+Local design review of this amendment (separate from implementation evidence):
+the existing room and capability remain the lifecycle owners; completion is bound
+to the current output identity and physical playback, the text queue is bounded,
+and identity/epoch/policy checks precede STS masking. Sharing the resampler from
+Call Engine preserves Gateway's dependency direction. No provider protocol or
+credential prerequisite changes. Opening protection precedes the carrier rerun;
+the existing checkpoint F phone scenarios retain their acceptance status.
 
 Post-review decisions recorded with the amendments:
 
@@ -2284,3 +2300,85 @@ Open findings: R1-4, R10-2. Package 4 (hold by muting) is next.
   exit are closed. Checkpoint F's independent local review and root gates are
   closed. The authorized hosted OpenAI service and real phone check remains
   the only open milestone task; no hosted call was made.
+
+## Hosted phone check: first carrier run (2026-10-06)
+
+A tagged live case now runs GPT-Live as the handler of a real outgoing carrier call
+(`apps/vxpipe_console/test/integration/live_telephony_test.exs`, tag `live_telephony_sts`):
+
+```shell
+bin/livetests run --only live_telephony_sts apps/vxpipe_console/test/integration
+```
+
+Twilio dials the machine's Telnyx number; the receiving room is a carrier-answered text agent.
+It passes only if the phone side hears GPT-Live's fixed opening ("Alpha."), GPT-Live's room
+hears the callee ("Bravo."), and the phone side then hears GPT-Live's reply ("Charlie.").
+
+Findings (13 live runs, 2026-10-06), each traced with bounded test-only diagnostics
+(room state, readiness preparation, capability and provider exit reasons, decoded provider
+errors):
+
+1. **Input format (fixed).** Telephony speech input converted only to 8/16 kHz PCM, so the
+   callee connection failed readiness with `media_connection` `:unsupported_audio` for GPT-Live's
+   24 kHz input and the opening never started. `Telephony.IncomingAudio` now produces any mono
+   PCM rate: Telnyx Opus decodes natively at 8/12/16/24/48 kHz, and other rates go through the
+   stateless `CallEngine.Media.PCMResampler` (timestamp-anchored linear interpolation). Local tests
+   cover readiness at any rate, pitch preservation, exact frame tiling and Opus native decode.
+2. **Caller speech during a fixed opening ends the call (fixed below).** `GPTLiveOpening.decode/2`
+   maps any caller input fragment during a fixed opening to `:opening_interrupted`, and
+   `GPTLiveSession` stops with `{:shutdown, :session_failed}`; the capability exits
+   `:provider_failed` and the room drops the call as `agent_unavailable`. A callee saying
+   "Hello?" while the agent opens therefore hangs up on them. Google's `STSOpening.accept/2`
+   does the same (`activity_start`/`interrupted` -> `:session_failed`).
+3. **24 kHz output to the phone (fixed below).** With the receiver silent (no overlap), the call passes
+   the opening stage and then the capability exits `:audio_output_failed`: GPT-Live emits 24 kHz
+   output frames in its own format while the carrier output pipelines accept 48 kHz only.
+   Google's speech-to-speech output is also 24 kHz.
+
+Before this continuation, the direct hosted harness (`gpt_live_hosted_test.exs`) passed
+its short-turn/interruption/reseed case with the same key and its delegated continuation
+failed once. The continuation below records the subsequent harness clock repair and rerun.
+
+- [x] Identify the input refusal and convert telephony input to any PCM rate.
+- [x] Openings are never interrupted (user decision 2026-10-06: an opening can be a
+  regulatory requirement). STS masks caller audio throughout opening playback;
+  Google and GPT-Live never receive the caller's samples. Text agents collect
+  caller speech/text and process it after matching opening playback completes.
+  `FirstMessage` reaches `:completed`; generation completion alone does not release
+  protection. Local regressions were written failing first. Independent
+  `opening_audio` retains its existing input gate.
+- [x] Convert speech-to-speech output to the room's 48 kHz format at the capability/room
+  boundary (exact 2x for 24 kHz), for every provider; reproduce locally first.
+- [x] Make the live `live_telephony_sts` case pass with the receiver speaking first.
+- [ ] Complete the remaining checkpoint F phone scenarios: backchannel/interruption,
+  tool, hold/release, forced reconnect with reseed, and speakerphone echo.
+
+### Continuation: protected openings and phone output
+
+The user decision above is implemented at the room/capability boundary; see
+[the approved contract and alternatives](../protected-agent-openings.md).
+Text input waits in a bounded room queue until matching opening playback completes.
+STS caller PCM and external activity are discarded. Continuous STS providers receive
+same-duration synthetic silence to preserve the audio clock; turn-based providers
+receive no PCM. Blanket removal of all input kept the first continuation call alive
+but stalled GPT-Live's opening; the official greeting guide requires continuous
+input, including silence.
+
+All STS sink frames now contain converted 48 kHz PCM. Provider validation, recognition
+and credit still use native PCM. The generic resampler belongs to Call Engine and is
+shared by Gateway telephone input without reversing application dependencies.
+
+On 2026-10-06 the Twilio → Telnyx live case passed in 24.1 seconds: the phone heard
+Alpha, the GPT-Live room heard Bravo, the phone heard Charlie, both rooms closed,
+and the outgoing attempt was answered. The receiver spoke first. The silence switch
+and process tracing were removed after this pass. The clean carrier rerun passed in
+22.3 seconds; both direct hosted tests passed in 17.4 seconds after keeping their
+input clock running during event waits. Final root evidence is recorded in the [continuation labnote](../../labnotes/20261006-1547-protect-phone-openings.md).
+This verifies this phone slice; checkpoint F and the index remain incomplete while
+the other hosted phone scenarios above remain open.
+
+Final continuation gates: 3,220 default tests, zero failures, 105 exclusions,
+seed 113691. Formatting, warnings-as-errors compile, strict Credo, unused-lock
+and Lean build/oracle/replay all pass. The affected Google/room/opening group passed
+191 tests; all three runner shell suites also passed. No UI or dependency change
+was made in this continuation. Checkpoint F's remaining carrier checks stay open.

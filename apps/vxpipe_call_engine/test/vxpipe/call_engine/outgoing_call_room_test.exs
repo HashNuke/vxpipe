@@ -72,10 +72,10 @@ defmodule Vxpipe.CallEngine.OutgoingCallRoomTest do
       assert {:ok, _attachment} = attach(plan, room, sink, input_track: track)
       output = collect_opening(sink, [])
       {:ok, config} = CallEngine.Provider.MorseCode.Config.new(unit_duration_ms: 20)
-      {:ok, decoder} = CallEngine.Provider.MorseCode.Decoder.new(config)
+      {:ok, decoder} = CallEngine.Provider.MorseCode.Decoder.new(%{config | sample_rate: 48_000})
       assert {:ok, _, decoded} = CallEngine.Provider.MorseCode.Decoder.push(decoder, output)
       assert {:final, @opening_text} in decoded
-      played = div(byte_size(output) * 1_000, 16_000 * 2)
+      played = div(byte_size(output) * 1_000, 48_000 * 2)
       assert :ok = CallEngine.TestAudioOutputSink.playback_progress(sink, played, played)
       assert :ok = CallEngine.TestAudioOutputSink.playback_completed(sink)
       agent = Map.fetch!(plan.participants, plan.entry_receiver).participant_id
@@ -621,6 +621,7 @@ defmodule Vxpipe.CallEngine.OutgoingCallRoomTest do
   defp collect_opening(sink, frames) do
     receive do
       {:test_audio_output, ^sink, frame} ->
+        assert frame.sample_rate == 48_000
         collect_opening(sink, [frame.payload | frames])
 
       {:test_audio_output_finish, ^sink, _turn} ->

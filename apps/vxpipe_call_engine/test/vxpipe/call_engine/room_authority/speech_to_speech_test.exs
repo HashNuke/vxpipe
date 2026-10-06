@@ -51,6 +51,24 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert state.next_sequence > 1
   end
 
+  test "only the opening's matching STS playback completion releases opening protection" do
+    first = %Vxpipe.CallEngine.RoomAuthority.FirstMessage{
+      mode: :fixed,
+      status: :started,
+      target_participant_id: @human,
+      text: "HELLO"
+    }
+
+    state = %{state() | first_message: first}
+    state = SpeechToSpeech.handle_turn_started(state, self(), @agent, "opening", 1)
+    state = SpeechToSpeech.handle_turn_completed(state, self(), @agent, "unknown", 1)
+    assert state.first_message.status == :started
+    state = SpeechToSpeech.handle_turn_completed(state, self(), @agent, "opening", 2)
+    assert state.first_message.status == :started
+    state = SpeechToSpeech.handle_turn_completed(state, self(), @agent, "opening", 1)
+    assert state.first_message.status == :completed
+  end
+
   test "STS reference turn values from capability events do not raise" do
     state = state()
     capability = self()

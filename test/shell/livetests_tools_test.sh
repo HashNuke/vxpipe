@@ -193,6 +193,18 @@ rg -q -F 'funnel=http://127.0.0.1:4600' "$scratch/output" || fail "registered no
 log_has 'authkey=' && fail "registered node asked for the secret again"
 tailscaled_running && fail "second run left tailscaled running"
 
+# Piped output must end when tools:up does; the daemon may not hold the pipe open.
+if ! timeout 20 bash -c '"$0" tools:up 2>&1 | cat > /dev/null' "$repo_root/bin/livetests"; then
+  fail "tools:up output pipe stayed open after it returned"
+fi
+livetests tools:down > /dev/null
+
+# Narrower telephony tags (live_telephony_*) also start the public endpoint.
+: > "$FAKE_TS_DIR/log"
+livetests run --only live_telephony_sts apps/vxpipe_console/test/integration
+rg -q -F 'funnel=http://127.0.0.1:4600' "$scratch/output" || fail "live_telephony_* selection did not start the tools"
+tailscaled_running && fail "live_telephony_* run left tailscaled running"
+
 # tools:up waits until every public Funnel relay answers, since carriers may reach any.
 FAKE_SLOW_RELAY=192.0.2.3 FAKE_RELAY_WARMUP=2 livetests tools:up > "$scratch/up"
 [[ "$(cat "$FAKE_TS_DIR/relay-192.0.2.3" 2>/dev/null || echo 0)" -ge 3 ]] \

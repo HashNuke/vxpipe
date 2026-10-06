@@ -382,7 +382,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     stt = Enum.find(observations, &(&1.capability == :output_speech_to_text))
     {:ok, config} = Config.new([])
     {:ok, pcm} = Encoder.encode(config, "RECEIVED HI")
-    accepted_bytes = byte_size(pcm) - byte_size(first.payload) - byte_size(second.payload)
+
+    rejected_source_bytes =
+      div(
+        (byte_size(first.payload) + byte_size(second.payload)) * config.sample_rate,
+        first.sample_rate
+      )
+
+    accepted_bytes = byte_size(pcm) - rejected_source_bytes
     assert stt.measurement.quantity == div(accepted_bytes * 1_000, 16_000 * 2)
     assert stt.outcome == :failed
   end

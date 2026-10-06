@@ -90,11 +90,27 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
   def close_rotated_origin(state),
     do: {:ok, %{state | held?: true, input_epoch: nil, caller_turns: %{}}}
 
+  def submit_audio(
+        %{opening_playing?: true, descriptor: %{output_shape: :continuous}} = state,
+        pcm
+      ) do
+    # Continuous providers need a running input clock to generate an opening.
+    # Replace caller samples with equal-duration silence; never replay the input.
+    silence = :binary.copy(<<0>>, byte_size(pcm))
+    ResponseOrigins.submit(state, {:audio, silence})
+  end
+
+  def submit_audio(%{opening_playing?: true} = state, _pcm), do: {:ok, state}
+  def submit_audio(state, pcm), do: ResponseOrigins.submit(state, {:audio, pcm})
+
   def deliver(state, ingress, reference, frame, revision, epoch) do
     {result, state} =
       case validate(state, ingress, frame, revision, epoch) do
-        :ok -> ResponseOrigins.submit(state, {:audio, frame.payload})
-        error -> {error, state}
+        :ok ->
+          submit_audio(state, frame.payload)
+
+        error ->
+          {error, state}
       end
 
     if ingress == state.input,
@@ -170,7 +186,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
   def submit_activity(state, boundary) do
     if Output.audio_route_permitted?(state, state.human_id, state.agent_id) and
          Output.audio_route_permitted?(state, state.agent_id, state.human_id) do
-      submit_permitted_activity(state, boundary)
+      if state.opening_playing?,
+        do: {:ok, state},
+        else: submit_permitted_activity(state, boundary)
     else
       {{:error, :policy_denied}, state}
     end

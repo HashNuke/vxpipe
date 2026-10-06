@@ -1540,7 +1540,9 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
   defp assert_audio(context, index) do
     sink = context.sink
     assert_receive {:test_audio_output, ^sink, frame}, 1_000
-    assert frame.payload == :binary.copy(<<index::little-signed-16>>, 480)
+    assert frame.sample_rate == 48_000
+    assert frame.payload == :binary.copy(<<index::little-signed-16>>, 960)
+    assert div(byte_size(frame.payload) * 1_000, frame.sample_rate * 2) == 20
     _ = :sys.get_state(context.capability)
     _ = :sys.get_state(context.provider)
   end

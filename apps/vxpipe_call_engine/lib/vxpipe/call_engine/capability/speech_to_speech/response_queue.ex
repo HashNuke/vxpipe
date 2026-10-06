@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{
     Input,
+    Opening,
     Output,
     OutputRecognition,
     ResponseOrigins
@@ -82,6 +83,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
               text_expires_at: nil,
               generation_done?: false,
               playback_done?: false,
+              input_samples: 0,
               played_ms: 0
             }
 
@@ -90,7 +92,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseQueue do
               {:vxpipe_sts_turn_started, self(), state.agent_id, turn_ref, entry_sequence(entry)}
             )
 
-            {:noreply, %{state | active_output: output}}
+            {:noreply, Opening.admitted(%{state | active_output: output}, turn_ref)}
 
           {:error, :busy} ->
             queue_turn(state, entry, position)

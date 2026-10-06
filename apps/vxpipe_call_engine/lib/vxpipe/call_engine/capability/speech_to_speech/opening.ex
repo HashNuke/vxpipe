@@ -21,10 +21,25 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Opening do
         {result, state} = ResponseOrigins.submit(state, {:opening, opening})
 
         case result do
-          :ok -> {:reply, :ok, %{state | opening_started?: true}}
-          {:ok, _handle} -> {:reply, :ok, %{state | opening_started?: true}}
-          error -> {:reply, error, state}
+          :ok ->
+            {:reply, :ok, %{state | opening_started?: true, opening_playing?: true}}
+
+          {:ok, _handle} ->
+            {:reply, :ok, %{state | opening_started?: true, opening_playing?: true}}
+
+          error ->
+            {:reply, error, state}
         end
     end
   end
+
+  def admitted(%{opening_playing?: true, opening_turn: nil} = state, turn),
+    do: %{state | opening_turn: turn}
+
+  def admitted(state, _turn), do: state
+
+  def completed(%{opening_turn: turn} = state, turn),
+    do: %{state | opening_playing?: false, opening_turn: nil}
+
+  def completed(state, _turn), do: state
 end

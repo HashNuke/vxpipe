@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
   """
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{
+    Opening,
     OutputRecognition,
     OutputRecognizer,
     OutputTranscript,
@@ -15,7 +16,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     Usage
   }
 
-  alias Vxpipe.CallEngine.Media.{AudioOutputFrame, OutputSink}
+  alias Vxpipe.CallEngine.Media.{AudioOutputFrame, OutputSink, PCMResampler}
   alias Vxpipe.CallEngine.MediaPolicy.Effective
   alias Vxpipe.CallEngine.Speech.{Audio, Event, OutputTurn, Session}
   alias Vxpipe.CallEngine.Telemetry
@@ -34,7 +35,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
       %{output: %{ref: ref}} = output when ref == audio.request_ref ->
         with :ok <- Session.validate_audio(state.session, audio),
              true <- audio_route_permitted?(state, state.agent_id, state.human_id),
-             frame = output_frame(output, audio, state),
+             {frame, state} = output_frame(output, audio, state),
              :ok <- OutputSink.push(state.sink, frame),
              :ok <- Session.ack_audio(state.session, audio) do
           {:noreply, feed_output_stt(audio, state)}
@@ -83,7 +84,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
           state = publish_agent_transcript(output, played_ms, state)
           _ = emit_turn_usage(state, output.provider_turn, :succeeded, played_ms, output)
-          state = drop_stt_buffer(%{state | active_output: nil, egress_ms: played_ms})
+
+          state =
+            state
+            |> Opening.completed(output.provider_turn)
+            |> Map.merge(%{active_output: nil, egress_ms: played_ms})
+            |> drop_stt_buffer()
 
           send(
             state.owner,
@@ -671,27 +677,36 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
   def transcript_route_permitted?(%{policy: policy}, source, recipient),
     do: Effective.transcript_route_permitted?(policy, source, recipient)
 
-  defp output_frame(output, %Audio{payload: payload}, state) do
+  defp output_frame(output, %Audio{payload: payload} = audio, state) do
     format = state.descriptor.format
     identity = state.frame_identity
 
-    struct!(AudioOutputFrame, %{
-      tenant_id: Map.get(identity, :tenant_id, "tenant"),
-      room_id: Map.get(identity, :room_id, "room"),
-      incarnation_id: Map.get(identity, :incarnation_id, "incarnation"),
-      participant_id: state.agent_id,
-      connection_id: Map.get(identity, :connection_id, "connection"),
-      command_id: Map.get(identity, :command_id, "command"),
-      correlation_id: output.sink_turn,
-      codec: format.encoding,
-      sample_rate: format.sample_rate,
-      channels: format.channels,
-      byte_order: format.byte_order,
-      payload: payload,
-      audio_scope: :conversation,
-      output_generation: state.output_generation,
-      reply_to: self()
-    })
+    {payload, _timestamp} =
+      PCMResampler.resample(payload, output.input_samples, format.sample_rate, 48_000)
+
+    input_samples = output.input_samples + div(byte_size(audio.payload), 2)
+    state = %{state | active_output: %{output | input_samples: input_samples}}
+
+    frame =
+      struct!(AudioOutputFrame, %{
+        tenant_id: Map.get(identity, :tenant_id, "tenant"),
+        room_id: Map.get(identity, :room_id, "room"),
+        incarnation_id: Map.get(identity, :incarnation_id, "incarnation"),
+        participant_id: state.agent_id,
+        connection_id: Map.get(identity, :connection_id, "connection"),
+        command_id: Map.get(identity, :command_id, "command"),
+        correlation_id: output.sink_turn,
+        codec: format.encoding,
+        sample_rate: 48_000,
+        channels: format.channels,
+        byte_order: format.byte_order,
+        payload: payload,
+        audio_scope: :conversation,
+        output_generation: state.output_generation,
+        reply_to: self()
+      })
+
+    {frame, state}
   end
 
   def stop_unavailable(reason, state) do

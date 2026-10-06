@@ -21,6 +21,74 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
                         __DIR__
                       )
 
+  for opening <- [:generated, {:fixed, "HELLO"}], input <- [:direct, :framed] do
+    @protected_opening opening
+    @protected_input input
+    test "#{inspect(opening)} opening drops #{@protected_input} input through sink playback completion" do
+      {capability, wire} = start_ready_capability(output_gap_ms: 40)
+      ingress = if @protected_input == :framed, do: bind_input(capability)
+      assert :ok = SpeechToSpeech.begin_opening(capability, @protected_opening)
+      assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.instructions.append"}}
+      assert :ok = offer_input(capability, ingress, 1)
+
+      assert_receive {:test_gpt_live_control, ^wire,
+                      %{"type" => "session.input_audio.append", "audio" => silence}},
+                     1_000
+
+      assert Base.decode64!(silence) == <<0, 0>>
+
+      TestGPTLiveTransport.deliver_sync(wire, %{
+        "type" => "session.output_transcript.delta",
+        "delta" => "HELLO",
+        "start_ms" => 0,
+        "end_ms" => 20
+      })
+
+      TestGPTLiveTransport.deliver_sync(wire, %{
+        "type" => "session.output_audio.delta",
+        "delta" => Base.encode64(:binary.copy(<<0, 16>>, 480) <> :binary.copy(<<0, 0>>, 960))
+      })
+
+      assert_receive {:vxpipe_sts_turn_started, ^capability, "agent1", turn, _}, 1_000
+      assert_receive {:test_audio_output, sink, _frame}, 1_000
+      assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+      assert :ok = offer_input(capability, ingress, 2)
+
+      assert_receive {:test_gpt_live_control, ^wire,
+                      %{"type" => "session.input_audio.append", "audio" => silence}},
+                     1_000
+
+      assert Base.decode64!(silence) == <<0, 0>>
+
+      TestAudioOutputSink.playback_progress(sink, 60, 60)
+      TestAudioOutputSink.playback_completed(sink)
+      assert_receive {:vxpipe_sts_turn_completed, ^capability, "agent1", ^turn, _}, 1_000
+      assert :ok = offer_input(capability, ingress, 3)
+
+      assert_receive {:test_gpt_live_control, ^wire,
+                      %{"type" => "session.input_audio.append", "audio" => delta}}
+
+      assert Base.decode64!(delta) == <<3, 0>>
+    end
+  end
+
+  test "24 kHz provider output reaches the room as 48 kHz PCM without changing duration" do
+    {capability, wire} = start_ready_capability(output_gap_ms: 40)
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+    pcm = :binary.copy(<<0, 16>>, 480)
+
+    TestGPTLiveTransport.deliver_sync(wire, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(pcm)
+    })
+
+    assert_receive {:test_audio_output, _sink, frame}, 1_000
+    assert frame.sample_rate == 48_000
+    assert frame.channels == 1
+    assert frame.payload == :binary.copy(<<0, 16>>, 960)
+    assert div(byte_size(frame.payload) * 1_000, frame.sample_rate * 2) == 20
+  end
+
   test "reseed waits for room-published history already queued at disconnect" do
     {capability, wire} = start_ready_capability()
     provider = Session.provider(:sys.get_state(capability).session)
@@ -657,6 +725,70 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, "agent1", "Hello", ^turn, _, _, _},
                    1_000
+  end
+
+  defp bind_input(capability) do
+    identity = %{
+      tenant_id: "tenant",
+      room_id: "room",
+      incarnation_id: "incarnation",
+      participant_id: "human1",
+      connection_id: "connection"
+    }
+
+    assert {:ok, format} = SpeechToSpeech.input_format(capability)
+
+    assert {:ok, ingress} =
+             SpeechToSpeech.Tree.start_input(capability,
+               source_connection: self(),
+               identity: identity,
+               agent_id: "agent1",
+               format: format
+             )
+
+    assert :ok = SpeechToSpeech.bind_input(capability, ingress)
+
+    snapshot = %Vxpipe.CallEngine.MediaPolicy.Snapshot{
+      revision: 0,
+      present_participant_ids: MapSet.new(["human1", "agent1"]),
+      effective: unrestricted()
+    }
+
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(capability, snapshot, 500)
+    assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, snapshot, 500)
+
+    assert :ok =
+             Vxpipe.CallEngine.Media.STSIngress.prepare_track(
+               ingress,
+               Map.put(format, :track_id, "phone")
+             )
+
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    {ingress, identity, format}
+  end
+
+  defp offer_input(capability, nil, sequence),
+    do: SpeechToSpeech.push_audio(capability, "human1", <<sequence, 0>>)
+
+  defp offer_input(capability, {ingress, identity, format}, sequence) do
+    frame =
+      struct!(
+        Vxpipe.CallEngine.Media.AudioFrame,
+        Map.merge(
+          identity,
+          Map.merge(format, %{
+            track_id: "phone",
+            sequence_number: sequence,
+            timestamp: sequence,
+            payload: <<sequence, 0>>,
+            received_at: System.monotonic_time(:millisecond)
+          })
+        )
+      )
+
+    assert :ok = Vxpipe.CallEngine.Media.STSIngress.push(ingress, frame)
+    _ = :sys.get_state(capability)
+    :ok
   end
 
   defp start_ready_capability(options \\ []) do

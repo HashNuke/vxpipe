@@ -240,7 +240,7 @@ pre-warmed Funnel passed 4 of 4.
 - [x] Fix: `tools:up` (and therefore `run` when it starts the tools) resolves the node name in
   public DNS and waits until every relay returns any HTTP status through Funnel (a 502 before
   the test's listener starts still proves the relay forwards), bounded by
-  `VXPIPE_LIVETESTS_RELAY_TIMEOUT` (default 180 s, polled every
+  `VXPIPE_LIVETESTS_RELAY_TIMEOUT` (default 300 s, polled every
   `VXPIPE_LIVETESTS_RELAY_INTERVAL`, default 3 s). On timeout it names the unreachable relays,
   and `run` tears down what it started.
 - [x] Live: four cold runs (no prior `tools:up`), two per direction, all passed.

@@ -929,6 +929,113 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
            ) == []
   end
 
+  for opening_mode <- ["fixed", "generated"],
+      generation <- [:pending, :complete],
+      input <- [:audio, :text] do
+    @protected_opening_mode opening_mode
+    @protected_generation generation
+    @protected_caller_input input
+    test "#{opening_mode} greeting plays fully before collected caller #{input} with #{generation} generation is processed" do
+      configure_speech_runtime()
+      configure_agent_runtime_provider()
+
+      opening =
+        if @protected_opening_mode == "fixed",
+          do: %{mode: "fixed", text: "Welcome."},
+          else: %{mode: "generated"}
+
+      plan = compile_plan(opening_audio: nil, agent_text_to_speech: true, first_message: opening)
+      caller = Map.fetch!(plan.participants, plan.entry_caller)
+      assert {:ok, room} = CallEngine.start_call(plan)
+      assert_receive {:test_tts_transport_started, voice, _}
+      sink = start_supervised!({TestAudioOutputSink, observer: self()})
+      connection_id = "protected-opening"
+
+      assert {:ok, _} =
+               TestTransferConnection.attach(
+                 attach_command(plan, room, caller, connection_id),
+                 sink
+               )
+
+      assert_receive {:test_stt_transport_started, stt, _}
+
+      if @protected_opening_mode == "generated" do
+        assert_receive {:test_agent_runtime_stream, model, _}
+        assert {:ok, response} = ModelResponse.new(text: "Welcome.")
+        send(model, {:test_agent_runtime_response, {:ok, response}})
+      end
+
+      assert_receive {:test_tts_control, ^voice, speak}
+      assert JSON.decode!(speak)["type"] == "Speak"
+      assert_receive {:test_tts_control, ^voice, _flush}
+
+      TestTextToSpeechTransport.deliver_control(
+        voice,
+        JSON.encode!(%{type: "SpeechStarted", speech_id: "protected"})
+      )
+
+      TestTextToSpeechTransport.deliver_audio(voice, :binary.copy(<<1, 0>>, 960))
+      assert_receive {:test_audio_output, ^sink, _}
+
+      if @protected_generation == :complete do
+        TestTextToSpeechTransport.deliver_control(
+          voice,
+          JSON.encode!(%{type: "SpeechMetadata", speech_id: "protected"})
+        )
+
+        assert_receive {:test_audio_output_finish, ^sink, _}
+      end
+
+      if @protected_caller_input == :text do
+        assert :ok =
+                 TestTransferConnection.send_text(
+                   send_command(plan, room, caller, connection_id, "Please help me.")
+                 )
+      else
+        for {event, sequence} <- [{"StartOfTurn", 1}, {"EndOfTurn", 2}] do
+          TestSpeechToTextTransport.deliver(
+            stt,
+            JSON.encode!(%{
+              type: "TurnInfo",
+              request_id: "protected-caller",
+              sequence_id: sequence,
+              event: event,
+              turn_index: 1,
+              audio_window_start: 0.0,
+              audio_window_end: 1.0,
+              transcript: "Please help me.",
+              words: [],
+              end_of_turn_confidence: 0.99,
+              trigger: if(event == "EndOfTurn", do: "model")
+            })
+          )
+        end
+      end
+
+      assert_receive {:vxpipe_event, %CallEngine.Event.ParticipantTurnCompleted{}}, 1_000
+      refute_received {:vxpipe_event, %CallEngine.Event.AgentTurnInterrupted{}}
+      refute_receive {:test_agent_runtime_stream, _, _}, 50
+
+      if @protected_generation == :pending do
+        TestTextToSpeechTransport.deliver_control(
+          voice,
+          JSON.encode!(%{type: "SpeechMetadata", speech_id: "protected"})
+        )
+
+        assert_receive {:test_audio_output_finish, ^sink, _}
+      end
+
+      assert :ok = TestAudioOutputSink.playback_started(sink)
+      assert :ok = TestAudioOutputSink.playback_completed(sink)
+      assert_receive {:vxpipe_event, %AgentTurnCompleted{}}, 1_000
+      assert_receive {:test_agent_runtime_stream, model, request}, 1_000
+      assert Enum.any?(request.messages, &(&1.role == :user and &1.content == "Please help me."))
+      assert Enum.any?(request.messages, &(&1.role == :assistant and &1.content == "Welcome."))
+      assert {:ok, response} = ModelResponse.new(text: "I can help.")
+      send(model, {:test_agent_runtime_response, {:ok, response}})
+    end
+  end
+
   test "emits one fixed greeting after opening playout and retains it as assistant history" do
     configure_speech_runtime()
     configure_agent_runtime_provider()

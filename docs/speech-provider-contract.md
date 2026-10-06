@@ -216,10 +216,14 @@ pure-validation responsibility. Readiness, endpointing and optional events must 
 the descriptor at delivery. Request IDs are optional, valid UTF-8 with 1..256 bytes,
 and excluded from inspection.
 The initial contract preserves supported formats: STT linear16/Opus as advertised by the
-selected provider; TTS mono little-endian linear16 at a supported sample rate. No implicit
-resampling, new codecs or silent format conversion is introduced. Format validation also
+selected provider; TTS mono little-endian linear16 at a supported sample rate. Provider
+sessions keep their declared format; room-side STS normalization is explicit at the sink
+boundary described below. No additional codecs are introduced. Format validation also
 distinguishes raw Opus packets from containerized Opus and raw PCM from WAV. Adapters perform
-bounded rechunking/pacing where their wire protocol needs it. Do not universally require 48 kHz.
+bounded rechunking/pacing where their wire protocol needs it. Provider descriptors do
+not universally require 48 kHz. The STS capability converts generated PCM to 48 kHz
+at the room sink boundary while retaining original PCM for provider credit,
+recognition and usage; see [protected openings and phone PCM](protected-agent-openings.md).
 WebRTC classifies channel mode from each Opus packet rather than SDP FMTP. Its bounded
 per-connection decoder accepts mono/stereo packets and normalizes provider input to the
 selected strict mono format. The [stereo input issue](issues/webrtc-opus-stereo-input.md)

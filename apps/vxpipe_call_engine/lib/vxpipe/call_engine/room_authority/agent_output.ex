@@ -20,6 +20,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   alias Vxpipe.CallEngine.RoomAuthority.{
     ConnectionLifecycle,
     EventPublisher,
+    FirstMessage,
     SpeechToSpeech,
     SpokenHistory,
     State,
@@ -201,6 +202,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
       do: {:ok, state}
 
   def interrupt(%TurnInterrupter{} = interrupter, %State{} = state) do
+    if FirstMessage.playing?(state) do
+      {:ok, state}
+    else
+      interrupt_active(interrupter, state)
+    end
+  end
+
+  defp interrupt_active(interrupter, state) do
     turns = state.agent_turns |> Map.values() |> Enum.sort_by(& &1.order, :desc)
     turn_ids = Enum.map(turns, &TurnState.key(&1.command))
 
@@ -294,6 +303,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     state
     |> Map.update!(:next_sequence, &(&1 + 1))
     |> TurnState.delete(request)
+    |> FirstMessage.complete(request)
   end
 
   defp emit_turn_completed(command, connection, occurred_at, state) do
@@ -316,6 +326,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     state
     |> Map.update!(:next_sequence, &(&1 + 1))
     |> TurnState.delete(command)
+    |> FirstMessage.complete(command)
   end
 
   defp complete_spoken_segment(request, connection, state) do

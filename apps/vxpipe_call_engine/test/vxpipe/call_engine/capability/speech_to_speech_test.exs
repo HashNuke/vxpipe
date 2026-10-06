@@ -23,7 +23,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
 
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn, _}
     assert_receive {:test_audio_output, _sink, frame}
-    assert frame.payload == reply_pcm_prefix("RECEIVED HI", byte_size(frame.payload))
+    assert frame.sample_rate == 48_000
+
+    source_samples =
+      for <<sample::binary-size(2), _interpolated::binary-size(4) <- frame.payload>>,
+        into: <<>>,
+        do: sample
+
+    assert source_samples == reply_pcm_prefix("RECEIVED HI", byte_size(source_samples))
 
     complete_playback(20)
 
@@ -812,6 +819,23 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert :ok = SpeechToSpeech.release(capability, second)
     assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: make_ref()]})
     assert_receive {:vxpipe_sts_input_event, ^capability, %{epoch: ^second}}
+  end
+
+  test "opening drops external caller activity without opening a provider input interval" do
+    %{capability: capability, ingress: ingress, epoch: epoch, provider: provider} =
+      bound_external_capability()
+
+    assert :ok = SpeechToSpeech.begin_opening(capability, :generated)
+
+    assert :ok =
+             Vxpipe.CallEngine.Media.STSIngress.activity(ingress, :started, epoch, %{
+               input: 0,
+               output: 0
+             })
+
+    _ = :sys.get_state(ingress)
+    _ = :sys.get_state(capability)
+    refute :sys.get_state(provider).external_started?
   end
 
   test "queued external activity reaches the capability through its bound ingress" do

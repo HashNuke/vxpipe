@@ -54,6 +54,22 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
       options
     )
 
+    # Only the speech-to-speech case needs OpenAI; other live cases run without its key.
+    case Map.get(settings, :openai_key) do
+      nil ->
+        :ok
+
+      openai_key ->
+        provision(
+          :platform,
+          "openai",
+          "live-telephony",
+          "api_key",
+          %{"api_key" => openai_key},
+          options
+        )
+    end
+
     twilio =
       provision(
         tenant.key,
@@ -116,6 +132,48 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
 
     # The outgoing spec has no fixed number; each call supplies `to`.
     %{outgoing: outgoing, incoming: incoming, to: Map.fetch!(fixture.settings.numbers, receiving)}
+  end
+
+  @doc """
+  An outgoing call handled by GPT-Live speech-to-speech and a carrier-answered incoming
+  call. The handler opens with "Alpha." and must answer the callee's "Bravo." with
+  "Charlie.", which proves phone audio reached the model and its speech reached the phone.
+  """
+  def sts_sources(fixture, dialing, receiving) do
+    outgoing =
+      source(fixture, :outgoing, dialing, receiving)
+      |> put_in([:participants, "assistant"], %{
+        type: "agent",
+        prompt:
+          "This is an automated carrier check. You already said Alpha. When the other " <>
+            "party says Bravo, reply with exactly: Charlie. Never say anything else or ask questions.",
+        first_message: %{mode: "fixed", text: "Alpha."},
+        tools: %{},
+        transfers: [],
+        capabilities: %{
+          speech_to_speech: %{
+            provider: "openai",
+            model: LiveModels.speech("openai", :sts),
+            credential_name: "live-telephony",
+            # The same delegated backend as the passing direct GPT-Live harness.
+            options: %{backend_model: LiveModels.speech("openai", :backend)}
+          }
+        }
+      })
+
+    incoming = source(fixture, :incoming, receiving, receiving)
+
+    %{outgoing: outgoing, incoming: incoming}
+  end
+
+  def publish_sts(fixture, dialing, receiving) do
+    sources = sts_sources(fixture, dialing, receiving)
+
+    %{
+      outgoing: publish_source(fixture, sources.outgoing),
+      incoming: publish_source(fixture, sources.incoming),
+      to: Map.fetch!(fixture.settings.numbers, receiving)
+    }
   end
 
   def transfer_sources(fixture) do

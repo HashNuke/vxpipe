@@ -195,7 +195,7 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
   end
 
   defp await_session(session, deadline, outputs, selected?) do
-    timeout = remaining(deadline)
+    timeout = min(remaining(deadline), 20)
 
     receive do
       {:vxpipe_speech, %Event{session: ^session} = event} ->
@@ -219,7 +219,25 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
       {:vxpipe_speech_closed, ^session, _reason} ->
         flunk("hosted speech session closed before acceptance")
     after
-      timeout -> flunk("hosted speech event timed out")
+      timeout ->
+        if remaining(deadline) == 0, do: flunk("hosted speech event timed out")
+        advance_input_clock(session)
+        await_session(session, deadline, outputs, selected?)
+    end
+  end
+
+  defp advance_input_clock(session) do
+    provider = Session.provider(session)
+
+    case :sys.get_state(provider) do
+      %{ready?: true, latest_context: context} when is_reference(context) ->
+        # GPT-Live needs continuous input even while the caller is silent or
+        # delegated work is pending. Preserve the most recent accepted origin.
+        silence = :binary.copy(<<0, 0>>, 480)
+        assert :ok = Session.push_audio(session, silence, response_context: context)
+
+      _starting ->
+        :ok
     end
   end
 

@@ -56,11 +56,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
     assert completed.endpointing == :inferred_gap
     assert_receive {:vxpipe_event, %AgentSpeechStarted{} = agent_started}, 5_000
     output = collect_output(context.sink, [])
-    assert {:ok, decoder} = Decoder.new(context.config)
+    assert {:ok, decoder} = Decoder.new(%{context.config | sample_rate: 48_000})
     assert {:ok, _decoder, events} = Decoder.push(decoder, output)
     assert {:partial, "RECEIVED HI"} in events
     refute_received {:vxpipe_event, %TextOutput{}}
-    played = div(byte_size(output) * 1_000, 16_000 * 2)
+    played = div(byte_size(output) * 1_000, 48_000 * 2)
     assert :ok = TestAudioOutputSink.playback_progress(context.sink, played, played)
     assert :ok = TestAudioOutputSink.playback_completed(context.sink)
 
@@ -113,7 +113,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
 
     rest = collect_output(sink, [])
     output = first_frame.payload <> rest
-    played = div(byte_size(output) * 1_000, 16_000 * 2)
+    played = div(byte_size(output) * 1_000, 48_000 * 2)
     assert :ok = TestAudioOutputSink.playback_progress(sink, played, played)
     assert :ok = TestAudioOutputSink.playback_completed(sink)
 
@@ -180,7 +180,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
     assert Session.provider(:sys.get_state(context.capability).session) == provider
     assert :sys.get_state(provider).hold_log == [{:hold, :started}, {:hold, :ended}]
     output = collect_output(context.sink, [])
-    played = div(byte_size(output) * 1_000, 16_000 * 2)
+    played = div(byte_size(output) * 1_000, 48_000 * 2)
     assert :ok = TestAudioOutputSink.playback_progress(context.sink, played, played)
     assert :ok = TestAudioOutputSink.playback_completed(context.sink)
     assert_receive {:vxpipe_event, %TextOutput{text: "RECEIVED TEXT OK"}}, 5_000
@@ -248,7 +248,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
     assert is_binary(first_audible)
     assert frame_amplitude(first_audible) > context.config.detection_threshold
     assert frame_amplitude(first_audible) < div(context.config.amplitude, 2)
-    assert {:ok, decoder} = Decoder.new(context.config)
+    assert {:ok, decoder} = Decoder.new(%{context.config | sample_rate: 48_000})
     assert {:ok, _decoder, events} = Decoder.push(decoder, output)
     assert {:partial, "RECEIVED HI"} in events
   end
@@ -483,7 +483,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
       _pending ->
         receive do
           {:test_audio_output, sink, frame} when sink == context.sink ->
-            duration = div(byte_size(frame.payload) * 1_000, 16_000 * 2)
+            duration = div(byte_size(frame.payload) * 1_000, frame.sample_rate * 2)
             await_first_word(context, generated_ms + duration)
         after
           10_000 -> flunk("first aligned word did not reach the room sink")
@@ -494,6 +494,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
   defp collect_output(sink, frames) do
     receive do
       {:test_audio_output, ^sink, frame} ->
+        assert frame.sample_rate == 48_000
         collect_output(sink, [frame.payload | frames])
 
       {:test_audio_output_finish, ^sink, _turn} ->
@@ -504,7 +505,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
   end
 
   defp settle_output(sink, output) do
-    played = div(byte_size(output) * 1_000, 16_000 * 2)
+    played = div(byte_size(output) * 1_000, 48_000 * 2)
     assert :ok = TestAudioOutputSink.playback_progress(sink, played, played)
     assert :ok = TestAudioOutputSink.playback_completed(sink)
   end

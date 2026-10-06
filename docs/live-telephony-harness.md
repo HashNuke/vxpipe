@@ -85,7 +85,7 @@ restricted to `a-z0-9-`, overridable with `VXP_TEST_MACHINE`.
 - After enabling Funnel, `tools:up` waits until every relay address in public DNS answers HTTP
   through Funnel, because carriers may reach any relay and relays warm up one by one (69 s
   measured for three relays on 2026-10-06). The wait is bounded by
-  `VXPIPE_LIVETESTS_RELAY_TIMEOUT` (default 180 s) and names unreachable relays on failure.
+  `VXPIPE_LIVETESTS_RELAY_TIMEOUT` (default 300 s) and names unreachable relays on failure.
 - Funnel listens only on 443, 8443 and 10000. Use 443: Twilio signs the exact callback URL, and
   carrier and SDK handling of explicit non-default ports is inconsistent.
 - `tailscale funnel --bg --https=443 http://127.0.0.1:<port>` starts the mapping; the same command

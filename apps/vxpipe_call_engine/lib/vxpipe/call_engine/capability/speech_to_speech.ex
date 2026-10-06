@@ -193,6 +193,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           session: session,
           descriptor: nil,
           opening_started?: false,
+          opening_playing?: false,
+          opening_turn: nil,
           sink: Keyword.fetch!(options, :sink),
           policy: Keyword.get(options, :policy),
           policy_revision: Keyword.get(options, :policy_revision, 0),
@@ -304,7 +306,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
         {:reply, {:error, :policy_denied}, state}
 
       true ->
-        {result, state} = ResponseOrigins.submit(state, {:audio, pcm})
+        {result, state} = Input.submit_audio(state, pcm)
         {:reply, result, state}
     end
   end
