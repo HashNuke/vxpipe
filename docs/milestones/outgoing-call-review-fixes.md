@@ -1,22 +1,24 @@
 # Outgoing call review fixes
 
-Status: open (review 2026-10-06). Prerequisite: [Outgoing calls and two-call live
+Status: complete (2026-10-06). The six corrections are committed as `817453a4`;
+twenty consecutive directional live cases and all final local gates pass.
+Prerequisite: [Outgoing calls and two-call live
 telephony](outgoing-calls-and-live-telephony.md), whose implementation was reviewed on 2026-10-06
 and is committed as `b1fd2f57`.
 
 ## Review summary
 
-The milestone's checklist is substantially implemented: schema direction and compatibility,
+At review, the milestone's checklist was substantially implemented: schema direction and compatibility,
 plan/persistence fields, engine dial lifecycle, gateway outcome propagation, the API with
-idempotency, observability, provisioning and live harness. Focused suites pass (direction and
+idempotency, observability, provisioning and live harness. Focused suites passed (direction and
 room 36, Calls 7, Gateway HTTP 9, Persistence 19, Gateway telephony/providers 199, shell suites).
 
-It is not complete. A live rerun on 2026-10-06 failed the Telnyx -> Twilio answered case in
+It was incomplete. A live rerun on 2026-10-06 failed the Telnyx -> Twilio answered case in
 4 of 9 runs (3 of 5 with a cold Funnel, 1 of 4 with `tools:up` kept warm), contradicting the
 milestone's "complete" status. Six defects are reproduced below by automated tests that fail on
-the reviewed tree. Five reproduction files cover six issues; issues 3 and 4 share one file. The reproductions live in isolated `*_review_test.exs` files so it does not
-modify the implementation's tests; fixes make them pass (or replace them with equivalent tests
-in the owning suite) and must keep every existing suite green.
+the reviewed tree. Five reproduction files cover six issues; issues 3 and 4 share one file.
+The original isolated `*_review_test.exs` reproductions are retained with focused extensions;
+owning suites also cover the repaired contracts. All review tests and existing suites are green.
 
 Reproductions:
 
@@ -117,7 +119,7 @@ connected, so the advertised retry can never succeed.
 - [x] Commit the reviewed implementation as coherent checkpoints, then these fixes; keep the
   parent milestone's status and index entry at incomplete until Issue 6's acceptance passes.
 - [x] Add this milestone to `docs/milestones/index.md` after the parent entry.
-- [ ] Root gates and Lean as `AGENTS.md` requires; known unrelated full-suite flakes are listed
+- [x] Root gates and Lean as `AGENTS.md` requires; earlier full-suite failures remain recorded
   in the parent milestone.
 
 ## Design review (2026-10-06)
@@ -150,17 +152,27 @@ seed 197656 failed reciprocal audio after receiving Deepgram TTS `session_failed
 webhooks returned 200 and no webhook failure was recorded. Seeds 990489, 541361, 168143
 and 284967 passed. Thus this captured live failure is a separate provider/media failure;
 it does not prove the blocking dial is the only live root cause. The scaled 200 ms blocked
-dial regressions prove that mechanism deterministically for both carriers. No paid suite,
-number purchase or environment-file inspection was used.
+dial regressions prove that mechanism deterministically for both carriers. Only the
+selected telephony cases ran; no number purchase or environment-file inspection was used.
 
-The live reliability gate passed below. Formatting, warnings-as-errors compilation,
-strict Credo, unused-dependency checking and Lean build/oracle/replay passed. Final
-completion still requires a clean local umbrella recheck. Earlier full runs hit the
+The live reliability gate below and all final local gates pass: formatting,
+warnings-as-errors compilation, strict Credo, unused-dependency checking and Lean
+build/oracle/replay. The final full umbrella run reports **3,192 tests, zero failures,
+104 excluded**, seed **394892**. Earlier full runs hit the
 previously recorded WebRTC 1750 Hz assertion or a phone-harness recovery timeout;
 all review regressions passed. A focused mock-provider fragment test failed red then
 passed after completing any earlier Speak through the ordinary test transport path.
 Both complete carrier harnesses passed, and five selected storage-loss repetitions
 passed. This fixture repair is not claimed to establish the intermittent timeout's cause.
+
+The repeated WebRTC 1750 Hz failure was isolated separately: bounded packet diagnostics
+proved the observer's audio reached the receiver but decoded with excessive energy and
+insufficient tonal purity. The receiver fixture recreated its Opus decoder between
+assertions on the same ongoing stream. Retaining one decoder across cue/conversation
+checks, basic packet reads and drained frames made the same red case pass six consecutive
+executions with seed 394892. Temporary diagnostics were removed; frequency thresholds,
+amplitudes, timeouts, sender pacing and production media policy were unchanged. The passing
+final umbrella check includes this minimal fixture correction and all 562 Gateway cases.
 
 ## Current live acceptance (2026-10-06)
 

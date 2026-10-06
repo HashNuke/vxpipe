@@ -41,8 +41,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegReviewTest do
     assert_receive {:test_telephony_dial_pending, adapter}, 1_000
 
     # The dispatcher gives up before the slow dial returns (scaled down from 5 s).
-    dispatch = Task.async(fn -> OutgoingLeg.dispatch(leg, answered(), 200) end)
-    result = Task.await(dispatch, 2_000)
+    result = OutgoingLeg.dispatch(leg, answered(), 200)
     send(adapter, :release_test_telephony_dial)
     assert :ok = OutgoingLeg.await(leg, 1_000)
 

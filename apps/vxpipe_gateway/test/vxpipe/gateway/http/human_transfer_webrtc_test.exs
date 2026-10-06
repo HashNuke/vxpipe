@@ -4436,12 +4436,14 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
                     {:track, %MediaStreamTrack{kind: :audio} = output_track}},
                    5_000
 
+    # Retain decoder history across cue, conversation and drained output packets.
     connection = %{
       client: client,
       channel_ref: channel_ref,
       connection_id: connection_id,
       input_track_id: input_track.id,
-      output_track_id: output_track.id
+      output_track_id: output_track.id,
+      morse_opus: Decoder.Native.create(48_000, 1)
     }
 
     if ready? and channel_label == "chat", do: await_call_ready(connection), else: connection
@@ -5006,7 +5008,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
        ) do
     receive_handoff_audio(
       connection,
-      Decoder.Native.create(48_000, 1),
+      connection.morse_opus,
       {conversation_frequency, wait_frequency, replay?},
       :waiting,
       System.monotonic_time(:millisecond) + 5_000
@@ -5128,7 +5130,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     output_track_id = connection.output_track_id
 
     receive do
-      {:ex_webrtc, ^client, {:rtp, ^output_track_id, _rid, %Packet{} = packet}} -> packet
+      {:ex_webrtc, ^client, {:rtp, ^output_track_id, _rid, %Packet{} = packet}} ->
+        _pcm = Decoder.Native.decode_packet(connection.morse_opus, packet.payload)
+        packet
     after
       timeout_ms -> flunk("timed out waiting for WebRTC audio")
     end

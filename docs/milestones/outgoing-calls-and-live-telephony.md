@@ -1,10 +1,11 @@
 # Outgoing calls and two-call live telephony
 
-Status: incomplete pending final local verification (2026-10-06). Review of `b1fd2f57`
+Status: complete after review corrections (2026-10-06). Review of `b1fd2f57`
 observed four failures in nine Telnyx → Twilio live reruns. The six corrections and ten
 consecutive passing live runs in each direction are now recorded in the
-[review-fix milestone](outgoing-call-review-fixes.md). Final umbrella verification and the
-implementation commit remain before completion; historical single-run evidence follows below.
+[review-fix milestone](outgoing-call-review-fixes.md), with fixes committed as `817453a4`.
+Final verification passes all root gates and Lean; the full umbrella reports 3,192 tests,
+zero failures and 104 exclusions (seed 394892). Historical single-run evidence follows below.
 
 Prerequisites: [Telnyx calls](telnyx-calls.md), [Twilio through the common telephony
 contract](twilio-calls.md) (adapter, incoming and transfer dialing), [prepared call
@@ -60,10 +61,14 @@ version.
   `admission: "start_call"` on a phone service or `web`. `outgoing_call.callee` is the human
   Vxpipe dials; its connection is `dial` on a phone service (`admission` may be omitted for the
   callee and is implied). `handled_by` is the participant that talks to that human when the call
-  connects, usually an agent; it must differ from the caller/callee.
+  connects and must differ from the caller/callee. An incoming handler may be an agent
+  or human; an outgoing handler must be an agent because the outgoing API supplies no
+  human-handler join route or token.
 - The callee's destination comes from `number` or protected `number_from_variable` (initial
   variables). The originating number is the telephony service's configured outbound number;
-  call spec input cannot supply it.
+  call spec input cannot supply it. Publication and new claims require that originating
+  number under the existing service lock, including after caller ID is removed from a
+  published service.
 - `outgoing_call.ring_timeout_ms` is optional: default 30,000, bounded 5,000–60,000. It covers
   dial submission through answer and is not reset by ringing events.
 - Other participants and transfers are unchanged and work in either direction. `dial` with
@@ -117,10 +122,12 @@ Content-Type: application/json
   is submitted through the existing outbound leg connector with fresh service/credential
   resolution. Respond `201` once the room exists and the dial was submitted.
 - Optional client-generated `Idempotency-Key` (a UUID or similar opaque value), stored on the
-  call record and unique per tenant: the same key and request returns the original call with
-  `200` and does not dial again; the same key with a different request returns `409`; without the header every request
-  is a separate call, as R39 decided for preparation. Incoming calls need no key: carrier event
-  and leg identities already deduplicate them.
+  call record and unique per tenant: the same key and request returns the original admitting,
+  running or ended call with `200` and does not dial again. A failed start replays its original
+  `503` error/body with `retryable: false`; another attempt requires a new key. The same key
+  with a different request returns `409`; without the header every request is a separate call,
+  as R39 decided for preparation. Incoming calls need no key: carrier event and leg identities
+  already deduplicate them.
 - `state` is the existing call record state (`running` once the room exists). The dial result
   is the new `outgoing_outcome`: `null` while ringing, then exactly one of `answered`,
   `no_answer` (carrier no-answer or local ring deadline), `busy`, `rejected` (remote hangup before
@@ -217,7 +224,8 @@ Implement in this order; each sub-checkpoint is a coherent commit with its tests
 D1. Call spec schema (CallEngine, Calls)
 - [x] Red validation cases: exactly one of `incoming_call`/`outgoing_call`; caller is a human
   with a `receive` + `start_call` connection; callee is a human with a phone `dial` connection;
-  `handled_by` exists and differs; `ring_timeout_ms` default and bounds; transfer dial unchanged.
+  `handled_by` exists and differs and is an agent for outgoing calls; `ring_timeout_ms`
+  default and bounds; transfer dial unchanged.
 - [x] New schema version `20261004.01`; `20260915.01` specs still parse (translated) and save,
   publish and run; examples and authoring docs updated.
 - [x] Saving an outgoing spec creates no inbound participant or telephony route.
