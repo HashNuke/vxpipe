@@ -192,7 +192,41 @@ tools_up() {
   fi
 
   public_url="https://$dns"
+  await_public_relays "$dns"
   printf '%s %s -> %s\n' "$node_name" "$public_url" "$funnel_target"
+}
+
+# Carriers resolve the public name themselves and may reach any Funnel relay, and
+# relays become reachable one by one, sometimes over a minute after Funnel starts.
+# Wait until every relay in public DNS answers HTTP through Funnel; any status
+# (502 while no test listener runs) proves that relay forwards to this node.
+await_public_relays() {
+  local dns="$1" deadline relays relay pending
+  deadline=$((SECONDS + ${VXPIPE_LIVETESTS_RELAY_TIMEOUT:-180}))
+
+  while :; do
+    relays="$("$curl_bin" -sS -m 5 "https://dns.google/resolve?name=$dns&type=A" < /dev/null 2>/dev/null |
+      jq -r '.Answer[]? | select(.type == 1) | .data' 2>/dev/null || true)"
+    pending=()
+    for relay in $relays; do
+      relay_reachable "$dns" "$relay" || pending+=("$relay")
+    done
+
+    if [[ -n "$relays" && ${#pending[@]} -eq 0 ]]; then
+      return 0
+    fi
+    if (( SECONDS >= deadline )); then
+      die "public Funnel relays for $dns not reachable after ${VXPIPE_LIVETESTS_RELAY_TIMEOUT:-180}s: ${pending[*]:-no relays in public DNS}"
+    fi
+    sleep "${VXPIPE_LIVETESTS_RELAY_INTERVAL:-3}"
+  done
+}
+
+relay_reachable() {
+  local dns="$1" relay="$2" status
+  status="$("$curl_bin" -s -o /dev/null -m 4 -w '%{http_code}' \
+    --resolve "$dns:443:$relay" "https://$dns/healthz" < /dev/null 2>/dev/null || true)"
+  [[ "$status" =~ ^[1-5][0-9][0-9]$ ]]
 }
 
 tools_down() {

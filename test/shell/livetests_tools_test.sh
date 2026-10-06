@@ -92,6 +92,21 @@ cat > "$scratch/bin/curl" <<'FAKE'
 #!/usr/bin/env bash
 url="${*: -1}"
 cat > /dev/null
+# Public DNS returns three Funnel relays; FAKE_SLOW_RELAY stays unreachable for
+# FAKE_RELAY_WARMUP probes. A reachable relay answers 502 (nothing listens yet).
+case "$url" in
+  https://dns.google/resolve*)
+    echo '{"Answer":[{"type":1,"data":"192.0.2.1"},{"type":1,"data":"192.0.2.2"},{"type":1,"data":"192.0.2.3"}]}'
+    exit 0 ;;
+  */healthz)
+    relay="$(printf '%s\n' "$@" | sed -n 's/^.*:443:\(.*\)$/\1/p')"
+    count=$(( $(cat "$FAKE_TS_DIR/relay-$relay" 2>/dev/null || echo 0) + 1 ))
+    echo "$count" > "$FAKE_TS_DIR/relay-$relay"
+    if [[ "$relay" == "${FAKE_SLOW_RELAY:-}" && "$count" -le "${FAKE_RELAY_WARMUP:-0}" ]]; then
+      printf '000'; exit 28
+    fi
+    printf '502'; exit 0 ;;
+esac
 base="https://vxp-test-$FAKE_MACHINE.tail0000.ts.net"
 case "$url" in
   *outbound_voice_profiles*) body="{\"data\":[{\"id\":\"p1\",\"name\":\"vxp-test-$FAKE_MACHINE\"}]}" ;;
@@ -126,6 +141,7 @@ export VXPIPE_LIVETESTS_STATE_DIR="$scratch/state"
 export VXP_TEST_MACHINE="Wheel_Jack.local"
 export FAKE_MACHINE=wheel-jack-local
 export VXPIPE_LIVETESTS_CURL_BIN="$scratch/bin/curl"
+export VXPIPE_LIVETESTS_RELAY_INTERVAL=0.05
 unset TELEPHONY_TEST_PUBLIC_URL TELEPHONY_TEST_PORT
 
 carriers='TELNYX_API_KEY=KEYtestonly
@@ -176,6 +192,24 @@ livetests run --only live_twilio apps/vxpipe_gateway/test/integration
 rg -q -F 'funnel=http://127.0.0.1:4600' "$scratch/output" || fail "registered node not reused"
 log_has 'authkey=' && fail "registered node asked for the secret again"
 tailscaled_running && fail "second run left tailscaled running"
+
+# tools:up waits until every public Funnel relay answers, since carriers may reach any.
+FAKE_SLOW_RELAY=192.0.2.3 FAKE_RELAY_WARMUP=2 livetests tools:up > "$scratch/up"
+[[ "$(cat "$FAKE_TS_DIR/relay-192.0.2.3" 2>/dev/null || echo 0)" -ge 3 ]] \
+  || fail "tools:up did not wait for a slow relay"
+for relay in 192.0.2.1 192.0.2.2; do
+  [[ -s "$FAKE_TS_DIR/relay-$relay" ]] || fail "relay $relay was not probed"
+done
+livetests tools:down > /dev/null
+
+# A relay that never answers fails within the bound, names it, and run cleans up.
+rm -f "$FAKE_TS_DIR"/relay-*
+if FAKE_SLOW_RELAY=192.0.2.3 FAKE_RELAY_WARMUP=100000 VXPIPE_LIVETESTS_RELAY_TIMEOUT=1 \
+  livetests run --only live_telephony apps/vxpipe_console/test/integration 2> "$scratch/stderr"; then
+  fail "run dialed with an unreachable public relay"
+fi
+rg -q -F '192.0.2.3' "$scratch/stderr" || fail "unreachable relay not named"
+tailscaled_running && fail "run left tailscaled running after a relay failure"
 
 # Tools started by tools:up stay up after a run; tools:down stops them.
 livetests tools:up > "$scratch/up"
