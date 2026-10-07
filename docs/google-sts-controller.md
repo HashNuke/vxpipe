@@ -158,6 +158,15 @@ verification before claiming complete Google conversation support; neither a
 placeholder request nor history replay is authorized. Research and concrete tasks
 are recorded in `labnotes/20260922-1903-google-sts-input.md` and the milestone.
 
+**Superseded 2026-10-07 (call continuity).** Live Gemini calls ended with
+`activity_start: ambiguous_input` when a caller turn received no input transcription (noise or a
+cut-off word) and the next turn began. Failing the session ended the caller's phone call over
+transcript bookkeeping. A new onset now settles the earlier caller with an empty final, marks
+socket resumption ambiguous, and settles the new caller's first final empty as well, because it
+may be the earlier caller's late final. Nothing is attributed by guesswork; at most one turn's
+transcript is lost, and the room treats an empty final as settled evidence rather than caller
+text. External turn control follows the same rule. The original rationale follows.
+
 Design review found no primary-source premise for FIFO attribution across several
 unfinished callers. A delayed A final after B onset is indistinguishable from a B
 final before B activity end while A remains missing. The first caller checkpoint

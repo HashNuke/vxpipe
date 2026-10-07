@@ -51,6 +51,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert state.next_sequence > 1
   end
 
+  # A provider settles a caller turn whose transcript can never be attributed with an empty
+  # final (Gemini Live without input transcription, 2026-10-07). It is not caller text.
+  test "an empty final settles the caller turn without publishing a transcription" do
+    state = caller_transcript(state(), "", "turn-silent")
+    refute_received {:vxpipe_event, %ParticipantTranscription{}}
+    assert %{final?: true} = Map.fetch!(state.sts_caller_turns, "turn-silent")
+  end
+
   test "only the opening's matching STS playback completion releases opening protection" do
     first = %Vxpipe.CallEngine.RoomAuthority.FirstMessage{
       mode: :fixed,

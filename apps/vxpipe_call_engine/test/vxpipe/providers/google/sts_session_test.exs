@@ -144,6 +144,80 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
       refute_received {:vxpipe_speech, %Event{session: ^session, kind: :turn_ended}}
     end
 
+    # Live Gemini (2026-10-07) can signal generation completion before the opening's output
+    # transcription arrives; verifying at that moment failed the session, so the call never
+    # heard its opening. The transcript is awaited until the turn completes.
+    test "fixed opening with response-start #{@fixed_response_start} verifies a transcript that follows generation completion" do
+      profile = Keyword.fetch!([response_start?: @fixed_response_start], :response_start?)
+      {session, wire} = start_session(response_start?: profile)
+      context = make_ref()
+      options = if profile, do: [response_context: context], else: []
+      assert :ok = Session.begin_opening(session, {:fixed, "GOOD DAY"}, options)
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :input_submitted} = submitted}
+
+      assert :ok = Session.ack(session, submitted)
+      output = opening_output(session, profile)
+      deliver_sync(session, wire, audio_message(1))
+      deliver_sync(session, wire, %{"serverContent" => %{"generationComplete" => true}})
+      refute_received {:vxpipe_speech_closed, ^session, _}
+      refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
+
+      deliver(wire, %{"serverContent" => %{"outputTranscription" => %{"text" => "GOOD DAY"}}})
+      output = if profile, do: response_output(session, context), else: output
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :output_transcript, text: "GOOD DAY"} = text}
+
+      assert :ok = Session.ack(session, text)
+      assert_receive {:vxpipe_speech_audio, %Audio{session: ^session} = audio}
+      assert :ok = Session.ack_audio(session, audio)
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :output_completed} = completed}
+
+      assert :ok = Session.ack(session, completed)
+      assert :ok = Session.settle_output(session, output, 0)
+      deliver(wire, %{"serverContent" => %{"turnComplete" => true}})
+      refute_receive {:vxpipe_speech_closed, ^session, _}, 100
+    end
+
+    # Live Gemini transcribed the fixed opening "Alpha." as "Alpha" (2026-10-07). Speech
+    # transcription does not carry the author's punctuation or case; the words must match.
+    test "fixed opening with response-start #{@fixed_response_start} verifies the words, not punctuation" do
+      profile = Keyword.fetch!([response_start?: @fixed_response_start], :response_start?)
+      {session, wire} = start_session(response_start?: profile)
+      context = make_ref()
+      options = if profile, do: [response_context: context], else: []
+      assert :ok = Session.begin_opening(session, {:fixed, "Good day, caller."}, options)
+
+      assert_receive {:vxpipe_speech,
+                      %Event{session: ^session, kind: :input_submitted} = submitted}
+
+      assert :ok = Session.ack(session, submitted)
+      _output = opening_output(session, profile)
+      deliver_sync(session, wire, audio_message(1))
+
+      deliver(wire, %{
+        "serverContent" => %{
+          "outputTranscription" => %{"text" => "good day caller"},
+          "generationComplete" => true
+        }
+      })
+
+      if profile, do: response_output(session, context)
+
+      assert_receive {:vxpipe_speech,
+                      %Event{
+                        session: ^session,
+                        kind: :output_transcript,
+                        text: "Good day, caller."
+                      }}
+
+      refute_received {:vxpipe_speech_closed, ^session, _}
+    end
+
     test "opening with response-start #{@fixed_response_start} cannot replace an unsettled opening" do
       profile = Keyword.fetch!([response_start?: @fixed_response_start], :response_start?)
       {session, wire} = start_session(response_start?: profile)
@@ -213,6 +287,8 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
           if transcript, do: %{"outputTranscription" => %{"text" => transcript}}, else: %{}
 
         deliver(wire, %{"serverContent" => Map.put(content, "generationComplete", true)})
+        # A missing transcript may still follow generation; it fails when the turn completes.
+        if is_nil(transcript), do: deliver(wire, %{"serverContent" => %{"turnComplete" => true}})
         assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
         refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
         refute_received {:vxpipe_speech, %Event{session: ^session, kind: :output_transcript}}

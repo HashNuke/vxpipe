@@ -959,18 +959,41 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     end
   end
 
-  test "a competing caller onset fails without guessing ownership of the missing final" do
+  # Live Gemini calls (2026-10-07) ended when a caller turn produced no input transcription
+  # and the next turn began: the session failed rather than guess the missing final's owner.
+  # The call must continue. Without a correlation ID the late final cannot be attributed, so
+  # the earlier turn and the next final are both settled without text; nothing is guessed.
+  test "a competing caller onset settles the missing final without text and keeps the call" do
     context = start_controller()
-    turn = start_caller(context)
+    capability = context.capability
+    first = start_caller(context)
     deliver(context, activity("ACTIVITY_END"))
-    assert_started(context, turn)
-    complete_reply(context, turn, "REPLY", 1)
+    assert_started(context, first)
+    complete_reply(context, first, "REPLY", 1)
     provider = context.provider
     monitor = Process.monitor(provider)
-    TestGoogleSTSTransport.deliver(context.wire, JSON.encode!(activity("ACTIVITY_START")))
-    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :session_failed}}, 1_000
-    refute_received {:vxpipe_sts_input_event, _, %{event: %Event{kind: :input_transcript}}}
-    refute_received {:test_google_sts_started, _, _}
+
+    second = start_caller(context)
+    refute second == first
+    assert_settled_without_text(capability, first)
+
+    deliver(context, content(%{"inputTranscription" => %{"text" => "LATE OR SECOND"}}))
+    assert_settled_without_text(capability, second)
+    deliver(context, content(%{"inputTranscription" => %{"text" => "SECOND"}}))
+    deliver(context, activity("ACTIVITY_END"))
+    assert_started(context, second)
+    complete_reply(context, second, "SECOND REPLY", 2)
+
+    third = start_caller(context)
+    final_caller(context, third, "THIRD")
+    refute_received {:DOWN, ^monitor, :process, ^provider, _}
+    assert :sys.get_state(context.provider).resumption_ambiguous?
+
+    refute_received {:vxpipe_sts_input_event, _,
+                     %{event: %Event{kind: :input_transcript, text: "LATE OR SECOND"}}}
+
+    refute_received {:vxpipe_sts_input_event, _,
+                     %{event: %Event{kind: :input_transcript, text: "SECOND"}}}
   end
 
   test "a typed submission cannot acquire an earlier audio caller's final" do
@@ -1018,7 +1041,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     refute_received {:vxpipe_sts_input_event, _, %{event: %Event{kind: :input_transcript}}}
   end
 
-  test "external competing onset fails before another wire activity start" do
+  test "external competing onset settles the missing final and starts the next activity" do
     context = start_controller("external")
     assert :ok = SpeechToSpeech.input_activity(context.capability, :started)
     assert :ok = SpeechToSpeech.input_activity(context.capability, :ended)
@@ -1027,9 +1050,14 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     assert_receive {:test_google_sts_control, ^wire, _end}
     provider = context.provider
     monitor = Process.monitor(provider)
-    assert {:error, _reason} = SpeechToSpeech.input_activity(context.capability, :started)
-    assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :session_failed}}, 1_000
-    refute_received {:test_google_sts_control, ^wire, _}
+    assert :ok = SpeechToSpeech.input_activity(context.capability, :started)
+    assert_receive {:test_google_sts_control, ^wire, _next_start}, 1_000
+
+    assert_receive {:vxpipe_sts_input_event, _,
+                    %{event: %Event{kind: :input_transcript, text: "", final: true}}},
+                   1_000
+
+    refute_received {:DOWN, ^monitor, :process, ^provider, _}
   end
 
   test "pending caller final prevents socket replacement after model end and playback" do
@@ -1489,6 +1517,19 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
                         kind: :input_transcript,
                         turn_ref: ^turn,
                         text: ^text,
+                        final: true
+                      }
+                    }},
+                   1_000
+  end
+
+  defp assert_settled_without_text(capability, turn) do
+    assert_receive {:vxpipe_sts_input_event, ^capability,
+                    %{
+                      event: %Event{
+                        kind: :input_transcript,
+                        turn_ref: ^turn,
+                        text: "",
                         final: true
                       }
                     }},

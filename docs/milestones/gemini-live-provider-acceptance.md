@@ -146,3 +146,20 @@ Adapter backlog/credit/caller-control failures belong to ordinary Google tests.
 Playback-duration and sink-responsiveness regressions belong to the common STS
 suite with a controlled provider/sink. The live lane proves upstream wire and
 carrier behavior and exposes the remaining qualified-attribution dependency.
+
+## Follow-up (2026-10-07)
+
+- `ambiguous_input`: a competing caller onset no longer fails the session. The earlier caller
+  and the next final are settled without text; the room treats an empty final as settled
+  evidence. See [the controller doc](../google-sts-controller.md). Red tests in the Google
+  controller and room STS suites. Live phone re-verification is blocked: Twilio's API reports
+  the account as not active.
+- Fixed-opening verification failed live sessions when the transcript followed
+  `generationComplete` or lacked punctuation. Both fixed with red tests; verification now waits
+  for the transcript until the turn completes and compares words.
+- Open: Gemini sometimes sends no output transcript for the opening at all (3 of 26 direct
+  runs). Independent Deepgram transcription of the held audio returned "alpha" each time, so
+  the openings were spoken correctly and only the transcript was missing. The session still
+  fails closed there; the policy (play, retry once, or fail) needs a user decision.
+- Phone lanes now dial Telnyx -> Telnyx (Twilio's account is inactive): Gemini round trip and
+  barge-in (2/2) pass.

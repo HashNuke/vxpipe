@@ -60,10 +60,23 @@ defmodule Vxpipe.Providers.Google.STSInput do
 
   def bind_context(_state, _context, _operation), do: {:error, :busy}
 
-  # The pinned profile has one final per audio caller, but no correlation ID.
-  # Never turn several unfinished callers into an assumed FIFO association.
+  # The pinned profile has one final per audio caller, but no correlation ID, and some caller
+  # activity (noise, a cut-off word) never receives a final. Failing the session there ended
+  # live calls. Instead the earlier caller is settled without text, and the next final is
+  # settled without text too because it may be that earlier caller's late final. Nothing is
+  # attributed by guesswork; only one transcript is lost and the conversation continues.
   def start(%{caller: %{ended?: false}} = state), do: {:ok, state}
-  def start(%{caller: caller}) when not is_nil(caller), do: {:error, :ambiguous_input}
+
+  def start(%{caller: caller} = state) when not is_nil(caller) do
+    case settle_without_text(state, caller) do
+      {:ok, state} ->
+        with {:ok, state} <- start(%{state | caller: nil, resumption_ambiguous?: true}),
+             do: {:ok, discard_next_final(state)}
+
+      error ->
+        error
+    end
+  end
 
   def start(state) do
     turn = make_ref()
@@ -79,7 +92,13 @@ defmodule Vxpipe.Providers.Google.STSInput do
         {:ok,
          STSResumption.begin_turn(%{
            state
-           | caller: %{turn_ref: turn, ended?: false, final?: false, model_interrupted?: false},
+           | caller: %{
+               turn_ref: turn,
+               ended?: false,
+               final?: false,
+               model_interrupted?: false,
+               discard_final?: false
+             },
              input_turn: turn,
              input_text: nil,
              input_ended?: false,
@@ -137,6 +156,16 @@ defmodule Vxpipe.Providers.Google.STSInput do
   def transcript(%{caller: nil} = state, _text, _final?), do: {:ok, state}
   def transcript(%{caller: %{final?: true}} = state, _text, _final?), do: {:ok, state}
 
+  # This caller's first final may belong to the caller settled before it; settle it empty.
+  def transcript(%{caller: %{discard_final?: true}} = state, _text, false), do: {:ok, state}
+
+  def transcript(%{caller: %{discard_final?: true} = caller} = state, _text, true) do
+    case settle_without_text(state, caller) do
+      {:ok, state} -> {:ok, retire(state, %{caller | final?: true, discard_final?: false})}
+      error -> error
+    end
+  end
+
   def transcript(state, text, final?) do
     caller = state.caller
 
@@ -153,6 +182,22 @@ defmodule Vxpipe.Providers.Google.STSInput do
         {:error, :session_failed}
     end
   end
+
+  defp settle_without_text(state, caller) do
+    case Event.emit(state.channel, :input_transcript,
+           turn_ref: caller.turn_ref,
+           text: "",
+           final: true
+         ) do
+      result when result in [:ok, :discarded] -> {:ok, STSResumption.observed_caller_final(state)}
+      _failure -> {:error, :session_failed}
+    end
+  end
+
+  defp discard_next_final(%{caller: caller} = state) when is_map(caller),
+    do: %{state | caller: %{caller | discard_final?: true}}
+
+  defp discard_next_final(state), do: state
 
   defp retire(state, %{ended?: true, final?: true}), do: %{state | caller: nil}
   defp retire(state, caller), do: %{state | caller: caller}

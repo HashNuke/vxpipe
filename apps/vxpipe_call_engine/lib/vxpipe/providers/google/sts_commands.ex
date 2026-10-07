@@ -117,10 +117,6 @@ defmodule Vxpipe.Providers.Google.STSCommands do
       ),
       do: {:reply, :ok, state}
 
-  def execute({:input_activity, :started}, %{ready?: true, caller: caller} = state)
-      when not is_nil(caller),
-      do: {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
-
   def execute({:input_activity, :ended}, %{ready?: true, caller: nil} = state),
     do: {:reply, :ok, state}
 

@@ -17,7 +17,8 @@ defmodule Vxpipe.Providers.Google.STSOpening do
         "Begin the conversation by speaking exactly the following text, with no additions: " <>
           text
 
-      {:ok, cue, %{expected: text, transcript: "", chunks: [], audio_bytes: 0}}
+      {:ok, cue,
+       %{expected: text, transcript: "", chunks: [], audio_bytes: 0, generation_done?: false}}
     else
       {:error, :invalid_opening}
     end
@@ -27,10 +28,13 @@ defmodule Vxpipe.Providers.Google.STSOpening do
 
   def accept(opening, {:output_transcript, text}) do
     transcript = opening.transcript <> text
+    opening = %{opening | transcript: transcript}
 
-    if byte_size(transcript) <= byte_size(opening.expected),
-      do: {:buffered, %{opening | transcript: transcript}},
-      else: {:error, :text_mismatch}
+    cond do
+      not prefix?(words(transcript), words(opening.expected)) -> {:error, :text_mismatch}
+      opening.generation_done? and verified?(opening) -> release(opening)
+      true -> {:buffered, opening}
+    end
   end
 
   def accept(opening, {:audio, pcm}) do
@@ -44,16 +48,14 @@ defmodule Vxpipe.Providers.Google.STSOpening do
     end
   end
 
+  # Gemini can report generation completion before the opening's output transcription
+  # arrives. Audio is complete; keep holding it until the transcript verifies or the turn
+  # completes without it.
   def accept(opening, :generation_complete) do
-    if opening.transcript == opening.expected and opening.chunks != [] do
-      events =
-        [{:output_transcript, opening.transcript}] ++
-          Enum.map(output_chunks(IO.iodata_to_binary(opening.chunks)), &{:audio, &1}) ++
-          [:generation_complete]
-
-      {:release, events}
-    else
-      {:error, :unverified_opening}
+    cond do
+      verified?(opening) -> release(opening)
+      opening.chunks != [] -> {:buffered, %{opening | generation_done?: true}}
+      true -> {:error, :unverified_opening}
     end
   end
 
@@ -61,8 +63,36 @@ defmodule Vxpipe.Providers.Google.STSOpening do
     do: {:error, :opening_interrupted}
 
   def accept(_opening, {:turn_complete, _status}), do: {:error, :unverified_opening}
+
   def accept(_opening, {:tool_call, _id, _name, _args}), do: {:error, :unexpected_tool}
   def accept(_opening, _metadata), do: :pass
+
+  # Speech transcription carries neither the author's punctuation nor case; compare words.
+  defp verified?(opening),
+    do: words(opening.transcript) == words(opening.expected) and opening.chunks != []
+
+  defp words(text) do
+    text
+    |> String.downcase()
+    |> String.replace(~r/[^\p{L}\p{N}]+/u, " ")
+    |> String.split()
+  end
+
+  # Fragments may split a word, so the last heard word only has to start the expected one.
+  defp prefix?([], _expected), do: true
+  defp prefix?([word], [expected | _rest]), do: String.starts_with?(expected, word)
+  defp prefix?([word | heard], [word | expected]), do: prefix?(heard, expected)
+  defp prefix?(_heard, _expected), do: false
+
+  # The verified opening is published as the author's exact text.
+  defp release(opening) do
+    events =
+      [{:output_transcript, opening.expected}] ++
+        Enum.map(output_chunks(IO.iodata_to_binary(opening.chunks)), &{:audio, &1}) ++
+        [:generation_complete]
+
+    {:release, events}
+  end
 
   defp output_chunks(<<chunk::binary-size(@output_chunk_bytes), rest::binary>>),
     do: [chunk | output_chunks(rest)]

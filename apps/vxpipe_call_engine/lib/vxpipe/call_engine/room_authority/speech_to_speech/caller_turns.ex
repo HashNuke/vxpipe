@@ -106,6 +106,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.CallerTurns do
     end
   end
 
+  # A provider settles a turn whose transcript cannot be attributed with an empty final. It
+  # completes the turn's transcript evidence but is not caller text.
+  defp update_turn(state, %{final?: false} = turn, %Event{
+         kind: :input_transcript,
+         text: "",
+         final: final?
+       })
+       when final? != false,
+       do: {state, %{turn | final?: true}}
+
   defp update_turn(state, %{final?: false} = turn, %Event{
          kind: :input_transcript,
          text: text,
