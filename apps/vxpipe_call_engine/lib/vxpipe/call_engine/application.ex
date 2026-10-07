@@ -21,6 +21,7 @@ defmodule Vxpipe.CallEngine.Application do
 
     base_children = [
       {Registry, keys: :unique, name: Vxpipe.CallEngine.RoomRegistry},
+      {Registry, keys: :duplicate, name: Vxpipe.CallEngine.ReadinessWatchRegistry},
       {Task.Supervisor, name: Vxpipe.CallEngine.ModelInferenceTaskSupervisor},
       {Task.Supervisor, name: Vxpipe.CallEngine.ArchiveWriterTaskSupervisor},
       {Task.Supervisor, name: Vxpipe.CallEngine.ReadinessTaskSupervisor},

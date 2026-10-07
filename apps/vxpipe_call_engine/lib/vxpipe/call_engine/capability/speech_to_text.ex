@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
+  alias Vxpipe.CallEngine.Readiness.Watch
   alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.Capability.SpeechToText.State
 
@@ -182,18 +183,24 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
         {:vxpipe_speech_prepared, allocation, descriptor},
         %{pending_policy: %{state: %{session: allocation}}} = state
       ) do
-    case PolicyPreparation.prepared(state, allocation, descriptor) do
-      {:ok, state} -> {:noreply, state}
-      {:error, _reason} -> {:noreply, PolicyPreparation.fail(state, :provider_failed)}
-    end
+    result =
+      case PolicyPreparation.prepared(state, allocation, descriptor) do
+        {:ok, state} -> {:noreply, state}
+        {:error, _reason} -> {:noreply, PolicyPreparation.fail(state, :provider_failed)}
+      end
+
+    announce_readiness(result, state)
   end
 
   def handle_info({:vxpipe_speech, event}, state) do
-    case State.event(state, event) do
-      {:ok, %Signal{} = signal, state} -> handle_signal(signal, state)
-      {:error, :stale_session} -> {:noreply, state}
-      {:error, _reason} -> stop_unavailable(:invalid_provider_message, state)
-    end
+    result =
+      case State.event(state, event) do
+        {:ok, %Signal{} = signal, updated} -> handle_signal(signal, updated)
+        {:error, :stale_session} -> {:noreply, state}
+        {:error, _reason} -> stop_unavailable(:invalid_provider_message, state)
+      end
+
+    announce_readiness(result, state)
   end
 
   def handle_info(
@@ -277,6 +284,22 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     state = Usage.observe_signal(state, signal)
     send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})
     {:noreply, %{state | last_provider_sequence: signal.provider_sequence}}
+  end
+
+  # Startup readiness collectors re-probe on this notification instead of waiting for a poll.
+  defp announce_readiness({:noreply, state} = result, previous) do
+    if readiness_evidence(state) != readiness_evidence(previous), do: Watch.changed()
+    result
+  end
+
+  defp announce_readiness(result, _previous), do: result
+
+  # The fields `State.readiness/1` and prepared-policy readiness are derived from.
+  defp readiness_evidence(state) do
+    pending = state.pending_policy && state.pending_policy.state
+
+    {state.readiness_status, state.session != nil, state.readiness_generation,
+     state.policy_revision, pending && {pending.readiness_status, pending.session != nil}}
   end
 
   defp stop_unavailable(reason, state) do

@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
 
   alias Vxpipe.CallEngine.Capability.TextToSpeech.{Output, Usage}
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
-  alias Vxpipe.CallEngine.Readiness.Resource
+  alias Vxpipe.CallEngine.Readiness.{Resource, Watch}
   alias Vxpipe.CallEngine.Speech.{Audio, Event, Session}
   alias Vxpipe.CallEngine.Telemetry
   alias Vxpipe.CallEngine.TextToSpeechRequest
@@ -164,6 +164,8 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
       when session == state.session do
     with :ok <- Session.ack(session, event),
          {:ok, descriptor} <- Session.describe(session) do
+      # Startup readiness collectors re-probe on this instead of waiting for a poll.
+      Watch.changed()
       {:noreply, %{state | descriptor: descriptor, readiness_status: :ready}}
     else
       _failure -> stop_unavailable(:provider_failed, state)

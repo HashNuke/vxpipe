@@ -109,6 +109,119 @@ defmodule Vxpipe.CallEngine.Readiness.CollectorTest do
     refute_receive {:test_stt_transport_started, _, _}
   end
 
+  test "a speech-to-text provider connecting makes readiness ready without a refresh or poll" do
+    identity = [tenant_id: "tenant-ready", room_id: "room-ready", incarnation_id: "inc-push"]
+
+    assert {:ok, provider} =
+             Flux.new(
+               api_key: "fixture-secret",
+               model: "flux-general-en",
+               encoding: :opus,
+               sample_rate: 48_000
+             )
+
+    tree = start_supervised!({CapabilityTree, owner: self()}, id: make_ref())
+
+    stt =
+      start_supervised!(
+        {SpeechToText,
+         identity ++
+           [
+             owner: self(),
+             participant_id: "caller",
+             connection_id: "connection",
+             speech_scope: CapabilityTree.scope(tree),
+             provider:
+               {Vxpipe.Providers.Deepgram.STTSession,
+                model: provider.model,
+                encoding: provider.encoding,
+                sample_rate: provider.sample_rate},
+             provider_private: [
+               config: provider,
+               wire_module: TestSpeechToTextTransport,
+               wire_options: [observer: self()]
+             ]
+           ]}
+      )
+
+    assert_receive {:test_stt_transport_started, transport, _connection}
+
+    policy = %Snapshot{
+      revision: 0,
+      present_participant_ids: MapSet.new(["caller"]),
+      effective: %Effective{
+        audio_routes: :unrestricted,
+        transcript_routes: :unrestricted,
+        record_audio: true,
+        save_transcripts: true
+      }
+    }
+
+    assert :ok = Enforcer.apply(stt, policy, 1_000)
+    assert {:ok, stt_resource, :preparing} = SpeechToText.readiness(stt)
+    collector = collector([stt_resource])
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :preparing}}
+
+    TestSpeechToTextTransport.deliver(
+      transport,
+      ~s({"type":"Connected","request_id":"connected","sequence_id":0})
+    )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}
+  end
+
+  test "a text-to-speech provider connecting makes readiness ready without a refresh or poll" do
+    assert {:ok, config} =
+             Vxpipe.Providers.Deepgram.FluxTextToSpeech.new(
+               api_key: "fixture-secret",
+               model: "flux-haley-en",
+               encoding: :linear16,
+               sample_rate: 48_000
+             )
+
+    {:ok, private} =
+      Vxpipe.CallEngine.Speech.PrivateInit.open(
+        [
+          config: config,
+          wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+          wire_options: [observer: self(), ready_on_start: false]
+        ],
+        5_000
+      )
+
+    tree =
+      try do
+        start_supervised!(
+          {Vxpipe.CallEngine.Capability.TextToSpeech.Tree,
+           owner: self(),
+           participant_id: "agent",
+           provider:
+             {Vxpipe.Providers.Deepgram.TTSSession,
+              model: config.model, encoding: config.encoding, sample_rate: config.sample_rate},
+           provider_private: private,
+           maximum_requests: 1}
+        )
+      after
+        Vxpipe.CallEngine.Speech.PrivateInit.close(private)
+      end
+
+    tts = Vxpipe.CallEngine.Capability.TextToSpeech.Tree.capability(tree)
+    assert_receive {:test_tts_transport_started, transport, _connection}
+
+    assert {:ok, tts_resource, :preparing} =
+             Vxpipe.CallEngine.Capability.TextToSpeech.readiness(tts)
+
+    collector = collector([tts_resource])
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :preparing}}
+
+    Vxpipe.CallEngine.TestTextToSpeechTransport.deliver_control(
+      transport,
+      ~s({"type":"Connected","request_id":"connected"})
+    )
+
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}
+  end
+
   test "collects every required binding asynchronously and retains ready evidence on reconcile" do
     first = adapter("first")
     second = adapter("second")
@@ -161,6 +274,35 @@ defmodule Vxpipe.CallEngine.Readiness.CollectorTest do
     :ok = TestReadinessAdapter.reply(source, :ready)
     assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}
     refute_receive {:readiness_requested, ^source}
+  end
+
+  # A ready transition used to wait for the next poll (100 ms by default), which delayed
+  # every opening that found its speech resources still connecting at the first probe.
+  test "a resource owner's readiness change re-probes without waiting for a poll" do
+    source = adapter("source")
+    collector = collector([TestReadinessAdapter.resource(source)])
+    assert_receive {:readiness_requested, ^source}
+    :ok = TestReadinessAdapter.reply(source, :preparing)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :preparing}}
+    refute_receive {:readiness_requested, ^source}, 50
+
+    :ok = TestReadinessAdapter.changed(source)
+    assert_receive {:readiness_requested, ^source}
+    :ok = TestReadinessAdapter.reply(source, :ready)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}
+  end
+
+  test "a readiness change during a probe re-probes once that probe finishes" do
+    source = adapter("source")
+    collector = collector([TestReadinessAdapter.resource(source)])
+    assert_receive {:readiness_requested, ^source}
+    :ok = TestReadinessAdapter.changed(source)
+    _ = :sys.get_state(collector)
+    :ok = TestReadinessAdapter.reply(source, :preparing)
+
+    assert_receive {:readiness_requested, ^source}
+    :ok = TestReadinessAdapter.reply(source, :ready)
+    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}
   end
 
   test "reconciliation cancels stale probes without stopping retained resources" do

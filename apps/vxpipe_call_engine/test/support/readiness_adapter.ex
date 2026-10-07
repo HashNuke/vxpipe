@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.TestReadinessAdapter do
   def readiness(server), do: GenServer.call(server, :readiness, 5_000)
   def resource(server), do: GenServer.call(server, :resource)
   def reply(server, status), do: GenServer.call(server, {:reply, status})
+  def changed(server), do: GenServer.call(server, :changed)
 
   @impl true
   def init(options) do
@@ -29,6 +30,10 @@ defmodule Vxpipe.CallEngine.TestReadinessAdapter do
     send(state.observer, {:readiness_requested, self()})
     send(state.observer, {:readiness_probe_caller, self(), elem(from, 0)})
     {:noreply, %{state | waiting: [from | state.waiting]}}
+  end
+
+  def handle_call(:changed, _from, state) do
+    {:reply, Vxpipe.CallEngine.Readiness.Watch.changed(), state}
   end
 
   def handle_call({:reply, status}, _from, state) do

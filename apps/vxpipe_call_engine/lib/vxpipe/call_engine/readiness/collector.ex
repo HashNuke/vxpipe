@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.Readiness.Collector do
 
   use GenServer
 
-  alias Vxpipe.CallEngine.Readiness.{Barrier, Probe, Report, Resource}
+  alias Vxpipe.CallEngine.Readiness.{Barrier, Probe, Report, Resource, Watch}
 
   @call_timeout 1_000
   @maximum_resources 256
@@ -56,8 +56,10 @@ defmodule Vxpipe.CallEngine.Readiness.Collector do
         expired?: false,
         failure: nil,
         monitors: %{},
+        watched: MapSet.new(),
         worker: nil,
         batch_id: nil,
+        reprobe?: false,
         poll: nil,
         poll_interval_ms: Keyword.get(options, :poll_interval_ms, 100),
         maximum_concurrency: Keyword.get(options, :maximum_concurrency, 8),
@@ -125,7 +127,19 @@ defmodule Vxpipe.CallEngine.Readiness.Collector do
 
   def handle_info({ref, :ok}, %{worker: %Task{ref: ref}} = state) do
     Process.demonitor(ref, [:flush])
-    {:noreply, schedule_poll(%{state | worker: nil, batch_id: nil})}
+    state = %{state | worker: nil, batch_id: nil}
+
+    if state.reprobe?,
+      do: {:noreply, start_batch(%{state | reprobe?: false})},
+      else: {:noreply, schedule_poll(state)}
+  end
+
+  def handle_info({:vxpipe_readiness_resource_changed, instance}, state) do
+    cond do
+      not MapSet.member?(state.watched, instance) -> {:noreply, state}
+      state.worker != nil -> {:noreply, %{state | reprobe?: true}}
+      true -> {:noreply, state |> cancel_poll() |> start_batch()}
+    end
   end
 
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, %{owner_monitor: monitor} = state) do
@@ -272,13 +286,27 @@ defmodule Vxpipe.CallEngine.Readiness.Collector do
 
     new = MapSet.difference(desired, MapSet.new(Map.values(retained)))
     monitors = Enum.reduce(new, retained, &Map.put(&2, Process.monitor(&1.instance), &1))
-    %{state | monitors: monitors}
+    %{state | monitors: monitors} |> watch_instances()
   end
 
   defp cancel_batch(state) do
     if state.worker, do: Task.shutdown(state.worker, :brutal_kill)
-    if state.poll, do: Process.cancel_timer(elem(state.poll, 1))
-    %{state | worker: nil, batch_id: nil, poll: nil}
+    %{cancel_poll(state) | worker: nil, batch_id: nil, reprobe?: false}
+  end
+
+  defp cancel_poll(%{poll: nil} = state), do: state
+
+  defp cancel_poll(%{poll: {_id, timer}} = state) do
+    Process.cancel_timer(timer)
+    %{state | poll: nil}
+  end
+
+  # Owners announce readiness changes through `Watch`; subscribe once per owning process.
+  defp watch_instances(state) do
+    instances = state.monitors |> Map.values() |> MapSet.new(& &1.instance)
+    Enum.each(MapSet.difference(state.watched, instances), &Watch.unsubscribe/1)
+    Enum.each(MapSet.difference(instances, state.watched), &Watch.subscribe/1)
+    %{state | watched: instances}
   end
 
   defp expired?(state),

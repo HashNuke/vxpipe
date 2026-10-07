@@ -819,6 +819,8 @@ selected-STT startup/binding failure follows the same lifecycle path: it cancels
 ends the attempted planned room immediately while returning a bounded attachment error. Legacy
 ad-hoc rooms preserve their detach-only behavior. Deeper provider-specific ready handshakes remain
 to be implemented where a transport's successful start does not already establish readiness.
+Speech capabilities announce readiness changes so startup readiness re-probes at once rather
+than at its next poll; see [readiness change notification](readiness-change-notification.md).
 
 Planned startup accepts either a human or an agent as `entry_receiver`. A human receiver is
 admitted through the same participant and media-policy commit barrier as the human caller but gets
