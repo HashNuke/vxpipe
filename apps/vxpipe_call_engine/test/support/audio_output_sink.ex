@@ -17,6 +17,24 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
 
   def complete_finish(sink, result \\ :ok), do: GenServer.call(sink, {:complete_finish, result})
 
+  # Manual provider clocks must wait for owned sink delivery, not just for the
+  # capability to read earlier mailbox messages. No wall-clock sleep is needed.
+  def await_delivery(capability) do
+    case :sys.get_state(capability).output_delivery do
+      nil ->
+        :ok
+
+      %{task: %Task{pid: pid}} ->
+        monitor = Process.monitor(pid)
+
+        receive do
+          {:DOWN, ^monitor, :process, ^pid, _reason} -> await_delivery(capability)
+        after
+          5_000 -> raise "owned STS output delivery did not complete"
+        end
+    end
+  end
+
   @impl true
   def init(options) do
     {:ok,

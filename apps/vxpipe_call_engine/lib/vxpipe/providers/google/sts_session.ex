@@ -3,9 +3,10 @@ defmodule Vxpipe.Providers.Google.STSSession do
   Gemini 3.8 Live speech-to-speech adapter behind the credentialed boundary.
 
   Ordinary tests use fixture payloads and fake sockets; no network account is
-  needed. The manifest does NOT advertise `:sts` and the hosted selection stays
-  gated until the explicitly authorized interoperability check passes. See
-  `Vxpipe.Providers.Google.STS` for the fixture wire assumptions.
+  needed. Configured agents select `gemini-3.8-live` through the Google manifest
+  and resolve the saved Google credential privately. Real-provider acceptance
+  belongs to the tagged hosted and phone lanes; fixtures alone do not establish
+  hosted continuity or interrupted-history reconciliation.
   """
 
   use GenServer
@@ -260,14 +261,18 @@ defmodule Vxpipe.Providers.Google.STSSession do
   def handle_call({:interrupt, turn_ref}, _from, %{response_start?: true} = state)
       when is_reference(turn_ref) do
     case STSResponseDelivery.interrupt(state, turn_ref) do
-      {:ok, state} -> {:reply, :ok, state}
-      {:error, _reason} -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+      {:ok, state} ->
+        {:reply, :ok, state}
+
+      {:error, reason} ->
+        emit_failure(:interrupt, reason)
+        {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
     end
   end
 
   def handle_call({:interrupt, turn_ref}, _from, state) when is_reference(turn_ref) do
     if current_legacy_turn?(state, turn_ref),
-      do: {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state},
+      do: fail_legacy_interrupt(state),
       else: {:reply, :ok, state}
   end
 
@@ -306,9 +311,11 @@ defmodule Vxpipe.Providers.Google.STSSession do
         end
 
       {:error, :provider_failure} ->
+        emit_failure(:decode, :provider_failure)
         {:stop, {:shutdown, :session_failed}, state}
 
-      {:error, _reason} ->
+      {:error, reason} ->
+        emit_failure(:decode, reason)
         {:stop, {:shutdown, :session_failed}, state}
     end
   end
@@ -374,8 +381,12 @@ defmodule Vxpipe.Providers.Google.STSSession do
         %{response_start?: true, channel: channel} = state
       ) do
     case STSResponseDelivery.grant(state, turn_ref, output_ref) do
-      {:ok, state} -> {:noreply, state}
-      {:error, _reason} -> {:stop, {:shutdown, :session_failed}, state}
+      {:ok, state} ->
+        {:noreply, state}
+
+      {:error, reason} ->
+        emit_failure(:output_grant, reason)
+        {:stop, {:shutdown, :session_failed}, state}
     end
   end
 
@@ -403,8 +414,12 @@ defmodule Vxpipe.Providers.Google.STSSession do
         %{response_start?: true, channel: channel} = state
       ) do
     case STSResponseDelivery.credit(state, output_ref, credit) do
-      {:ok, state} -> {:noreply, state}
-      {:error, _reason} -> {:stop, {:shutdown, :session_failed}, state}
+      {:ok, state} ->
+        {:noreply, state}
+
+      {:error, reason} ->
+        emit_failure(:output_credit, reason)
+        {:stop, {:shutdown, :session_failed}, state}
     end
   end
 
@@ -463,12 +478,21 @@ defmodule Vxpipe.Providers.Google.STSSession do
         %{response_start?: true, channel: channel} = state
       ) do
     case STSResponseDelivery.discard(state, turn) do
-      {:ok, state} -> {:noreply, STSResumption.advance(state)}
-      {:error, _reason} -> {:stop, {:shutdown, :session_failed}, state}
+      {:ok, state} ->
+        {:noreply, STSResumption.advance(state)}
+
+      {:error, reason} ->
+        emit_failure(:output_discard, reason)
+        {:stop, {:shutdown, :session_failed}, state}
     end
   end
 
   def handle_info(_message, state), do: {:noreply, state}
+
+  defp fail_legacy_interrupt(state) do
+    emit_failure(:interrupt, :unsupported_interrupt)
+    {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+  end
 
   defp recover_connection(state) do
     if STSResumption.recoverable?(state),
@@ -501,8 +525,12 @@ defmodule Vxpipe.Providers.Google.STSSession do
         end
 
       case apply_wire_event(event, state) do
-        {:ok, state} -> {:cont, {:ok, state}}
-        {:error, _reason} = error -> {:halt, error}
+        {:ok, state} ->
+          {:cont, {:ok, state}}
+
+        {:error, reason} = error ->
+          if is_nil(state.fixed_opening), do: emit_failure(event_kind(event), reason)
+          {:halt, error}
       end
     end)
   end
@@ -510,14 +538,33 @@ defmodule Vxpipe.Providers.Google.STSSession do
   defp apply_wire_event(event, %{fixed_opening: opening} = state)
        when not is_nil(opening) do
     case STSOpening.accept(opening, event) do
-      {:buffered, opening} -> {:ok, %{state | fixed_opening: opening}}
-      {:release, events} -> apply_wire_events(events, %{state | fixed_opening: nil})
-      :pass -> apply_session_event(event, state)
-      {:error, _reason} -> {:error, :session_failed}
+      {:buffered, opening} ->
+        {:ok, %{state | fixed_opening: opening}}
+
+      {:release, events} ->
+        apply_wire_events(events, %{state | fixed_opening: nil})
+
+      :pass ->
+        apply_session_event(event, state)
+
+      {:error, reason} ->
+        emit_failure(:fixed_opening, reason)
+        {:error, :session_failed}
     end
   end
 
   defp apply_wire_event(event, state), do: apply_session_event(event, state)
+
+  defp event_kind(event) when is_tuple(event), do: elem(event, 0)
+  defp event_kind(event) when is_atom(event), do: event
+
+  defp emit_failure(stage, reason) when is_atom(stage) and is_atom(reason) do
+    :telemetry.execute(
+      [:vxpipe, :providers, :google, :sts, :failure],
+      %{count: 1},
+      %{stage: stage, reason: reason}
+    )
+  end
 
   defp apply_session_event(:ready, %{ready?: false} = state) do
     Process.cancel_timer(state.setup_timer)

@@ -2,8 +2,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
   @moduledoc """
   Playback settlement and agent-output recognition for STS.
 
-  Runs within the capability process; it introduces no process or mailbox.
-  Sink credit and the optional recognizer share the output lifecycle,
+  Runs lifecycle logic within the capability process. Its owned task supervisor
+  isolates blocking sink pushes; the channel retains its single audio credit
+  until delivery completes. Sink credit and the optional recognizer share the output lifecycle,
   independently of caller input and tool-event handling.
   """
 
@@ -35,10 +36,15 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
       %{output: %{ref: ref}} = output when ref == audio.request_ref ->
         with :ok <- Session.validate_audio(state.session, audio),
              true <- audio_route_permitted?(state, state.agent_id, state.human_id),
-             {frame, state} = output_frame(output, audio, state),
-             :ok <- OutputSink.push(state.sink, frame),
-             :ok <- Session.ack_audio(state.session, audio) do
-          {:noreply, feed_output_stt(audio, state)}
+             {frame, state} = output_frame(output, audio, state) do
+          sink = state.sink
+
+          task =
+            Task.Supervisor.async_nolink(state.output_task_supervisor, fn ->
+              OutputSink.push(sink, frame)
+            end)
+
+          {:noreply, %{state | output_delivery: %{task: task, audio: audio}}}
         else
           false -> discard_denied_audio(audio, state)
           _failure -> stop_unavailable(:audio_output_failed, state)
@@ -47,6 +53,28 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
       _other ->
         _ = Session.ack_audio(state.session, audio)
         {:noreply, state}
+    end
+  end
+
+  def delivered(result, %{output_delivery: %{audio: audio}} = state) do
+    state = %{state | output_delivery: nil}
+
+    case state.active_output do
+      %{output: %{ref: reference}} when reference == audio.request_ref ->
+        with :ok <- result,
+             :ok <- Session.ack_audio(state.session, audio) do
+          {:noreply, feed_output_stt(audio, state)}
+        else
+          _failure -> stop_unavailable(:audio_output_failed, state)
+        end
+
+      _fenced ->
+        # Interruption may release the sink's blocked push with an error. Retire
+        # its exact channel credit without reviving the fenced output or text.
+        case Session.ack_audio(state.session, audio) do
+          :ok -> {:noreply, state}
+          _failure -> stop_unavailable(:audio_output_failed, state)
+        end
     end
   end
 
@@ -78,7 +106,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     if output.generation_done? and output.playback_done? and output_text_ready?(output, state) do
       played_ms = output.played_ms
 
-      case Session.settle_output(state.session, output.output, played_ms) do
+      case Session.settle_output(
+             state.session,
+             output.output,
+             provider_playback_ms(state, output, played_ms)
+           ) do
         :ok ->
           state = cancel_text_deadline(state)
 
@@ -540,11 +572,27 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
 
   defp settle_fenced_generation(_state, %{generation_done?: false}, _played_ms), do: :ok
 
-  defp settle_fenced_generation(state, %{output: handle}, played_ms) do
-    case Session.settle_output(state.session, handle, played_ms) do
+  defp settle_fenced_generation(state, %{output: handle} = output, played_ms) do
+    case Session.settle_output(
+           state.session,
+           handle,
+           provider_playback_ms(state, output, played_ms)
+         ) do
       :ok -> :ok
       {:error, _reason} -> :ok
     end
+  end
+
+  defp provider_playback_ms(state, output, played_ms) do
+    format = state.descriptor.format
+    samples_per_second = format.sample_rate * format.channels
+    source_milliseconds = output.input_samples * 1_000
+    source_ms = div(source_milliseconds, samples_per_second)
+    packet_units = samples_per_second * 20
+    padded_ms = div(source_milliseconds + packet_units - 1, packet_units) * 20
+    # Native sinks may pad the final packet with silence. Physical completion
+    # still fences the turn; padding is not generated provider PCM.
+    if played_ms <= padded_ms, do: min(played_ms, source_ms), else: played_ms
   end
 
   def fence_output(state), do: fence_output(state, :request_interrupt)

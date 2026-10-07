@@ -7,6 +7,24 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins
   alias Vxpipe.CallEngine.Speech.Session
 
+  @max_open_input_turns 16
+
+  def track_turn(%{descriptor: %{response_start?: false}} = state, _turn),
+    do: {:ok, state}
+
+  def track_turn(state, turn) do
+    cond do
+      MapSet.member?(state.input_turns, turn) ->
+        {:ok, state}
+
+      MapSet.size(state.input_turns) >= @max_open_input_turns ->
+        {:error, :pending_caller_overflow}
+
+      true ->
+        {:ok, %{state | input_turns: MapSet.put(state.input_turns, turn)}}
+    end
+  end
+
   def format(%{descriptor: %{input_format: format}}) do
     {:ok, %{codec: format.encoding, sample_rate: format.sample_rate, channels: format.channels}}
   end

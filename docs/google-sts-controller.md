@@ -1,7 +1,9 @@
 # Google STS controller boundaries
 
-Status: sequential controller checkpoint implemented locally. Google STS remains unadvertised;
-fake-wire acceptance is not hosted interoperability or interruption-history proof.
+Status: sequential controller and configured Google selection are implemented.
+See [Gemini provider acceptance](milestones/gemini-live-provider-acceptance.md)
+for real-provider evidence. Fake-wire acceptance is not hosted interoperability
+or interruption-history proof.
 
 ## Evidence and decision
 
@@ -42,8 +44,12 @@ renewal remains bounded by its existing deadline. This conservative interim
 guard does not complete the separately required overlap-correlation support.
 
 Retain existing PCM/credit bounds, cap assembled text at the shared 65,536-byte
-bound, and erase retained text on settlement/fencing. An overflow fails the
-allocation; no silent truncation, transcript fallback or history replay.
+bound, and erase retained text on settlement/fencing. At the sixteen-chunk queue
+limit, compact pending PCM within its exact response into chunks of at most
+131,072 bytes. This preserves order, response identity and the existing byte
+budget while accepting bursts of small wire packets. It never combines audio
+across responses or touches the outstanding channel credit. A full byte budget
+still fails the allocation; no silent truncation, transcript fallback or replay.
 
 ## Rejected alternatives and limits
 
@@ -78,8 +84,11 @@ sending an idle end in external mode would not cancel output. Synthetic caller
 activity or client content would modify conversational history, so neither is
 an acceptable replacement.
 
-An engine-requested interruption of the current Google wire response therefore
-returns a failure and terminates that allocation. It does not claim successful
+An unrelated manual interruption of the current Google wire response therefore
+returns a failure and terminates that allocation. When Google has already
+reported genuine caller onset, room-owned barge-in instead discards the current
+response locally and waits for the actual server interruption/model boundary.
+It sends no synthetic activity or standalone cancel and preserves the allocation. It does not claim successful
 same-socket barge-in or truncated provider history. A local discard of an older
 response already off the wire remains response-specific and does not interrupt
 the newer wire generation. By contrast, a genuine server `interrupted` event
@@ -235,3 +244,19 @@ with any explicit idle completion in the same envelope applied after observing
 activity. A separate [checkpoint-coverage audit](sts-context-restoration.md#implemented-handle-handoff)
 remains open: idle and handle arrival do not account for the provider's consumed-
 client-message watermark or prove cross-direction no-loss handoff.
+
+## Source PCM and physical phone playback
+
+Native phone sinks pad a final PCM packet to 20 ms. Provider output settlement
+counts generated source samples; it must exclude that silence padding while
+retaining physical completion as the publication fence and transport estimate.
+The capability converts a sink duration within the final packet bound to at
+most the accepted source duration. An impossible larger report still fails
+settlement. Partial-frame and excessive-report regressions cover this distinction.
+
+Sink pushes run in the capability tree's owned task supervisor. The capability
+retains the exact pending audio credit until the task succeeds, so only one
+push is in progress while caller input, policy changes and interruption remain
+responsive. A fenced task's completion releases its original credit and cannot
+revive old output or transcript. Local contract tests exercise a blocked sink;
+shared settlement tests cover 8, 16, 24 and 48 kHz without a live account.

@@ -38,6 +38,8 @@ defmodule Vxpipe.Providers.RegistryTest do
     assert {:error, :unsupported_provider_capability} =
              Registry.fetch_capability("telnyx", :stt)
 
+    assert {:ok, Vxpipe.Providers.Google.STSSession} = Registry.fetch_capability("google", :sts)
+
     assert {:ok, Vxpipe.Providers.Google} = Registry.fetch("google")
 
     assert {:ok, Vxpipe.Providers.Google.Credential} =
@@ -118,7 +120,7 @@ defmodule Vxpipe.Providers.RegistryTest do
              "openrouter" => [:credential, :credential_validation],
              "fireworks" => [:credential],
              "deepgram" => [:credential, :credential_validation, :stt, :tts],
-             "google" => [:credential, :credential_validation, :stt, :tts],
+             "google" => [:credential, :credential_validation, :sts, :stt, :tts],
              "morse" => [:sts, :stt, :tts],
              "openai" => [:credential, :credential_validation, :sts],
              "rime" => [:credential, :credential_validation, :tts],

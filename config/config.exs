@@ -84,7 +84,12 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     refresh_timeout_ms: 30_000
   ],
   speech_to_text: [providers: %{}],
-  speech_to_speech: [providers: %{Vxpipe.Providers.OpenAI.GPTLiveSession => [enabled: true]}],
+  speech_to_speech: [
+    providers: %{
+      Vxpipe.Providers.OpenAI.GPTLiveSession => [enabled: true],
+      Vxpipe.Providers.Google.STSSession => [enabled: true]
+    }
+  ],
   telemetry: [sample_interval_ms: 1_000],
   text_to_speech: [providers: %{}]
 

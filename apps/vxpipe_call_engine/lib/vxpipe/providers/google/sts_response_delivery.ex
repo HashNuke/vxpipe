@@ -31,6 +31,7 @@ defmodule Vxpipe.Providers.Google.STSResponseDelivery do
          :ok <- announce(state.channel, announcement) do
       drain(%{state | responses: owner})
     else
+      {:error, reason} when is_atom(reason) -> {:error, reason}
       _failure -> {:error, :session_failed}
     end
   end
@@ -70,6 +71,17 @@ defmodule Vxpipe.Providers.Google.STSResponseDelivery do
           _failure -> {:error, :session_failed}
         end
     end
+  end
+
+  def interrupt(
+        %{config: %{turn_control: "provider"}, caller: %{ended?: false}} = state,
+        turn
+      )
+      when state.responses.wire == turn do
+    # Real provider VAD has already observed the caller. Fence local delivery
+    # without inventing a cancellation command; retain wire ownership until
+    # Google's interrupted/model boundary arrives, dropping the old tail.
+    discard(state, turn)
   end
 
   def interrupt(state, turn) when state.responses.wire == turn,

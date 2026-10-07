@@ -74,6 +74,7 @@ defmodule Vxpipe.Console.ConfiguredTelephonyTransferFixtureTest do
     model = sources.outgoing.participants["assistant"]
     assert model.capabilities.speech_to_speech.provider == "openai"
     assert model.prompt =~ "count slowly from one to thirty"
+    assert model.prompt =~ "single response"
     assert model.prompt =~ "say only: I have stopped."
 
     receiver = sources.incoming.participants["assistant"]
@@ -104,6 +105,57 @@ defmodule Vxpipe.Console.ConfiguredTelephonyTransferFixtureTest do
     assert model.first_message == %{mode: "fixed", text: "Ping."}
     assert model.prompt =~ "Every time the other party says Pong, reply with exactly: Ping."
     assert sources.incoming.participants["assistant"].prompt =~ "reply with exactly: Pong."
+    assert sources.incoming.participants["assistant"].first_message == %{mode: "wait_for_input"}
+  end
+
+  test "the Gemini phone scenarios select the saved Google STS and retain their contracts" do
+    fixture = %ConfiguredTelephonyFixture{
+      settings: %{numbers: %{"twilio" => "+15550001001", "telnyx" => "+15550001002"}}
+    }
+
+    for scenario <- [:round_trip, :barge_in, {:long_session, 600_000}] do
+      sources =
+        ConfiguredTelephonyFixture.sts_sources(fixture, "twilio", "telnyx", scenario, "google")
+
+      for {name, source} <- sources do
+        assert {:ok, _spec} = CallSpec.new(source, resource_id: "gemini-#{name}", revision: 1)
+      end
+
+      model = sources.outgoing.participants["assistant"]
+
+      assert model.capabilities.speech_to_speech == %{
+               provider: "google",
+               model: "gemini-3.8-live",
+               credential_name: "live-telephony",
+               options: %{voice: "Kore", turn_control: "provider"}
+             }
+
+      refute Map.has_key?(model.capabilities, :model_inference)
+      refute Map.has_key?(model.capabilities, :text_to_speech)
+
+      case scenario do
+        :round_trip ->
+          assert model.first_message == %{mode: "fixed", text: "Alpha."}
+          assert model.prompt =~ "Charlie"
+
+        :barge_in ->
+          assert model.prompt =~ "count slowly from one to thirty"
+          assert model.prompt =~ "single response"
+          receiver = sources.incoming.participants["assistant"]
+          assert receiver.capabilities.speech_to_speech.provider == "openai"
+          assert receiver.first_message == %{mode: "wait_for_input"}
+          assert receiver.prompt =~ "Stop counting now"
+
+        {:long_session, _duration} ->
+          assert model.first_message == %{mode: "fixed", text: "Ping."}
+          assert sources.outgoing.limits.max_duration_ms == 780_000
+          assert sources.incoming.limits.max_duration_ms == 780_000
+
+          assert sources.incoming.participants["assistant"].first_message == %{
+                   mode: "wait_for_input"
+                 }
+      end
+    end
   end
 
   test "the three-party carrier fixture validates portable receive and private-transfer contracts" do

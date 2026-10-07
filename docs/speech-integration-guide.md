@@ -512,14 +512,21 @@ through setup, PCM conversion, multi-part/out-of-order evidence, generation
 versus playback completion, pre-audio interruption, turn-control enforcement,
 tool cancellation, `goAway`/resumption/expiry and the fence-window mute for
 sent-ahead bytes. The fixture wire shapes are documented in the codec module;
-hosted byte compatibility is not claimed. History reconciliation is declared
-false and the manifest keeps no Google `:sts` entry, so hosted selection and
-its service badge stay gated until the authorized interoperability check
-passes within its fixed budget.
+history reconciliation remains declared false. The Google manifest now offers
+`:sts`, and configured agents select `provider: "google"`,
+`model: "gemini-3.8-live"` with public voice and turn-control options. Startup
+resolves the saved Google key privately and uses response-owned output.
+The [Gemini acceptance milestone](milestones/gemini-live-provider-acceptance.md)
+records the actual hosted and phone evidence and remaining acceptance checks;
+these checks do not establish interrupted-history reconciliation.
 
 Both pre-admission and active Google output keep at most 16 pending PCM chunks,
-in addition to the channel's single outstanding audio credit. A full queue fails
-the owned session; it does not silently drop speech or reconnect to replay it.
+in addition to the channel's single outstanding audio credit. At the chunk limit,
+pending audio from the same response is compacted into at most 131,072-byte
+chunks without increasing the byte budget. Exhaustion still fails the session;
+it does not silently drop speech or reconnect to replay it. The shared STS
+capability runs sink pushes in its owned task supervisor so playback backpressure
+does not block caller input or interruption; it credits audio only after delivery.
 Wire decoding preserves the final partial chunk when splitting large PCM parts
 at the unchanged 131,072-byte limit. Local buffer, fake-socket credit/cleanup
 and PCM-tail regressions cover these guarantees (`sts_output_test.exs`,

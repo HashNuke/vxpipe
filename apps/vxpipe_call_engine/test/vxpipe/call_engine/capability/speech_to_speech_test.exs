@@ -41,6 +41,101 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     refute_received {:vxpipe_send_text, _, _, _}
   end
 
+  test "caller input and interruption remain responsive while output is backpressured" do
+    {_tree, capability, sink} = start_contract_capability()
+    session = :sys.get_state(capability).session
+    provider = Vxpipe.CallEngine.Speech.Session.provider(session)
+    turn = make_ref()
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :turn_ended, [turn_ref: turn, text: "CALLER", endpointing: :provider_gap]}
+             )
+
+    assert_receive {:sts_output_permitted, ^provider, _channel, ^turn, output_ref}
+    assert :ok = GenServer.call(sink, {:block_output, true})
+    assert {:ok, _credit} = GenServer.call(provider, {:output, output_ref})
+    assert_receive {:test_audio_output, ^sink, frame}
+
+    try do
+      assert :ok = GenServer.call(capability, {:push_text, "Caller speaks"}, 100)
+      assert_receive {:text_submission, _reference, [:ok]}
+      assert {:ok, 0} = SpeechToSpeech.interrupt(capability)
+      assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^turn, 0, _, _}
+      assert_receive {:vxpipe_speech_credit, _, ^output_ref, _, :ok}
+      assert :ok = SpeechToSpeech.push_text(capability, "After the fence")
+      refute_received {:vxpipe_sts_unavailable, ^capability, _}
+    after
+      # Release a blocked push even when the mailbox responsiveness assertion fails.
+      GenServer.call(sink, {:vxpipe_audio_output_interrupt, frame.correlation_id, frame.reply_to})
+    end
+  end
+
+  for rate <- [8_000, 16_000, 24_000, 48_000], report <- [40, 60] do
+    test "#{rate} Hz source settlement excludes phone padding and validates #{report} ms playback" do
+      {_tree, capability, sink} = start_contract_capability(sample_rate: unquote(rate))
+      session = :sys.get_state(capability).session
+      provider = Vxpipe.CallEngine.Speech.Session.provider(session)
+      turn = make_ref()
+
+      assert :ok =
+               GenServer.call(
+                 provider,
+                 {:emit, :turn_ended,
+                  [turn_ref: turn, text: "CALLER", endpointing: :provider_gap]}
+               )
+
+      assert_receive {:sts_output_permitted, ^provider, _channel, ^turn, output_ref}
+      assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, ^turn, _sequence}
+
+      assert :ok =
+               GenServer.call(
+                 provider,
+                 {:emit, :output_transcript, [turn_ref: turn, text: "PARTIAL TAIL", final: true]}
+               )
+
+      pcm = :binary.copy(<<1, 0>>, div(unquote(rate), 50) + 1)
+      assert {:ok, _credit} = GenServer.call(provider, {:output, output_ref, pcm})
+      assert_receive {:test_audio_output, ^sink, frame}
+      assert frame.sample_rate == 48_000
+      assert byte_size(frame.payload) in 1_922..1_932
+      assert_receive {:vxpipe_speech_credit, _, ^output_ref, _, :ok}
+
+      assert :ok =
+               GenServer.call(
+                 provider,
+                 {:emit, :output_completed, [turn_ref: turn, request_ref: output_ref]}
+               )
+
+      assert_receive {:test_audio_output_finish, ^sink, _sink_turn}
+      assert :ok = TestAudioOutputSink.playback_progress(sink, unquote(report), unquote(report))
+      assert :ok = TestAudioOutputSink.playback_completed(sink)
+
+      if unquote(report) == 40 do
+        assert_receive {:vxpipe_speech_output_settled, _channel, ^turn, ^output_ref, 20}
+
+        assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "PARTIAL TAIL", ^turn,
+                        40, _, _}
+
+        assert_receive {:vxpipe_sts_turn_completed, ^capability, @agent, ^turn, _}
+        next = make_ref()
+
+        assert :ok =
+                 GenServer.call(
+                   provider,
+                   {:emit, :turn_ended,
+                    [turn_ref: next, text: "NEXT", endpointing: :provider_gap]}
+                 )
+
+        assert_receive {:sts_output_permitted, ^provider, _, ^next, _}
+      else
+        assert_receive {:vxpipe_sts_unavailable, ^capability, :provider_failed}
+        refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _, _}
+      end
+    end
+  end
+
   test "queued legacy output keeps its acknowledged start order through playback" do
     {_tree, capability, sink} = start_contract_capability()
     provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
@@ -608,10 +703,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     refute_received {:contract_tool_result, _, _}
   end
 
-  defp start_contract_capability do
+  defp start_contract_capability(provider_options \\ []) do
     start_capability(
       policy: unrestricted(),
-      provider: {Vxpipe.CallEngine.SpeechSTSContractProvider, []},
+      provider: {Vxpipe.CallEngine.SpeechSTSContractProvider, provider_options},
       provider_private: [observer: self()]
     )
   end

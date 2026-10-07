@@ -228,11 +228,13 @@ defmodule Vxpipe.CallEngine.Speech.STSProviderContractTest do
     }
 
     assert {:error, :unsupported_capability} = CapabilityCatalog.validate(selection)
-    assert {:error, :unsupported_provider_capability} = Registry.fetch_capability("google", :sts)
+
+    assert {:error, :unsupported_provider_capability} =
+             Registry.fetch_capability("deepgram", :sts)
   end
 
   test ":sts adapter resolution is manifest-gated with no fallback" do
-    for provider <- ["google", "deepgram", "rime"] do
+    for provider <- ["deepgram", "rime"] do
       selection = %CapabilitySelection{
         kind: :speech_to_speech,
         provider: provider,

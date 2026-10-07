@@ -220,6 +220,77 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     end
   end
 
+  test "audio backlog failure reports its bounded cause without PCM" do
+    {session, wire} = start_session(response_start?: true)
+    provider = Session.provider(session)
+    handler = {:google_audio_failure, make_ref()}
+    observer = self()
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        [:vxpipe, :providers, :google, :sts, :failure],
+        fn _event, _measurements, metadata, _config ->
+          if self() == provider, do: send(observer, {:google_audio_failure, metadata})
+        end,
+        nil
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+    assert :ok = Session.push_text(session, "Reply", response_context: make_ref())
+
+    for _index <- 1..17 do
+      deliver(wire, %{
+        "serverContent" => %{
+          "modelTurn" => %{
+            "parts" => [
+              %{
+                "inlineData" => %{
+                  "mimeType" => "audio/pcm;rate=24000",
+                  "data" => Base.encode64(:binary.copy(<<1, 0>>, 65_536))
+                }
+              }
+            ]
+          }
+        }
+      })
+    end
+
+    assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+    assert_receive {:google_audio_failure, %{stage: :audio, reason: :audio_overflow}}
+  end
+
+  test "fixed-opening failure reports a bounded protocol reason without private content" do
+    {session, wire} = start_session(response_start?: true)
+    provider = Session.provider(session)
+    handler = {:google_failure, make_ref()}
+    observer = self()
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        [:vxpipe, :providers, :google, :sts, :failure],
+        fn _event, measurements, metadata, _config ->
+          if self() == provider, do: send(observer, {:google_failure, measurements, metadata})
+        end,
+        nil
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+    assert :ok = Session.begin_opening(session, {:fixed, "NOTICE"}, response_context: make_ref())
+
+    deliver(wire, %{
+      "serverContent" => %{"outputTranscription" => %{"text" => "WRONG LONG NOTICE"}}
+    })
+
+    assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+
+    assert_receive {:google_failure, %{count: 1},
+                    %{stage: :fixed_opening, reason: :text_mismatch}}
+
+    refute_received {:vxpipe_speech_audio, %Audio{session: ^session}}
+  end
+
   defp opening_large_audio do
     %{
       "serverContent" => %{
@@ -1188,9 +1259,8 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     refute_received {:DOWN, ^monitor, :process, _, _}
   end
 
-  test "google STS stays unadvertised until the hosted gate passes" do
-    assert {:error, :unsupported_provider_capability} =
-             Vxpipe.Providers.Registry.fetch_capability("google", :sts)
+  test "Google STS is declared and accepts the configured Gemini selection" do
+    assert {:ok, STSSession} = Vxpipe.Providers.Registry.fetch_capability("google", :sts)
 
     selection = %Vxpipe.CallEngine.CallSpec.CapabilitySelection{
       kind: :speech_to_speech,
@@ -1201,8 +1271,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
       provider_options: %{}
     }
 
-    assert {:error, :unsupported_capability} =
-             Vxpipe.CallEngine.CapabilityCatalog.validate(selection)
+    assert :ok = Vxpipe.CallEngine.CapabilityCatalog.validate(selection)
   end
 
   defp start_session(opts \\ []) do

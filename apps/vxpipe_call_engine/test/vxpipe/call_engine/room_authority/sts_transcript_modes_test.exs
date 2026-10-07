@@ -1245,14 +1245,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
   defp install_google_fixture(_authority, :morse), do: :ok
 
   defp install_google_fixture(authority, :google) do
-    assert {:error, :unsupported_provider_capability} =
+    assert {:ok, Vxpipe.Providers.Google.STSSession} =
              Vxpipe.Providers.Registry.fetch_capability("google", :sts)
 
     assert {:ok, config} = Vxpipe.Providers.Google.STS.new(api_key: "synthetic-room-key")
     observer = self()
 
     # Replace only the prepared private test runtime before source attachment.
-    # This exercises room allocation/publication, not gated production selection.
+    # This exercises room allocation/publication, not configured provider resolution.
     :sys.replace_state(authority, fn state ->
       runtime = %{
         state.speech_to_speech_runtime

@@ -1,5 +1,11 @@
 # Google AI Studio speech integration
 
+Current configured slice, 2026-10-07: the Google manifest now advertises STS
+with `gemini-3.8-live`, the existing saved Google key, and public voice/turn
+control. See [Gemini provider acceptance](milestones/gemini-live-provider-acceptance.md)
+for live evidence and outstanding checks. Gating statements in the historical
+checkpoints below describe their source revision, not current selection.
+
 ## Decision
 
 Vxpipe exposes Google AI Studio as two independent scoped speech capabilities. TTS uses the

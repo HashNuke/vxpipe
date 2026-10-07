@@ -68,7 +68,12 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
          false <- Keyword.has_key?(options, :system_prompt) or Keyword.has_key?(options, :tools),
          {:ok, config} <-
            STS.new(options ++ [system_prompt: activation.system_prompt, tools: tools]),
-         public = [model: config.model, voice: config.voice, turn_control: config.turn_control],
+         public = [
+           model: config.model,
+           voice: config.voice,
+           turn_control: config.turn_control,
+           response_start?: true
+         ],
          {:ok, selected, []} <- provider({STSSession, public}, settings) do
       {:ok, selected, [config: config]}
     else

@@ -47,12 +47,13 @@
     {
       "id": "google",
       "name": "Google AI Studio",
-      "description": "Connect Gemini language, transcription, and speech synthesis.",
-      "capabilities": ["stt", "llm", "tts"],
+      "description": "Connect Gemini language, transcription, speech synthesis, and live speech.",
+      "capabilities": ["stt", "llm", "tts", "s2s"],
       "defaultModels": {
         "stt": "gemini-3.5-transcribe-live",
         "llm": "gemini-2.5-flash",
-        "tts": "gemini-3.1-flash-tts-preview"
+        "tts": "gemini-3.1-flash-tts-preview",
+        "s2s": "gemini-3.8-live"
       },
       "sampleCapabilities": ["stt", "llm", "tts"]
     },

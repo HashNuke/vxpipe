@@ -7,9 +7,9 @@ defmodule Vxpipe.Providers.Google.STS do
   documented Live API families (setup, realtime input audio/text/activity,
   tool responses; server content audio/transcription/generation/turn
   completion, interruption, tool calls/cancellations, go-away, resumption
-  updates and usage metadata). Hosted byte-level compatibility is NOT claimed
-  here; it waits for the explicitly authorized tagged interoperability check.
-  Ordinary tests use fixture payloads and fake sockets only.
+  updates and usage metadata). Tagged hosted and phone tests verify the
+  exercised wire scenarios; ordinary tests use fixture payloads and fake
+  sockets only. Broader continuity and history contracts retain separate gates.
   """
 
   @endpoint "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"

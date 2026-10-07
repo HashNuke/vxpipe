@@ -59,7 +59,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   @call_timeout 5_000
   @default_output_stt_timeout_ms 5_000
-  @max_open_input_turns 16
 
   def start_link(options) do
     GenServer.start_link(__MODULE__, options, Keyword.take(options, [:name]))
@@ -196,6 +195,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           opening_playing?: false,
           opening_turn: nil,
           sink: Keyword.fetch!(options, :sink),
+          output_task_supervisor: Keyword.fetch!(options, :output_task_supervisor),
+          output_delivery: nil,
           policy: Keyword.get(options, :policy),
           policy_revision: Keyword.get(options, :policy_revision, 0),
           caller_source: Keyword.get(options, :caller_source, :sts),
@@ -435,6 +436,21 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     handle_audio(audio, state)
   end
 
+  def handle_info({reference, result}, %{output_delivery: %{task: %Task{ref: reference}}} = state) do
+    Process.demonitor(reference, [:flush])
+    Vxpipe.CallEngine.Capability.SpeechToSpeech.Output.delivered(result, state)
+  end
+
+  def handle_info(
+        {:DOWN, reference, :process, _pid, _reason},
+        %{output_delivery: %{task: %Task{ref: reference}}} = state
+      ) do
+    Vxpipe.CallEngine.Capability.SpeechToSpeech.Output.delivered(
+      {:error, :sink_unavailable},
+      state
+    )
+  end
+
   def handle_info({:vxpipe_speech_audio, %Audio{}}, state) do
     {:noreply, state}
   end
@@ -561,25 +577,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     |> Map.put(:log, [])
   end
 
-  defp track_input_turn(%{descriptor: %{response_start?: false}} = state, _turn),
-    do: {:ok, state}
-
-  defp track_input_turn(state, turn) do
-    cond do
-      MapSet.member?(state.input_turns, turn) ->
-        {:ok, state}
-
-      MapSet.size(state.input_turns) >= @max_open_input_turns ->
-        {:error, :pending_caller_overflow}
-
-      true ->
-        {:ok, %{state | input_turns: MapSet.put(state.input_turns, turn)}}
-    end
-  end
-
   defp handle_event(%Event{kind: :speech_started} = event, state) do
     with :ok <- Session.ack(state.session, event),
-         {:ok, state} <- track_input_turn(state, event.turn_ref),
+         {:ok, state} <- Input.track_turn(state, event.turn_ref),
          {:ok, state} <- CallerEvents.forward(state, event) do
       send(
         state.owner,

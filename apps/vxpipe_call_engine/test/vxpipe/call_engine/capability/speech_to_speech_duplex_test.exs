@@ -424,8 +424,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     provider = Session.provider(:sys.get_state(capability).session)
 
     Enum.reduce_while(1..2_000, :ok, fn _, :ok ->
-      # Let the capability process sink acknowledgements before the next frame.
-      _ = :sys.get_state(capability)
+      # Preserve one real sink delivery per scripted clock advance.
+      TestAudioOutputSink.await_delivery(capability)
       drain_audio()
 
       provider_state = :sys.get_state(provider)
@@ -433,6 +433,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
       if Output.idle?(provider_state.timeline) and provider_state.segments == %{} do
         {:halt, :ok}
       else
+        TestAudioOutputSink.await_delivery(capability)
         :ok = DuplexSTS.advance(provider, 20)
         {:cont, :ok}
       end
@@ -462,6 +463,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
     after
       0 ->
         provider = Session.provider(:sys.get_state(capability).session)
+        TestAudioOutputSink.await_delivery(capability)
         :ok = DuplexSTS.advance(provider, 20)
         await_turn_started(capability, remaining - 1)
     end
@@ -507,6 +509,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechDuplexTest do
           collect_transcripts(capability, sink, expected, acc, remaining)
       after
         0 ->
+          TestAudioOutputSink.await_delivery(capability)
           :ok = DuplexSTS.advance(provider, 20)
           collect_transcripts(capability, sink, expected, acc, remaining - 1)
       end

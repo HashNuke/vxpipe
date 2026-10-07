@@ -7,6 +7,65 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
   alias Vxpipe.Providers.OpenAI.GPTLiveSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
 
+  test "Gemini Live starts from the saved Google key with validated public speech options" do
+    plan =
+      compile_plan(%{
+        speech_to_speech: %{
+          provider: "google",
+          model: "gemini-3.8-live",
+          options: %{voice: "Kore", turn_control: "provider"}
+        }
+      })
+
+    provider = Vxpipe.Providers.Google.STSSession
+    bindings = %{{"tenant-sts", "google", "default"} => %{"api_key" => "google-tenant-marker"}}
+
+    settings =
+      options()
+      |> Keyword.put(:credential_source, {TestTenantCredentialSource, {self(), bindings}})
+      |> Keyword.put(:speech_to_speech, providers: %{provider => [enabled: true]})
+
+    assert :ok = PlanStartup.validate(plan, settings)
+    assert {:ok, startup} = PlanStartup.new(plan, settings)
+    assert {^provider, public} = startup.speech_to_speech.provider
+
+    assert public == [
+             model: "gemini-3.8-live",
+             voice: "Kore",
+             turn_control: "provider",
+             response_start?: true
+           ]
+
+    assert {:ok, descriptor} = provider.configure(public)
+    assert descriptor.input_format.sample_rate == 16_000
+    assert descriptor.format.sample_rate == 24_000
+    assert descriptor.barge_in == :room
+    assert startup.agent_activation == nil
+    config = Keyword.fetch!(startup.speech_to_speech.provider_private, :config)
+    assert config.api_key == "google-tenant-marker"
+    assert config.system_prompt == "Answer briefly."
+    refute inspect(startup) =~ "tenant-marker"
+
+    disabled =
+      Keyword.put(settings, :speech_to_speech, providers: %{provider => [enabled: false]})
+
+    assert {:error, _error} = PlanStartup.validate(plan, disabled)
+  end
+
+  test "configured Gemini rejects unknown models and private or unsupported speech options" do
+    for {model, public} <- [
+          {"gemini-other", %{}},
+          {"gemini-3.8-live", %{api_key: "private-marker"}},
+          {"gemini-3.8-live", %{system_prompt: "override"}},
+          {"gemini-3.8-live", %{turn_control: "hybrid"}}
+        ] do
+      assert {:error, _error} =
+               compile_result(%{
+                 speech_to_speech: %{provider: "google", model: model, options: public}
+               })
+    end
+  end
+
   test "OpenAI speech starts from one saved API key and the default backend model" do
     plan =
       compile_plan(%{speech_to_speech: %{provider: "openai", model: "gpt-live-1", options: %{}}})

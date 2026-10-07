@@ -182,8 +182,8 @@ its release epoch through the same path. Both audio directions must be
 permitted at input acceptance.
 This is pre-input origin binding, not a grant-time policy queue. Full Google
 interaction association and authorization remain open.
-The unadvertised Google fixture profile can opt into this callback for local
-association tests. It binds the first accepted context before wire input and
+The configured Google profile uses this callback; fixture coverage exercises
+its conservative association boundary. It binds the first accepted context before wire input and
 continues it across `IN_PROGRESS`. A different context is accepted on the same
 socket only after explicit model `IDLE` and completion, no pending caller,
 tool, response or playback, no ambiguity, and no unresolved accepted input.
@@ -894,9 +894,11 @@ deduplication and Google cross-origin proof remain separate.
 Complete turn-controller/lifecycle coverage, full
 native conversations, usage/load and final UI acceptance remain open
 in the [STS milestone](milestones/agent-speech-to-speech.md); normative requirements above
-do not check those tasks off. Google declares `history_reconciliation?: false`. Its manifest
-entry and service badge remain disabled pending explicitly authorized hosted verification;
-local fake-socket tests do not establish hosted continuity or interrupted-history semantics.
+do not check those tasks off. Google declares `history_reconciliation?: false`.
+Its manifest and service badge now advertise configured `gemini-3.8-live`.
+The separately authorized [Gemini acceptance slice](milestones/gemini-live-provider-acceptance.md)
+records real-provider evidence; local fake-socket tests do not establish hosted
+continuity or interrupted-history semantics.
 Independent review also identified directional output-revocation,
 recognizer generation isolation, hosted sidecar configuration/format,
 recognizer usage attribution and integrated Google response-ordering defects.

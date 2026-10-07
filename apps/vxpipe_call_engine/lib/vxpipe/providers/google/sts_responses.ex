@@ -10,6 +10,7 @@ defmodule Vxpipe.Providers.Google.STSResponses do
 
   @maximum_records 16
   @maximum_pending_chunks 16
+  @maximum_chunk_bytes 131_072
   @maximum_text_bytes 65_536
   @maximum_index 9_223_372_036_854_775_807
 
@@ -97,19 +98,40 @@ defmodule Vxpipe.Providers.Google.STSResponses do
         {:error, :generation_completed}
 
       {:ok, response} ->
-        if counts(state).pending_chunks < @maximum_pending_chunks do
+        with {:ok, queue} <- pending_audio(state, response, pcm) do
           announcement =
             if not response.announced?, do: Map.take(response, [:ref, :index, :context])
 
-          response = %{response | queue: response.queue ++ [pcm], announced?: true}
+          response = %{response | queue: queue, announced?: true}
           {:ok, put_response(state, response), announcement}
-        else
-          {:error, :audio_overflow}
         end
 
       :error ->
         {:error, :no_wire_response}
     end
+  end
+
+  defp pending_audio(state, response, pcm) do
+    pending = counts(state).pending_chunks
+
+    if pending < @maximum_pending_chunks do
+      {:ok, response.queue ++ [pcm]}
+    else
+      # Wire packet boundaries do not identify responses. Compact only this
+      # response's pending PCM, preserving order and the original byte budget.
+      queue = compact_audio(IO.iodata_to_binary(response.queue ++ [pcm]))
+
+      if pending - length(response.queue) + length(queue) <= @maximum_pending_chunks,
+        do: {:ok, queue},
+        else: {:error, :audio_overflow}
+    end
+  end
+
+  defp compact_audio(pcm) when byte_size(pcm) <= @maximum_chunk_bytes, do: [pcm]
+
+  defp compact_audio(pcm) do
+    <<chunk::binary-size(@maximum_chunk_bytes), rest::binary>> = pcm
+    [chunk | compact_audio(rest)]
   end
 
   def generation_end(state) do

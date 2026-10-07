@@ -1,5 +1,14 @@
 # Agent speech-to-speech
 
+2026-10-07 configured Gemini checkpoint: the separately authorized
+[Gemini provider acceptance](gemini-live-provider-acceptance.md) enables
+`gemini-3.8-live` with the existing saved Google key and advertises its service
+badge. Real direct audio, phone round-trip and room-owned barge-in pass.
+The approved long call exposes the existing independent caller-final attribution
+boundary; qualified association and broader lifecycle acceptance remain open.
+Historical selection-gating statements below describe their checkpoint revision.
+
+
 Status: checkpoint A is implemented; B–E have focused implementation evidence
 but the integrated room path and lifecycle work remain incomplete. Checkpoint F
 is partially complete (service gating tests and documentation are in place).
@@ -13,7 +22,9 @@ gate, not the final acceptance pass after remaining B–E changes.
 The current finish line is unchanged: complete real-room/native and lifecycle
 acceptance, agent-output STT and Google local gates, then the coordinated UI,
 load, review and root pass. Hosted Google acceptance remains opt-in and billable;
-its production badge stays gated. The detailed A–F boundary below, not new
+the newly authorized [Gemini acceptance slice](gemini-live-provider-acceptance.md)
+now enables its configured selection and badge. That slice does not close the
+parent lifecycle/history/load gates. The detailed A–F boundary below, not new
 nested audit notes, defines the milestone's product scope.
 
 The milestones index entry stays unchecked until the coordinated final

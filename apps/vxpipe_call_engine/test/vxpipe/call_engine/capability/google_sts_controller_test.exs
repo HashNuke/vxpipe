@@ -560,6 +560,37 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
     refute_received {:test_google_sts_control, ^wire, _}
   end
 
+  test "genuine Google caller onset fences playback and survives the server interruption" do
+    context = start_controller("provider", response_start?: true)
+    capability = context.capability
+    wire = context.wire
+    submit_response_input(context, :typed)
+    assert_receive {:test_google_sts_control, ^wire, _input}
+    deliver(context, content(%{"outputTranscription" => %{"text" => "ONE TWO THREE"}}))
+    deliver(context, audio_message(1))
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", first, _}, 1_000
+    assert_audio(context, 1)
+
+    caller = start_caller(context)
+    assert_receive {:vxpipe_sts_interrupted, ^capability, "agent", ^first, _, _, _}, 1_000
+    refute_received {:test_google_sts_control, ^wire, _cancel}
+    deliver(context, content(%{"outputTranscription" => %{"text" => "LATE OLD"}}))
+    deliver(context, audio_message(2))
+    refute_received {:test_audio_output, _, _}
+    deliver(context, content(%{"interrupted" => true}))
+    final_caller(context, caller, "STOP COUNTING")
+    deliver(context, activity("ACTIVITY_END"))
+    deliver(context, content(%{"outputTranscription" => %{"text" => "STOPPED"}}))
+    deliver(context, audio_message(3))
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", second, _}, 1_000
+    assert second != first
+    assert_audio(context, 3)
+    finish_generation(context)
+    finish_playback(context, second, "STOPPED", 20)
+    deliver(context, interaction_end("IDLE"))
+    refute_received {:vxpipe_sts_agent_transcript, ^capability, _, "LATE OLD", _, _, _, _}
+  end
+
   test "manual interruption of the current Google response closes its allocation without old history" do
     context = start_controller()
     capability = context.capability

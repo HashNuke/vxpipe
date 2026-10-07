@@ -53,8 +53,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
     scope_name = address(self(), :scope)
     output_scope_name = address(self(), :output_stt_scope)
     output_stt? = Keyword.has_key?(options, :output_stt)
+    output_tasks = address(self(), :output_tasks)
+    options = Keyword.put(options, :output_task_supervisor, output_tasks)
 
     children = [
+      {Task.Supervisor, name: output_tasks},
       {DynamicSupervisor, name: address(self(), :input_scope), strategy: :one_for_one},
       Supervisor.child_spec(
         {CapabilityTree, owner: Keyword.fetch!(options, :owner), name: scope_name},

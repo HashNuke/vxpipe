@@ -135,11 +135,11 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
   end
 
   @doc """
-  An outgoing call handled by GPT-Live speech-to-speech and a carrier-answered incoming
+  An outgoing call handled by the selected speech-to-speech provider and a carrier-answered incoming
   call. The handler opens with "Alpha." and must answer the callee's "Bravo." with
   "Charlie.", which proves phone audio reached the model and its speech reached the phone.
   """
-  def sts_sources(fixture, dialing, receiving, scenario \\ :round_trip) do
+  def sts_sources(fixture, dialing, receiving, scenario \\ :round_trip, provider \\ "openai") do
     scenario = sts_scenario(scenario)
 
     outgoing =
@@ -150,7 +150,7 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
         first_message: %{mode: "fixed", text: scenario.model_opening},
         tools: %{},
         transfers: [],
-        capabilities: %{speech_to_speech: gpt_live_capability()}
+        capabilities: %{speech_to_speech: sts_capability(provider)}
       })
 
     incoming = source(fixture, :incoming, receiving, receiving) |> put_receiver(scenario)
@@ -174,12 +174,18 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
     })
   end
 
-  defp put_receiver(source, %{receiver_rule: rule}) do
-    put_in(
-      source,
-      [:participants, "assistant", :prompt],
-      "This is an automated carrier check. #{rule} Never say anything else or ask questions."
-    )
+  defp put_receiver(source, %{receiver_rule: rule} = scenario) do
+    source =
+      put_in(
+        source,
+        [:participants, "assistant", :prompt],
+        "This is an automated carrier check. #{rule} Never say anything else or ask questions."
+      )
+
+    case Map.fetch(scenario, :receiver_first_message) do
+      {:ok, opening} -> put_in(source, [:participants, "assistant", :first_message], opening)
+      :error -> source
+    end
   end
 
   # Round trip: the model answers the receiver's Bravo with Charlie.
@@ -202,8 +208,10 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
       model_opening: "Alpha.",
       model_prompt:
         "This is an automated carrier check. You already said Alpha. When the other party " <>
-          "says ready, count slowly from one to thirty, one number at a time. If the other " <>
-          "party asks you to stop while you are counting, stop counting immediately and say " <>
+          "says ready, count slowly from one to thirty in a single response. Say every " <>
+          "number consecutively without waiting for another reply. Continue after each " <>
+          "number. If the other party asks you to stop while you are counting, stop " <>
+          "counting immediately and say " <>
           "only: I have stopped. Never say anything else or ask questions.",
       receiver_prompt:
         "This is an automated carrier check. When the other party says Alpha, reply with " <>
@@ -223,9 +231,21 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
           "Every time the other party says Pong, reply with exactly: Ping. Never stop, never " <>
           "say anything else and never ask questions.",
       receiver_rule: "Every time the other party says Ping, reply with exactly: Pong.",
+      receiver_first_message: %{mode: "wait_for_input"},
       max_duration_ms: duration_ms + 180_000
     }
   end
+
+  defp sts_capability("google") do
+    %{
+      provider: "google",
+      model: LiveModels.speech("google", :sts),
+      credential_name: "live-telephony",
+      options: %{voice: "Kore", turn_control: "provider"}
+    }
+  end
+
+  defp sts_capability("openai"), do: gpt_live_capability()
 
   defp gpt_live_capability do
     %{
@@ -237,8 +257,8 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
     }
   end
 
-  def publish_sts(fixture, dialing, receiving, scenario \\ :round_trip) do
-    sources = sts_sources(fixture, dialing, receiving, scenario)
+  def publish_sts(fixture, dialing, receiving, scenario \\ :round_trip, provider \\ "openai") do
+    sources = sts_sources(fixture, dialing, receiving, scenario, provider)
 
     %{
       outgoing: publish_source(fixture, sources.outgoing),

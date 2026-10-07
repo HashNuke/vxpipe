@@ -23,6 +23,7 @@ defmodule Vxpipe.Providers.LiveModels do
   }
 
   @speech %{
+    "google" => %{sts: "gemini-3.8-live"},
     "elevenlabs" => %{
       stt: "scribe_v2_realtime",
       sts_backend: "gemini-3.5-flash-lite",

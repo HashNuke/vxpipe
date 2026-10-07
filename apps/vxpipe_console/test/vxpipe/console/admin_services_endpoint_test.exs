@@ -519,7 +519,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
              "deepgram" => ["credential", "credential_validation", "stt", "tts"],
              "deepseek" => ["credential", "credential_validation"],
              "fireworks" => ["credential"],
-             "google" => ["credential", "credential_validation", "stt", "tts"],
+             "google" => ["credential", "credential_validation", "sts", "stt", "tts"],
              "morse" => ["sts", "stt", "tts"],
              "openai" => ["credential", "credential_validation", "sts"],
              "openrouter" => ["credential", "credential_validation"],
@@ -529,10 +529,9 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
              "zenmux" => ["credential", "credential_validation"]
            }
 
-    # The hosted speech-to-speech badge stays gated: Google advertises no `:sts`
-    # until its interoperability check passes, and credential-free Morse never
-    # enters the credential-backed setup catalog.
-    refute "sts" in json_response(conn, 200)["provider_capabilities"]["google"]
+    # Gemini Live uses the existing Google key; credential-free Morse remains
+    # outside the credential-backed setup catalog.
+    assert "sts" in json_response(conn, 200)["provider_capabilities"]["google"]
     refute "credential" in json_response(conn, 200)["provider_capabilities"]["morse"]
 
     refute conn.resp_body =~ "payload"

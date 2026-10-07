@@ -7,6 +7,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   alias Vxpipe.Providers.Google.TTSSession, as: GoogleTTSSession
   alias Vxpipe.Providers.Google.STT, as: GoogleSTT
   alias Vxpipe.Providers.Google.STTSession, as: GoogleSTTSession
+  alias Vxpipe.Providers.Google.STS, as: GoogleSTS
+  alias Vxpipe.Providers.Google.STSSession, as: GoogleSTSSession
   alias Vxpipe.Providers.Cartesia.TTS, as: CartesiaTTS
   alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaTTSSession
   alias Vxpipe.Providers.Cartesia.STT, as: CartesiaSTT
@@ -191,7 +193,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   defp speech_adapters(:speech_to_speech) do
     {:ok, morse} = Registry.fetch_capability("morse", :sts)
     {:ok, openai} = Registry.fetch_capability("openai", :sts)
-    [morse, DuplexSTSSession, openai]
+    {:ok, google} = Registry.fetch_capability("google", :sts)
+    [morse, DuplexSTSSession, openai, google]
   end
 
   defp speech_adapters(_kind), do: []
@@ -312,6 +315,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   defp validate_provider_settings(GPTLiveSession, :speech_to_speech, settings),
     do: Keyword.validate(settings, enabled: false)
 
+  defp validate_provider_settings(GoogleSTSSession, :speech_to_speech, settings),
+    do: Keyword.validate(settings, enabled: false)
+
   defp validate_provider_settings(_provider, _kind, _settings),
     do: {:error, :provider_not_configured}
 
@@ -417,6 +423,19 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     with {:ok, options} <- normalize(input, [:voice, :sample_rate]),
          {:ok, public} <- ElevenLabsTTS.public_options(Keyword.put(options, :model, model)) do
       {:ok, [model: public.model, voice: public.voice, sample_rate: public.sample_rate]}
+    end
+  end
+
+  def speech_options(%CapabilitySelection{
+        kind: :speech_to_speech,
+        provider: "google",
+        model: "gemini-3.8-live",
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, [:voice, :turn_control]),
+         {:ok, public} <-
+           GoogleSTS.public_options(Keyword.put(options, :model, "gemini-3.8-live")) do
+      {:ok, [model: public.model, voice: public.voice, turn_control: public.turn_control]}
     end
   end
 
@@ -544,6 +563,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
       {:error, _reason} -> {:error, :unsupported_capability}
     end
   end
+
+  defp validate_speech(%{provider: "google", kind: :speech_to_speech}, options),
+    do: validate_provider(GoogleSTSSession, options)
 
   defp validate_speech(_selection, _options), do: {:error, :unsupported_capability}
 

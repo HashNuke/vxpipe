@@ -103,3 +103,13 @@ test("OpenAI speech-to-speech is available with one connected credential", () =>
     ),
   ).toEqual([expect.objectContaining({ id: "openai" })]);
 });
+
+
+test("Setup advertises configured Gemini Live only when Google STS is installed", () => {
+  const providers = installedSetupProviders({google: ["credential", "stt", "sts", "tts"]});
+  expect(providers).toEqual([
+    expect.objectContaining({id: "google", capabilities: ["stt", "llm", "tts", "s2s"],
+      defaultModels: expect.objectContaining({s2s: "gemini-3.8-live"})}),
+  ]);
+  expect(installedSetupProviders({google: ["credential", "stt", "tts"]})[0]?.capabilities).not.toContain("s2s");
+});

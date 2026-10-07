@@ -232,7 +232,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     assert startup.speech_to_speech.output_speech_to_text_private == []
   end
 
-  test "output slot rejects invalid public selections without enabling Google STS" do
+  test "output slot rejects invalid public selections independently of Google STS" do
     for selection <- [
           %{google() | provider: "unknown"},
           %{google() | model: "unsupported"},
@@ -243,7 +243,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
       assert {:error, _} = CapabilitySelection.new(selection, :output_speech_to_text, [])
     end
 
-    assert {:error, _} = Vxpipe.Providers.Registry.fetch_capability("google", :sts)
+    assert {:ok, Vxpipe.Providers.Google.STSSession} =
+             Vxpipe.Providers.Registry.fetch_capability("google", :sts)
   end
 
   defp google do

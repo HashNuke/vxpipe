@@ -63,9 +63,30 @@ defmodule Vxpipe.Providers.Google.STSResponsesTest do
     assert STSResponses.counts(state).text_bytes == 0
   end
 
+  test "a burst of small wire packets retains ordered PCM within the existing chunk budget" do
+    assert {:ok, state, response} = STSResponses.ensure_wire(STSResponses.new(), make_ref())
+    packets = Enum.map(1..60, &:binary.copy(<<&1::little-signed-16>>, 2_048))
+
+    state =
+      Enum.reduce(packets, state, fn pcm, state ->
+        assert {:ok, next, _announcement} = STSResponses.append_audio(state, pcm)
+        next
+      end)
+
+    assert {:ok, buffered} = STSResponses.fetch(state, response.ref)
+    assert IO.iodata_to_binary(buffered.queue) == IO.iodata_to_binary(packets)
+    assert STSResponses.counts(state).pending_chunks <= 16
+    assert Enum.all?(buffered.queue, &(byte_size(&1) <= 131_072))
+    assert {:ok, state} = STSResponses.discard(state, response.ref)
+    assert STSResponses.counts(state).pending_chunks == 0
+  end
+
   test "global pending PCM capacity is shared by admitted and later responses" do
     context = make_ref()
-    {state, first} = response(STSResponses.new(), context, "FIRST", <<1, 0>>)
+
+    {state, first} =
+      response(STSResponses.new(), context, "FIRST", :binary.copy(<<1, 0>>, 65_536))
+
     assert {:ok, state} = STSResponses.grant(state, first.ref, make_ref())
     assert {:ok, state} = STSResponses.generation_end(state)
     assert {:ok, state} = STSResponses.model_end(state)
@@ -74,7 +95,10 @@ defmodule Vxpipe.Providers.Google.STSResponsesTest do
     state =
       Enum.reduce(2..16, state, fn index, state ->
         assert {:ok, next, _announcement} =
-                 STSResponses.append_audio(state, <<index::little-signed-16>>)
+                 STSResponses.append_audio(
+                   state,
+                   :binary.copy(<<index::little-signed-16>>, 65_536)
+                 )
 
         next
       end)
@@ -265,7 +289,9 @@ defmodule Vxpipe.Providers.Google.STSResponsesTest do
 
     state =
       Enum.reduce(1..16, state, fn _, state ->
-        assert {:ok, state, nil} = STSResponses.append_audio(state, <<2, 0>>)
+        assert {:ok, state, nil} =
+                 STSResponses.append_audio(state, :binary.copy(<<2, 0>>, 65_536))
+
         state
       end)
 
