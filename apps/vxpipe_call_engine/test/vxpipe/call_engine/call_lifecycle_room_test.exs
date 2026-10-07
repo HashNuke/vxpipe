@@ -275,7 +275,6 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     command = connection_command(plan, room, caller, "detached-wait-startup")
     assert {:ok, _} = CallEngine.TestTransferConnection.attach(command, sink)
     assert_receive {:test_audio_output, ^sink, wait_frame}, 1_000
-    assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
     player_monitor = Process.monitor(wait_frame.reply_to)
 
     assert :ok =

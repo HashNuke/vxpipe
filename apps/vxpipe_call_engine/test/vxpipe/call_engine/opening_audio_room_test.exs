@@ -66,13 +66,12 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert RoomAuthority.input_admission(plan.tenant_id, plan.room_id) == :opening_audio
     refute_receive {:test_call_ready, _}, 100
     assert :ok = GenServer.call(connection, :complete_readiness)
-    assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+    # Readiness ends the wait: its queued audio is interrupted, not played out.
+    assert_receive {:test_audio_output_interrupt, ^sink, wait_turn, _played}, 1_000
+    assert wait_turn == waiting.correlation_id
     await_initial_resource_observation(authority, System.monotonic_time(:millisecond) + 1_000)
-    _ = :sys.get_state(waiting.reply_to)
-    assert :ok = TestAudioOutputSink.playback_completed(sink)
     assert_eventually_open(plan)
     refute_receive {:test_call_ready, _}
-    refute_receive {:test_audio_output, ^sink, _}
   end
 
   # Review 2026-10-06: protection must end when the opening turn fails, not only when it
@@ -151,6 +150,12 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_receive {:test_agent_runtime_stream, _model, request}, 1_000
     assert Enum.any?(request.messages, &(&1.role == :user and &1.content == "Hello?"))
     end_room(plan, room)
+  end
+
+  # Wait audio already queued ahead of real time keeps arriving; skip to the matching frame.
+  defp await_output(sink, matches?) do
+    assert_receive {:test_audio_output, ^sink, frame}, 1_000
+    if matches?.(frame), do: frame, else: await_output(sink, matches?)
   end
 
   defp await_output_probe_result(authority, deadline) do
@@ -306,18 +311,16 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       assert_receive {:opening_fetch_waiting, fetcher}, 1_000
       assert_receive {:test_audio_output, ^sink, first}, 1_000
       assert first.payload == :binary.copy(<<100::little-16>>, 960)
-      assert_receive {:test_audio_output_finish, ^sink, _}
-      assert :ok = TestAudioOutputSink.playback_completed(sink)
       assert_receive {:test_audio_output, ^sink, second}
       assert second.payload == :binary.copy(<<200::little-16>>, 960)
-      assert_receive {:test_audio_output_finish, ^sink, _}
+      # Two wait frames have played when the notice arrives; the pause interrupts the rest.
+      assert :ok = TestAudioOutputSink.playback_progress(sink, 40, 40)
 
       send(fetcher, :release_notice)
-      refute_receive {:test_audio_output, ^sink, _}, 100
-      assert :ok = TestAudioOutputSink.playback_completed(sink)
-      assert_receive {:test_audio_output, ^sink, notice}
-      assert notice.payload == <<1, 0, 2, 0>>
-      assert_receive {:test_audio_output_finish, ^sink, _}
+      assert_receive {:test_audio_output_interrupt, ^sink, _wait_turn, 40}, 1_000
+      notice = await_output(sink, &(&1.payload == <<1, 0, 2, 0>>))
+      assert_receive {:test_audio_output_finish, ^sink, notice_turn}
+      assert notice_turn == notice.correlation_id
       refute_receive {:test_audio_output, ^sink, _}, 100
       [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
       connection = TestTransferConnection.run(command, fn -> self() end)
@@ -341,13 +344,12 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         send(model_preparer, :release_test_agent_runtime_model)
       end
 
-      assert_receive {:test_audio_output_finish, ^sink, _}
+      # Readiness ends the wait: its queued audio is interrupted, not played out.
+      assert_receive {:test_audio_output_interrupt, ^sink, wait_turn, _played}, 1_000
+      assert wait_turn == resumed.correlation_id
       await_initial_resource_observation(authority, System.monotonic_time(:millisecond) + 1_000)
-      _ = :sys.get_state(resumed.reply_to)
-      assert :ok = TestAudioOutputSink.playback_completed(sink)
       assert_eventually_open(plan)
       refute_receive {:test_call_ready, _}
-      refute_receive {:test_audio_output, ^sink, _}
     end
   end
 

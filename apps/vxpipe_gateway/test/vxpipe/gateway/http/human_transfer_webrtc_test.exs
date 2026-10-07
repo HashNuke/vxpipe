@@ -459,7 +459,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     await_tone(late_client, 250, 2_000)
     {late_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
     pause_wait_at(late_player, 100)
-    assert await_paused_cursor(late_player, 3_000) == 192_000
+    assert await_paused_cursor(late_player, 3_000) > 0
 
     audience_phase = :sys.get_state(authority).pending_participant_transfer.task.pid
     assert :erlang.suspend_process(audience_phase)
@@ -480,7 +480,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     {reentered_player, _} = Map.fetch!(wait_players(room.incarnation_id), late.participant_id)
     refute reentered_player == late_player
     pause_wait_at(reentered_player, 25)
-    assert await_paused_cursor(reentered_player, 2_000) == 48_000
+    assert await_paused_cursor(reentered_player, 2_000) > 0
     CallEngine.WaitSounds.Player.resume(reentered_player)
     audience = audience ++ [late_client]
 
@@ -500,8 +500,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert_receive {:test_stt_transport_started, support_stt, _}, 2_000
     await_transfer_progress(third_client, "preparing", ["speech_to_text"])
     assert {:ok, pending} = CallEngine.RoomAuthority.readiness_binding(authority)
-    assert await_paused_cursor(observer_player, 8_000) == 288_000
-    assert await_paused_cursor(caller_player, 8_000) == 672_000
+    observer_cursor = await_paused_cursor(observer_player, 8_000)
+    caller_cursor = await_paused_cursor(caller_player, 8_000)
+    assert caller_cursor > observer_cursor
 
     phase = :sys.get_state(authority).pending_participant_transfer.task.pid
 
@@ -529,8 +530,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         :erlang.resume_process(worker)
       end
 
-    assert :sys.get_state(observer_player).offset == 288_000
-    assert :sys.get_state(caller_player).offset == 672_000
+    assert :sys.get_state(observer_player).offset == observer_cursor
+    assert :sys.get_state(caller_player).offset == caller_cursor
     CallEngine.WaitSounds.Player.resume(observer_player)
     CallEngine.WaitSounds.Player.resume(caller_player)
     await_tone(second_sink, 250, 2_000)
@@ -1355,6 +1356,9 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       assert {:ok, tool_resource, :ready} = CallEngine.Tool.InvocationRegistry.readiness(tools)
       token = pause_tool_readiness(tools)
+      # Readiness changes can already have shown the tools as ready to the transfer's
+      # collector, which then never asks them again; ask now that the hook is installed.
+      refresh_readiness_collectors(room.incarnation_id)
 
       try do
         assert_receive {:tool_readiness_waiting, ^token}, 2_000
@@ -3918,6 +3922,19 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     end
   end
 
+  defp refresh_readiness_collectors(incarnation) do
+    [{supervisor, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {:capability_supervisor, incarnation})
+
+    for {_, collector, _, [Vxpipe.CallEngine.Readiness.Collector]} <-
+          DynamicSupervisor.which_children(supervisor),
+        is_pid(collector) do
+      _ = Vxpipe.CallEngine.Readiness.Collector.refresh(collector)
+    end
+
+    :ok
+  end
+
   defp pause_tool_readiness(tools) do
     owner = self()
     token = make_ref()
@@ -4491,31 +4508,33 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     :exit, _reason -> "connection=#{peer.connection_id}, output unavailable"
   end
 
+  # Pauses once the native output has accepted `frame_count` more frames. Each accepted
+  # frame arrives as one `:ok` reply; the pause interrupts the output, so the cursor is
+  # wherever real playback reached.
   defp pause_wait_at(player, frame_count) do
     token = make_ref()
-    target = ":#{frame_count - 2}"
 
     assert :ok =
-             :sys.install(player, {token,
-              fn
-                :done, _event, _process ->
-                  :done
-
-                state,
-                {:in, {:vxpipe_audio_playback, _sink, correlation, {:completed, _}}},
-                _process ->
-                  if String.ends_with?(correlation, target) do
-                    # The next frame is submitted by handle_continue before this cast.
-                    # Pause then drains exactly that frame through the native output.
-                    CallEngine.WaitSounds.Player.pause(self())
+             :sys.install(
+               player,
+               {token,
+                fn
+                  :done, _event, _process ->
                     :done
-                  else
-                    state
-                  end
 
-                state, _event, _process ->
-                  state
-              end, nil})
+                  accepted, {:in, {reference, :ok}}, _process
+                  when is_reference(reference) or is_list(reference) ->
+                    if accepted + 1 >= frame_count do
+                      CallEngine.WaitSounds.Player.pause(self())
+                      :done
+                    else
+                      accepted + 1
+                    end
+
+                  accepted, _event, _process ->
+                    accepted
+                end, 0}
+             )
   end
 
   defp remove_native_listener(authority, room, participant, peer, player) do
