@@ -70,16 +70,6 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
         )
     end
 
-    twilio =
-      provision(
-        tenant.key,
-        "twilio",
-        "live-telephony",
-        "account_sid_auth_token",
-        %{"account_sid" => settings.account_sid, "auth_token" => settings.auth_token},
-        options
-      )
-
     assert {:ok, _telnyx} =
              OperatorTelephonyApplications.create(
                InstallationOperator.authority(),
@@ -92,20 +82,7 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
                options
              )
 
-    assert {:ok, _twilio} =
-             TelephonyServices.register(
-               tenant.key,
-               %{
-                 "name" => "live-twilio",
-                 "ingress_key" => "vxp-test-twilio",
-                 "provider" => "twilio",
-                 "provider_connection_id" => settings.account_sid,
-                 "credential_id" => twilio.id,
-                 "outbound_number" => Map.fetch!(settings.numbers, "twilio"),
-                 "answering_machine_detection" => "disabled"
-               },
-               options
-             )
+    register_twilio(tenant, settings, options)
 
     %__MODULE__{
       tenant: tenant,
@@ -115,6 +92,37 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
       options: options
     }
   end
+
+  # Twilio is optional: Telnyx carries every telephony test that is not about Twilio itself.
+  defp register_twilio(tenant, %{account_sid: sid, auth_token: token} = settings, options)
+       when is_binary(sid) and is_binary(token) and is_map_key(settings.numbers, "twilio") do
+    twilio =
+      provision(
+        tenant.key,
+        "twilio",
+        "live-telephony",
+        "account_sid_auth_token",
+        %{"account_sid" => sid, "auth_token" => token},
+        options
+      )
+
+    assert {:ok, _twilio} =
+             TelephonyServices.register(
+               tenant.key,
+               %{
+                 "name" => "live-twilio",
+                 "ingress_key" => "vxp-test-twilio",
+                 "provider" => "twilio",
+                 "provider_connection_id" => sid,
+                 "credential_id" => twilio.id,
+                 "outbound_number" => Map.fetch!(settings.numbers, "twilio"),
+                 "answering_machine_detection" => "disabled"
+               },
+               options
+             )
+  end
+
+  defp register_twilio(_tenant, _settings, _options), do: :ok
 
   def publish(fixture, dialing, receiving, options \\ []) do
     incoming =
@@ -399,11 +407,15 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
     publication
   end
 
+  # Endpoints name a number; both Telnyx numbers belong to the one Telnyx service.
+  defp endpoint_service("telnyx-b"), do: "telnyx"
+  defp endpoint_service(endpoint), do: endpoint
+
   defp source(fixture, direction, service, destination, options \\ []) do
     timeout = Keyword.get(options, :ring_timeout_ms, 15_000)
 
     human_connection = %{
-      service: "live-" <> service,
+      service: "live-" <> endpoint_service(service),
       number: Map.fetch!(fixture.settings.numbers, destination)
     }
 

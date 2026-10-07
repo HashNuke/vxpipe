@@ -26,8 +26,12 @@ Room A: saved outgoing call spec, agent first
   -> provider B incoming webhook -> Room B: published receiving call spec
 ```
 
-One run covers provider A outbound and provider B inbound; the reversed pair covers the other
-two directions. A third case dials a number configured not to answer and expects Room A to end at
+**Telnyx carries every telephony test that is not about Twilio itself (2026-10-07).** Its two
+numbers call each other (Telnyx A dials, Telnyx B receives through the same Voice API
+application), so the default round trip, speech-to-speech, barge-in, long-session and unanswered
+cases need no Twilio account. Twilio's own cases (the Twilio round trips and the private
+transfer) carry `live_twilio` and run only when Twilio is usable. One cross-carrier run covers
+provider A outbound and provider B inbound; the reversed pair covers the other two directions. A third case dials a number configured not to answer and expects Room A to end at
 its ring deadline. No human destination, verified caller ID or personal phone number is involved.
 All numbers are US local numbers and every test call is US to US.
 
@@ -118,7 +122,8 @@ Each resource is named for the machine so two machines never route each other's 
 | --- | --- | --- | --- |
 | Telnyx | Voice API (Call Control) application `vxp-test-<machine>` | `filter[application_name][contains]`, then exact match | `/v2/call_control_applications`; `webhook_event_url`, `outbound.outbound_voice_profile_id` |
 | Telnyx | Outbound voice profile `vxp-test-<machine>`, `whitelisted_destinations: ["US"]` | `filter[name][contains]`, then exact match | `/v2/outbound_voice_profiles` |
-| Telnyx | US local number tagged `vxp-test-<machine>`, assigned to that application | `filter[tag]` | `/v2/phone_numbers` (`tags`, `connection_id`); purchase via `/v2/available_phone_numbers` then `/v2/number_orders` |
+| Telnyx | US local number tagged `vxp-test-<machine>`, assigned to that application | `filter[tag]`, then exact tag match | `/v2/phone_numbers` (`tags`, `connection_id`); purchase via `/v2/available_phone_numbers` then `/v2/number_orders` |
+| Telnyx | Second US local number tagged `vxp-test-<machine>-b`, assigned to the same application; it receives Telnyx-to-Telnyx calls | `filter[tag]`, then exact tag match | as above |
 | Twilio | US local number, `FriendlyName` `vxp-test-<machine>` | `FriendlyName` list filter | `IncomingPhoneNumbers`; purchase via `AvailablePhoneNumbers/US/Local` |
 
 `telephony:provision` sets the Telnyx application webhook and the Twilio number's Voice URL to
@@ -135,9 +140,13 @@ permissions and enable only the low-risk US/Canada category. See the
 [Twilio API reference](https://www.twilio.com/docs/voice/api/dialingpermissions-bulkcountryupdate-resource).
 
 Telephony runs discover the same resources read-only before starting tests and export them to
-the child: `TELNYX_APP_ID`, `TELNYX_TEST_FROM`/`TWILIO_TEST_DESTINATION` (the Telnyx number) and
-`TWILIO_TEST_FROM`/`TELNYX_TEST_DESTINATION` (the Twilio number), so each provider calls the
-other. Missing or unwired resources stop the run with the provisioning command to fix it. The
+the child: `TELNYX_APP_ID`, `TELNYX_TEST_FROM` (Telnyx A), `TELNYX_TEST_TO` and
+`TELNYX_TEST_DESTINATION` (Telnyx B). When Twilio is usable they also export
+`TWILIO_TEST_FROM` (the Twilio number) and `TWILIO_TEST_DESTINATION` (Telnyx A). Twilio is
+required only when the selection names Twilio's own tests (`live_twilio`, `live_telephony_twilio*`
+or a Twilio path); otherwise a Twilio error is reported and the run continues on Telnyx.
+`telephony:provision` likewise reports Twilio problems without stopping Telnyx provisioning.
+Missing or unwired Telnyx resources stop the run with the provisioning command to fix it. The
 Telnyx application webhook uses the platform-scoped route `/webhooks/platform/telnyx`; the Twilio
 number's Voice URL uses ingress key `vxp-test-twilio`. Credentials reach `curl` only through its
 stdin configuration, never argv, and Twilio account SIDs are masked in error messages.
@@ -219,8 +228,8 @@ Select one case at a time:
 
 ```shell
 bin/livetests run --only live_telephony_endpoint apps/vxpipe_console/test/integration/live_telephony_test.exs
-bin/livetests run --only live_telephony_twilio apps/vxpipe_console/test/integration/live_telephony_test.exs
 bin/livetests run --only live_telephony_telnyx apps/vxpipe_console/test/integration/live_telephony_test.exs
+bin/livetests run --only live_twilio apps/vxpipe_console/test/integration/live_telephony_test.exs
 bin/livetests run --only live_telephony_unanswered apps/vxpipe_console/test/integration/live_telephony_test.exs
 ```
 

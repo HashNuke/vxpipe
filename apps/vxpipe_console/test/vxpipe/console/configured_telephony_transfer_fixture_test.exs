@@ -158,6 +158,23 @@ defmodule Vxpipe.Console.ConfiguredTelephonyTransferFixtureTest do
     end
   end
 
+  test "a Telnyx-to-Telnyx pair dials and receives through the one Telnyx service" do
+    fixture = %ConfiguredTelephonyFixture{
+      settings: %{numbers: %{"telnyx" => "+15550001002", "telnyx-b" => "+15550001003"}}
+    }
+
+    sources = ConfiguredTelephonyFixture.sts_sources(fixture, "telnyx", "telnyx-b")
+
+    for {name, source} <- sources do
+      assert {:ok, _spec} = CallSpec.new(source, resource_id: "telnyx-pair-#{name}", revision: 1)
+    end
+
+    assert sources.outgoing.participants["human"].connection.service == "live-telnyx"
+    incoming = sources.incoming.participants["human"].connection
+    assert incoming.service == "live-telnyx"
+    assert incoming.number == "+15550001003"
+  end
+
   test "the three-party carrier fixture validates portable receive and private-transfer contracts" do
     fixture = %ConfiguredTelephonyFixture{
       settings: %{numbers: %{"twilio" => "+15550001001", "telnyx" => "+15550001002"}}

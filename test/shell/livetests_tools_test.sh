@@ -111,7 +111,8 @@ base="https://vxp-test-$FAKE_MACHINE.tail0000.ts.net"
 case "$url" in
   *outbound_voice_profiles*) body="{\"data\":[{\"id\":\"p1\",\"name\":\"vxp-test-$FAKE_MACHINE\"}]}" ;;
   *call_control_applications*) body="{\"data\":[{\"id\":\"a1\",\"application_name\":\"vxp-test-$FAKE_MACHINE\",\"webhook_event_url\":\"$base/webhooks/platform/telnyx\",\"outbound\":{\"outbound_voice_profile_id\":\"p1\"}}]}" ;;
-  *phone_numbers*) body='{"data":[{"id":"n1","phone_number":"+13125550142","connection_id":"a1"}]}' ;;
+  *phone_numbers*filter*tag*-b) body="{\"data\":[{\"id\":\"n2\",\"phone_number\":\"+13125550143\",\"connection_id\":\"a1\",\"tags\":[\"vxp-test-$FAKE_MACHINE-b\"]}]}" ;;
+  *phone_numbers*) body="{\"data\":[{\"id\":\"n1\",\"phone_number\":\"+13125550142\",\"connection_id\":\"a1\",\"tags\":[\"vxp-test-$FAKE_MACHINE\"]}]}" ;;
   *IncomingPhoneNumbers*) body="{\"incoming_phone_numbers\":[{\"sid\":\"PN1\",\"phone_number\":\"+14155550199\",\"friendly_name\":\"vxp-test-$FAKE_MACHINE\",\"voice_url\":\"$base/api/telephony/twilio/vxp-test-twilio/voice\",\"voice_method\":\"POST\"}]}" ;;
   *) echo "unexpected $url" >&2; exit 7 ;;
 esac

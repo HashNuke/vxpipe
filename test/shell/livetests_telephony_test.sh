@@ -70,8 +70,9 @@ if [[ "$path" != "$url" ]]; then
       jq --argjson b "$body" --arg id "$id" 'map(if .id == $id then . + $b else . end)' "$api/telnyx/numbers.json" > "$api/t" && mv "$api/t" "$api/telnyx/numbers.json"
       reply 200 "$(jq -c --arg id "$id" '{data: (.[] | select(.id == $id))}' "$api/telnyx/numbers.json")" ;;
     "GET /available_phone_numbers")
-      reply 200 "$(jq -c '{data: [.[0:1][] | {phone_number: .}]}' "$api/telnyx/available.json")" ;;
+      reply 200 "$(jq -c --slurpfile owned "$api/telnyx/numbers.json" '{data: [map(select(. as $p | ($owned[0] | map(.phone_number) | index($p)) | not))[0:1][] | {phone_number: .}]}' "$api/telnyx/available.json")" ;;
     "POST /number_orders")
+      [[ -f "$api/telnyx/order_error" ]] && reply 422 "$(cat "$api/telnyx/order_error")"
       number="$(jq -r '.phone_numbers[0].phone_number' <<< "$body")"
       connection="$(jq -r '.connection_id' <<< "$body")"
       id="$(next_id)"
@@ -84,6 +85,7 @@ fi
 path="${url#https://api.twilio.com/2010-04-01/Accounts/}"
 if [[ "$path" != "$url" ]]; then
   grep -q '^user = "AC' <<< "$config" || reply 401 '{"message":"no auth"}'
+  [[ -f "$api/twilio/inactive" ]] && reply 401 '{"message":"authentication failed, account ACtestonly with status 4 is not active"}'
   path="/${path#*/}"
   path="${path%%\?*}"
   case "$method $path" in
@@ -120,7 +122,7 @@ FAKE
 
 cat > "$scratch/bin/mix" <<'MIX'
 #!/usr/bin/env bash
-env | grep -E '^(TELNYX_APP_ID|TELNYX_TEST_FROM|TELNYX_TEST_DESTINATION|TWILIO_TEST_FROM|TWILIO_TEST_DESTINATION)=' | sort > "$VXPIPE_LIVE_RUNNER_TEST_OUTPUT"
+env | grep -E '^(TELNYX_APP_ID|TELNYX_TEST_FROM|TELNYX_TEST_TO|TELNYX_TEST_DESTINATION|TWILIO_TEST_FROM|TWILIO_TEST_DESTINATION)=' | sort > "$VXPIPE_LIVE_RUNNER_TEST_OUTPUT"
 MIX
 chmod +x "$scratch/bin/"*
 
@@ -130,7 +132,8 @@ reset_api() {
   # Another machine's resources must never be touched or adopted.
   echo '[{"id":"9","phone_number":"+13125550100","tags":["vxp-test-wheeljack"],"connection_id":"wheeljack-app"}]' \
     > "$scratch/api/telnyx/numbers.json"
-  echo '["+13125550142"]' > "$scratch/api/telnyx/available.json"
+  echo '["+13125550142","+13125550143"]' > "$scratch/api/telnyx/available.json"
+  rm -f "$scratch/api/telnyx/order_error" "$scratch/api/twilio/inactive"
   echo '[{"sid":"PN9","phone_number":"+14155550100","friendly_name":"vxp-test-wheeljack","voice_url":"https://wheeljack/voice","voice_method":"POST"}]' \
     > "$scratch/api/twilio/numbers.json"
   echo '["+14155550199"]' > "$scratch/api/twilio/available.json"
@@ -155,14 +158,22 @@ livetests() { "$repo_root/bin/livetests" "$@"; }
 log_has() { rg -q -F -- "$1" "$scratch/api/log"; }
 url="https://vxp-test-rocksalt.tail0000.ts.net"
 
-# A carrier API error stops provisioning with a failure instead of reporting success.
+# A Telnyx API error stops provisioning with a failure instead of reporting success.
+reset_api
+echo '{"errors":[{"detail":"Number is no longer available."}]}' > "$scratch/api/telnyx/order_error"
+if livetests telephony:provision --allow-purchase > "$scratch/out" 2> "$scratch/err"; then
+  fail "provision reported success after a Telnyx error"
+fi
+rg -q -F 'no longer available' "$scratch/err" || fail "Telnyx error not shown"
+rg -q -F 'ready' "$scratch/out" && fail "provision printed ready after a Telnyx error"
+
+# Twilio is optional: its errors are reported, Telnyx is still provisioned, and no secret leaks.
 reset_api
 echo '{"message":"Primary compliance profile is not approved."}' > "$scratch/api/twilio/purchase_error"
-if livetests telephony:provision --allow-purchase > "$scratch/out" 2> "$scratch/err"; then
-  fail "provision reported success after a carrier error"
-fi
-rg -q -F 'compliance profile' "$scratch/err" || fail "carrier error not shown"
-rg -q -F 'ready' "$scratch/out" && fail "provision printed ready after a carrier error"
+livetests telephony:provision --allow-purchase > "$scratch/out" 2> "$scratch/err" ||
+  fail "a Twilio error stopped Telnyx provisioning"
+rg -q -F 'compliance profile' "$scratch/err" || fail "Twilio error not shown"
+rg -q -F 'twilio unavailable' "$scratch/out" || fail "unavailable Twilio not reported"
 rg -q -F 'ACtestonly' "$scratch/err" && fail "account SID printed in an error"
 rm "$scratch/api/twilio/purchase_error"
 
@@ -177,6 +188,7 @@ log_has 'POST https://api.twilio.com/2010-04-01/Accounts/ACtestonly/IncomingPhon
 rg -q -F -- '--allow-purchase' "$scratch/err" || fail "missing purchase flag not explained"
 
 # With --allow-purchase every missing resource is created and wired.
+reset_api
 livetests telephony:provision --allow-purchase > "$scratch/out"
 profile_id="$(jq -r '.[] | select(.name == "vxp-test-rocksalt") | .id' "$scratch/api/telnyx/profiles.json")"
 [[ -n "$profile_id" ]] || fail "outbound profile not created"
@@ -189,6 +201,11 @@ app_id="$(jq -r '.id' <<< "$app")"
 number="$(jq -c '.[] | select(.phone_number == "+13125550142")' "$scratch/api/telnyx/numbers.json")"
 [[ "$(jq -r '.connection_id' <<< "$number")" == "$app_id" ]] || fail "Telnyx number not assigned to the app"
 [[ "$(jq -r '.tags | index("vxp-test-rocksalt")' <<< "$number")" != null ]] || fail "Telnyx number not tagged"
+# A second Telnyx number receives the Telnyx-to-Telnyx calls.
+second="$(jq -c '.[] | select(.phone_number == "+13125550143")' "$scratch/api/telnyx/numbers.json")"
+[[ "$(jq -r '.connection_id' <<< "$second")" == "$app_id" ]] || fail "second Telnyx number not assigned to the app"
+[[ "$(jq -c '.tags' <<< "$second")" == '["vxp-test-rocksalt-b"]' ]] || fail "second Telnyx number not tagged: $second"
+rg -q -F '+13125550143' "$scratch/out" || fail "second Telnyx number not reported"
 twilio="$(jq -c '.[] | select(.friendly_name == "vxp-test-rocksalt")' "$scratch/api/twilio/numbers.json")"
 [[ "$(jq -r '.phone_number' <<< "$twilio")" == "+14155550199" ]] || fail "Twilio number not bought"
 [[ "$(jq -r '.voice_url' <<< "$twilio")" == "$url/api/telephony/twilio/vxp-test-twilio/voice" ]] || fail "Twilio voice URL wrong"
@@ -233,11 +250,32 @@ grep '^ARGV' "$scratch/api/log" | grep -qvE '^ARGV GET ' && fail "run changed ca
 diff <(cat "$scratch/output") <(sort <<EOF
 TELNYX_APP_ID=$app_id
 TELNYX_TEST_FROM=+13125550142
-TELNYX_TEST_DESTINATION=+14155550199
+TELNYX_TEST_TO=+13125550143
+TELNYX_TEST_DESTINATION=+13125550143
 TWILIO_TEST_FROM=+14155550199
 TWILIO_TEST_DESTINATION=+13125550142
 EOF
 ) || fail "discovered resources not exported"
+
+# With Twilio unusable, telephony runs on Telnyx alone; an explicit Twilio selection fails.
+touch "$scratch/api/twilio/inactive"
+livetests run --only live_telephony apps/vxpipe_console/test/integration 2> "$scratch/err" ||
+  fail "an inactive Twilio account stopped a Telnyx telephony run"
+diff <(cat "$scratch/output") <(sort <<EOF
+TELNYX_APP_ID=$app_id
+TELNYX_TEST_FROM=+13125550142
+TELNYX_TEST_TO=+13125550143
+TELNYX_TEST_DESTINATION=+13125550143
+EOF
+) || fail "Telnyx-only resources not exported"
+rg -q -F 'Twilio' "$scratch/err" || fail "unavailable Twilio not reported"
+rg -q -F 'ACtestonly' "$scratch/err" && fail "account SID printed from a Twilio error"
+rm -f "$scratch/output"
+if livetests run --only live_twilio apps/vxpipe_gateway/test/integration 2> "$scratch/err"; then
+  fail "a Twilio selection ran without Twilio"
+fi
+[[ ! -e "$scratch/output" ]] || fail "Twilio tests started without Twilio"
+rm "$scratch/api/twilio/inactive"
 
 # A run against an unprovisioned account names the fix and does not start tests.
 reset_api

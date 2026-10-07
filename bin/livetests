@@ -54,7 +54,7 @@ credential_names=(
   TELEPHONY_TEST_PUBLIC_URL
   TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_TEST_FROM TWILIO_TEST_DESTINATION
   TELNYX_API_KEY TELNYX_PUBLIC_KEY TELNYX_APP_ID TELNYX_TEST_FROM
-  TELNYX_TEST_DESTINATION
+  TELNYX_TEST_TO TELNYX_TEST_DESTINATION
   TAILSCALE_CLIENT_ID TAILSCALE_CLIENT_SECRET
 )
 
@@ -290,7 +290,11 @@ http_request() {
   status="${response##*$'\n'}"
   body="${response%$'\n'*}"
   if [[ "$status" != 2* ]]; then
-    die "$method $where returned HTTP $status: $(jq -r '[.errors[]?.detail, .message] | map(select(.)) | first // empty' <<< "$body" 2>/dev/null)"
+    local detail
+    detail="$(jq -r '[.errors[]?.detail, .message] | map(select(.)) | first // empty' <<< "$body" 2>/dev/null)"
+    # Carrier error text can echo the account identifier; keep it out of output.
+    [[ -n "${TWILIO_ACCOUNT_SID:-}" ]] && detail="${detail//$TWILIO_ACCOUNT_SID/<account>}"
+    die "$method $where returned HTTP $status: $detail"
   fi
   printf '%s' "$body"
 }
@@ -312,12 +316,18 @@ twilio_api() {
     "$method" "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID$path" "${arguments[@]}"
 }
 
+# Telnyx carries every telephony test; Twilio is needed only for Twilio's own tests.
 require_carrier_credentials() {
-  local name missing=()
-  for name in TELNYX_API_KEY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN; do
+  local twilio="$1" name names=(TELNYX_API_KEY) missing=()
+  [[ "$twilio" == required ]] && names+=(TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN)
+  for name in "${names[@]}"; do
     [[ -n "${!name:-}" ]] || missing+=("$name")
   done
   [[ ${#missing[@]} -eq 0 ]] || die "set ${missing[*]} in $env_file"
+}
+
+twilio_credentials_present() {
+  [[ -n "${TWILIO_ACCOUNT_SID:-}" && -n "${TWILIO_AUTH_TOKEN:-}" ]]
 }
 
 carrier_public_url() {
@@ -385,13 +395,16 @@ ensure_telnyx_app() {
   jq -r .id <<< "$app"
 }
 
+# Each Telnyx number is identified by one exact tag: the machine's node name for the dialing
+# number, and "<node>-b" for the number that receives Telnyx-to-Telnyx calls.
 ensure_telnyx_number() {
-  local mode="$1" purchase="$2" app_id="$3" number candidate attempt
-  number="$(telnyx_api GET "/phone_numbers?filter[tag]=$node_name" | jq -c 'first(.data[]) // empty')" || return 2
+  local mode="$1" purchase="$2" app_id="$3" tag="$4" label="$5" number candidate attempt
+  number="$(telnyx_api GET "/phone_numbers?filter[tag]=$tag" |
+    jq -c --arg t "$tag" 'first(.data[] | select((.tags // []) | index($t))) // empty')" || return 2
   if [[ -z "$number" ]]; then
     [[ "$mode" == check ]] && return 1
     [[ "$purchase" == true ]] || {
-      report telnyx "number" "missing (re-run with --allow-purchase to buy a US local number)"
+      report telnyx "$label" "missing (re-run with --allow-purchase to buy a US local number)"
       return 1
     }
     candidate="$(telnyx_api GET "/available_phone_numbers?filter[country_code]=US&filter[phone_number_type]=local&filter[features][]=voice&filter[limit]=1" |
@@ -406,15 +419,15 @@ ensure_telnyx_number() {
     done
     [[ -n "$number" ]] || { carrier_error "ordered $candidate from Telnyx but it has not appeared yet; re-run telephony:provision shortly"; return 2; }
     number="$(telnyx_api PATCH "/phone_numbers/$(jq -r .id <<< "$number")" \
-      "$(jq -nc --arg t "$node_name" --arg c "$app_id" '{tags: [$t], connection_id: $c}')" | jq -c .data)" || return 2
-    report telnyx "number" "bought $(jq -r .phone_number <<< "$number")"
+      "$(jq -nc --arg t "$tag" --arg c "$app_id" '{tags: [$t], connection_id: $c}')" | jq -c .data)" || return 2
+    report telnyx "$label" "bought $(jq -r .phone_number <<< "$number")"
   elif [[ "$(jq -r .connection_id <<< "$number")" != "$app_id" ]]; then
     [[ "$mode" == check ]] && { carrier_error "Telnyx number $(jq -r .phone_number <<< "$number") is not assigned to $node_name; run bin/livetests telephony:provision"; return 2; }
     number="$(telnyx_api PATCH "/phone_numbers/$(jq -r .id <<< "$number")" \
       "$(jq -nc --arg c "$app_id" '{connection_id: $c}')" | jq -c .data)" || return 2
-    report telnyx "number" "assigned $(jq -r .phone_number <<< "$number")"
+    report telnyx "$label" "assigned $(jq -r .phone_number <<< "$number")"
   else
-    report telnyx "number" "found $(jq -r .phone_number <<< "$number")"
+    report telnyx "$label" "found $(jq -r .phone_number <<< "$number")"
   fi
   jq -r .phone_number <<< "$number"
 }
@@ -457,22 +470,40 @@ carrier_step() {
   return "$status"
 }
 
-# mode: provision (create/repair) or check (read-only). Sets carrier_* globals.
+# An optional step reports problems but never stops the command.
+carrier_try() {
+  local variable="$1" output
+  shift
+  output="$("$@")" || return 1
+  printf -v "$variable" '%s' "$output"
+}
+
+# mode: provision (create/repair) or check (read-only); twilio: required, optional or skip.
+# Sets carrier_* globals. Telnyx resources are always required.
 carrier_resources() {
-  local mode="$1" purchase="${2:-false}" url missing=false profile_id=""
-  require_carrier_credentials
+  local mode="$1" purchase="${2:-false}" twilio="${3:-optional}" url missing=false profile_id=""
+  require_carrier_credentials "$twilio"
   url="$(carrier_public_url)"
-  carrier_telnyx_app="" carrier_telnyx_number="" carrier_twilio_number=""
+  carrier_telnyx_app="" carrier_telnyx_number="" carrier_telnyx_receiver="" carrier_twilio_number=""
 
   if carrier_step profile_id ensure_telnyx_profile "$mode" &&
     carrier_step carrier_telnyx_app ensure_telnyx_app "$mode" "$profile_id" "$url/webhooks/platform/telnyx"; then
-    carrier_step carrier_telnyx_number ensure_telnyx_number "$mode" "$purchase" "$carrier_telnyx_app" ||
-      missing=true
+    carrier_step carrier_telnyx_number ensure_telnyx_number "$mode" "$purchase" "$carrier_telnyx_app" \
+      "$node_name" number || missing=true
+    carrier_step carrier_telnyx_receiver ensure_telnyx_number "$mode" "$purchase" "$carrier_telnyx_app" \
+      "$node_name-b" "second number" || missing=true
   else
     missing=true
   fi
-  carrier_step carrier_twilio_number ensure_twilio_number "$mode" "$purchase" \
-    "$url/api/telephony/twilio/$twilio_ingress_key/voice" || missing=true
+
+  if [[ "$twilio" == required ]]; then
+    carrier_step carrier_twilio_number ensure_twilio_number "$mode" "$purchase" \
+      "$url/api/telephony/twilio/$twilio_ingress_key/voice" || missing=true
+  elif [[ "$twilio" == optional ]] && twilio_credentials_present; then
+    carrier_try carrier_twilio_number ensure_twilio_number "$mode" "$purchase" \
+      "$url/api/telephony/twilio/$twilio_ingress_key/voice" ||
+      report twilio "number" "unavailable; Twilio-specific tests will not run"
+  fi
 
   [[ "$missing" == false ]]
 }
@@ -483,8 +514,9 @@ telephony_provision() {
   load_credentials
   carrier_resources provision "$purchase" ||
     die "some resources are missing; re-run with --allow-purchase to buy them"
-  printf 'ready: telnyx %s (app %s), twilio %s\n' \
-    "$carrier_telnyx_number" "$carrier_telnyx_app" "$carrier_twilio_number"
+  printf 'ready: telnyx %s -> %s (app %s), twilio %s\n' \
+    "$carrier_telnyx_number" "$carrier_telnyx_receiver" "$carrier_telnyx_app" \
+    "${carrier_twilio_number:-unavailable}"
 }
 
 telephony_status() {
@@ -492,16 +524,38 @@ telephony_status() {
   carrier_resources check || true
   printf 'telnyx app:    %s\n' "${carrier_telnyx_app:-missing}"
   printf 'telnyx number: %s\n' "${carrier_telnyx_number:-missing}"
+  printf 'telnyx second: %s\n' "${carrier_telnyx_receiver:-missing}"
   printf 'twilio number: %s\n' "${carrier_twilio_number:-missing}"
 }
 
-# Read-only discovery for telephony test runs; each number dials the other.
+# Read-only discovery for telephony test runs. The two Telnyx numbers call each other;
+# Twilio's number is exported only when Twilio is usable, and is required only when a
+# Twilio-specific test is selected.
 export_carrier_resources() {
-  carrier_resources check 3> /dev/null ||
+  local twilio="$1"
+  carrier_resources check false "$twilio" 3> /dev/null ||
     die "this machine's carrier resources are missing; run bin/livetests telephony:provision"
   export TELNYX_APP_ID="$carrier_telnyx_app"
-  export TELNYX_TEST_FROM="$carrier_telnyx_number" TWILIO_TEST_DESTINATION="$carrier_telnyx_number"
-  export TWILIO_TEST_FROM="$carrier_twilio_number" TELNYX_TEST_DESTINATION="$carrier_twilio_number"
+  export TELNYX_TEST_FROM="$carrier_telnyx_number"
+  export TELNYX_TEST_TO="$carrier_telnyx_receiver" TELNYX_TEST_DESTINATION="$carrier_telnyx_receiver"
+
+  if [[ -n "$carrier_twilio_number" ]]; then
+    export TWILIO_TEST_FROM="$carrier_twilio_number" TWILIO_TEST_DESTINATION="$carrier_telnyx_number"
+  else
+    unset TWILIO_TEST_FROM TWILIO_TEST_DESTINATION
+    printf 'livetests: Twilio is unavailable; only Telnyx telephony tests can pass\n' >&2
+  fi
+}
+
+# Twilio is required only when a selection names Twilio's own tests.
+twilio_requirement() {
+  local argument
+  for argument in "$@"; do
+    case "$argument" in
+      live_twilio|live_telephony_twilio*|*twilio*) printf required; return 0 ;;
+    esac
+  done
+  printf optional
 }
 
 carrier_credentials_present() {
@@ -540,12 +594,12 @@ run_tests() {
 
   export TELEPHONY_TEST_PORT="$test_port"
   if [[ -n "${TELEPHONY_TEST_PUBLIC_URL:-}" ]]; then
-    export_carrier_resources
+    export_carrier_resources "$(twilio_requirement "$@")"
     exec "$mix_bin" test "${mix_arguments[@]}"
   fi
 
   acquire_lock
-  export_carrier_resources
+  export_carrier_resources "$(twilio_requirement "$@")"
   if tools_running; then
     public_url="https://$(node_dns)"
   else

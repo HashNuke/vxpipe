@@ -60,18 +60,21 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     %{options: options}
   end
 
-  for {dialing, receiving, tag} <- [
-        {"twilio", "telnyx", :live_telephony_twilio},
-        {"telnyx", "twilio", :live_telephony_telnyx}
+  # Telnyx carries every telephony test that is not about Twilio itself: its two numbers call
+  # each other. The Twilio pairs run only when Twilio's own tests are selected (`live_twilio`).
+  for {dialing, receiving, tags} <- [
+        {"telnyx", "telnyx-b", [:live_telephony, :live_telephony_telnyx]},
+        {"twilio", "telnyx", [:live_twilio, :live_telephony_twilio]},
+        {"telnyx", "twilio", [:live_twilio, :live_telephony_twilio_receive]}
       ] do
     @dialing dialing
     @receiving receiving
     @tag :live_providers
-    @tag :live_telephony
-    @tag tag
+    for tag <- tags, do: @tag(tag)
     @tag timeout: 90_000
     test "#{dialing} to #{receiving} carries both remote greetings and closes both rooms",
          context do
+      if "twilio" in [@dialing, @receiving], do: require_twilio!()
       fixture = live_fixture(context)
       pair = ConfiguredTelephonyFixture.publish(fixture, @dialing, @receiving)
 
@@ -159,8 +162,8 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       pair =
         ConfiguredTelephonyFixture.publish_sts(
           fixture,
-          "twilio",
           "telnyx",
+          "telnyx-b",
           :round_trip,
           @sts_provider
         )
@@ -211,7 +214,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
         assert final.outgoing_outcome == :answered
 
         IO.puts(
-          "Live #{@sts_label} twilio -> telnyx: opening heard on the phone; callee heard by the model; model reply heard on the phone; both rooms ended"
+          "Live #{@sts_label} telnyx -> telnyx-b: opening heard on the phone; callee heard by the model; model reply heard on the phone; both rooms ended"
         )
       after
         cleanup(fixture.tenant.key)
@@ -236,8 +239,8 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       pair =
         ConfiguredTelephonyFixture.publish_sts(
           fixture,
-          "twilio",
           "telnyx",
+          "telnyx-b",
           :barge_in,
           @sts_provider
         )
@@ -278,7 +281,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
         end
 
         IO.puts(
-          "Live #{@sts_label} barge-in twilio -> telnyx: model counted, the parties overlapped, and the model stopped short of thirty"
+          "Live #{@sts_label} barge-in telnyx -> telnyx-b: model counted, the parties overlapped, and the model stopped short of thirty"
         )
       after
         cleanup(fixture.tenant.key)
@@ -301,8 +304,8 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       pair =
         ConfiguredTelephonyFixture.publish_sts(
           fixture,
-          "twilio",
           "telnyx",
+          "telnyx-b",
           {:long_session, duration_ms},
           @sts_provider
         )
@@ -341,7 +344,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
         end
 
         IO.puts(
-          "Live #{@sts_label} long session twilio -> telnyx: #{@long_session_minutes} min, " <>
+          "Live #{@sts_label} long session telnyx -> telnyx-b: #{@long_session_minutes} min, " <>
             "#{count_phrase(fixture, incoming, "ping")} pings heard on the phone, call still live"
         )
       after
@@ -354,11 +357,11 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
   @tag :live_telephony
   @tag :live_telephony_unanswered
   @tag timeout: 90_000
-  test "an unrouteable cross-carrier dial ends within its five-second ring bound", context do
+  test "an unrouteable dial ends within its five-second ring bound", context do
     fixture = live_fixture(context)
 
     pair =
-      ConfiguredTelephonyFixture.publish(fixture, "twilio", "telnyx",
+      ConfiguredTelephonyFixture.publish(fixture, "telnyx", "telnyx-b",
         answered?: false,
         ring_timeout_ms: 5_000
       )
@@ -381,7 +384,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       assert length(page.calls) == 1
 
       IO.puts(
-        "Live unanswered Twilio -> Telnyx: no published receiving route; one call; bounded outcome #{final.outgoing_outcome}; no answer timestamp"
+        "Live unanswered Telnyx -> Telnyx: no published receiving route; one call; bounded outcome #{final.outgoing_outcome}; no answer timestamp"
       )
     after
       cleanup(fixture.tenant.key)
@@ -389,10 +392,11 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
   end
 
   @tag :live_providers
-  @tag :live_telephony
+  @tag :live_twilio
   @tag :live_telephony_transfer
   @tag timeout: 120_000
   test "Twilio privately transfers with real destination press-1 and selective hangup", context do
+    require_twilio!()
     once = start_supervised!({Agent, fn -> false end})
     observer = self()
 
@@ -890,17 +894,21 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     settings = %{
       public_url: System.fetch_env!("TELEPHONY_TEST_PUBLIC_URL"),
       application_id: System.fetch_env!("TELNYX_APP_ID"),
-      account_sid: System.fetch_env!("TWILIO_ACCOUNT_SID"),
-      auth_token: System.fetch_env!("TWILIO_AUTH_TOKEN"),
+      # Twilio is optional: `bin/livetests` exports its number only when Twilio is usable.
+      account_sid: System.get_env("TWILIO_ACCOUNT_SID"),
+      auth_token: System.get_env("TWILIO_AUTH_TOKEN"),
       telnyx_key: System.fetch_env!("TELNYX_API_KEY"),
       public_key: System.fetch_env!("TELNYX_PUBLIC_KEY"),
       gemini_key: System.fetch_env!("GEMINI_API_KEY"),
       deepgram_key: System.fetch_env!("DEEPGRAM_API_KEY"),
       openai_key: System.get_env("OPENAI_API_KEY"),
-      numbers: %{
-        "twilio" => System.fetch_env!("TWILIO_TEST_FROM"),
-        "telnyx" => System.fetch_env!("TELNYX_TEST_FROM")
-      }
+      numbers:
+        %{
+          "telnyx" => System.fetch_env!("TELNYX_TEST_FROM"),
+          "telnyx-b" => System.fetch_env!("TELNYX_TEST_TO"),
+          "twilio" => System.get_env("TWILIO_TEST_FROM")
+        }
+        |> Map.reject(fn {_endpoint, number} -> is_nil(number) end)
     }
 
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
@@ -1308,6 +1316,14 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     call.state == :ended and Enum.any?(facts, &(&1.kind == :archive_stream_closed))
   end
 
+  defp require_twilio! do
+    System.get_env("TWILIO_TEST_FROM") ||
+      flunk(
+        "Twilio is unavailable (bin/livetests could not resolve this machine's Twilio number); " <>
+          "Telnyx-only telephony tests do not need it"
+      )
+  end
+
   defp await(label, timeout, operation),
     do: await_until(label, System.monotonic_time(:millisecond) + timeout, operation)
 
@@ -1363,7 +1379,11 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
       public_key: Base.encode64(<<1::256>>),
       gemini_key: "synthetic-private-gemini",
       deepgram_key: "synthetic-private-deepgram",
-      numbers: %{"twilio" => "+15550001001", "telnyx" => "+15550001002"}
+      numbers: %{
+        "twilio" => "+15550001001",
+        "telnyx" => "+15550001002",
+        "telnyx-b" => "+15550001003"
+      }
     }
   end
 end
