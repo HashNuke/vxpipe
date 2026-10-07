@@ -60,6 +60,52 @@ defmodule Vxpipe.Console.ConfiguredTelephonyTransferFixtureTest do
     assert sources.incoming.participants["assistant"].first_message.text == "Bravo."
   end
 
+  test "the GPT-Live barge-in pair puts a second GPT-Live on the receiving number" do
+    fixture = %ConfiguredTelephonyFixture{
+      settings: %{numbers: %{"twilio" => "+15550001001", "telnyx" => "+15550001002"}}
+    }
+
+    sources = ConfiguredTelephonyFixture.sts_sources(fixture, "twilio", "telnyx", :barge_in)
+
+    for {name, source} <- sources do
+      assert {:ok, _spec} = CallSpec.new(source, resource_id: "live-barge-#{name}", revision: 1)
+    end
+
+    model = sources.outgoing.participants["assistant"]
+    assert model.capabilities.speech_to_speech.provider == "openai"
+    assert model.prompt =~ "count slowly from one to thirty"
+    assert model.prompt =~ "say only: I have stopped."
+
+    receiver = sources.incoming.participants["assistant"]
+    assert receiver.capabilities.speech_to_speech.provider == "openai"
+    assert receiver.first_message == %{mode: "wait_for_input"}
+    assert receiver.prompt =~ "say: Stop counting now"
+  end
+
+  test "the GPT-Live long-session pair trades Ping and Pong within a raised call limit" do
+    fixture = %ConfiguredTelephonyFixture{
+      settings: %{numbers: %{"twilio" => "+15550001001", "telnyx" => "+15550001002"}}
+    }
+
+    sources =
+      ConfiguredTelephonyFixture.sts_sources(
+        fixture,
+        "twilio",
+        "telnyx",
+        {:long_session, 600_000}
+      )
+
+    for {name, source} <- sources do
+      assert {:ok, _spec} = CallSpec.new(source, resource_id: "live-long-#{name}", revision: 1)
+      assert source.limits.max_duration_ms == 780_000
+    end
+
+    model = sources.outgoing.participants["assistant"]
+    assert model.first_message == %{mode: "fixed", text: "Ping."}
+    assert model.prompt =~ "Every time the other party says Pong, reply with exactly: Ping."
+    assert sources.incoming.participants["assistant"].prompt =~ "reply with exactly: Pong."
+  end
+
   test "the three-party carrier fixture validates portable receive and private-transfer contracts" do
     fixture = %ConfiguredTelephonyFixture{
       settings: %{numbers: %{"twilio" => "+15550001001", "telnyx" => "+15550001002"}}

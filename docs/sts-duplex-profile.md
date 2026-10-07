@@ -159,9 +159,12 @@ and the prompting guide instructs: "When the user interrupts, the assistant
 should stop its answer and listen." Brief listening sounds ("backchannels") are
 a separate, configurable behaviour and do not take over the caller's turn.
 There is no provider event that announces a yield, so the adapter infers the
-yield from output audio stopping. **Unverified:** the exact latency and
-reliability of a yield under a real carrier echo, and whether an always-listening
-model reacts to its own returned speech. Hosted-check items.
+yield from output audio stopping. **Verified on a carrier leg (2026-10-07):** a
+caller speaking over a GPT-Live count on a Twilio -> Telnyx call made the model
+stop and answer, with the overlap recorded as an `:overlapped` agent turn; see the
+[GPT-Live milestone](milestones/gpt-live-speech-to-speech.md#phone-barge-in-2026-10-07).
+**Unverified:** whether an always-listening model reacts to its own returned
+speech (speakerphone echo). Hosted-check item.
 
 ## Session duration limit
 
@@ -193,7 +196,8 @@ not assume that silence is or is not present on the wire. Hosted-check item.
 
 1. Exact additional primary-connection headers beyond `Authorization`.
 2. Acceptance of an `audio.format` outside the four documented forms.
-3. Talk-over latency, reliability and echo behaviour on a real carrier leg.
+3. Echo behaviour on a real carrier leg. Talk-over on a carrier leg is verified
+   (2026-10-07); latency is not measured.
 4. Whether output audio contains continuous silence on an idle session.
 5. Any numeric session duration limit.
 6. Whether the default 24 kHz output can be down-converted to the room format

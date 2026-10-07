@@ -139,35 +139,106 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
   call. The handler opens with "Alpha." and must answer the callee's "Bravo." with
   "Charlie.", which proves phone audio reached the model and its speech reached the phone.
   """
-  def sts_sources(fixture, dialing, receiving) do
+  def sts_sources(fixture, dialing, receiving, scenario \\ :round_trip) do
+    scenario = sts_scenario(scenario)
+
     outgoing =
       source(fixture, :outgoing, dialing, receiving)
       |> put_in([:participants, "assistant"], %{
         type: "agent",
-        prompt:
-          "This is an automated carrier check. You already said Alpha. When the other " <>
-            "party says Bravo, reply with exactly: Charlie. Never say anything else or ask questions.",
-        first_message: %{mode: "fixed", text: "Alpha."},
+        prompt: scenario.model_prompt,
+        first_message: %{mode: "fixed", text: scenario.model_opening},
         tools: %{},
         transfers: [],
-        capabilities: %{
-          speech_to_speech: %{
-            provider: "openai",
-            model: LiveModels.speech("openai", :sts),
-            credential_name: "live-telephony",
-            # The same delegated backend as the passing direct GPT-Live harness.
-            options: %{backend_model: LiveModels.speech("openai", :backend)}
-          }
-        }
+        capabilities: %{speech_to_speech: gpt_live_capability()}
       })
 
-    incoming = source(fixture, :incoming, receiving, receiving)
+    incoming = source(fixture, :incoming, receiving, receiving) |> put_receiver(scenario)
 
-    %{outgoing: outgoing, incoming: incoming}
+    %{outgoing: put_limit(outgoing, scenario), incoming: put_limit(incoming, scenario)}
   end
 
-  def publish_sts(fixture, dialing, receiving) do
-    sources = sts_sources(fixture, dialing, receiving)
+  defp put_limit(source, %{max_duration_ms: limit}),
+    do: put_in(source.limits.max_duration_ms, limit)
+
+  defp put_limit(source, _scenario), do: source
+
+  defp put_receiver(source, %{receiver_prompt: prompt}) do
+    put_in(source, [:participants, "assistant"], %{
+      type: "agent",
+      prompt: prompt,
+      first_message: %{mode: "wait_for_input"},
+      tools: %{},
+      transfers: [],
+      capabilities: %{speech_to_speech: gpt_live_capability()}
+    })
+  end
+
+  defp put_receiver(source, %{receiver_rule: rule}) do
+    put_in(
+      source,
+      [:participants, "assistant", :prompt],
+      "This is an automated carrier check. #{rule} Never say anything else or ask questions."
+    )
+  end
+
+  # Round trip: the model answers the receiver's Bravo with Charlie.
+  defp sts_scenario(:round_trip) do
+    %{
+      model_opening: "Alpha.",
+      model_prompt:
+        "This is an automated carrier check. You already said Alpha. When the other party " <>
+          "says Bravo, reply with exactly: Charlie. Never say anything else or ask questions.",
+      receiver_rule: "Whenever the other party speaks, reply with exactly: Bravo."
+    }
+  end
+
+  # Barge-in: a second GPT-Live answers on the receiving number and talks over the count.
+  # A text-agent receiver cannot: its own room interrupts each reply as soon as the next
+  # number starts, so nothing reaches the model mid-count. GPT-Live owns its barge-in, so
+  # the counter's yield ends its turn `:overlapped`.
+  defp sts_scenario(:barge_in) do
+    %{
+      model_opening: "Alpha.",
+      model_prompt:
+        "This is an automated carrier check. You already said Alpha. When the other party " <>
+          "says ready, count slowly from one to thirty, one number at a time. If the other " <>
+          "party asks you to stop while you are counting, stop counting immediately and say " <>
+          "only: I have stopped. Never say anything else or ask questions.",
+      receiver_prompt:
+        "This is an automated carrier check. When the other party says Alpha, reply with " <>
+          "exactly: Ready. They will then count. As soon as you hear them say three, " <>
+          "interrupt at once without waiting for a pause and say: Stop counting now, please " <>
+          "stop counting. After that, say nothing else."
+    }
+  end
+
+  # Long session: the two parties trade Ping and Pong for the whole call, so the provider
+  # session stays busy until the test's duration elapses.
+  defp sts_scenario({:long_session, duration_ms}) do
+    %{
+      model_opening: "Ping.",
+      model_prompt:
+        "This is an automated line test that lasts many minutes. You already said Ping. " <>
+          "Every time the other party says Pong, reply with exactly: Ping. Never stop, never " <>
+          "say anything else and never ask questions.",
+      receiver_rule: "Every time the other party says Ping, reply with exactly: Pong.",
+      max_duration_ms: duration_ms + 180_000
+    }
+  end
+
+  defp gpt_live_capability do
+    %{
+      provider: "openai",
+      model: LiveModels.speech("openai", :sts),
+      credential_name: "live-telephony",
+      # The same delegated backend as the passing direct GPT-Live harness.
+      options: %{backend_model: LiveModels.speech("openai", :backend)}
+    }
+  end
+
+  def publish_sts(fixture, dialing, receiving, scenario \\ :round_trip) do
+    sources = sts_sources(fixture, dialing, receiving, scenario)
 
     %{
       outgoing: publish_source(fixture, sources.outgoing),

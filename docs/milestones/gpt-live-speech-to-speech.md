@@ -2352,6 +2352,15 @@ failed once. The continuation below records the subsequent harness clock repair 
 - [x] Make the live `live_telephony_sts` case pass with the receiver speaking first.
 - [ ] Complete the remaining checkpoint F phone scenarios: backchannel/interruption,
   tool, hold/release, forced reconnect with reseed, and speakerphone echo.
+  - [x] Interruption over a phone leg (`live_telephony_sts_barge_in`, 2026-10-07); see
+    [Phone barge-in](#phone-barge-in-2026-10-07).
+  - [ ] Speakerphone echo: needs a loopback receiver (open design choice, below).
+  - [x] Session length (2026-10-07, user-approved): `live_telephony_long_openai_gpt_live`
+    kept a Twilio -> Telnyx GPT-Live call trading Ping/Pong live for 10 minutes (26 pings
+    heard on the phone, every 30 s check passed). No `expired` close occurred. The test is
+    tagged `live_long` (excluded by default) and its own provider+model tag, never
+    `live_providers` or a provider tag. A Gemini Live variant is not possible yet: the
+    configured speech-to-speech provider registry accepts only Morse and GPT-Live.
 
 ### Continuation: protected openings and phone output
 
@@ -2382,3 +2391,87 @@ seed 113691. Formatting, warnings-as-errors compile, strict Credo, unused-lock
 and Lean build/oracle/replay all pass. The affected Google/room/opening group passed
 191 tests; all three runner shell suites also passed. No UI or dependency change
 was made in this continuation. Checkpoint F's remaining carrier checks stay open.
+
+### Phone barge-in (2026-10-07)
+
+`GPT-Live yields when the phone caller speaks over its reply` in
+`apps/vxpipe_console/test/integration/live_telephony_test.exs` (tags
+`live_telephony_sts`, `live_telephony_sts_barge_in`) dials Twilio -> Telnyx. GPT-Live
+dials, opens with Alpha, counts slowly to thirty after the receiver says Ready, and must
+stop and say "I have stopped" when asked. A second GPT-Live answers the receiving number:
+it says Ready, then talks over the count with "Stop counting now". The test requires the
+count to start, an `:overlapped` agent turn in either room, the phrase "stopped" on the
+phone, and no "thirty".
+
+What the runs established:
+
+- GPT-Live owns its barge-in (`barge_in: :provider`), so a yield is an `AgentTurnCompleted`
+  with outcome `:overlapped`, never `AgentTurnInterrupted`. The first draft asserted an
+  interruption and could never pass.
+- A text-agent receiver cannot interrupt a continuous count over the phone. Its own room
+  interrupts each reply on the next number's onset, so nothing reaches GPT-Live
+  (five `agent_turn_interrupted` on the receiver, none heard by GPT-Live). A protected
+  receiver opening plays too early: GPT-Live's session setup delays its own opening
+  about 3 s, and GPT-Live will not start counting while the other side talks.
+- Which room records `:overlapped` depends on where the interjection lands. During a
+  number the counter's turn overlaps; in the gap before the next number the receiver's
+  turn overlaps while the counter stops. One run stopped at "six" and said "I have
+  stopped" with the overlap recorded on the receiver, so the test accepts either.
+- Seven runs of the final design: four passed after the assertion settled (15, 17, 20,
+  21); one missed only the overlap label (19, now accepted); one never heard the
+  receiver's Ready (18); one lost the dialing GPT-Live session (16; the room then ended
+  the call with `agent_unavailable`). This is a model-behaviour test; expect an
+  occasional retry.
+
+Fixed 2026-10-07 (was an observation): in run 14 the dialing GPT-Live capability stopped five
+seconds into the call, before its opening played. The room cleared the capability
+(`SpeechToSpeech.handle_unavailable/3`) and kept the call running silently for 40 s
+without a failure fact or `agent_unavailable`. The stop reason is redacted and collapses
+to `:session_failed`; a temporary log of decoded GPT-Live events in three later runs
+showed no unknown event types or error events. Cause: the room monitors the capability only
+after input preparation, so a capability lost while starting reached only
+`handle_unavailable/3`, which notified nobody. "an STS agent lost before it is ready tells
+attached connections the agent is unavailable" (`room_authority/speech_to_speech_test.exs`)
+failed first, then passed once `handle_unavailable/3` notifies connections and drops the
+monitor so its `:DOWN` cannot notify twice. The provider's own failure cause in that run is
+still unknown.
+
+### Review of `465d563c` (2026-10-06)
+
+The protected-opening and phone-PCM change matches the approved contract and passes live: the
+receiver-first Twilio -> Telnyx GPT-Live case passed again in review (one run, 109 s). Findings:
+
+- [x] **A failed opening leaves the room stuck (reproduced).** Protection ends only in
+  `FirstMessage.complete/2`, called from `AgentOutput.emit_turn_completed`. When the opening turn
+  fails, `AgentOutput.failed/4` publishes `AgentTurnFailed`, deletes the turn and keeps the call
+  running, but `first_message` stays `:started`. `FirstMessage.playing?/1` then stays true for the
+  rest of the call: caller barge-in is disabled and every caller turn is queued and never
+  answered (busy once 16 are queued). Reproduction:
+  `opening_audio_room_test.exs` "a failed generated opening releases protection so caller input
+  is processed" (fails: no model request after the caller's text). Decide the contract for a
+  failed opening (release protection and continue, or end the call because a mandated notice
+  could not play), implement it for fixed and generated openings, and make the test express it.
+  Fixed 2026-10-07: a failed opening releases protection and the call continues; the failure
+  is already public as `AgentTurnFailed`, and ending the call is the more drastic choice.
+  The user may override this. `AgentOutput.failed/4` now calls `FirstMessage.complete/2`, so
+  queued caller turns are submitted. Both tests failed first, then passed: "a failed generated opening releases
+  protection so caller input is processed" and "caller text queued behind a failed generated
+  opening is answered".
+- [x] **Same risk for speech-to-speech (reproduced for a fenced opening).** `opening_playing?` clears only in
+  `Opening.completed/2` when the admitted opening output finishes. If a provider never produces
+  opening audio, or the opening output is dropped without ending the session, caller audio is
+  discarded for the rest of the call. Add a failing test with a local provider, then apply the
+  same failed-opening contract.
+  Fixed 2026-10-07: every fence of the active output (hold, policy revocation, room or
+  provider interruption) skipped `Opening.completed/2`. "a hold that cuts the opening short
+  releases opening protection after release" (`gpt_live_fake_socket_test.exs`) received
+  silence instead of caller audio after release, then passed once `Output.fence_output/2`
+  ends the opening. An opening that never produces any audio is still unbounded; it was not
+  reproduced with a real provider and has no test.
+- [x] **Output conversion assumes mono 16-bit PCM (minor): not a defect.** `SpeechToSpeech.Output` resamples
+  every provider payload as mono linear16 while copying `codec` and `channels` from the provider
+  format. All current providers emit mono linear16; reject or convert other descriptors
+  explicitly instead of corrupting them silently.
+  Closed 2026-10-07: `Speech.Descriptor` rejects every STS output format except raw mono
+  signed little-endian `linear16` (`valid_format?/1` and the STS `valid_kind?/1` clause), so
+  no other format reaches the converter.

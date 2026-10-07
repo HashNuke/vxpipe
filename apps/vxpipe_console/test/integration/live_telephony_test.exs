@@ -30,9 +30,17 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     UsageStore
   }
 
-  setup do
+  setup context do
     if is_nil(Process.whereis(Repo)), do: start_supervised!(Repo)
-    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
+
+    # The sandbox reclaims an owner's connection after its ownership timeout (two minutes by
+    # default); long sessions need it for as long as the test may run.
+    owner =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(Repo,
+        shared: true,
+        ownership_timeout: max(Map.get(context, :timeout, 60_000), 120_000)
+      )
+
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     {:ok, keyring} = CredentialKeyring.new("test", %{"test" => :crypto.strong_rand_bytes(32)})
     private = [repo: Repo, keyring: keyring]
@@ -174,6 +182,128 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
 
       IO.puts(
         "Live GPT-Live twilio -> telnyx: opening heard on the phone; callee heard by the model; model reply heard on the phone; both rooms ended"
+      )
+    after
+      cleanup(fixture.tenant.key)
+    end
+  end
+
+  # A caller speaking over a GPT-Live reply on a real phone leg: the model must yield
+  # and answer the interruption instead of finishing. The phone caller is a second GPT-Live,
+  # which can talk over the count. GPT-Live owns its barge-in, so the yield is an agent turn
+  # completed `:overlapped`, never a room-initiated interruption.
+  @tag :live_providers
+  @tag :live_telephony
+  @tag :live_telephony_sts
+  @tag :live_telephony_sts_barge_in
+  @tag timeout: 150_000
+  test "GPT-Live yields when the phone caller speaks over its reply", context do
+    System.get_env("OPENAI_API_KEY") ||
+      flunk("set OPENAI_API_KEY in the live providers env file for the GPT-Live case")
+
+    fixture = live_fixture(context)
+    pair = ConfiguredTelephonyFixture.publish_sts(fixture, "twilio", "telnyx", :barge_in)
+
+    try do
+      outgoing = submit(fixture, pair.outgoing, pair.to)
+
+      incoming =
+        await("incoming room", 20_000, fn ->
+          assert {:ok, page} = Calls.list_calls(fixture.principal, fixture.options)
+          Enum.find(page.calls, &(&1.call_spec_id == pair.incoming.call_spec_id))
+        end)
+
+      assert {:ok, incoming} = Calls.fetch_call(fixture.tenant.key, incoming.id, fixture.options)
+
+      try do
+        await("the model starts counting after Ready", 40_000, fn ->
+          remote_phrase?(fixture, outgoing, "ready") and
+            Enum.any?(~w(one two three), &remote_phrase?(fixture, incoming, &1))
+        end)
+
+        # Which side records `:overlapped` depends on where the interjection lands: during
+        # a number the counter's turn overlaps; in the gap before the next number the
+        # receiver's does. Either proves the two parties spoke over each other.
+        await("the model yields to the caller and says it stopped", 45_000, fn ->
+          (overlapped?(fixture, outgoing) or overlapped?(fixture, incoming)) and
+            remote_phrase?(fixture, incoming, "stopped")
+        end)
+
+        refute remote_phrase?(fixture, incoming, "thirty"),
+               "the model finished counting despite being spoken over"
+      rescue
+        error in ExUnit.AssertionError ->
+          print_heard(fixture, outgoing, "GPT-Live room heard")
+          print_heard(fixture, incoming, "phone side heard")
+          diagnose_media(fixture, outgoing, "outgoing GPT-Live")
+          diagnose_media(fixture, incoming, "incoming GPT-Live receiver")
+          reraise error, __STACKTRACE__
+      end
+
+      IO.puts(
+        "Live GPT-Live barge-in twilio -> telnyx: model counted, the parties overlapped, and the model stopped short of thirty"
+      )
+    after
+      cleanup(fixture.tenant.key)
+    end
+  end
+
+  # Long session, billed: never selected by `live_providers`, `live_telephony` or a provider
+  # tag. Run it explicitly with `--only live_telephony_long_openai_gpt_live`. GPT-Live dials and
+  # trades Ping/Pong with a text agent for VXPIPE_LIVE_LONG_SESSION_MINUTES (default 10) to find
+  # any provider session limit; OpenAI documents an `expired` close but no duration.
+  @long_session_minutes String.to_integer(
+                          System.get_env("VXPIPE_LIVE_LONG_SESSION_MINUTES", "10")
+                        )
+  @tag :live_long
+  @tag :live_telephony_long_openai_gpt_live
+  @tag timeout: @long_session_minutes * 60_000 + 300_000
+  test "a GPT-Live phone call stays live for the whole long session", context do
+    System.get_env("OPENAI_API_KEY") ||
+      flunk("set OPENAI_API_KEY in the live providers env file for the GPT-Live case")
+
+    duration_ms = @long_session_minutes * 60_000
+    fixture = live_fixture(context)
+
+    pair =
+      ConfiguredTelephonyFixture.publish_sts(
+        fixture,
+        "twilio",
+        "telnyx",
+        {:long_session, duration_ms}
+      )
+
+    try do
+      outgoing = submit(fixture, pair.outgoing, pair.to)
+
+      incoming =
+        await("incoming room", 20_000, fn ->
+          assert {:ok, page} = Calls.list_calls(fixture.principal, fixture.options)
+          Enum.find(page.calls, &(&1.call_spec_id == pair.incoming.call_spec_id))
+        end)
+
+      assert {:ok, incoming} = Calls.fetch_call(fixture.tenant.key, incoming.id, fixture.options)
+
+      await("the first Ping/Pong exchange", 45_000, fn ->
+        remote_phrase?(fixture, incoming, "ping") and remote_phrase?(fixture, outgoing, "pong")
+      end)
+
+      started = System.monotonic_time(:millisecond)
+
+      try do
+        watch_long_session(fixture, outgoing, incoming, started, duration_ms)
+      rescue
+        error in ExUnit.AssertionError ->
+          elapsed = div(System.monotonic_time(:millisecond) - started, 1_000)
+          IO.puts("Live GPT-Live long session stopped after #{elapsed} s")
+          print_session_end(fixture, outgoing, "GPT-Live room")
+          print_session_end(fixture, incoming, "phone side")
+          reraise error, __STACKTRACE__
+      end
+
+      IO.puts(
+        "Live GPT-Live long session twilio -> telnyx: #{@long_session_minutes} min, " <>
+          "#{count_phrase(fixture, incoming, "ping")} pings heard on the phone, call still live"
       )
     after
       cleanup(fixture.tenant.key)
@@ -895,6 +1025,102 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
         fact.participant_id == human.participant_id and
         String.contains?(" " <> text <> " ", " " <> phrase <> " ")
     end)
+  end
+
+  # Synthetic test phrases only: what one room transcribed from its remote party, in order.
+  defp print_heard(fixture, call, label) do
+    assert {:ok, facts} = Calls.fetch_call_facts(fixture.principal, call.id, fixture.options)
+
+    heard =
+      facts
+      |> Enum.filter(
+        &(&1.kind in [
+            :participant_transcription_final,
+            :agent_turn_completed,
+            :agent_turn_interrupted
+          ])
+      )
+      |> Enum.map(fn fact ->
+        {DateTime.to_time(fact.occurred_at), fact.kind,
+         Map.get(fact.payload, "text") || Map.get(fact.payload, "outcome")}
+      end)
+
+    IO.puts("Live #{label}: #{inspect(heard, limit: 40, printable_limit: 400)}")
+  end
+
+  # Every 30 s: both calls still running and the phone heard a Ping within the last minute.
+  defp watch_long_session(fixture, outgoing, incoming, started, duration_ms) do
+    elapsed = System.monotonic_time(:millisecond) - started
+
+    for call <- [outgoing, incoming] do
+      assert {:ok, current} = Calls.fetch_call(fixture.tenant.key, call.id, fixture.options)
+      assert current.state == :running, "call #{call.id} is #{current.state} after #{elapsed} ms"
+    end
+
+    assert recent_phrase?(fixture, incoming, "ping", 60),
+           "the phone heard no Ping in the last 60 s after #{elapsed} ms"
+
+    if elapsed < duration_ms do
+      wait_ms = min(30_000, duration_ms - elapsed)
+      reference = make_ref()
+      Process.send_after(self(), {:long_session_check, reference}, wait_ms)
+
+      receive do
+        {:long_session_check, ^reference} -> :ok
+      end
+
+      watch_long_session(fixture, outgoing, incoming, started, duration_ms)
+    end
+  end
+
+  defp remote_finals(fixture, call) do
+    human = Map.fetch!(call.plan.participants, call.plan.entry_caller)
+    assert {:ok, facts} = Calls.fetch_call_facts(fixture.principal, call.id, fixture.options)
+
+    Enum.filter(
+      facts,
+      &(&1.kind == :participant_transcription_final and
+          &1.participant_id == human.participant_id)
+    )
+  end
+
+  defp heard?(fact, phrase) do
+    text = fact.payload |> Map.get("text", "") |> String.downcase()
+    String.contains?(text, phrase)
+  end
+
+  defp recent_phrase?(fixture, call, phrase, seconds) do
+    since = DateTime.add(DateTime.utc_now(), -seconds, :second)
+
+    fixture
+    |> remote_finals(call)
+    |> Enum.any?(&(heard?(&1, phrase) and DateTime.compare(&1.occurred_at, since) == :gt))
+  end
+
+  defp count_phrase(fixture, call, phrase),
+    do: fixture |> remote_finals(call) |> Enum.count(&heard?(&1, phrase))
+
+  # Synthetic test phrases only: how one room's call ended and its last few facts.
+  defp print_session_end(fixture, call, label) do
+    assert {:ok, current} = Calls.fetch_call(fixture.tenant.key, call.id, fixture.options)
+    assert {:ok, facts} = Calls.fetch_call_facts(fixture.principal, call.id, fixture.options)
+
+    tail =
+      facts
+      |> Enum.reject(&(&1.kind == :usage_observed))
+      |> Enum.take(-12)
+      |> Enum.map(&{DateTime.to_time(&1.occurred_at), &1.kind, Map.get(&1.payload, "reason")})
+
+    IO.puts("Live #{label}: state #{current.state}; last facts #{inspect(tail, limit: 20)}")
+  end
+
+  defp overlapped?(fixture, call) do
+    assert {:ok, facts} = Calls.fetch_call_facts(fixture.principal, call.id, fixture.options)
+
+    Enum.any?(
+      facts,
+      &(&1.kind == :agent_turn_completed and &1.payload["outcome"] == "overlapped")
+    )
   end
 
   defp diagnose_media(fixture, call, direction) do
