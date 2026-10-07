@@ -22,10 +22,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Opening do
 
         case result do
           :ok ->
-            {:reply, :ok, %{state | opening_started?: true, opening_playing?: true}}
+            {:reply, :ok, started(state, opening)}
 
           {:ok, _handle} ->
-            {:reply, :ok, %{state | opening_started?: true, opening_playing?: true}}
+            {:reply, :ok, started(state, opening)}
 
           error ->
             {:reply, error, state}
@@ -33,13 +33,40 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Opening do
     end
   end
 
+  defp started(state, opening) do
+    %{
+      state
+      | opening_started?: true,
+        opening_playing?: true,
+        fixed_opening?: match?({:fixed, _text}, opening)
+    }
+  end
+
+  # Google releases a completed fixed-opening waveform even if its transcription
+  # is absent. This permits playback settlement, never an invented public text.
+  def audio_only?(%{
+        provider: Vxpipe.Providers.Google.STSSession,
+        output_stt: nil,
+        fixed_opening?: true,
+        opening_turn: turn,
+        active_output: %{
+          provider_turn: turn,
+          generation_done?: true,
+          pending_text: nil,
+          fragments: []
+        }
+      }),
+      do: true
+
+  def audio_only?(_state), do: false
+
   def admitted(%{opening_playing?: true, opening_turn: nil} = state, turn),
     do: %{state | opening_turn: turn}
 
   def admitted(state, _turn), do: state
 
   def completed(%{opening_turn: turn} = state, turn),
-    do: %{state | opening_playing?: false, opening_turn: nil}
+    do: %{state | opening_playing?: false, opening_turn: nil, fixed_opening?: false}
 
   def completed(state, _turn), do: state
 end

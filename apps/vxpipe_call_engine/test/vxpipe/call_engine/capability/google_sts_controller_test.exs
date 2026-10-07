@@ -7,6 +7,38 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
   alias Vxpipe.CallEngine.{TestAudioOutputSink, TestGoogleSTSTransport}
   alias Vxpipe.Providers.Google.{STS, STSSession}
 
+  for profile <- [false, true] do
+    test "fixed Gemini opening without text completes after physical playback with response-start #{profile}" do
+      context = start_controller("provider", response_start?: unquote(profile))
+      capability = context.capability
+      sink = context.sink
+      assert :ok = SpeechToSpeech.begin_opening(capability, {:fixed, "Alpha."})
+      deliver(context, audio_message(1))
+      deliver(context, content(%{"generationComplete" => true}))
+      refute_received {:test_audio_output, ^sink, _}
+      deliver(context, interaction_end("IDLE"))
+      assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", opening, _}, 1_000
+      assert_audio(context, 1)
+      assert_receive {:test_audio_output_finish, ^sink, _}, 1_000
+      refute_received {:vxpipe_sts_turn_completed, ^capability, _, _, _}
+      assert :sys.get_state(capability).opening_playing?
+      assert :ok = TestAudioOutputSink.playback_progress(sink, 20, 20)
+      assert :ok = TestAudioOutputSink.playback_completed(sink)
+      assert_receive {:vxpipe_sts_turn_completed, ^capability, "agent", ^opening, _}, 1_000
+      refute_received {:vxpipe_sts_agent_transcript, ^capability, _, _, _, _, _, _}
+      refute :sys.get_state(capability).opening_playing?
+
+      assert :ok = SpeechToSpeech.push_text(capability, "Continue")
+      deliver(context, content(%{"outputTranscription" => %{"text" => "NEXT"}}))
+      deliver(context, audio_message(2))
+      assert_receive {:vxpipe_sts_turn_started, ^capability, "agent", next, _}, 1_000
+      assert next != opening
+      assert_audio(context, 2)
+      finish_generation(context)
+      finish_playback(context, next, "NEXT", 20)
+    end
+  end
+
   for {mode, turn_control} <- [provider: "provider", external: "external", typed: "provider"] do
     test "#{mode} first response needs model PCM and has identity independent of its caller" do
       mode = unquote(mode)

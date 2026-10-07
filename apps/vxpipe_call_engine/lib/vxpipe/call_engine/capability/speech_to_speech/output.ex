@@ -214,7 +214,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
     end
   end
 
-  defp output_text_ready?(output, %{output_stt: nil}), do: OutputTranscript.ready?(output)
+  defp output_text_ready?(output, %{output_stt: nil} = state),
+    do: Opening.audio_only?(state) or OutputTranscript.ready?(output)
+
   defp output_text_ready?(%{stt_text: :failed}, _state), do: true
   defp output_text_ready?(%{stt_text: text}, _state), do: not is_nil(text)
 

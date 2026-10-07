@@ -1,5 +1,5 @@
 defmodule Vxpipe.Providers.Google.STSOpening do
-  @moduledoc "Bounded fixed-opening verification before native Google output can reach playback."
+  @moduledoc "Bounded fixed-opening assembly and available-transcript validation before playback."
 
   alias Vxpipe.CallEngine.Speech.Opening
 
@@ -49,8 +49,8 @@ defmodule Vxpipe.Providers.Google.STSOpening do
   end
 
   # Gemini can report generation completion before the opening's output transcription
-  # arrives. Audio is complete; keep holding it until the transcript verifies or the turn
-  # completes without it.
+  # arrives. Hold audio until the transcript verifies or the completed turn establishes
+  # that no transcription was supplied.
   def accept(opening, :generation_complete) do
     cond do
       verified?(opening) -> release(opening)
@@ -62,7 +62,13 @@ defmodule Vxpipe.Providers.Google.STSOpening do
   def accept(_opening, event) when event in [:activity_start, :interrupted],
     do: {:error, :opening_interrupted}
 
-  def accept(_opening, {:turn_complete, _status}), do: {:error, :unverified_opening}
+  def accept(opening, {:turn_complete, _status} = event) do
+    if opening.generation_done? and opening.chunks != [] and opening.transcript == "" do
+      {:release, audio_events(opening) ++ [event]}
+    else
+      {:error, :unverified_opening}
+    end
+  end
 
   def accept(_opening, {:tool_call, _id, _name, _args}), do: {:error, :unexpected_tool}
   def accept(_opening, _metadata), do: :pass
@@ -87,11 +93,14 @@ defmodule Vxpipe.Providers.Google.STSOpening do
   # The verified opening is published as the author's exact text.
   defp release(opening) do
     events =
-      [{:output_transcript, opening.expected}] ++
-        Enum.map(output_chunks(IO.iodata_to_binary(opening.chunks)), &{:audio, &1}) ++
-        [:generation_complete]
+      [{:output_transcript, opening.expected}] ++ audio_events(opening)
 
     {:release, events}
+  end
+
+  defp audio_events(opening) do
+    Enum.map(output_chunks(IO.iodata_to_binary(opening.chunks)), &{:audio, &1}) ++
+      [:generation_complete]
   end
 
   defp output_chunks(<<chunk::binary-size(@output_chunk_bytes), rest::binary>>),

@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Integration.GeminiLiveHostedTest do
   alias Vxpipe.CallEngine.Media.PCMResampler
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
   alias Vxpipe.Providers.Google.{STS, STSSession}
+  alias Vxpipe.CallEngine.TestDeepgramAudioConfirmation
   alias Vxpipe.Providers.LiveModels
 
   @moduletag :live_providers
@@ -31,7 +32,7 @@ defmodule Vxpipe.CallEngine.Integration.GeminiLiveHostedTest do
                owner: self()
              )
 
-    state = %{outputs: %{}, bytes: 0, completed: 0, input: "", text: "", stream: nil}
+    state = %{outputs: %{}, bytes: 0, completed: 0, input: "", text: "", pcm: [], stream: nil}
     state = await(session, deadline, state, & &1.ready?)
     assert {:ok, descriptor} = Session.describe(session)
     assert descriptor.input_format.sample_rate == 16_000
@@ -52,53 +53,94 @@ defmodule Vxpipe.CallEngine.Integration.GeminiLiveHostedTest do
     first = await(session, deadline, state, &(&1.completed > 0 and &1.stream == nil))
     assert first.bytes > 0
     assert String.trim(first.input) != ""
-    assert String.trim(first.text) != ""
+    assert String.trim(heard_text(first, scope, deadline)) != ""
     assert first.outputs == %{}
 
     assert :ok =
              Session.push_text(session, "Say exactly the word violet.", response_context: context)
 
-    second = await(session, deadline, %{first | text: ""}, &(&1.completed > first.completed))
+    second =
+      await(session, deadline, %{first | text: "", pcm: []}, &(&1.completed > first.completed))
+
     assert second.bytes > first.bytes
-    assert String.downcase(second.text) =~ "violet"
+    assert String.downcase(heard_text(second, scope, deadline)) =~ "violet"
     assert second.outputs == %{}
     assert :ok = Session.close(session)
 
     IO.puts(
-      "Live Gemini: 16 kHz caller PCM, both transcriptions, credited 24 kHz output and subsequent turn"
+      "Live Gemini: 16 kHz caller PCM, caller transcription, confirmed credited 24 kHz output and subsequent turn"
     )
   end
 
-  test "the configured fixed opening and subsequent turn receive independent output credit" do
-    scope = start_supervised!({CapabilityTree, owner: self()})
-    assert {:ok, config} = STS.new(api_key: System.fetch_env!("GEMINI_API_KEY"))
+  for confirmation <- [:provider_or_deepgram, :deepgram] do
+    @confirmation confirmation
+    test "the configured fixed opening and subsequent turn receive independent output credit with #{confirmation} confirmation" do
+      scope = start_supervised!({CapabilityTree, owner: self()})
+      assert {:ok, config} = STS.new(api_key: System.fetch_env!("GEMINI_API_KEY"))
 
-    assert {:ok, session, :starting} =
-             Session.start(CapabilityTree.scope(scope),
-               provider: STSSession,
-               options: [response_start?: true],
-               private: [config: config],
-               owner: self()
+      assert {:ok, session, :starting} =
+               Session.start(CapabilityTree.scope(scope),
+                 provider: STSSession,
+                 options: [response_start?: true],
+                 private: [config: config],
+                 owner: self()
+               )
+
+      deadline = System.monotonic_time(:millisecond) + 30_000
+      state = %{outputs: %{}, bytes: 0, completed: 0, input: "", text: "", pcm: [], stream: nil}
+      state = await(session, deadline, state, & &1.ready?)
+      context = make_ref()
+      assert :ok = Session.begin_opening(session, {:fixed, "Alpha."}, response_context: context)
+      state = await(session, deadline, state, &(&1.completed > 0))
+      assert state.bytes > 0
+      if state.text != "", do: assert(state.text == "Alpha.")
+      # Exercise independent recognition even when this run has a provider transcript.
+      confirmed = if @confirmation == :deepgram, do: %{state | text: ""}, else: state
+      assert words(heard_text(confirmed, scope, deadline)) == ["alpha"]
+
+      if state.text == "",
+        do: IO.puts("Live Gemini fixed opening: missing provider transcript confirmed from PCM")
+
+      assert state.outputs == %{}
+
+      assert :ok =
+               Session.push_text(session, "Say exactly the word violet.",
+                 response_context: context
+               )
+
+      second =
+        await(session, deadline, %{state | text: "", pcm: []}, &(&1.completed > state.completed))
+
+      assert second.bytes > state.bytes
+      assert second.outputs == %{}
+      assert String.downcase(heard_text(second, scope, deadline)) =~ "violet"
+      assert :ok = Session.close(session)
+    end
+  end
+
+  defp heard_text(%{text: text}, _scope, _deadline) when text != "", do: text
+
+  # Test-only confirmation of real PCM; production has no recognition fallback.
+  defp heard_text(state, _scope, deadline) do
+    pcm = IO.iodata_to_binary(Enum.reverse(state.pcm))
+    assert byte_size(pcm) in 2..2_097_152
+
+    assert {:ok, text} =
+             TestDeepgramAudioConfirmation.transcribe(
+               pcm,
+               24_000,
+               System.fetch_env!("DEEPGRAM_API_KEY"),
+               timeout_ms: remaining(deadline)
              )
 
-    deadline = System.monotonic_time(:millisecond) + 30_000
-    state = %{outputs: %{}, bytes: 0, completed: 0, input: "", text: "", stream: nil}
-    state = await(session, deadline, state, & &1.ready?)
-    context = make_ref()
-    assert :ok = Session.begin_opening(session, {:fixed, "Alpha."}, response_context: context)
-    state = await(session, deadline, state, &(&1.completed > 0))
-    assert state.bytes > 0
-    assert state.text == "Alpha."
-    assert state.outputs == %{}
+    IO.puts("Live Gemini output confirmed with test-only Deepgram recognition")
+    text
+  end
 
-    assert :ok =
-             Session.push_text(session, "Say exactly the word violet.", response_context: context)
+  defp remaining(deadline), do: max(deadline - System.monotonic_time(:millisecond), 0)
 
-    second = await(session, deadline, %{state | text: ""}, &(&1.completed > state.completed))
-    assert second.bytes > state.bytes
-    assert second.outputs == %{}
-    assert String.downcase(second.text) =~ "violet"
-    assert :ok = Session.close(session)
+  defp words(text) do
+    text |> String.downcase() |> String.replace(~r/[^\p{L}\p{N}]+/u, " ") |> String.split()
   end
 
   defp await(session, deadline, state, done?) do
@@ -119,7 +161,11 @@ defmodule Vxpipe.CallEngine.Integration.GeminiLiveHostedTest do
           await(
             session,
             deadline,
-            %{state | bytes: state.bytes + byte_size(audio.payload)},
+            %{
+              state
+              | bytes: state.bytes + byte_size(audio.payload),
+                pcm: [audio.payload | state.pcm]
+            },
             done?
           )
 

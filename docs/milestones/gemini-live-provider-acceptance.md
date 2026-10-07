@@ -81,6 +81,44 @@ belong to the common STS suite across supported sample rates.
 
 ## Tasks and acceptance
 
+### Fixed opening transcript omission (2026-10-07)
+
+Design review: Gemini may complete correct fixed-opening audio while omitting
+output transcription. The user approved playing that completed bounded waveform
+without runtime verification or expected-text substitution. The adapter continues
+rejecting present mismatched/incomplete words, interruption and overflow. The
+capability must preserve the exact opening's physical playback fence and publish
+no agent transcript when it has none. This does not relax ordinary-response or
+generated-opening transcription contracts. Tagged tests use existing Deepgram
+recognition of actual PCM when Gemini text is missing; dependencies remain within
+Call Engine's existing speech boundary. No timeout increase is permitted.
+
+- [x] Provider red/green for missing transcript in both Google response profiles;
+  retain mismatch, partial text, interruption, overflow and empty-audio rejection.
+- [x] Capability red/green for protected physical playback, no invented transcript
+  and a working subsequent turn.
+- [x] Repeated hosted Gemini runs, including independent Deepgram confirmation.
+- [x] All root/Lean gates for this checkpoint: 3,266 default tests, zero failures,
+  114 exclusions (seed 576967), plus formatting, warnings-as-errors compilation,
+  strict Credo, unused dependencies and Lean build/oracle/replay.
+- [ ] Additional Gemini phone regression: the Telnyx pair's two cases fail to
+  hear the expected opening/count (seed 502758). Both rooms remain running and
+  no Google failure is recorded; bounded mixer diagnostics show many buffer
+  overflows. The cause is not established. Do not claim carrier acceptance.
+
+Live evidence: thirty consecutive full hosted selections pass, 90 tests with no
+failures. Seven naturally omitted opening transcripts are independently recognized
+as Alpha from captured PCM; every run also verifies the subsequent turn. Each
+selection includes an additional independent Deepgram opening check even when
+Gemini provides text. The initial streaming-recognition probe did not reliably
+finalize a short clip; the final test-only helper uses finite Nova-3 recognition
+of unmodified 24 kHz PCM, without expected-word hints, retries or longer deadlines.
+Its five local request/error boundary tests pass.
+
+Evidence is recorded in [the checkpoint labnote](../../labnotes/20261007-1616-gemini-opening-transcript.md).
+
+### Configured provider acceptance
+
 - [x] Red/green configured Google selection, exact model/options validation,
   manifest discovery and existing saved-key startup; enable runtime settings.
 - [x] Direct hosted real-Google test (`live_providers`, `live_gemini`), with

@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.OutputTranscript do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Output
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Opening
 
   @default_timeout_ms 5_000
   @maximum_timeout_ms 30_000
@@ -112,11 +113,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.OutputTranscript do
           %{output | text_deadline: timer, text_expires_at: expires}
       end
 
-    %{state | active_output: output}
+    state = %{state | active_output: output}
+
+    if Opening.audio_only?(state),
+      do: %{state | active_output: %{output | text_final?: true}},
+      else: state
   end
 
   def generated(%{output_stt: nil, active_output: output} = state) do
     cond do
+      Opening.audio_only?(state) ->
+        Output.maybe_finish_turn(state)
+
       state.descriptor.output_settlement == :generation_boundary and not ready?(output) ->
         Output.stop_unavailable(:output_transcript_missing, state)
 

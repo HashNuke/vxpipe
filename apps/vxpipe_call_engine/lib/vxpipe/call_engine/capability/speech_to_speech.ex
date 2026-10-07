@@ -194,6 +194,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           opening_started?: false,
           opening_playing?: false,
           opening_turn: nil,
+          fixed_opening?: false,
           sink: Keyword.fetch!(options, :sink),
           output_task_supervisor: Keyword.fetch!(options, :output_task_supervisor),
           output_delivery: nil,

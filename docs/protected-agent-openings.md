@@ -29,6 +29,10 @@ keeps running; turn-based providers receive no PCM during the opening. OpenAI's
 explicitly require continuous input, including silence, while an opening is generated. The capability tracks opening output identity and
 clears its gate after generation, playback and transcript settlement. The room
 separately completes its first-message lifecycle from current capability evidence.
+The approved fixed Gemini exception permits completed opening audio without an
+output transcript. It still waits for physical playback before clearing protection
+and completing the first message; no transcript is synthesized and no production
+recognition model is added. Present mismatched text is rejected by the adapter.
 
 ## Audio boundary
 

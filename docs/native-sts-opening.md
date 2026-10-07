@@ -25,18 +25,26 @@ caller text turn; native input-transcription echoes are ignored while no real ca
 exists. Generated output follows the normal credited streaming path. Both legacy and
 response-start profiles have focused coverage.
 
-For fixed Google output, a prompt alone is insufficient. The adapter holds PCM and
-output transcription until the generation boundary. Only a complete transcript exactly
-equal to the requested text releases output. Missing, additional or different text,
-interruption, unexpected tools, a caller start, or overflow fails the allocation without
-releasing unverified audio. No trimming or punctuation/case normalization is applied.
+For fixed Google output, the adapter holds PCM until generation completes and
+available output transcription matches the requested words, ignoring case and
+punctuation. Transcription can arrive after generation completion; wait through
+model turn completion for it. If the completed turn has audio and no output
+transcription, the approved contract is to release that audio without fabricating
+an expected-text transcript. Present incomplete, additional or different words,
+interruption, unexpected tools, a caller start, absent/unfinished audio or overflow
+still fail the allocation. Production does not invoke another model to verify it.
 The private assembly is bounded to 4,096 fragments and 2 MiB PCM; validated fragments
 are combined into at most sixteen 128 KiB output chunks, preserving PCM byte order and
 the existing queue and credit limits. A pending opening cannot be replaced by another cue.
 
-This is validation of provider-reported transcription, not independent recognition of
-the spoken waveform or proof that a remote party heard it. Google remains unadvertised
-behind its existing hosted interoperability gate. These tests make no Google API calls.
+When transcription exists this validates provider-reported words, not the spoken
+waveform or remote hearing. When absent, fixed Google opening completion requires
+generation and physical playback settlement, publishes no agent transcript and
+releases opening protection only after playback. Generated openings and ordinary
+responses retain their selected transcript requirements. Configured Google is
+advertised; the [Gemini acceptance milestone](milestones/gemini-live-provider-acceptance.md)
+records hosted evidence. Tagged tests independently confirm missing text from
+actual PCM through Deepgram; this test-only recognition is not a runtime fallback.
 
 Providers without the optional opening callback return `unsupported_operation`, with
 no fallback to caller text. `wait_for_input` uses no opening operation and retains its

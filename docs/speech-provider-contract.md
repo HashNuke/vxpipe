@@ -668,10 +668,19 @@ engine to concatenate. For `output_settlement: :transcript_end`, the provider
 must emit `output_transcript` with `final: true`; omitted/false finality does not
 settle text. The first acknowledged final freezes the matching output's text.
 For `:generation_boundary`, acknowledged generation completion freezes the last
-prior snapshot; missing text at that boundary fails explicitly. Later snapshots
+prior snapshot; missing text at that boundary fails explicitly except for the
+approved fixed Google opening described below. Later snapshots
 cannot replace either settled form, and a different turn reference cannot settle
 the current output. Upstream reference retirement remains a separate requirement.
 Morse now emits the explicit final its descriptor declares.
+
+For a fixed Google opening, generation-complete audio withheld through model turn
+completion may be played when output transcription is absent. The capability
+settles that exact opening after physical playback and publishes no invented
+transcript. Available wrong or incomplete text remains an error; generated
+openings and ordinary replies keep the existing missing-text failure contract.
+No verification model is introduced into production. See
+[native openings](native-sts-opening.md) for bounds and test-only recognition.
 
 Google assembles `outputTranscription` fragments into these snapshots, retaining
 early text until output permission arrives. Its aggregate limit is 65,536 bytes;
