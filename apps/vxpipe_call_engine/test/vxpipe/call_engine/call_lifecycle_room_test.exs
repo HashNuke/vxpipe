@@ -89,6 +89,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     assert {:ok, monitor} =
              CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
 
+    _ = :sys.get_state(room_authority(plan))
     :ok = TestCallLifecycleTimer.fire(readiness_timer)
     assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :startup_readiness_timeout}}, 1_000
 

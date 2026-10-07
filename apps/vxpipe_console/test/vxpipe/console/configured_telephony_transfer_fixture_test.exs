@@ -79,7 +79,7 @@ defmodule Vxpipe.Console.ConfiguredTelephonyTransferFixtureTest do
 
     receiver = sources.incoming.participants["assistant"]
     assert receiver.capabilities.speech_to_speech.provider == "openai"
-    assert receiver.first_message == %{mode: "wait_for_input"}
+    assert receiver.first_message == %{mode: "generated"}
     assert receiver.prompt =~ "say: Stop counting now"
   end
 
@@ -106,6 +106,24 @@ defmodule Vxpipe.Console.ConfiguredTelephonyTransferFixtureTest do
     assert model.prompt =~ "Every time the other party says Pong, reply with exactly: Ping."
     assert sources.incoming.participants["assistant"].prompt =~ "reply with exactly: Pong."
     assert sources.incoming.participants["assistant"].first_message == %{mode: "wait_for_input"}
+  end
+
+  test "the barge-in counter waits for the receiving model's audible readiness signal" do
+    fixture = %ConfiguredTelephonyFixture{
+      settings: %{numbers: %{"telnyx" => "+15550001001", "telnyx-b" => "+15550001002"}}
+    }
+
+    for provider <- ["google", "openai"] do
+      sources =
+        ConfiguredTelephonyFixture.sts_sources(fixture, "telnyx", "telnyx-b", :barge_in, provider)
+
+      assert sources.outgoing.participants["assistant"].first_message ==
+               %{mode: "wait_for_input"}
+
+      receiver = sources.incoming.participants["assistant"]
+      assert receiver.first_message == %{mode: "generated"}
+      assert receiver.prompt =~ "Begin by saying exactly: Ready."
+    end
   end
 
   test "the Gemini phone scenarios select the saved Google STS and retain their contracts" do
@@ -143,7 +161,7 @@ defmodule Vxpipe.Console.ConfiguredTelephonyTransferFixtureTest do
           assert model.prompt =~ "single response"
           receiver = sources.incoming.participants["assistant"]
           assert receiver.capabilities.speech_to_speech.provider == "openai"
-          assert receiver.first_message == %{mode: "wait_for_input"}
+          assert receiver.first_message == %{mode: "generated"}
           assert receiver.prompt =~ "Stop counting now"
 
         {:long_session, _duration} ->

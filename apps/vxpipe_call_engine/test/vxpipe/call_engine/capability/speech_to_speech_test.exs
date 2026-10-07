@@ -41,6 +41,16 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     refute_received {:vxpipe_send_text, _, _, _}
   end
 
+  test "a pending opening masks caller PCM before the opening command starts" do
+    {_tree, capability, _sink} =
+      start_capability(policy: unrestricted(), opening_pending?: true)
+
+    push_morse(capability, "EARLY")
+
+    refute_receive {:vxpipe_sts_input_event, ^capability, _evidence}
+    refute_receive {:vxpipe_sts_turn_started, ^capability, @agent, _turn, _sequence}
+  end
+
   test "caller input and interruption remain responsive while output is backpressured" do
     {_tree, capability, sink} = start_contract_capability()
     session = :sys.get_state(capability).session
@@ -1354,6 +1364,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
              sink: sink,
              frame_identity: %{},
              caller_source: Keyword.get(options, :caller_source, :sts),
+             opening_pending?: Keyword.get(options, :opening_pending?, false),
              policy: Keyword.fetch!(options, :policy),
              usage_context: Keyword.get(options, :usage_context)
            ]},

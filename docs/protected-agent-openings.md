@@ -19,7 +19,10 @@ held state and active turn still match; retired work cannot cross into a new age
 Queued response deadlines begin at submission so a long greeting does not consume
 the internal model's response budget. Ordinary conversation retains interruption.
 
-STS agents discard caller PCM and external start/end controls during the opening.
+STS agents discard caller PCM and external start/end controls while an opening is
+pending or playing. The room initializes this protection when allocating the
+capability, before startup can release caller input or send the opening command.
+Wait-for-input agents retain their ordinary input path.
 Discarded valid ingress is acknowledged to release delivery credit and advance the
 frame sequence. Identity, epoch, format and policy checks still happen first.
 Caller input is not buffered or replayed. Continuous providers receive newly

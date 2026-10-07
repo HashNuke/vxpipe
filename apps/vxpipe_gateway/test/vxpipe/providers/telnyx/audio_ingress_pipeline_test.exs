@@ -30,6 +30,21 @@ defmodule Vxpipe.Providers.Telnyx.AudioIngressPipelineTest do
     assert byte_size(pcm) == 1_920
   end
 
+  test "keeps successive Telnyx sample-clock packets twenty milliseconds apart" do
+    pipeline_id = start_pipeline()
+    packet = encode(:binary.copy(<<1_000::little-signed-16>>, 320))
+
+    # The live 16 kHz Opus stream advances its timestamp by 320 per 20 ms packet.
+    assert :ok = AudioIngressPipeline.push(pipeline_id, frame(1, 320, 1_043, packet))
+    assert :ok = AudioIngressPipeline.push(pipeline_id, frame(2, 640, 1_063, packet))
+
+    assert_receive {:vxpipe_audio_pipeline, ^pipeline_id, %PCMFrame{timestamp: 1_920}},
+                   @pipeline_timeout
+
+    assert_receive {:vxpipe_audio_pipeline, ^pipeline_id, %PCMFrame{timestamp: 2_880}},
+                   @pipeline_timeout
+  end
+
   test "collects the initialized phone input before any media without changing its pinned format" do
     pipeline_id = start_pipeline()
     track = %{track_id: "stream-1", codec: :opus, sample_rate: 16000, channels: 1}

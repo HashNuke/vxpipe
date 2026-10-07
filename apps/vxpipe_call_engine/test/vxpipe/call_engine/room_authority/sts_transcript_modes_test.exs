@@ -1039,7 +1039,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
 
   for mode <- ["external", "hybrid"] do
     test "#{mode} keeps permitted human transcription after STS audio is denied" do
-      context = room(true, false, %{}, :morse, unquote(mode), :deny_audio)
+      clock = manual_stt_clock()
+
+      context =
+        room(true, false, %{}, :morse, unquote(mode), :deny_audio)
+        |> Map.put(:stt_clock, clock)
+
       state = :sys.get_state(context.authority)
       connection = Map.fetch!(state.connections, context.command.connection_id)
       stt = connection.speech_to_text.capability
@@ -1308,8 +1313,33 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     assert result == :ok
   end
 
-  defp stt_frame(context, pcm, sequence),
-    do: frame(context, pcm, sequence, Map.get(context, :source_epoch))
+  defp stt_frame(context, pcm, sequence) do
+    frame = frame(context, pcm, sequence, Map.get(context, :source_epoch))
+
+    case Map.get(context, :stt_clock) do
+      nil -> frame
+      clock -> %{frame | received_at: :atomics.add_get(clock, 1, 1)}
+    end
+  end
+
+  defp manual_stt_clock do
+    clock = :atomics.new(1, [])
+    :atomics.put(clock, 1, System.monotonic_time(:millisecond))
+    clock_function = fn -> :atomics.get(clock, 1) end
+    settings = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
+    speech = Keyword.fetch!(settings, :speech_to_text)
+
+    providers =
+      Map.update!(Keyword.fetch!(speech, :providers), STTSession, fn options ->
+        Keyword.update!(options, :media_ingress, fn ingress ->
+          Keyword.put(ingress, :clock, clock_function)
+        end)
+      end)
+
+    settings = Keyword.put(settings, :speech_to_text, Keyword.put(speech, :providers, providers))
+    Application.put_env(:vxpipe_call_engine, CallEngine.Application, settings)
+    clock
+  end
 
   defp push_sts(context, sequence_offset \\ 0) do
     for {chunk, sequence} <-

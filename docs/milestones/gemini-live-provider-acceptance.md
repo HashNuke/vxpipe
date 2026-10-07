@@ -101,10 +101,10 @@ Call Engine's existing speech boundary. No timeout increase is permitted.
 - [x] All root/Lean gates for this checkpoint: 3,266 default tests, zero failures,
   114 exclusions (seed 576967), plus formatting, warnings-as-errors compilation,
   strict Credo, unused dependencies and Lean build/oracle/replay.
-- [ ] Additional Gemini phone regression: the Telnyx pair's two cases fail to
-  hear the expected opening/count (seed 502758). Both rooms remain running and
-  no Google failure is recorded; bounded mixer diagnostics show many buffer
-  overflows. The cause is not established. Do not claim carrier acceptance.
+- [x] Diagnose the additional Gemini phone regression (seed 502758): repair
+  Telnyx sample-clock conversion, pending-opening input protection and peer
+  readiness. The final repeated phone evidence is recorded below; the broader
+  long-call acceptance remains open.
 
 Live evidence: thirty consecutive full hosted selections pass, 90 tests with no
 failures. Seven naturally omitted opening transcripts are independently recognized
@@ -116,6 +116,66 @@ of unmodified 24 kHz PCM, without expected-word hints, retries or longer deadlin
 Its five local request/error boundary tests pass.
 
 Evidence is recorded in [the checkpoint labnote](../../labnotes/20261007-1616-gemini-opening-transcript.md).
+
+### Carrier clock and startup handshake (2026-10-07)
+
+Design review (separate from implementation evidence): the authenticated Telnyx
+16 kHz Opus stream uses sample-clock timestamps, observed advancing 320 per
+20 ms packet. Conversion belongs in Gateway's packet source; the room clock,
+playout delay, buffer capacity and STS input protection retain their contracts.
+The barge-in fixture must start its exchange from the receiving model's audible
+Ready opening, with the counter waiting for input. This establishes receiver
+readiness through the real carrier path rather than using a short Alpha trigger
+that can finish while that model starts. The independent fixed-opening round-trip
+still requires remote Alpha, Bravo and Charlie. No extra timer, retry or runtime
+verification model is introduced.
+
+Use a generated Ready opening for that readiness signal. A native callback trace
+captured GPT's fixed-opening verifier rejecting an output fragment in the
+receiver's prelude, before barge-in could start. The barge-in contract requires
+remotely heard Ready, counting, overlap and a stopped reply; it does not require
+an additional strict fixed-opening verification on its peer. The round-trip case
+owns fixed-opening acceptance. A focused fixture red/green establishes the
+generated prelude and explicit Ready instruction for both tested providers.
+
+The same review found an allocation boundary that must honor the existing opening
+contract: a pending fixed/generated first message protects caller input before
+the opening command starts. Initialize that gate from the room's FirstMessage
+state, retaining continuous silence, dropped turn-based PCM and physical
+playback settlement. Wait-for-input allocations remain open. This belongs to the
+common capability, independently of Google or the phone transport.
+
+- [x] Reproduce the original silent Gemini barge-in exchange and compare b5500c30.
+- [x] Gateway red/green for two sample-clock packets becoming consecutive room PCM.
+- [x] Console red/green for a provider-independent receiver Ready handshake.
+- [x] Common capability red/green for pending-opening input protection; affected
+  capability, duplex and room suites pass 122 tests with zero failures.
+- [x] Repeated Gemini phone pairs, existing GPT-Live phone cases and hosted Gemini.
+  Final shared selection: 4/0, seed 690869. Further Gemini pairs: 2/0 with seed
+  502758 and 2/0 with seed 839293. Hosted Gemini: 3/0 with independent Deepgram
+  output confirmation. All temporary probes are removed.
+- [x] All root and Lean gates; temporary probes removed and exact diff reviewed.
+  The clean final default run passes 3,269 tests with zero failures and 114
+  exclusions (seed 44264), including Gateway 572/0. Formatting, warnings-as-errors
+  compilation, strict Credo, unused dependencies and Lean build/oracle/replay pass.
+
+The clock fault predates c7b232b8: numeric probes find it in the baseline too.
+It accounts for mixer overflow but repairing it alone does not repair the silent
+STS exchange. The paired readiness trace places the receiving GPT model's ready
+event only 263 ms before Gemini's opening completes; no Alpha is recognized.
+Input remains closed during startup. The barge-in fixture now makes the receiver
+initiate the exchange after its own startup. See
+[the diagnosis labnote](../../labnotes/20261007-1746-gemini-phone-regression.md)
+for unsuccessful runs and subsequent acceptance evidence. Long-call acceptance
+remains a separate open gate.
+
+Broader default verification also exposes the previously recorded native WebRTC
+handoff intermittence: changing-listener adoption, terminal release-deadline
+progress and repeated AI transfers fail in separate full runs. Their owning
+handoff suite subsequently passes 67 default cases with zero failures (seed
+44264, one integration exclusion). Temporary diagnostic output is removed;
+no handoff runtime contract, timeout or assertion is changed. This does not
+establish a cause or a repair of those intermittent failures.
 
 ### Configured provider acceptance
 

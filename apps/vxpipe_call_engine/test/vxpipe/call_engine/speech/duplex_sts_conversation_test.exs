@@ -160,7 +160,10 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
         end
       end)
 
-    assert result in [{:error, :pending_reply_overflow}, {:error, :closed}]
+    # The shared input boundary normalizes a fatal provider reply; retirement may
+    # also finish before this request reaches the channel. Preserve the exact
+    # provider overflow proof through its monitored shutdown below.
+    assert result in [{:error, :session_failed}, {:error, :closed}]
     assert_receive {:DOWN, ^monitor, :process, ^provider, {:shutdown, :pending_reply_overflow}}
   end
 

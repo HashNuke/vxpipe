@@ -192,7 +192,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           session: session,
           descriptor: nil,
           opening_started?: false,
-          opening_playing?: false,
+          opening_playing?: Keyword.get(options, :opening_pending?, false),
           opening_turn: nil,
           fixed_opening?: false,
           sink: Keyword.fetch!(options, :sink),

@@ -550,7 +550,11 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
       media = %{
         "track" => "inbound",
         "chunk" => sequence + index,
-        "timestamp" => timestamp + index * 20,
+        "timestamp" =>
+          if(provider == :telnyx,
+            do: (timestamp + index * 20) * 16,
+            else: timestamp + index * 20
+          ),
         "payload" => Base.encode64(payload)
       }
 

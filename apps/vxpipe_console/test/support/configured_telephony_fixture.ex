@@ -155,7 +155,7 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
       |> put_in([:participants, "assistant"], %{
         type: "agent",
         prompt: scenario.model_prompt,
-        first_message: %{mode: "fixed", text: scenario.model_opening},
+        first_message: scenario.model_first_message,
         tools: %{},
         transfers: [],
         capabilities: %{speech_to_speech: sts_capability(provider)}
@@ -171,11 +171,11 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
 
   defp put_limit(source, _scenario), do: source
 
-  defp put_receiver(source, %{receiver_prompt: prompt}) do
+  defp put_receiver(source, %{receiver_prompt: prompt, receiver_first_message: opening}) do
     put_in(source, [:participants, "assistant"], %{
       type: "agent",
       prompt: prompt,
-      first_message: %{mode: "wait_for_input"},
+      first_message: opening,
       tools: %{},
       transfers: [],
       capabilities: %{speech_to_speech: gpt_live_capability()}
@@ -199,10 +199,11 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
   # Round trip: the model answers the receiver's Bravo with Charlie.
   defp sts_scenario(:round_trip) do
     %{
-      model_opening: "Alpha.",
+      model_first_message: %{mode: "fixed", text: "Alpha."},
       model_prompt:
-        "This is an automated carrier check. You already said Alpha. When the other party " <>
-          "says Bravo, reply with exactly: Charlie. Never say anything else or ask questions.",
+        "This is an automated carrier check. Your required opening is Alpha. After your " <>
+          "opening, when the other party says Bravo, reply with exactly: Charlie. " <>
+          "Do not add any other words or ask questions.",
       receiver_rule: "Whenever the other party speaks, reply with exactly: Bravo."
     }
   end
@@ -210,22 +211,24 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
   # Barge-in: a second GPT-Live answers on the receiving number and talks over the count.
   # A text-agent receiver cannot: its own room interrupts each reply as soon as the next
   # number starts, so nothing reaches the model mid-count. GPT-Live owns its barge-in, so
-  # the counter's yield ends its turn `:overlapped`.
+  # the counter's yield ends its turn `:overlapped`. Its generated Ready opening signals
+  # that the receiver is listening; an Alpha sent while it starts would be dropped.
   defp sts_scenario(:barge_in) do
     %{
-      model_opening: "Alpha.",
+      model_first_message: %{mode: "wait_for_input"},
       model_prompt:
-        "This is an automated carrier check. You already said Alpha. When the other party " <>
+        "This is an automated carrier check. When the other party " <>
           "says ready, count slowly from one to thirty in a single response. Say every " <>
           "number consecutively without waiting for another reply. Continue after each " <>
           "number. If the other party asks you to stop while you are counting, stop " <>
           "counting immediately and say " <>
           "only: I have stopped. Never say anything else or ask questions.",
       receiver_prompt:
-        "This is an automated carrier check. When the other party says Alpha, reply with " <>
-          "exactly: Ready. They will then count. As soon as you hear them say three, " <>
+        "This is an automated carrier check. Begin by saying exactly: Ready. The other party " <>
+          "will then count. As soon as you hear them say three, " <>
           "interrupt at once without waiting for a pause and say: Stop counting now, please " <>
-          "stop counting. After that, say nothing else."
+          "stop counting. After that, say nothing else.",
+      receiver_first_message: %{mode: "generated"}
     }
   end
 
@@ -233,7 +236,7 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
   # session stays busy until the test's duration elapses.
   defp sts_scenario({:long_session, duration_ms}) do
     %{
-      model_opening: "Ping.",
+      model_first_message: %{mode: "fixed", text: "Ping."},
       model_prompt:
         "This is an automated line test that lasts many minutes. You already said Ping. " <>
           "Every time the other party says Pong, reply with exactly: Ping. Never stop, never " <>

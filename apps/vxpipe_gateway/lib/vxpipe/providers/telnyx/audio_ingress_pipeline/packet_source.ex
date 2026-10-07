@@ -29,7 +29,8 @@ defmodule Vxpipe.Providers.Telnyx.AudioIngressPipeline.PacketSource do
   def handle_parent_notification({:push, %AudioFrame{} = frame}, _context, state) do
     buffer = %Buffer{
       payload: frame.payload,
-      pts: Time.milliseconds(frame.timestamp),
+      # Telnyx's pinned 16 kHz Opus stream uses a sample clock (320 per 20 ms).
+      pts: div(frame.timestamp * Time.second(), frame.sample_rate),
       metadata: %{received_at: frame.received_at}
     }
 

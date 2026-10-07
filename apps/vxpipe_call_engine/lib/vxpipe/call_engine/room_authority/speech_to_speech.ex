@@ -735,6 +735,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         agent_id: runtime.participant_id,
         human_id: human_id,
         input_required?: true,
+        opening_pending?: Vxpipe.CallEngine.RoomAuthority.FirstMessage.playing?(state),
         provider: runtime.provider,
         provider_private: runtime.provider_private,
         sink: connection.output_sink,

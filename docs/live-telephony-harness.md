@@ -97,6 +97,27 @@ restricted to `a-z0-9-`, overridable with `VXP_TEST_MACHINE`.
   existing 443 configuration on its node.
 - `run` holds a per-machine lock so two runs on one machine cannot share the node and numbers.
 
+Recovery check, 2026-10-07: the dedicated test node was online with Funnel and HTTPS
+capabilities, while some public relays stalled during TLS setup. Restarting only
+that node with `tools:down` / `tools:up` restored every advertised relay within the
+existing startup bound. Subsequent carrier checks independently returned HTTP 200
+through all three relays. The system Tailscale daemon was left running. This is
+operational recovery evidence; it does not establish the cause of the upstream
+TLS stall. Keep the initiating process alive when the execution environment reaps
+detached descendants, or use `run` to own startup and cleanup in one process tree.
+Later public TLS resets recurred while node status remained healthy. A connection
+refresh preceded recovery on every relay. Treat restart/refresh as recovery,
+continue checking the public path, and retain any pre-dial failure as a failed
+verification attempt; no permanent upstream repair is claimed.
+
+The same carrier diagnosis found that Telnyx's pinned 16 kHz Opus input advances
+its timestamp by 320 samples per 20 ms packet. Gateway converts that sample clock
+to Membrane presentation time before room-clock alignment. Interpreting it as
+milliseconds pushes audio far into the future and overflows the mixer even while
+Funnel, webhooks and media upgrades succeed. The owning packet-pipeline regression
+checks consecutive normalized PCM timestamps; no playout delay or buffer limit
+was increased. See the [Gemini phone diagnosis](milestones/gemini-live-provider-acceptance.md#carrier-clock-and-startup-handshake-2026-10-07).
+
 One-time manual setup in the Tailscale admin console, because no credential exists yet to
 script it:
 
