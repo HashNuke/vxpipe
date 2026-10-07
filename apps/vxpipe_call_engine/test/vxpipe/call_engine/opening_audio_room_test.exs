@@ -75,6 +75,84 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     refute_receive {:test_audio_output, ^sink, _}
   end
 
+  # Review 2026-10-06: protection must end when the opening turn fails, not only when it
+  # completes; otherwise caller turns queue forever and barge-in never returns.
+  test "a failed generated opening releases protection so caller input is processed" do
+    configure_speech_runtime()
+    configure_agent_runtime_provider()
+
+    plan =
+      compile_plan(
+        opening_audio: nil,
+        agent_text_to_speech: true,
+        first_message: %{mode: "generated"}
+      )
+
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, _voice, _}
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    connection_id = "failed-opening"
+
+    assert {:ok, _} =
+             TestTransferConnection.attach(
+               attach_command(plan, room, caller, connection_id),
+               sink
+             )
+
+    assert_receive {:test_agent_runtime_stream, model, _opening_request}, 1_000
+    send(model, {:test_agent_runtime_response, {:error, :provider_unavailable}})
+    assert_receive {:vxpipe_event, %CallEngine.Event.AgentTurnFailed{}}, 1_000
+
+    assert :ok =
+             TestTransferConnection.send_text(
+               send_command(plan, room, caller, connection_id, "Are you there?")
+             )
+
+    assert_receive {:test_agent_runtime_stream, _model, request}, 1_000
+    assert Enum.any?(request.messages, &(&1.role == :user and &1.content == "Are you there?"))
+    end_room(plan, room)
+  end
+
+  test "caller text queued behind a failed generated opening is answered" do
+    configure_speech_runtime()
+    configure_agent_runtime_provider()
+
+    plan =
+      compile_plan(
+        opening_audio: nil,
+        agent_text_to_speech: true,
+        first_message: %{mode: "generated"}
+      )
+
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    assert {:ok, room} = CallEngine.start_call(plan)
+    assert_receive {:test_tts_transport_started, _voice, _}
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    connection_id = "failed-opening-queued"
+
+    assert {:ok, _} =
+             TestTransferConnection.attach(
+               attach_command(plan, room, caller, connection_id),
+               sink
+             )
+
+    assert_receive {:test_agent_runtime_stream, model, _opening_request}, 1_000
+
+    assert :ok =
+             TestTransferConnection.send_text(
+               send_command(plan, room, caller, connection_id, "Hello?")
+             )
+
+    refute_receive {:test_agent_runtime_stream, _model, _request}, 100
+    send(model, {:test_agent_runtime_response, {:error, :provider_unavailable}})
+    assert_receive {:vxpipe_event, %CallEngine.Event.AgentTurnFailed{}}, 1_000
+
+    assert_receive {:test_agent_runtime_stream, _model, request}, 1_000
+    assert Enum.any?(request.messages, &(&1.role == :user and &1.content == "Hello?"))
+    end_room(plan, room)
+  end
+
   defp await_output_probe_result(authority, deadline) do
     {:messages, messages} = Process.info(authority, :messages)
 
@@ -1301,6 +1379,16 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     end)
 
     plan
+  end
+
+  # The model request above is left unanswered; end the room so its deadline cannot fire
+  # during a later test.
+  defp end_room(plan, room) do
+    assert {:ok, monitor} =
+             CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
+
+    assert :ok = CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+    assert_receive {:DOWN, ^monitor, :process, _pid, _reason}, 1_000
   end
 
   defp attach_command(plan, room, caller, connection_id) do

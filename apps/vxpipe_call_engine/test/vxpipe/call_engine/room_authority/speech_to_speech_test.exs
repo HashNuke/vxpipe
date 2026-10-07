@@ -69,6 +69,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert state.first_message.status == :completed
   end
 
+  # Live GPT-Live run 2026-10-07: the provider session failed after the phone leg attached
+  # but before the capability was ready (so before the room monitored it). The room cleared
+  # the capability and left the caller in a silent call.
+  test "an STS agent lost before it is ready tells attached connections the agent is unavailable" do
+    state = state()
+    refute state.speech_to_speech_ready?
+
+    state = SpeechToSpeech.handle_unavailable(state, self(), :provider_failed)
+
+    assert state.speech_to_speech_capability == nil
+    assert_received {:vxpipe_connection_unavailable, :agent_unavailable}
+  end
+
   test "STS reference turn values from capability events do not raise" do
     state = state()
     capability = self()

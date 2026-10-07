@@ -135,9 +135,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
       state = EventPublisher.publish(state, connection.pid, event)
 
+      # A failed opening releases its protection like a completed one; otherwise the
+      # caller's queued turns would wait for the rest of the call.
       state
       |> Map.update!(:next_sequence, &(&1 + 1))
       |> TurnState.delete(command)
+      |> FirstMessage.complete(command)
     else
       state
     end

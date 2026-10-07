@@ -72,6 +72,35 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     end
   end
 
+  # Review 2026-10-06: the opening gate cleared only when the opening output completed. A
+  # hold fences that output, so after release every caller frame was still replaced with
+  # silence for the rest of the call.
+  test "a hold that cuts the opening short releases opening protection after release" do
+    {capability, wire} = start_ready_capability(output_gap_ms: 40)
+    assert :ok = SpeechToSpeech.begin_opening(capability, :generated)
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => "session.instructions.append"}}
+
+    TestGPTLiveTransport.deliver_sync(wire, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(:binary.copy(<<0, 16>>, 480))
+    })
+
+    assert_receive {:vxpipe_sts_turn_started, ^capability, "agent1", _turn, _}, 1_000
+    assert_receive {:test_audio_output, _sink, _frame}, 1_000
+
+    assert :ok = change_hold(capability, wire, true)
+    assert_receive {:vxpipe_sts_interrupted, ^capability, "agent1", _turn, _, _, _}, 1_000
+    assert :ok = change_hold(capability, wire, false)
+
+    assert :ok = offer_input(capability, nil, 7)
+
+    assert_receive {:test_gpt_live_control, ^wire,
+                    %{"type" => "session.input_audio.append", "audio" => delta}},
+                   1_000
+
+    assert Base.decode64!(delta) == <<7, 0>>
+  end
+
   test "24 kHz provider output reaches the room as 48 kHz PCM without changing duration" do
     {capability, wire} = start_ready_capability(output_gap_ms: 40)
     assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
@@ -765,6 +794,35 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
 
     assert :ok = SpeechToSpeech.release(capability, make_ref())
     {ingress, identity, format}
+  end
+
+  defp change_hold(capability, wire, held?) do
+    observer = self()
+
+    start_supervised!(
+      Supervisor.child_spec(
+        {Task,
+         fn ->
+           result =
+             if held?,
+               do: SpeechToSpeech.hold(capability),
+               else: SpeechToSpeech.release(capability)
+
+           send(observer, {:hold_result, result})
+         end},
+        id: make_ref()
+      )
+    )
+
+    command = if held?, do: "session.input_audio.mute", else: "session.input_audio.unmute"
+    event = if held?, do: "session.input_audio.muted", else: "session.input_audio.unmuted"
+
+    assert_receive {:test_gpt_live_control, ^wire, %{"type" => ^command, "event_id" => event_id}},
+                   1_000
+
+    TestGPTLiveTransport.deliver_sync(wire, %{"type" => event, "client_event_id" => event_id})
+    assert_receive {:hold_result, result}, 1_000
+    result
   end
 
   defp offer_input(capability, nil, sequence),

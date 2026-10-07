@@ -577,6 +577,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Output do
            output.owner_sequence}
         )
 
+        # A fenced opening (hold, policy revocation, provider interruption) has ended; keeping
+        # its gate would discard caller input for the rest of the call.
+        state = Opening.completed(state, provider_turn)
+
         {played_ms,
          drain_queue(%{
            state

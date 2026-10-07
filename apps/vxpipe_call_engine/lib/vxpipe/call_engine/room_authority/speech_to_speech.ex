@@ -40,7 +40,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   alias Vxpipe.CallEngine.{Error, Id, RoomCapabilitySupervisor, SpeechToSpeechRuntime}
   alias Vxpipe.CallEngine.MediaPolicy.{Authority, Snapshot}
-  alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State, STTAudioAdmission}
+
+  alias Vxpipe.CallEngine.RoomAuthority.{
+    ConnectionLifecycle,
+    EventPublisher,
+    State,
+    STTAudioAdmission
+  }
+
   alias Vxpipe.CallEngine.RoomAuthority.STSSourceCutover
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
@@ -336,9 +343,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   @spec handle_unavailable(State.t(), pid(), term()) :: State.t()
   def handle_unavailable(%State{} = state, capability, _reason) do
     if current?(state, capability) do
+      # The room monitors the capability only once input is prepared, so a capability lost
+      # while it is still starting would otherwise leave attached callers in silence. The
+      # monitor is dropped so its `:DOWN` cannot notify a second time.
+      if state.speech_to_speech_monitor,
+        do: Process.demonitor(state.speech_to_speech_monitor, [:flush])
+
+      ConnectionLifecycle.notify(state.connections, :agent_unavailable)
+
       %{
         state
         | speech_to_speech_capability: nil,
+          speech_to_speech_monitor: nil,
           speech_to_speech_ready?: false,
           sts_turns: %{},
           sts_output_sequence: 0,
