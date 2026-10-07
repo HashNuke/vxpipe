@@ -159,7 +159,9 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressTest do
     send(egress, {:vxpipe_room_audio_output_unavailable, pipeline_id, :transport_closed})
 
     assert_receive {:vxpipe_connection_unavailable, {:room_audio_output, :transport_closed}}
-    assert_receive {:DOWN, ^monitor, :process, ^egress, :room_audio_output_unavailable}
+
+    assert_receive {:DOWN, ^monitor, :process, ^egress,
+                    {:shutdown, :room_audio_output_unavailable}}
   end
 
   defp start_enabled_egress(frames, revision) do

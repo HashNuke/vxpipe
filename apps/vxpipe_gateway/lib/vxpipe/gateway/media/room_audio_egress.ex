@@ -273,9 +273,12 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
     end
   end
 
+  # An unavailable output is an expected end that the owner has just been told about, not a
+  # crash. A non-shutdown reason made OTP format a crash report of this state before exiting,
+  # which delayed the exit by 12-140 ms.
   defp stop_unavailable(reason, state) do
     send(state.owner, {:vxpipe_connection_unavailable, {:room_audio_output, reason}})
-    {:stop, :room_audio_output_unavailable, state}
+    {:stop, {:shutdown, :room_audio_output_unavailable}, state}
   end
 
   defp safe_call(server, message) do

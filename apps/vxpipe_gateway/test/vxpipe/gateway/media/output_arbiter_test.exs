@@ -393,7 +393,7 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     assert_receive {:vxpipe_connection_unavailable,
                     {:room_audio_output, :output_release_uncertain}}
 
-    assert_receive {:DOWN, ^monitor, :process, ^room, :room_audio_output_unavailable}
+    assert_receive {:DOWN, ^monitor, :process, ^room, {:shutdown, :room_audio_output_unavailable}}
   end
 
   test "private playback follows the current room frame on one encoder and RTP clock" do
