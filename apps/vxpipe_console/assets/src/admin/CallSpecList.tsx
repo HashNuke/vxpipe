@@ -5,11 +5,13 @@ export function CallSpecList({
   callSpecs,
   tenant,
   onSelectCallSpec,
+  onEditCallSpec,
   linkCalls,
 }: {
   callSpecs: CallSpecSummary[];
   tenant: TenantContext;
   onSelectCallSpec?: (callSpecId: string) => void;
+  onEditCallSpec?: (callSpecId: string) => void;
   linkCalls?: boolean;
 }) {
   return (
@@ -41,6 +43,7 @@ export function CallSpecList({
               key={callSpec.id}
               linkCalls={linkCalls}
               onSelect={onSelectCallSpec}
+              onEdit={onEditCallSpec}
               tenant={tenant}
             />
           ))}

@@ -820,3 +820,69 @@ publication return 404. Invalid sources preserve structured paths and safe reaso
 configuration/store exceptions return fixed errors. No remote MCP discovery or
 live providers are called. All five root gates pass: 3,458 tests, zero failures, 120 excluded, seed 991936.
 Credo checked 1,217 files without issues. No live tests ran.
+
+### Production wiring red/green
+
+New API tests failed on the missing client module and five route tests failed on
+missing editor pages before implementation. The first eight API/route tests are
+now green. The list action test was red for the missing New call spec link, then
+passed with separate editor and call-count links. Router regression tests exposed
+captured initial App props after moving to the data router; context now supplies
+current props while retaining a stable router. This preserves existing request
+injection and session handling. Added history-back and in-flight create-save
+coverage to verify unsaved data survives URL replacement and cancellation.
+
+Full heavy jobs remain serialized; bounded single-worker focused frontend tests
+ran while the long default Gateway lane was active, with over 4 GiB available.
+
+The history-back test exposed a real confirmation race: Radix closes an accepted
+alert dialog after its action, which called the stale cancel callback and reset
+React Router's proceeding navigation. Tracking approved departure until the next
+blocked navigation fixes it. Both cancellation and confirmed browser Back pass.
+First-save URL replacement also preserves a newer draft typed during the request.
+
+Production assets built successfully and the real local Console was inspected with
+agent-browser at 1440x1000 and 390x844. Created, saved and published incoming specs
+at both widths; edited/reopened immutable revisions; verified revision 1 stayed
+published while later drafts were saved; inspected explicit revision URLs and
+Continue editing latest revision. Prompt and outgoing ring-timeout validation
+blocked saves and retained edits. Outgoing conversion uses a configured synthetic
+phone application and requires an agent handler. The browser recorded no errors.
+The populated list, new, edit, published, historical, validation and outgoing states
+have rendered captures named vxpipe-production-* in temporary verification output.
+
+Resizing an already-open desktop canvas to phone width initially left participants
+off-screen. A focused test was red for missing resize behavior, then green after
+fitting the viewport when the available canvas dimensions change. Ordinary
+rerenders preserve pan/zoom. A fresh production build and rendered resize check
+confirmed both nodes remain inside the phone viewport. Browser automation needed
+explicit waits for nested sheet/dialog/popover animations; early captures and
+failed selectors were replaced by settled-state inspections.
+
+All three examples (development, sts-morse, outgoing-morse) were created through
+the tenant API, opened in the production editor and saved without edits. Each
+retained both its exact JSON value and original source digest. The outgoing example
+initially returned the expected missing-service credential error; provisioning a
+local synthetic tenant phone application allowed the authorized round-trip. No
+carrier request was made. A newly created/published editor spec's caller route
+prepared and started a local Gateway session: both requests returned 201 and the
+call entered running state. It used a synthetic tenant credential, waited for input,
+and received no input or provider generation request. This is local call-start
+acceptance, not live-provider interoperability testing.
+
+The temporary Console server and its watchers were stopped after browser checks;
+the temporary login/API-key file was removed. No live-provider environment file was
+read or changed, and no live tests ran. Final frontend verification passes 503 tests
+in 66 files, TypeScript and lint without warnings. The final five root gates are
+running serially after that frontend lane; resource checks showed 3.9 GiB available
+before launch. No speech/source-cutover state machine changed, so Lean is not
+required for this checkpoint.
+
+Final gate chain completed successfully: format, warnings-as-errors compile, strict
+Credo, the umbrella default suite and unused-dependency check all pass. The suite
+reports 3,458 tests, zero failures, 120 excluded (seed 991936); Console has 248
+tests, Calls 214, Gateway 593 and CallEngine 2,068. Final frontend verification
+passes 503 tests in 66 files, TypeScript and lint. Documentation links and staged
+whitespace checks pass. Milestone W/Z, acceptance checks and the index are now
+complete. The user-deferred UI review is recorded as a disposition, not approval.
+The unrelated wrangler-cache-repair labnote remains untouched and untracked.

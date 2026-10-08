@@ -1,6 +1,6 @@
 # Call spec editor
 
-Status: implementation started 2026-10-08; checkpoints V, P, L, K and S complete; checkpoint U complete; checkpoint C in progress. Design review complete.
+Status: complete 2026-10-08. Checkpoints V, P, L, K, S, U, C, W and Z are implemented and verified. The user explicitly deferred U8 UI review and authorized completion of product integration.
 Prerequisites: [Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md),
 [Operator login and admin dashboard](operator-login-and-admin-dashboard.md),
 [Operator admin Storybook](operator-admin-storybook.md) and the
@@ -696,60 +696,105 @@ pass. All five root gates pass: 3,458 tests, zero failures, 120 excluded
 
 Outcome: operators create, edit, save and publish call specs in `/admin`.
 
-- [ ] **W1 — Routes.** Add `/admin/tenants/:tenantKey/call-specs/new` and `/:callSpecId`
+- [x] **W1 — Routes.** Add `/admin/tenants/:tenantKey/call-specs/new` and `/:callSpecId`
   (`?revision=N` read-only) to the React Router table and update
   [Console React routing](../console-react-routing.md).
-- [ ] **W2 — API client.** Typed functions for C's endpoints and K's listings, following the
+- [x] **W2 — API client.** Typed functions for C's endpoints and K's listings, following the
   abort, stale-response and session-expiry handling already used in `adminApi.ts`.
-- [ ] **W3 — List integration.** **New call spec** action and row links on `TenantCallSpecsPage`.
-- [ ] **W4 — Containers.** Load source and catalog (page error state on failure), save,
+- [x] **W3 — List integration.** **New call spec** action and row links on `TenantCallSpecsPage`.
+- [x] **W4 — Containers.** Load source and catalog (page error state on failure), save,
   publish, map every response to its toast and placement through S5b and U6, keep unsaved
   changes on every failure, and guard unsaved changes on navigation and reload.
-- [ ] **W5 — Rendered check.** With `agent-browser`, create, edit, save, fail validation, publish
+- [x] **W5 — Rendered check.** With `agent-browser`, create, edit, save, fail validation, publish
   and reopen a spec at desktop and phone widths.
-- [ ] **Exit W.** Frontend and Console tests and root gates pass and rendered inspection is
+- [x] **Exit W.** Frontend and Console tests and root gates pass and rendered inspection is
   recorded.
 
 ## Checkpoint Z — Final acceptance
 
-- [ ] **Z1** Run every item under [acceptance and failure checks](#acceptance-and-failure-checks)
+- [x] **Z1** Run every item under [acceptance and failure checks](#acceptance-and-failure-checks)
   and record the evidence.
-- [ ] **Z2** Add a Console authoring section to the API guide or a new operator guide.
-- [ ] **Z3** Update this milestone, the index entry and the labnote; then run the
+- [x] **Z2** Add a Console authoring section to the API guide or a new operator guide.
+- [x] **Z3** Update this milestone, the index entry and the labnote; then run the
   [common implementation gates](index.md#common-implementation-and-verification-gates).
 
 ## Acceptance and failure checks
 
-- [ ] Create an incoming web spec in the editor, save, publish and start a sample call through its
+- [x] Create an incoming web spec in the editor, save, publish and start a sample call through its
   published route.
-- [ ] Create an outgoing spec; the UI flags a human handler, a callee with
+- [x] Create an outgoing spec; the UI flags a human handler, a callee with
   `number_from_variable` and an out-of-range ring timeout before saving.
-- [ ] Saving an invalid source through the tenant API returns `422` with the failing field's path
+- [x] Saving an invalid source through the tenant API returns `422` with the failing field's path
   and reason instead of a bare `invalid_call_spec`.
-- [ ] Every LLM model the listing returns for a provider resolves through the runtime's provider
+- [x] Every LLM model the listing returns for a provider resolves through the runtime's provider
   selection.
-- [ ] Choosing a provider in the editor preselects its recommended model and voice; switching
+- [x] Choosing a provider in the editor preselects its recommended model and voice; switching
   provider resets them; opening an existing spec keeps its saved choices.
-- [ ] Every LLM provider's declared default resolves through `ProviderSelection`, and the
+- [x] Every LLM provider's declared default resolves through `ProviderSelection`, and the
   onboarding page shows the same defaults it showed before, now read from the listing.
-- [ ] For every speech capability in the registry, `models/0` is non-empty, has exactly one
+- [x] For every speech capability in the registry, `models/0` is non-empty, has exactly one
   default, and `configure/1` accepts each listed public model with its default voice and rejects an
   unknown model; previously supported Flux concrete IDs remain compatible.
-- [ ] With client validation bypassed in a test, the same invalid source is rejected by the
+- [x] With client validation bypassed in a test, the same invalid source is rejected by the
   backend and its errors appear on the matching fields.
-- [ ] Open each example under `examples/call-specs/` and save without edits; the saved source
+- [x] Open each example under `examples/call-specs/` and save without edits; the saved source
   digest equals the original.
-- [ ] A spec saved through the tenant API opens in the editor and every field it uses is visible.
-- [ ] Renaming a participant updates all references; the saved spec validates.
-- [ ] Every save and publish ends with one toast matching the
+- [x] A spec saved through the tenant API opens in the editor and every field it uses is visible.
+- [x] Renaming a participant updates all references; the saved spec validates.
+- [x] Every save and publish ends with one toast matching the
   [outcomes table](#error-presentation); **Show** selects the right node and tab and focuses the
   field; an unmappable backend error opens the issues list; unsaved changes survive every
   failure.
-- [ ] Editing with client errors raises no toast; saving with client errors sends no request.
-- [ ] Saving after an edit creates revision N+1 and leaves revision N unchanged and still published.
-- [ ] Another tenant's spec ID returns not found; responses contain no credential values.
-- [ ] Rendered browser inspection with `agent-browser` at desktop and phone widths for list, new,
+- [x] Editing with client errors raises no toast; saving with client errors sends no request.
+- [x] Saving after an edit creates revision N+1 and leaves revision N unchanged and still published.
+- [x] Another tenant's spec ID returns not found; responses contain no credential values.
+- [x] Rendered browser inspection with `agent-browser` at desktop and phone widths for list, new,
   edit, validation-error, outgoing and published states.
+
+## Acceptance evidence
+
+- Production routes and the typed client: `CallSpecEditorRoute.test.tsx` and
+  `editor-api.test.ts` cover create/append/publish, CSRF/exact bodies, encoded
+  tenant paths, response validation, abort, load retry, read-only revisions,
+  session-expiry draft retention and first-save URL replacement during edits.
+  Existing `App.test.tsx` navigation/session tests remain green.
+- Dirty/pending navigation: editor component tests cover Back/reload/unload;
+  production route tests cover browser Back cancellation and confirmed departure
+  without a second confirmation. Failed writes retain source and retry current edits.
+- Field/error contracts: `validation.test.ts`, `action-feedback.test.ts`,
+  `editor-state.test.ts` and `flow-editor.test.tsx` cover the shared invalid-source
+  fixtures, bypassed client validation, field placement, Show, unknown issue paths,
+  one-toast outcomes, no request for client errors and preservation after failures.
+  Gateway `call_spec_writes_test.exs` verifies independent backend 422 paths/reasons.
+- Provider contracts: AgentRuntime `model_catalog_test.exs`, CallEngine
+  `speech/model_catalog_test.exs` and aggregate catalog tests verify every listed
+  runnable model/default, speech declarations/configuration/rejection and legacy
+  Flux compatibility. Capability picker and onboarding tests preserve existing
+  selections and reset provider/model/voice defaults only on explicit changes.
+- Source preservation: source/participant edit tests cover all references and
+  validation after rename. All three files under `examples/call-specs/` were also
+  created through the tenant API, opened in the production editor and saved without
+  edits; each stored JSON value and source digest remained unchanged.
+- Persistence/privacy: Console `admin_call_specs_endpoint_test.exs` verifies
+  immutable revisions and current publication, cross-tenant 404s, CSRF, safe lookup
+  names/errors, no credential disclosure and source-body log filtering.
+- Rendered production acceptance: agent-browser checked populated list, new, edit,
+  published, historical, validation and outgoing states at 1440x1000 and 390x844.
+  Create/save/publish/reopen and discard cancellation passed. Invalid prompt and
+  outgoing ring timeout blocked saving. A desktop-to-phone resize defect was fixed
+  with a focused red-green test and rechecked in the browser. No browser errors or
+  document overflow remained. Historical source is explicitly read-only.
+- Local call-start acceptance: a spec created and published in the editor supplied
+  its caller route to the ordinary Gateway prepare/session endpoints. Both returned
+  201 and the call entered `running`. It used a synthetic credential, waited for
+  input and received no input or provider generation request. This replaces live
+  provider execution as explicitly authorized; no live tests ran.
+- The [operator guide](../call-spec-editor-guide.md) documents the workflow,
+  immutable revisions, recovery, source export, model/voice abstraction and API.
+  Final frontend checks pass 503 tests in 66 files, TypeScript and lint; production
+  assets build. All five final root gates pass: 3,458 tests, zero failures, 120
+  excluded (seed 991936). U8 review remains deferred by the user, not claimed as
+  UI approval. No speech/source-cutover state machine changed; Lean was not required.
 
 ## Decisions and open questions
 
@@ -796,3 +841,12 @@ The default suite and local synthetic sample acceptance replace any live-provide
 execution for this milestone, per the user's explicit instruction. U's concrete
 Storybook inspection is complete; the user has deferred their review until after
 production integration. Design review does not establish implementation completion.
+
+Production integration design review (2026-10-08): checked the deferred U8 review
+against the user's explicit authorization, then rechecked C → W dependency order.
+The read response must distinguish the opened revision, latest revision and
+currently published revision. The data router is needed for history blocking;
+confirmed local departures must not trigger a second dialog. First-save identity
+replacement must preserve in-flight edits, and expired writes must not redirect
+away from source. These contracts are now covered by focused integration tests.
+No database protocol, source schema or speech lifecycle change was required.

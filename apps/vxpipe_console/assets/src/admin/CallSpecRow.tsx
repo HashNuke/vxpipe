@@ -9,11 +9,13 @@ export function CallSpecRow({
   callSpec,
   tenant,
   onSelect,
+  onEdit,
   linkCalls = true,
 }: {
   callSpec: CallSpecSummary;
   tenant: TenantContext;
   onSelect?: (callSpecId: string) => void;
+  onEdit?: (callSpecId: string) => void;
   linkCalls?: boolean;
 }) {
   const label = callSpec.name ?? callSpec.id;
@@ -28,7 +30,7 @@ export function CallSpecRow({
   return (
     <tr className="border-t border-[var(--admin-row-line)] transition-colors first:border-t-0 hover:bg-[var(--admin-soft)]">
       <th className="truncate px-4 py-4 text-sm font-semibold" scope="row" title={label}>
-        {label}
+        <a className="rounded-sm text-[var(--admin-blue)] underline-offset-4 hover:underline" href={`/admin/tenants/${encodeURIComponent(tenant.key)}/call-specs/${encodeURIComponent(callSpec.id)}`} onClick={(event) => { if (onEdit && shouldInterceptNavigation(event)) { event.preventDefault(); onEdit(callSpec.id); } }}>{label}</a>
       </th>
       <td className="truncate px-4 py-4 font-mono text-xs text-[var(--admin-muted)]" title={callSpec.id}>
         {callSpec.id}

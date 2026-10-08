@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ModelCatalog } from "../modelCatalog";
 import { ActionFailureContext } from "./action-failure-context";
 import { editSource } from "./editSource";
 import { FlowNameDialog } from "./editor-header";
-import type { EditorSnapshot } from "./editor-state";
+import type { EditorSnapshot, SavedRevision } from "./editor-state";
 import { EditorToast } from "./editor-toast";
 import { locateIssue, type ActionFeedback } from "./errorPresentation";
 import { FlowEditorLayout } from "./flow-editor-layout";
@@ -20,6 +20,7 @@ import { useEditor, type ExecuteEditorRequest } from "./use-editor";
 
 export type CallSpecEditorProps = {
   snapshot: EditorSnapshot;
+  noticeAction?: ReactNode;
   catalog: ModelCatalog;
   lookups: EditorLookups;
   execute: ExecuteEditorRequest;
@@ -28,10 +29,12 @@ export type CallSpecEditorProps = {
   onNavigate: (href: string) => void;
   onReload: (signal: AbortSignal) => Promise<EditorSnapshot>;
   onSessionExpired?: () => void;
+  onGuardChange?: (guarded: boolean) => void;
+  onSaved?: (saved: SavedRevision) => void;
 };
 type Departure = { kind: "leave"; href: string } | { kind: "reload" };
 
-export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, servicesHref, onNavigate, onReload, onSessionExpired }: CallSpecEditorProps) {
+export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, servicesHref, onNavigate, onReload, onSessionExpired, onGuardChange, onSaved, noticeAction }: CallSpecEditorProps) {
   const editor = useEditor(snapshot, execute, onSessionExpired);
   const { state, reportFeedback } = editor;
   const [selectedNodeId, setSelectedNode] = useState<string | null>(null);
@@ -53,6 +56,8 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
   const document = reloading ? { ...state.document, readOnly: true } : state.document;
 
   useEffect(() => () => reloadController.current?.abort(), []);
+  useEffect(() => { onGuardChange?.(guarded); return () => onGuardChange?.(false); }, [guarded, onGuardChange]);
+  useEffect(() => { if (state.saved) onSaved?.(state.saved); }, [state.saved, onSaved]);
   useEffect(() => {
     if (!guarded) return;
     const preventLeave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -114,7 +119,7 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
       if (!edge.locked && change((document) => setTransfer(document, edge.source, edge.target, false), "Couldn't delete this transfer. Try again.")) selectNode(null);
     }} />;
   return <ActionFailureContext value={reportFailure}>
-    <FlowEditorLayout document={document} selectedNodeId={selectedNodeId} issues={counts.nodes} onSelectNode={selectNode}
+    <FlowEditorLayout noticeAction={noticeAction} document={document} selectedNodeId={selectedNodeId} issues={counts.nodes} onSelectNode={selectNode}
       onSelectEdge={(id) => { setSelectedEdge(id); setSelectedNode(null); setFocusRequest(undefined); }} onAddNode={add}
       onConnect={(from, to) => { change((document) => setTransfer(document, from, to, true), "Couldn't connect these participants. Choose an agent and a transfer destination."); }}
       inspector={inspector} inspectorTitle={selectedEdgeId ? "Selected edge" : selectedNodeId === "$entry" ? "Entry settings" : selectedNodeId ? `Participant ${selectedNodeId}` : "Call settings"} inspectorRequest={inspectorRequest}

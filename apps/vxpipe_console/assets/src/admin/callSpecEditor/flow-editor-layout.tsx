@@ -16,13 +16,14 @@ const serverViewport = () => false;
 
 type Props = FlowCanvasProps & Omit<EditorHeaderProps, "flowName" | "readOnly"> & {
   inspector: ReactNode;
+  noticeAction?: ReactNode;
   inspectorTitle: string;
   inspectorRequest?: number;
   onAddNode: (kind: "agent" | "human") => void;
 };
 
 /** Canvas/sidebar geometry copied from Callpipe, with a standard Sheet on phones. */
-export function FlowEditorLayout({ document, selectedNodeId, issues, onConnect, onSelectNode, onSelectEdge, inspector, inspectorTitle, inspectorRequest, onAddNode, ...header }: Props) {
+export function FlowEditorLayout({ document, selectedNodeId, issues, onConnect, onSelectNode, onSelectEdge, inspector, inspectorTitle, inspectorRequest, onAddNode, noticeAction, ...header }: Props) {
   const [arrangement, setArrangement] = useState(0);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [dismissedRequest, setDismissedRequest] = useState<number>();
@@ -36,7 +37,7 @@ export function FlowEditorLayout({ document, selectedNodeId, issues, onConnect, 
       {header.loading && <div role="status" className="absolute inset-0 z-20 grid place-items-center bg-background/80 text-sm font-medium text-muted-foreground">Loading call spec…</div>}
       <FlowCanvas key={arrangement} document={document} selectedNodeId={selectedNodeId} issues={issues} onConnect={onConnect} onSelectNode={selectNode} onSelectEdge={selectEdge} />
       <FlowEditorHeader {...header} flowName={document.source.name} readOnly={document.readOnly} />
-      {document.notice && <p role="status" className="absolute left-4 right-4 top-44 z-10 rounded-md border bg-background p-3 text-sm lg:right-[35rem]">{document.notice}</p>}
+      {document.notice && <p role="status" className="absolute left-4 right-4 top-44 z-10 rounded-md border bg-background p-3 text-sm lg:right-[35rem]">{document.notice}{noticeAction && <span className="mt-2 block">{noticeAction}</span>}</p>}
       <div className="absolute bottom-24 left-4 z-10 lg:left-3">
         <Button variant="outline" aria-description={settingsIssues ? `${settingsIssues} ${settingsIssues === 1 ? "issue" : "issues"}` : undefined} onClick={() => selectNode(null)}><Settings className="h-4 w-4" />Call settings<IssueCount count={settingsIssues} /></Button>
       </div>

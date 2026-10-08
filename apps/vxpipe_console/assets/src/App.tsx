@@ -1,17 +1,21 @@
 import {
+  createContext,
+  useContext,
   useCallback,
   useEffect,
   useRef,
   useState,
+  type ReactNode,
   type Dispatch,
   type MutableRefObject,
   type SetStateAction,
 } from "react";
 import {
-  BrowserRouter,
+  createBrowserRouter,
+  createRoutesFromElements,
+  RouterProvider,
   Navigate,
   Route,
-  Routes,
   useNavigate,
   useParams,
   useSearchParams,
@@ -59,6 +63,7 @@ import {
 } from "./admin/credentialApi";
 import { TenantServicesPage } from "./admin/TenantServicesPage";
 import { TenantsPage } from "./admin/TenantsPage";
+import { CallSpecEditorRoute } from "./CallSpecEditorRoute";
 import { ScopedServicesApp } from "./ScopedServicesApp";
 import { parseBindingDirectory } from "./admin/serviceBindingsApi";
 import type { PaginationModel, TenantsPageState } from "./admin/tenantTypes";
@@ -82,23 +87,30 @@ type AppProps = {
 const defaultFetch: Fetch = (input, init) => window.fetch(input, init);
 const redirectExpiredSession = () => window.location.assign("/auth/login");
 
+const AppConfiguration = createContext<AppProps>({ csrfToken: "" });
+
+function ConfiguredRoute({ render }: { render: (props: AppProps) => ReactNode }) {
+  return render(useContext(AppConfiguration));
+}
+
 export function App(props: AppProps) {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/admin/platform/services" element={<ScopedServicesRoute {...props} platform />} />
+  const [router] = useState(() => createBrowserRouter(createRoutesFromElements(
+      <>
+        <Route path="/admin/platform/services" element={<ConfiguredRoute render={(props) => <ScopedServicesRoute {...props} platform />} />} />
         <Route path="/admin/tenants/:tenantKey/setup-services" element={<RetiredSetupServicesRedirect />} />
-        <Route path="/admin/onboarding" element={<RoutedApp {...props} route={{ kind: "onboarding" }} />} />
-        <Route path="/admin" element={<TenantDirectoryRoute {...props} />} />
+        <Route path="/admin/onboarding" element={<ConfiguredRoute render={(props) => <RoutedApp {...props} route={{ kind: "onboarding" }} />} />} />
+        <Route path="/admin" element={<ConfiguredRoute render={(props) => <TenantDirectoryRoute {...props} />} />} />
         <Route path="/admin/tenants/:tenantKey" element={<TenantWorkspaceRedirect />} />
-        <Route path="/admin/tenants/:tenantKey/call-specs" element={<CallSpecsRoute {...props} />} />
-        <Route path="/admin/tenants/:tenantKey/calls" element={<CallsRoute {...props} />} />
-        <Route path="/admin/tenants/:tenantKey/calls/:callId" element={<CallDetailsRoute {...props} />} />
-        <Route path="/admin/tenants/:tenantKey/services" element={<ServicesRoute {...props} />} />
+        <Route path="/admin/tenants/:tenantKey/call-specs/:callSpecId" element={<ConfiguredRoute render={(props) => <CallSpecEditorRoute {...props} />} />} />
+        <Route path="/admin/tenants/:tenantKey/call-specs" element={<ConfiguredRoute render={(props) => <CallSpecsRoute {...props} />} />} />
+        <Route path="/admin/tenants/:tenantKey/calls" element={<ConfiguredRoute render={(props) => <CallsRoute {...props} />} />} />
+        <Route path="/admin/tenants/:tenantKey/calls/:callId" element={<ConfiguredRoute render={(props) => <CallDetailsRoute {...props} />} />} />
+        <Route path="/admin/tenants/:tenantKey/services" element={<ConfiguredRoute render={(props) => <ServicesRoute {...props} />} />} />
         <Route path="*" element={<Navigate replace to="/admin" />} />
-      </Routes>
-    </BrowserRouter>
-  );
+      </>
+  )));
+  useEffect(() => () => router.dispose(), [router]);
+  return <AppConfiguration value={props}><RouterProvider router={router} /></AppConfiguration>;
 }
 
 function ScopedServicesRoute({ platform = false, ...props }: AppProps & { platform?: boolean }) {
@@ -500,6 +512,8 @@ function RoutedApp({
   if (route.kind === "call-specs") {
     return (
       <TenantCallSpecsPage
+        onNewCallSpec={() => routerNavigate(`/admin/tenants/${encodeURIComponent(route.tenantKey)}/call-specs/new`)}
+        onEditCallSpec={(id) => routerNavigate(`/admin/tenants/${encodeURIComponent(route.tenantKey)}/call-specs/${encodeURIComponent(id)}`)}
         headerActions={headerActions}
         linkCalls
         onNextPage={() => navigate({ ...route, page: route.page + 1 })}

@@ -193,3 +193,13 @@ test("call spec story links record forward and back destinations without replaci
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
   expect(window.location.hash).toBe("#/admin");
 });
+
+test("offers new and edit links while preserving the separate calls link", () => {
+  const navigate = vi.fn();
+  render(<TenantCallSpecsPage state={populated} onEditCallSpec={navigate} onNewCallSpec={() => navigate("new")} />);
+  expect(screen.getByRole("link", { name: "New call spec" })).toHaveAttribute("href", "/admin/tenants/tn_demo_01/call-specs/new");
+  const edit = screen.getByRole("link", { name: "Delivery rescheduling" });
+  expect(edit).toHaveAttribute("href", "/admin/tenants/tn_demo_01/call-specs/delivery-rescheduling");
+  fireEvent.click(edit); expect(navigate).toHaveBeenCalledWith("delivery-rescheduling");
+  expect(screen.getByRole("link", { name: "View 5 calls for Delivery rescheduling" })).toHaveAttribute("href", "/admin/tenants/tn_demo_01/calls?call_spec_id=delivery-rescheduling");
+});

@@ -2,7 +2,8 @@
 
 ## Decision
 
-The production Console uses React Router's declarative browser router. Route
+The production Console uses React Router's browser data router (`createBrowserRouter` and
+`RouterProvider`). Route
 matching, browser-history subscription, redirects, path parameters, and search
 parameter synchronization are owned by `react-router`, not by application code.
 
@@ -12,6 +13,8 @@ The route table is:
 - `/admin/onboarding`
 - `/admin/tenants/:tenantKey`
 - `/admin/tenants/:tenantKey/call-specs`
+- `/admin/tenants/:tenantKey/call-specs/new`
+- `/admin/tenants/:tenantKey/call-specs/:callSpecId` (`?revision=N` opens read-only)
 - `/admin/tenants/:tenantKey/calls`
 - `/admin/tenants/:tenantKey/calls/:callId`
 - `/admin/tenants/:tenantKey/services`
@@ -34,9 +37,12 @@ Storybook keeps its isolated hash navigation because Storybook runs inside
   parser.
 - React Router framework mode would take ownership of the build and server model,
   which conflicts with the Phoenix application boundary.
-- Data mode was unnecessary for this migration because Console requests already
-  have explicit abort, stale-response, and session-expiry behavior. Declarative
-  mode replaces navigation without rewriting those integration contracts.
+- Declarative mode served the initial navigation migration. The call-spec editor
+  now requires `useBlocker` for unsaved changes during browser Back/Forward and
+  in-app navigation, so the router uses data mode. Requests retain their explicit
+  abort, stale-response and session-expiry contracts; loaders are not required.
+  A separate hand-written history blocker was rejected because it would duplicate
+  router state and mishandle browser history restoration.
 
 ## Implications
 
@@ -47,6 +53,18 @@ Storybook keeps its isolated hash navigation because Storybook runs inside
   route table. Storybook-only navigation helpers remain independent.
 - Phoenix must continue serving the Console document for its existing `/admin`
   routes so direct browser loads can reach the client router.
+
+## Editor navigation
+
+The editor guards dirty source and pending writes. Its own Back and recovery
+actions confirm locally, then bypass the router blocker once for that approved
+destination. Other SPA navigation and browser history use the same discard dialog
+through `useBlocker`; document reload/close uses `beforeunload`. Successful first
+save replaces `/new` with the stored ID without remounting the editor, preserving
+edits made while the request was pending. Explicit revision links are read-only
+and offer navigation to the latest editable revision. Session expiry during a
+write disables authoring and retains the source for copy/download; it does not
+redirect away from an unsaved draft.
 
 ## Verification
 

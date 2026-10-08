@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { Background, Controls, ReactFlow, type XYPosition } from "@xyflow/react";
+import { FitCanvasOnResize } from "./fit-canvas-on-resize";
 import { FlowNode } from "./flow-node";
-import { canvasGraph, canConnectParticipants } from "./flow-layout";
+import { canvasGraph, canConnectParticipants, flowFitViewOptions } from "./flow-layout";
 import type { SourceDocument } from "./types";
 
 const nodeTypes = { flowNode: FlowNode };
-const flowFitViewOptions = { padding: 0.3, maxZoom: 0.85 };
 export type FlowCanvasProps = {
   document: SourceDocument;
   selectedNodeId: string | null;
@@ -48,6 +48,7 @@ export function FlowCanvas({ document, selectedNodeId, issues, onConnect, onSele
         fitView
         fitViewOptions={flowFitViewOptions}
       >
+        <FitCanvasOnResize />
         <Background color="var(--border)" gap={20} />
         <Controls showInteractive={false} className="bottom-40 lg:bottom-0" />
       </ReactFlow>

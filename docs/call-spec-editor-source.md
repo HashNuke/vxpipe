@@ -199,3 +199,27 @@ The existing operator session, CSRF and private/no-store pipeline protects these
 routes. Request logging filters the entire source body so prompts and source
 values do not enter request logs. Existing structured authoring errors are shared
 with the tenant API; unexpected failures return a fixed unavailable response.
+
+## Production request and navigation ownership
+
+The editor API client encodes tenant/spec paths, sends exact source bodies with
+CSRF and same-origin credentials, disables caching, validates response shapes and
+passes abort signals to every request. Catalog choices come from the existing
+provider/model listing endpoints. The route container cancels superseded loads,
+keeps failed initial loads in a retryable page state, and never turns a failed
+write into navigation away from the draft.
+
+The React Router data router owns browser-history blocking. The editor still
+owns confirmation for its own Back/reload/recovery controls; confirmed departures
+bypass the router guard once. First-save URL replacement preserves the mounted
+editor and edits made while the request was pending. Explicit revision URLs are
+read-only and link to the latest editable source. A second frontend repository,
+new expected-revision protocol and automatic historical-source migration were
+rejected; existing immutable append/publication contracts remain authoritative.
+
+Production acceptance passes 503 frontend tests, TypeScript, lint, the production
+asset build and all five root gates (3,458 tests, zero failures, 120 excluded;
+seed 991936). Desktop/phone browser checks cover authoring, failures, history and
+responsive refitting. All three examples preserve source digests through tenant
+API creation and editor saves. A published editor route starts a local call with
+a synthetic credential and no provider generation request. No live tests ran.

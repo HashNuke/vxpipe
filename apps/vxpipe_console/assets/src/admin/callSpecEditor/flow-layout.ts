@@ -55,3 +55,5 @@ export function canConnectParticipants(document: SourceDocument, source: string,
   const targetKey = target === "$entry" ? projectGraph(document).nodes[0]!.participantKey : target;
   return !document.readOnly && target !== "$entry" && source !== targetKey && document.source.participants[source]?.type === "agent" && isTransferDestination(document.source, targetKey);
 }
+
+export const flowFitViewOptions = { padding: 0.3, maxZoom: 0.85 };

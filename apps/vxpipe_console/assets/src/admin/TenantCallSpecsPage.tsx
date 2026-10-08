@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { shouldInterceptNavigation } from "./shouldInterceptNavigation";
 import { AdminShell } from "./AdminShell";
 import { CallSpecList } from "./CallSpecList";
 import { CallSpecListSkeleton } from "./CallSpecListSkeleton";
@@ -13,6 +14,8 @@ export function TenantCallSpecsPage({
   theme = "dark",
   onSelectTenants,
   onSelectCallSpec,
+  onEditCallSpec,
+  onNewCallSpec,
   onSelectWorkspace,
   onPreviousPage,
   onNextPage,
@@ -24,6 +27,8 @@ export function TenantCallSpecsPage({
   theme?: "dark" | "light";
   onSelectTenants?: () => void;
   onSelectCallSpec?: (callSpecId: string) => void;
+  onEditCallSpec?: (callSpecId: string) => void;
+  onNewCallSpec?: () => void;
   onSelectWorkspace?: (destination: TenantDestination) => void;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
@@ -51,6 +56,7 @@ export function TenantCallSpecsPage({
           onSelect={onSelectWorkspace}
           tenant={state.tenant}
         />
+        <div className="flex justify-end py-4"><a className="rounded-md bg-[var(--admin-blue)] px-4 py-2 text-sm font-semibold text-white" href={`/admin/tenants/${encodeURIComponent(state.tenant.key)}/call-specs/new`} onClick={(event) => { if (onNewCallSpec && shouldInterceptNavigation(event)) { event.preventDefault(); onNewCallSpec(); } }}>New call spec</a></div>
         <section
           aria-label="Call spec directory"
           className="overflow-hidden"
@@ -76,6 +82,7 @@ export function TenantCallSpecsPage({
                 callSpecs={state.callSpecs}
                 linkCalls={linkCalls}
                 onSelectCallSpec={onSelectCallSpec}
+                onEditCallSpec={onEditCallSpec}
                 tenant={state.tenant}
               />
               {state.pagination ? (
