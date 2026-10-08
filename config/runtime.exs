@@ -7,6 +7,44 @@ nonempty_env = fn name ->
   end
 end
 
+worktree =
+  if config_env() in [:dev, :test] do
+    {metadata, _bindings} = Code.eval_file(Path.join(__DIR__, "worktree.exs"))
+    metadata
+  end
+
+local_database_connection = fn ->
+  local_socket_dir =
+    Enum.find(["/var/run/postgresql", "/tmp"], &File.exists?(Path.join(&1, ".s.PGSQL.5432")))
+
+  connection =
+    case nonempty_env.("PGHOST") do
+      nil when is_binary(local_socket_dir) -> [socket_dir: local_socket_dir]
+      nil -> [hostname: "localhost"]
+      "/" <> _path = socket_dir -> [socket_dir: socket_dir]
+      hostname -> [hostname: hostname]
+    end
+
+  connection ++ [username: nonempty_env.("PGUSER") || System.fetch_env!("USER")]
+end
+
+if config_env() == :test do
+  test_repo =
+    case nonempty_env.("VXPIPE_TEST_DATABASE_URL") do
+      nil ->
+        database =
+          nonempty_env.("VXPIPE_TEST_DATABASE") ||
+            if(worktree, do: worktree["databases"]["test"], else: "vxpipe_test")
+
+        local_database_connection.() ++ [database: database]
+
+      url ->
+        [url: url]
+    end
+
+  config :vxpipe_persistence, Vxpipe.Persistence.Repo, test_repo
+end
+
 credential_keyring =
   if config_env() != :test do
     case Vxpipe.Persistence.CredentialKeyring.from_config(
@@ -35,7 +73,7 @@ credential_keyring =
 
     url =
       nonempty_env.("VXPIPE_DB_URL") || nonempty_env.("DATABASE_URL") ||
-        if(config_env() == :dev, do: "postgres://localhost/vxpipe_dev")
+        if(config_env() == :dev and is_nil(worktree), do: "postgres://localhost/vxpipe_dev")
 
     url =
       if url do
@@ -61,12 +99,25 @@ credential_keyring =
     {url, pool_size}
   end
 
-if database_url do
+database_enabled? = not is_nil(database_url) or (config_env() == :dev and not is_nil(worktree))
+
+if database_enabled? do
   config :vxpipe_persistence, :enabled, true
 
-  config :vxpipe_persistence, Vxpipe.Persistence.Repo,
-    url: database_url,
-    pool_size: database_pool_size
+  development_repo =
+    if database_url do
+      [url: database_url, pool_size: database_pool_size]
+    else
+      local_database_connection.() ++
+        [
+          url: nil,
+          password: nil,
+          database: worktree["databases"]["dev"],
+          pool_size: database_pool_size
+        ]
+    end
+
+  config :vxpipe_persistence, Vxpipe.Persistence.Repo, development_repo
 
   config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     credential_source: {Vxpipe.Calls.ProviderCredentialSource, :configured}
@@ -120,7 +171,7 @@ if nonempty_env.("AWS_SESSION_TOKEN") do
   config :ex_aws, :s3, security_token: {:system, "AWS_SESSION_TOKEN"}
 end
 
-if database_url && storage_bucket do
+if database_enabled? && storage_bucket do
   document_store_options =
     case Vxpipe.Artifacts.S3DocumentConfiguration.build(artifact_storage) do
       {:ok, options} ->
@@ -149,7 +200,7 @@ if config_env() == :dev do
          :recording,
          [
            enabled: System.get_env("VXPIPE_RECORDING_ENABLED"),
-           persistence_enabled: not is_nil(database_url)
+           persistence_enabled: database_enabled?
          ] ++ artifact_storage
 
   app_host =
@@ -210,7 +261,7 @@ if config_env() == :dev do
     |> Keyword.update!(:cors, &Keyword.put(&1, :allowed_origins, allowed_origins))
 
   gateway_http =
-    if database_url do
+    if database_enabled? do
       archive = [
         enabled: true,
         writer: {Vxpipe.Persistence.EctoStorage, []},
@@ -230,7 +281,7 @@ if config_env() == :dev do
 
   config :vxpipe_gateway, Vxpipe.Gateway.Application, http: gateway_http
 
-  if database_url do
+  if database_enabled? do
     room_creation = Keyword.fetch!(gateway_http, :room_creation)
     trusted_call = Keyword.fetch!(room_creation, :trusted_call)
     sample_tenant = nonempty_env.("VXPIPE_DEV_TENANT")
@@ -374,8 +425,8 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
 
   config :vxpipe_gateway, Vxpipe.Gateway.Application,
     http: [
-      operator_api: [enabled: not is_nil(database_url)],
-      call_spec_authoring: [enabled: not is_nil(database_url)],
+      operator_api: [enabled: database_enabled?],
+      call_spec_authoring: [enabled: database_enabled?],
       telephony: [
         enabled: not is_nil(telephony_public_base_url),
         public_base_url: telephony_public_base_url

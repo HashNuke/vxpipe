@@ -45,3 +45,7 @@ erl_crash.dump
 .impeccable/review/storybook/
 
 sounds/*.wav
+
+# Non-secret checkout setup state and local Python tooling bytecode.
+/.vxpipe/
+/bin/lib/__pycache__/

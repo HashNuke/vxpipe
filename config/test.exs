@@ -1,39 +1,8 @@
 import Config
 
-test_database_url = System.get_env("VXPIPE_TEST_DATABASE_URL")
-
-test_repo =
-  if test_database_url do
-    [url: test_database_url]
-  else
-    # Without PGHOST, prefer the local server's Unix socket (Debian/Ubuntu, then
-    # Homebrew/macOS), where peer authentication needs no password. Fall back to
-    # Postgrex's TCP localhost default when no socket exists.
-    local_socket_dir =
-      Enum.find(["/var/run/postgresql", "/tmp"], &File.exists?(Path.join(&1, ".s.PGSQL.5432")))
-
-    connection =
-      case System.get_env("PGHOST") do
-        nil when is_binary(local_socket_dir) -> [socket_dir: local_socket_dir]
-        nil -> []
-        "/" <> _path = socket_dir -> [socket_dir: socket_dir]
-        hostname -> [hostname: hostname]
-      end
-
-    connection ++
-      [
-        username: System.get_env("PGUSER") || System.fetch_env!("USER"),
-        database: System.get_env("VXPIPE_TEST_DATABASE", "vxpipe_test")
-      ]
-  end
-
-config :vxpipe_persistence,
-       Vxpipe.Persistence.Repo,
-       test_repo ++
-         [
-           pool: Ecto.Adapters.SQL.Sandbox,
-           pool_size: System.schedulers_online() * 2
-         ]
+config :vxpipe_persistence, Vxpipe.Persistence.Repo,
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: System.schedulers_online() * 2
 
 config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   credential_source: {Vxpipe.CallEngine.TestSpeechCredentialSource, :synthetic},

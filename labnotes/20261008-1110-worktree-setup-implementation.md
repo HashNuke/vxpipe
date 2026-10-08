@@ -24,3 +24,35 @@
 - All four existing runner suites and the new owner suite pass. No provider contacted.
 - Cooperative reservation intentionally does not serialize same-branch invocations;
   manual recovery after confirming abandoned live work is documented.
+
+
+## Common validation after checkpoint 1
+
+- Root formatting, warnings-as-errors compilation, strict Credo and unused-dependency
+  checks pass. The default umbrella run (seed 658333) reports one Gateway failure:
+  the five-participant handoff/reconnection test. Gateway reports 585 tests, one
+  failure, eight excluded; no live test was selected. Remaining observed suites pass.
+- Its isolated child invocation at line 485, seed 658333, passes one test with
+  68 exclusions in 171.8 seconds. This does not explain or resolve the full-run
+  failure; final concurrent/root acceptance must establish a passing complete gate.
+- Initial unredirected full-run output was too verbose and truncated the failure
+  detail; ExUnit's failure manifest identifies the case. Subsequent commands retain
+  local logs and print bounded summaries. No runtime/state-machine fix is claimed.
+
+## Checkpoint 2: runtime defaults (partial)
+
+- New Console-owned boundary tests first fail four of five cases: metadata is
+  ignored, test database settings are compile-time, and malformed metadata is accepted.
+- Move test connection resolution to runtime while retaining compile-time sandbox
+  pool settings. A dependency-free config reader validates version, random hex ID,
+  checkout root and derived database names. Only dev/test load it; production ignores it.
+- Initialized development uses socket/current-role defaults, clearing legacy postgres
+  credentials. Explicit dev URLs retain precedence; test URLs/names remain separate.
+  No-metadata development/test keep their legacy database defaults.
+- Preserve persistence enablement and all credential/publication/operator wiring when
+  development uses a socket instead of a URL. Existing default-configuration tests
+  use copied config fixtures so future checkout initialization cannot change their
+  no-metadata assumptions.
+- The 11 focused database/runtime tests and broader 26-test configuration group pass;
+  formatting, compilation and strict Credo pass. Actual root/child Mix startup with generated metadata and isolated
+  databases remains a setup acceptance requirement, not proven by Config.Reader tests.

@@ -10,7 +10,17 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     TELEPHONY_HOST APP_HOST PORT SECRET_KEY_BASE VXPIPE_DEV_TLS)
   @settings [{:vxpipe_gateway, Vxpipe.Gateway.Application}]
 
-  setup do
+  @moduletag :tmp_dir
+  setup %{tmp_dir: tmp_dir} do
+    runtime = Path.join(tmp_dir, "config/runtime.exs")
+    File.mkdir_p!(Path.dirname(runtime))
+    File.cp!(@runtime, runtime)
+
+    File.cp!(
+      Path.join(Path.dirname(@runtime), "worktree.exs"),
+      Path.join(Path.dirname(runtime), "worktree.exs")
+    )
+
     previous = Map.new(@variables, &{&1, System.get_env(&1)})
 
     settings =
@@ -36,14 +46,17 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
 
       Enum.each(settings, fn {{app, key}, value} -> Application.put_env(app, key, value) end)
     end)
+
+    %{runtime: runtime}
   end
 
-  test "operator HTTP authentication is enabled with hosted persistence in development and production" do
+  test "operator HTTP authentication is enabled with hosted persistence in development and production",
+       %{runtime: runtime} do
     System.put_env("VXPIPE_DB_URL", "postgres://localhost/operator_auth_configuration")
 
     for environment <- [:dev, :prod] do
       http =
-        Config.Reader.read!(@runtime, env: environment)
+        Config.Reader.read!(runtime, env: environment)
         |> Keyword.fetch!(:vxpipe_gateway)
         |> Keyword.fetch!(Vxpipe.Gateway.Application)
         |> Keyword.fetch!(:http)
@@ -54,7 +67,7 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     System.delete_env("VXPIPE_DB_URL")
 
     http =
-      Config.Reader.read!(@runtime, env: :prod)
+      Config.Reader.read!(runtime, env: :prod)
       |> Keyword.fetch!(:vxpipe_gateway)
       |> Keyword.fetch!(Vxpipe.Gateway.Application)
       |> Keyword.fetch!(:http)
@@ -62,14 +75,16 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     refute http |> Keyword.get(:operator_api, []) |> Keyword.get(:enabled, false)
   end
 
-  test "each database alias works and the first nonblank alias wins independently" do
+  test "each database alias works and the first nonblank alias wins independently", %{
+    runtime: runtime
+  } do
     for {url_key, pool_key} <- [
           {"VXPIPE_DB_URL", "VXPIPE_DB_POOL_SIZE"},
           {"DATABASE_URL", "DB_POOL_SIZE"}
         ] do
       System.put_env(url_key, "postgres://localhost/selected")
       System.put_env(pool_key, "7")
-      assert repo(:prod) == [url: "postgres://localhost/selected", pool_size: 7]
+      assert repo(:prod, runtime) == [url: "postgres://localhost/selected", pool_size: 7]
       System.delete_env(url_key)
       System.delete_env(pool_key)
     end
@@ -81,14 +96,16 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
       "DB_POOL_SIZE" => "9"
     })
 
-    assert repo(:prod) == [url: "postgres://localhost/first", pool_size: 3]
+    assert repo(:prod, runtime) == [url: "postgres://localhost/first", pool_size: 3]
     System.put_env("VXPIPE_DB_URL", "  ")
-    assert repo(:prod) == [url: "postgres://localhost/second", pool_size: 3]
+    assert repo(:prod, runtime) == [url: "postgres://localhost/second", pool_size: 3]
     System.put_env("VXPIPE_DB_POOL_SIZE", "")
-    assert repo(:prod) == [url: "postgres://localhost/second", pool_size: 9]
+    assert repo(:prod, runtime) == [url: "postgres://localhost/second", pool_size: 9]
   end
 
-  test "blank aliases and retired settings preserve only the development default" do
+  test "blank aliases and retired settings preserve only the development default", %{
+    runtime: runtime
+  } do
     System.put_env(%{
       "VXPIPE_DATABASE_URL" => "postgres://localhost/retired",
       "VXPIPE_DATABASE_POOL_SIZE" => "99"
@@ -99,12 +116,14 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
         if value, do: System.put_env(key, value), else: System.delete_env(key)
       end
 
-      assert repo(:dev) == [url: "postgres://localhost/vxpipe_dev", pool_size: 10]
-      assert repo(:prod) == []
+      assert repo(:dev, runtime) == [url: "postgres://localhost/vxpipe_dev", pool_size: 10]
+      assert repo(:prod, runtime) == []
     end
   end
 
-  test "invalid selected settings fail safely without consulting a lower-priority alias" do
+  test "invalid selected settings fail safely without consulting a lower-priority alias", %{
+    runtime: runtime
+  } do
     System.put_env("DATABASE_URL", "postgres://localhost/valid")
 
     for value <- [
@@ -114,7 +133,7 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
           "private-invalid-value"
         ] do
       System.put_env("VXPIPE_DB_URL", value)
-      error = assert_raise RuntimeError, fn -> repo(:prod) end
+      error = assert_raise RuntimeError, fn -> repo(:prod, runtime) end
       assert Exception.message(error) == "invalid VXPIPE_DB_URL / DATABASE_URL configuration"
     end
 
@@ -123,18 +142,21 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
 
     for value <- ["0", "-1", "1.5", "private-invalid-value"] do
       System.put_env("VXPIPE_DB_POOL_SIZE", value)
-      error = assert_raise RuntimeError, fn -> repo(:prod) end
+      error = assert_raise RuntimeError, fn -> repo(:prod, runtime) end
 
       assert Exception.message(error) ==
                "invalid VXPIPE_DB_POOL_SIZE / DB_POOL_SIZE configuration"
     end
   end
 
-  test "ordinary aliases cannot replace or validate against the dedicated test database" do
+  test "ordinary aliases cannot replace or validate against the dedicated test database", %{
+    runtime: runtime
+  } do
     test_config = Config.Reader.read!(@test_config)
 
     before =
       test_config
+      |> Config.Reader.merge(Config.Reader.read!(runtime, env: :test))
       |> Keyword.fetch!(:vxpipe_persistence)
       |> Keyword.fetch!(Vxpipe.Persistence.Repo)
 
@@ -146,11 +168,7 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
       "VXPIPE_DATABASE_URL" => "postgres://localhost/retired"
     })
 
-    runtime = Config.Reader.read!(@runtime, env: :test)
-
-    assert runtime
-           |> Keyword.get(:vxpipe_persistence, [])
-           |> Keyword.get(Vxpipe.Persistence.Repo, []) == []
+    runtime = Config.Reader.read!(runtime, env: :test)
 
     merged = Config.Reader.merge(test_config, runtime)
 
@@ -161,7 +179,9 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     assert Keyword.fetch!(before, :pool) == Ecto.Adapters.SQL.Sandbox
   end
 
-  test "the independent pool setting remains authoritative in Ecto's effective configuration" do
+  test "the independent pool setting remains authoritative in Ecto's effective configuration", %{
+    runtime: runtime
+  } do
     System.put_env("VXPIPE_DB_URL", "postgres://localhost/selected?pool_size=1&ssl=true")
 
     for {selected, expected} <- [{nil, 10}, {"7", 7}] do
@@ -174,7 +194,7 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
                  :runtime,
                  Vxpipe.Persistence.Repo,
                  :vxpipe_persistence,
-                 repo(:prod)
+                 repo(:prod, runtime)
                )
 
       assert Keyword.fetch!(effective, :database) == "selected"
@@ -183,8 +203,8 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     end
   end
 
-  defp repo(environment) do
-    Config.Reader.read!(@runtime, env: environment)
+  defp repo(environment, runtime) do
+    Config.Reader.read!(runtime, env: environment)
     |> Keyword.get(:vxpipe_persistence, [])
     |> Keyword.get(Vxpipe.Persistence.Repo, [])
   end

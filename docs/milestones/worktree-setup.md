@@ -173,6 +173,13 @@ Owning files: new `bin/setup`, a focused metadata reader, runtime/test configura
   Red-test partial migration/setup failure and data-preserving reruns. Never reset,
   drop or silently adopt another checkout's DB. Document focused child-test use.
 
+Partial progress (2026-10-08): runtime dev/test defaults and the versioned metadata
+reader are implemented. Five new boundary tests (four initially red), plus the six
+existing database configuration tests, pass. Socket/current-role development and
+explicit URL precedence are covered; production ignores metadata. Setup orchestration,
+actual root/child startup and two-checkout database acceptance remain unverified;
+checkpoint 2 stays incomplete.
+
 Exit: on the prepared machine, two initialized worktrees can run database-backed
 focused tests using plain `mix test`, without shell activation or shared DB state.
 
