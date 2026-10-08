@@ -28,7 +28,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
   alias Vxpipe.CallEngine.{TestAudioOutputSink, TestCallStartup, TestTransferConnection}
   alias Vxpipe.Providers.MorseCode.{STSSession, STTSession}
   alias Vxpipe.Providers.Google.STSSession, as: GoogleSTS
-  alias Vxpipe.CallEngine.Speech.Session
+  alias Vxpipe.CallEngine.Speech.{Channel, Session, SessionTree}
   alias Vxpipe.CallEngine.TestGoogleSTSTransport
 
   @morse [unit_duration_ms: 20]
@@ -792,11 +792,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       push_sts(rebound)
       push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
 
-      fresh_turn =
-        Enum.reduce_while(1..200, nil, fn _, _ ->
-          turn = :sys.get_state(context.authority).speech_to_speech_capability.activity_turn
-          if is_map(turn), do: {:halt, turn}, else: {:cont, nil}
-        end)
+      caller = context.caller
+
+      assert_receive {:vxpipe_event, %ParticipantTurnStarted{participant_id: ^caller} = started},
+                     1_000
+
+      fresh_turn = :sys.get_state(context.authority).speech_to_speech_capability.activity_turn
 
       assert is_map(fresh_turn)
 
@@ -824,7 +825,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
         1
       )
 
-      assert_caller_text(context)
+      assert_caller_text(context, started)
       output = collect_output(rebound.sink, [])
       settle_and_assert_reply(rebound, output)
     end
@@ -935,6 +936,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
   for mode <- ["external", "hybrid"] do
     test "#{mode} replaces an active pair after transcript-only STT rotation" do
       context = room(true, false, %{}, :morse, unquote(mode), :no_transcripts)
+      monitor = Process.monitor(context.capability)
       assert {:ok, old_pcm} = Encoder.encode(context.config, "NO")
       state = :sys.get_state(context.authority)
       connection = Map.fetch!(state.connections, context.command.connection_id)
@@ -958,19 +960,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       assert fresh.audio_input_interval == before.audio_input_interval
       assert fresh.audio_output_interval == before.audio_output_interval
 
-      rebound =
-        Enum.reduce_while(1..200, nil, fn _, _ ->
-          case :sys.get_state(context.authority).speech_to_speech_capability do
-            %{pid: capability, ingress: ingress, input_epoch: epoch}
-            when capability != context.capability and is_pid(ingress) and is_reference(epoch) ->
-              {:halt, %{context | capability: capability, ingress: ingress}}
-
-            _pending ->
-              {:cont, nil}
-          end
-        end)
-
-      assert is_map(rebound)
+      rebound = recovered_sts_context(context, monitor)
       push_sts(rebound)
       push_selected_stt(context)
       assert_caller_text(context)
@@ -1394,7 +1384,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     )
   end
 
-  defp assert_caller_text(context) do
+  defp assert_caller_text(context, started \\ nil) do
     caller = context.caller
 
     assert_receive {:vxpipe_event,
@@ -1402,8 +1392,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
                       text},
                    1_000
 
-    assert_receive {:vxpipe_event, %ParticipantTurnStarted{participant_id: ^caller} = started},
-                   1_000
+    started =
+      if started do
+        started
+      else
+        assert_receive {:vxpipe_event, %ParticipantTurnStarted{participant_id: ^caller} = event},
+                       1_000
+
+        event
+      end
 
     assert_receive {:vxpipe_event,
                     %ParticipantTurnCompleted{participant_id: ^caller} = completed},
@@ -1550,6 +1547,28 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
   defp await_new_stt_origin(stt, old_generation, field \\ :activity_origin) do
     deadline = System.monotonic_time(:millisecond) + 5_000
     poll_stt_origin(stt, old_generation, field, deadline)
+  end
+
+  defp recovered_sts_context(context, monitor) do
+    old = context.capability
+    assert_receive {:DOWN, ^monitor, :process, ^old, _reason}, 1_000
+    %{pid: capability} = :sys.get_state(context.authority).speech_to_speech_capability
+    session = :sys.get_state(capability).session
+    _ = :sys.get_state(session.scope.admissions)
+
+    for initializer <- Task.Supervisor.children(SessionTree.commands(session)) do
+      initialization = Process.monitor(initializer)
+      assert_receive {:DOWN, ^initialization, :process, ^initializer, _reason}, 1_000
+    end
+
+    _ = :sys.get_state(Channel.address(session))
+    _ = :sys.get_state(capability)
+
+    assert %{pid: ^capability, ingress: ingress, input_epoch: epoch} =
+             :sys.get_state(context.authority).speech_to_speech_capability
+
+    assert is_pid(ingress) and is_reference(epoch)
+    %{context | capability: capability, ingress: ingress}
   end
 
   defp poll_stt_origin(stt, old_generation, field, deadline) do

@@ -134,7 +134,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
 
   @impl true
   def handle_cast(:output_release_failed, state),
-    do: stop_unavailable(:output_release_uncertain, state)
+    do: stop_unavailable(:output_release_uncertain, state, :release)
 
   @impl true
   def handle_info(:drain_room_audio, state), do: continue(state)
@@ -269,14 +269,15 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress do
   defp continue(state) do
     case Delivery.drain(state) do
       {:ok, state} -> {:noreply, state}
-      {:error, reason, state} -> stop_unavailable(reason, state)
+      {:error, stage, reason, state} -> stop_unavailable(reason, state, stage)
     end
   end
 
   # An unavailable output is an expected end that the owner has just been told about, not a
   # crash. A non-shutdown reason made OTP format a crash report of this state before exiting,
   # which delayed the exit by 12-140 ms.
-  defp stop_unavailable(reason, state) do
+  defp stop_unavailable(reason, state, stage \\ :pipeline) do
+    Vxpipe.Gateway.Telemetry.room_output_failure(stage, reason)
     send(state.owner, {:vxpipe_connection_unavailable, {:room_audio_output, reason}})
     {:stop, {:shutdown, :room_audio_output_unavailable}, state}
   end

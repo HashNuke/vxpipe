@@ -5,7 +5,7 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress.Delivery do
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.Gateway.Media.RoomAudioEgress.State
 
-  @spec drain(State.t()) :: {:ok, State.t()} | {:error, term(), State.t()}
+  @spec drain(State.t()) :: {:ok, State.t()} | {:error, :take | :push, term(), State.t()}
   def drain(
         %State{
           drain_pending?: true,
@@ -26,10 +26,10 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress.Delivery do
         push(frame, state)
 
       {:ok, _invalid} ->
-        {:error, :invalid_mixer_delivery, state}
+        {:error, :take, :invalid_mixer_delivery, state}
 
       {:error, reason} ->
-        {:error, reason, state}
+        {:error, :take, reason, state}
     end
   end
 
@@ -40,10 +40,10 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgress.Delivery do
          Snapshot.interval(state.policy, :audio_output, state.identity.participant_id) do
       case safe_push(state.pipeline, state.pipeline_id, frame) do
         :ok -> {:ok, %{state | in_flight: {state.pipeline_id, frame.timestamp}}}
-        {:error, reason} -> {:error, reason, state}
+        {:error, reason} -> {:error, :push, reason, state}
       end
     else
-      {:error, :stale_policy_revision, state}
+      {:error, :push, :stale_policy_revision, state}
     end
   end
 

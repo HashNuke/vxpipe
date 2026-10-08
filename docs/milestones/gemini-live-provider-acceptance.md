@@ -177,6 +177,14 @@ handoff suite subsequently passes 67 default cases with zero failures (seed
 no handoff runtime contract, timeout or assertion is changed. This does not
 establish a cause or a repair of those intermittent failures.
 
+The 2026-10-08 user follow-up prioritizes human-caller calls with human or agent
+counterparts and transfers to either type. It adds no runtime participation
+limits. The five-participant listener-reconnection investigation is deferred.
+The deadline-closing bypass now has owning red/green and repeated native proof;
+the earlier listener-re-entry audio-loss cause remains unresolved. Evidence lives in
+[the owning transfer milestone](transfer-readiness-and-wait-sounds.md#webrtc-transfer-follow-up-2026-10-08).
+Run Gemini's ten-minute acceptance after these WebRTC repairs are verified.
+
 ### Configured provider acceptance
 
 - [x] Red/green configured Google selection, exact model/options validation,

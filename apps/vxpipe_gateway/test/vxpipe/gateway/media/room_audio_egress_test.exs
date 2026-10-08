@@ -164,6 +164,51 @@ defmodule Vxpipe.Gateway.Media.RoomAudioEgressTest do
                     {:shutdown, :room_audio_output_unavailable}}
   end
 
+  for stage <- [:take, :push] do
+    test "reports a #{stage} failure before ending the output boundary" do
+      stage = unquote(stage)
+      connection_id = unique_id("conn-output-failure")
+      start_supervised!({ConnectionPeerSupervisor, connection_id: connection_id})
+      attachment = attachment({:ok, %{mode: :mix_minus}}, snapshot(4), [frame(0, 4)])
+      assert {:ok, egress} = start_egress(connection_id, attachment)
+
+      assert_receive {:test_room_audio_output_pipeline_started, pipeline_id, pipeline, ^egress}
+      assert_receive {:test_room_audio_output_subscribed, subscription_id, ^egress}
+
+      set_output_failure(stage, attachment, pipeline)
+
+      event = [:vxpipe, :gateway, :room_audio_output, :failed]
+      handler = {__MODULE__, make_ref()}
+
+      assert :ok =
+               :telemetry.attach(handler, event, &__MODULE__.observe_output_failure/4, {
+                 egress,
+                 self()
+               })
+
+      on_exit(fn -> :telemetry.detach(handler) end)
+      monitor = Process.monitor(egress)
+      send(egress, {:vxpipe_room_audio_output_ready, pipeline_id})
+      send(egress, {:vxpipe_room_audio_available, self(), subscription_id})
+
+      assert_receive {:room_output_failure, %{count: 1}, %{stage: ^stage, reason: :unavailable}}
+      assert_receive {:vxpipe_connection_unavailable, {:room_audio_output, :unavailable}}
+
+      assert_receive {:DOWN, ^monitor, :process, ^egress,
+                      {:shutdown, :room_audio_output_unavailable}}
+    end
+  end
+
+  def observe_output_failure(_event, measurements, metadata, {egress, observer}) do
+    if self() == egress, do: send(observer, {:room_output_failure, measurements, metadata})
+  end
+
+  defp set_output_failure(:take, attachment, _pipeline),
+    do: Agent.update(attachment.store, &Map.put(&1, :take_result, {:error, :unavailable}))
+
+  defp set_output_failure(:push, _attachment, pipeline),
+    do: Agent.update(pipeline, &Map.put(&1, :push_result, {:error, :unavailable}))
+
   defp start_enabled_egress(frames, revision) do
     connection_id = unique_id("conn-mix-minus")
     start_supervised!({ConnectionPeerSupervisor, connection_id: connection_id})

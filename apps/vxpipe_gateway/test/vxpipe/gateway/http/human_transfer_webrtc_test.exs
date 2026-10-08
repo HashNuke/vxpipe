@@ -372,6 +372,114 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     refute_private_recording(collect_native_recording([]))
   end
 
+  @tag morse: true
+  @tag :two_party_agent_transfers
+  test "a human caller keeps audio and recording across repeated agent transfers" do
+    {wait_sounds, options} = custom_wait_configuration(48_000)
+
+    plan =
+      compile_plan(
+        morse: true,
+        agent_destination: true,
+        reception_model: "test:blocked",
+        billing_model: "test:blocked",
+        billing_transfers: ["reception"],
+        reception_first_message: %{mode: "fixed", text: "E"},
+        billing_first_message: %{mode: "fixed", text: "T"},
+        wait_sounds: Map.put(wait_sounds, :transfer_to_agent, wait_sounds.transfer_to_human)
+      )
+
+    options =
+      Keyword.put(options, :recording,
+        enabled: true,
+        targets: [:individual_tracks],
+        writer: {CallEngine.TestRecordingWriter, observer: self()},
+        maximum_pull_frames: 20
+      )
+
+    assert {:ok, room} = CallEngine.start_call(plan, options)
+    stop_room_on_exit(plan)
+    assert_receive {:test_agent_runtime_model_preparing, initial_model}, 2_000
+    caller = Map.fetch!(plan.participants, "caller")
+
+    client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat", false))
+      |> Map.put(:morse_opus, Decoder.Native.create(48_000, 1))
+
+    assert :ok = send_client_ready(client)
+    send(initial_model, :release_test_agent_runtime_model)
+    await_sideband(client, "bot-ready", 2_000)
+    assert_morse(client, "E")
+    await_sideband(client, "bot-stopped-speaking", 2_000)
+
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    assert {:ok, original} = CallEngine.RoomAuthority.readiness_binding(authority)
+
+    {_client, attempts} =
+      Enum.reduce(
+        [{"billing", "ET"}, {"reception", "TE"}, {"billing", "SOS"}],
+        {client, MapSet.new()},
+        fn {destination, spoken}, {client, attempts} ->
+          {source_prompt, destination_prompt} =
+            if destination == "billing",
+              do: {"Route callers safely.", "Handle billing requests."},
+              else: {"Handle billing requests.", "Route callers safely."}
+
+          client = send_morse(client, spoken)
+          assert_transcript(client, caller.participant_id, spoken)
+          {provider, _request} = await_native_model_request(source_prompt, spoken)
+
+          assert {:ok, transfer} =
+                   ToolCall.new(
+                     id: "two-party-#{spoken}",
+                     name: "transfer",
+                     arguments: %{"destination" => destination}
+                   )
+
+          assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [transfer])
+          send(provider, {:test_agent_runtime_response, {:ok, response}})
+          assert_receive {:test_agent_runtime_model_preparing, model}, 2_000
+          assert :ok = await_tone(client, 250, 2_000)
+          pending = :sys.get_state(authority).pending_participant_transfer
+          refute MapSet.member?(attempts, pending.attempt_id)
+          refute_private_recording(collect_native_recording([]))
+          send(model, :release_test_agent_runtime_model)
+
+          assert %{"attempt_id" => attempt} = await_transfer_progress(client, "completed")
+          assert attempt == pending.attempt_id
+          assert :ok = await_tone(client, 1_000, 2_000)
+
+          if MapSet.size(attempts) == 0 do
+            assert_morse(client, "T")
+            await_sideband(client, "bot-stopped-speaking", 2_000)
+          end
+
+          assert {:ok, current} = CallEngine.RoomAuthority.readiness_binding(authority)
+          assert current.room == original.room
+
+          assert current.connections[client.connection_id] ==
+                   original.connections[client.connection_id]
+
+          client = send_morse(client, "E")
+          assert_transcript(client, caller.participant_id, "E")
+          {provider, _request} = await_native_model_request(destination_prompt, "E")
+          assert {:ok, reply} = ModelResponse.new(text: "OK")
+          send(provider, {:test_agent_runtime_response, {:ok, reply}})
+          assert_morse(client, "OK")
+          await_sideband(client, "bot-stopped-speaking", 2_000)
+          assert wait_players(room.incarnation_id) == %{}
+          recorded = collect_native_recording([])
+          assert Enum.any?(recorded, &tone?(&1.payload, 700))
+          refute_private_recording(recorded)
+          {client, MapSet.put(attempts, attempt)}
+        end
+      )
+
+    assert MapSet.size(attempts) == 3
+  end
+
   @tag changing_listeners: true
   @tag :controlled_late_attachment
   test "five-participant handoff retains wait cursors through monitor addition and reconnection" do

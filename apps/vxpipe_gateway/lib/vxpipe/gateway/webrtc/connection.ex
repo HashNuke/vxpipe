@@ -321,11 +321,21 @@ defmodule Vxpipe.Gateway.WebRTC.Connection do
   def handle_info({:ex_webrtc, _peer, {:rtp, _track, _rid, _packet}} = message, state),
     do: SourceAudio.peer(message, state)
 
+  # Media owners can exit together when a room closes. Keep the existing peer-left
+  # grace after the first notification so queued terminal progress can reach the
+  # client; an already-dead transport still ends the connection immediately.
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
+        %{peer_left_timeout_token: token, peer_monitor: peer_monitor} = state
+      )
+      when is_reference(token) and monitor != peer_monitor,
+      do: {:noreply, state}
+
   def handle_info(
         {:DOWN, monitor, :process, _pid, _reason},
         %{handoff_gate: %{monitor: monitor}} = state
       ),
-      do: {:stop, :shutdown, state}
+      do: leave_peer(state)
 
   def handle_info(
         {:DOWN, monitor, :process, receiver, _reason},

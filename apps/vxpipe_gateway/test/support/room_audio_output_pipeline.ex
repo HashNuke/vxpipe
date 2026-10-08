@@ -9,9 +9,8 @@ defmodule Vxpipe.Gateway.TestRoomAudioOutputPipeline do
       [{pipeline, _value}] ->
         Agent.get(pipeline, fn state ->
           send(state.observer, {:test_room_audio_output_pipeline_push, pipeline_id, frame})
+          Map.get(state, :push_result, :ok)
         end)
-
-        :ok
 
       [] ->
         {:error, :pipeline_unavailable}

@@ -53,6 +53,45 @@ checkpoint passed all five root gates with 1,306 tests, zero failures and 15 exc
 `mix test --max-cases 4`
 limits concurrent fixture setup on the shared host. Full milestone acceptance remains unfinished.
 
+## WebRTC transfer follow-up (2026-10-08)
+
+The user prioritizes tests with a human caller, a human or agent counterpart,
+and transfer destinations of either type. This is test prioritization: add no
+participant-count or participant-kind limits to runtime code, and retain existing
+coverage. Investigation of the five-participant listener-reconnection case is
+deferred. Gemini's ten-minute acceptance follows the transfer repairs.
+
+Design review: terminal progress and peer-left use the same ordered datachannel.
+A held handoff's additional room monitor must use the established closing path,
+rather than stopping the peer before queued terminal progress is sent. Subsequent
+dependency deaths must not shorten or restart the existing 250 ms grace; an
+already-dead peer ends immediately. Retain held media, deadline failure and
+privacy fencing. Raising deadlines or adding a second grace period is rejected.
+Bounded stage/reason diagnostics distinguish mixer take, pipeline push, pipeline
+lifetime and output release failures without payloads or identities.
+
+- [x] Owning Connection red/green for terminal progress, held media, one peer-left
+  notification, duplicate room/dependency deaths and immediate dead-peer cleanup.
+- [x] Native human-transfer release-deadline check after the repair; the original
+  timeout result and room shutdown remain required.
+- [x] Add native repeated agent-transfer coverage without extra listeners, retaining
+  audio, transcripts, resources and recording privacy. Its initial pass is
+  regression coverage, not a reproduced audio-loss cause.
+- [x] Egress diagnostic red/green distinguishing take/push and excluding private
+  error details while preserving the original terminal failure.
+- [ ] Capture and fix the repeated-transfer output loss at its owning boundary.
+- [x] Repeat prioritized native transfer cases; all root gates and Lean pass.
+
+Six prioritized selections pass 12 native checks. The original listener-re-entry
+case passes 11 repetitions without reproducing the earlier output loss. The final
+default umbrella run passes 3,274 tests, zero failures, 114 excluded (seed 44264),
+alongside formatting, warnings-as-errors compilation, strict Credo, unused-dependency
+and Lean checks. The repaired STT recovery fixture passes 222 owning checks across
+six selections using lifecycle acknowledgements rather than short state polling.
+No live provider tests ran; reserve those lanes for provider-specific failures.
+These passing local runs do not establish a cause or repair of the earlier output
+loss. Evidence: [checkpoint labnote](../../labnotes/20261008-0011-webrtc-transfer-intermittence.md).
+
 ## Call Spec changes
 
 Add one call-level `wait_sounds` object. Each configured value is an absolute audio-file URL or

@@ -44,7 +44,7 @@ defmodule Vxpipe.Gateway.Telemetry do
 
   @doc "Records a failed carrier webhook without payloads, identities or error details."
   def webhook_failure(provider, http_status, reason) when provider in [:telnyx, :twilio] do
-    reason = bounded_webhook_reason(reason)
+    reason = bounded_failure_reason(reason)
 
     :telemetry.execute(
       [:vxpipe, :telephony, :webhook, :failed],
@@ -59,14 +59,28 @@ defmodule Vxpipe.Gateway.Telemetry do
     :ok
   end
 
-  defp bounded_webhook_reason(reason) when is_atom(reason) do
+  @doc "Records the bounded stage and reason of a terminal room-output failure."
+  def room_output_failure(stage, reason) when stage in [:take, :push, :pipeline, :release] do
+    reason = bounded_failure_reason(reason)
+
+    :telemetry.execute(
+      [:vxpipe, :gateway, :room_audio_output, :failed],
+      %{count: 1},
+      %{stage: stage, reason: reason}
+    )
+
+    Logger.warning("Room audio output failed stage=#{stage} reason=#{reason}")
+    :ok
+  end
+
+  defp bounded_failure_reason(reason) when is_atom(reason) do
     if byte_size(Atom.to_string(reason)) <= 80, do: reason, else: :unclassified_error
   end
 
-  defp bounded_webhook_reason(%Vxpipe.CallEngine.Error{code: code}) when is_atom(code),
-    do: bounded_webhook_reason(code)
+  defp bounded_failure_reason(%Vxpipe.CallEngine.Error{code: code}) when is_atom(code),
+    do: bounded_failure_reason(code)
 
-  defp bounded_webhook_reason(_reason), do: :unclassified_error
+  defp bounded_failure_reason(_reason), do: :unclassified_error
 
   @doc "Returns the event emitted when a gateway HTTP request stops."
   @spec request_stop_event() :: nonempty_list(atom())

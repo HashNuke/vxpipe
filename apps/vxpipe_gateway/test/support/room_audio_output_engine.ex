@@ -60,7 +60,7 @@ defmodule Vxpipe.Gateway.TestRoomAudioOutputEngine do
     Agent.get_and_update(store, fn state ->
       {frames, remaining} = Enum.split(state.frames, maximum_frames)
       send(state.observer, {:test_room_audio_output_take, subscription_id, maximum_frames})
-      {{:ok, frames}, %{state | frames: remaining}}
+      {Map.get(state, :take_result, {:ok, frames}), %{state | frames: remaining}}
     end)
   end
 end
