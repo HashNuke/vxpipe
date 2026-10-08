@@ -1,5 +1,5 @@
 name = "vxpipe_verification"
-defaultTargets = ["Verification"]
+defaultTargets = ["Verification", "oracle"]
 
 [[lean_lib]]
 name = "Verification"

@@ -156,3 +156,17 @@
   setup's `PGPORT` and test `PGPASSWORD`. Runtime now uses the same explicit port,
   socket search and password. Nine configuration tests pass; formatting,
   warnings-as-errors compilation and strict Credo remain green.
+
+
+## Fresh verification correction
+
+- Both optional setup runs pass docs installation and the pinned installed Lean
+  library build. Running `bin/verify-lean` in the fresh second worktree then fails:
+  the oracle executable is absent. The default Lake targets only named the library,
+  so prior cached executable output hid the omission. Added the existing oracle
+  executable to default targets; this is a build configuration correction.
+- Both Consoles start on distinct reserved ports. Concurrent same-checkout package
+  rebuilding briefly invalidates watcher inputs, then recovers when package outputs
+  return; browser inspection waits for builds to finish. An initial Chrome launch
+  fails on this host's user-namespace restrictions; doctor passes and inspection
+  uses the documented local `--no-sandbox` launch flag.
