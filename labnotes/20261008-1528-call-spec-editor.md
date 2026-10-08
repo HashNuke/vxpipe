@@ -315,3 +315,20 @@ No production route changed and no live tests ran.
 Post-shell format, warnings-as-errors compilation, strict Credo and unused-lock
 checks pass. A fresh full default umbrella run is underway after this frontend
 checkpoint; the previously completed source-model umbrella run remains green.
+
+## U2 umbrella follow-up: STS test precondition
+
+The fresh umbrella run (seed 991936) failed the existing direct-output policy
+revoke test while its authority variant passed. The test expected a sink
+interruption after receiving the logical STS turn-start event, but the owned
+output-delivery task had not necessarily registered its first frame with the
+sink. The sink returns wrong_turn for an interrupt before that registration;
+the failure mailbox shows the frame arriving after the interruption publication.
+The unchanged two-case isolated selection passed with the same seed.
+
+Both variants now await the first sink frame and the existing owned-delivery
+acknowledgement before queuing the second reply and revoking output. This makes
+the tested sink-interruption precondition explicit without sleeps or production
+state-machine changes. The full 63-test STS capability file passes with seed
+991936. The first umbrella run remains failed evidence; final umbrella acceptance
+must be rerun. No Lean run is needed for this test-only synchronization change.

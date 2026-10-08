@@ -367,6 +367,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
                       %{event: %{kind: :input_transcript, text: "FIRST"}}}
 
       assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, first, _}
+      # Sink interruption is observable only after its first frame is registered.
+      assert_receive {:test_audio_output, ^sink, _}, 5_000
+      assert :ok = TestAudioOutputSink.await_delivery(capability)
       assert :ok = SpeechToSpeech.push_text(capability, "SECOND")
 
       assert_receive {:vxpipe_sts_input_event, ^capability,
