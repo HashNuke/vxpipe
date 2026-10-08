@@ -263,3 +263,55 @@ first full run remains failed evidence; a complete final run is still required.
   theme attribute after navigation.
   The S final umbrella run is still in progress; its corrected full Call Engine
   suite passes 2,066 tests, zero failures, 74 excluded.
+
+## Source-model final acceptance
+
+The final umbrella process exited successfully: 3,448 tests, zero failures,
+120 excluded, seed 197178. All five root gates pass on the source-model changes.
+No live tests ran. Exit S is complete. The original failed run remains recorded
+above; the readiness-synchronized Cartesia test passed within the full suite.
+
+## Copied header and toolbar adaptation
+
+Moved the committed original header/toolbar into strict TypeScript, preserving
+the floating layout and name dialog. Replaced Callpipe translations and local
+controls with Console registry primitives; removed test-call/chat actions. Added
+revision/published badges, unsaved/read-only state and the issues action. Save
+stays actionable with client errors so the editor can explain the blocked save.
+Seven focused tests failed first because the adapted module was absent, then
+passed. The initial test run exposed missing explicit Testing Library cleanup;
+adding the existing suite's cleanup pattern fixed test isolation.
+
+The remaining U2 shell files and component stories now adapt the committed
+Callpipe baseline. The original 320px card and 34rem inspector geometry remains;
+S's deterministic graph order replaces mutable Dagre layout. Positions and
+measured dimensions live only in the canvas. Drawing rejects non-agent sources,
+self/missing/entry destinations and read-only documents, consistently with S's
+transfer edit boundary. Entry edges cannot be removed or reconnected.
+
+The first browser pass exposed hidden cards because reconstructed nodes dropped
+React Flow's measured dimensions. Retaining measurements and memoizing graph
+projection fixes the display; unchanged measurement notifications are ignored.
+The copied static NodeCards story also rendered Handles outside node context;
+its cards now use actual React Flow nodes. Final browser console/errors are clear.
+React Flow CSS is imported in the component layer so semantic utilities apply to
+handles; its controls are themed and moved above the toolbar on phones. Upstream
+attribution is retained. The mobile inspector uses the standard Sheet.
+
+Eleven focused UI/projection tests pass after missing-module red runs. All 361
+frontend tests, type check, lint and the final Storybook build pass. Inspected six
+stories (Header, HeaderSaving, NameDialog, Toolbar, NodeCards, CanvasShell) at
+1440x1000 and 390x844: no horizontal overflow. A real pointer drag from intake to
+a newly added agent produces transfer:intake:agent_1 alongside the locked entry
+and existing specialist edges. Name editing produces Reception and unsaved state;
+arranging and opening/closing the phone Call settings Sheet work. Inspector body
+content is intentionally a composition slot pending U3–U5, not a finished page.
+
+The earlier Storybook process was confirmed terminal; its port check still
+refused the old port after HTTP stopped responding. The current development
+server runs on port 6021 in an owned tmux session for persistent browser checks.
+No production route changed and no live tests ran.
+
+Post-shell format, warnings-as-errors compilation, strict Credo and unused-lock
+checks pass. A fresh full default umbrella run is underway after this frontend
+checkpoint; the previously completed source-model umbrella run remains green.

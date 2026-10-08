@@ -1,6 +1,6 @@
 # Call spec editor
 
-Status: implementation started 2026-10-08; checkpoints V, P, L and K complete; checkpoint S in progress. Design review complete.
+Status: implementation started 2026-10-08; checkpoints V, P, L, K and S complete; checkpoint U in progress. Design review complete.
 Prerequisites: [Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md),
 [Operator login and admin dashboard](operator-login-and-admin-dashboard.md),
 [Operator admin Storybook](operator-admin-storybook.md) and the
@@ -544,13 +544,14 @@ client and project it to a graph, round-tripping every supported source without 
   paths falling back to the issues list and the backend `reason`.
 - [x] **S6 — New spec seed.** A function returning the default new spec (incoming web caller, one
   agent) with recommended defaults filled from a catalog argument.
-- [ ] **Exit S.** Console frontend unit tests, type check and lint pass; no React in this module.
+- [x] **Exit S.** Console frontend unit tests, type check and lint pass; no React in this module.
 
 Checkpoint S progress: source operations, graph projection, client validation,
 error placement and catalog-driven seed are implemented. All 73 shared backend
 validation cases pass; the full frontend suite passes 349 tests, type check and
-lint. Final umbrella verification is in progress after the existing Cartesia room
-test was synchronized with startup readiness. See the [source-model decision](../call-spec-editor-source.md).
+lint. All five root gates pass, including 3,448 default tests, zero failures and
+120 excluded (seed 197178), after synchronizing the existing Cartesia room test
+with startup readiness. No live tests ran. See the [source-model decision](../call-spec-editor-source.md).
 
 ## Checkpoint U — Editor in Storybook
 
@@ -575,7 +576,7 @@ adaptation.
   dependencies and lockfile. Install unmodified registry versions rather than copying
   Callpipe's local copies. Following the project's Storybook rule, do not add stories for raw
   primitives; one theme check story confirms the token mapping in light and dark themes.
-- [ ] **U2 — Shell (copied).** `editor-header` (with `FlowNameDialog`), `editor-toolbar`,
+- [x] **U2 — Shell (copied).** `editor-header` (with `FlowNameDialog`), `editor-toolbar`,
   `flow-canvas`, `flow-node`, `flow-layout` and the canvas half of `flow-editor-layout`. Remove
   the test call and testchat buttons, add revision and published badges and validation state,
   and drive nodes and edges from S's graph projection. Copy the `Header`, `HeaderSaving`,
@@ -611,6 +612,14 @@ adaptation.
   stop for the user's review and record the decision here.
 - [ ] **Exit U.** Frontend tests and Storybook build pass, rendered inspection is recorded, and
   the user has approved the UI for production integration.
+
+Checkpoint U progress: U1 and U2 are implemented. The copied header, toolbar,
+node cards and canvas use the source projection, with revision and issue badges,
+a read-only state and a narrow-screen inspector Sheet. All 361 frontend tests,
+type check, lint and Storybook build pass. Six component/shell stories were
+inspected at 1440px and 390px; browser interactions cover adding an agent, drawing
+a new transfer, editing the spec name, arranging and opening Call settings.
+Inspector bodies remain U3–U5 work; this is not the complete editor review.
 
 ## Checkpoint C — Console authoring endpoints
 

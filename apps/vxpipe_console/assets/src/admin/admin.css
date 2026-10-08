@@ -1,9 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@xyflow/react/dist/style.css" layer(components);
 @import "@vxpipe/react/styles.css";
 @import "./tenantSetup.css";
 @source "./**/*.{ts,tsx}";
-
 
 @custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *, [data-admin-editor-theme="dark"] *));
 
@@ -203,4 +203,13 @@ body[data-admin-editor-theme="light"] {
   border-color: color-mix(in srgb, #f472b6 45%, transparent);
   background: linear-gradient(145deg, #831843, #e11d48);
   color: #fce7f3;
+}
+
+/* React Flow canvas chrome follows the same Console theme as its node cards. */
+.vx-admin .react-flow {
+  --xy-controls-button-background-color: var(--background);
+  --xy-controls-button-background-color-hover: var(--muted);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
 }

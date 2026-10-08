@@ -15,3 +15,7 @@ Test-call controllers, API/controller code, Lexical, knowledge and variable
 retention components are not copied. References to those features in the original
 component/story snapshots will be removed during adaptation. This baseline does
 not expose them in the Console.
+
+The initial snapshot is committed at `8a3f85fb`. Files already adapted have moved
+to the parent directory; the manifest continues to identify their original
+Callpipe contents at that initial commit.
