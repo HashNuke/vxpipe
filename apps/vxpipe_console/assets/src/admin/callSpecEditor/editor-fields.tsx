@@ -19,9 +19,9 @@ function Field({ label, path, issues = [], hint, disabled, labelHidden, children
     </div>}
   </div>;
 }
-export function TextField({ value, onChange, multiline, ...props }: FieldProps & { value: string; onChange: (value: string) => void; multiline?: boolean }) {
+export function TextField({ value, onChange, multiline, rows, ...props }: FieldProps & { value: string; onChange: (value: string) => void; multiline?: boolean; rows?: number }) {
   return <Field {...props}>{(control) => multiline
-    ? <Textarea {...control} value={value} onChange={(event) => onChange(event.target.value)} className="min-h-28" />
+    ? <Textarea {...control} rows={rows} value={value} onChange={(event) => onChange(event.target.value)} className={rows ? "field-sizing-fixed" : "min-h-28"} />
     : <Input {...control} value={value} onChange={(event) => onChange(event.target.value)} />}</Field>;
 }
 export function NumberField({ value, onChange, ...props }: FieldProps & { value?: number; onChange: (value: number | undefined) => void }) {

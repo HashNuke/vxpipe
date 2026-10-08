@@ -21,3 +21,12 @@ test("drawing permits agent transfers to existing other participants only", () =
   }
   expect(canConnectParticipants({ ...editorFixture, readOnly: true }, "intake", "specialist")).toBe(false);
 });
+
+test("transfer drawing rejects humans without transfer admission and accepts implicit phone transfer admission", () => {
+  const document = structuredClone(editorFixture);
+  document.source.participants.visitor = { type: "human", connection: { service: "web", mode: "receive", admission: "start_call" } };
+  expect(canConnectParticipants(document, "intake", "visitor")).toBe(false);
+  expect(canConnectParticipants(document, "intake", "caller")).toBe(false);
+  document.source.participants.visitor.connection = { service: "phone", mode: "dial", number: "+15550001000" };
+  expect(canConnectParticipants(document, "intake", "visitor")).toBe(true);
+});

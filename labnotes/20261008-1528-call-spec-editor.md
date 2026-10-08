@@ -512,3 +512,52 @@ Additional Chrome interactions verified the human deletion confirmation and
 removal, and a participant voice override while retaining visible call-default
 context. The current browser session reports zero errors. U4 is checked off;
 Agent inspector, full error presentation, page stories and user review remain.
+
+
+## Checkpoint U5: Agent inspector
+
+Adapted the committed Callpipe agent inspector to six source-backed tabs: Prompt,
+Voice and model, Variables, Transfers, Tools and Presence. The original tab bar,
+transfer destination search, tool list and source/tool/options dialog pattern are
+retained with standard registry primitives. Prompt uses a plain textarea; shared
+capability, section-permission and presence controls replace the original profile
+and variable-access concepts. Agent key edits and deletion reuse atomic source
+reference rewrites. First-message omission shows the direction-dependent default
+without inserting it into saved source. Transfer-history edits clear mode-specific
+turn counts; loading a saved null preserves it.
+
+The focused red run found that canvas connections and source transfer edits allowed
+a human with start-call admission as a transfer destination. Both now share the
+transfer-destination rule used by the new picker: another agent, receive/transfer
+web human, or dial/transfer phone human (phone admission may be omitted). Existing
+invalid destinations remain removable. This is a frontend source-edit rule, not a
+production speech or source-cutover state-machine change.
+
+Tool names remain free text; MCP integration names come from lookups. Host tools
+keep their registered name as the local key, matching compiler resolution. The
+modal replaces type-specific fields when changing source, preserves explicit or
+omitted conversation mode, and rejects reserved/colliding keys on submission.
+Tool-key renaming moves its visibility override atomically, including an obsolete
+visibility entry at the new key; a focused red case caught that collision before
+the fix. Tool removal uses the existing visibility cleanup. No remote tool discovery
+or provider call is performed by these Storybook fixtures.
+
+Focused UI/source verification passes 23 tests, with type check and lint. Ten
+stories were rendered at dark 1440x1000 and light 390x844; all twenty views were
+inspected with no horizontal page overflow. The bounded visual pass moved Prompt
+first and gave it ten rows, using the standard textarea's native sizing. Existing
+admin.css hook findings remain the previously triaged unrelated Console styles.
+The six affected Prompt views were reinspected after that adjustment. Chrome
+interactions at both widths verified searching and adding a transfer destination
+and editing an MCP tool through its Tool and Options steps, including a local-key
+rename. The current browser session reports zero errors.
+
+All five root gates pass, including 3,448 default umbrella tests with zero failures
+and 120 excluded (seed 991936). Storybook builds successfully. The first full
+frontend run passed all 418 assertions but failed on a deferred Radix focus-scope
+unmount event crossing jsdom realms between files. The shared test setup now
+awaits the queued timer turn before closing each file, allowing that lifecycle
+cleanup to finish in its original realm. This changes test teardown only; no
+dependency behavior is mocked or suppressed. The full rerun passes all 418 tests
+in 54 files, type check and lint with exit 0. No live tests ran. U5 is checked off;
+full error presentation, page stories and user review remain.

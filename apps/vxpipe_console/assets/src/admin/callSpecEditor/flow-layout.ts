@@ -1,5 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import { projectGraph } from "./graph";
+import { isTransferDestination } from "./participants";
 import type { SourceDocument } from "./types";
 
 // Callpipe card geometry; source graph order replaces its mutable Dagre graph.
@@ -52,5 +53,5 @@ export function canvasGraph(document: SourceDocument, selectedNodeId: string | n
 
 export function canConnectParticipants(document: SourceDocument, source: string, target: string): boolean {
   const targetKey = target === "$entry" ? projectGraph(document).nodes[0]!.participantKey : target;
-  return !document.readOnly && target !== "$entry" && source !== targetKey && document.source.participants[source]?.type === "agent" && Object.hasOwn(document.source.participants, targetKey);
+  return !document.readOnly && target !== "$entry" && source !== targetKey && document.source.participants[source]?.type === "agent" && isTransferDestination(document.source, targetKey);
 }

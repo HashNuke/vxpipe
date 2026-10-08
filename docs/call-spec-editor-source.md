@@ -80,6 +80,15 @@ private briefings removes the field; opening a saved null leaves it unchanged.
 Participant capability panels show the call default and any explicit override.
 The human inspector's transfer timeout edits the one call-wide transfer policy.
 
+The Agent inspector keeps omitted first-message and transfer-history defaults
+implicit. Changing either mode replaces its dependent fields in one edit. Its
+transfer picker and canvas share the eligibility rule, and existing invalid
+references remain removable. Tool editing preserves per-tool visibility across a
+key rename, rejects reserved keys and collisions, and keeps host keys equal to
+their registered tool names. MCP integration names come from lookups; tool names
+are entered explicitly and resolved by the backend. The tool dialog holds its
+draft locally until Add or Save, so Cancel does not change the source.
+
 ## Alternatives and implications
 
 A mutable graph compiled into JSON was rejected because it could lose fields and

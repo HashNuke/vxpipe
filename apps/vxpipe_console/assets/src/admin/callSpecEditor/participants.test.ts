@@ -59,3 +59,10 @@ test("historical documents cannot be edited even if a caller changes the read-on
   old.source.schema_version = "20260915.01";
   expect(() => addParticipant(old, "new", "agent")).toThrow("read-only");
 });
+
+test("new human transfers require transfer admission, while stale references can still be removed", () => {
+  const source = document();
+  source.source.participants.human = {type: "human", connection: {service: "web", mode: "receive", admission: "start_call"}};
+  expect(() => setTransfer(source, "assistant", "human", true)).toThrow("transfer");
+  expect(setTransfer(source, "assistant", "human", false).source.participants.assistant).toMatchObject({transfers: []});
+});

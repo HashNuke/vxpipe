@@ -39,11 +39,22 @@ export function setTransfer(document: SourceDocument, from: string, to: string, 
     if (enabled) {
       requireParticipant(source, to);
       if (from === to || entryParticipant(source) === to) throw new Error("Choose another transfer destination.");
+      if (!isTransferDestination(source, to)) throw new Error("Choose an agent or a human with transfer admission.");
     }
     const transfers = participant.transfers ?? [];
     participant.transfers = enabled ? [...new Set([...transfers, to])] : transfers.filter((target) => target !== to);
     cleanTransferVisibility(source, from);
   });
+}
+
+export function isTransferDestination(source: CallSpecSource, key: string): boolean {
+  if (!Object.hasOwn(source.participants, key) || entryParticipant(source) === key) return false;
+  const target = source.participants[key]!;
+  if (target.type === "agent") return true;
+  const connection = target.connection;
+  return connection.service === "web"
+    ? connection.mode === "receive" && connection.admission === "transfer"
+    : connection.mode === "dial" && (connection.admission === undefined || connection.admission === "transfer");
 }
 
 function requireParticipant(source: CallSpecSource, key: string): Participant {

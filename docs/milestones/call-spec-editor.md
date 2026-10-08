@@ -590,7 +590,7 @@ adaptation.
   phone field and add service selection, web destinations, `number_from_variable`, description
   and the private briefing; replace the timing summary with the one transfer attempt timeout.
   Copy the `HumanInspectorDefault` and `InboundInspectorDefault` stories.
-- [ ] **U5 — Agent inspector (adapted from `agent-inspector`).** Tabs Prompt, Voice and model,
+- [x] **U5 — Agent inspector (adapted from `agent-inspector`).** Tabs Prompt, Voice and model,
   Variables, Transfers, Tools, Presence. Model pickers preselect the recommended model and voice, reset them when the provider
   changes, and keep saved choices when opening an existing spec. Tests cover all three.
   Keep Callpipe's tab bar, transfer destination search and the step pattern of `AddToolsModal`
@@ -633,8 +633,16 @@ attempt timeout, and participant capability/presence overrides. Nine stories wer
 inspected at desktop and phone widths, including scrolled voice controls and the
 delete confirmation. All 402 frontend tests, type check, lint and Storybook build
 pass; all five root gates pass, including 3,448 tests with zero failures and 120
-excluded (seed 991936). No live tests ran. U5–U8 remain; this is not the complete
-editor review.
+excluded (seed 991936). No live tests ran.
+U5 is implemented: the Agent inspector has all six tabs, direction-dependent
+first-message defaults, shared transfer eligibility and searchable destinations,
+and the source/tool/options dialog with atomic tool-key and visibility edits.
+Ten stories were inspected at desktop and phone widths; interactions cover
+transfer search/add and tool editing/renaming. All 418 frontend tests, type check,
+lint and Storybook build pass. All five root gates pass, including 3,448 tests
+with zero failures and 120 excluded (seed 991936). The frontend teardown awaits
+queued focus-scope cleanup before leaving each jsdom realm. No live tests ran.
+U6–U8 remain; this is not the complete editor review.
 
 ## Checkpoint C — Console authoring endpoints
 
