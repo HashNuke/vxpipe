@@ -273,3 +273,13 @@
   remain preserved. A will restart the complete default suite with this assertion
   correction while B continues. B's runtime implementation is identical; only this
   test assertion and labnotes differ between those acceptance revisions.
+
+- B subsequently finds an outgoing projection-cleanup assertion race: the HTTP
+  failure reply can precede Registry removal for the terminating room. The test
+  now monitors any remaining registered authority and requires `:DOWN` within one
+  second, as required by the repository testing guidelines. It still proves no
+  dial submission and the persisted/replayed failure response. Thirty focused
+  repetitions and all 12 outgoing HTTP cases pass after the observed red run.
+- B's already-failing run is stopped and its logs preserved. Its replacement full
+  suite includes both assertion corrections and overlaps A's restarted suite.
+  Runtime implementation remains identical between the acceptance worktrees.

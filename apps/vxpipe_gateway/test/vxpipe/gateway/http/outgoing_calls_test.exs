@@ -200,7 +200,17 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
 
     id = failed.id
     assert {:ok, stored} = Calls.fetch_call(c.tenant.key, id, c.options)
-    assert Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {c.tenant.key, stored.room_id}) == []
+    # Registry cleanup may follow the controller reply. Observe termination
+    # rather than requiring the registry's asynchronous removal to win the race.
+    case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {c.tenant.key, stored.room_id}) do
+      [] ->
+        :ok
+
+      [{authority, nil}] ->
+        monitor = Process.monitor(authority)
+        assert_receive {:DOWN, ^monitor, :process, ^authority, _reason}, 1_000
+    end
+
     refute_receive {:test_outbound_leg_connect, _, _, _}, 30
   end
 
