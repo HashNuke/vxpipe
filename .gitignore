@@ -49,3 +49,4 @@ sounds/*.wav
 # Non-secret checkout setup state and local Python tooling bytecode.
 /.vxpipe/
 /bin/lib/__pycache__/
+/bin/__pycache__/

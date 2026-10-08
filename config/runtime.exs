@@ -106,12 +106,20 @@ if database_enabled? do
 
   development_repo =
     if database_url do
-      [url: database_url, pool_size: database_pool_size]
+      defaults =
+        if worktree,
+          do: [
+            username: nonempty_env.("PGUSER") || System.fetch_env!("USER"),
+            password: nonempty_env.("PGPASSWORD")
+          ],
+          else: []
+
+      defaults ++ [url: database_url, pool_size: database_pool_size]
     else
       local_database_connection.() ++
         [
           url: nil,
-          password: nil,
+          password: nonempty_env.("PGPASSWORD"),
           database: worktree["databases"]["dev"],
           pool_size: database_pool_size
         ]

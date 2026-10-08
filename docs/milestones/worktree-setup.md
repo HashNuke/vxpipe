@@ -92,8 +92,9 @@ cd ../vxpipe-feature
 bin/setup
 ```
 
-These are proposed usage instructions: `bin/setup` does not exist yet. A new
-worktree receives committed files, so its branch must contain the eventual setup
+The initial `bin/setup` now prepares dependencies and isolated databases; complete
+asset/configuration bootstrap and concurrent acceptance remain pending. A new
+worktree receives committed files, so its branch must contain the setup
 implementation. Uncommitted setup changes in another checkout are not inherited.
 
 Setup must preserve existing configuration and database contents, keep credentials
@@ -176,9 +177,11 @@ Owning files: new `bin/setup`, a focused metadata reader, runtime/test configura
 Partial progress (2026-10-08): runtime dev/test defaults and the versioned metadata
 reader are implemented. Five new boundary tests (four initially red), plus the six
 existing database configuration tests, pass. Socket/current-role development and
-explicit URL precedence are covered; production ignores metadata. Setup orchestration,
-actual root/child startup and two-checkout database acceptance remain unverified;
-checkpoint 2 stays incomplete.
+explicit URL precedence are covered; production ignores metadata. The initial setup command now passes 17 synthetic checks and real local initialization/
+rerun. Actual root/child dev/test startup selects the expected databases, plain child
+Persistence tests pass, and marker rows survive rerun in both databases. Two-checkout
+database acceptance remains unverified, so checkpoint 2 stays incomplete. See the
+[isolation decision](../worktree-isolation.md).
 
 Exit: on the prepared machine, two initialized worktrees can run database-backed
 focused tests using plain `mix test`, without shell activation or shared DB state.

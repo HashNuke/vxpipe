@@ -15,6 +15,31 @@ Rust, C/C++ build tools, `pkg-config`, and OpenSSL development headers.
 
 The `--tailscale` mode of either development launcher also requires Tailscale and `jq`.
 
+## Initialize checkout databases
+
+`bin/setup` currently prepares Mix dependencies and isolated development/test
+databases; asset installation and local `.env` bootstrap are the next worktree
+milestone checkpoint. It requires Python 3.10+, Git and the prerequisites above.
+Run it from either a root checkout or a linked Git worktree:
+
+```shell
+bin/setup
+```
+
+The ignored `.vxpipe/worktree.json` keeps the checkout ID and database defaults
+stable across reruns and branch changes. Ordinary `mix test`, including commands
+from a child application, reads these defaults without shell activation. For example:
+
+```shell
+cd apps/vxpipe_persistence
+mix test test/vxpipe/persistence/operator_tasks_test.exs
+```
+
+Existing legacy databases are preserved. Explicit database URLs/names override
+metadata, but setup refuses shared dev/test targets or an existing database without
+this checkout's ownership marker. See [checkout isolation](worktree-isolation.md)
+for connection selection, failure recovery and current acceptance limits.
+
 ## Start the development stack
 
 Install the application and Console frontend dependencies from the repository root:
@@ -24,7 +49,8 @@ mix deps.get
 mix assets.setup
 ```
 
-With PostgreSQL running, initialize the default `vxpipe_dev` database:
+For an uninitialized checkout, the manual database default remains `vxpipe_dev`.
+After `bin/setup`, these commands use the checkout-specific database instead:
 
 ```shell
 mix do ecto.create, ecto.migrate
@@ -174,7 +200,7 @@ desk. Follow the [human-transfer walkthrough](../apps/vxpipe_console/assets/READ
 for the two-browser flow.
 
 The umbrella test alias creates and migrates the configured test database
-(`vxpipe_test` as your Unix user). With no settings it uses the local server's Unix
+(the checkout-specific test database after setup, otherwise `vxpipe_test` as your Unix user). With no settings it uses the local server's Unix
 socket (`/var/run/postgresql`, then `/tmp`), where peer authentication needs no
 password, and otherwise TCP localhost. `VXPIPE_TEST_DATABASE_URL`, standard PostgreSQL
 variables and `VXPIPE_TEST_DATABASE` remain optional overrides, for example for a

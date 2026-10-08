@@ -3,7 +3,7 @@ defmodule Vxpipe.Console.WorktreeRuntimeConfigurationTest do
 
   @config Path.expand("../../../../../config", __DIR__)
   @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE
-    VXPIPE_TEST_DATABASE_URL VXPIPE_TEST_DATABASE PGHOST PGUSER
+    VXPIPE_TEST_DATABASE_URL VXPIPE_TEST_DATABASE PGHOST PGUSER PGPASSWORD
     VXPIPE_CREDENTIAL_KEY_ID VXPIPE_CREDENTIAL_KEYS STORAGE_BUCKET AWS_SESSION_TOKEN
     VXPIPE_RECORDING_ENABLED VXPIPE_DEV_TENANT TELEPHONY_HOST APP_HOST PORT SECRET_KEY_BASE
     VXPIPE_DEV_TLS)
@@ -78,6 +78,43 @@ defmodule Vxpipe.Console.WorktreeRuntimeConfigurationTest do
     assert Keyword.get(repo(root, :test), :database) == "explicit_test"
     System.put_env("VXPIPE_TEST_DATABASE_URL", "postgres://localhost/url_test")
     assert Keyword.get(repo(root, :test), :url) == "postgres://localhost/url_test"
+  end
+
+  test "initialized development URL connections inherit current-role defaults rather than legacy credentials",
+       %{root: root} do
+    base =
+      Config.Reader.read!(Path.join(@config, "dev.exs"))
+      |> Keyword.fetch!(:vxpipe_persistence)
+      |> Keyword.fetch!(Vxpipe.Persistence.Repo)
+
+    System.put_env("VXPIPE_DB_URL", "postgres://localhost/explicit_dev")
+
+    assert {:ok, effective} =
+             Ecto.Repo.Supervisor.init_config(
+               :runtime,
+               Vxpipe.Persistence.Repo,
+               :vxpipe_persistence,
+               Keyword.merge(base, repo(root, :dev))
+             )
+
+    assert Keyword.get(effective, :username) == System.fetch_env!("USER")
+    assert Keyword.get(effective, :password) == nil
+
+    System.put_env(
+      "VXPIPE_DB_URL",
+      "postgres://fixture:synthetic@remote.example.test/explicit_dev"
+    )
+
+    assert {:ok, effective} =
+             Ecto.Repo.Supervisor.init_config(
+               :runtime,
+               Vxpipe.Persistence.Repo,
+               :vxpipe_persistence,
+               Keyword.merge(base, repo(root, :dev))
+             )
+
+    assert Keyword.get(effective, :username) == "fixture"
+    assert Keyword.get(effective, :password) == "synthetic"
   end
 
   test "no metadata retains legacy defaults and sandbox remains compile-time configuration", %{

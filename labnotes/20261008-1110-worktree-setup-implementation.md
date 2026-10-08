@@ -56,3 +56,29 @@
 - The 11 focused database/runtime tests and broader 26-test configuration group pass;
   formatting, compilation and strict Credo pass. Actual root/child Mix startup with generated metadata and isolated
   databases remains a setup acceptance requirement, not proven by Config.Reader tests.
+
+
+## Checkpoint 2: setup orchestration (partial)
+
+- Added Python standard-library orchestration with focused responsibilities for
+  preflight, metadata, DB selection/ownership and local build steps. Python 3.10+
+  is documented; no third-party Python package or implicit system installation.
+- Red/green progression: five initial preflight failures (missing setup), four
+  missing initialization failures, three missing migration/URL/conflict failures,
+  and one undetected lockfile mutation. The expanded synthetic suite passes 17 tests.
+- PostgreSQL markers and creation locks reject another checkout's or unmarked DB
+  before migration. Development/test target conflicts fail; creation never drops
+  data. A narrow interrupted create/comment gap fails closed and requires explicit
+  ownership recovery rather than silently adopting a database.
+- New initialized-URL test exposed legacy `postgres` credential inheritance only
+  after merging the development config (an initial runtime-only probe was too weak).
+  Fixed current-role defaults while preserving full explicit URL credentials.
+- First real `bin/setup` and a rerun pass on the existing checkout: dependencies,
+  isolated dev DB migration and isolated test DB migration. Lockfiles unchanged.
+  Inserted project-owned probe rows in both DBs, verified them after rerun, then
+  removed only the probe tables. Identity and application data remain intact.
+- Actual `mix run --no-start` from umbrella and Persistence child, in dev and test,
+  selects metadata database names. Plain child operator-task tests pass 2 tests;
+  root database/runtime configuration selection passes 12 tests, seed 908011.
+- Two-worktree proof and complete fresh bootstrap remain pending; checkpoint 2
+  stays incomplete. No real live credentials, provider commands or daemon changes.
