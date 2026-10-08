@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 41 milestone specifications: 31 complete and 10 incomplete. Milestone 17, Telnyx calls and
+Status: 42 milestone specifications: 31 complete and 11 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -172,6 +172,7 @@ progress without claiming the entire milestone is complete.
 39. [x] [Outgoing call review fixes](outgoing-call-review-fixes.md) — Safe webhook diagnostics, supervised dialing with identity-checked early events, service/handler validation, answer/decline outcomes, failed-request replay and all-relay preflight pass. Twenty paired directional live cases pass. Receiver-owned Opus decoder history repairs the observed WebRTC fixture distortion without weakening assertions; all 562 Gateway cases and the final umbrella pass. Residual `leg_not_found` callbacks and earlier failures remain recorded.
 40. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 41. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+42. [ ] [Call spec editor](call-spec-editor.md) — Proposed 2026-10-08: recreate the Callpipe flow editor in the operator Console as a participant canvas over the portable call spec source, with client validation, field-level save/publish errors on the tenant API, provider and model listings, save and publish; no test calls; specification review pending.
 
 ## Pre-delivery review hold
 
