@@ -105,7 +105,31 @@ defmodule Vxpipe.Calls.CallSpecsTest do
   } do
     source = Map.put(call_spec_input(), :api_key, "must-not-be-stored")
 
-    assert {:error, :private_call_spec_material} = CallSpecs.save(tenant.key, source, options)
+    assert {:error, %Vxpipe.CallEngine.Error{code: :private_call_spec_material} = error} =
+             CallSpecs.save(tenant.key, source, options)
+
+    assert error.details == %{
+             "path" => ["api_key"],
+             "reason" => "must not contain credentials or secrets"
+           }
+
+    nested =
+      put_in(call_spec_input(), [:participants, "assistant", :tools], %{
+        "lookup" => %{"options" => [%{"authorization" => "must-not-be-stored"}]}
+      })
+
+    assert {:error, %Vxpipe.CallEngine.Error{} = nested_error} =
+             CallSpecs.save(tenant.key, nested, options)
+
+    assert nested_error.details["path"] == [
+             "participants",
+             "assistant",
+             "tools",
+             "lookup",
+             "options",
+             "0",
+             "authorization"
+           ]
   end
 
   test "stores provider-neutral phone intent metadata without creating a web join route", %{

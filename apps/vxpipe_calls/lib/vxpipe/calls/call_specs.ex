@@ -26,7 +26,7 @@ defmodule Vxpipe.Calls.CallSpecs do
   def save(tenant_key, source, options \\ [])
 
   def save(tenant_key, source, options) when is_map(source) do
-    with false <- PrivateMaterial.present?(source),
+    with :ok <- public_source(source),
          {:ok, credential_repository} <- Repositories.fetch(options, :credential_repository),
          {:ok, _tenant} <-
            Repositories.call(credential_repository, :fetch_tenant, [tenant_key]),
@@ -44,7 +44,6 @@ defmodule Vxpipe.Calls.CallSpecs do
         @maximum_attempts
       )
     else
-      true -> {:error, :private_call_spec_material}
       {:error, :not_found} -> {:error, :tenant_not_found}
       {:error, _reason} = error -> error
     end
@@ -286,6 +285,19 @@ defmodule Vxpipe.Calls.CallSpecs do
     |> JSON.encode!()
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
+  end
+
+  defp public_source(source) do
+    case PrivateMaterial.path(source) do
+      nil ->
+        :ok
+
+      path ->
+        {:error,
+         Error.new(:private_call_spec_material, "The call spec contains private material.",
+           details: %{"path" => path, "reason" => "must not contain credentials or secrets"}
+         )}
+    end
   end
 
   defp json_safe(source) do

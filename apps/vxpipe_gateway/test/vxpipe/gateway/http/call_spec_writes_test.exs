@@ -104,6 +104,14 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWritesTest do
 
     assert response.status == 422
     assert JSON.decode!(response.resp_body)["error"]["code"] == "telephony_caller_id_missing"
+
+    assert JSON.decode!(response.resp_body)["error"]["path"] == [
+             "participants",
+             "callee",
+             "connection",
+             "service"
+           ]
+
     refute response.resp_body =~ "private"
   end
 
@@ -116,6 +124,179 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWritesTest do
            }
 
     refute response.resp_body =~ "private"
+  end
+
+  test "invalid sources return the validator's field path and reason on create and update" do
+    incoming = source()
+
+    outgoing =
+      incoming
+      |> Map.delete("incoming_call")
+      |> Map.put("outgoing_call", %{"callee" => "caller", "handled_by" => "assistant"})
+      |> put_in(["participants", "caller", "connection"], %{
+        "service" => "phone",
+        "mode" => "dial",
+        "number" => "+15550001000"
+      })
+
+    cases = [
+      {update_in(incoming, ["participants", "assistant"], &Map.delete(&1, "prompt")),
+       ["participants", "assistant", "prompt"]},
+      {put_in(incoming, ["incoming_call", "handled_by"], "missing"),
+       ["incoming_call", "handled_by"]},
+      {put_in(outgoing, ["participants", "assistant"], %{
+         "type" => "human",
+         "connection" => %{"service" => "web", "mode" => "receive", "admission" => "transfer"}
+       }), ["outgoing_call", "handled_by"]},
+      {put_in(outgoing, ["outgoing_call", "ring_timeout_ms"], 1),
+       ["outgoing_call", "ring_timeout_ms"]},
+      {put_in(outgoing, ["participants", "caller", "connection", "number"], "private-number"),
+       ["participants", "caller", "connection", "number"]},
+      {put_in(incoming, ["participants", "assistant", "transfers"], ["missing"]),
+       ["participants", "assistant", "transfers", "0"]},
+      {put_in(incoming, ["participants", "assistant", "tools"], %{
+         "transfer" => %{"type" => "platform", "name" => "transfer"}
+       }), ["participants", "assistant", "tools", "transfer"]}
+    ]
+
+    for {source, path} <- cases do
+      assert {:error, error} =
+               Vxpipe.CallEngine.CallSpec.new(source, resource_id: "test", revision: 1)
+
+      assert error.details["path"] == path
+
+      for {method, route} <- [{:post, @tenant_path}, {:put, @tenant_path <> "/existing"}] do
+        response = request(method, route, "tenant-key", %{"source" => source}, {:error, error})
+        assert response.status == 422
+
+        assert JSON.decode!(response.resp_body) == %{
+                 "error" => %{
+                   "code" => "invalid_call_spec",
+                   "path" => path,
+                   "reason" => error.details["reason"]
+                 }
+               }
+
+        refute response.resp_body =~ "private-number"
+      end
+    end
+  end
+
+  test "save and publish preserve specific failures with fixed public explanations" do
+    for {failure, status, code} <- [
+          {:revision_conflict, 409, "revision_conflict"},
+          {:revision_generation_exhausted, 409, "revision_conflict"},
+          {:invalid_telephony_route, 422, "invalid_telephony_route"},
+          {:private_call_spec_material, 422, "private_call_spec_material"}
+        ] do
+      for {route, body} <- [
+            {@tenant_path, %{"source" => %{}}},
+            {@tenant_path <> "/existing/revisions/1/publish", %{}}
+          ] do
+        response = request(:post, route, "tenant-key", body, {:error, failure})
+
+        assert response.status == status
+
+        assert %{"code" => ^code, "path" => [], "reason" => reason} =
+                 JSON.decode!(response.resp_body)["error"]
+
+        assert is_binary(reason) and reason != ""
+      end
+    end
+  end
+
+  test "publication and saved validation errors expose only the first compiler error" do
+    error =
+      Vxpipe.CallEngine.Error.new(:unsupported_call_plan, "private-message",
+        details: %{
+          "path" => ["participants", "assistant", "tools", "lookup"],
+          "reason" => "does not resolve to an available host tool",
+          "secret" => "private-secret"
+        }
+      )
+
+    errors = [Vxpipe.CallEngine.Error.to_public(error), %{"reason" => "private-second"}]
+
+    response =
+      request(
+        :post,
+        @tenant_path <> "/existing/revisions/1/publish",
+        "tenant-key",
+        %{},
+        {:error, {:call_spec_not_publishable, errors}}
+      )
+
+    assert response.status == 409
+
+    assert JSON.decode!(response.resp_body)["error"] == %{
+             "code" => "call_spec_not_publishable",
+             "path" => error.details["path"],
+             "reason" => error.details["reason"]
+           }
+
+    revision = %Vxpipe.Calls.CallSpecRevision{
+      tenant_key: @tenant,
+      call_spec_id: "id",
+      revision: 1,
+      schema_version: "20261004.01",
+      source: %{},
+      source_digest: "digest",
+      compiled_metadata: %{},
+      validation_errors: errors,
+      routes: [],
+      telephony_routes: [],
+      published_at: nil,
+      inserted_at: DateTime.utc_now()
+    }
+
+    saved = request(:post, @tenant_path, "tenant-key", %{"source" => %{}}, {:ok, revision})
+
+    assert [%{"code" => "unsupported_call_plan", "path" => path, "reason" => reason}] =
+             JSON.decode!(saved.resp_body)["call_spec"]["validation_errors"]
+
+    assert path == error.details["path"]
+    assert reason == error.details["reason"]
+    refute response.resp_body =~ "private"
+    refute saved.resp_body =~ "private"
+  end
+
+  test "invalid values never appear in field error responses" do
+    for source <- [
+          put_in(
+            source(),
+            ["participants", "assistant", "prompt"],
+            String.duplicate("secret-prompt", 3000)
+          ),
+          Map.put(source(), "opening_audio", %{
+            "type" => "file_url",
+            "url" => "https://secret-user:secret-pass@example.com/audio?signature=private"
+          })
+        ] do
+      assert {:error, error} =
+               Vxpipe.CallEngine.CallSpec.new(source, resource_id: "test", revision: 1)
+
+      response =
+        request(:post, @tenant_path, "tenant-key", %{"source" => source}, {:error, error})
+
+      assert response.status == 422
+      assert is_list(JSON.decode!(response.resp_body)["error"]["path"])
+      refute response.resp_body =~ "secret-"
+      refute response.resp_body =~ "signature="
+    end
+  end
+
+  defp source do
+    %{
+      "schema_version" => "20261004.01",
+      "incoming_call" => %{"caller" => "caller", "handled_by" => "assistant"},
+      "participants" => %{
+        "caller" => %{
+          "type" => "human",
+          "connection" => %{"service" => "web", "mode" => "receive", "admission" => "start_call"}
+        },
+        "assistant" => %{"type" => "agent", "prompt" => "Help the caller."}
+      }
+    }
   end
 
   defp request(method, path, key, body, result \\ nil) do

@@ -1,6 +1,6 @@
 # Call spec editor
 
-Status: specification proposed 2026-10-08; not implemented. Design review pending.
+Status: implementation started 2026-10-08; checkpoint V complete; checkpoint P started. Design review complete.
 Prerequisites: [Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md),
 [Operator login and admin dashboard](operator-login-and-admin-dashboard.md),
 [Operator admin Storybook](operator-admin-storybook.md) and the
@@ -163,6 +163,15 @@ fallback. Chat and WhatsApp flows are excluded. None of them is a requirement he
   - LLM models use the same descriptor shape (ID, display name, default flag). Their listing lives
     in `vxpipe_agent_runtime`, which owns ReqLLM and `llm_db`, beside the overrides in
     `ProviderSelection`, so `vxpipe_providers` gains no `llm_db` dependency.
+- **Provider model IDs may have a public abstraction.** User clarification 2026-10-08:
+  list Deepgram TTS as `flux` with a separate free-text voice and let the adapter
+  construct `flux-{voice}-en`. The runtime already accepts `model: "flux"` with
+  `options.voice`; use that public shape for new editor selections. Preserve existing
+  combined IDs without rewriting saved source. The catalog descriptor carries any
+  adapter-owned voice parameter mapping, so future combined-ID providers follow the
+  same contract. For Flux, the recommended combination remains voice `hannah` (the
+  prior onboarding default `flux-hannah-en`). Reject unknown public models while
+  retaining the adapter's supported legacy concrete IDs.
 - **Every provider has one recommended default.** Each speech adapter's `models/0` marks exactly
   one default model, and each model with a voice list marks one default voice. Each LLM provider
   declares one default model, and that model must resolve through `ProviderSelection`. Today these
@@ -371,30 +380,36 @@ provider registry directly.
 Outcome: `POST`/`PUT /api/tenants/:tenant_key/call-specs` and the publish route return a specific
 error for an invalid source instead of a bare `invalid_call_spec`.
 
-- [ ] **V1 — Red Gateway tests.** In `apps/vxpipe_gateway/test/vxpipe/gateway/http/call_spec_writes_test.exs`,
+- [x] **V1 — Red Gateway tests.** In `apps/vxpipe_gateway/test/vxpipe/gateway/http/call_spec_writes_test.exs`,
   submit representative invalid sources (missing `prompt`, unknown `handled_by`, an outgoing
   human handler, an out-of-range `ring_timeout_ms`, a bad E.164 number, an unknown transfer
   target, a reserved tool name) and expect `422` with `error.code`, `error.path` (a JSON path as
   a list of strings) and `error.reason`. Confirm they fail on the current opaque body.
-- [ ] **V2 — Shared public projection.** Add one function that turns a
+- [x] **V2 — Shared public projection.** Add one function that turns a
   `Vxpipe.CallEngine.Error` with `details` `path`/`reason` into the public error body, owned by
   Calls so Gateway and Console share it. Keep the existing specific codes
   (`provider_service_forbidden`, `provider_credential_unavailable`,
   `telephony_caller_id_missing`) and add a path where the failure has one.
-- [ ] **V2b — Specific codes for collapsed failures.** Red tests, then return
+- [x] **V2b — Specific codes for collapsed failures.** Red tests, then return
   `409 revision_conflict`, `422 invalid_telephony_route` and `422 private_call_spec_material`
   (with paths where available) instead of today's `503` or generic `invalid_call_spec`, as listed
   in [Error presentation](#error-presentation).
-- [ ] **V3 — Publish failures.** Replace the `unsupported_call_plan` summary in
+- [x] **V3 — Publish failures.** Replace the `unsupported_call_plan` summary in
   `validation_errors` and the unpublishable-draft `409` body with the same code/path/reason
   entries. Red test first.
-- [ ] **V4 — Safety.** Test that reasons never echo submitted values: a secret-looking prompt,
+- [x] **V4 — Safety.** Test that reasons never echo submitted values: a secret-looking prompt,
   URL or number in an invalid field does not appear in the response. `private_data?` rejections
   keep a path and a fixed reason.
-- [ ] **V5 — Docs.** Update the error table in
+- [x] **V5 — Docs.** Update the error table in
   [operator API-key authoring](../operator-api-key-authoring.md) with the new body and an example.
-- [ ] **Exit V.** Gateway suite, root gates and the existing save/publish/outgoing API tests pass;
+- [x] **Exit V.** Gateway suite, root gates and the existing save/publish/outgoing API tests pass;
   responses carry exactly one error, as the validator is fail-fast.
+
+Checkpoint V evidence (2026-10-08): ten focused Gateway tests and ten Calls workflow
+tests pass after confirmed red runs. All five root gates pass. The default umbrella
+suite reports 3,326 tests, zero failures and 120 exclusions (seed 947553), including
+589 Gateway tests and the existing save/publish/outgoing coverage. No live tests ran.
+See the [implementation labnote](../../labnotes/20261008-1528-call-spec-editor.md).
 
 ## Checkpoint P — Speech models in the provider contract
 
@@ -404,8 +419,8 @@ default, and the adapter rejects any model it does not declare.
 - [ ] **P1 — Red contract test.** Add a Call Engine test that iterates
   `Vxpipe.Providers.Registry` and, for every `:stt`, `:tts` and `:sts` capability, expects a
   non-empty `models/0`, exactly one default model, one default voice for each model with a voice
-  list, `configure/1` accepting each listed model with its default voice, and `configure/1`
-  rejecting an unlisted model. It fails because `models/0` does not exist.
+  list, `configure/1` accepting each listed public model with its default voice, and `configure/1`
+  rejecting an unknown model (with the documented legacy Flux concrete-ID compatibility). It fails because `models/0` does not exist.
 - [ ] **P2 — Behaviour callback.** Add `@callback models() :: [model]` and a small model
   descriptor type (ID, display name, default flag, voices as a list with a default or free text)
   to `apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/stt_provider.ex`, `tts_provider.ex`
@@ -636,8 +651,8 @@ Outcome: operators create, edit, save and publish call specs in `/admin`.
 - [ ] Every LLM provider's declared default resolves through `ProviderSelection`, and the
   onboarding page shows the same defaults it showed before, now read from the listing.
 - [ ] For every speech capability in the registry, `models/0` is non-empty, has exactly one
-  default, and `configure/1` accepts each listed model with its default voice and rejects an
-  unlisted model.
+  default, and `configure/1` accepts each listed public model with its default voice and rejects an
+  unknown model; previously supported Flux concrete IDs remain compatible.
 - [ ] With client validation bypassed in a test, the same invalid source is rejected by the
   backend and its errors appear on the matching fields.
 - [ ] Open each example under `examples/call-specs/` and save without edits; the saved source
@@ -686,4 +701,16 @@ save/publish errors and the provider/model listings.
 
 ## Specification review
 
-Pending. Review for missing contracts and dependency order before implementation starts.
+Reviewed locally 2026-10-08 against Calls authoring, Gateway error projection, the
+completed administration prerequisites, direction schema and Console routing/styling
+contracts. V → P → L → K establishes shared backend shapes before S → U; C → W
+reuses the existing operator authority and immutable revision workflows. No reverse
+application dependency is required.
+
+Implementation clarifications: exhausted optimistic revision retries also map to
+`409 revision_conflict`; private-material rejection must retain its first field path;
+historical stored compiler errors need the same bounded projection as new errors.
+The default suite and local synthetic sample acceptance replace any live-provider
+execution for this milestone, per the user's explicit instruction. U's concrete
+Storybook review remains before production integration. Design review does not
+establish implementation completion.

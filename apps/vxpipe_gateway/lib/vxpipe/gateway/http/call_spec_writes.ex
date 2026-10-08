@@ -1,8 +1,7 @@
 defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
   @moduledoc false
   import Plug.Conn
-  alias Vxpipe.CallEngine.Error
-  alias Vxpipe.Calls.{CallSpecRevision, ProviderAuth}
+  alias Vxpipe.Calls.{CallSpecErrors, CallSpecRevision, ProviderAuth}
 
   def init(options),
     do: %{
@@ -90,8 +89,7 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
       source_digest: revision.source_digest,
       published: not is_nil(revision.published_at),
       published_at: if(revision.published_at, do: DateTime.to_iso8601(revision.published_at)),
-      validation_errors:
-        if(revision.validation_errors == [], do: [], else: [%{code: "unsupported_call_plan"}]),
+      validation_errors: CallSpecErrors.validation_errors(revision.validation_errors),
       routes:
         Enum.map(
           revision.routes,
@@ -104,43 +102,10 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
     }
   end
 
-  defp error(conn, :invalid_api_key), do: failure(conn, 401, "invalid_api_key")
-
-  defp error(conn, reason)
-       when reason in [
-              :insufficient_scope,
-              :tenant_access_forbidden,
-              :authoring_authority_required
-            ],
-       do: failure(conn, 403, "authoring_forbidden")
-
-  defp error(conn, %Error{code: :provider_service_forbidden}),
-    do: failure(conn, 403, "provider_service_forbidden")
-
-  defp error(conn, %Error{code: :provider_credential_unavailable}),
-    do: failure(conn, 422, "provider_credential_unavailable")
-
-  defp error(conn, %Error{code: :telephony_caller_id_missing}),
-    do: failure(conn, 422, "telephony_caller_id_missing")
-
-  defp error(conn, %Error{}), do: failure(conn, 422, "invalid_call_spec")
-
-  defp error(conn, reason)
-       when reason in [:private_call_spec_material, :invalid_call_spec_source],
-       do: failure(conn, 422, "invalid_call_spec")
-
-  defp error(conn, reason) when reason in [:invalid_request, :invalid_tenant_key],
-    do: failure(conn, 400, "invalid_request")
-
-  defp error(conn, reason) when reason in [:not_found, :tenant_not_found],
-    do: failure(conn, 404, "call_spec_not_found")
-
-  defp error(conn, {:call_spec_not_publishable, _errors}),
-    do: failure(conn, 409, "call_spec_not_publishable")
-
-  defp error(conn, _reason), do: failure(conn, 503, "call_spec_authoring_unavailable")
-
-  defp failure(conn, status, code), do: json(conn, status, %{error: %{code: code}})
+  defp error(conn, reason) do
+    {status, error} = CallSpecErrors.response(reason)
+    json(conn, status, %{error: error})
+  end
 
   defp json(conn, status, body) do
     conn

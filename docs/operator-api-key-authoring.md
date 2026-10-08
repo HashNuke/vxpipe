@@ -120,7 +120,7 @@ service-owner options.
 Responses contain a `call_spec` metadata object with its ID, revision, schema,
 source digest, publication state and public participant routes. Source and compiled
 configuration are omitted. Unsupported configuration produces a bounded
-`validation_errors` summary; trusted inspection remains available for fuller diagnosis.
+`validation_errors` entry with its code, field path and reason.
 Draft routes remain unavailable until publication.
 
 `401` rejects missing, invalid or wrong-scope keys; `403` rejects insufficient author
@@ -147,6 +147,36 @@ Design review, 2026-09-19: this follows the completed tenant-key and A2 authorin
 boundaries. It adds no database dependency to Gateway or Console dependency to Calls.
 The two delivery steps avoid combining key lifecycle and all authoring routes into
 one review. The checklist records implementation evidence separately from this review.
+
+## Field-level authoring errors
+
+Rejected sources return one fail-fast error with a JSON field path (an array of
+strings) and a value-free reason. Create, append and publish use the same Calls-owned
+projection. For example, a missing agent prompt returns `422`:
+
+```json
+{"error":{"code":"invalid_call_spec","path":["participants","assistant","prompt"],"reason":"is required"}}
+```
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 422 | `invalid_call_spec` | The portable source fails validation; `path` and `reason` locate the first problem. |
+| 422 | `private_call_spec_material` | Remove credentials or secrets at the returned path. |
+| 422 | `invalid_telephony_route` | The selected phone route is invalid. |
+| 422 | `provider_credential_unavailable` | The selected provider has no usable credential. |
+| 422 | `telephony_caller_id_missing` | The callee's service has no outbound caller ID. |
+| 403 | `provider_service_forbidden` | The author's authority does not allow the selected service. |
+| 409 | `revision_conflict` | Revision allocation conflicted, including exhausted bounded retries; reload before retrying. |
+| 409 | `call_spec_not_publishable` | The saved draft has a compiler error; `path` and `reason` describe the first error. |
+
+An empty path means the error applies to the document or the failing backend did
+not provide a field location. A successful draft response's `validation_errors`
+contains at most one `{code, path, reason}` compiler error, rather than an opaque
+summary. Older stored errors without structured details receive a fixed explanation.
+Authentication, malformed-request, not-found and unavailable errors retain their
+existing status and code. Reasons never include submitted values, provider payloads
+or exception messages; paths redact non-identifier source keys. These changes add
+no separate validation endpoint and do not change immutable revision behavior.
 
 ## Starting an outgoing call
 
