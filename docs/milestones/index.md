@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 42 milestone specifications: 31 complete and 11 incomplete. Milestone 17, Telnyx calls and
+Status: 43 milestone specifications: 31 complete and 12 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -170,9 +170,16 @@ progress without claiming the entire milestone is complete.
 37. [ ] [AI gateway routing](ai-gateway-routing.md) — Design separate upstream/provider and gateway routing contracts for Cloudflare, Vercel and future gateways; implementation deferred.
 38. [x] [Outgoing calls and two-call live telephony](outgoing-calls-and-live-telephony.md) — Review of `b1fd2f57` reopened acceptance after six reproduced defects and four failures in nine Telnyx → Twilio reruns. Corrections are committed as `817453a4`; ten consecutive passing live calls in each direction, all root gates and Lean now pass. Final default evidence: 3,192 tests, zero failures, 104 excluded, seed 394892.
 39. [x] [Outgoing call review fixes](outgoing-call-review-fixes.md) — Safe webhook diagnostics, supervised dialing with identity-checked early events, service/handler validation, answer/decline outcomes, failed-request replay and all-relay preflight pass. Twenty paired directional live cases pass. Receiver-owned Opus decoder history repairs the observed WebRTC fixture distortion without weakening assertions; all 562 Gateway cases and the final umbrella pass. Residual `leg_not_found` callbacks and earlier failures remain recorded.
-40. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-41. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
-42. [ ] [Call spec editor](call-spec-editor.md) — Proposed 2026-10-08: recreate the Callpipe flow editor in the operator Console as a participant canvas over the portable call spec source, with client validation, field-level save/publish errors on the tenant API, provider and model listings, save and publish; no test calls; specification review pending.
+40. [ ] [Worktree setup and concurrent development](worktree-setup.md) — Planned 2026-10-08; 0 of 6 checkpoints complete. Add repeatable `bin/setup`, isolated databases/builds/temporary files/development ports and a shared branch-name file reserving live testing until branch work finishes; prove concurrent ordinary suites across two worktrees.
+41. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+42. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+43. [ ] [Call spec editor](call-spec-editor.md) — Proposed 2026-10-08: recreate the Callpipe flow editor in the operator Console as a participant canvas over the portable call spec source, with client validation, field-level save/publish errors on the tenant API, provider and model listings, save and publish; no test calls; specification review pending.
+
+The worktree setup milestone is an enabling developer-tooling slice after the
+existing live-runner fixes and before delivery. Its prerequisites are already
+implemented; it does not depend on unfinished onboarding or call-spec editing.
+Research and local specification review are complete, with all implementation
+checkboxes open. Existing delivery/retention holds remain in force.
 
 ## Pre-delivery review hold
 
@@ -538,6 +545,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [GPT-Live speech-to-speech](gpt-live-speech-to-speech.md#specification-review) | Specification frozen 2026-09-25; A–E locally verified; F hosted acceptance open | OpenAI GPT-Live guides and two open-source client implementations established the duplex gaps: no turn or interruption events, untimed continuous output, delegated tools and no resumption handle. Descriptor facts, adapter-side inference, provider-owned barge-in and reseeded continuity address them. Checkpoints A–C establish the contract, Morse duplex local provider, and compiled-room behavior. D verifies the OpenAI adapter against a fake socket. E verifies bounded room-published history reseeding and room-owned transfer, including concurrent publication ordering. F enables one-key OpenAI setup and has local load, review and an opt-in hosted harness. The 2026-10-06 phone slice verifies protected openings, native input and 48 kHz output through a real carrier pair; the remaining hosted phone scenarios keep acceptance open. |
 | [Outgoing calls and two-call live telephony](outgoing-calls-and-live-telephony.md#specification-review) | Reviewed with the user 2026-10-04 (30 s ring default, optional client Idempotency-Key, per-tenant limits deferred) | Tailscale, Telnyx OpenAPI and Twilio trial research in the [harness decision](../live-telephony-harness.md); internal admission, connection-intent and outbound-connector reading recorded in the labnote. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The 2026-09-19 speech plan adds a locally reviewed prerequisite before publishing the embedded interface. The packaging hold remains. |
+| [Worktree setup and concurrent development](worktree-setup.md#specification-review) | Planned; locally reviewed 2026-10-08 | Six unchecked implementation checkpoints. Reviewed database/configuration dependencies, branch-lifetime live ownership, explicit release, repeatable bootstrap, port/session isolation and concurrent acceptance; research is not implementation evidence. |
 
 ## Planning verification
 
