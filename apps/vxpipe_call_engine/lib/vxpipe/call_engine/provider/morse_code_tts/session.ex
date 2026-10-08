@@ -7,12 +7,17 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeTTS.Session do
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, TTSProvider}
 
   @impl true
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("morse", "Morse", true)]
+
+  @impl true
   def configure(options) do
-    allowed = Config.option_keys()
+    allowed = [:model | Config.option_keys()]
 
     with true <- is_list(options) and Keyword.keyword?(options),
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
          true <- Enum.all?(Keyword.keys(options), &(&1 in allowed)),
+         {model, options} = Keyword.pop(options, :model, "morse"),
+         true <- Vxpipe.CallEngine.Speech.Model.supported?(models(), model),
          {:ok, config} <- Config.new(options) do
       Descriptor.new(
         kind: :tts,

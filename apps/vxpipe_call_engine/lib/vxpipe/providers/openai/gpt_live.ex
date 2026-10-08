@@ -20,6 +20,14 @@ defmodule Vxpipe.Providers.OpenAI.GPTLive do
                 tools: []
               ]
 
+  alias Vxpipe.CallEngine.Speech.Model
+
+  def models do
+    [
+      Model.new("gpt-live-1", "GPT-Live 1", true, Model.free_voice("marin"))
+    ]
+  end
+
   def public_options(options) when is_list(options) do
     with true <- Keyword.keyword?(options),
          true <- length(options) == length(Enum.uniq(Keyword.keys(options))),
@@ -31,7 +39,8 @@ defmodule Vxpipe.Providers.OpenAI.GPTLive do
              input_sample_rate: 24_000,
              output_sample_rate: 24_000
            ),
-         @model <- Keyword.fetch!(options, :model),
+         model <- Keyword.fetch!(options, :model),
+         true <- Model.supported?(models(), model),
          voice when is_binary(voice) <- Keyword.fetch!(options, :voice),
          true <- byte_size(voice) in 1..64 and Regex.match?(@voice_pattern, voice),
          backend when is_binary(backend) <- Keyword.fetch!(options, :backend_model),
@@ -40,7 +49,7 @@ defmodule Vxpipe.Providers.OpenAI.GPTLive do
          24_000 <- Keyword.fetch!(options, :output_sample_rate) do
       {:ok,
        %{
-         model: @model,
+         model: model,
          voice: voice,
          backend_model: backend,
          input_sample_rate: 24_000,

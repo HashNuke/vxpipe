@@ -7,6 +7,9 @@ defmodule Vxpipe.Providers.Google.TTSSession do
   alias Vxpipe.Providers.Google.{TTS, TTSRequest}
 
   @impl true
+  defdelegate models(), to: Vxpipe.Providers.Google.TTS
+
+  @impl true
   def configure(options) do
     with {:ok, public} <- TTS.public_options(options) do
       Descriptor.new(

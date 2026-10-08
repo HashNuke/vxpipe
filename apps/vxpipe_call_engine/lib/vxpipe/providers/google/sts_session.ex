@@ -91,6 +91,9 @@ defmodule Vxpipe.Providers.Google.STSSession do
   ]
 
   @impl true
+  defdelegate models(), to: Vxpipe.Providers.Google.STS
+
+  @impl true
   def configure(options) when is_list(options) do
     with true <- Keyword.keyword?(options),
          true <- length(options) == length(Enum.uniq(Keyword.keys(options))),

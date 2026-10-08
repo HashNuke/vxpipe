@@ -6,6 +6,9 @@ defmodule Vxpipe.CallEngine.SpeechSTSContractProvider do
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, STSProvider}
 
   @impl true
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("test", "Test provider", true)]
+
+  @impl true
   def configure(options) do
     {input_transcript?, options} = Keyword.pop(options, :input_transcript, true)
     {output_settlement, options} = Keyword.pop(options, :output_settlement, :transcript_end)

@@ -6,6 +6,9 @@ defmodule Vxpipe.Providers.MorseCode.STTSession do
   alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: Native
 
   @impl true
+  defdelegate models(), to: Native
+
+  @impl true
   defdelegate configure(options), to: Native
 
   @impl true

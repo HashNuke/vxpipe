@@ -8,8 +8,13 @@ defmodule Vxpipe.CallEngine.SpeechGuideTTSProvider do
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, Playback, TTSProvider}
 
   @impl true
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("guide", "Guide speech", true)]
+
+  @impl true
   def configure(options) do
-    with {:ok, options} <- Keyword.validate(options, sample_rate: 16_000),
+    with {:ok, options} <- Keyword.validate(options, model: "guide", sample_rate: 16_000),
+         true <-
+           Vxpipe.CallEngine.Speech.Model.supported?(models(), Keyword.fetch!(options, :model)),
          sample_rate when is_integer(sample_rate) and sample_rate > 0 <-
            Keyword.fetch!(options, :sample_rate) do
       Descriptor.new(

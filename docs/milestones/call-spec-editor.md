@@ -1,6 +1,6 @@
 # Call spec editor
 
-Status: implementation started 2026-10-08; checkpoint V complete; checkpoint P started. Design review complete.
+Status: implementation started 2026-10-08; checkpoints V and P complete; L is next. Design review complete.
 Prerequisites: [Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md),
 [Operator login and admin dashboard](operator-login-and-admin-dashboard.md),
 [Operator admin Storybook](operator-admin-storybook.md) and the
@@ -416,29 +416,35 @@ See the [implementation labnote](../../labnotes/20261008-1528-call-spec-editor.m
 Outcome: registering a speech adapter declares its supported models, voices and one recommended
 default, and the adapter rejects any model it does not declare.
 
-- [ ] **P1 — Red contract test.** Add a Call Engine test that iterates
+- [x] **P1 — Red contract test.** Add a Call Engine test that iterates
   `Vxpipe.Providers.Registry` and, for every `:stt`, `:tts` and `:sts` capability, expects a
   non-empty `models/0`, exactly one default model, one default voice for each model with a voice
   list, `configure/1` accepting each listed public model with its default voice, and `configure/1`
   rejecting an unknown model (with the documented legacy Flux concrete-ID compatibility). It fails because `models/0` does not exist.
-- [ ] **P2 — Behaviour callback.** Add `@callback models() :: [model]` and a small model
+- [x] **P2 — Behaviour callback.** Add `@callback models() :: [model]` and a small model
   descriptor type (ID, display name, default flag, voices as a list with a default or free text)
   to `apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/stt_provider.ex`, `tts_provider.ex`
   and `sts_provider.ex`.
-- [ ] **P3 — Adapters.** Implement `models/0` in every adapter that implements those behaviours:
+- [x] **P3 — Adapters.** Implement `models/0` in every adapter that implements those behaviours:
   Cartesia, Deepgram, ElevenLabs and Google STT/TTS, Google and GPT-Live STS, Rime TTS, and the
   Morse STT/TTS/STS/duplex sessions under both `providers/morse_code/` and
   `call_engine/provider/morse_code_*`. Move the private lists (`@models` in Cartesia and
   ElevenLabs TTS, Deepgram Flux, fixed Google and GPT-Live models) into `models/0` and have
   `configure/1` check against it. Adapter behavior for currently valid configurations is unchanged.
-- [ ] **P4 — Defaults.** Set each adapter's default to the value in today's
+- [x] **P4 — Defaults.** Set each adapter's default to the value in today's
   `apps/vxpipe_console/assets/src/admin/setupCatalog.json` `defaultModels` (for example Deepgram
   STT `flux-general-multi`, Cartesia TTS `sonic-3.6`, ElevenLabs STT `scribe_v2_realtime`, Google
   STS `gemini-3.8-live`, OpenAI STS `gpt-live-1`). Record any adapter with no frontend default
   and the default chosen for it.
-- [ ] **Exit P.** The contract test passes for every registered capability, existing adapter and
+- [x] **Exit P.** The contract test passes for every registered capability, existing adapter and
   room tests are green, and `mix compile --warnings-as-errors` fails if an adapter omits
   `models/0` (checked once by temporarily removing it locally, not committed).
+
+Checkpoint P progress: model declarations and pure acceptance tests pass for all
+registered speech capabilities and both Morse namespaces. The 670-test provider,
+speech and inline-activation group passes (22 excluded, seed 821225). Removing a
+required callback correctly fails warnings-as-errors compilation. All five root gates pass; the full default umbrella suite passes 3,343 tests,
+zero failures, 120 excluded (seed 468087). No live tests were run.
 
 ## Checkpoint L — Runnable LLM model listing
 

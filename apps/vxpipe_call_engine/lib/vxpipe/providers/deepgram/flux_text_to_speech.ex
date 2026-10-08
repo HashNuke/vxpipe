@@ -1,6 +1,7 @@
 defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeech do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.Speech.Model
   alias Vxpipe.Providers.Deepgram.FluxTextToSpeech.Signal
 
   @endpoint "wss://api.deepgram.com/v2/speak"
@@ -34,34 +35,44 @@ defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeech do
 
   def model_for_voice(_voice), do: {:error, :unsupported_capability}
 
-  def new(options) when is_list(options) do
-    api_key = Keyword.get(options, :api_key)
-    model = Keyword.get(options, :model, "flux-haley-en")
-    encoding = Keyword.get(options, :encoding, :linear16)
-    sample_rate = Keyword.get(options, :sample_rate, 48_000)
+  def models, do: [Model.new("flux", "Flux", true, Model.free_voice("hannah"))]
 
-    if valid_api_key?(api_key) and validate_options(options) == :ok do
-      {:ok,
-       %__MODULE__{
-         api_key: api_key,
-         model: model,
-         encoding: encoding,
-         sample_rate: sample_rate
-       }}
+  def new(options) when is_list(options) do
+    with true <- valid_api_key?(Keyword.get(options, :api_key)),
+         {:ok, public} <- public_options(Keyword.delete(options, :api_key)) do
+      {:ok, struct(__MODULE__, Map.put(public, :api_key, Keyword.fetch!(options, :api_key)))}
     else
-      {:error, :invalid_configuration}
+      _invalid -> {:error, :invalid_configuration}
     end
   end
 
-  @doc false
-  def validate_options(options) do
-    model = Keyword.get(options, :model, "flux-haley-en")
-    encoding = Keyword.get(options, :encoding, :linear16)
-    sample_rate = Keyword.get(options, :sample_rate, 48_000)
+  def public_options(options) when is_list(options) do
+    with {:ok, options} <-
+           Keyword.validate(options,
+             model: "flux-haley-en",
+             voice: nil,
+             encoding: :linear16,
+             sample_rate: 48_000
+           ),
+         {:ok, model} <-
+           wire_model(Keyword.fetch!(options, :model), Keyword.fetch!(options, :voice)),
+         :linear16 <- Keyword.fetch!(options, :encoding),
+         rate <- Keyword.fetch!(options, :sample_rate),
+         true <- rate in @sample_rates do
+      {:ok, %{model: model, encoding: :linear16, sample_rate: rate}}
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
 
-    if valid_model?(model) and encoding == :linear16 and sample_rate in @sample_rates,
-      do: :ok,
-      else: {:error, :invalid_configuration}
+  def public_options(_options), do: {:error, :invalid_configuration}
+
+  defp wire_model(model, voice) do
+    cond do
+      Model.supported?(models(), model) -> model_for_voice(voice)
+      is_nil(voice) and valid_model?(model) -> {:ok, model}
+      true -> {:error, :invalid_configuration}
+    end
   end
 
   def new!(options) do

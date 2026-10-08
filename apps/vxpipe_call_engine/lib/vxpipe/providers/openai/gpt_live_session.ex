@@ -76,6 +76,9 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
   ]
 
   @impl true
+  defdelegate models(), to: Vxpipe.Providers.OpenAI.GPTLive
+
+  @impl true
   def configure(options) do
     with {:ok, public} <- GPTLive.public_options(options) do
       Descriptor.new(

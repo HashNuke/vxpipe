@@ -25,6 +25,14 @@ defmodule Vxpipe.Providers.Google.STS do
   @derive {Inspect, only: [:model, :voice, :turn_control]}
   defstruct @enforce_keys ++ [endpoint: @endpoint, system_prompt: "", tools: []]
 
+  alias Vxpipe.CallEngine.Speech.Model
+
+  def models do
+    [
+      Model.new("gemini-3.8-live", "Gemini 3.8 Live", true, Model.free_voice("Kore"))
+    ]
+  end
+
   def new(options) when is_list(options) do
     with true <- Keyword.keyword?(options),
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
@@ -62,14 +70,15 @@ defmodule Vxpipe.Providers.Google.STS do
   def public_options(options) when is_list(options) do
     with {:ok, options} <-
            Keyword.validate(options, model: @model, voice: "Kore", turn_control: "provider"),
-         @model <- Keyword.fetch!(options, :model),
+         model <- Keyword.fetch!(options, :model),
+         true <- Model.supported?(models(), model),
          voice when is_binary(voice) <- Keyword.fetch!(options, :voice),
          true <- byte_size(voice) in 1..64 and Regex.match?(@voice_pattern, voice),
          turn_control when is_binary(turn_control) <- Keyword.fetch!(options, :turn_control),
          true <- turn_control in @turn_controls do
       {:ok,
        %{
-         model: @model,
+         model: model,
          voice: voice,
          turn_control: turn_control,
          input_sample_rate: 16_000,

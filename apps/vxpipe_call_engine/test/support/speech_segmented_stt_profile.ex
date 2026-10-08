@@ -8,6 +8,9 @@ defmodule Vxpipe.CallEngine.SpeechSegmentedSTTProfile do
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, STTProvider}
 
   @impl true
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("test", "Test provider", true)]
+
+  @impl true
   def configure(options) do
     with {:ok, options} <-
            Keyword.validate(options,

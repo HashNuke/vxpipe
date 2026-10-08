@@ -8,6 +8,9 @@ defmodule Vxpipe.CallEngine.SpeechOutputSTTSlowProvider do
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event}
 
   @impl true
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("test", "Test provider", true)]
+
+  @impl true
   def configure(options) do
     with true <- is_list(options) and Keyword.keyword?(options) do
       Descriptor.new(

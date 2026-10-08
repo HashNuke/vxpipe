@@ -27,6 +27,7 @@ defmodule Vxpipe.CallEngine.Speech.STSProvider do
 
   defdelegate start_link(module, private_init), to: Vxpipe.CallEngine.Speech.ProviderProcess
 
+  @callback models() :: [Vxpipe.CallEngine.Speech.Model.t()]
   @callback configure(keyword()) :: {:ok, Descriptor.t()} | {:error, :invalid_configuration}
   @callback start_link(keyword()) :: GenServer.on_start()
   @callback push_audio(pid(), binary()) :: :ok | {:error, :busy | :session_failed}

@@ -7,6 +7,9 @@ defmodule Vxpipe.CallEngine.SpeechSessionProbe do
   alias Vxpipe.CallEngine.Speech.{Channel, Event}
 
   @impl true
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("test", "Test provider", true)]
+
+  @impl true
   def configure(options) do
     case Keyword.fetch(options, :descriptor) do
       {:ok, descriptor} -> {:ok, descriptor}

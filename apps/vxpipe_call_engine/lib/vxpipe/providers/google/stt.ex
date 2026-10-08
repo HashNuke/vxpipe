@@ -11,6 +11,14 @@ defmodule Vxpipe.Providers.Google.STT do
   @derive {Inspect, only: [:model, :encoding, :sample_rate]}
   defstruct @enforce_keys ++ [endpoint: @endpoint]
 
+  alias Vxpipe.CallEngine.Speech.Model
+
+  def models do
+    [
+      Model.new("gemini-3.5-transcribe-live", "Gemini 3.5 Transcribe Live", true)
+    ]
+  end
+
   def new(options) when is_list(options) do
     with {:ok, public} <- public_options(Keyword.drop(options, [:api_key])),
          api_key when is_binary(api_key) <- Keyword.get(options, :api_key),
@@ -31,10 +39,11 @@ defmodule Vxpipe.Providers.Google.STT do
              encoding: :linear16,
              sample_rate: 16_000
            ),
-         @model <- Keyword.fetch!(options, :model),
+         model <- Keyword.fetch!(options, :model),
+         true <- Model.supported?(models(), model),
          :linear16 <- Keyword.fetch!(options, :encoding),
          16_000 <- Keyword.fetch!(options, :sample_rate) do
-      {:ok, %{model: @model, encoding: :linear16, sample_rate: 16_000}}
+      {:ok, %{model: model, encoding: :linear16, sample_rate: 16_000}}
     else
       _invalid -> {:error, :invalid_configuration}
     end

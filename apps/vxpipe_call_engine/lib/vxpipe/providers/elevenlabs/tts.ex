@@ -1,11 +1,30 @@
 defmodule Vxpipe.Providers.ElevenLabs.TTS do
   @moduledoc false
   @endpoint "https://api.elevenlabs.io/v1/text-to-speech"
-  @models ~w(eleven_flash_v2_5 eleven_multilingual_v2 eleven_v3)
   @rates [8_000, 16_000, 24_000, 48_000]
   @enforce_keys [:api_key, :model, :voice, :sample_rate]
   @derive {Inspect, only: [:model, :voice, :sample_rate]}
   defstruct @enforce_keys ++ [endpoint: @endpoint]
+
+  alias Vxpipe.CallEngine.Speech.Model
+
+  def models do
+    [
+      Model.new(
+        "eleven_flash_v2_5",
+        "Eleven Flash v2.5",
+        true,
+        Model.free_voice("JBFqnCBsd6RMkjVDRZzb")
+      ),
+      Model.new(
+        "eleven_multilingual_v2",
+        "Eleven Multilingual v2",
+        false,
+        Model.free_voice("JBFqnCBsd6RMkjVDRZzb")
+      ),
+      Model.new("eleven_v3", "Eleven v3", false, Model.free_voice("JBFqnCBsd6RMkjVDRZzb"))
+    ]
+  end
 
   def new(options) when is_list(options) do
     with true <- Keyword.keyword?(options),
@@ -27,7 +46,7 @@ defmodule Vxpipe.Providers.ElevenLabs.TTS do
          {:ok, options} <-
            Keyword.validate(options, model: "eleven_flash_v2_5", voice: nil, sample_rate: 16_000),
          model <- Keyword.fetch!(options, :model),
-         true <- model in @models,
+         true <- Model.supported?(models(), model),
          voice when is_binary(voice) <- Keyword.fetch!(options, :voice),
          true <- Regex.match?(~r/\A[A-Za-z0-9_-]{1,128}\z/, voice),
          rate <- Keyword.fetch!(options, :sample_rate),

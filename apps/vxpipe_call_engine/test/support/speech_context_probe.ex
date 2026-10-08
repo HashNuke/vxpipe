@@ -4,6 +4,8 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
   alias Vxpipe.CallEngine.Provider.MorseCodeSTS.Session, as: Morse
   alias Vxpipe.CallEngine.Speech.{Channel, Event, STSProvider}
 
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("test", "Test provider", true)]
+
   def configure(options) do
     {opt_in, options} = Keyword.pop(options, :response_start?, true)
 

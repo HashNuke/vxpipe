@@ -49,6 +49,9 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   ]
 
   @impl true
+  defdelegate models(), to: Vxpipe.Providers.ElevenLabs.Scribe
+
+  @impl true
   def configure(options) do
     with {:ok, public} <- Scribe.public_options(options),
          :manual <- public.commit_strategy do

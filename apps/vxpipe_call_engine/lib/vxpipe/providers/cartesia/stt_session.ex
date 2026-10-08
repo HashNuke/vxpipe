@@ -25,6 +25,9 @@ defmodule Vxpipe.Providers.Cartesia.STTSession do
   ]
 
   @impl true
+  defdelegate models(), to: Vxpipe.Providers.Cartesia.STT
+
+  @impl true
   def configure(options) do
     with {:ok, public} <- STT.public_options(options) do
       Descriptor.new(

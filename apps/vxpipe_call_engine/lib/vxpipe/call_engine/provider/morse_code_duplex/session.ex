@@ -75,6 +75,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   @trailing_silence_frames 60
 
   @impl true
+  defdelegate models(), to: Profile
+
+  @impl true
   def configure(options), do: Profile.configure(options)
 
   @impl true

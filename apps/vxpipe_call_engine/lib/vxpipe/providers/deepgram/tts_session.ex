@@ -25,15 +25,11 @@ defmodule Vxpipe.Providers.Deepgram.TTSSession do
   ]
 
   @impl true
-  def configure(options) do
-    with {:ok, options} <- Keyword.validate(options, [:model, :encoding, :sample_rate]),
-         :ok <- FluxTextToSpeech.validate_options(options) do
-      settings = %{
-        model: Keyword.get(options, :model, "flux-haley-en"),
-        encoding: Keyword.get(options, :encoding, :linear16),
-        sample_rate: Keyword.get(options, :sample_rate, 48_000)
-      }
+  defdelegate models(), to: FluxTextToSpeech
 
+  @impl true
+  def configure(options) do
+    with {:ok, settings} <- FluxTextToSpeech.public_options(options) do
       Descriptor.new(
         kind: :tts,
         settings: settings,

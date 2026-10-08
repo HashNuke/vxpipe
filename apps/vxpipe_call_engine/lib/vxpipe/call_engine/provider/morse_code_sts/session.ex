@@ -10,12 +10,17 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeSTS.Session do
   @reply_prefix "RECEIVED "
 
   @impl true
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("morse", "Morse", true)]
+
+  @impl true
   def configure(options) do
-    allowed = Config.option_keys() ++ [:turn_control, :output_transcript]
+    allowed = [:model | Config.option_keys()] ++ [:turn_control, :output_transcript]
 
     with true <- is_list(options) and Keyword.keyword?(options),
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
          true <- Enum.all?(Keyword.keys(options), &(&1 in allowed)),
+         {model, options} = Keyword.pop(options, :model, "morse"),
+         true <- Vxpipe.CallEngine.Speech.Model.supported?(models(), model),
          {turn_control, rest} = Keyword.pop(options, :turn_control, "provider"),
          true <- turn_control in @turn_controls,
          {output_transcript, rest} = Keyword.pop(rest, :output_transcript, true),

@@ -23,6 +23,9 @@ defmodule Vxpipe.Providers.Rime.TTSSession do
   ]
 
   @impl true
+  defdelegate models(), to: Vxpipe.Providers.Rime.TTS
+
+  @impl true
   def configure(options) do
     with {:ok, public} <- TTS.public_options(options) do
       Descriptor.new(

@@ -19,6 +19,9 @@ defmodule Vxpipe.CallEngine.SpeechRequestTTSProfile do
   @default_maximum_response_bytes 131_072
 
   @impl true
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("test", "Test provider", true)]
+
+  @impl true
   def configure(options) do
     with {:ok, options} <-
            Keyword.validate(options,

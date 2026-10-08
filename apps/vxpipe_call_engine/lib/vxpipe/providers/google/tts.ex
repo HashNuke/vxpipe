@@ -8,6 +8,19 @@ defmodule Vxpipe.Providers.Google.TTS do
   @derive {Inspect, only: [:model, :voice, :sample_rate]}
   defstruct @enforce_keys ++ [endpoint: @endpoint]
 
+  alias Vxpipe.CallEngine.Speech.Model
+
+  def models do
+    [
+      Model.new(
+        "gemini-3.1-flash-tts-preview",
+        "Gemini 3.1 Flash TTS Preview",
+        true,
+        Model.free_voice("Kore")
+      )
+    ]
+  end
+
   def new(options) when is_list(options) do
     with {:ok, public} <- public_options(Keyword.drop(options, [:api_key])),
          api_key when is_binary(api_key) <- Keyword.get(options, :api_key),
@@ -23,11 +36,12 @@ defmodule Vxpipe.Providers.Google.TTS do
 
   def public_options(options) when is_list(options) do
     with {:ok, options} <- Keyword.validate(options, model: @model, voice: "Kore"),
-         @model <- Keyword.fetch!(options, :model),
+         model <- Keyword.fetch!(options, :model),
+         true <- Model.supported?(models(), model),
          voice when is_binary(voice) <- Keyword.fetch!(options, :voice),
          true <- byte_size(voice) in 1..128,
          true <- Regex.match?(~r/\A[A-Za-z][A-Za-z0-9_-]*\z/, voice) do
-      {:ok, %{model: @model, voice: voice, sample_rate: 24_000}}
+      {:ok, %{model: model, voice: voice, sample_rate: 24_000}}
     else
       _invalid -> {:error, :invalid_configuration}
     end

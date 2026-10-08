@@ -19,6 +19,9 @@ defmodule Vxpipe.Providers.Deepgram.STTSession do
   ]
 
   @impl true
+  defdelegate models(), to: Vxpipe.Providers.Deepgram.Flux
+
+  @impl true
   def configure(options) do
     with {:ok, options} <- Keyword.validate(options, [:model, :encoding, :sample_rate]),
          :ok <- Flux.validate_options(options) do

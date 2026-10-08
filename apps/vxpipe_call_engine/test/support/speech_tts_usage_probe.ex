@@ -7,6 +7,9 @@ defmodule Vxpipe.CallEngine.SpeechTTSUsageProbe do
   alias Vxpipe.CallEngine.Speech.{Channel, Event, TTSProvider}
 
   @impl true
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("test", "Test provider", true)]
+
+  @impl true
   def configure(options), do: MorseSession.configure(options)
 
   @impl true

@@ -7,13 +7,18 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Profile do
   alias Vxpipe.CallEngine.Provider.MorseCode.Config
   alias Vxpipe.CallEngine.Speech.Descriptor
 
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("morse-duplex", "Morse duplex", true)]
+
   @spec configure(keyword()) :: {:ok, Descriptor.t()} | {:error, :invalid_configuration}
   def configure(options) do
-    allowed = Config.option_keys() ++ [:output_transcript, :yield?, :clock, :scripted_closes?]
+    allowed =
+      [:model | Config.option_keys()] ++ [:output_transcript, :yield?, :clock, :scripted_closes?]
 
     with true <- is_list(options) and Keyword.keyword?(options),
          true <- length(Keyword.keys(options)) == length(Enum.uniq(Keyword.keys(options))),
          true <- Enum.all?(Keyword.keys(options), &(&1 in allowed)),
+         {model, options} = Keyword.pop(options, :model, "morse-duplex"),
+         true <- Vxpipe.CallEngine.Speech.Model.supported?(models(), model),
          {output_transcript, rest} = Keyword.pop(options, :output_transcript, true),
          true <- is_boolean(output_transcript),
          {yield?, rest} = Keyword.pop(rest, :yield?, true),

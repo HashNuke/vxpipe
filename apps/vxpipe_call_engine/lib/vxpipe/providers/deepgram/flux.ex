@@ -8,7 +8,6 @@ defmodule Vxpipe.Providers.Deepgram.Flux do
   @maximum_request_id_bytes 128
   @maximum_transcript_bytes 65_536
   @maximum_trigger_bytes 64
-  @models ["flux-general-en", "flux-general-multi"]
   @encodings [:linear16, :opus]
 
   @derive {Inspect, only: [:model, :encoding, :sample_rate]}
@@ -22,6 +21,15 @@ defmodule Vxpipe.Providers.Deepgram.Flux do
           encoding: :linear16 | :opus,
           sample_rate: pos_integer()
         }
+
+  alias Vxpipe.CallEngine.Speech.Model
+
+  def models do
+    [
+      Model.new("flux-general-en", "Flux General English", false),
+      Model.new("flux-general-multi", "Flux General Multilingual", true)
+    ]
+  end
 
   def new(options) when is_list(options) do
     api_key = Keyword.get(options, :api_key)
@@ -48,7 +56,7 @@ defmodule Vxpipe.Providers.Deepgram.Flux do
     encoding = Keyword.get(options, :encoding)
     sample_rate = Keyword.get(options, :sample_rate)
 
-    if model in @models and encoding in @encodings and
+    if Model.supported?(models(), model) and encoding in @encodings and
          is_integer(sample_rate) and sample_rate > 0,
        do: :ok,
        else: {:error, :invalid_configuration}

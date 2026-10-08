@@ -22,6 +22,7 @@ defmodule Vxpipe.CallEngine.Speech.TTSProvider do
 
   def credit(_message, _channel, _request_ref, _credit_ref), do: :stale
 
+  @callback models() :: [Vxpipe.CallEngine.Speech.Model.t()]
   @callback configure(keyword()) :: {:ok, Descriptor.t()} | {:error, :invalid_configuration}
   @callback start_link(keyword()) :: GenServer.on_start()
   @callback speak(pid(), reference(), String.t()) :: :ok | {:error, atom()}

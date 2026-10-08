@@ -6,6 +6,9 @@ defmodule Vxpipe.Providers.ElevenLabs.TTSSession do
   alias Vxpipe.Providers.ElevenLabs.{TTS, TTSRequest}
 
   @impl true
+  defdelegate models(), to: Vxpipe.Providers.ElevenLabs.TTS
+
+  @impl true
   def configure(options) do
     with {:ok, public} <- TTS.public_options(options) do
       Descriptor.new(

@@ -35,6 +35,26 @@ synthesis. Provider contexts, flushes, synthesis batches, and wire request IDs r
 The provider emits `:completed` only after every audio chunk for the engine request has received
 its exact Channel credit. Sink playback and request completion are separate facts.
 
+## Public models and voices
+
+Every STT, TTS and STS adapter implements the required `models/0` callback. Return
+non-empty `Speech.Model` descriptors with `id`, `name`, `default` and `voices`,
+marking exactly one model as recommended. Use the same declarations to validate
+`configure/1`; a picker must never offer a model that configuration rejects.
+
+`voices` is `nil` for models without a voice choice, a free-text descriptor with
+`type: :free_text`, `default` and `parameter`, or a known list with `type: :list`,
+`values` (ID, name, default flag) and `parameter`. Known lists have one default.
+`parameter` names the portable selection's option (`voice`, or Rime's `speaker`).
+Declarations are pure public data: no credentials, network discovery or environment
+reads. Model recommendations need not change a legacy configure/1 fallback.
+
+A public model can abstract the provider's wire naming. Deepgram lists `flux` and
+voice `hannah`; a source selects `model: "flux"`, `options: {"voice": "hannah"}`.
+The adapter constructs `flux-hannah-en`. Existing combined IDs remain supported,
+and opening a saved source never normalizes or replaces its model/voice choice.
+See [model catalog decisions](speech-model-catalog.md).
+
 ## Public configuration and private initialization
 
 `configure/1` is pure and accepts only public, validated options. It returns a closed
@@ -76,8 +96,12 @@ defmodule Vxpipe.CallEngine.SpeechGuideTTSProvider do
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, Playback, TTSProvider}
 
   @impl true
+  def models, do: [Vxpipe.CallEngine.Speech.Model.new("guide", "Guide speech", true)]
+
+  @impl true
   def configure(options) do
-    with {:ok, options} <- Keyword.validate(options, sample_rate: 16_000),
+    with {:ok, options} <- Keyword.validate(options, model: "guide", sample_rate: 16_000),
+         true <- Vxpipe.CallEngine.Speech.Model.supported?(models(), Keyword.fetch!(options, :model)),
          sample_rate when is_integer(sample_rate) and sample_rate > 0 <-
            Keyword.fetch!(options, :sample_rate) do
       Descriptor.new(
@@ -302,6 +326,7 @@ Required callbacks:
 
 | Callback | Meaning |
 | --- | --- |
+| `models()` | Declares supported public models, voices and one recommended default, without I/O. |
 | `configure(public_options)` | Pure validation of model, voice, PCM formats, transcript coverage, and turn-control support. Returns `{:ok, descriptor}` with `kind: :sts` or `{:error, :invalid_configuration}`. No credentials or I/O. |
 | `start_link(private_init)` | Bounded local startup under the agent capability tree via `STSProvider.start_link/2`; remote readiness is asynchronous and arrives as `:ready`. |
 | `push_audio(pid, audio)` | Bounded admission of one permitted input chunk. `:ok` proves acceptance; `{:error, :busy}` means the chunk was not accepted and existing work remains valid. |

@@ -11,6 +11,14 @@ defmodule Vxpipe.Providers.Rime.TTS do
   @derive {Inspect, only: [:model, :speaker, :sample_rate]}
   defstruct @enforce_keys ++ [endpoint: @endpoint]
 
+  alias Vxpipe.CallEngine.Speech.Model
+
+  def models do
+    [
+      Model.new("coda", "Coda", true, Model.free_voice("astra", "speaker"))
+    ]
+  end
+
   def new(options) when is_list(options) do
     with {:ok, public} <- public_options(Keyword.drop(options, [:api_key])),
          api_key when is_binary(api_key) <- Keyword.get(options, :api_key),
@@ -27,12 +35,13 @@ defmodule Vxpipe.Providers.Rime.TTS do
   def public_options(options) when is_list(options) do
     with {:ok, options} <-
            Keyword.validate(options, model: "coda", speaker: "astra", sample_rate: 24_000),
-         "coda" <- Keyword.fetch!(options, :model),
+         model <- Keyword.fetch!(options, :model),
+         true <- Model.supported?(models(), model),
          speaker when is_binary(speaker) <- Keyword.fetch!(options, :speaker),
          true <- byte_size(speaker) in 1..128,
          true <- Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9_-]*\z/, speaker),
          sample_rate when sample_rate in @sample_rates <- Keyword.fetch!(options, :sample_rate) do
-      {:ok, %{model: "coda", speaker: speaker, sample_rate: sample_rate}}
+      {:ok, %{model: model, speaker: speaker, sample_rate: sample_rate}}
     else
       _invalid -> {:error, :invalid_configuration}
     end

@@ -60,3 +60,36 @@ P's new, uncommitted model-contract test was run separately after the root run h
 finished its Call Engine phase. Its 17 failures establish the missing model callback
 and direct Flux public-selection behavior; this future-checkpoint red test is not
 part of V's verified/committed tree. No P implementation is included in V.
+
+## Checkpoint P implementation and verification
+
+- Registry-driven red contract: 17 failures because models/0 was absent and direct
+  Flux configuration did not accept the public model plus voice. The implementation
+  now passes all 17 checks (seed 282748 before adding the guide fixture check).
+- Every production STT/TTS/STS adapter and both Morse namespaces declares models.
+  Pure configuration modules own declarations; sessions delegate. Model acceptance
+  uses those declarations. Legacy fallback configuration stays unchanged.
+- Flux lists one public `flux` model with recommended `hannah` voice, and builds
+  concrete wire IDs internally. Old combined IDs remain supported. Free-text voice
+  parameters also preserve Rime's `speaker` option. Defaults and rejected alternatives
+  are recorded in docs/speech-model-catalog.md.
+- Added the executable guide provider to the contract test: confirmed a red failure
+  (seed 9180), then taught its configuration to accept/validate its declared model
+  and synchronized the guide. Test-only probe adapters declare the required callback.
+- Temporarily removed Cartesia STT's models/0 locally: `mix compile
+  --warnings-as-errors` failed on the missing required callback. Restored the exact
+  source and warnings-as-errors compilation passed. No broken callback is retained.
+- Broader owning-child run: 670 provider, speech and inline-activation tests pass,
+  zero failures, 22 excluded (seed 821225). Formatting, strict Credo and unused
+  dependency gates pass. Full root default suite is running; P is not complete yet.
+- One probe previously had no @impl annotations; adding only one triggered warnings
+  for its other callbacks. Kept that probe's existing annotation convention instead
+  of expanding unrelated test-fixture changes.
+
+### Checkpoint P exit evidence
+
+All five root gates pass. The default umbrella suite passes 3,343 tests, zero
+failures, 120 excluded (seed 468087), including existing room and adapter tests.
+No live tests ran. L implementation was applied after the root run had completed
+its Agent Runtime phase; it is excluded from this checkpoint and receives a
+separate full suite.

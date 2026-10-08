@@ -35,6 +35,9 @@ defmodule Vxpipe.Providers.Google.STTSession do
   ]
 
   @impl true
+  defdelegate models(), to: Vxpipe.Providers.Google.STT
+
+  @impl true
   def configure(options) do
     with {:ok, public} <- STT.public_options(options) do
       Descriptor.new(

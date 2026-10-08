@@ -13,6 +13,14 @@ defmodule Vxpipe.Providers.Cartesia.STT do
   @derive {Inspect, only: [:model, :encoding, :sample_rate]}
   defstruct @enforce_keys ++ [endpoint: @endpoint]
 
+  alias Vxpipe.CallEngine.Speech.Model
+
+  def models do
+    [
+      Model.new("ink-2", "Ink 2", true)
+    ]
+  end
+
   def new(options) when is_list(options) do
     with true <- Keyword.keyword?(options),
          {:ok, public} <- public_options(Keyword.drop(options, [:api_key])),
@@ -31,10 +39,11 @@ defmodule Vxpipe.Providers.Cartesia.STT do
          true <- length(options) == length(Enum.uniq(Keyword.keys(options))),
          {:ok, options} <-
            Keyword.validate(options, model: "ink-2", encoding: :linear16, sample_rate: 16_000),
-         "ink-2" <- Keyword.fetch!(options, :model),
+         model <- Keyword.fetch!(options, :model),
+         true <- Model.supported?(models(), model),
          :linear16 <- Keyword.fetch!(options, :encoding),
          16_000 <- Keyword.fetch!(options, :sample_rate) do
-      {:ok, %{model: "ink-2", encoding: :linear16, sample_rate: 16_000}}
+      {:ok, %{model: model, encoding: :linear16, sample_rate: 16_000}}
     else
       _invalid -> {:error, :invalid_configuration}
     end

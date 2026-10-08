@@ -15,6 +15,14 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
   @derive {Inspect, only: [:model, :encoding, :sample_rate, :language_code, :commit_strategy]}
   defstruct @enforce_keys ++ [endpoint: @endpoint]
 
+  alias Vxpipe.CallEngine.Speech.Model
+
+  def models do
+    [
+      Model.new("scribe_v2_realtime", "Scribe v2 Realtime", true)
+    ]
+  end
+
   def new(options) when is_list(options) do
     with true <- Keyword.keyword?(options) and unique_options?(options),
          {:ok, public} <- public_options(Keyword.drop(options, [:api_key])),
@@ -38,7 +46,8 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
              language_code: nil,
              commit_strategy: :manual
            ),
-         @model <- Keyword.fetch!(options, :model),
+         model <- Keyword.fetch!(options, :model),
+         true <- Model.supported?(models(), model),
          :linear16 <- Keyword.fetch!(options, :encoding),
          16_000 <- Keyword.fetch!(options, :sample_rate),
          strategy when strategy in [:manual, :vad] <- Keyword.fetch!(options, :commit_strategy),
@@ -46,7 +55,7 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
          true <- valid_language?(language) do
       {:ok,
        %{
-         model: @model,
+         model: model,
          encoding: :linear16,
          sample_rate: 16_000,
          language_code: language,
