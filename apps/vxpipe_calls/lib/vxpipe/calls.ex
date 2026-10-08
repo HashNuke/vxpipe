@@ -85,6 +85,12 @@ defmodule Vxpipe.Calls do
   def list_operator_call_specs(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_call_specs(authority, tenant_key, options)
 
+  def fetch_operator_call_spec(authority, tenant_key, id, options \\ []),
+    do: Vxpipe.Calls.OperatorCallSpecs.fetch(authority, tenant_key, id, options)
+
+  def list_call_spec_editor_lookups(authority, tenant_key, options \\ []),
+    do: Vxpipe.Calls.CallSpecEditorLookups.list(authority, tenant_key, options)
+
   def list_operator_calls(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_calls(authority, tenant_key, options)
 

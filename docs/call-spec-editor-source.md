@@ -179,4 +179,23 @@ The frontend lane passes 491 tests, TypeScript and lint; the Storybook productio
 build and all five root gates pass (3,448 tests, zero failures, seed 991936).
 Rendered checks cover all page stories at desktop and phone widths, recovery
 confirmations, field navigation, clipboard feedback and downloaded JSON.
-Production endpoint/router integration awaits the milestone's user review gate.
+The user explicitly deferred UI review on 2026-10-08 and authorized production
+endpoint/router integration and the remaining acceptance work.
+
+## Console authoring boundary
+
+Console's installation-operator endpoints reuse Calls authoring and persistence.
+Reads resolve the latest immutable revision or an explicit revision, and return
+source plus the latest and currently published revision numbers. Appending to a
+spec first checks that the ID exists in the requested tenant; a foreign or missing
+ID returns 404. Publishing addresses an explicit saved revision. No new repository
+protocol or database schema is needed.
+
+Editor lookups contain effective credential names, tenant telephony application
+names and configured MCP integration names. MCP names come from the configured
+integration source filtered to application and matching tenant scopes, without
+remote discovery. Credentials, URLs, headers and connection IDs are not returned.
+The existing operator session, CSRF and private/no-store pipeline protects these
+routes. Request logging filters the entire source body so prompts and source
+values do not enter request logs. Existing structured authoring errors are shared
+with the tenant API; unexpected failures return a fixed unavailable response.

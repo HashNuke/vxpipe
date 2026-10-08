@@ -113,7 +113,28 @@ defmodule Vxpipe.Console.Router do
         Vxpipe.Console.AdminProviderCatalogController,
         :models
 
+    get "/tenants/:tenant_key/call-spec-editor-lookups",
+        Vxpipe.Console.AdminCallSpecLookupsController,
+        :index
+
     get "/tenants/:tenant_key/call-specs", Vxpipe.Console.AdminCallSpecsController, :index
+
+    get "/tenants/:tenant_key/call-specs/:id",
+        Vxpipe.Console.AdminCallSpecAuthoringController,
+        :show
+
+    post "/tenants/:tenant_key/call-specs",
+         Vxpipe.Console.AdminCallSpecAuthoringController,
+         :create
+
+    put "/tenants/:tenant_key/call-specs/:id",
+        Vxpipe.Console.AdminCallSpecAuthoringController,
+        :update
+
+    post "/tenants/:tenant_key/call-specs/:id/revisions/:revision/publish",
+         Vxpipe.Console.AdminCallSpecAuthoringController,
+         :publish
+
     get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index
     get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
     get "/tenants/:tenant_key/services", Vxpipe.Console.AdminServicesController, :index

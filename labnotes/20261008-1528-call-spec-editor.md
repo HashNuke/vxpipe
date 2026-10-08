@@ -799,3 +799,24 @@ results remain applicable because no source changed during the resumed build and
 browser pass. U8 remains unchecked: the complete prototype is ready for the user's
 required review. The static Storybook server remains available on port 6021 for
 that review. C/W production integration has not started.
+
+### Production integration authorized
+
+The user explicitly instructed completing product integration and everything else,
+with their UI review deferred until later. This supersedes the U8 stop: the
+prototype remains browser-verified, but no user UI approval is claimed. Updated
+the milestone and index accordingly. Continue C → W → Z with red-green tests,
+frequent coherent commits, no live tests and serialized heavy checks. Resource
+check before starting: 4.5 GiB available RAM; load average about 2.2.
+
+### Console endpoint checkpoint
+
+Added installation-operator latest/historical reads, create/append/publish routes,
+and credential/telephony/MCP name lookups. Focused tests were red for missing
+facades/routes and then green: Calls 11, Console 9, configured MCP names 2.
+A separate privacy regression first exposed source prompts in Phoenix request
+logs; filtering the source parameter made it green. Cross-tenant reads, writes and
+publication return 404. Invalid sources preserve structured paths and safe reasons;
+configuration/store exceptions return fixed errors. No remote MCP discovery or
+live providers are called. All five root gates pass: 3,458 tests, zero failures, 120 excluded, seed 991936.
+Credo checked 1,217 files without issues. No live tests ran.

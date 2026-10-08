@@ -1,6 +1,6 @@
 # Call spec editor
 
-Status: implementation started 2026-10-08; checkpoints V, P, L, K and S complete; checkpoint U in progress. Design review complete.
+Status: implementation started 2026-10-08; checkpoints V, P, L, K and S complete; checkpoint U complete; checkpoint C in progress. Design review complete.
 Prerequisites: [Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md),
 [Operator login and admin dashboard](operator-login-and-admin-dashboard.md),
 [Operator admin Storybook](operator-admin-storybook.md) and the
@@ -348,8 +348,8 @@ Copy in this table is the intended meaning; final wording is settled in Storyboo
 Implement **V → P → L → K → S → U → C → W → Z** in that order. The four backend checkpoints
 (V, P, L, K) settle the contracts the editor depends on: error shape, model declarations and
 listing responses. S builds the editor's source model as pure TypeScript. U puts the whole editor
-in Storybook and stops for the user's review. C and W connect it to real endpoints only after that
-review. Z closes the milestone. S and U depend only on the response shapes fixed in V and K, so
+in Storybook. On 2026-10-08 the user explicitly deferred UI review until later and
+authorized completing production integration and all remaining work. C and W may proceed. Z closes the milestone. S and U depend only on the response shapes fixed in V and K, so
 they may start once those shapes are committed.
 
 For each checkpoint: write the smallest red test in the owning child for the stated behavior,
@@ -608,10 +608,11 @@ adaptation.
   published revision, outgoing call, historical schema (read-only), narrow viewport and long
   content, with interaction tests for adding a participant, drawing a transfer, renaming,
   following a toast's **Show** action and opening the issues list.
-- [ ] **U8 — Review.** Inspect every story with `agent-browser` at desktop and phone widths, then
-  stop for the user's review and record the decision here.
-- [ ] **Exit U.** Frontend tests and Storybook build pass, rendered inspection is recorded, and
-  the user has approved the UI for production integration.
+- [x] **U8 — Review disposition.** All stories inspected at desktop and phone widths.
+  On 2026-10-08 the user said: "you complete the product integration and everything else please.
+  i can review later." UI review is deferred by explicit instruction; production integration is authorized.
+- [x] **Exit U.** Frontend tests, Storybook build and rendered inspection pass. The user
+  authorized production integration with UI review deferred; this does not claim UI approval.
 
 Checkpoint U progress: U1 and U2 are implemented. The copied header, toolbar,
 node cards and canvas use the source projection, with revision and issue badges,
@@ -651,7 +652,7 @@ write. Phone Add and Show open the inspector and Show focuses the requested fiel
 There are 34 full-page stories adapted from Callpipe, covering every outcome row,
 loading/spec/catalog failures, new/published/outgoing/historical/long/narrow states,
 and Add, Rename, Draw transfer, Show and issues-list interactions. Production
-endpoints and router integration remain behind U8's review gate.
+endpoints and router integration proceed under the user's deferred-review instruction.
 
 All 491 frontend tests, TypeScript checking and lint pass. After execution
 permissions were restored, the full-page Storybook production build and all five
@@ -663,28 +664,33 @@ after opening. Browser checks also verify Back cancellation/confirmation,
 confirmed conflict reload, Open services with unsaved edits, catalog Retry,
 clipboard success and a downloaded JSON retaining the added agent and transfer.
 Heavy verification jobs were serialized after checking system resources.
-U8 user review remains pending before C/W production integration. No live tests ran.
+The user deferred U8 review and authorized C/W production integration. No live tests ran.
 
 ## Checkpoint C — Console authoring endpoints
 
 Outcome: the installation operator can read, save and publish call specs and look up the choices
 the editor needs, through Console admin endpoints.
 
-- [ ] **C1 — Red endpoint tests.** In
+- [x] **C1 — Red endpoint tests.** In
   `apps/vxpipe_console/test/vxpipe/console/admin_call_specs_endpoint_test.exs`, expect read of
   the latest and a given revision (source, revision, published state, routes), save as new and as
   a new revision, publish, V's error body on invalid sources, `404` for another tenant's spec and
   no credential values in any response.
-- [ ] **C2 — Calls read workflow.** Expose reading a revision's source for the installation
+- [x] **C2 — Calls read workflow.** Expose reading a revision's source for the installation
   operator through `Vxpipe.Calls`, reusing `fetch_call_spec`.
-- [ ] **C3 — Routes.** Add `GET`, `POST`, `PUT` and publish routes under
+- [x] **C3 — Routes.** Add `GET`, `POST`, `PUT` and publish routes under
   `/admin/api/tenants/:tenant_key/call-specs`, calling `CallSpecAuthoring` with
   `InstallationOperator.authority()` and V's shared error projection.
-- [ ] **C4 — Lookups.** Credential names per provider from tenant service bindings, telephony
+- [x] **C4 — Lookups.** Credential names per provider from tenant service bindings, telephony
   services from tenant telephony applications, and MCP integration names from the configured
   integration list, all without secret material. MCP tool names stay free text in v1, because
   listing them needs a network call to each server.
-- [ ] **Exit C.** Console and Calls suites and root gates pass.
+- [x] **Exit C.** Console and Calls suites and root gates pass.
+
+C verification: latest/historical/source preservation, scoped append/publish, CSRF,
+private/no-store responses, value-free lookups/errors and source-log filtering
+pass. All five root gates pass: 3,458 tests, zero failures, 120 excluded
+(seed 991936). No live tests ran.
 
 ## Checkpoint W — Production editor
 
@@ -788,5 +794,5 @@ Implementation clarifications: exhausted optimistic revision retries also map to
 historical stored compiler errors need the same bounded projection as new errors.
 The default suite and local synthetic sample acceptance replace any live-provider
 execution for this milestone, per the user's explicit instruction. U's concrete
-Storybook review remains before production integration. Design review does not
-establish implementation completion.
+Storybook inspection is complete; the user has deferred their review until after
+production integration. Design review does not establish implementation completion.

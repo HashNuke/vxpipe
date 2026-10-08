@@ -342,6 +342,63 @@ defmodule Vxpipe.Calls.CallSpecsTest do
              :crypto.hash(:sha256, :erlang.term_to_binary(first.plan, [:deterministic]))
   end
 
+  test "operator read selects latest or historical source with current publication metadata", %{
+    tenant: tenant,
+    other_tenant: other,
+    options: options
+  } do
+    authority = Vxpipe.Calls.InstallationOperator.authority()
+    {:ok, first} = CallSpecs.save(tenant.key, call_spec_input(), options)
+    {:ok, _} = CallSpecs.publish(tenant.key, first.call_spec_id, 1, options)
+
+    {:ok, _} =
+      CallSpecs.save(
+        tenant.key,
+        Map.put(call_spec_input(), :name, "Next"),
+        Keyword.put(options, :call_spec_id, first.call_spec_id)
+      )
+
+    assert {:ok, %{call_spec: latest, latest_revision: 2, published_revision: 1}} =
+             Vxpipe.Calls.fetch_operator_call_spec(
+               authority,
+               tenant.key,
+               first.call_spec_id,
+               options
+             )
+
+    assert latest.revision == 2
+    assert latest.source["name"] == "Next"
+
+    assert {:ok, %{call_spec: historical, published_revision: 1}} =
+             Vxpipe.Calls.fetch_operator_call_spec(
+               authority,
+               tenant.key,
+               first.call_spec_id,
+               Keyword.put(options, :revision, 1)
+             )
+
+    assert historical.source_digest == first.source_digest
+
+    assert {:error, :not_found} =
+             Vxpipe.Calls.fetch_operator_call_spec(
+               authority,
+               other.key,
+               first.call_spec_id,
+               options
+             )
+
+    assert {:error, :installation_operator_required} =
+             Vxpipe.Calls.fetch_operator_call_spec(nil, tenant.key, first.call_spec_id, options)
+
+    assert {:error, :invalid_request} =
+             Vxpipe.Calls.fetch_operator_call_spec(
+               authority,
+               tenant.key,
+               first.call_spec_id,
+               Keyword.put(options, :revision, 0)
+             )
+  end
+
   defp registries do
     %{
       host_tools: %{}

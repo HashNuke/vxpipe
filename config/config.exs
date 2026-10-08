@@ -10,6 +10,7 @@
 import Config
 
 config :phoenix, :filter_parameters, [
+  "source",
   "password",
   "secret",
   "token",
