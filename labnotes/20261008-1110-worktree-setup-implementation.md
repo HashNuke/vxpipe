@@ -258,3 +258,18 @@
 - All 15 synthetic Telnyx phone-harness tests pass, including storage-loss recovery
   variants. Root format/compile/strict Credo/dependency-use checks and the full Lean
   build/oracle/replay lane pass. No external-service or real live tests were run.
+
+## Startup assertion ordering and final rerun
+
+- The second concurrent run passes all 1,966 CallEngine tests in B. A finds one
+  narrower assertion failure in the provider-startup case. Repetition with a useful
+  assertion diagnostic reproduces `:room_audio_unavailable`: provider failure has
+  already removed room audio when the public attachment API resolves its handle.
+- This is an existing typed API outcome, not a production failure. The test now
+  accepts it alongside successful attachment or `:speech_to_text_unavailable`,
+  while retaining the exact monitored startup-failure reason and readiness checks.
+  Forty repetitions and all 19 lifecycle tests pass. No runtime code changed.
+- The already-failing A run is stopped after CallEngine and Calls finish; its logs
+  remain preserved. A will restart the complete default suite with this assertion
+  correction while B continues. B's runtime implementation is identical; only this
+  test assertion and labnotes differ between those acceptance revisions.

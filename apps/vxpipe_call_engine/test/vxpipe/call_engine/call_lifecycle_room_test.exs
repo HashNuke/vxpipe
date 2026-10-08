@@ -352,8 +352,16 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
 
     result = attach(plan, room, caller)
 
+    # Provider failure can tear down room audio after speech attachment returns
+    # but before the public API resolves its audio handle. All three outcomes
+    # must still lead to the exact startup-failure termination asserted below.
     assert match?({:ok, _attachment}, result) or
-             match?({:error, %Error{code: :speech_to_text_unavailable}}, result)
+             match?(
+               {:error, %Error{code: code}}
+               when code in [:speech_to_text_unavailable, :room_audio_unavailable],
+               result
+             ),
+           "unexpected attachment result: #{inspect(result)}"
 
     assert_receive :test_failing_stt_start_attempted, 1_000
     assert_receive {:test_call_lifecycle_timer_cancelled, ^readiness_timer}, 1_000
