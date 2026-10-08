@@ -378,3 +378,42 @@ __proto__ receiving a visibility override. The UI now uses own-property lookup
 and computed-key updates instead of treating inherited object members as source
 data. All nine panel tests pass. Final rendered policy interaction confirms
 recipient checkbox changes and no horizontal overflow; browser errors are empty.
+
+
+## Checkpoint U3: catalog-driven model controls
+
+Added shared capability fields and a Defaults panel. A provider selection uses
+its catalog recommendation, including adapter-owned options and voice parameter.
+The source keeps Deepgram model flux and options.voice separate. Model changes
+reset model options to the chosen descriptor while preserving the same provider's
+credential name and provider_options. Provider changes replace the whole selection
+so stale credentials and provider-specific options do not cross providers.
+Opening a saved selection performs no defaulting; legacy combined IDs remain
+visible until explicitly replaced. Default edits leave participant overrides intact.
+
+Six new tests began red on missing controls, then passed along with the existing
+seed tests after implementation. Full frontend verification passes 376 tests.
+Type check and lint pass; the Storybook build passes. The model-selection helper
+was extracted from seed.ts so new specs and explicit picker changes share the
+same descriptor semantics. Generic structured options remain a separate U3 task;
+these controls preserve options they do not yet expose.
+
+Rendered empty, saved-voice and legacy-model compositions in dark desktop and
+light phone layouts. Browser interaction changed Deepgram to Rime, edited its
+speaker and selected OpenAI STS with its declared free-text voice recommendation.
+A synthetic, clearly named story exercises the future known-voice-list contract;
+all currently captured runtime fixture descriptors use free-text voices or none.
+No horizontal overflow or browser errors in the final inspected states.
+
+The design hook also reported 23 existing admin.css token/radius findings while
+following the story's stylesheet import. This checkpoint does not change that
+stylesheet; existing branding and unrelated Console styles remain as requested.
+No design-rule suppression was added. Format, warnings-as-errors compilation,
+strict Credo and unused-lock checks pass. The full umbrella rerun ended early with :terminating after Gateway reported
+568 tests and no failures; Console did not run and the result is not acceptance.
+The log does not establish the termination cause. After confirming that process
+had exited, started one full seed-991936 rerun in an owned persistent tmux session
+with a separate exit-status record. No live tests ran.
+
+The voice-list screenshots initially caught the opening transition. Waiting for
+computed opacity 1 produced readable final menu captures in both themes.

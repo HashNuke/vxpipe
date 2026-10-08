@@ -1,4 +1,4 @@
-import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
+import type { CatalogCapability, ModelCatalog, ModelDescriptor } from "../modelCatalog";
 import type { CapabilitySelection, SourceDocument } from "./types";
 
 export function recommendedSelection(catalog: ModelCatalog, capability: CatalogCapability, provider: string): CapabilitySelection {
@@ -6,6 +6,10 @@ export function recommendedSelection(catalog: ModelCatalog, capability: CatalogC
   const models = providers && Object.hasOwn(providers, provider) ? providers[provider] : undefined;
   const model = models?.find((model) => model.default);
   if (!model) throw new Error("No recommended model is available for this provider. Reload the model catalog.");
+  return selectionForModel(provider, model);
+}
+
+export function selectionForModel(provider: string, model: ModelDescriptor): CapabilitySelection {
   const selection: CapabilitySelection = { provider, model: model.id };
   if (model.options) selection.options = structuredClone(model.options);
   if (model.voices) {

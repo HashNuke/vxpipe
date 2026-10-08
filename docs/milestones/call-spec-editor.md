@@ -621,8 +621,11 @@ inspected at 1440px and 390px; browser interactions cover adding an agent, drawi
 a new transfer, editing the spec name, arranging and opening Call settings.
 U3 has four policy-panel compositions (Direction, Media and recording, Wait sounds,
 Advanced), including explicit-denial/silence semantics and read-only controls.
-All 370 frontend tests pass; six panel stories have desktop/phone rendered checks.
-Defaults, Variables and full inspector integration remain before U3 is complete.
+The shared capability controls and Defaults panel now select catalog recommendations,
+keep model and voice separate, preserve saved choices and reset provider-specific
+selections on a provider change. All 376 frontend tests pass. Policy panels and
+model controls have desktop/phone rendered checks; structured option editing,
+Variables and full inspector integration remain before U3 is complete.
 The fresh umbrella run found an STS test precondition (corrected in ca407ea0) and
 the previously deferred five-participant WebRTC reconnection failure; final root
 acceptance remains pending. This is not the complete editor review.
