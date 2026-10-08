@@ -563,7 +563,7 @@ them as described under [Frontend](#frontend), and copies their existing stories
 them, so the first commit of each component shows Callpipe's version and later diffs show the
 adaptation.
 
-- [ ] **U1 — Dependencies, theme tokens and primitives.** Add `@xyflow/react` to
+- [x] **U1 — Dependencies, theme tokens and primitives.** Add `@xyflow/react` to
   `apps/vxpipe_console/assets/package.json` with its lockfile. In
   `apps/vxpipe_console/assets/src/admin/admin.css`, map the standard shadcn color tokens
   (`background`, `foreground`, `muted`, `muted-foreground`, `border`, `input`, `ring`,

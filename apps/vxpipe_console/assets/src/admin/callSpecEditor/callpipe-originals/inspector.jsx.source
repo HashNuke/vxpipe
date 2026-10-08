@@ -1,0 +1,97 @@
+import React from "react"
+
+import { AgentInspector } from "./agent-inspector"
+import { FlowLevelInspector } from "./flow-level-inspector"
+import { GenericNodeInspector } from "./generic-node-inspector"
+import { HumanInspector } from "./human-inspector"
+import { InboundInspector } from "./inbound-inspector"
+import { SelectedEdgeInspector } from "./selected-edge-inspector"
+
+export function Inspector({
+  organizationId,
+  workspaceId,
+  flowId,
+  selectedNode,
+  selectedEdge,
+  flow,
+  isChatFlow,
+  example,
+  nodes,
+  updateDefinition,
+  updateChatAgent,
+  updateFlowSettings,
+  updateNodeData,
+  onDeleteNode,
+  onDeleteEdge,
+  onAddTransferDestination,
+  onRemoveTransferDestination,
+  phoneCountryCode,
+  availableNumberPools
+}) {
+  if (selectedEdge) {
+    return (
+      <SelectedEdgeInspector selectedEdge={selectedEdge} onDeleteEdge={onDeleteEdge} />
+    )
+  }
+
+  if (!selectedNode) {
+    return (
+      <FlowLevelInspector
+        flow={flow}
+        isChatFlow={isChatFlow}
+        definition={example}
+        updateChatAgent={updateChatAgent}
+        updateDefinition={updateDefinition}
+        updateFlowSettings={updateFlowSettings}
+      />
+    )
+  }
+
+  const data = selectedNode.data
+  const canDeleteNode = selectedNode.id !== "inbound-call" && !selectedNode.data?.locked
+
+  if (data.kind === "agent") {
+    return (
+      <AgentInspector
+        organizationId={organizationId}
+        workspaceId={workspaceId}
+        flowId={flowId}
+        node={selectedNode}
+        definition={example}
+        allNodes={nodes}
+        updateDefinition={updateDefinition}
+        updateNodeData={updateNodeData}
+        onDeleteNode={onDeleteNode}
+        canDeleteNode={canDeleteNode}
+        onAddTransferDestination={onAddTransferDestination}
+        onRemoveTransferDestination={onRemoveTransferDestination}
+      />
+    )
+  }
+
+  if (data.kind === "human") {
+    return (
+      <HumanInspector
+        node={selectedNode}
+        updateNodeData={updateNodeData}
+        onDeleteNode={onDeleteNode}
+        canDeleteNode={canDeleteNode}
+        phoneCountryCode={phoneCountryCode}
+      />
+    )
+  }
+
+  if (data.kind === "start") {
+    return (
+      <InboundInspector
+        node={selectedNode}
+        updateNodeData={updateNodeData}
+        availableNumberPools={availableNumberPools}
+      />
+    )
+  }
+
+  return (
+    <GenericNodeInspector node={selectedNode} onDeleteNode={onDeleteNode} canDeleteNode={canDeleteNode} />
+  )
+}

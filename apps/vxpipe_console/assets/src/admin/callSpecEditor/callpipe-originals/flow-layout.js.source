@@ -1,0 +1,189 @@
+import dagre from "@dagrejs/dagre"
+
+export const FLOW_NODE_WIDTH = 320
+export const FLOW_NODE_HEIGHT = 132
+export const FLOW_START_NODE_HEIGHT = 72
+export const FLOW_LAYOUT_NODE_SEPARATION = 80
+export const FLOW_LAYOUT_RANK_SEPARATION = 40
+export const FLOW_LAYOUT_MARGIN = 48
+export const FLOW_LAYOUT_NEW_NODE_GAP = 180
+export const FLOW_LAYOUT_UNCONNECTED_GAP = 220
+
+function numericPosition(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function nodeHeight(node) {
+  const height = numericPosition(node.height ?? node.measured?.height)
+  if (height && height > 0) return height
+
+  return node?.data?.kind === "start" ? FLOW_START_NODE_HEIGHT : FLOW_NODE_HEIGHT
+}
+
+function nodeWidth(node) {
+  const width = numericPosition(node.width ?? node.measured?.width)
+  return width && width > 0 ? width : FLOW_NODE_WIDTH
+}
+
+function validPosition(node) {
+  const x = numericPosition(node?.position?.x)
+  const y = numericPosition(node?.position?.y)
+
+  return x === null || y === null ? null : { x, y }
+}
+
+function layoutEdges(edges, nodeIds) {
+  const seen = new Set()
+
+  return (Array.isArray(edges) ? edges : []).filter((edge) => {
+    if (!nodeIds.has(edge?.source) || !nodeIds.has(edge?.target)) return false
+    if (edge.source === edge.target) return false
+
+    const key = `${edge.source}->${edge.target}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function connectedComponents(nodes, edges) {
+  const remaining = new Set(nodes.map((node) => node.id))
+  const neighbors = nodes.reduce((map, node) => map.set(node.id, new Set()), new Map())
+
+  edges.forEach((edge) => {
+    neighbors.get(edge.source)?.add(edge.target)
+    neighbors.get(edge.target)?.add(edge.source)
+  })
+
+  const components = []
+
+  nodes.forEach((node) => {
+    if (!remaining.has(node.id)) return
+
+    const ids = []
+    const queue = [node.id]
+    remaining.delete(node.id)
+
+    while (queue.length > 0) {
+      const id = queue.shift()
+      ids.push(id)
+
+      ;(neighbors.get(id) || []).forEach((neighbor) => {
+        if (!remaining.has(neighbor)) return
+        remaining.delete(neighbor)
+        queue.push(neighbor)
+      })
+    }
+
+    components.push(ids)
+  })
+
+  return components
+}
+
+function arrangeWithDagre(nodes, edges, options = {}) {
+  const graph = new dagre.graphlib.Graph()
+
+  graph.setDefaultEdgeLabel(() => ({}))
+  graph.setGraph({
+    rankdir: "TB",
+    nodesep: options.nodesep ?? FLOW_LAYOUT_NODE_SEPARATION,
+    ranksep: options.ranksep ?? FLOW_LAYOUT_RANK_SEPARATION,
+    marginx: options.marginx ?? FLOW_LAYOUT_MARGIN,
+    marginy: options.marginy ?? FLOW_LAYOUT_MARGIN
+  })
+
+  nodes.forEach((node) => {
+    graph.setNode(node.id, {
+      width: nodeWidth(node),
+      height: nodeHeight(node)
+    })
+  })
+
+  edges.forEach((edge) => graph.setEdge(edge.source, edge.target))
+  dagre.layout(graph)
+
+  return nodes.map((node) => {
+    const layoutNode = graph.node(node.id)
+    if (!layoutNode) return node
+
+    return {
+      ...node,
+      position: {
+        x: layoutNode.x - nodeWidth(node) / 2,
+        y: layoutNode.y - nodeHeight(node) / 2
+      }
+    }
+  })
+}
+
+export function arrangeFlowNodes(nodes, edges, options = {}) {
+  if (!Array.isArray(nodes) || nodes.length === 0) return []
+
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  const validEdges = layoutEdges(edges, nodeIds)
+
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+  let yOffset = FLOW_LAYOUT_MARGIN
+  const arrangedById = new Map()
+
+  connectedComponents(nodes, validEdges).forEach((componentIds, componentIndex) => {
+    const componentNodes = componentIds.map((id) => nodeById.get(id)).filter(Boolean)
+    const componentIdSet = new Set(componentIds)
+    const componentEdges = validEdges.filter((edge) => componentIdSet.has(edge.source) && componentIdSet.has(edge.target))
+    const arrangedComponent = arrangeWithDagre(componentNodes, componentEdges, options)
+    const minY = Math.min(...arrangedComponent.map((node) => validPosition(node)?.y ?? 0))
+    const maxY = Math.max(...arrangedComponent.map((node) => {
+      const position = validPosition(node) || { y: 0 }
+      return position.y + nodeHeight(node)
+    }))
+    const offset = yOffset - minY
+
+    arrangedComponent.forEach((node) => {
+      arrangedById.set(node.id, {
+        ...node,
+        position: {
+          ...node.position,
+          y: node.position.y + offset
+        }
+      })
+    })
+
+    yOffset += (maxY - minY) + (componentIndex === 0 ? FLOW_LAYOUT_UNCONNECTED_GAP : FLOW_LAYOUT_NEW_NODE_GAP)
+  })
+
+  return nodes.map((node) => arrangedById.get(node.id) || node)
+}
+
+export function placeNewNodeBelow(nodes, selectedNode) {
+  const selectedPosition = validPosition(selectedNode)
+  const occupiedPositions = (Array.isArray(nodes) ? nodes : []).map((node) => validPosition(node)).filter(Boolean)
+
+  if (selectedPosition) {
+    let y = selectedPosition.y + nodeHeight(selectedNode) + FLOW_LAYOUT_NEW_NODE_GAP
+
+    while (occupiedPositions.some((position) =>
+      Math.abs(position.x - selectedPosition.x) < FLOW_NODE_WIDTH &&
+      Math.abs(position.y - y) < FLOW_LAYOUT_NEW_NODE_GAP
+    )) {
+      y += FLOW_LAYOUT_NEW_NODE_GAP
+    }
+
+    return {
+      x: selectedPosition.x,
+      y
+    }
+  }
+
+  if (occupiedPositions.length === 0) return { x: FLOW_LAYOUT_MARGIN, y: FLOW_LAYOUT_MARGIN }
+
+  const lowestPosition = occupiedPositions.reduce((lowest, position) =>
+    position.y > lowest.y ? position : lowest
+  )
+
+  return {
+    x: lowestPosition.x,
+    y: lowestPosition.y + FLOW_LAYOUT_NEW_NODE_GAP
+  }
+}

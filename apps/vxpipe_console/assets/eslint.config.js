@@ -24,4 +24,9 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Keep standard registry components unchanged; their variant exports are intentional.
+    files: ["src/admin/components/ui/*.tsx"],
+    rules: { "react-refresh/only-export-components": "off" },
+  },
 );

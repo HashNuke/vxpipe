@@ -1,0 +1,82 @@
+import React from "react"
+import { Timer, Trash2 } from "lucide-react"
+
+import { useTranslation } from "../../i18n"
+import { Badge, Button } from "../../ui"
+import { visibleNodeSubtitle } from "./display-helpers"
+import { InspectorRow, InspectorShell } from "./inspector-primitives"
+
+function nodeKindLabel(kind) {
+  return {
+    agent: "Agent node",
+    human: "Human handoff node",
+    end: "End node"
+  }[kind] || "Node"
+}
+
+export function GenericNodeInspector({ node, onDeleteNode, canDeleteNode }) {
+  const { t } = useTranslation()
+  const data = node.data
+  const subtitle = visibleNodeSubtitle(data)
+
+  return (
+    <InspectorShell title={data.label} subtitle={nodeKindLabel(data.kind)}>
+      <div className="space-y-4 text-sm">
+        {canDeleteNode && (
+          <Button variant="secondary" size="sm" className="w-full justify-start text-rose-700 hover:text-rose-800" onClick={() => onDeleteNode(node.id)}>
+            <Trash2 className="h-4 w-4" />
+            {t("flowEditor.actions.deleteNode")}
+          </Button>
+        )}
+
+        {subtitle && (
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Purpose</div>
+            <p className="mt-1 text-foreground">{subtitle}</p>
+          </div>
+        )}
+
+        {data.tools?.length > 0 && (
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tools</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {data.tools.map((tool) => <Badge key={tool} tone="blue">{tool}</Badge>)}
+            </div>
+          </div>
+        )}
+
+        {data.extracts?.length > 0 && (
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Variables</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {data.extracts.map((field) => <Badge key={field} tone="purple">{field}</Badge>)}
+            </div>
+          </div>
+        )}
+
+        {data.handoff && (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-emerald-950">
+            <div className="flex items-center gap-2 font-semibold">
+              <Timer className="h-4 w-4" />
+              Human handoff timing
+            </div>
+            <dl className="mt-3 space-y-2">
+              <InspectorRow label="Availability check" value={data.handoff.availabilityTimeout} />
+              <InspectorRow label="Ring duration" value={data.handoff.ringDuration} />
+              <InspectorRow label="Max attempt" value={data.handoff.totalAttemptDuration} />
+              <InspectorRow label="Retry" value={data.handoff.retryCount} />
+              <InspectorRow label="Fallback" value={data.handoff.unavailableFallback} />
+            </dl>
+          </div>
+        )}
+
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Runtime notes</div>
+          <ul className="mt-2 space-y-1.5 text-muted-foreground">
+            {data.details?.map((detail) => <li key={detail}>{detail}</li>)}
+          </ul>
+        </div>
+      </div>
+    </InspectorShell>
+  )
+}

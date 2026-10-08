@@ -1,0 +1,184 @@
+import React from "react"
+
+import { FlowEditorHeader, FlowNameDialog } from "./editor-header"
+import { FlowEditorToolbar } from "./editor-toolbar"
+import { FlowCanvas } from "./flow-canvas"
+import { FlowLevelInspector } from "./flow-level-inspector"
+import { Inspector } from "./inspector"
+import { FlowTestCallModal } from "./test-call-modal"
+
+export function FlowEditorLayout({ editor, organizationId, t, workspaceSocketToken }) {
+  if (editor.isChatFlow) {
+    return (
+      <main data-chat-flow-editor className="min-h-screen bg-slate-100 px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col gap-4">
+          {editor.loading && (
+            <div className="grid min-h-[22rem] place-items-center rounded-md border border-border bg-background text-sm font-medium text-muted-foreground">
+              {t("flowEditor.loading")}
+            </div>
+          )}
+
+          <FlowEditorHeader
+            layout="settings"
+            backHref={editor.backHref}
+            flowName={editor.flowName}
+            saving={editor.saving}
+            publishing={editor.publishing}
+            loading={editor.loading}
+            backLabel={t("flowEditor.actions.backToFlows")}
+            editNameLabel={t("flowEditor.actions.editFlowName")}
+            titleFallback={t("flowEditor.titleFallback")}
+            saveDraftLabel={t("flowEditor.actions.saveDraft")}
+            savingLabel={t("flowEditor.actions.saving")}
+            publishLabel={t("flowEditor.actions.publish")}
+            publishingLabel={t("flowEditor.actions.publishing")}
+            testCallLabel={t("flowEditor.actions.testCall")}
+            testchatLabel={t("flowEditor.actions.testchat")}
+            onEditFlowName={editor.beginFlowNameEdit}
+            onSaveDraft={() => editor.saveDraft().catch(() => {})}
+            onPublish={editor.publishDraft}
+            onOpenTestCall={null}
+            onOpenTestchat={editor.openTestchat}
+          />
+
+          <section className="min-h-0 flex-1 overflow-hidden rounded-md border border-border bg-background shadow-sm">
+            <FlowLevelInspector
+              flow={editor.flow}
+              isChatFlow={editor.isChatFlow}
+              definition={editor.example}
+              availableWhatsappPhoneNumbers={editor.availableWhatsappPhoneNumbers}
+              bindingWhatsappPhoneNumber={editor.bindingWhatsappPhoneNumber}
+              whatsappEntrypoint={editor.whatsappEntrypoint}
+              validationFieldErrors={editor.validationFieldErrors}
+              onBindWhatsappPhoneNumber={editor.bindWhatsappPhoneNumber}
+              updateChatAgent={editor.updateChatAgent}
+              updateDefinition={editor.updateDefinition}
+              updateFlowSettings={editor.updateFlowSettings}
+            />
+          </section>
+
+          <FlowNameDialog
+            open={editor.editingFlowName}
+            value={editor.flowNameDraft}
+            title={t("flowEditor.nameDialog.title")}
+            nameLabel={t("flowEditor.nameDialog.nameLabel")}
+            cancelLabel={t("flowEditor.nameDialog.cancel")}
+            saveLabel={t("flowEditor.nameDialog.save")}
+            onValueChange={editor.setFlowNameDraft}
+            onCancel={editor.cancelFlowNameEdit}
+            onSubmit={editor.submitFlowNameEdit}
+          />
+        </div>
+      </main>
+    )
+  }
+
+  return (
+    <main className="relative h-screen min-h-0 overflow-hidden overscroll-none bg-slate-100">
+      {editor.loading && (
+        <div className="absolute inset-0 z-20 grid place-items-center bg-background/80 text-sm font-medium text-muted-foreground">
+          {t("flowEditor.loading")}
+        </div>
+      )}
+      <FlowCanvas
+        nodes={editor.renderedNodes}
+        edges={editor.edges}
+        onNodesChange={editor.handleNodesChange}
+        onEdgesChange={editor.handleEdgesChange}
+        onConnect={editor.connectNodes}
+        onNodeClick={(_, node) => {
+          editor.setSelectedNodeId(node.id)
+          editor.setSelectedEdgeId(null)
+        }}
+        onEdgeClick={(_, edge) => {
+          editor.setSelectedEdgeId(edge.id)
+          editor.setSelectedNodeId(null)
+        }}
+        onPaneClick={() => {
+          editor.setSelectedNodeId(null)
+          editor.setSelectedEdgeId(null)
+        }}
+      />
+
+      <FlowEditorHeader
+        backHref={editor.backHref}
+        flowName={editor.flowName}
+        saving={editor.saving}
+        publishing={editor.publishing}
+        loading={editor.loading}
+        backLabel={t("flowEditor.actions.backToFlows")}
+        editNameLabel={t("flowEditor.actions.editFlowName")}
+        titleFallback={t("flowEditor.titleFallback")}
+        saveDraftLabel={t("flowEditor.actions.saveDraft")}
+        savingLabel={t("flowEditor.actions.saving")}
+        publishLabel={t("flowEditor.actions.publish")}
+        publishingLabel={t("flowEditor.actions.publishing")}
+        testCallLabel={t("flowEditor.actions.testCall")}
+        testchatLabel={t("flowEditor.actions.testchat")}
+        onEditFlowName={editor.beginFlowNameEdit}
+        onSaveDraft={() => editor.saveDraft().catch(() => {})}
+        onPublish={editor.publishDraft}
+        onOpenTestCall={editor.isChatFlow ? null : () => editor.setTestCallOpen(true)}
+        onOpenTestchat={editor.isChatFlow ? editor.openTestchat : null}
+      />
+
+      <FlowEditorToolbar
+        t={t}
+        onAddNode={editor.addNode}
+        onArrangeNodes={editor.arrangeNodes}
+      />
+
+      <section data-flow-editor-sidebar className="absolute inset-y-0 right-0 z-10 flex w-[min(34rem,100vw)] min-h-0 flex-col overflow-hidden border-l border-border bg-background/95 shadow-xl backdrop-blur">
+        <Inspector
+          organizationId={organizationId}
+          workspaceId={editor.effectiveWorkspaceId}
+          flowId={editor.flowId}
+          selectedNode={editor.selectedNode}
+          selectedEdge={editor.selectedEdge}
+          flow={editor.flow}
+          isChatFlow={editor.isChatFlow}
+          example={editor.example}
+          nodes={editor.renderedNodes}
+          updateDefinition={editor.updateDefinition}
+          updateChatAgent={editor.updateChatAgent}
+          updateFlowSettings={editor.updateFlowSettings}
+          updateNodeData={editor.updateNodeData}
+          onDeleteNode={editor.deleteNode}
+          onDeleteEdge={editor.deleteEdge}
+          onAddTransferDestination={editor.addTransferDestination}
+          onRemoveTransferDestination={editor.removeTransferDestination}
+          phoneCountryCode={editor.phoneCountryCode}
+          availableNumberPools={editor.availableNumberPools}
+        />
+      </section>
+
+      {!editor.isChatFlow && (
+        <FlowTestCallModal
+          open={editor.testCallOpen}
+          onClose={() => editor.setTestCallOpen(false)}
+          organizationId={organizationId}
+          workspaceId={editor.effectiveWorkspaceId}
+          flowId={editor.flowId}
+          dirtyDraft={editor.draftDirty}
+          onSaveDraft={editor.saveDraft}
+          aiCallerPrompt={editor.testCallAiPrompt}
+          onAiCallerPromptChange={editor.setTestCallAiPrompt}
+          workspaceSocketToken={workspaceSocketToken}
+          t={t}
+        />
+      )}
+
+      <FlowNameDialog
+        open={editor.editingFlowName}
+        value={editor.flowNameDraft}
+        title={t("flowEditor.nameDialog.title")}
+        nameLabel={t("flowEditor.nameDialog.nameLabel")}
+        cancelLabel={t("flowEditor.nameDialog.cancel")}
+        saveLabel={t("flowEditor.nameDialog.save")}
+        onValueChange={editor.setFlowNameDraft}
+        onCancel={editor.cancelFlowNameEdit}
+        onSubmit={editor.submitFlowNameEdit}
+      />
+    </main>
+  )
+}

@@ -1,0 +1,38 @@
+export function countItems(items) {
+  return Array.isArray(items) ? items.length : 0
+}
+
+export function pluralize(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+export function collectedVariables(data) {
+  const variables = data.variables || data.attributes || data.extracts || []
+
+  return variables.map((variable) => {
+    if (typeof variable === "string") {
+      return {
+        key: variable,
+        label: variable,
+        type: "text",
+        required: false
+      }
+    }
+
+    return {
+      required: false,
+      type: "text",
+      ...variable
+    }
+  })
+}
+
+export function visibleNodeSubtitle(data) {
+  if (data?.kind === "start") {
+    return ""
+  }
+
+  const subtitle = data?.subtitle?.trim()
+
+  return subtitle || ""
+}

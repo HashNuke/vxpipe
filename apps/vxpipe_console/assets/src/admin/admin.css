@@ -1,7 +1,66 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "@vxpipe/react/styles.css";
 @import "./tenantSetup.css";
 @source "./**/*.{ts,tsx}";
+
+
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *, [data-admin-editor-theme="dark"] *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Registry primitives use the same tokens locally and in body-mounted portals. */
+.vx-admin,
+body[data-admin-editor-theme] {
+  --background: var(--admin-bg);
+  --foreground: var(--admin-ink);
+  --card: var(--admin-panel);
+  --card-foreground: var(--admin-ink);
+  --popover: var(--admin-panel);
+  --popover-foreground: var(--admin-ink);
+  --primary: var(--admin-blue);
+  --primary-foreground: var(--admin-bg);
+  --secondary: var(--admin-soft);
+  --secondary-foreground: var(--admin-ink);
+  --muted: var(--admin-soft);
+  --muted-foreground: var(--admin-muted);
+  --accent: var(--admin-soft);
+  --accent-foreground: var(--admin-ink);
+  --destructive: var(--admin-red);
+  --border: var(--admin-line);
+  --input: var(--admin-line);
+  --ring: var(--admin-blue);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  :where(.vx-admin, body[data-admin-editor-theme]) * {
+    border-color: var(--border);
+  }
+}
 
 html,
 body,
@@ -10,7 +69,8 @@ body,
   margin: 0;
 }
 
-.vx-admin {
+.vx-admin,
+body[data-admin-editor-theme] {
   --admin-bg: oklch(0.141 0.005 285.823);
   --admin-panel: oklch(0.18 0.005 285);
   --admin-soft: oklch(0.274 0.006 286.033);
@@ -34,7 +94,8 @@ body,
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
-.vx-admin[data-theme="light"] {
+.vx-admin[data-theme="light"],
+body[data-admin-editor-theme="light"] {
   --admin-bg: oklch(0.985 0 0);
   --admin-panel: oklch(1 0 0);
   --admin-soft: oklch(0.967 0.001 286.375);

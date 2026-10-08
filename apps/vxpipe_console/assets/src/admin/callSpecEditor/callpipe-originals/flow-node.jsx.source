@@ -1,0 +1,117 @@
+import React from "react"
+import { Handle, Position } from "@xyflow/react"
+import { Bot, CircleAlert, Handshake, PhoneIncoming, Square, Variable, Wrench } from "lucide-react"
+
+import { cn as cx } from "@/lib/utils"
+import { collectedVariables, countItems, pluralize, visibleNodeSubtitle } from "./display-helpers"
+
+const nodeTone = {
+  start: {
+    icon: PhoneIncoming,
+    iconClassName: "h-4 w-4",
+    className: "border-sky-200 bg-sky-50 text-sky-900",
+    handle: "bg-sky-500"
+  },
+  agent: {
+    icon: Bot,
+    iconClassName: "h-5 w-5",
+    className: "border-border bg-card text-card-foreground",
+    handle: "bg-slate-500"
+  },
+  human: {
+    icon: Handshake,
+    iconClassName: "h-4 w-4",
+    className: "border-border bg-card text-card-foreground",
+    handle: "bg-slate-500"
+  },
+  end: {
+    icon: Square,
+    iconClassName: "h-4 w-4",
+    className: "border-border bg-card text-card-foreground",
+    handle: "bg-slate-500"
+  }
+}
+
+function nodeIssueCount(data) {
+  return countItems(data.issues)
+}
+
+export function FlowNode({ data, selected }) {
+  const tone = nodeTone[data.kind] || nodeTone.agent
+  const Icon = tone.icon
+  const hasInput = data.kind !== "start"
+  const hasOutput = data.kind !== "end"
+  const showCapabilityBadges = data.kind !== "start"
+  const subtitle = visibleNodeSubtitle(data)
+  const toolCount = countItems(data.tools)
+  const mcpCount = countItems(data.mcps)
+  const variableCount = collectedVariables(data).length
+  const issues = nodeIssueCount(data)
+  const showNodeIndicators = issues > 0
+  const label = data.kind === "start" ? "Inbound" : data.label
+  const connectorClass = cx(
+    "group h-7 w-7 rounded-full border-[3px] border-white bg-slate-950 shadow-md shadow-slate-900/30 ring-2 ring-slate-950 transition hover:scale-125 hover:bg-white hover:ring-[3px] hover:ring-slate-950 focus-visible:scale-125 focus-visible:bg-white focus-visible:ring-[3px] focus-visible:ring-slate-950 before:absolute before:left-1/2 before:top-1/2 before:h-2.5 before:w-0.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-white before:content-[''] after:absolute after:left-1/2 after:top-1/2 after:h-0.5 after:w-2.5 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-white after:content-[''] hover:before:bg-slate-950 hover:after:bg-slate-950 focus-visible:before:bg-slate-950 focus-visible:after:bg-slate-950",
+    tone.handle
+  )
+
+  return (
+    <div
+      className={cx(
+        "relative w-80 rounded-md border bg-white p-3 shadow-sm transition",
+        tone.className,
+        selected && "ring-2 ring-slate-950 ring-offset-2"
+      )}
+    >
+      {hasInput && (
+        <Handle
+          type="target"
+          position={Position.Top}
+          className={connectorClass}
+        />
+      )}
+      <div
+        data-flow-node-content
+        className={cx("flex gap-3", subtitle ? "items-start" : "items-center")}
+      >
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-current/15 bg-white/75">
+          <Icon className={tone.iconClassName} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div data-flow-node-title-row className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</div>
+            {showNodeIndicators && (
+              <div className="flex shrink-0 items-center gap-1 text-[11px] font-medium">
+                {issues > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-sm bg-rose-50 px-1.5 py-0.5 text-rose-700 ring-1 ring-rose-200">
+                    <CircleAlert className="h-3 w-3" />
+                    {issues}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          {subtitle && <div className="mt-0.5 line-clamp-2 text-xs opacity-75">{subtitle}</div>}
+        </div>
+      </div>
+      {showCapabilityBadges && (
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <span className="inline-flex items-center gap-1 rounded-sm bg-white/80 px-2 py-1 font-medium shadow-sm">
+            <Wrench className="h-3 w-3" />
+            {pluralize(toolCount, "tool")} · {mcpCount} MCP
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-sm bg-white/80 px-2 py-1 font-medium shadow-sm">
+            <Variable className="h-3 w-3" />
+            {pluralize(variableCount, "variable")}
+          </span>
+        </div>
+      )}
+      {hasOutput && (
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className={connectorClass}
+        />
+      )}
+    </div>
+  )
+}

@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import type { StorybookConfig } from "@storybook/react-vite";
 import tailwindcss from "@tailwindcss/vite";
@@ -35,6 +36,7 @@ const config: StorybookConfig = {
     plugins: [...(config.plugins ?? []), tailwindcss()],
     resolve: {
       ...config.resolve,
+      alias: { ...config.resolve?.alias, "@": fileURLToPath(new URL("../apps/vxpipe_console/assets/src", import.meta.url)) },
       dedupe: [...(config.resolve?.dedupe ?? []), "react", "react-dom"],
     },
     server: {

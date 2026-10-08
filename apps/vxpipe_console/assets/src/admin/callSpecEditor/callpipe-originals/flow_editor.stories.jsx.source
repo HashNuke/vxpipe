@@ -1,0 +1,352 @@
+import React from "react"
+import { expect, userEvent, waitFor, within } from "storybook/test"
+
+import { serverFlowEditorResponse } from "../../../tests/fixtures.js"
+import { apiDelete, apiGet, apiPatch, apiPost, pageParameters, WorkspaceStory } from "../storybook.jsx"
+import { FlowEditorPage } from "./flow_editor.jsx"
+
+const editorApiPath = "/api/o/1/workspaces/11/flows/21/editor"
+const draftApiPath = "/api/o/1/workspaces/11/flows/21/draft"
+const testCallApiPath = "/api/o/1/workspaces/11/flows/21/test-call"
+const publishApiPath = "/api/o/1/workspaces/11/flows/21/publish"
+const whatsappEntrypointApiPath = "/api/o/1/workspaces/11/flows/21/whatsapp-entrypoint"
+
+const editorWithTransferEdge = {
+  ...serverFlowEditorResponse,
+  definition: {
+    ...serverFlowEditorResponse.definition,
+    edges: [
+      ...serverFlowEditorResponse.definition.edges,
+      { id: "intake-handoff", source: "intake", target: "human-handoff", label: "transfer" }
+    ]
+  }
+}
+
+const editorWithSavedPrompt = {
+  ...serverFlowEditorResponse,
+  flow: {
+    ...serverFlowEditorResponse.flow,
+    test_call_ai_caller_prompt: "Ask about same-day availability."
+  }
+}
+
+const chatEditorWithWhatsAppEnabled = {
+  ...serverFlowEditorResponse,
+  flow: {
+    ...serverFlowEditorResponse.flow,
+    name: "Chat intake",
+    flow_type: "chat"
+  },
+  definition: {
+    flow_type: "chat",
+    channels: {
+      testchat: { enabled: true, locked: false },
+      whatsapp: { enabled: true, locked: false }
+    },
+    chat_agent: {
+      id: "chat-agent",
+      kind: "chat_agent",
+      instructions: "Answer clearly and hand off when needed.",
+      starters: [],
+      variables: []
+    },
+    validation: { errors: [], warnings: [] }
+  },
+  available_whatsapp_phone_numbers: [
+    {
+      id: 7,
+      phone_number_id: "phone-7",
+      display_phone_number: "+1 555-123-4567",
+      verified_name: "Brightline WhatsApp",
+      status: "active"
+    }
+  ],
+  whatsapp_entrypoint: null
+}
+
+const chatEditorWithWhatsAppBinding = {
+  ...chatEditorWithWhatsAppEnabled,
+  whatsapp_entrypoint: {
+    id: 3,
+    channel: "whatsapp_business",
+    provider: "meta.whatsapp",
+    status: "active",
+    default: true,
+    whatsapp_phone_number_id: 7,
+    phone_number: chatEditorWithWhatsAppEnabled.available_whatsapp_phone_numbers[0]
+  }
+}
+
+const startedTestCallResponse = {
+  session_id: "VX-TC-STORY1",
+  status: "connecting",
+  mode: "ai",
+  connection_id: "debug-listener-webrtc",
+  support_reference: "VX-TC-STORY1",
+  test_call_token: "test-call-token-1",
+  signaling: { channel: "flow_test_call:VX-TC-STORY1" },
+  events: { channel: "flow_test_call_events:VX-TC-STORY1" },
+  snapshot: { session: { id: "VX-TC-STORY1", status: "connecting" } }
+}
+
+const stoppedTestCallResponse = {
+  status: "ended",
+  session_id: "VX-TC-STORY1"
+}
+
+const editorHandlers = [
+  apiGet(editorApiPath, serverFlowEditorResponse),
+  apiPatch(draftApiPath, serverFlowEditorResponse),
+  apiPost(testCallApiPath, startedTestCallResponse),
+  apiDelete(`${testCallApiPath}/VX-TC-STORY1`, stoppedTestCallResponse)
+]
+
+const meta = {
+  title: "Workspace/Flows/Pages/Flow Editor",
+  component: FlowEditorPage,
+  render: (args) => <WorkspaceStory pathname={args.pathname} />,
+  args: {
+    pathname: "/o/1/w/11/flows/21/edit"
+  },
+  argTypes: {
+    pathname: { control: "text" }
+  },
+  parameters: {
+    layout: "fullscreen"
+  }
+}
+
+export default meta
+
+export const Default = {
+  parameters: pageParameters(editorHandlers),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.findByRole("heading", { name: "New Patient Appointment Intake" })).resolves.toBeInTheDocument()
+    await expect(canvas.findByRole("toolbar", { name: "Add flow nodes" })).resolves.toBeInTheDocument()
+    await expect(canvas.findByLabelText("Agent name")).resolves.toHaveValue("Roof intake agent")
+  }
+}
+
+export const Loading = {
+  parameters: pageParameters([
+    apiGet(editorApiPath, serverFlowEditorResponse, { delay: "infinite" })
+  ]),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.findByText("Loading flow editor...")).resolves.toBeInTheDocument()
+  }
+}
+
+export const FlowLevelInspector = {
+  parameters: pageParameters(editorHandlers),
+  play: async ({ canvasElement }) => {
+    const pane = await waitFor(() => canvasElement.querySelector(".react-flow__pane"))
+    await userEvent.click(pane)
+
+    const sidebar = within(canvasElement.querySelector("[data-flow-editor-sidebar]"))
+    await expect(sidebar.findByText("Flow properties")).resolves.toBeInTheDocument()
+    await expect(sidebar.findByText("Brightline Dental Studio")).resolves.toBeInTheDocument()
+  }
+}
+
+export const InboundInspector = {
+  parameters: pageParameters(editorHandlers),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByText("Inbound"))
+
+    const sidebar = within(canvasElement.querySelector("[data-flow-editor-sidebar]"))
+    await expect(sidebar.findByText("Inbound number")).resolves.toBeInTheDocument()
+    await expect(sidebar.findByRole("switch", { name: "Call recording disclosure" })).resolves.toBeChecked()
+  }
+}
+
+export const HumanInspector = {
+  parameters: pageParameters(editorHandlers),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByText("On-call roof specialist"))
+
+    const sidebar = within(canvasElement.querySelector("[data-flow-editor-sidebar]"))
+    await expect(sidebar.findByLabelText("Human agent name")).resolves.toHaveValue("On-call roof specialist")
+    await expect(sidebar.findByLabelText("Local phone number")).resolves.toHaveValue("3035550184")
+  }
+}
+
+export const AgentVariables = {
+  parameters: pageParameters(editorHandlers),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByRole("tab", { name: "Variables" }))
+    await expect(canvas.findByDisplayValue("Visitor name")).resolves.toBeInTheDocument()
+    await expect(canvas.findByDisplayValue("Reason for call")).resolves.toBeInTheDocument()
+    await expect(canvas.findByDisplayValue("Urgency")).resolves.toBeInTheDocument()
+  }
+}
+
+export const AgentTransfers = {
+  parameters: pageParameters([
+    apiGet(editorApiPath, editorWithTransferEdge),
+    apiPatch(draftApiPath, editorWithTransferEdge)
+  ]),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByRole("tab", { name: "Transfers" }))
+
+    const sidebar = within(canvasElement.querySelector("[data-flow-editor-sidebar]"))
+    await expect(sidebar.findByText("On-call roof specialist")).resolves.toBeInTheDocument()
+    await expect(sidebar.findByRole("button", { name: "Add" })).resolves.toBeInTheDocument()
+  }
+}
+
+export const SelectedEdgeInspector = {
+  parameters: pageParameters([
+    apiGet(editorApiPath, editorWithTransferEdge)
+  ]),
+  play: async ({ canvasElement }) => {
+    await waitFor(() => expect(canvasElement.querySelector(".react-flow__edge")).toBeTruthy())
+    await userEvent.click(canvasElement.querySelectorAll(".react-flow__edge")[1])
+
+    const sidebar = within(canvasElement.querySelector("[data-flow-editor-sidebar]"))
+    await expect(sidebar.findByText("Selected edge")).resolves.toBeInTheDocument()
+    await expect(sidebar.findByText("intake")).resolves.toBeInTheDocument()
+    await expect(sidebar.findByText("human-handoff")).resolves.toBeInTheDocument()
+  }
+}
+
+export const AddAgent = {
+  parameters: pageParameters(editorHandlers),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const toolbar = await canvas.findByRole("toolbar", { name: "Add flow nodes" })
+    await userEvent.click(within(toolbar).getByRole("button", { name: "AI agent" }))
+
+    await expect(canvas.findByDisplayValue("New agent")).resolves.toBeInTheDocument()
+    await expect(canvas.findByRole("tab", { name: "System prompt" })).resolves.toBeInTheDocument()
+  }
+}
+
+export const SaveDraft = {
+  parameters: pageParameters(editorHandlers),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.findByRole("heading", { name: "New Patient Appointment Intake" })).resolves.toBeInTheDocument()
+    await userEvent.click(canvas.getByRole("button", { name: "Save draft" }))
+    await expect(canvas.findByRole("button", { name: /Save draft|Saving/ })).resolves.toBeInTheDocument()
+  }
+}
+
+export const PublishValidationError = {
+  parameters: pageParameters([
+    apiGet(editorApiPath, chatEditorWithWhatsAppEnabled),
+    apiPost(
+      publishApiPath,
+      {
+        errors: { channels: { whatsapp: ["send_capable_phone_binding_required"] } },
+        error_keys: { channels: { whatsapp: ["flowEditor.errors.whatsappBindingRequired"] } }
+      },
+      { status: 422 }
+    )
+  ]),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.findByRole("heading", { name: "Chat intake" })).resolves.toBeInTheDocument()
+    await userEvent.click(canvas.getByRole("button", { name: "Publish" }))
+    await expect(
+      canvas.findByText("Connect and assign a ready WhatsApp phone number before publishing this WhatsApp chat flow.")
+    ).resolves.toBeInTheDocument()
+  }
+}
+
+export const StarterValidationError = {
+  parameters: pageParameters([
+    apiGet(editorApiPath, chatEditorWithWhatsAppEnabled),
+    apiPatch(
+      draftApiPath,
+      {
+        errors: {
+          definition: [
+            "chat_agent starterList en button_label must be 20 characters or fewer",
+            "chat_agent starter language_switch sv row_description is required"
+          ]
+        },
+        field_errors: [
+          {
+            path: ["chat_agent", "starterList", "translations", "en", "button_label"],
+            message_key: "flowEditor.errors.starterListButtonLabelTooLong",
+            values: { locale: "en", limit: "20" }
+          },
+          {
+            path: [
+              "chat_agent",
+              "starters",
+              "language_switch",
+              "translations",
+              "sv",
+              "row_description"
+            ],
+            message_key: "flowEditor.errors.starterRowDescriptionRequired",
+            values: { starter: "language_switch", locale: "sv" }
+          }
+        ]
+      },
+      { status: 422 }
+    )
+  ]),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.findByRole("heading", { name: "Chat intake" })).resolves.toBeInTheDocument()
+    await userEvent.click(canvas.getByRole("button", { name: "Save draft" }))
+    await expect(canvas.findByTestId("whatsapp-starter-validation-errors")).resolves.toBeInTheDocument()
+    await expect(canvas.findByText("List button label (en)")).resolves.toBeInTheDocument()
+    await expect(canvas.findByText("List button label for en must be 20 characters or fewer.")).resolves.toBeInTheDocument()
+  }
+}
+
+export const WhatsAppPhoneBinding = {
+  parameters: pageParameters([
+    apiGet(editorApiPath, chatEditorWithWhatsAppEnabled),
+    apiPost(whatsappEntrypointApiPath, chatEditorWithWhatsAppBinding)
+  ]),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.findByRole("heading", { name: "Chat intake" })).resolves.toBeInTheDocument()
+    await userEvent.click(await canvas.findByRole("tab", { name: "Channels" }))
+    await userEvent.selectOptions(await canvas.findByLabelText("WhatsApp phone number"), "7")
+    await expect(canvas.findByText("WhatsApp phone assigned.")).resolves.toBeInTheDocument()
+  }
+}
+
+export const TestCallModal = {
+  parameters: pageParameters([
+    apiGet(editorApiPath, editorWithSavedPrompt),
+    apiPost(testCallApiPath, startedTestCallResponse),
+    apiDelete(`${testCallApiPath}/VX-TC-STORY1`, stoppedTestCallResponse)
+  ]),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByRole("button", { name: "Test call" }))
+
+    const dialog = await canvas.findByRole("dialog", { name: "Test call" })
+    await expect(within(dialog).findByRole("tab", { name: "Test setup" })).resolves.toHaveAttribute("aria-selected", "true")
+    await expect(within(dialog).findByRole("textbox", { name: "AI caller prompt" })).resolves.toHaveValue("Ask about same-day availability.")
+  }
+}
+
+export const TestCallStarted = {
+  parameters: pageParameters([
+    apiGet(editorApiPath, editorWithSavedPrompt),
+    apiPost(testCallApiPath, startedTestCallResponse),
+    apiDelete(`${testCallApiPath}/VX-TC-STORY1`, stoppedTestCallResponse)
+  ]),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByRole("button", { name: "Test call" }))
+
+    const dialog = await canvas.findByRole("dialog", { name: "Test call" })
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Let AI speak" }))
+    await userEvent.click(within(dialog).getByRole("button", { name: "Start test" }))
+    await expect(within(dialog).findByRole("button", { name: "Connecting audio" })).resolves.toBeDisabled()
+  }
+}

@@ -232,3 +232,34 @@ startup readiness acknowledgement before inspecting resources and pushing audio.
 The corrected five-test file passes. No production speech/source state machine was
 changed; no Lean lane is needed for this test synchronization correction. The
 first full run remains failed evidence; a complete final run is still required.
+
+## Checkpoint U foundation and copied baseline
+
+- Preserved 17 required Callpipe component/story files byte-for-byte from commit
+  2ea5ee0c503ef3690ad0d4e2139ee07bbbc985fd. Hashes and provenance are recorded in
+  callSpecEditor/callpipe-originals. The initial `.source` suffix keeps this copy
+  checkpoint usable without importing Callpipe-only dependencies or exposing its
+  excluded features. Adaptations will move these files to strict TypeScript.
+- Installed React Flow and all 25 requested standard registry controls (26 files,
+  including the toggle dependency) using the shadcn CLI's new-york Radix style.
+  Registry files are unchanged after CLI generation. The current registry uses
+  upstream `cn` and `radix-ui` packages; these are recorded in the assets lockfile.
+  Existing Console buttons remain unchanged. Added tw-animate-css for the registry
+  motion utilities, TS/Storybook/Vitest aliases, and a narrow lint exception for
+  intentional registry variant exports. No product custom-control replacement.
+- Read the official CLI/components.json and React Flow guides, and the installed
+  CLI help before use. Added a red test for editor-owned body portal theme lifetime,
+  then a restoring EditorTheme wrapper. Console's existing tokens now supply the
+  standard semantic shadcn tokens in both themes, including body-mounted portals.
+- The theme-check composition renders form, disabled/error states, dialog and
+  popover at desktop/phone dimensions. Headless Chrome verifies dark desktop and
+  light 390px phone; portal computed backgrounds/foregrounds match their theme,
+  and the light phone has no horizontal overflow. Waited for animation completion
+  before final portal screenshots. Browser errors are empty. Old Storybook handle
+  was confirmed terminal after connection refusal; started a new worktree server.
+- Type check and lint pass. Storybook build succeeds. All 350 frontend tests in
+  42 files pass. Rendered onboarding at 390px retains the same catalog defaults
+  (including Flux / hannah), has no horizontal overflow, and has no editor body
+  theme attribute after navigation.
+  The S final umbrella run is still in progress; its corrected full Call Engine
+  suite passes 2,066 tests, zero failures, 74 excluded.
