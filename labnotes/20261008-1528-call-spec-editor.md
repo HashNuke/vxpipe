@@ -332,3 +332,49 @@ the tested sink-interruption precondition explicit without sleeps or production
 state-machine changes. The full 63-test STS capability file passes with seed
 991936. The first umbrella run remains failed evidence; final umbrella acceptance
 must be rerun. No Lean run is needed for this test-only synchronization change.
+
+## Checkpoint U3: direction and policy panels
+
+Added field compositions from the standard registry controls and adapted the
+committed Callpipe InspectorShell. Direction editing preserves participant data
+and requires an explicit phone service and agent before switching to outgoing.
+Media fields expose call-wide and presence policy shapes, wait sounds distinguish
+omitted defaults from explicit silence, and Advanced exposes tool visibility,
+per-tool overrides, duration and transfer timeout. Optional values are omitted
+only when explicitly cleared; read-only documents disable all mutation controls.
+
+Seven focused tests started red on absent modules. Reading the backend policy
+contracts identified two important UI distinctions, then additional red cases
+confirmed the initial controls were wrong: an explicit empty route map denies
+all pairs (inheritance is at the map level), and wait_sounds: null silences every
+slot. The controls now preserve both meanings across edits. Routing requires an
+explicit Restricted selection; each source offers Nobody or All other
+participants, with checkboxes for a custom set. The full frontend suite passes
+370 tests; type check, lint and Storybook build pass.
+
+Rendered six composition stories at dark 1440x1000 and light 390x844: direction,
+media/recording, wait sounds, all-silent, invalid timeout and historical read-only.
+No horizontal overflow. Corrected shrinking inspector headers and waited for the
+Storybook play function and dialog/Select dismissal animations before final
+screenshots. The outgoing dialog requires service selection and produces a
+callee/agent direction in the browser; final browser errors are empty. These are
+U3 component compositions, not the complete Call settings tabbed inspector;
+Defaults and Variables remain before U3 can be checked off.
+
+The complete U2 umbrella rerun exited with two failures, seed 991936: the STS
+precondition fixed in ca407ea0, and the already-recorded five-participant WebRTC
+listener-reconnection case (missing 250 Hz audio after closing the original
+monitor connection). The transfer milestone explicitly defers investigation of
+that latter case. Existing coverage and runtime behavior are retained; a scoped
+same-seed reproduction is running, followed by a new complete default run.
+
+The unchanged isolated five-participant WebRTC case passes with seed 991936
+(1 test, 68 excluded). This does not establish or repair its intermittent cause.
+A full default rerun with that seed is now active after ca407ea0.
+
+Final review added two red cases for supported prototype-shaped identifiers:
+a participant named constructor with an empty route map, and a tool named
+__proto__ receiving a visibility override. The UI now uses own-property lookup
+and computed-key updates instead of treating inherited object members as source
+data. All nine panel tests pass. Final rendered policy interaction confirms
+recipient checkbox changes and no horizontal overflow; browser errors are empty.

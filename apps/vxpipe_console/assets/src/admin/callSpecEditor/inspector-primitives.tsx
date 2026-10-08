@@ -1,13 +1,15 @@
-import React from "react"
+import type { ReactNode } from "react"
+import type { LucideIcon } from "lucide-react"
+import { Label } from "../components/ui/label"
 
-export function FieldLabel({ children }) {
-  return <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{children}</label>
+export function FieldLabel({ children }: { children: ReactNode }) {
+  return <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{children}</Label>
 }
 
-export function InspectorShell({ title, subtitle, icon: Icon, children }) {
+export function InspectorShell({ title, subtitle, icon: Icon, children }: { title: string; subtitle?: string; icon?: LucideIcon; children: ReactNode }) {
   return (
     <aside className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-card">
-      <div className="border-b border-border p-4">
+      <div className="shrink-0 border-b border-border p-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
           <span>{title}</span>
@@ -19,7 +21,7 @@ export function InspectorShell({ title, subtitle, icon: Icon, children }) {
   )
 }
 
-export function InspectorRow({ label, value }) {
+export function InspectorRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <dt className="shrink-0 text-muted-foreground">{label}</dt>

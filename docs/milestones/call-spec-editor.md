@@ -619,7 +619,13 @@ a read-only state and a narrow-screen inspector Sheet. All 361 frontend tests,
 type check, lint and Storybook build pass. Six component/shell stories were
 inspected at 1440px and 390px; browser interactions cover adding an agent, drawing
 a new transfer, editing the spec name, arranging and opening Call settings.
-Inspector bodies remain U3–U5 work; this is not the complete editor review.
+U3 has four policy-panel compositions (Direction, Media and recording, Wait sounds,
+Advanced), including explicit-denial/silence semantics and read-only controls.
+All 370 frontend tests pass; six panel stories have desktop/phone rendered checks.
+Defaults, Variables and full inspector integration remain before U3 is complete.
+The fresh umbrella run found an STS test precondition (corrected in ca407ea0) and
+the previously deferred five-participant WebRTC reconnection failure; final root
+acceptance remains pending. This is not the complete editor review.
 
 ## Checkpoint C — Console authoring endpoints
 
