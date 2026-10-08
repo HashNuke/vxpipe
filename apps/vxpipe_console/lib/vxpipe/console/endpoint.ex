@@ -1,15 +1,8 @@
 defmodule Vxpipe.Console.Endpoint do
   use Phoenix.Endpoint, otp_app: :vxpipe_console
 
-  @session_options [
-    store: :cookie,
-    key: "_vxpipe_console_key",
-    signing_salt: "vxpipe-console",
-    same_site: "Lax"
-  ]
-
   socket "/admin/diagnostics/live", Vxpipe.Console.DiagnosticsSocket,
-    websocket: [connect_info: [:uri, session: @session_options]]
+    websocket: [connect_info: [:uri, session: {Vxpipe.Console.BrowserSession, :options, []}]]
 
   if code_reloading? do
     socket "/phoenix/live_reload/socket", Vxpipe.Console.LiveReloadSocket,
@@ -34,6 +27,6 @@ defmodule Vxpipe.Console.Endpoint do
     plug Phoenix.CodeReloader
   end
 
-  plug Plug.Session, @session_options
+  plug Vxpipe.Console.BrowserSession
   plug Vxpipe.Console.Router
 end

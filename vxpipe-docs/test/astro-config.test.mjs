@@ -13,6 +13,7 @@ function loadConfig(env) {
       host: config.server?.host ?? false,
       allowedHosts: config.server?.allowedHosts ?? [],
       port: config.server?.port ?? 4321,
+      strictPort: config.vite?.server?.strictPort ?? false,
       https: config.vite?.server?.https ? {
         cert: config.vite.server.https.cert.toString(),
         key: config.vite.server.https.key.toString(),
@@ -36,7 +37,7 @@ test('ordinary development keeps localhost HTTP despite stale Tailscale settings
       APP_HOST: 'console.example.ts.net',
       VXPIPE_DEV_TLS_CERTFILE: '/missing/cert.crt',
       VXPIPE_DEV_TLS_KEYFILE: '/missing/cert.key',
-    }), { host: false, allowedHosts: [], port: 4321, https: null });
+    }), { host: false, allowedHosts: [], port: 4321, strictPort: true, https: null });
   }
 });
 
@@ -57,7 +58,14 @@ test('Tailscale development uses the launcher address and certificate on port 43
   }), {
     host: '100.64.0.12',
     allowedHosts: ['console.example.ts.net'],
-    port: 4321,
+    port: 4321, strictPort: true,
     https: { cert: 'fixture certificate', key: 'fixture key' },
   });
+});
+
+
+test('assigned Astro port is used without automatic port drift', () => {
+  const config = loadConfig({ ASTRO_PORT: '14321', VXPIPE_DEV_TLS: 'http' });
+  assert.equal(config.port, 14321);
+  assert.equal(config.strictPort, true);
 });

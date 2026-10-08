@@ -83,6 +83,40 @@ probes only read nonexistent names. Fixed ports in configuration assertions do n
 start listeners; reviewed default-suite wire servers bind port zero. The explicit
 live telephony lane retains its separately reserved listener and remains excluded.
 
+## Development ports and sessions
+
+Metadata optionally includes three distinct `ports`: `console`, `astro` and
+`storybook`. Setup serializes only allocation through a short user-state file lock
+and atomically persists reservations in `$XDG_STATE_HOME/vxpipe/worktrees/ports.json`
+(default `~/.local/state`). It scans from 4000, 4321 and 6006, excluding all reserved
+or occupied ports and live port 4600. Reruns keep reservations stable. Missing
+checkout directories can be reclaimed only when all three ports are free.
+
+`--reassign-ports` requires stopped listeners and keeps identity/databases intact.
+Registry publication precedes checkout metadata: interruption can leave a reservation
+without matching local ports, which a rerun repairs. Launchers check socket availability
+but do not hold sockets across process startup; a competing external program can still
+win that race, so the servers also fail on bind rather than choose another port.
+Astro uses strictPort and Storybook exact-port. Explicit shell overrides are the
+caller's responsibility and do not rewrite reservations.
+
+Runtime Console defaults and the three launchers consume the same metadata.
+`PORT`, `ASTRO_PORT` and `STORYBOOK_PORT` override assigned ports. `bin/dev` preserves
+shell PORT/APP_HOST ahead of `.env`; Storybook resolves the Console public origin
+using shell, public `.env` settings and then metadata. HTTPS development remains
+an explicit Tailscale launcher mode using the selected port.
+
+Cookies share a hostname across ports. Initialized development Consoles therefore
+use `_vxpipe_console_<id>` session keys through runtime Plug.Session options,
+including the diagnostic websocket's session configuration. Production and legacy
+checkouts retain `_vxpipe_console_key`. This separates browser sessions without
+requiring a distinct hostname or browser profile for every checkout.
+
+Optional docs setup runs locked `npm ci`; optional verification uses `elan run`
+with the tracked Lean toolchain, without automatic installation. Mutable output
+remains checkout-local. Retired databases and checkout files require separate,
+explicit cleanup; setup never deletes them.
+
 ## Verification and limits
 
 The synthetic setup suite covers missing tools, unsupported versions, unavailable
@@ -91,9 +125,9 @@ stable reruns/branch changes, interrupted publication, malformed/copied metadata
 URL selection, conflicting or unowned DB targets, dependency/migration failures and
 unexpected lockfile changes. All external commands in that suite are fixtures.
 
-Real local acceptance has initialized and rerun one checkout, verified separate
-dev/test targets through actual root/child Mix startup, preserved marker rows across
-rerun, and passed plain child database tests. This is partial milestone evidence;
-fresh concurrent checkout bootstrap, port/session isolation
-and complete simultaneous suites remain required in the
+Real local acceptance has initialized and rerun the original checkout and two fresh
+worktrees, verified distinct marked dev/test databases and private output directories,
+preserved secrets/metadata, and passed both owning child suites concurrently.
+Synthetic port/launcher/cookie checks pass. Rendered multi-server checks and complete
+simultaneous umbrella suites remain required in the
 [worktree setup milestone](milestones/worktree-setup.md).

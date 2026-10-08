@@ -3,7 +3,7 @@ defmodule Vxpipe.Console.WorktreeRuntimeConfigurationTest do
 
   @config Path.expand("../../../../../config", __DIR__)
   @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE
-    VXPIPE_TEST_DATABASE_URL VXPIPE_TEST_DATABASE PGHOST PGUSER PGPASSWORD
+    VXPIPE_TEST_DATABASE_URL VXPIPE_TEST_DATABASE PGHOST PGPORT PGUSER PGPASSWORD
     VXPIPE_CREDENTIAL_KEY_ID VXPIPE_CREDENTIAL_KEYS STORAGE_BUCKET AWS_SESSION_TOKEN
     VXPIPE_RECORDING_ENABLED VXPIPE_DEV_TENANT TELEPHONY_HOST APP_HOST PORT SECRET_KEY_BASE
     VXPIPE_DEV_TLS)
@@ -68,6 +68,16 @@ defmodule Vxpipe.Console.WorktreeRuntimeConfigurationTest do
 
     assert Keyword.get(repo(root, :dev), :password) == nil
     assert Keyword.get(repo(root, :dev), :url) == nil
+  end
+
+  test "local database runtime uses the same explicit port and password as setup", %{root: root} do
+    System.put_env("PGPORT", "15432")
+    System.put_env("PGPASSWORD", "synthetic-password")
+
+    for environment <- [:dev, :test] do
+      assert Keyword.get(repo(root, environment), :port) == 15432
+      assert Keyword.get(repo(root, environment), :password) == "synthetic-password"
+    end
   end
 
   test "environment overrides win and test ignores development aliases", %{root: root} do
@@ -150,6 +160,53 @@ defmodule Vxpipe.Console.WorktreeRuntimeConfigurationTest do
       error = assert_raise RuntimeError, fn -> repo(root, :test) end
       assert Exception.message(error) =~ "worktree metadata"
       refute Exception.message(error) =~ "private-invalid"
+    end
+  end
+
+  test "development uses the assigned Console port and a checkout-specific cookie", %{
+    root: root,
+    metadata: metadata
+  } do
+    metadata =
+      Map.put(metadata, "ports", %{"console" => 4501, "astro" => 4502, "storybook" => 4503})
+
+    File.write!(Path.join(root, ".vxpipe/worktree.json"), JSON.encode!(metadata))
+    runtime = Config.Reader.read!(Path.join(root, "config/runtime.exs"), env: :dev)
+    console = Keyword.fetch!(runtime, :vxpipe_console)
+    endpoint = Keyword.fetch!(console, Vxpipe.Console.Endpoint)
+    assert endpoint |> Keyword.fetch!(:url) |> Keyword.fetch!(:port) == 4501
+    assert Keyword.fetch!(console, :session_cookie_name) == "_vxpipe_console_#{@id}"
+    System.put_env("PORT", "4511")
+
+    explicit =
+      Config.Reader.read!(Path.join(root, "config/runtime.exs"), env: :dev)
+      |> Keyword.fetch!(:vxpipe_console)
+      |> Keyword.fetch!(Vxpipe.Console.Endpoint)
+
+    assert explicit |> Keyword.fetch!(:url) |> Keyword.fetch!(:port) == 4511
+
+    production =
+      Config.Reader.read!(Path.join(root, "config/runtime.exs"), env: :prod)
+      |> Keyword.fetch!(:vxpipe_console)
+
+    refute Keyword.has_key?(production, :session_cookie_name)
+  end
+
+  test "invalid port metadata fails before binding a development server", %{
+    root: root,
+    metadata: metadata
+  } do
+    for ports <- [
+          %{"console" => 4600, "astro" => 4502, "storybook" => 4503},
+          %{"console" => 4501, "astro" => 4501, "storybook" => 4503},
+          %{"console" => "4501"}
+        ] do
+      File.write!(
+        Path.join(root, ".vxpipe/worktree.json"),
+        JSON.encode!(Map.put(metadata, "ports", ports))
+      )
+
+      assert_raise RuntimeError, ~r/worktree metadata/, fn -> repo(root, :dev) end
     end
   end
 

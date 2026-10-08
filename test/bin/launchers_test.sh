@@ -35,7 +35,7 @@ make_executable() {
   chmod +x "$fake_bin/$name"
 }
 
-for command in bash dirname jq mkdir chmod mktemp mv rm readlink; do
+for command in bash python3 dirname jq mkdir chmod mktemp mv rm readlink; do
   ln -s "$(command -v "$command")" "$fake_bin/$command"
 done
 
@@ -53,7 +53,8 @@ assert_line "$app_log" "run"
 assert_line "$app_log" "--no-halt"
 
 mkdir -p "$test_tmp/repo/bin"
-cp "$repo_root/bin/dev" "$test_tmp/repo/bin/dev"
+cp "$repo_root/bin/dev" "$repo_root/bin/worktree-port" "$test_tmp/repo/bin/"
+cp -R "$repo_root/bin/lib" "$test_tmp/repo/bin/lib"
 printf '%s\n' 'VXPIPE_TEST_DOTENV=loaded' >"$test_tmp/repo/.env"
 PATH="$fake_bin" VXPIPE_TEST_COMMAND_LOG="$app_log" "$test_tmp/repo/bin/dev"
 assert_line "$app_log" "loaded"

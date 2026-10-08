@@ -14,8 +14,10 @@ worktree =
   end
 
 local_database_connection = fn ->
+  port = String.to_integer(nonempty_env.("PGPORT") || "5432")
+
   local_socket_dir =
-    Enum.find(["/var/run/postgresql", "/tmp"], &File.exists?(Path.join(&1, ".s.PGSQL.5432")))
+    Enum.find(["/var/run/postgresql", "/tmp"], &File.exists?(Path.join(&1, ".s.PGSQL.#{port}")))
 
   connection =
     case nonempty_env.("PGHOST") do
@@ -25,7 +27,12 @@ local_database_connection = fn ->
       hostname -> [hostname: hostname]
     end
 
-  connection ++ [username: nonempty_env.("PGUSER") || System.fetch_env!("USER")]
+  connection ++
+    [
+      username: nonempty_env.("PGUSER") || System.fetch_env!("USER"),
+      port: port,
+      password: nonempty_env.("PGPASSWORD")
+    ]
 end
 
 if config_env() == :test do
@@ -119,7 +126,6 @@ if database_enabled? do
       local_database_connection.() ++
         [
           url: nil,
-          password: nonempty_env.("PGPASSWORD"),
           database: worktree["databases"]["dev"],
           pool_size: database_pool_size
         ]
@@ -217,10 +223,12 @@ if config_env() == :dev do
       value -> value |> String.trim() |> String.trim_trailing(".")
     end
 
-  port =
-    "PORT"
-    |> System.get_env("4000")
-    |> String.to_integer()
+  default_port = if worktree, do: get_in(worktree, ["ports", "console"]) || 4000, else: 4000
+  port = String.to_integer(nonempty_env.("PORT") || Integer.to_string(default_port))
+
+  if worktree do
+    config :vxpipe_console, :session_cookie_name, "_vxpipe_console_#{worktree["id"]}"
+  end
 
   console_host = if app_host in [nil, ""], do: "localhost", else: app_host
 

@@ -123,3 +123,36 @@
   support. Other writers use ExUnit/checkouts; missing-file probes are read-only;
   ordinary wire servers bind zero. Fixed ports in configuration assertions do not
   create listeners. Cross-worktree concurrent owning-suite acceptance remains open.
+
+
+## Fresh concurrent acceptance completed
+
+- Both sibling acceptance worktrees finish fresh setup and rerun successfully.
+  `.env` and metadata hashes remain unchanged; lockfiles remain clean. PostgreSQL
+  has four distinct marked databases with migrations. Mutable dependency and
+  frontend output directories have distinct inodes and no shared symlinks.
+- Both reruns start at 12:02:17 UTC. Providers: 30 tests each, no failures.
+  Persistence: 214 tests each, no failures, 12 live cases excluded. Persistence
+  overlaps from 12:03:27 through 12:03:53 UTC. Checkpoints 2–4 now meet their exits.
+
+## Checkpoint 5 in progress
+
+- Allocator regression tests first failed on missing port metadata, then passed
+  concurrent distinct assignments, stable reruns, occupied ports, reassignment and
+  conservative stale reservation reclamation. Live port 4600 is always excluded.
+- Cookie regression first failed because login wrote the shared cookie key. Runtime
+  session options now give initialized development checkouts separate cookie names;
+  the same browser retains both sessions. Production uses the existing cookie key.
+- Launcher regressions reproduced absent exports, ignored collisions and shell
+  override precedence; fixes pass. Astro uses the assigned port with strict binding.
+  Storybook delegates to a checkout-aware launcher with exact-port behavior.
+- Optional setup tests cover missing tools and failed builds. Elan shorthand was
+  rejected after inspecting its help: it implicitly installs missing toolchains.
+  Explicit `elan run` uses the pinned installed toolchain without `--install`.
+- 32 synthetic setup tests, launcher shell checks, three Astro config tests and
+  27 Console runtime/login/origin tests pass. Browser and full concurrent gates
+  remain open. No live-provider commands or credential files were used.
+- Added a focused red/green connection test after review found runtime ignored
+  setup's `PGPORT` and test `PGPASSWORD`. Runtime now uses the same explicit port,
+  socket search and password. Nine configuration tests pass; formatting,
+  warnings-as-errors compilation and strict Credo remain green.

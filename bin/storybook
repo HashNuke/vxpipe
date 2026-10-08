@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+port="$("$repo_root/bin/worktree-port" storybook --check)"
+cd "$repo_root"
+exec "$repo_root/node_modules/.bin/storybook" dev --port "$port" --exact-port \
+  --host 127.0.0.1 --no-open --disable-telemetry "$@"

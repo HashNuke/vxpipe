@@ -11,10 +11,17 @@ defmodule Vxpipe.Console.OperatorLoginFlowTest do
   setup do
     original_calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
     original_secret = Application.fetch_env!(:vxpipe_console, :operator_login_secret)
+    original_cookie_name = Application.get_env(:vxpipe_console, :session_cookie_name)
 
     on_exit(fn ->
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, original_calls)
       Application.put_env(:vxpipe_console, :operator_login_secret, original_secret)
+
+      if original_cookie_name do
+        Application.put_env(:vxpipe_console, :session_cookie_name, original_cookie_name)
+      else
+        Application.delete_env(:vxpipe_console, :session_cookie_name)
+      end
     end)
 
     Application.put_env(:vxpipe_console, :operator_login_secret, @secret)
@@ -79,6 +86,28 @@ defmodule Vxpipe.Console.OperatorLoginFlowTest do
     assert %{"operator" => true, "expires_at" => expires_at} = json_response(api, 200)
     assert is_binary(expires_at)
     assert private_auth_response?(api)
+  end
+
+  test "two checkout cookies on the same hostname retain independent operator sessions" do
+    Application.put_env(:vxpipe_console, :session_cookie_name, "_checkout_a")
+    authenticated_a = post_challenge(https_get("/auth/login-token/#{@token}"), @token, "01234567")
+    assert Map.has_key?(authenticated_a.resp_cookies, "_checkout_a")
+
+    Application.put_env(:vxpipe_console, :session_cookie_name, "_checkout_b")
+    other = authenticated_a |> recycle() |> https_get("/admin/api/session")
+    assert other.status == 401
+    form_b = other |> recycle() |> https_get("/auth/login-token/#{@token}")
+    authenticated_b = post_challenge(form_b, @token, "01234567")
+    assert Map.has_key?(authenticated_b.resp_cookies, "_checkout_b")
+    assert Map.has_key?(authenticated_b.req_cookies, "_checkout_a")
+
+    Application.put_env(:vxpipe_console, :session_cookie_name, "_checkout_a")
+    session_a = authenticated_b |> recycle() |> https_get("/admin/api/session")
+    assert %{"operator" => true} = json_response(session_a, 200)
+
+    Application.put_env(:vxpipe_console, :session_cookie_name, "_checkout_b")
+    session_b = session_a |> recycle() |> https_get("/admin/api/session")
+    assert %{"operator" => true} = json_response(session_b, 200)
   end
 
   test "uses one generic response for unknown, expired, exhausted, and consumed challenges" do

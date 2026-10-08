@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import type { StorybookConfig } from "@storybook/react-vite";
 import tailwindcss from "@tailwindcss/vite";
 import { loadEnv } from "vite";
@@ -10,7 +11,10 @@ const publicSettings = loadEnv("development", process.cwd(), [
 ]);
 const publicOrigin = setupPublicOrigin({
   APP_HOST: process.env.APP_HOST ?? publicSettings.APP_HOST,
-  PORT: process.env.PORT ?? publicSettings.PORT,
+  PORT: execFileSync("bin/worktree-port", ["console"], {
+    encoding: "utf8",
+    env: { ...process.env, PORT: process.env.PORT ?? publicSettings.PORT ?? "" },
+  }).trim(),
   VXPIPE_DEV_TLS: process.env.VXPIPE_DEV_TLS ?? publicSettings.VXPIPE_DEV_TLS,
 });
 

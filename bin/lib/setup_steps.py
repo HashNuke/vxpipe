@@ -21,13 +21,13 @@ def redact(output, environment):
     return re.sub(r"postgres(?:ql)?://[^\s'\"<>]+", "[redacted database URL]", output)
 
 
-def run_step(root, environment, arguments, label):
+def run_step(root, environment, arguments, label, *, cwd=None):
     print(f"Preparing {label}…", flush=True)
     settings = os.environ | {"MIX_ENV": environment}
     lockfiles = [root / name for name in ("mix.lock", "package-lock.json",
                  "apps/vxpipe_console/assets/package-lock.json", "vxpipe-docs/package-lock.json")]
     before = {path: path.read_bytes() if path.exists() else None for path in lockfiles}
-    process = subprocess.Popen(arguments, cwd=root, env=settings, stdout=subprocess.PIPE,
+    process = subprocess.Popen(arguments, cwd=cwd or root, env=settings, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, start_new_session=True)
     try:
         output, _ = process.communicate()

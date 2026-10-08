@@ -5,13 +5,17 @@ export function developmentServerConfig(env) {
   const tailscale = env.VXPIPE_DEV_TLS === 'phoenix';
 
   return {
-    server: tailscale ? {
-      host: env.VXPIPE_TAILSCALE_IP,
-      allowedHosts: [env.APP_HOST ?? ''],
-    } : {},
+    server: {
+      port: Number(env.ASTRO_PORT || 4321),
+      ...(tailscale ? {
+        host: env.VXPIPE_TAILSCALE_IP,
+        allowedHosts: [env.APP_HOST ?? ''],
+      } : {}),
+    },
 
     vite: {
       server: {
+        strictPort: true,
         https: tailscale ? {
           cert: readFileSync(env.VXPIPE_DEV_TLS_CERTFILE ?? ''),
           key: readFileSync(env.VXPIPE_DEV_TLS_KEYFILE ?? ''),

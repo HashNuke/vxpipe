@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import signal
 import shlex
+import shutil
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from setup_preflight import SetupError, preflight
@@ -13,18 +14,27 @@ from setup_database import preflight_connections, prepare_databases
 from setup_steps import run_step
 from setup_environment import initialize_environment
 from setup_isolation import check_isolation
+from worktree_ports import assign_ports
 
 
 def main():
-    parser = argparse.ArgumentParser(usage="Usage: bin/setup", description=__doc__)
-    parser.parse_args()
+    parser = argparse.ArgumentParser(usage="Usage: bin/setup [--reassign-ports] [--with-docs] [--with-lean]", description=__doc__)
+    parser.add_argument("--reassign-ports", action="store_true", help="assign new development ports after stopping current listeners")
+    parser.add_argument("--with-docs", action="store_true", help="install locked Astro dependencies")
+    parser.add_argument("--with-lean", action="store_true", help="build verification with the pinned installed Lean toolchain")
+    arguments = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     check_isolation(root)
     preflight(root)
+    if arguments.with_lean:
+        for command in ("lake", "elan"):
+            if not shutil.which(command):
+                raise SetupError(f"missing optional tool: {command}; install elan and the pinned Lean toolchain")
     preflight_connections()
     with setup_lock(root):
         metadata = identity(root)
         print(f"Checkout identity: {metadata['id']}", flush=True)
+        ports = assign_ports(root, metadata, arguments.reassign_ports)
         initialize_environment(root, metadata["id"])
         prepare_databases(metadata)
         run_step(root, "dev", ["mix", "deps.get"], "Mix dependencies")
@@ -32,6 +42,12 @@ def main():
         run_step(root, "dev", ["mix", "assets.build"], "frontend build")
         for environment in ("dev", "test"):
             run_step(root, environment, ["mix", "ecto.migrate"], f"{environment} database migration")
+        if arguments.with_docs:
+            run_step(root, "dev", ["npm", "--prefix", "vxpipe-docs", "ci"], "Astro dependencies")
+        if arguments.with_lean:
+            toolchain = (root / "verification/lean-toolchain").read_text().strip()
+            run_step(root, "dev", ["elan", "run", toolchain, "lake", "build"], "Lean build", cwd=root / "verification")
+        print(f"Assigned URLs: Console http://localhost:{ports['console']}, Astro http://localhost:{ports['astro']}, Storybook http://localhost:{ports['storybook']}")
         print("Ready for local development. Next commands:")
         print(f"  cd {shlex.quote(str(root))} && bin/dev")
         print(f"  cd {shlex.quote(str(root))} && mix test")

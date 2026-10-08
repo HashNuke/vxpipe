@@ -35,13 +35,13 @@ def setup_lock(root):
         yield
 
 
-def identity(root):
+def read_identity(root):
     path = root / ".vxpipe/worktree.json"
     if path.exists():
         try:
             value = json.loads(path.read_text())
             identifier = value["id"]
-            if (value["version"] != 1 or value["root"] != str(root)
+            if (type(value["version"]) is not int or value["version"] != 1 or value["root"] != str(root)
                     or not isinstance(identifier, str)
                     or not re.fullmatch(r"[a-f0-9]{32}", identifier)
                     or value["databases"] != database_names(identifier)):
@@ -49,6 +49,14 @@ def identity(root):
         except (OSError, ValueError, KeyError, TypeError):
             raise SetupError("invalid, unsupported or copied worktree metadata; preserve it for recovery and run setup with fresh metadata in this checkout") from None
         return value
+    return None
+
+
+def identity(root):
+    value = read_identity(root)
+    if value is not None:
+        return value
+    path = root / ".vxpipe/worktree.json"
     identifier = secrets.token_hex(16)
     value = {"version": 1, "id": identifier, "root": str(root), "databases": database_names(identifier)}
     atomic_json(path, value)

@@ -1,10 +1,9 @@
 # Worktree setup and concurrent development
 
-Status: in progress; **1 of 6 checkpoints complete**. Branch-lifetime live-test
-ownership is implemented and verified with synthetic commands (2026-10-08). Setup
-now prepares databases, assets and local secrets; fresh/concurrent acceptance,
-temporary-file isolation and development port/session isolation remain pending. Research and local specification
-review completed 2026-10-08.
+Status: in progress; **4 of 6 checkpoints complete**. Branch ownership, isolated
+databases, fresh/repeatable bootstrap and temporary-file isolation are verified
+(2026-10-08). Development port/session integration and complete concurrent acceptance
+remain in progress. Research and local specification review completed 2026-10-08.
 
 Prerequisites: the existing database/configuration contracts from
 [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md)
@@ -94,7 +93,7 @@ bin/setup
 ```
 
 The initial `bin/setup` now prepares dependencies, assets, local secrets and isolated
-databases; fresh/concurrent acceptance remains pending. A new
+databases; fresh concurrent bootstrap and reruns pass. A new
 worktree receives committed files, so its branch must contain the setup
 implementation. Uncommitted setup changes in another checkout are not inherited.
 
@@ -175,14 +174,12 @@ Owning files: new `bin/setup`, a focused metadata reader, runtime/test configura
   Red-test partial migration/setup failure and data-preserving reruns. Never reset,
   drop or silently adopt another checkout's DB. Document focused child-test use.
 
-Partial progress (2026-10-08): runtime dev/test defaults and the versioned metadata
-reader are implemented. Five new boundary tests (four initially red), plus the six
-existing database configuration tests, pass. Socket/current-role development and
-explicit URL precedence are covered; production ignores metadata. The initial setup command now passes 17 synthetic checks and real local initialization/
-rerun. Actual root/child dev/test startup selects the expected databases, plain child
-Persistence tests pass, and marker rows survive rerun in both databases. Two-checkout
-database acceptance remains unverified, so checkpoint 2 stays incomplete. See the
-[isolation decision](../worktree-isolation.md).
+Evidence (2026-10-08): synthetic setup and runtime boundary tests pass, including
+root/linked discovery, explicit overrides and copied metadata refusal. Actual root
+and child dev/test startup selects the intended DBs. Probe rows in both databases
+survive rerun. Two fresh worktrees have distinct database names and ownership
+comments; each passes 214 Persistence tests with 12 live cases excluded, concurrently.
+See the [isolation decision](../worktree-isolation.md).
 
 Exit: on the prepared machine, two initialized worktrees can run database-backed
 focused tests using plain `mix test`, without shell activation or shared DB state.
@@ -207,17 +204,16 @@ setup shell tests and the development guide.
 - [x] Print completed steps and exact next commands without credentials. Explain
   that ordinary local startup needs no live credentials, while actual voice samples
   still require separate tenant/provider provisioning.
-- [ ] Verify fresh bootstrap on the existing machine and a data-preserving rerun;
+- [x] Verify fresh bootstrap on the existing machine and a data-preserving rerun;
   update development instructions without replacing operator onboarding docs.
 
 Exit: one command prepares dependencies, assets, configuration and databases for
 local development; a repeat invocation retains all existing data and secrets.
 
-Partial bootstrap evidence (2026-10-08): 24 synthetic tests pass, including new
-secret generation/preservation, required asset ordering, dependency/asset/migration
-failures, private output checks and interruption cleanup. Full bootstrap passes on
-the existing machine checkout with unchanged lockfiles. Fresh-checkout bootstrap
-and the complete rerun are still pending; checkpoint 3 remains incomplete.
+Bootstrap evidence (2026-10-08): 24 synthetic bootstrap checks pass. The existing
+checkout and two fresh worktrees complete setup and reruns with unchanged lockfiles,
+metadata and `.env` hashes. Both fresh builds run concurrently with two BEAM
+schedulers and two Cargo jobs per checkout; native and frontend builds succeed.
 
 ## Checkpoint 4 — Remove cross-process temporary-file collisions
 
@@ -232,18 +228,18 @@ Persistence operator-task tests and Providers Deepgram fixture tests/support.
   each owning boundary. Preserve live fixture generation/reuse behavior.
 - [x] Audit remaining filesystem and local-listener fixtures for shared mutable
   paths and fixed bound ports; distinguish assertions from actual listeners.
-- [ ] Run the focused owning suites concurrently from two worktrees and record
+- [x] Run the focused owning suites concurrently from two worktrees and record
   evidence. Do not depend on a wrapper exporting `TMPDIR` for plain Mix safety.
 
 Exit: ordinary fixture work and cleanup remain independent across BEAM instances
 and checkouts, including focused child test commands.
 
-Partial fixture evidence (2026-10-08): the two-BEAM scratch test first fails on the
-shared system-temp path, then passes with overlapping fixture lifetimes and one
-process finishing while the other's files remain usable. Six Providers fixture
-checks and two Persistence operator-task checks pass. The filesystem/listener audit
-is recorded in [checkout isolation](../worktree-isolation.md). Concurrent owning
-suites in the two new worktrees remain pending; checkpoint 4 is incomplete.
+Fixture evidence (2026-10-08): the two-BEAM scratch test first fails on the shared
+system-temp path, then passes with synchronized overlapping lifetimes. Both fresh
+worktrees pass 30 Providers tests and 214 Persistence tests concurrently. The two
+acceptance runs start at 12:02:17 UTC; Persistence executions overlap from 12:03:27
+through 12:03:53 UTC. Other mutable test paths and ordinary listeners were audited;
+see [checkout isolation](../worktree-isolation.md).
 
 ## Checkpoint 5 — Run development tools side by side
 

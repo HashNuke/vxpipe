@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+"""Resolve a development port without writing checkout or shared state."""
+import argparse
+import os
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from setup_preflight import SetupError
+from worktree_state import read_identity
+from worktree_ports import DEFAULT_PORTS, LIVE_PORT, port_available, valid_ports
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("service", choices=DEFAULT_PORTS)
+    parser.add_argument("--check", action="store_true", help="refuse an occupied listener")
+    arguments = parser.parse_args()
+    root = Path(__file__).resolve().parent.parent
+    metadata = read_identity(root)
+    ports = metadata.get("ports") if metadata else None
+    if ports is not None and not valid_ports(ports):
+        raise SetupError("invalid development port metadata; rerun bin/setup after repairing it")
+    variable = {"console": "PORT", "astro": "ASTRO_PORT", "storybook": "STORYBOOK_PORT"}[arguments.service]
+    selected = os.environ.get(variable) or str((ports or DEFAULT_PORTS)[arguments.service])
+    if not selected.isdecimal() or not 1024 <= int(selected) <= 65535 or int(selected) == LIVE_PORT:
+        raise SetupError(f"{variable} must be a development port between 1024 and 65535, excluding live port 4600")
+    port = int(selected)
+    if arguments.check and not port_available(port):
+        raise SetupError(f"{arguments.service} port {port} is occupied; stop its listener, set {variable}, or stop this checkout's servers and run bin/setup --reassign-ports")
+    print(port)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except SetupError as error:
+        print(f"worktree-port: {error}", file=sys.stderr)
+        sys.exit(1)

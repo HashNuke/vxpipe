@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import socket
 import subprocess
 import tempfile
 import unittest
@@ -22,7 +23,7 @@ class SetupTest(unittest.TestCase):
         shutil.copytree(REPOSITORY / "bin", self.root / "bin")
         self.fake = self.base / "tools"
         self.fake.mkdir()
-        for tool in ("python3", "git", "bash"):
+        for tool in ("python3", "git", "bash", "dirname"):
             (self.fake / tool).symlink_to(shutil.which(tool))
         for tool in ("mix", "elixir", "erl", "node", "npm", "cargo", "cc", "c++", "make", "pkg-config", "psql"):
             self.tool(tool, "exit 0")
@@ -42,6 +43,77 @@ class SetupTest(unittest.TestCase):
         return subprocess.run([str((root or self.root) / "bin/setup"), *arguments],
                               cwd=self.base, env=self.environment | environment,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+    def launch(self, name, **environment):
+        return subprocess.run([str(self.root / "bin" / name)], cwd=self.base,
+                              env=self.environment | environment, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, text=True)
+
+    def test_launchers_use_assigned_ports_and_explicit_overrides(self):
+        self.assertEqual(self.setup().returncode, 0)
+        ports = json.loads((self.root / ".vxpipe/worktree.json").read_text())["ports"]
+        self.tool("mix", 'printf "console:%s" "$PORT"')
+        self.tool("npm", 'printf "astro:%s" "$ASTRO_PORT"')
+        self.assertEqual(self.launch("dev").stdout, f"console:{ports['console']}")
+        self.assertEqual(self.launch("site-dev").stdout, f"astro:{ports['astro']}")
+        (self.root / ".env").write_text("PORT=19501\n")
+        self.assertEqual(self.launch("dev").stdout, "console:19501")
+        self.assertEqual(self.launch("dev", PORT="19502").stdout, "console:19502")
+        self.assertEqual(self.launch("site-dev", ASTRO_PORT="19503").stdout, "astro:19503")
+
+    def test_launcher_refuses_occupied_or_live_port_before_command(self):
+        self.assertEqual(self.setup().returncode, 0)
+        self.tool("mix", 'printf "MIX_STARTED"')
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+            result = self.launch("dev", PORT=str(listener.getsockname()[1]))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("occupied", result.stdout)
+        self.assertNotIn("MIX_STARTED", result.stdout)
+        result = self.launch("dev", PORT="4600")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("MIX_STARTED", result.stdout)
+
+    def test_storybook_launcher_uses_reserved_port_and_keeps_console_origin(self):
+        self.assertEqual(self.setup().returncode, 0)
+        ports = json.loads((self.root / ".vxpipe/worktree.json").read_text())["ports"]
+        binary = self.root / "node_modules/.bin"
+        binary.mkdir(parents=True)
+        command = binary / "storybook"
+        command.write_text('#!/bin/bash\nprintf "%s\\n" "$@"\n')
+        command.chmod(0o755)
+        result = self.launch("storybook")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn(f"--port\n{ports['storybook']}\n", result.stdout)
+        self.assertIn("--exact-port", result.stdout)
+        result = self.launch("storybook", STORYBOOK_PORT="19504")
+        self.assertIn("--port\n19504\n", result.stdout)
+        metadata = (self.root / ".vxpipe/worktree.json").read_bytes()
+        result = subprocess.run([str(self.root / "bin/worktree-port"), "console"],
+                                env=self.environment, capture_output=True, text=True)
+        self.assertEqual(result.stdout.strip(), str(ports["console"]))
+        self.assertEqual((self.root / ".vxpipe/worktree.json").read_bytes(), metadata)
+
+    def test_optional_setup_checks_tools_and_runs_requested_steps(self):
+        missing = self.setup("--with-lean")
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("lake", missing.stdout)
+        self.assertFalse((self.root / ".vxpipe").exists())
+        (self.root / "verification").mkdir()
+        (self.root / "verification/lean-toolchain").write_text("leanprover/lean4:v4.34.1\n")
+        self.tool("lake", "exit 0")
+        self.tool("elan", '[[ "$PWD" == */verification ]] && [[ "$*" == "run leanprover/lean4:v4.34.1 lake build" ]]')
+        self.tool("npm", '[[ "$*" == "--prefix vxpipe-docs ci" ]]')
+        result = self.setup("--with-lean", "--with-docs")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("Completed Astro dependencies", result.stdout)
+        self.assertIn("Completed Lean build", result.stdout)
+        self.tool("elan", "exit 3")
+        failed = self.setup("--with-lean")
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("Lean build failed", failed.stdout)
+        self.assertNotIn("Ready", failed.stdout)
 
     def test_help_is_read_only(self):
         result = self.setup("--help")
@@ -111,7 +183,7 @@ class SetupTest(unittest.TestCase):
         self.assertEqual(first.returncode, 0, first.stdout)
         path = self.root / ".vxpipe/worktree.json"
         metadata = json.loads(path.read_text())
-        for content in ("private-invalid", json.dumps(metadata | {"version": 100}),
+        for content in ("private-invalid", json.dumps(metadata | {"version": 100}), json.dumps(metadata | {"version": True}),
                         json.dumps(metadata | {"root": str(self.base / "another")})):
             path.write_text(content)
             result = self.setup()
@@ -331,6 +403,79 @@ signal.pause()
         result = self.setup()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual((self.root / ".vxpipe/worktree.json").read_text(), metadata)
+
+    def another_checkout(self, name):
+        root = self.base / name
+        root.mkdir()
+        shutil.copytree(self.root / "bin", root / "bin")
+        subprocess.run([str(self.fake / "git"), "init", "-q", "-b", name, str(root)], check=True)
+        return root
+
+    def ports(self, root=None):
+        return json.loads(((root or self.root) / ".vxpipe/worktree.json").read_text())["ports"]
+
+    def test_concurrent_checkouts_reserve_distinct_stable_ports(self):
+        other = self.another_checkout("other")
+        first = subprocess.Popen([str(self.root / "bin/setup")], cwd=self.base, env=self.environment,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        second = self.setup(root=other)
+        output, _ = first.communicate(timeout=20)
+        self.assertEqual(first.returncode, 0, output)
+        self.assertEqual(second.returncode, 0, second.stdout)
+        first_ports, second_ports = self.ports(), self.ports(other)
+        self.assertEqual(set(first_ports), {"console", "astro", "storybook"})
+        self.assertTrue(set(first_ports.values()).isdisjoint(second_ports.values()))
+        self.assertEqual(len(set(first_ports.values())), 3)
+        self.assertNotIn(4600, list(first_ports.values()) + list(second_ports.values()))
+        self.assertEqual(self.setup().returncode, 0)
+        self.assertEqual(self.ports(), first_ports)
+        self.assertFalse((self.base / "state/vxpipe/livetests").exists())
+
+    def test_new_assignment_skips_occupied_listener(self):
+        listener = socket.socket()
+        try:
+            try:
+                listener.bind(("127.0.0.1", 4000))
+                listener.listen()
+            except OSError:
+                pass  # An existing listener also makes the candidate unavailable.
+            result = self.setup()
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertNotEqual(self.ports()["console"], 4000)
+        finally:
+            listener.close()
+
+    def test_explicit_reassignment_preserves_identity_but_requires_old_listeners_to_stop(self):
+        self.assertEqual(self.setup().returncode, 0)
+        old = json.loads((self.root / ".vxpipe/worktree.json").read_text())
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", old["ports"]["console"]))
+            listener.listen()
+            result = self.setup("--reassign-ports")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("stop", result.stdout)
+        result = self.setup("--reassign-ports")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        new = json.loads((self.root / ".vxpipe/worktree.json").read_text())
+        self.assertEqual(old["id"], new["id"])
+        self.assertEqual(old["databases"], new["databases"])
+        self.assertTrue(set(old["ports"].values()).isdisjoint(new["ports"].values()))
+
+    def test_abandoned_reservation_is_retained_while_any_listener_is_running(self):
+        self.assertEqual(self.setup().returncode, 0)
+        old_ports = self.ports()
+        other = self.another_checkout("other")
+        third = self.another_checkout("third")
+        self.root.rename(self.base / "retired")
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", old_ports["console"]))
+            listener.listen()
+            result = self.setup(root=other)
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertTrue(set(old_ports.values()).isdisjoint(self.ports(other).values()))
+        result = self.setup(root=third)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.ports(third), old_ports)
 
 
 if __name__ == "__main__":

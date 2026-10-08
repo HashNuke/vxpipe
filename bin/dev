@@ -15,6 +15,9 @@ if [[ $# -gt 0 ]]; then
   exit 1
 fi
 
+explicit_port="${PORT:-}"
+explicit_host="${APP_HOST:-}"
+
 # Direct Mix commands do not load .env; keep bin/dev's previous behavior.
 if [[ -f "$repo_root/.env" ]]; then
   set -a
@@ -22,6 +25,10 @@ if [[ -f "$repo_root/.env" ]]; then
   set +a
 fi
 
+[[ -z "$explicit_port" ]] || export PORT="$explicit_port"
+[[ -z "$explicit_host" ]] || export APP_HOST="$explicit_host"
+PORT="$("$repo_root/bin/worktree-port" console --check)"
+export PORT
 export VXPIPE_DEV_TLS="http"
 cd "$repo_root"
 

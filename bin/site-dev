@@ -15,6 +15,8 @@ if [[ $# -gt 0 ]]; then
   exit 1
 fi
 
+ASTRO_PORT="$("$repo_root/bin/worktree-port" astro --check)"
+export ASTRO_PORT
 export VXPIPE_DEV_TLS="http"
 export ASTRO_DEV_BACKGROUND="0"
 cd "$repo_root"

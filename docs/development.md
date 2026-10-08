@@ -43,6 +43,26 @@ Setup rejects shared `MIX_BUILD_PATH` / `MIX_DEPS_PATH` overrides and symlinked
 mutable output directories. Keep caches shared only through package-manager download
 caches, then rerun after fixing failures reported in the private `.vxpipe/setup.log`.
 
+Setup also reserves persistent Console, Astro and Storybook ports. Run `npm run
+storybook` for the assigned Storybook URL. Explicit shell `PORT`, `ASTRO_PORT` and
+`STORYBOOK_PORT` override those defaults. Console additionally reads `.env` `PORT`,
+with the shell value taking precedence. Storybook uses the selected Console origin.
+An occupied listener causes startup to fail with recovery instructions. Stop this
+checkout's servers before `bin/setup --reassign-ports`; databases and identity stay
+unchanged. Port 4600 remains reserved for the separate live-test workflow.
+
+Use `bin/setup --with-docs --with-lean` to install locked Astro dependencies and
+build verification with the pinned, already installed elan toolchain. Omit either
+flag if that tool is unnecessary. Setup never installs system tools or a Lean
+toolchain automatically. Ordinary setup needs neither Tailscale nor provider keys.
+
+Existing checkouts can run setup directly: existing `.env` and legacy database data
+remain intact, while new metadata selects isolated databases. Do not copy ignored
+metadata, secrets or build directories into another checkout. Retiring a worktree
+is an explicit operation: stop its servers and release any live-branch ownership
+before removing it. Setup never deletes databases or files. Stale port reservations
+are reclaimed only after the checkout directory is gone and all its ports are free.
+
 ## Start the development stack
 
 After `bin/setup`, proceed to `bin/dev` below. For manual setup, install the
@@ -77,7 +97,7 @@ Then start the Vxpipe umbrella and Console frontend:
 bin/dev
 ```
 
-The Console is at `http://localhost:4000/`. `bin/dev` starts only the Elixir
+Use the Console URL printed by setup (port 4000 without metadata). `bin/dev` starts only the Elixir
 application. To work on the Astro site separately, run these in another shell:
 
 ```shell
@@ -85,7 +105,7 @@ npm --prefix vxpipe-docs ci
 bin/site-dev
 ```
 
-The site is at `http://localhost:4321/`, with docs at `/en/docs/`. Astro handles
+Use the Astro URL printed by setup (port 4321 without metadata), with docs at `/en/docs/`. Astro handles
 its own live reload. Either launcher accepts `--tailscale` for HTTPS access.
 
 `bin/dev` loads the repository-root `.env`; direct `mix` commands do not. Export
@@ -220,7 +240,7 @@ second asset port is involved.
 
 The gateway reads its listener and CORS options from the `vxpipe_gateway`
 application environment. In development, `APP_HOST` becomes the exact allowed
-origin on port 4000, using the selected HTTPS or HTTP scheme. Environment variables
+origin on the selected Console port, using the selected HTTPS or HTTP scheme. Environment variables
 are read from `config/runtime.exs`; `config/dev.exs` supplies local defaults.
 
 With a provisioned tenant selected, the playground's **Create room** action first asks the
