@@ -97,7 +97,7 @@ Then start the Vxpipe umbrella and Console frontend:
 bin/dev
 ```
 
-Use the Console URL printed by setup (port 4000 without metadata). `bin/dev` starts only the Elixir
+Use the Console `/admin` URL printed by setup (port 4000 without metadata). `bin/dev` starts only the Elixir
 application. To work on the Astro site separately, run these in another shell:
 
 ```shell

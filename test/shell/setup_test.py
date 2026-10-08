@@ -155,6 +155,7 @@ class SetupTest(unittest.TestCase):
         self.assertEqual(first.returncode, 0, first.stdout)
         path = self.root / ".vxpipe/worktree.json"
         metadata = json.loads(path.read_text())
+        self.assertIn(f"Console http://localhost:{metadata['ports']['console']}/admin", first.stdout)
         self.assertEqual(metadata["version"], 1)
         self.assertRegex(metadata["id"], r"^[a-f0-9]{32}$")
         self.assertEqual(metadata["root"], str(self.root))

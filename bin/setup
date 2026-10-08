@@ -47,7 +47,7 @@ def main():
         if arguments.with_lean:
             toolchain = (root / "verification/lean-toolchain").read_text().strip()
             run_step(root, "dev", ["elan", "run", toolchain, "lake", "build"], "Lean build", cwd=root / "verification")
-        print(f"Assigned URLs: Console http://localhost:{ports['console']}, Astro http://localhost:{ports['astro']}, Storybook http://localhost:{ports['storybook']}")
+        print(f"Assigned URLs: Console http://localhost:{ports['console']}/admin, Astro http://localhost:{ports['astro']}, Storybook http://localhost:{ports['storybook']}")
         print("Ready for local development. Next commands:")
         print(f"  cd {shlex.quote(str(root))} && bin/dev")
         print(f"  cd {shlex.quote(str(root))} && mix test")

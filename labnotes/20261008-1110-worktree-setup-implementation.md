@@ -207,3 +207,11 @@
   plain `mix test` from their roots and unused-dependency checks. The first also
   runs formatting, warnings-as-errors compilation and strict Credo. Logs capture
   complete output and UTC start/end timestamps for overlap evidence.
+
+- Rendered verification also showed the Console root path has no route; the
+  operator UI starts at `/admin`. A setup-output regression failed on the bare
+  origin, and setup now prints the usable `/admin` URL.
+- The initial root suite finishes with the single outgoing-deadline test failure
+  already corrected above. Gateway passes all 585 cases (8 excluded), including
+  the previously intermittent five-participant handoff; Console passes 237 cases
+  (15 excluded). Final concurrent runs contain the acknowledgement fix.
