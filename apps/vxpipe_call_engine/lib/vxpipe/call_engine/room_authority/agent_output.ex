@@ -160,6 +160,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
         :completed ->
           complete_spoken_segment(request, connection, state)
+
+        :discarded ->
+          settle_speech_segment(request, connection, state)
       end
     else
       state
@@ -339,6 +342,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
       SpokenHistory.played_assistant(state.spoken_history, request.text)
 
     state = %{state | archive_recorder: archive_recorder, spoken_history: spoken_history}
+    settle_speech_segment(request, connection, state)
+  end
+
+  defp settle_speech_segment(request, connection, state) do
     turn = TurnState.get(state, request)
     turn = %{turn | pending_speech: max(turn.pending_speech - 1, 0)}
     state = TurnState.replace(state, request, turn)

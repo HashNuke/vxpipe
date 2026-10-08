@@ -95,6 +95,80 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutputTest do
                     }}
   end
 
+  test "discarded speech settles its segment without recording unheard words" do
+    snapshot = %Snapshot{
+      tenant_id: "tenant-test",
+      room_id: "room-test",
+      incarnation_id: "incarnation-test",
+      lifecycle: :open,
+      created_by_actor_id: "actor-test",
+      created_by_command_id: "create"
+    }
+
+    {:ok, command} =
+      SendText.new(
+        id: "old",
+        tenant_id: "tenant-test",
+        actor_id: "actor-test",
+        room_id: "room-test",
+        incarnation_id: "incarnation-test",
+        participant_id: "human-test",
+        connection_id: "connection-test",
+        correlation_id: "old-turn",
+        content: "hello",
+        deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+      )
+
+    replacement = %{command | id: "new", correlation_id: "new-turn"}
+    state = State.new(%Recorder{port: nil, participant_activations: %{}}, snapshot, %{})
+
+    state = %{
+      state
+      | connections: %{
+          "connection-test" => %{
+            participant_id: "human-test",
+            pid: self(),
+            output_sink: self()
+          }
+        },
+        text_to_speech_capability: %{pid: self()}
+    }
+
+    state = state |> TurnState.put(command) |> TurnState.put(replacement)
+    state = TurnState.update(state, command, &%{&1 | pending_speech: 1})
+
+    request = %Vxpipe.CallEngine.TextToSpeechRequest{
+      tenant_id: "tenant-test",
+      room_id: "room-test",
+      incarnation_id: "incarnation-test",
+      participant_id: "agent-test",
+      source_participant_id: "human-test",
+      connection_id: "connection-test",
+      command_id: "old",
+      correlation_id: "old-turn",
+      output_id: "output-old",
+      text: "Unheard words",
+      output_sink: self()
+    }
+
+    settled = AgentOutput.playback(self(), request, :discarded, state)
+    assert TurnState.get(settled, command).pending_speech == 0
+    assert TurnState.active?(settled, command)
+    assert TurnState.get(settled, replacement) == TurnState.get(state, replacement)
+    assert settled.spoken_history == state.spoken_history
+    assert settled.archive_recorder == state.archive_recorder
+    refute_receive {:vxpipe_event, _event}
+
+    finished = TurnState.update(state, command, &%{&1 | generation_complete?: true})
+    settled = AgentOutput.playback(self(), request, :discarded, finished)
+    refute TurnState.active?(settled, command)
+    assert TurnState.active?(settled, replacement)
+    assert settled.spoken_history == state.spoken_history
+    assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.AgentTurnCompleted{command_id: "old"}}
+    assert AgentOutput.playback(self(), request, :discarded, settled) == settled
+    refute_receive {:vxpipe_event, _event}
+  end
+
   defp open_archive do
     assert {:ok, handoff} =
              ArchiveSupervisor.open(

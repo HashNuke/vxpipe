@@ -553,7 +553,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
         {:vxpipe_tts_playback, capability, %TextToSpeechRequest{} = request, status},
         state
       )
-      when status in [:started, :completed] do
+      when status in [:started, :completed, :discarded] do
     handle_text_to_speech_playback(capability, request, status, state)
   end
 

@@ -32,7 +32,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Playback do
           :unrelated ->
             state = AgentOutput.playback(capability, request, status, state)
 
-            if status == :completed do
+            if status in [:completed, :discarded] do
               {:noreply, CallerIdle.reconcile(state)}
             else
               {:noreply, state}

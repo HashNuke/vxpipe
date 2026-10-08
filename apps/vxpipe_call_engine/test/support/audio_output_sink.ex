@@ -119,6 +119,11 @@ defmodule Vxpipe.CallEngine.TestAudioOutputSink do
     {:reply, :ok, %{state | pending_finish: nil, defer_finish: false}}
   end
 
+  def handle_call({:complete_output, result}, _from, state) do
+    GenServer.reply(state.pending_output, result)
+    {:reply, :ok, %{state | pending_output: nil, block_output: false}}
+  end
+
   def handle_call({:block_output, blocked?}, _from, %{pending_output: nil} = state)
       when is_boolean(blocked?),
       do: {:reply, :ok, %{state | block_output: blocked?}}

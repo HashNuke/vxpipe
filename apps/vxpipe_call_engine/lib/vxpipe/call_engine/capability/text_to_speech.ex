@@ -135,6 +135,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
          {:ok, request_id} <- Session.request_cancel(state.session, ticket, played_ms) do
       cancellation = %{
         accepted?: false,
+        discarded?: false,
         from: from,
         interrupted: [{current.request, played_ms} | pending],
         played_ms: played_ms,
@@ -196,8 +197,12 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
           {:error, _reason} -> stop_unavailable(:audio_output_failed, state)
         end
 
-      result in [:ok, {:error, :interrupted}] and current.phase == :cancelling ->
+      result in [:ok, {:error, :interrupted}, {:error, :stale_output_generation}] and
+          current.phase == :cancelling ->
         {:noreply, state}
+
+      result == {:error, :stale_output_generation} and current.request.purpose == :agent_turn ->
+        discard_obsolete_output(state)
 
       true ->
         stop_unavailable(:audio_output_failed, state)
@@ -277,7 +282,9 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
       ) do
     case Session.cancellation_response(message, request_id) do
       {:reply, {:ok, _playback}} ->
-        GenServer.reply(cancellation.from, {:ok, cancellation.interrupted})
+        if cancellation.from != nil do
+          GenServer.reply(cancellation.from, {:ok, cancellation.interrupted})
+        end
 
         maybe_finish_cancellation(%{
           state
@@ -452,8 +459,37 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     end
   end
 
+  defp discard_obsolete_output(state) do
+    current = state.current
+
+    with {:ok, ticket} <- Session.fence_output(state.session, current.handle),
+         {:ok, played_ms, state} <- interrupt_output(current, state),
+         {:ok, request_id} <- Session.request_cancel(state.session, ticket, played_ms) do
+      cancellation = %{
+        accepted?: false,
+        discarded?: true,
+        from: nil,
+        interrupted: [],
+        played_ms: played_ms,
+        request_id: request_id,
+        terminal?: current.phase in [:finishing, :draining],
+        ticket: ticket
+      }
+
+      {:noreply, %{state | cancellation: cancellation, current: %{current | phase: :cancelling}}}
+    else
+      {:error, :audio_output_failed, state} -> stop_unavailable(:audio_output_failed, state)
+      _failure -> stop_unavailable(:provider_failed, state)
+    end
+  end
+
   defp finish_cancellation(state) do
     _current = Usage.finish(state.current, :cancelled, state.owner)
+
+    if state.cancellation.discarded? do
+      send(state.owner, {:vxpipe_tts_playback, self(), state.current.request, :discarded})
+    end
+
     state = %{state | cancellation: nil, current: nil}
 
     case start_next(state) do

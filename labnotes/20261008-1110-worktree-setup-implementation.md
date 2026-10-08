@@ -238,3 +238,23 @@
 - Formatting, warnings-as-errors compilation, strict Credo and unused-dependency
   checks pass after these fixes. Lean build, oracle comparison and Elixir replay
   also pass from the original umbrella root.
+
+## Obsolete speech after phone-transfer rollback
+
+- First concurrent complete suites both finish with failures: A has the archival
+  queue issue, B has the speech-tree shutdown race plus a phone-transfer recovery
+  failure. Both test intervals overlap for approximately 13 minutes. These are
+  acceptance findings, not evidence of a green milestone.
+- Gateway's failure is late pre-handoff TTS audio rejected by the correct output
+  generation fence. TTS incorrectly treats that rejection as service failure and
+  disconnects the recovered caller. Five isolated reruns pass, so a deterministic
+  capability regression is used rather than relying on repeated broad runs.
+- The regression fails with `:audio_output_failed` and a monitored `:DOWN`; a
+  second room-owner test fails on the missing discarded-segment handling.
+  Both are green after request-scoped cancellation and explicit segment settlement
+  that preserves queued speech and never records unheard words as spoken.
+- Focused result: 12 tests, zero failures. The architecture decision and rejected
+  alternatives are documented in `docs/stale-speech-output.md`.
+- All 15 synthetic Telnyx phone-harness tests pass, including storage-loss recovery
+  variants. Root format/compile/strict Credo/dependency-use checks and the full Lean
+  build/oracle/replay lane pass. No external-service or real live tests were run.

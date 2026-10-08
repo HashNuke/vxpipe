@@ -15,6 +15,39 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechSemanticTest do
   alias Vxpipe.CallEngine.Usage.ProviderContext
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseSession
 
+  test "obsolete output cancels only its request and preserves recovery speech" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self(), block_output: true})
+    capability = start_capability(provider_private: [observer: self(), hold_cancel?: true])
+    monitor = Process.monitor(capability)
+    assert {:ok, _resource, :ready} = await_ready(capability)
+
+    first = request("obsolete", sink)
+    replacement = %{request("recovery", sink) | output_generation: 2}
+    assert :ok = TextToSpeech.synthesize(capability, first)
+    assert_receive {:usage_probe_submitted, first_reference, _id}
+    assert_receive {:test_audio_output, ^sink, %{output_generation: 0}}
+    assert :ok = TextToSpeech.synthesize(capability, replacement)
+    assert :ok = GenServer.call(sink, {:complete_output, {:error, :stale_output_generation}})
+
+    assert_receive {:usage_probe_cancel_held, provider, ^first_reference}, 500
+    refute_receive {:usage_probe_submitted, _reference, _id}
+    send(provider, :release_usage_probe_cancel)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^first, :discarded}
+    assert_receive {:usage_probe_submitted, replacement_reference, _id}
+
+    assert_receive {:test_audio_output, ^sink,
+                    %{correlation_id: "recovery", output_generation: 2}}
+
+    assert_receive {:usage_probe_audio_credited, ^replacement_reference, _credit}
+    assert :ok = GenServer.call(provider, :complete)
+    assert_receive {:test_audio_output_finish, ^sink, "recovery"}
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^replacement, :completed}
+    refute_receive {:vxpipe_tts_playback, ^capability, ^first, :completed}
+    refute_receive {:vxpipe_tts_unavailable, ^capability, _reason}
+    refute_receive {:DOWN, ^monitor, :process, ^capability, _reason}
+  end
+
   test "provider completion waits for sink acceptance and confirmed playout" do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     :ok = TestAudioOutputSink.defer_finish(sink, true)
