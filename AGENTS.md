@@ -1,5 +1,8 @@
 # Vxpipe
 
+Run `bin/setup` in each checkout/worktree for dependencies, assets, local secrets
+and isolated databases/ports. Safe to rerun; optional `--with-docs` and `--with-lean`.
+
 ## Project hygiene
 
 Work in small, coherent checkpoints that leave the umbrella usable. Keep the
