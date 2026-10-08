@@ -358,8 +358,19 @@ defmodule Vxpipe.CallEngine.OutgoingCallRoomTest do
 
   test "one ring deadline ends and disconnects an unanswered call" do
     plan = plan()
-    assert {:ok, _room} = start_call(plan)
+    admission = make_ref()
+    assert {:ok, room} = start_call(plan, outgoing_admission: {self(), admission})
+
+    assert :ok =
+             CallEngine.admit_outgoing_call(
+               plan.tenant_id,
+               plan.room_id,
+               room.incarnation_id,
+               admission
+             )
+
     assert_receive {:test_outbound_leg_connect, _, request, _}, 1_000
+    assert_receive {:vxpipe_outgoing_submission, ^admission, {:ok, :accepted}}, 1_000
     assert_receive {:test_call_lifecycle_timer_scheduled, timer, 5_000}, 1_000
     assert {owner, _, :outgoing_ring} = timer
     monitor = Process.monitor(owner)

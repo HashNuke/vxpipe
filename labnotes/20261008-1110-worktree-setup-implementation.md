@@ -170,3 +170,21 @@
   return; browser inspection waits for builds to finish. An initial Chrome launch
   fails on this host's user-namespace restrictions; doctor passes and inspection
   uses the documented local `--no-sandbox` launch flag.
+
+
+## Acceptance test synchronization
+
+- Root default suite seed 774165 reproduced an outgoing ring-deadline test race:
+  the test observed connector entry and fired the deadline before the authority
+  had processed the connector's accepted handle. It terminated with no handle to
+  disconnect. The test now uses the existing outgoing-admission acknowledgement
+  before firing its synthetic deadline. No production lifecycle behavior changed.
+- The focused original seed passes, then all 28 outgoing-call boundary tests pass.
+  The final full concurrent suites will cover the corrected test under load.
+- Fresh Lean build, oracle drift check and Elixir replay pass in the second
+  worktree. First worktree frontend verification passes: 40 workspace tests, 219
+  Console frontend tests, three Astro tests, TypeScript/build and Astro build.
+- Rendered login checked at 1440×1000 and 390×844. Console A authenticates while B
+  remains logged out; after authenticating B both session endpoints return 200.
+  Signing out of B leaves A authenticated. A's live reload fires on a watched
+  asset change and retains its session. No provider configuration was submitted.
