@@ -417,3 +417,53 @@ with a separate exit-status record. No live tests ran.
 
 The voice-list screenshots initially caught the opening transition. Waiting for
 computed opacity 1 produced readable final menu captures in both themes.
+
+
+## Checkpoint U3 complete: structured options and Variables
+
+Added typed JSON value compositions for options/provider_options, reusing the
+standard Input, Select, Button and Label primitives. Nested objects and arrays,
+booleans, numbers, strings and null remain editable without raw JSON. Explicit
+empty objects remain distinct from omitted options. Colliding key renames leave
+the old value intact and show an error, including prototype-shaped keys and the
+voice parameter reserved for its separate control. The same value composition
+edits schema enum values; no custom primitive replaces a registry component.
+
+Adapted the committed Callpipe flow-level inspector to six source-backed tabs.
+Its scrolling tab bar and inspector geometry remain; unsupported chat, workspace,
+knowledge and retention controls are removed. Variable rows extend the original
+name/type/required/remove composition to named sections and the supported nested
+schema subset. Section/field renames use S's reference rewrites. A shared table
+exposes section-by-agent permissions. Existing grants to missing sections remain
+visible and removable; granting new access still requires a declared section.
+
+Focused red runs covered absent value/schema/tab controls, capability integration,
+voice-key collisions, stale grant removal in both pure source and UI tests, and
+constraint visibility. The final suite passes 391 tests in 51 files. Type check,
+lint and Storybook build pass. A check briefly ran while the next test's module
+was still absent and failed; final complete verification supersedes that partial
+worktree check. Constraint controls now show relevant fields plus every stored
+constraint, so changing a schema type does not discard unusual existing keywords.
+
+Rendered eight inspector stories and five model/option compositions in dark
+1440x1000 and light 390x844. Inspected nested JSON/schema content and the permission
+matrix while scrolling; browser edits changed an array string and a section grant.
+No horizontal page overflow. Initial inspection found selected Advanced outside
+the scrolling tab bar; a browser assertion failed before an active-tab scroll
+fix and passes afterward. Labels wrap long paths and the active indicator stays
+within the bar. Two Storybook hot-reload errors (cannot render when not prepared)
+were retained by the original browser session; a fresh session is used to check
+current rendering separately. These were preview-runtime errors during edits,
+not evidence of a product exception or failed source mutation.
+
+The persistent full default umbrella run completed with exit 0: 3,448 tests,
+zero failures, 120 excluded, seed 991936. Format, warnings-as-errors compilation,
+strict Credo and unused-lock checks also pass. The prior partial/failed runs stay
+recorded above. The deferred five-participant reconnection case passed this run;
+this does not prove its intermittent cause was repaired. No live tests ran and
+no production speech/source-cutover state machine changed. U3 is checked off;
+participant inspectors and the complete error/page/review checkpoints remain.
+
+Fresh Chrome session rendering the nested-variable inspector reports zero browser
+errors after the final changes. The original session retains its earlier preview
+hot-reload errors; they were not discarded as a substitute for verification.

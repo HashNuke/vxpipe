@@ -63,3 +63,6 @@ export const KnownVoicesFixture: Story = { args: {
   catalog: { text_to_speech: { fixture: [{ id: "listed-voices", name: "Story fixture", default: true, voices: { type: "list", parameter: "speaker", values: [{ id: "a", name: "Alpha", default: true }, { id: "b", name: "Beta", default: false }] } }] } },
   initial: { ...editorFixture, source: { ...editorFixture.source, defaults: { capabilities: { text_to_speech: { provider: "fixture", model: "listed-voices", options: { speaker: "a" } } } } } },
 } };
+export const StructuredOptionsFixture: Story = { args: { panel: "defaults", initial: { ...editorFixture, source: { ...editorFixture.source, defaults: { capabilities: {
+  text_to_speech: { provider: "deepgram", model: "flux", options: { voice: "hannah", encoding: "linear16", sample_rate: 48000 }, provider_options: { example: { enabled: true, values: [null, "sample"] } } },
+} } } } } };

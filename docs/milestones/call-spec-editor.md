@@ -581,7 +581,7 @@ adaptation.
   the test call and testchat buttons, add revision and published badges and validation state,
   and drive nodes and edges from S's graph projection. Copy the `Header`, `HeaderSaving`,
   `NameDialog`, `Toolbar` and `NodeCards` stories.
-- [ ] **U3 — Call settings inspector (adapted from `flow-level-inspector`).** Keep its tab
+- [x] **U3 — Call settings inspector (adapted from `flow-level-inspector`).** Keep its tab
   structure; drop channels, starters, knowledge and the chat agent. Add tabs Direction, Defaults,
   Variables, Media and recording, Wait sounds, Advanced.
 - [ ] **U4 — Entry and human inspectors (adapted from `inbound-inspector` and
@@ -619,16 +619,15 @@ a read-only state and a narrow-screen inspector Sheet. All 361 frontend tests,
 type check, lint and Storybook build pass. Six component/shell stories were
 inspected at 1440px and 390px; browser interactions cover adding an agent, drawing
 a new transfer, editing the spec name, arranging and opening Call settings.
-U3 has four policy-panel compositions (Direction, Media and recording, Wait sounds,
-Advanced), including explicit-denial/silence semantics and read-only controls.
-The shared capability controls and Defaults panel now select catalog recommendations,
-keep model and voice separate, preserve saved choices and reset provider-specific
-selections on a provider change. All 376 frontend tests pass. Policy panels and
-model controls have desktop/phone rendered checks; structured option editing,
-Variables and full inspector integration remain before U3 is complete.
-The fresh umbrella run found an STS test precondition (corrected in ca407ea0) and
-the previously deferred five-participant WebRTC reconnection failure; final root
-acceptance remains pending. This is not the complete editor review.
+U3 is implemented: the adapted Call settings inspector has all six tabs,
+structured capability options, nested variable schemas and section permissions.
+Saved selections, explicit empty values and unedited schema keywords remain intact.
+All 391 frontend tests, type check, lint and Storybook build pass. The full default
+umbrella suite passes 3,448 tests with zero failures (seed 991936), and all other
+root gates pass. Eight inspector stories and the model/option compositions have
+dark desktop and light phone rendered checks, including nested values, permission
+changes, read-only fields, inline errors and selected-tab visibility. U4–U8 remain;
+this is not the complete editor review.
 
 ## Checkpoint C — Console authoring endpoints
 

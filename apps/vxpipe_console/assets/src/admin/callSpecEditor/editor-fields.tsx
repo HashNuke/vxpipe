@@ -5,13 +5,13 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import type { SourceIssue } from "./types";
 
-type FieldProps = { label: string; path: string[]; issues?: SourceIssue[]; hint?: string; disabled?: boolean };
+type FieldProps = { label: string; path: string[]; issues?: SourceIssue[]; hint?: string; disabled?: boolean; labelHidden?: boolean };
 type ControlProps = { id: string; "aria-describedby"?: string; "aria-invalid"?: boolean; disabled?: boolean };
-function Field({ label, path, issues = [], hint, disabled, children }: FieldProps & { children: (props: ControlProps) => ReactNode }) {
+function Field({ label, path, issues = [], hint, disabled, labelHidden, children }: FieldProps & { children: (props: ControlProps) => ReactNode }) {
   const id = useId();
   const errors = issues.filter((issue) => issue.path.length === path.length && issue.path.every((part, index) => part === path[index]));
   return <div className="space-y-2" data-field-path={JSON.stringify(path)}>
-    <Label htmlFor={id}>{label}</Label>
+    <Label htmlFor={id} className={labelHidden ? "sr-only" : "wrap-anywhere"}>{label}</Label>
     {children({ id, disabled, "aria-invalid": errors.length > 0, "aria-describedby": hint || errors.length ? `${id}-help` : undefined })}
     {(hint || errors.length > 0) && <div id={`${id}-help`} className="space-y-1 text-xs">
       {hint && <p className="text-muted-foreground">{hint}</p>}

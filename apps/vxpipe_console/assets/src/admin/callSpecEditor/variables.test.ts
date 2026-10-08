@@ -61,3 +61,11 @@ test("JSON Schema property names stay lossless even when they are not participan
   expect(Object.hasOwn(edited.source.call_variables!.sections!.contact!.schema.properties!, "__proto__")).toBe(true);
   expect(edited.source.call_variables?.sections?.contact?.schema.required).toContain("__proto__");
 });
+
+test("an obsolete section grant can be cleared without adding its missing section", () => {
+  const doc = document();
+  delete doc.source.call_variables!.sections!.contact;
+  const edited = setSectionPermission(doc, "assistant", "contact", undefined);
+  expect(edited.source.participants.assistant).toMatchObject({ variable_permissions: {} });
+  expect(() => setSectionPermission(doc, "assistant", "contact", ["read"])).toThrow();
+});

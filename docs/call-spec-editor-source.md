@@ -50,6 +50,26 @@ list. Save/publish feedback distinguishes validation, missing services, conflict
 permission, expired session and retryable failures. These pure functions return
 presentation data; the UI owns focus, badges, toast replacement and dismissal.
 
+## Inspector edits
+
+Call settings composes standard form controls over the source-edit functions.
+Typed option fields support JSON scalars, arrays and nested objects; operators
+never need to edit raw JSON. Removing the last key retains an explicit empty
+object, while Clear omits the optional object. Voice parameters are edited by the
+catalog-driven voice field and reserved against collisions in the other options.
+Changing provider replaces the whole selection with that provider's recommendation;
+changing model preserves the provider's credential name and provider_options while
+resetting model options to the descriptor's defaults.
+
+Variable rows belong to named sections. Their type, nullable flag, required
+membership, enums, nested object fields, array items and supported constraints are
+editable independently. Controls expose constraints appropriate to the selected
+type, plus any unusual constraints already present in the source. They do not
+normalize away stored keywords. A section permission matrix includes obsolete
+grants so the operator can clear a reference to a missing section; it cannot grant
+new access to a missing section. Section and top-level field renames still use the
+source functions that rewrite permissions and dial references atomically.
+
 ## Alternatives and implications
 
 A mutable graph compiled into JSON was rejected because it could lose fields and

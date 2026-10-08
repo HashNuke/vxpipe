@@ -47,7 +47,7 @@ export function setSectionSchema(document: SourceDocument, key: string, schema: 
 export function setSectionPermission(document: SourceDocument, key: string, sectionKey: string, value: VariablePermission | undefined): SourceDocument {
   return editSource(document, (source) => {
     const target = agent(source, key);
-    section(source, sectionKey);
+    if (value !== undefined) section(source, sectionKey);
     const grants = target.variable_permissions ?? {};
     if (value === undefined) {
       if (target.variable_permissions) delete target.variable_permissions[sectionKey];

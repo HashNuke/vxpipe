@@ -1,6 +1,7 @@
 import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
 import { ChoiceField, TextField } from "./editor-fields";
 import { recommendedSelection, selectionForModel } from "./seed";
+import { ObjectFields } from "./structured-value-fields";
 import type { CapabilitySelection, SourceIssue } from "./types";
 
 type Props = {
@@ -47,6 +48,18 @@ export function CapabilityFields({ kind, path, value, onChange, catalog, credent
       <ChoiceField label="Credential" path={[...path, "credential_name"]} issues={issues} disabled={disabled} value={value.credential_name ?? ""}
         choices={[{ value: "", label: "Service default" }, ...names.map((name) => ({ value: name, label: name }))]}
         onChange={(name) => { const next = { ...value }; if (name) next.credential_name = name; else delete next.credential_name; onChange(next); }} />
+      <ObjectFields label="Options" path={[...path, "options"]} issues={issues} disabled={disabled}
+        reservedKeys={voices ? [voices.parameter] : []}
+        value={value.options === undefined ? undefined : Object.fromEntries(Object.entries(value.options).filter(([key]) => key !== voices?.parameter))}
+        onChange={(options) => {
+          const next = { ...value };
+          const hasVoice = voices && value.options && Object.hasOwn(value.options, voices.parameter);
+          if (options === undefined && !hasVoice) delete next.options;
+          else next.options = { ...options, ...(hasVoice ? { [voices.parameter]: value.options![voices.parameter]! } : {}) };
+          onChange(next);
+        }} />
+      <ObjectFields label="Provider options" path={[...path, "provider_options"]} issues={issues} disabled={disabled} value={value.provider_options}
+        onChange={(options) => { const next = { ...value }; if (options === undefined) delete next.provider_options; else next.provider_options = options; onChange(next); }} />
     </>}
   </fieldset>;
 }

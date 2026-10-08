@@ -67,3 +67,23 @@ test("historical selections disable every mutation control", () => {
   for (const control of screen.getAllByRole("combobox")) expect(control).toBeDisabled();
   expect(screen.getByRole("textbox", { name: "Voice" })).toBeDisabled();
 });
+
+test("structured option edits retain the separate voice and preserve nested provider options", () => {
+  render(<Harness initial={{ provider: "deepgram", model: "flux", options: { voice: "custom", sample_rate: 24000 }, provider_options: { nested: { retries: 2 } } }} />);
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Options / sample_rate" }), { target: { value: "48000" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Provider options / nested / retries" }), { target: { value: "3" } });
+  expect(saved()).toEqual({ provider: "deepgram", model: "flux", options: { voice: "custom", sample_rate: 48000 }, provider_options: { nested: { retries: 3 } } });
+  expect(screen.queryByRole("textbox", { name: "Options / voice" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Clear Options" }));
+  expect(saved().options).toEqual({ voice: "custom" });
+  fireEvent.click(screen.getByRole("button", { name: "Clear Provider options" }));
+  expect(saved()).not.toHaveProperty("provider_options");
+});
+
+test("an option cannot replace the separately edited voice parameter", () => {
+  render(<Harness initial={{ provider: "deepgram", model: "flux", options: { voice: "custom", sample_rate: 24000 } }} />);
+  const key = screen.getByRole("textbox", { name: "Options / sample_rate key" });
+  fireEvent.change(key, { target: { value: "voice" } }); fireEvent.blur(key);
+  expect(screen.getByRole("alert")).toHaveTextContent("already exists");
+  expect(saved().options).toEqual({ voice: "custom", sample_rate: 24000 });
+});
