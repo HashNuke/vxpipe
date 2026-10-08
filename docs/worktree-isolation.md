@@ -64,6 +64,25 @@ including frontend outputs and Lean's `.lake`. Nested npm workspace links inside
 an ordinary local `node_modules` directory remain supported. Setup does not change
 user overrides, install toolchains, start daemons or contact live providers.
 
+## Temporary fixtures and listeners
+
+Persistence operator-task files and Providers fixture-test roots use ExUnit's
+checkout-local temporary directories. The Deepgram fixture generator creates an
+atomically unique scratch directory under its selected root's `tmp/deepgram-fixtures`.
+Its existing PCM/Opus paths and generation/reuse semantics remain unchanged. Keeping
+scratch and output under the same root also avoids a cross-filesystem rename.
+
+A synchronized two-BEAM test holds both transcodes open, finishes one invocation
+and verifies the other's scratch PCM survives cleanup before letting it finish.
+The test redirects system temp only to contain the old failing behavior; the fix
+itself does not rely on `TMPDIR` or a wrapper around plain Mix commands.
+
+The filesystem/listener audit found remaining writable fixtures already use
+ExUnit temp directories or checkout-relative paths. Console's fixed missing-file
+probes only read nonexistent names. Fixed ports in configuration assertions do not
+start listeners; reviewed default-suite wire servers bind port zero. The explicit
+live telephony lane retains its separately reserved listener and remains excluded.
+
 ## Verification and limits
 
 The synthetic setup suite covers missing tools, unsupported versions, unavailable

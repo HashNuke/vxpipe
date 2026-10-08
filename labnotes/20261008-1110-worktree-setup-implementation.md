@@ -99,3 +99,27 @@
   asset checks/build, dev migration and test migration with unchanged lockfiles.
   Existing `.env` was preserved. Fresh checkout builds and a complete rerun remain
   the acceptance gates before completing this checkpoint.
+
+
+## Fresh acceptance and checkpoint 4 (in progress)
+
+- Committed bootstrap as `3026a23a`, then created branches
+  `worktree-setup-acceptance-a` and `worktree-setup-acceptance-b` in sibling checkouts.
+  Both run `ERL_FLAGS='+S 2:2' CARGO_BUILD_JOBS=2 bin/setup` concurrently, keeping
+  each checkout's own dependencies/builds. No user worktree was changed or pruned.
+- Both assigned distinct IDs and databases, generated private `.env` files and
+  fetched dependencies. Fresh frontend/native dependency builds remain running;
+  full completion is not yet claimed. The existing-checkout complete rerun is also
+  being checked for unchanged identity and `.env`.
+- New Providers test launches two independent BEAMs with synchronized transcode
+  lifetimes. Red: scratch was outside the requested checkout root. Green: random
+  names plus atomic directory creation under the fixture root; one invocation's
+  cleanup leaves the other's PCM readable. Tests inject PCM/transcoding, never TTS.
+- Replaced system-temp integer-based test paths in operator tasks and Deepgram
+  fixtures with ExUnit checkout-local directories. Existing generation/reuse tests
+  retain their assertions. Six Providers fixture tests and two operator-task tests
+  pass; formatting, warnings-as-errors compilation and strict Credo pass.
+- Audited filesystem mutations and listener construction throughout child tests and
+  support. Other writers use ExUnit/checkouts; missing-file probes are read-only;
+  ordinary wire servers bind zero. Fixed ports in configuration assertions do not
+  create listeners. Cross-worktree concurrent owning-suite acceptance remains open.

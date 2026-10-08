@@ -77,14 +77,13 @@ defmodule Vxpipe.Persistence.OperatorTasksTest do
              Administration.authenticate(tenant_key, replacement["api_key"], :calls)
   end
 
-  test "saves, publishes, and reads a call spec through trusted commands" do
+  @tag :tmp_dir
+  test "saves, publishes, and reads a call spec through trusted commands", %{tmp_dir: tmp_dir} do
     {:ok, tenant, _issued} = Administration.bootstrap_tenant("CallSpecs tenant", [:admin])
 
-    path =
-      Path.join(System.tmp_dir!(), "vxpipe-call-spec-#{System.unique_integer([:positive])}.json")
+    path = Path.join(tmp_dir, "call-spec.json")
 
     File.write!(path, JSON.encode!(call_spec_input()))
-    on_exit(fn -> File.rm(path) end)
 
     Mix.Tasks.Vxpipe.CallSpec.Save.run(["--tenant", tenant.key, "--file", path])
     saved = receive_json!()

@@ -19,7 +19,10 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixture do
   end
 
   def short_pcm_path(root \\ @root) do
-    Path.join(root, "apps/vxpipe_providers/test/fixtures/deepgram/short_answer_16k_mono_s16le.pcm")
+    Path.join(
+      root,
+      "apps/vxpipe_providers/test/fixtures/deepgram/short_answer_16k_mono_s16le.pcm"
+    )
   end
 
   def ensure_short!(options \\ []) do
@@ -50,10 +53,7 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixture do
     if File.regular?(pcm) and File.regular?(opus) do
       :ok
     else
-      scratch =
-        Path.join(System.tmp_dir!(), "vxpipe-deepgram-#{System.unique_integer([:positive])}")
-
-      File.mkdir_p!(scratch)
+      scratch = create_scratch!(root)
 
       try do
         generate_missing!(
@@ -66,6 +66,24 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixture do
       after
         File.rm_rf!(scratch)
       end
+    end
+  end
+
+  defp create_scratch!(root) do
+    parent = Path.join(root, "tmp/deepgram-fixtures")
+    File.mkdir_p!(parent)
+    name = :crypto.strong_rand_bytes(18) |> Base.url_encode64(padding: false)
+    path = Path.join(parent, name)
+
+    case File.mkdir(path) do
+      :ok ->
+        path
+
+      {:error, :eexist} ->
+        create_scratch!(root)
+
+      {:error, reason} ->
+        raise File.Error, reason: reason, action: "create scratch directory", path: path
     end
   end
 

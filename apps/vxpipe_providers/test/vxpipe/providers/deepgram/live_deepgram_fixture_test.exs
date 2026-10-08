@@ -3,9 +3,9 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixtureTest do
 
   alias Vxpipe.Providers.Deepgram.LiveFixture
 
-  test "generates a brief PCM answer once and reuses it without transcoding" do
-    root = Path.join(System.tmp_dir!(), "vxpipe-deepgram-#{System.unique_integer([:positive])}")
-    on_exit(fn -> File.rm_rf!(root) end)
+  @moduletag :tmp_dir
+
+  test "generates a brief PCM answer once and reuses it without transcoding", %{tmp_dir: root} do
     audio = :binary.copy(<<1, 0>>, 8_000)
     observer = self()
 
@@ -28,9 +28,9 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixtureTest do
              )
   end
 
-  test "generated speech carries two seconds of PCM silence for streaming turn detection" do
-    root = Path.join(System.tmp_dir!(), "vxpipe-deepgram-#{System.unique_integer([:positive])}")
-    on_exit(fn -> File.rm_rf!(root) end)
+  test "generated speech carries two seconds of PCM silence for streaming turn detection", %{
+    tmp_dir: root
+  } do
     speech = <<1, 0, 2, 0>>
 
     assert :ok =
@@ -46,10 +46,7 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixtureTest do
     assert File.read!(LiveFixture.pcm_path(root)) == speech <> :binary.copy(<<0>>, 64_000)
   end
 
-  test "generates both samples once and reuses them" do
-    root = Path.join(System.tmp_dir!(), "vxpipe-deepgram-#{System.unique_integer([:positive])}")
-    on_exit(fn -> File.rm_rf!(root) end)
-
+  test "generates both samples once and reuses them", %{tmp_dir: root} do
     request = fn ->
       send(self(), :tts_requested)
       {:ok, <<0, 0, 1, 0, 2, 0, 3, 0>>}
@@ -78,10 +75,7 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixtureTest do
     assert File.read!(LiveFixture.opus_path(root)) == "OggSfixture"
   end
 
-  test "a failed transcode leaves no newly generated samples" do
-    root = Path.join(System.tmp_dir!(), "vxpipe-deepgram-#{System.unique_integer([:positive])}")
-    on_exit(fn -> File.rm_rf!(root) end)
-
+  test "a failed transcode leaves no newly generated samples", %{tmp_dir: root} do
     assert_raise RuntimeError, "Deepgram fixture transcoding failed", fn ->
       LiveFixture.ensure!(
         root: root,
@@ -94,9 +88,7 @@ defmodule Vxpipe.Providers.Deepgram.LiveFixtureTest do
     refute File.exists?(LiveFixture.opus_path(root))
   end
 
-  test "an existing PCM sample only needs local Opus transcoding" do
-    root = Path.join(System.tmp_dir!(), "vxpipe-deepgram-#{System.unique_integer([:positive])}")
-    on_exit(fn -> File.rm_rf!(root) end)
+  test "an existing PCM sample only needs local Opus transcoding", %{tmp_dir: root} do
     pcm = LiveFixture.pcm_path(root)
     File.mkdir_p!(Path.dirname(pcm))
     File.write!(pcm, <<0, 0, 1, 0>>)

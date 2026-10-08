@@ -224,19 +224,26 @@ and the complete rerun are still pending; checkpoint 3 remains incomplete.
 Prerequisite: checkpoint 2 for database-backed fixtures. Owning boundaries:
 Persistence operator-task tests and Providers Deepgram fixture tests/support.
 
-- [ ] Red-test the project-owned temporary-file isolation boundary using two
+- [x] Red-test the project-owned temporary-file isolation boundary using two
   independent BEAM processes and synchronized overlapping fixture lifetimes.
   Demonstrate that one invocation's cleanup cannot remove the other's files.
-- [ ] Replace system-temp names based only on `System.unique_integer/1` with
+- [x] Replace system-temp names based only on `System.unique_integer/1` with
   checkout-local ExUnit temporary directories or atomically unique directories at
   each owning boundary. Preserve live fixture generation/reuse behavior.
-- [ ] Audit remaining filesystem and local-listener fixtures for shared mutable
+- [x] Audit remaining filesystem and local-listener fixtures for shared mutable
   paths and fixed bound ports; distinguish assertions from actual listeners.
 - [ ] Run the focused owning suites concurrently from two worktrees and record
   evidence. Do not depend on a wrapper exporting `TMPDIR` for plain Mix safety.
 
 Exit: ordinary fixture work and cleanup remain independent across BEAM instances
 and checkouts, including focused child test commands.
+
+Partial fixture evidence (2026-10-08): the two-BEAM scratch test first fails on the
+shared system-temp path, then passes with overlapping fixture lifetimes and one
+process finishing while the other's files remain usable. Six Providers fixture
+checks and two Persistence operator-task checks pass. The filesystem/listener audit
+is recorded in [checkout isolation](../worktree-isolation.md). Concurrent owning
+suites in the two new worktrees remain pending; checkpoint 4 is incomplete.
 
 ## Checkpoint 5 — Run development tools side by side
 
