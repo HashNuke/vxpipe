@@ -176,7 +176,7 @@ fallback. Chat and WhatsApp flows are excluded. None of them is a requirement he
   new provider's defaults. A new call spec starts with defaults for each capability it needs.
   Opening an existing spec never replaces a model or voice it already names.
   - Credential names from the tenant's service bindings, telephony services from the tenant
-    telephony applications, MCP integrations from the configured integration list.
+    telephony applications, MCP integration names from the configured integration list.
 
 ## Specification
 
@@ -205,9 +205,66 @@ fallback. Chat and WhatsApp flows are excluded. None of them is a requirement he
   - Human destination: name/key, description, connection (web or phone service, fixed number or
     from variable), private briefing, capability and presence overrides.
   - Selected edge: source, target, delete.
-- Validation drawer listing every server error with a link that selects the node and tab.
+- Issues list (drawer) and toasts as defined in [Error presentation](#error-presentation).
 - **Source** view: read-only formatted JSON with copy and download, so operators can move a spec
   to the API. Editing raw JSON is out of scope for v1.
+
+### Error presentation
+
+The editor is too dense to show every error everywhere. Each action therefore ends with exactly
+one toast saying what happened, and the toast's **Show** action takes the operator to the field
+when there is one. Inline messages appear only where the operator is already looking.
+
+**Surfaces**
+
+| Surface | Shows | Never shows |
+| --- | --- | --- |
+| Toast | The outcome of every save and publish (success or failure), and failures of other user actions. One toast per action; a new save or publish replaces the previous action's toast. Success toasts auto-dismiss; failure toasts stay until dismissed. | Client validation while editing. |
+| Inline field message | The client or backend error for a field in the currently open node and tab. | Errors for fields that are not on screen. |
+| Badges | An error count on each canvas node, on the Call settings entry and on each inspector tab, so the operator can find errors without a list. | Messages. |
+| Header issue count | "N issues" when client validation finds problems; clicking opens the issues list. | Backend or network failures. |
+| Issues list (drawer) | Every current client error plus the last backend validation error, each with **Show**. Opened on demand, never automatically. | Success, network or permission failures. |
+| Page error state | Failures to load the spec or the catalog, with **Retry**. These are not toasts, because there is no editor to return to. | Save and publish failures. |
+
+**Rules**
+
+- Client validation runs on every edit and updates badges, the issue count and visible inline
+  messages. It never raises a toast by itself.
+- Saving or publishing with client errors does not call the backend. It shows one toast:
+  "Fix N issues before saving" (or publishing) with **Show first issue**.
+- The **Show** action selects the node (or Call settings), opens the tab, scrolls to the field and
+  focuses it. A path the editor cannot place opens the issues list instead.
+- A backend validation error stays inline on its field and in the issues list until that field is
+  edited or the next save succeeds.
+- The editor never discards unsaved changes because of a failure. Retryable failures offer
+  **Retry** in the toast.
+- Toast text names the location in operator terms ("Agent assistant › Prompt") and the problem in
+  plain words, using a client message catalog keyed by error code and path pattern. Paths the
+  catalog does not cover fall back to the location and the backend's `reason`.
+
+**Save and publish outcomes**
+
+| Outcome (status, code) | Toast | Also |
+| --- | --- | --- |
+| `201` save | "Saved as revision N" | Header shows the new revision. |
+| `200` publish | "Published revision N" | Header shows published. |
+| Client errors present (no request) | "Fix N issues before saving" (or publishing), **Show first issue** | Badges and issue count already visible. |
+| `422 invalid_call_spec` with a mappable path | "Couldn't save: Agent assistant › Prompt is required", **Show** | Inline on the field; node and tab badges. |
+| `422 invalid_call_spec` with an unmappable path | "Couldn't save: {reason}", **Show** opens the issues list | Listed in the issues list. |
+| `409 call_spec_not_publishable` | "Couldn't publish: {first error}", **Show** | Same placement as a validation error. |
+| `422 provider_credential_unavailable` | "No usable {provider} credential for this tenant", **Open services** | Inline on the capability picker when the path names it. |
+| `403 provider_service_forbidden` | "This tenant can't use {provider}", **Open services** | Inline on the capability picker when the path names it. |
+| `422 telephony_caller_id_missing` | "{service} has no outbound caller ID number", **Open services** | Inline on the callee connection. |
+| `422 invalid_telephony_route` | "Phone number {field} isn't routable through {service}", **Show** | Inline on the connection. |
+| `422 private_call_spec_material` | "Remove credentials or secrets from {location}", **Show** | Inline on the field; the value is never echoed. |
+| `409 revision_conflict` | "This spec changed while saving. Reload to see the latest revision", **Reload** | Unsaved changes kept until the operator reloads. |
+| `404 call_spec_not_found` | "This call spec no longer exists" | Save disabled. |
+| `403 authoring_forbidden` | "You don't have permission to change call specs" | Save and publish disabled. |
+| `401` or expired operator session | Existing Console session-expiry behavior; the toast says changes in this tab are kept until the page is left. | — |
+| `400 invalid_request` | "Couldn't save: the editor sent an invalid request" | Logged as a client defect; no field placement. |
+| `503 call_spec_authoring_unavailable`, network error or timeout | "Couldn't save. Try again", **Retry** | — |
+
+Copy in this table is the intended meaning; final wording is settled in Storybook review.
 
 ### Backend additions (Console and Calls)
 
@@ -222,8 +279,8 @@ fallback. Chat and WhatsApp flows are excluded. None of them is a requirement he
   mirror: model IDs, display names, and for LLMs the context limit and tool support from
   `llm_db`; for TTS/STS the known voices. Responses are built from in-memory catalogs and make no
   provider network calls.
-- Console-only lookups for credential names per provider, telephony services and MCP integrations
-  with their tools, without secret material.
+- Console-only lookups for credential names per provider, telephony services and MCP integration
+  names, without secret material. MCP tool names are free text in v1.
 - Save and publish failures on both the tenant API and the Console return `code`, `path` and
   `reason`, so the UI can place them on fields.
 
@@ -233,6 +290,43 @@ fallback. Chat and WhatsApp flows are excluded. None of them is a requirement he
   not in `@vxpipe/react`.
 - Add `@xyflow/react` to the Console assets package (Callpipe used it for the same canvas). No
   Lexical dependency.
+- **Standard shadcn components first.** Every control uses a standard shadcn registry
+  component when one fits, installed with the shadcn CLI so the source matches the registry.
+  Project components are compositions of those (inspector panels, node cards, pickers), not
+  replacements for them. Expected set: `button`, `input`, `textarea`, `label`, `field`,
+  `select`, `combobox` (`popover` + `command`), `switch`, `checkbox`, `radio-group`,
+  `toggle-group`, `tabs`, `dialog`, `alert-dialog` (unsaved changes, delete participant),
+  `sheet` (inspector on narrow screens), `dropdown-menu`, `tooltip`, `badge`, `separator`,
+  `scroll-area`, `collapsible`, `item`, `skeleton`, `table` (section permission matrix) and
+  `sonner` or the existing `PageToast` for save and publish feedback. A custom control needs a
+  short note in the labnote saying which shadcn component was considered and why it did not fit.
+  Existing Console pages keep their current `Button` in this milestone; aligning them is a
+  separate change.
+- **Copy and adapt Callpipe's components; do not redesign them.** Callpipe's flow editor already
+  has presentational components and Storybook stories in `ui/src/workspace/pages/flow-editor/`
+  (`editor-header`, `editor-toolbar`, `flow-canvas`, `flow-node`, `flow-layout`,
+  `inspector-primitives`, `inspector`, `agent-inspector`, `human-inspector`, `inbound-inspector`,
+  `flow-level-inspector`, `selected-edge-inspector`, `generic-node-inspector`, `display-helpers`)
+  plus `components.stories.jsx` and `flow_editor.stories.jsx`. Both stacks use Tailwind v4,
+  shadcn-style Radix primitives, class-variance-authority, cmdk and lucide. Adapting each copied
+  file means:
+  - converting JSX to strict TypeScript;
+  - replacing `t("flowEditor...")` calls with English strings, since Console has no i18n;
+  - binding props to the call spec source and S's edit functions instead of Callpipe node data
+    (`data.systemPrompt`, `variableAccess`, `transfers.allowedDestinations`);
+  - importing standard shadcn components installed in Console (U1) in place of Callpipe's local
+    `@/components/ui/*` copies, and replacing hand-built controls in the copied files (native
+    `<select>`, custom tab buttons, ad hoc popovers) with their shadcn equivalents;
+  - checking lucide icon names, since Callpipe uses lucide 0.468 and Console 1.46;
+  - replacing hard-coded light-only colors (`bg-slate-100`, `text-slate-950`, `border-slate-200`
+    and similar) with semantic shadcn tokens so the dark default theme works;
+  - moving stories to the Console admin Storybook conventions and call spec fixtures.
+- **Not copied:** `use-flow-editor-controller.js`, `flow-definition.js` and `api.js` (replaced by
+  S and W), the test call modal and its controller, `variable-retention-control`, channels,
+  WhatsApp and conversation starters, knowledge pickers, the Lexical `prompt-editor` and the
+  "any node" transfer option. Panels with no Callpipe counterpart (Defaults and Voice and model
+  pickers, Media and recording, Wait sounds, Advanced, first message, transfer history, Presence)
+  are new and built from the same copied primitives.
 - Pure functions own source edits (add/rename/remove participant, add/remove transfer, set
   capability override, set section permission) and are unit tested without React.
 - Storybook first, as for the [operator admin Storybook](operator-admin-storybook.md): page and
@@ -240,26 +334,292 @@ fallback. Chat and WhatsApp flows are excluded. None of them is a requirement he
   failure, published revision, outgoing call, narrow viewport and long content. Production wiring
   follows the user's review of those stories.
 
-## Implementation checklist
+## Delivery strategy
 
-- [ ] A. Source model: red unit tests, then pure edit functions, client validation rules and the
-  graph projection for both directions, including participant renaming and round-trip with the
-  three files under `examples/call-specs/`.
-- [ ] B. Storybook: header, canvas, every inspector and the validation drawer with deterministic
-  fixtures; record the user's review.
-- [ ] C. Structured save/publish errors on the tenant API (red Gateway tests for path and reason on
-  representative failures), then Console read, save and publish endpoints sharing that projection,
-  including tenant isolation and no secret material. Update the API guide's error table.
-- [ ] D. Provider and model listing: add `models/0` to the STT, TTS and STS provider behaviours,
-  implement it in every registered adapter and make each `configure/1` validate against it,
-  with a contract test that iterates the registry so a newly registered provider is covered
-  automatically; move the default models from `setupCatalog.json` into the backend declarations; LLM listing from `llm_db` plus runtime overrides; tenant API and
-  Console endpoints; Console lookups for credentials, telephony services and MCP integrations.
-- [ ] E. Production integration: routes, list actions, unsaved-change guard, save and publish
-  through the real endpoints.
-- [ ] F. Documentation: Console authoring section in
-  [operator API-key authoring](../operator-api-key-authoring.md) or a new operator guide, and this
-  milestone's evidence.
+Implement **V → P → L → K → S → U → C → W → Z** in that order. The four backend checkpoints
+(V, P, L, K) settle the contracts the editor depends on: error shape, model declarations and
+listing responses. S builds the editor's source model as pure TypeScript. U puts the whole editor
+in Storybook and stops for the user's review. C and W connect it to real endpoints only after that
+review. Z closes the milestone. S and U depend only on the response shapes fixed in V and K, so
+they may start once those shapes are committed.
+
+For each checkpoint: write the smallest red test in the owning child for the stated behavior,
+make it green, then refactor; update the relevant docs and this milestone's labnote. Run the
+broader relevant suite and all five root gates before treating the checkpoint as usable. Each
+checkpoint is one coherent commit; none is committed as complete while its exit gate is red.
+Proposed file names may be refined without changing the contracts or exit gates.
+
+Dependency direction for the catalog follows `mix.exs`: Call Engine (which already depends on
+Agent Runtime and Providers) exposes the combined model catalog; Calls adds tenant credential
+availability; Gateway and Console call Calls. Neither Gateway nor Console reads `llm_db` or the
+provider registry directly.
+
+| Checkpoint | Runnable slice | Candidate commit subject |
+| --- | --- | --- |
+| V | Saving or publishing an invalid spec through the tenant API returns the failing field's path and reason. | Return field-level call spec validation errors |
+| P | Every registered speech adapter declares its models and recommended default, and validates against them. | Declare speech models in the provider contract |
+| L | Each LLM provider lists runnable models from `llm_db` plus runtime overrides, with one default. | List runnable LLM models with recommended defaults |
+| K | Tenant API and Console list providers and models; onboarding reads defaults from the listing. | Add provider and model listing endpoints |
+| S | Pure source-model functions edit, validate and project any supported call spec without loss. | Add the call spec editor source model |
+| U | The complete editor is reviewable in Storybook with fixtures. | Add call spec editor Storybook |
+| C | Console can read, save and publish specs and look up credentials, telephony services and MCP integrations. | Add Console call spec authoring endpoints |
+| W | Operators create, edit, save and publish call specs in `/admin`. | Integrate the call spec editor in Console |
+| Z | Full acceptance, rendered inspection and documentation. | Complete the call spec editor milestone |
+
+## Checkpoint V — Field-level errors on the tenant API
+
+Outcome: `POST`/`PUT /api/tenants/:tenant_key/call-specs` and the publish route return a specific
+error for an invalid source instead of a bare `invalid_call_spec`.
+
+- [ ] **V1 — Red Gateway tests.** In `apps/vxpipe_gateway/test/vxpipe/gateway/http/call_spec_writes_test.exs`,
+  submit representative invalid sources (missing `prompt`, unknown `handled_by`, an outgoing
+  human handler, an out-of-range `ring_timeout_ms`, a bad E.164 number, an unknown transfer
+  target, a reserved tool name) and expect `422` with `error.code`, `error.path` (a JSON path as
+  a list of strings) and `error.reason`. Confirm they fail on the current opaque body.
+- [ ] **V2 — Shared public projection.** Add one function that turns a
+  `Vxpipe.CallEngine.Error` with `details` `path`/`reason` into the public error body, owned by
+  Calls so Gateway and Console share it. Keep the existing specific codes
+  (`provider_service_forbidden`, `provider_credential_unavailable`,
+  `telephony_caller_id_missing`) and add a path where the failure has one.
+- [ ] **V2b — Specific codes for collapsed failures.** Red tests, then return
+  `409 revision_conflict`, `422 invalid_telephony_route` and `422 private_call_spec_material`
+  (with paths where available) instead of today's `503` or generic `invalid_call_spec`, as listed
+  in [Error presentation](#error-presentation).
+- [ ] **V3 — Publish failures.** Replace the `unsupported_call_plan` summary in
+  `validation_errors` and the unpublishable-draft `409` body with the same code/path/reason
+  entries. Red test first.
+- [ ] **V4 — Safety.** Test that reasons never echo submitted values: a secret-looking prompt,
+  URL or number in an invalid field does not appear in the response. `private_data?` rejections
+  keep a path and a fixed reason.
+- [ ] **V5 — Docs.** Update the error table in
+  [operator API-key authoring](../operator-api-key-authoring.md) with the new body and an example.
+- [ ] **Exit V.** Gateway suite, root gates and the existing save/publish/outgoing API tests pass;
+  responses carry exactly one error, as the validator is fail-fast.
+
+## Checkpoint P — Speech models in the provider contract
+
+Outcome: registering a speech adapter declares its supported models, voices and one recommended
+default, and the adapter rejects any model it does not declare.
+
+- [ ] **P1 — Red contract test.** Add a Call Engine test that iterates
+  `Vxpipe.Providers.Registry` and, for every `:stt`, `:tts` and `:sts` capability, expects a
+  non-empty `models/0`, exactly one default model, one default voice for each model with a voice
+  list, `configure/1` accepting each listed model with its default voice, and `configure/1`
+  rejecting an unlisted model. It fails because `models/0` does not exist.
+- [ ] **P2 — Behaviour callback.** Add `@callback models() :: [model]` and a small model
+  descriptor type (ID, display name, default flag, voices as a list with a default or free text)
+  to `apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/stt_provider.ex`, `tts_provider.ex`
+  and `sts_provider.ex`.
+- [ ] **P3 — Adapters.** Implement `models/0` in every adapter that implements those behaviours:
+  Cartesia, Deepgram, ElevenLabs and Google STT/TTS, Google and GPT-Live STS, Rime TTS, and the
+  Morse STT/TTS/STS/duplex sessions under both `providers/morse_code/` and
+  `call_engine/provider/morse_code_*`. Move the private lists (`@models` in Cartesia and
+  ElevenLabs TTS, Deepgram Flux, fixed Google and GPT-Live models) into `models/0` and have
+  `configure/1` check against it. Adapter behavior for currently valid configurations is unchanged.
+- [ ] **P4 — Defaults.** Set each adapter's default to the value in today's
+  `apps/vxpipe_console/assets/src/admin/setupCatalog.json` `defaultModels` (for example Deepgram
+  STT `flux-general-multi`, Cartesia TTS `sonic-3.6`, ElevenLabs STT `scribe_v2_realtime`, Google
+  STS `gemini-3.8-live`, OpenAI STS `gpt-live-1`). Record any adapter with no frontend default
+  and the default chosen for it.
+- [ ] **Exit P.** The contract test passes for every registered capability, existing adapter and
+  room tests are green, and `mix compile --warnings-as-errors` fails if an adapter omits
+  `models/0` (checked once by temporarily removing it locally, not committed).
+
+## Checkpoint L — Runnable LLM model listing
+
+Outcome: for each LLM provider the runtime supports, Agent Runtime lists models it can actually
+run, with one recommended default.
+
+- [ ] **L1 — Red tests.** In `apps/vxpipe_agent_runtime/test/vxpipe/agent_runtime/`, expect a
+  listing per supported provider (google, openai, deepseek, openrouter, fireworks, zenmux) where
+  every entry resolves through `ProviderSelection`, non-chat entries (image or video output, no
+  text output) are excluded, the runtime overrides (`deepseek-flash`, `gpt-6-luna`) are included,
+  and exactly one entry is the default.
+- [ ] **L2 — Listing module.** Add an Agent Runtime module that reads the `llm_db` snapshot,
+  filters to text output with tool calling, adds the `ProviderSelection` overrides and returns
+  the shared descriptor shape (ID, display name, default flag, context limit). Keep the override
+  definitions in one place so the listing and `ProviderSelection` cannot drift.
+- [ ] **L3 — Defaults.** Declare one default per provider, matching `setupCatalog.json`
+  (google `gemini-2.5-flash`, openai `gpt-5`, zenmux `openai/gpt-5`, deepseek `deepseek-flash`,
+  openrouter `google/gemini-3.5-flash-lite`, fireworks
+  `accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b`). A test fails if a default is not
+  in the provider's listing.
+- [ ] **L4 — Load cost.** Measure listing time and memory for the largest provider (openrouter)
+  after `LLMDB.load/0`; record it. Cache the filtered result in `:persistent_term` only if the
+  measurement justifies it.
+- [ ] **Exit L.** Agent Runtime suite and root gates pass; the listing makes no network calls.
+
+## Checkpoint K — Provider and model listing endpoints
+
+Outcome: API clients and the Console can list providers per capability and each provider's
+models with its recommended default; the onboarding page reads defaults from the backend.
+
+- [ ] **K1 — Red catalog tests.** Add a Call Engine model-catalog facade test combining P's
+  speech declarations and L's LLM listing by capability (`speech_to_text`, `text_to_speech`,
+  `speech_to_speech`, `output_speech_to_text`, `model_inference`), omitting providers whose
+  implementation is not installed (`Registry.resolve_capability/2`).
+- [ ] **K2 — Calls workflow.** Add a Calls function that returns the catalog plus whether the
+  tenant has a usable credential for each provider (tenant binding or inherited platform
+  credential), without credential values. Test tenant isolation.
+- [ ] **K3 — Tenant API routes.** Red Gateway tests, then
+  `GET /api/tenants/:tenant_key/providers?capability=...` and
+  `GET /api/tenants/:tenant_key/providers/:provider/models?capability=...`, authenticated like
+  the existing tenant routes. Unknown provider or capability returns `404`/`422`.
+- [ ] **K4 — Console routes.** Red endpoint tests, then the matching
+  `/admin/api/tenants/:tenant_key/providers...` routes in
+  `apps/vxpipe_console/lib/vxpipe/console/router.ex`, with a controller beside
+  `AdminCallSpecsController`.
+- [ ] **K5 — Onboarding cutover.** Remove `defaultModels` from `setupCatalog.json`; have
+  its readers (`setupCatalog.ts` and `OnboardingStory.tsx`) take defaults from the
+  listing (fixtures in Storybook). Update `setupCatalog.test.ts`. The rendered onboarding page
+  shows the same defaults as before.
+- [ ] **K6 — Docs.** Document both tenant API routes and their response shape in the API guide.
+- [ ] **Exit K.** Gateway, Console and Calls suites, Console frontend tests and root gates pass;
+  onboarding is inspected in a rendered browser with `agent-browser`.
+
+## Checkpoint S — Call spec source model
+
+Outcome: framework-free TypeScript functions hold a call spec source, edit it, validate it on the
+client and project it to a graph, round-tripping every supported source without loss.
+
+- [ ] **S1 — Red round-trip tests.** Under `apps/vxpipe_console/assets/src/admin/callSpecEditor/`,
+  load each file in `examples/call-specs/` and expect parse → project → serialize to produce an
+  identical JSON value. Fails because the module does not exist.
+- [ ] **S2 — Types.** Define TypeScript types for schema `20261004.01`: direction blocks,
+  participants (human and agent fields), connection, capabilities, first message, tools,
+  transfers, transfer history, variable sections and permissions, media policy, wait sounds,
+  tool visibility, limits, opening audio and transfer policy. Historical `20260915.01` sources
+  open read-only with a notice; the editor does not rewrite them.
+- [ ] **S3 — Edit functions.** Red tests then pure functions: add/remove agent or human
+  participant, rename a participant (rewriting `handled_by`, `caller`/`callee`, `transfers`,
+  route maps and tool visibility overrides), add/remove a transfer, switch direction, set or
+  clear a capability override, set a section permission, add/edit/remove variable sections and
+  fields, and set first message, tools, wait sounds and media policy.
+- [ ] **S4 — Graph projection.** Entry node from the direction block, agent and human nodes,
+  transfer edges from `transfers`, deterministic layout (entry, then agents, then human
+  destinations, ordered by `transfers`) and no positions in the source.
+- [ ] **S5 — Client validation.** Rules returning the same JSON paths the backend uses: required
+  fields, string lengths (name 256, description 1,024, transfer notice 4,096, fixed first message
+  4,096, prompt 32,768), identifier format, E.164 numbers, ring timeout 5,000 to 60,000, transfer
+  attempt timeout 1,000 to 120,000, reference integrity, direction rules (outgoing handler is an
+  agent, callee is a human with a phone `dial` connection, no `number_from_variable` on the callee)
+  and reserved tool names. A table-driven test checks each rule against the matching V1 backend
+  case so client and server paths agree.
+- [ ] **S5b — Error placement and messages.** Pure functions mapping a JSON path to a location
+  (node or Call settings, tab, field, operator-facing label such as "Agent assistant › Prompt")
+  and an error code plus path pattern to toast text, covering every row of the
+  [save and publish outcomes](#error-presentation) table. Table-driven tests include unmappable
+  paths falling back to the issues list and the backend `reason`.
+- [ ] **S6 — New spec seed.** A function returning the default new spec (incoming web caller, one
+  agent) with recommended defaults filled from a catalog argument.
+- [ ] **Exit S.** Console frontend unit tests, type check and lint pass; no React in this module.
+
+## Checkpoint U — Editor in Storybook
+
+Outcome: the complete editor is reviewable in Storybook with deterministic fixtures, following the
+[operator admin Storybook](operator-admin-storybook.md) conventions. Production routes are not
+changed.
+
+Each task copies the named Callpipe files from `ui/src/workspace/pages/flow-editor/`, adapts
+them as described under [Frontend](#frontend), and copies their existing stories before changing
+them, so the first commit of each component shows Callpipe's version and later diffs show the
+adaptation.
+
+- [ ] **U1 — Dependencies, theme tokens and primitives.** Add `@xyflow/react` to
+  `apps/vxpipe_console/assets/package.json` with its lockfile. In
+  `apps/vxpipe_console/assets/src/admin/admin.css`, map the standard shadcn color tokens
+  (`background`, `foreground`, `muted`, `muted-foreground`, `border`, `input`, `ring`,
+  `primary`, `destructive` and so on) onto the existing `--admin-*` variables in both themes, so
+  shadcn components and copied Callpipe markup render in Console colors without per-file
+  rewrites. Add a `components.json` for Console assets and install the standard shadcn components
+  listed under [Frontend](#frontend) with the shadcn CLI, including the seven Callpipe's editor
+  imports (`dialog`, `input`, `item`, `popover`, `skeleton`, `switch`, `tabs`), with their Radix
+  dependencies and lockfile. Install unmodified registry versions rather than copying
+  Callpipe's local copies. Following the project's Storybook rule, do not add stories for raw
+  primitives; one theme check story confirms the token mapping in light and dark themes.
+- [ ] **U2 — Shell (copied).** `editor-header` (with `FlowNameDialog`), `editor-toolbar`,
+  `flow-canvas`, `flow-node`, `flow-layout` and the canvas half of `flow-editor-layout`. Remove
+  the test call and testchat buttons, add revision and published badges and validation state,
+  and drive nodes and edges from S's graph projection. Copy the `Header`, `HeaderSaving`,
+  `NameDialog`, `Toolbar` and `NodeCards` stories.
+- [ ] **U3 — Call settings inspector (adapted from `flow-level-inspector`).** Keep its tab
+  structure; drop channels, starters, knowledge and the chat agent. Add tabs Direction, Defaults,
+  Variables, Media and recording, Wait sounds, Advanced.
+- [ ] **U4 — Entry and human inspectors (adapted from `inbound-inspector` and
+  `human-inspector`).** Replace the number pool with the caller or callee connection, turn the
+  recording disclosure into opening audio, add the outgoing ring timeout. For humans, keep the
+  phone field and add service selection, web destinations, `number_from_variable`, description
+  and the private briefing; replace the timing summary with the one transfer attempt timeout.
+  Copy the `HumanInspectorDefault` and `InboundInspectorDefault` stories.
+- [ ] **U5 — Agent inspector (adapted from `agent-inspector`).** Tabs Prompt, Voice and model,
+  Variables, Transfers, Tools, Presence. Model pickers preselect the recommended model and voice, reset them when the provider
+  changes, and keep saved choices when opening an existing spec. Tests cover all three.
+  Keep Callpipe's tab bar, transfer destination search and the step pattern of `AddToolsModal`
+  (source, then tool, then options), rebound to `host`/`mcp`/`platform` tools and conversation
+  mode. Replace the prompt editor with a plain textarea, and variable access grants with the
+  section permission matrix. Copy and adapt `AgentInspectorDefault`, `AgentVariables` and
+  `AgentTransfers`.
+- [ ] **U6 — Errors and source view.** Badges on nodes, Call settings and tabs; header issue
+  count; issues list; inline messages for the visible tab only; toasts with **Show**,
+  **Retry**, **Open services** and **Reload** actions, all per
+  [Error presentation](#error-presentation); read-only JSON with copy and download.
+- [ ] **U7 — Stories.** Starting from `flow_editor.stories.jsx`, page stories for default,
+  loading, load failure, new spec, client validation errors, save blocked by client errors, one
+  story per row of the save and publish outcomes table, mappable and unmappable backend errors,
+  published revision, outgoing call, historical schema (read-only), narrow viewport and long
+  content, with interaction tests for adding a participant, drawing a transfer, renaming,
+  following a toast's **Show** action and opening the issues list.
+- [ ] **U8 — Review.** Inspect every story with `agent-browser` at desktop and phone widths, then
+  stop for the user's review and record the decision here.
+- [ ] **Exit U.** Frontend tests and Storybook build pass, rendered inspection is recorded, and
+  the user has approved the UI for production integration.
+
+## Checkpoint C — Console authoring endpoints
+
+Outcome: the installation operator can read, save and publish call specs and look up the choices
+the editor needs, through Console admin endpoints.
+
+- [ ] **C1 — Red endpoint tests.** In
+  `apps/vxpipe_console/test/vxpipe/console/admin_call_specs_endpoint_test.exs`, expect read of
+  the latest and a given revision (source, revision, published state, routes), save as new and as
+  a new revision, publish, V's error body on invalid sources, `404` for another tenant's spec and
+  no credential values in any response.
+- [ ] **C2 — Calls read workflow.** Expose reading a revision's source for the installation
+  operator through `Vxpipe.Calls`, reusing `fetch_call_spec`.
+- [ ] **C3 — Routes.** Add `GET`, `POST`, `PUT` and publish routes under
+  `/admin/api/tenants/:tenant_key/call-specs`, calling `CallSpecAuthoring` with
+  `InstallationOperator.authority()` and V's shared error projection.
+- [ ] **C4 — Lookups.** Credential names per provider from tenant service bindings, telephony
+  services from tenant telephony applications, and MCP integration names from the configured
+  integration list, all without secret material. MCP tool names stay free text in v1, because
+  listing them needs a network call to each server.
+- [ ] **Exit C.** Console and Calls suites and root gates pass.
+
+## Checkpoint W — Production editor
+
+Outcome: operators create, edit, save and publish call specs in `/admin`.
+
+- [ ] **W1 — Routes.** Add `/admin/tenants/:tenantKey/call-specs/new` and `/:callSpecId`
+  (`?revision=N` read-only) to the React Router table and update
+  [Console React routing](../console-react-routing.md).
+- [ ] **W2 — API client.** Typed functions for C's endpoints and K's listings, following the
+  abort, stale-response and session-expiry handling already used in `adminApi.ts`.
+- [ ] **W3 — List integration.** **New call spec** action and row links on `TenantCallSpecsPage`.
+- [ ] **W4 — Containers.** Load source and catalog (page error state on failure), save,
+  publish, map every response to its toast and placement through S5b and U6, keep unsaved
+  changes on every failure, and guard unsaved changes on navigation and reload.
+- [ ] **W5 — Rendered check.** With `agent-browser`, create, edit, save, fail validation, publish
+  and reopen a spec at desktop and phone widths.
+- [ ] **Exit W.** Frontend and Console tests and root gates pass and rendered inspection is
+  recorded.
+
+## Checkpoint Z — Final acceptance
+
+- [ ] **Z1** Run every item under [acceptance and failure checks](#acceptance-and-failure-checks)
+  and record the evidence.
+- [ ] **Z2** Add a Console authoring section to the API guide or a new operator guide.
+- [ ] **Z3** Update this milestone, the index entry and the labnote; then run the
+  [common implementation gates](index.md#common-implementation-and-verification-gates).
 
 ## Acceptance and failure checks
 
@@ -284,8 +644,11 @@ fallback. Chat and WhatsApp flows are excluded. None of them is a requirement he
   digest equals the original.
 - [ ] A spec saved through the tenant API opens in the editor and every field it uses is visible.
 - [ ] Renaming a participant updates all references; the saved spec validates.
-- [ ] A backend validation error selects the right node and tab and highlights the field; an
-  unmappable backend error appears in the validation drawer.
+- [ ] Every save and publish ends with one toast matching the
+  [outcomes table](#error-presentation); **Show** selects the right node and tab and focuses the
+  field; an unmappable backend error opens the issues list; unsaved changes survive every
+  failure.
+- [ ] Editing with client errors raises no toast; saving with client errors sends no request.
 - [ ] Saving after an edit creates revision N+1 and leaves revision N unchanged and still published.
 - [ ] Another tenant's spec ID returns not found; responses contain no credential values.
 - [ ] Rendered browser inspection with `agent-browser` at desktop and phone widths for list, new,

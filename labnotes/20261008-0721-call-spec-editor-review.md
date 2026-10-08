@@ -72,6 +72,46 @@ authoring in the Vxpipe operator Console. Result:
   instructions, transfer acceptance gates, human handoff availability/retry/fallback, and an LLM
   listing with the same descriptor shape. Chat/WhatsApp excluded.
 
+## Checkpoint breakdown (2026-10-08)
+
+The milestone checklist was replaced by nine checkpoints, V → P → L → K → S → U → C → W → Z, in the
+format of `simpler-speech-integrations.md`. Placement follows `mix.exs`: Call Engine already
+depends on Agent Runtime and Providers, so it hosts the combined model catalog; Calls adds tenant
+credential availability; Gateway and Console call Calls. Speech adapters implementing the
+behaviours include duplicate Morse sessions under `providers/morse_code/` and
+`call_engine/provider/morse_code_*`; both need `models/0`. Publish of an unpublishable draft
+currently returns `409` with an `unsupported_call_plan` summary, so checkpoint V covers publish
+too. MCP tool names stay free text in v1 because listing them needs a network call to each server.
+
+## Reuse of Callpipe components (2026-10-08)
+
+User direction: copy Callpipe's Storybook-backed editor components and adapt them rather than
+rebuilding. Both stacks use Tailwind v4, shadcn-style Radix primitives, class-variance-authority,
+cmdk and lucide. Differences to adapt: Callpipe is JSX with `t()` i18n and lucide 0.468; Console is
+strict TypeScript, English only, lucide 1.46. The editor imports only seven shadcn primitives
+(`dialog`, `input`, `item`, `popover`, `skeleton`, `switch`, `tabs`); Console has none of them
+yet beyond a local `Button`. Callpipe's controller, definition and API modules are bound to its
+node-data model and are replaced rather than copied.
+- Styling: Console already uses Tailwind v4 with shadcn-style components (`admin.css` imports
+  `tailwindcss`; `Button.tsx` uses cva and Radix Slot), so "use shadcn" and the plan agree; shadcn
+  components are Tailwind-styled source. The real gap is tokens: Callpipe uses standard shadcn
+  names (`text-muted-foreground` 89 uses, `border-border` 64, `bg-background` 29) and light-only
+  slate colors, while Console defines `--admin-*` variables with a dark default. U1 maps the
+  shadcn tokens onto `--admin-*` and the copied markup drops hard-coded slate colors.
+- User direction: use standard shadcn components broadly. The milestone now lists the expected
+  registry components, installs them with the shadcn CLI (Console has no `components.json` yet)
+  instead of copying Callpipe's local copies, and replaces Callpipe's hand-built controls (for
+  example the agent inspector's custom tab buttons and native `<select>`) with shadcn ones.
+
+## Error presentation (2026-10-08)
+
+User direction: the editor is too complex to show every error; communicate save outcomes through
+toasts. The milestone now defines surfaces (toast, inline for the visible tab only, badges,
+header issue count, on-demand issues list, page error state for load failures) and a toast for
+every save/publish outcome. Gateway currently maps `revision_conflict` to `503` and
+`invalid_telephony_route` and `private_call_spec_material` to generic codes; checkpoint V2b gives
+them specific codes so the UI can say what happened.
+
 ## Verification
 
 Documentation-only change. Checked milestone links resolve to existing files and the index count
