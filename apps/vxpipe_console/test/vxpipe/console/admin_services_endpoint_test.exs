@@ -517,16 +517,16 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
              "cartesia" => ["credential", "stt", "tts"],
              "elevenlabs" => ["credential", "stt", "tts"],
              "deepgram" => ["credential", "credential_validation", "stt", "tts"],
-             "deepseek" => ["credential", "credential_validation"],
-             "fireworks" => ["credential"],
-             "google" => ["credential", "credential_validation", "sts", "stt", "tts"],
+             "deepseek" => ["credential", "credential_validation", "llm"],
+             "fireworks" => ["credential", "llm"],
+             "google" => ["credential", "credential_validation", "llm", "sts", "stt", "tts"],
              "morse" => ["sts", "stt", "tts"],
-             "openai" => ["credential", "credential_validation", "sts"],
-             "openrouter" => ["credential", "credential_validation"],
+             "openai" => ["credential", "credential_validation", "llm", "sts"],
+             "openrouter" => ["credential", "credential_validation", "llm"],
              "rime" => ["credential", "credential_validation", "tts"],
              "telnyx" => ["credential", "credential_validation", "telephony"],
              "twilio" => ["credential", "credential_validation", "telephony"],
-             "zenmux" => ["credential", "credential_validation"]
+             "zenmux" => ["credential", "credential_validation", "llm"]
            }
 
     # Gemini Live uses the existing Google key; credential-free Morse remains

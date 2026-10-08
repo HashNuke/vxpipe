@@ -1,6 +1,6 @@
 # Call spec editor
 
-Status: implementation started 2026-10-08; checkpoints V, P and L complete; K is next. Design review complete.
+Status: implementation started 2026-10-08; checkpoints V, P, L and K complete; checkpoint S in progress. Design review complete.
 Prerequisites: [Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md),
 [Operator login and admin dashboard](operator-login-and-admin-dashboard.md),
 [Operator admin Storybook](operator-admin-storybook.md) and the
@@ -480,28 +480,34 @@ Checkpoint L progress: all 108 Agent Runtime tests pass (eight excluded, seed
 Outcome: API clients and the Console can list providers per capability and each provider's
 models with its recommended default; the onboarding page reads defaults from the backend.
 
-- [ ] **K1 — Red catalog tests.** Add a Call Engine model-catalog facade test combining P's
+- [x] **K1 — Red catalog tests.** Add a Call Engine model-catalog facade test combining P's
   speech declarations and L's LLM listing by capability (`speech_to_text`, `text_to_speech`,
   `speech_to_speech`, `output_speech_to_text`, `model_inference`), omitting providers whose
   implementation is not installed (`Registry.resolve_capability/2`).
-- [ ] **K2 — Calls workflow.** Add a Calls function that returns the catalog plus whether the
+- [x] **K2 — Calls workflow.** Add a Calls function that returns the catalog plus whether the
   tenant has a usable credential for each provider (tenant binding or inherited platform
   credential), without credential values. Test tenant isolation.
-- [ ] **K3 — Tenant API routes.** Red Gateway tests, then
+- [x] **K3 — Tenant API routes.** Red Gateway tests, then
   `GET /api/tenants/:tenant_key/providers?capability=...` and
   `GET /api/tenants/:tenant_key/providers/:provider/models?capability=...`, authenticated like
   the existing tenant routes. Unknown provider or capability returns `404`/`422`.
-- [ ] **K4 — Console routes.** Red endpoint tests, then the matching
+- [x] **K4 — Console routes.** Red endpoint tests, then the matching
   `/admin/api/tenants/:tenant_key/providers...` routes in
   `apps/vxpipe_console/lib/vxpipe/console/router.ex`, with a controller beside
   `AdminCallSpecsController`.
-- [ ] **K5 — Onboarding cutover.** Remove `defaultModels` from `setupCatalog.json`; have
+- [x] **K5 — Onboarding cutover.** Remove `defaultModels` from `setupCatalog.json`; have
   its readers (`setupCatalog.ts` and `OnboardingStory.tsx`) take defaults from the
   listing (fixtures in Storybook). Update `setupCatalog.test.ts`. The rendered onboarding page
   shows the same defaults as before.
-- [ ] **K6 — Docs.** Document both tenant API routes and their response shape in the API guide.
-- [ ] **Exit K.** Gateway, Console and Calls suites, Console frontend tests and root gates pass;
+- [x] **K6 — Docs.** Document both tenant API routes and their response shape in the API guide.
+- [x] **Exit K.** Gateway, Console and Calls suites, Console frontend tests and root gates pass;
   onboarding is inspected in a rendered browser with `agent-browser`.
+
+Checkpoint K progress: the shared catalog, authorized API/Console routes and
+onboarding cutover are implemented. The frontend passes 222 tests, type check and
+lint; rendered Storybook checks cover desktop/phone recommendations, blocked
+samples and light theme. All five root gates pass. The complete default umbrella
+suite passes 3,374 tests, zero failures, 120 excluded (seed 487098). No live tests ran.
 
 ## Checkpoint S — Call spec source model
 

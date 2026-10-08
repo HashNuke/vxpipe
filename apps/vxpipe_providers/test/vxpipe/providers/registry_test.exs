@@ -116,17 +116,17 @@ defmodule Vxpipe.Providers.RegistryTest do
     assert Registry.catalog() == %{
              "cartesia" => [:credential, :stt, :tts],
              "elevenlabs" => [:credential, :stt, :tts],
-             "deepseek" => [:credential, :credential_validation],
-             "openrouter" => [:credential, :credential_validation],
-             "fireworks" => [:credential],
+             "deepseek" => [:credential, :credential_validation, :llm],
+             "openrouter" => [:credential, :credential_validation, :llm],
+             "fireworks" => [:credential, :llm],
              "deepgram" => [:credential, :credential_validation, :stt, :tts],
-             "google" => [:credential, :credential_validation, :sts, :stt, :tts],
+             "google" => [:credential, :credential_validation, :llm, :sts, :stt, :tts],
              "morse" => [:sts, :stt, :tts],
-             "openai" => [:credential, :credential_validation, :sts],
+             "openai" => [:credential, :credential_validation, :llm, :sts],
              "rime" => [:credential, :credential_validation, :tts],
              "telnyx" => [:credential, :credential_validation, :telephony],
              "twilio" => [:credential, :credential_validation, :telephony],
-             "zenmux" => [:credential, :credential_validation]
+             "zenmux" => [:credential, :credential_validation, :llm]
            }
   end
 

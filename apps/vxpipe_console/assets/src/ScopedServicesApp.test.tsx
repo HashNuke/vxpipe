@@ -1,3 +1,4 @@
+import { modelCatalogFixture } from "./admin/modelCatalogFixtures";
 import {
   cleanup,
   fireEvent,
@@ -27,11 +28,11 @@ const binding = (provider: string, source = "platform", name = provider) => ({
 });
 const providerCapabilities = {
   deepgram: ["credential", "stt", "tts"],
-  google: ["credential"],
+  google: ["credential", "llm"],
   rime: ["credential", "tts"],
   telnyx: ["credential", "telephony"],
   twilio: ["credential", "telephony"],
-  zenmux: ["credential"],
+  zenmux: ["credential", "llm"],
 };
 
 test("platform displays existing Telnyx and Deepgram once without writing credentials", async () => {
@@ -44,7 +45,7 @@ test("platform displays existing Telnyx and Deepgram once without writing creden
             { ...binding("telnyx"), platform_available: false },
             { ...binding("deepgram"), platform_available: false },
           ],
-          provider_capabilities: providerCapabilities,
+          model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities,
         });
   });
 
@@ -63,7 +64,7 @@ test("Setup picker offers installed services with only working capability badges
   const fetchImpl = vi.fn(async () => response({
     tenant: null,
     bindings: [],
-    provider_capabilities: providerCapabilities,
+    model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities,
   }));
   render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
   await screen.findByRole("heading", { name: "Platform services" });
@@ -100,7 +101,7 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
       return new Response(
         JSON.stringify({
           tenant: null,
-          provider_capabilities: providerCapabilities,
+          model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities,
           bindings: saved
             ? [
                 {
@@ -180,7 +181,7 @@ test("platform services test and save separately, then edit the exact persisted 
         bindings = [];
         return new Response(null, { status: 204 });
       }
-      return new Response(JSON.stringify({ tenant: null, bindings, provider_capabilities: providerCapabilities }));
+      return new Response(JSON.stringify({ tenant: null, bindings, model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities }));
     },
   );
   render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
@@ -273,7 +274,7 @@ test("failed card removal keeps the credentials visible and reports the error", 
       : response({
           tenant: null,
           bindings: [binding("deepgram")],
-          provider_capabilities: providerCapabilities,
+          model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities,
         }),
   );
 
@@ -293,7 +294,7 @@ test("platform save failure appears in a page notification while the form stays 
   const fetchImpl = vi.fn(async (_url: RequestInfo | URL, options?: RequestInit) =>
     options?.method === "POST"
       ? response({ error: { code: "unavailable" } }, 503)
-      : response({ tenant: null, bindings: [], provider_capabilities: providerCapabilities }),
+      : response({ tenant: null, bindings: [], model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities }),
   );
 
   render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
@@ -327,7 +328,7 @@ test("keeps Save usable when a platform credential cannot be tested", async () =
       }
       return response({
         tenant: null,
-        provider_capabilities: providerCapabilities,
+        model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities,
         bindings: saved ? [binding("rime")] : [],
       });
     },

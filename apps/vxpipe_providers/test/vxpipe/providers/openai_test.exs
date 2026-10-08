@@ -5,17 +5,19 @@ defmodule Vxpipe.Providers.OpenAITest do
   alias Vxpipe.Providers.OpenAI.{Credential, CredentialValidation}
   alias Vxpipe.Providers.Registry
 
-  test "declares tenant credential and GPT-Live speech capabilities" do
+  test "declares tenant credential, LLM and GPT-Live speech capabilities" do
     assert OpenAI.id() == "openai"
 
     assert OpenAI.capabilities() == %{
              credential: Credential,
              credential_validation: CredentialValidation,
+             llm: Vxpipe.AgentRuntime.Provider.ReqLLM,
              sts: Vxpipe.Providers.OpenAI.GPTLiveSession
            }
 
     assert {:ok, OpenAI} = Registry.fetch("openai")
     assert {:ok, Credential} = Registry.resolve_capability("openai", :credential)
+
     assert {:ok, CredentialValidation} =
              Registry.resolve_capability("openai", :credential_validation)
 
@@ -25,6 +27,7 @@ defmodule Vxpipe.Providers.OpenAITest do
 
   test "accepts exactly one printable, bounded API key and previews only its suffix" do
     assert Credential.auth_kind() == "api_key"
+
     assert Credential.preview_fields() == [
              %{field: "api_key", label: "API key", display: :last_four}
            ]
@@ -50,6 +53,7 @@ defmodule Vxpipe.Providers.OpenAITest do
 
     assert {:ok, request} = CredentialValidation.request("api_key", %{"api_key" => key})
     assert request[:url] == "https://api.openai.com/v1/models"
+
     assert request[:headers] == [
              {"authorization", "Bearer " <> key},
              {"accept", "application/json"}

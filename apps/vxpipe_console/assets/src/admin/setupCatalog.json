@@ -6,10 +6,6 @@
       "name": "Deepgram",
       "description": "Listen and speak with one service.",
       "capabilities": ["stt", "tts"],
-      "defaultModels": {
-        "stt": "flux-general-multi",
-        "tts": "flux-hannah-en"
-      },
       "sampleCapabilities": ["stt", "tts"]
     },
     {
@@ -17,9 +13,6 @@
       "name": "Rime",
       "description": "Speak with Rime Coda.",
       "capabilities": ["tts"],
-      "defaultModels": {
-        "tts": "coda"
-      },
       "sampleCapabilities": ["tts"]
     },
     {
@@ -27,10 +20,6 @@
       "name": "Cartesia",
       "description": "Transcribe with Ink and speak with Sonic.",
       "capabilities": ["stt", "tts"],
-      "defaultModels": {
-        "stt": "ink-2",
-        "tts": "sonic-3.6"
-      },
       "sampleCapabilities": ["stt", "tts"]
     },
     {
@@ -38,10 +27,6 @@
       "name": "ElevenLabs",
       "description": "Transcribe with Scribe and speak with ElevenLabs voices.",
       "capabilities": ["stt", "tts"],
-      "defaultModels": {
-        "stt": "scribe_v2_realtime",
-        "tts": "eleven_flash_v2_5"
-      },
       "sampleCapabilities": ["stt", "tts"]
     },
     {
@@ -49,12 +34,6 @@
       "name": "Google AI Studio",
       "description": "Connect Gemini language, transcription, speech synthesis, and live speech.",
       "capabilities": ["stt", "llm", "tts", "s2s"],
-      "defaultModels": {
-        "stt": "gemini-3.5-transcribe-live",
-        "llm": "gemini-2.5-flash",
-        "tts": "gemini-3.1-flash-tts-preview",
-        "s2s": "gemini-3.8-live"
-      },
       "sampleCapabilities": ["stt", "llm", "tts"]
     },
     {
@@ -62,10 +41,6 @@
       "name": "OpenAI",
       "description": "Connect GPT language models and live speech with one API key.",
       "capabilities": ["llm", "s2s"],
-      "defaultModels": {
-        "llm": "gpt-5",
-        "s2s": "gpt-live-1"
-      },
       "sampleCapabilities": ["llm", "s2s"]
     },
     {
@@ -73,9 +48,6 @@
       "name": "Zenmux",
       "description": "Connect a language model through Zenmux.",
       "capabilities": ["llm"],
-      "defaultModels": {
-        "llm": "openai/gpt-5"
-      },
       "sampleCapabilities": ["llm"]
     },
     {
@@ -83,9 +55,6 @@
       "name": "DeepSeek",
       "description": "Connect DeepSeek language models.",
       "capabilities": ["llm"],
-      "defaultModels": {
-        "llm": "deepseek-flash"
-      },
       "sampleCapabilities": ["llm"]
     },
     {
@@ -93,9 +62,6 @@
       "name": "OpenRouter",
       "description": "Choose language models through OpenRouter.",
       "capabilities": ["llm"],
-      "defaultModels": {
-        "llm": "google/gemini-3.5-flash-lite"
-      },
       "sampleCapabilities": ["llm"]
     },
     {
@@ -103,9 +69,6 @@
       "name": "Fireworks AI",
       "description": "Connect serverless language models on Fireworks AI.",
       "capabilities": ["llm"],
-      "defaultModels": {
-        "llm": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"
-      },
       "sampleCapabilities": ["llm"]
     },
     {
@@ -113,7 +76,6 @@
       "name": "Telnyx",
       "description": "Connect phone calls with Telnyx.",
       "capabilities": ["telephony"],
-      "defaultModels": {},
       "sampleCapabilities": []
     },
     {
@@ -121,7 +83,6 @@
       "name": "Twilio",
       "description": "Connect phone calls with Twilio.",
       "capabilities": ["telephony"],
-      "defaultModels": {},
       "sampleCapabilities": []
     }
   ]

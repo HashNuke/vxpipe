@@ -1,3 +1,4 @@
+import type { CatalogCapability, ModelCatalog, ModelDescriptor } from "./modelCatalog";
 import catalog from "./setupCatalog.json";
 import type { ServiceProvider, CredentialField } from "./serviceTypes";
 
@@ -33,23 +34,41 @@ export type SetupProvider = {
   description: string;
   capabilities: Array<VoiceCapability | "telephony">;
   defaultModels: Partial<Record<VoiceCapability, string>>;
+  recommendedModels: Partial<Record<VoiceCapability, ModelDescriptor>>;
   sampleCapabilities: VoiceCapability[];
 };
 
-export const setupProviders = catalog.providers as SetupProvider[];
+export const setupProviders: SetupProvider[] = catalog.providers.map((provider) => ({
+  ...provider,
+  capabilities: provider.capabilities as SetupProvider["capabilities"],
+  sampleCapabilities: provider.sampleCapabilities as VoiceCapability[],
+  id: provider.id as SetupProviderId,
+  defaultModels: {},
+  recommendedModels: {},
+}));
+const catalogCapability: Record<VoiceCapability, CatalogCapability> = {
+  stt: "speech_to_text", llm: "model_inference", tts: "text_to_speech", s2s: "speech_to_speech",
+};
 export type ProviderCapabilities = Record<string, string[]>;
 
 export function installedSetupProviders(
   installed: ProviderCapabilities,
+  models: ModelCatalog,
 ): SetupProvider[] {
   return setupProviders.flatMap((provider) => {
     const declared = installed[provider.id];
     if (!declared?.includes("credential")) return [];
     const capabilities = provider.capabilities.filter(
       (capability) =>
-        capability === "llm" ||
         declared.includes(capability === "s2s" ? "sts" : capability),
     );
+    const recommendedModels = Object.fromEntries(
+      capabilities.filter((capability): capability is VoiceCapability => capability !== "telephony")
+        .flatMap((capability) => {
+          const recommended = models[catalogCapability[capability]]?.[provider.id]?.find((model) => model.default);
+          return recommended ? [[capability, recommended]] : [];
+        }),
+    ) as SetupProvider["recommendedModels"];
     return [
       {
         ...provider,
@@ -57,15 +76,23 @@ export function installedSetupProviders(
         sampleCapabilities: provider.sampleCapabilities.filter((capability) =>
           capabilities.includes(capability),
         ),
+        recommendedModels,
         defaultModels: Object.fromEntries(
-          Object.entries(provider.defaultModels).filter(([capability]) =>
-            capabilities.includes(capability as VoiceCapability),
-          ),
+          Object.entries(recommendedModels).map(([capability, model]) => [capability, model.id]),
         ),
       },
     ];
   });
 }
+export function modelRecommendation(provider: SetupProvider, capability: VoiceCapability): string {
+  const model = provider.recommendedModels[capability];
+  if (!model) return "";
+  const voice = model.voices?.type === "free_text"
+    ? model.voices.default
+    : model.voices?.values.find((voice) => voice.default)?.id;
+  return voice ? `${model.id} · ${voice}` : model.id;
+}
+
 export const voiceCapabilities: VoiceCapability[] = ["stt", "llm", "tts"];
 export const capabilityLabels = {
   stt: "Speech-to-text",

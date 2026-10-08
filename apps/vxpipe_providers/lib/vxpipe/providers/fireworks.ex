@@ -8,6 +8,7 @@ defmodule Vxpipe.Providers.Fireworks do
   @impl true
   def capabilities do
     %{
+      llm: Vxpipe.AgentRuntime.Provider.ReqLLM,
       credential: Vxpipe.Providers.APIKeyCredential
     }
   end

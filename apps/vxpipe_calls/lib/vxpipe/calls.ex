@@ -25,16 +25,23 @@ defmodule Vxpipe.Calls do
         )
 
   @doc "Claims an outgoing call that dials `to` (E.164), required when the callee has no fixed number."
-  def claim_outgoing_call(principal, call_spec_id, initial_variables, to, idempotency_key, options),
-    do:
-      Vxpipe.Calls.OutgoingCalls.claim(
+  def claim_outgoing_call(
         principal,
         call_spec_id,
         initial_variables,
         to,
         idempotency_key,
         options
-      )
+      ),
+      do:
+        Vxpipe.Calls.OutgoingCalls.claim(
+          principal,
+          call_spec_id,
+          initial_variables,
+          to,
+          idempotency_key,
+          options
+        )
 
   alias Vxpipe.Calls.{
     Administration,
@@ -65,6 +72,12 @@ defmodule Vxpipe.Calls do
 
   def consume_operator_login_challenge(token, code, verifier_secret, options \\ []),
     do: OperatorLoginChallenges.consume(token, code, verifier_secret, options)
+
+  def list_providers(authority, tenant_key, capability, options \\ []),
+    do: Vxpipe.Calls.ProviderCatalog.providers(authority, tenant_key, capability, options)
+
+  def list_provider_models(authority, tenant_key, provider, capability, options \\ []),
+    do: Vxpipe.Calls.ProviderCatalog.models(authority, tenant_key, provider, capability, options)
 
   def list_operator_tenants(authority, options \\ []),
     do: OperatorAdministration.list_tenants(authority, options)

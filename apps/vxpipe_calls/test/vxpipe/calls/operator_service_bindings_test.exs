@@ -2,6 +2,22 @@ defmodule Vxpipe.Calls.OperatorServiceBindingsTest do
   use ExUnit.Case, async: true
   alias Vxpipe.Calls.{InstallationOperator, Principal, TestOperatorCredentialRepository}
 
+  test "operator inventory includes public models before a tenant exists" do
+    options = [
+      provider_credential_repository:
+        TestOperatorCredentialRepository.repository(self(), {:ok, %{tenant: nil, bindings: []}})
+    ]
+
+    assert {:ok, %{model_catalog: catalog}} =
+             Vxpipe.Calls.list_operator_service_bindings(
+               InstallationOperator.authority(),
+               :platform,
+               options
+             )
+
+    assert [%{id: "flux"}] = catalog["text_to_speech"]["deepgram"]
+  end
+
   test "only an installation operator can delete credentials within their exact owner" do
     tenant = "AAAAAAAAAAAAAAAA"
 
@@ -70,7 +86,7 @@ defmodule Vxpipe.Calls.OperatorServiceBindingsTest do
 
     refute_received {:operator_bindings_requested, _}
 
-    assert {:ok, ^result} =
+    assert {:ok, %{tenant: nil, bindings: [], model_catalog: _catalog}} =
              Vxpipe.Calls.list_operator_service_bindings(
                InstallationOperator.authority(),
                :platform,

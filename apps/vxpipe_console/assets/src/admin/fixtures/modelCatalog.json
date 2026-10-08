@@ -1,0 +1,252 @@
+{
+  "model_inference": {
+    "deepseek": [
+      {
+        "default": true,
+        "id": "deepseek-flash",
+        "name": "DeepSeek V4.1 Flash",
+        "context_limit": 1048576,
+        "tool_support": true,
+        "voices": null
+      }
+    ],
+    "fireworks": [
+      {
+        "default": true,
+        "id": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "name": "Nemotron 3.5 Lightning 30B A3B",
+        "context_limit": 262144,
+        "tool_support": true,
+        "voices": null
+      }
+    ],
+    "google": [
+      {
+        "default": true,
+        "id": "gemini-2.5-flash",
+        "name": "Gemini 2.5 Flash",
+        "context_limit": 1048576,
+        "tool_support": true,
+        "voices": null
+      }
+    ],
+    "openai": [
+      {
+        "default": true,
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "context_limit": 400000,
+        "tool_support": true,
+        "voices": null
+      }
+    ],
+    "openrouter": [
+      {
+        "default": true,
+        "id": "google/gemini-3.5-flash-lite",
+        "name": "Google: Gemini 3.5 Flash Lite",
+        "context_limit": 1048576,
+        "tool_support": true,
+        "voices": null
+      }
+    ],
+    "zenmux": [
+      {
+        "default": true,
+        "id": "openai/gpt-5",
+        "name": "openai/gpt-5",
+        "context_limit": 400000,
+        "tool_support": true,
+        "voices": null
+      }
+    ]
+  },
+  "output_speech_to_text": {
+    "cartesia": [
+      {
+        "default": true,
+        "id": "ink-2",
+        "name": "Ink 2",
+        "voices": null
+      }
+    ],
+    "deepgram": [
+      {
+        "default": true,
+        "id": "flux-general-multi",
+        "name": "Flux General Multilingual",
+        "voices": null
+      }
+    ],
+    "elevenlabs": [
+      {
+        "default": true,
+        "id": "scribe_v2_realtime",
+        "name": "Scribe v2 Realtime",
+        "voices": null
+      }
+    ],
+    "google": [
+      {
+        "default": true,
+        "id": "gemini-3.5-transcribe-live",
+        "name": "Gemini 3.5 Transcribe Live",
+        "voices": null
+      }
+    ],
+    "morse": [
+      {
+        "default": true,
+        "id": "morse",
+        "name": "Morse",
+        "voices": null
+      }
+    ]
+  },
+  "speech_to_speech": {
+    "google": [
+      {
+        "default": true,
+        "id": "gemini-3.8-live",
+        "name": "Gemini 3.8 Live",
+        "voices": {
+          "default": "Kore",
+          "type": "free_text",
+          "parameter": "voice"
+        }
+      }
+    ],
+    "morse": [
+      {
+        "default": true,
+        "id": "morse",
+        "name": "Morse",
+        "voices": null
+      }
+    ],
+    "openai": [
+      {
+        "default": true,
+        "id": "gpt-live-1",
+        "name": "GPT-Live 1",
+        "voices": {
+          "default": "marin",
+          "type": "free_text",
+          "parameter": "voice"
+        }
+      }
+    ]
+  },
+  "speech_to_text": {
+    "cartesia": [
+      {
+        "default": true,
+        "id": "ink-2",
+        "name": "Ink 2",
+        "voices": null
+      }
+    ],
+    "deepgram": [
+      {
+        "default": true,
+        "id": "flux-general-multi",
+        "name": "Flux General Multilingual",
+        "voices": null
+      }
+    ],
+    "elevenlabs": [
+      {
+        "default": true,
+        "id": "scribe_v2_realtime",
+        "name": "Scribe v2 Realtime",
+        "voices": null
+      }
+    ],
+    "google": [
+      {
+        "default": true,
+        "id": "gemini-3.5-transcribe-live",
+        "name": "Gemini 3.5 Transcribe Live",
+        "voices": null
+      }
+    ],
+    "morse": [
+      {
+        "default": true,
+        "id": "morse",
+        "name": "Morse",
+        "voices": null
+      }
+    ]
+  },
+  "text_to_speech": {
+    "cartesia": [
+      {
+        "default": true,
+        "id": "sonic-3.6",
+        "name": "Sonic 3.6",
+        "voices": {
+          "default": "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4",
+          "type": "free_text",
+          "parameter": "voice"
+        }
+      }
+    ],
+    "deepgram": [
+      {
+        "default": true,
+        "id": "flux",
+        "name": "Flux",
+        "voices": {
+          "default": "hannah",
+          "type": "free_text",
+          "parameter": "voice"
+        }
+      }
+    ],
+    "elevenlabs": [
+      {
+        "default": true,
+        "id": "eleven_flash_v2_5",
+        "name": "Eleven Flash v2.5",
+        "voices": {
+          "default": "JBFqnCBsd6RMkjVDRZzb",
+          "type": "free_text",
+          "parameter": "voice"
+        }
+      }
+    ],
+    "google": [
+      {
+        "default": true,
+        "id": "gemini-3.1-flash-tts-preview",
+        "name": "Gemini 3.1 Flash TTS Preview",
+        "voices": {
+          "default": "Kore",
+          "type": "free_text",
+          "parameter": "voice"
+        }
+      }
+    ],
+    "morse": [
+      {
+        "default": true,
+        "id": "morse",
+        "name": "Morse",
+        "voices": null
+      }
+    ],
+    "rime": [
+      {
+        "default": true,
+        "id": "coda",
+        "name": "Coda",
+        "voices": {
+          "default": "astra",
+          "type": "free_text",
+          "parameter": "speaker"
+        }
+      }
+    ]
+  }
+}

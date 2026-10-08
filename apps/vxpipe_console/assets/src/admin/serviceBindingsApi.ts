@@ -1,3 +1,4 @@
+import { parseModelCatalog, type ModelCatalog } from "./modelCatalog";
 import catalog from "./setupCatalog.json";
 import type { ProviderCapabilities, SetupConnection, SetupServiceScope } from "./setupCatalog";
 
@@ -11,6 +12,7 @@ export type BindingDirectory = {
   tenant: { key: string; name: string } | null;
   bindings: ServiceBinding[];
   providerCapabilities: ProviderCapabilities;
+  modelCatalog: ModelCatalog;
   webhookUrls?: { platform: string; tenant: string | null };
 };
 
@@ -119,6 +121,7 @@ export function parseBindingDirectory(
     tenant: tenant as BindingDirectory["tenant"],
     bindings,
     providerCapabilities: value.provider_capabilities as ProviderCapabilities,
+    modelCatalog: parseModelCatalog(value.model_catalog),
     webhookUrls,
   };
 }

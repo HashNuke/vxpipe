@@ -1,3 +1,4 @@
+import { modelCatalogFixture } from "./modelCatalogFixtures";
 import { ArrowUpRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -23,7 +24,9 @@ import {
   capabilityLabels,
   effectiveSetupConnections,
   voiceSetupReady,
+  installedSetupProviders,
   setupProviders,
+  modelRecommendation,
   providersFor,
   setupProvider,
   voiceCapabilities,
@@ -217,7 +220,9 @@ export function OnboardingStory({
   scenario: OnboardingScenario;
   theme: "dark" | "light";
 }) {
-  const providers = setupProviders;
+  const providers = installedSetupProviders(Object.fromEntries(setupProviders.map((provider) => [
+    provider.id, ["credential", ...provider.capabilities.map((capability) => capability === "s2s" ? "sts" : capability)],
+  ])), modelCatalogFixture);
   const [page, setPage] = useState<SetupPage>(
     scenario.startsWith("platform-")
       ? "platform"
@@ -625,7 +630,7 @@ export function OnboardingStory({
                 <div key={capability}>
                   <span>{capabilityLabels[capability]}</span>
                   <strong>
-                    {provider?.name} · {provider?.defaultModels[capability]}
+                    {provider?.name} · {provider ? modelRecommendation(provider, capability) : ""}
                   </strong>
                 </div>
               );

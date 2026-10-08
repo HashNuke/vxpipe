@@ -305,7 +305,7 @@ export function ScopedServicesApp({
     (binding) => binding.name === binding.provider,
   );
   const providers = directory
-    ? installedSetupProviders(directory.providerCapabilities)
+    ? installedSetupProviders(directory.providerCapabilities, directory.modelCatalog)
     : [];
   const named = bindings.filter((binding) => binding.name !== binding.provider);
   const selected = modal?.provider

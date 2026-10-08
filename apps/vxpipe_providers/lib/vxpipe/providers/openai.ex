@@ -8,6 +8,7 @@ defmodule Vxpipe.Providers.OpenAI do
   @impl true
   def capabilities do
     %{
+      llm: Vxpipe.AgentRuntime.Provider.ReqLLM,
       credential: Vxpipe.Providers.OpenAI.Credential,
       credential_validation: Vxpipe.Providers.OpenAI.CredentialValidation,
       sts: Vxpipe.Providers.OpenAI.GPTLiveSession

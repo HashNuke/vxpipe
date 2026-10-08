@@ -1,3 +1,4 @@
+import { modelCatalogFixture } from "./admin/modelCatalogFixtures";
 import {
   act,
   cleanup,
@@ -215,7 +216,7 @@ test("starts the Demo onboarding flow when the installation has no tenants", asy
     return response({
       tenant: { key: "DEMOabcdefgh1234", name: "Demo" },
       bindings: [],
-      provider_capabilities: {},
+      model_catalog: modelCatalogFixture, provider_capabilities: {},
     });
   });
 

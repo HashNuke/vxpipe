@@ -8,6 +8,7 @@ defmodule Vxpipe.Providers.OpenRouter do
   @impl true
   def capabilities do
     %{
+      llm: Vxpipe.AgentRuntime.Provider.ReqLLM,
       credential: Vxpipe.Providers.APIKeyCredential,
       credential_validation: Vxpipe.Providers.OpenRouter.CredentialValidation
     }

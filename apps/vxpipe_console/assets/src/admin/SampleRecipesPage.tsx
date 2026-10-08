@@ -11,6 +11,7 @@ import {
   missingCapabilities,
   providersFor,
   setupProviders,
+  modelRecommendation,
   type SetupProvider,
   voiceCapabilities,
   type SetupConnection,
@@ -117,7 +118,7 @@ export function SampleRecipesPage({
                   <strong>{provider?.name ?? "Not connected"}</strong>
                 )}
                 {provider ? (
-                  <code>{provider.defaultModels[capability]}</code>
+                  <code>{modelRecommendation(provider, capability)}</code>
                 ) : (
                   <span className="setup-error">Setup required</span>
                 )}

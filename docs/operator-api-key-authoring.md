@@ -239,3 +239,83 @@ pass, and all root gates passed after D6: 3,121 tests, zero failures, 98 exclude
 STS opening and live carrier acceptance remain open. See the
 [outgoing example](../examples/call-specs/outgoing-morse.json) and
 [lifecycle projection contract](outgoing-call-runtime.md#outgoing-lifecycle-projection).
+
+## Provider and model catalog
+
+Tenant clients with an `admin` API key can discover installed capabilities and
+locally supported models through the same authenticated tenant boundary:
+
+```http
+GET /api/tenants/:tenant_key/providers?capability=text_to_speech
+GET /api/tenants/:tenant_key/providers/deepgram/models?capability=text_to_speech
+Authorization: Bearer TENANT_ADMIN_KEY
+```
+
+Capabilities are `speech_to_text`, `output_speech_to_text`, `text_to_speech`,
+`speech_to_speech`, and `model_inference`. A provider listing returns:
+
+```json
+{
+  "providers": [
+    {
+      "id": "deepgram",
+      "name": "Deepgram",
+      "credential_required": true,
+      "credential_available": true
+    }
+  ]
+}
+```
+
+This is an abbreviated response. Unavailable implementations are omitted.
+`credential_available` means at least one effective named binding is connected,
+including an inherited platform binding. An invalid tenant override does not fall
+back to its platform binding. Local Morse requires no credential and is available.
+Availability describes runtime configuration; it does not grant a tenant API key
+permission to author references to platform-owned services. Existing save/publish
+ownership checks still apply. No credential values or private metadata are returned.
+
+The model response for Deepgram TTS is:
+
+```json
+{
+  "models": [
+    {
+      "id": "flux",
+      "name": "Flux",
+      "default": true,
+      "voices": {"type": "free_text", "default": "hannah", "parameter": "voice"}
+    }
+  ]
+}
+```
+
+Use `model: "flux"` and `options: {"voice": "hannah"}` in the call spec; the
+adapter constructs its concrete model ID. Opening an existing source preserves its
+model and voice. Every listing has exactly one recommended model. `voices` is null,
+a free-text descriptor, or `{"type":"list","parameter":"voice","values":[...]}`
+whose entries have `id`, `name`, and one `default: true`. The parameter identifies
+the source option (`voice`, or `speaker` for Rime). LLM models also have
+`tool_support: true` and `context_limit` (null when unknown). Listings use the
+bundled database and local adapters; they do not contact providers or guarantee
+remote account access.
+
+| Failure | HTTP status | Error code |
+| --- | --- | --- |
+| Missing/invalid key | 401 | `invalid_api_key` |
+| Insufficient scope | 403 | `authoring_forbidden` |
+| Unknown tenant | 404 | `tenant_not_found` |
+| Unknown provider, unsupported pair, or missing implementation | 404 | `provider_not_found` |
+| Missing/unknown capability | 422 | `invalid_capability` |
+| Unavailable catalog or credential repository | 503 | `provider_catalog_unavailable` |
+
+Errors have `{"error":{"code":"..."}}`; backend messages are never included.
+Responses disable caching. Embedded hosts enable these endpoints with the existing
+`call_spec_authoring: [enabled: true]` setting and configured Calls repositories.
+
+The Console mirrors these routes at `/admin/api/tenants/:tenant_key/providers`
+and `/admin/api/tenants/:tenant_key/providers/:provider/models`, protected by the
+installation-operator browser session. Its existing platform/tenant service
+inventory also includes `model_catalog`, grouped by capability then provider,
+with these same model descriptors. Onboarding therefore loads recommendations
+before a tenant exists, without keeping a separate frontend model inventory.

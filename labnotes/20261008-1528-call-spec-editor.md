@@ -123,3 +123,56 @@ All five root gates pass. The default umbrella suite passes 3,352 tests, zero
 failures, 120 excluded (seed 226406). No live tests ran. K facade and endpoint work
 began after this process had loaded the relevant preceding app tests; K changes
 are excluded from the L commit and need their own complete verification.
+
+## Checkpoint K implementation
+
+- Red: eight facade tests failed for the missing module, the provider registry
+  expectation failed for missing LLM declarations, four Calls tests failed for
+  absent workflows, three tenant HTTP checks failed for missing routes, and three
+  Console checks failed because the route fell through to the SPA.
+- Added explicit `:llm` manifest ownership pointing at the existing ReqLLM runtime.
+  The Call Engine facade resolves installed registry capabilities and delegates
+  model listing to speech adapters or Agent Runtime. A fresh Elixir VM with only
+  provider manifests proves absent implementation apps are omitted.
+- Calls authorizes the exact tenant's admin or installation operator, then projects
+  only credential-required/available flags. EffectiveServiceBindings now owns the
+  trusted, validated inventory shared with the existing operator workflow. Tests
+  cover inherited credentials, invalid tenant overrides, wrong tenant/scope, and
+  private metadata exclusion.
+- Gateway uses the existing call-spec-authoring feature gate and authentication;
+  Console uses its operator-session pipeline. Both share value-free catalog errors.
+  Owning focused suites pass: eight Calls checks, 14 Gateway checks and 16 Console
+  checks (including existing service authoring) after the endpoint implementation.
+- Onboarding needs model listings before tenant creation. The operator inventory
+  workflow now includes the shared catalog; no second model inventory or new public
+  unauthenticated endpoint is introduced. Frontend setupCatalog.json loses model
+  IDs, and stories/tests use a captured descriptor fixture. Added parser and source
+  recommendation tests before implementation. First frontend full run passes 222
+  tests across 34 files, plus type check and lint.
+- Browser startup required Chrome's `--no-sandbox` in this environment. The owned
+  browser session and worktree Storybook port are used; no real sample call is run.
+  Rendered desktop/phone inspection and full K root verification remain in progress.
+
+### Checkpoint K verification progress
+
+The final frontend run passes all 222 tests across 34 files after adding the
+separate model/voice recommendation label. Type check and lint passed. Rendered
+Storybook checks used headless Chrome at 1440×1000 and 390×844: correct Deepgram
+STT, Gemini LLM and Flux/Hannah defaults; no horizontal overflow; blocked samples
+have disabled load controls; the light theme renders the same recommendations.
+No real sample call was started. Screenshots are temporary review artifacts.
+
+The initial K umbrella run exposed an outdated OpenAI manifest equality assertion
+(now includes :llm; all 30 Provider tests pass, seed 460817). That run also received
+SIGTERM at 16:25:35 before finishing Call Engine; its apparent shell success is not
+acceptance evidence. The full root suite has been restarted. A Storybook navigation
+initially remained on its loader; the original server was still live, and reloading
+then waiting for the rendered heading resolved it. No server restart was needed.
+
+### Checkpoint K exit evidence
+
+All five root gates pass. The completed umbrella suite exits successfully with
+3,374 tests, zero failures and 120 exclusions (seed 487098), including all Calls,
+Gateway and Console suites. Frontend and rendered evidence is recorded above.
+No live tests ran. Checkpoint S files under callSpecEditor remain outside this
+checkpoint and need their own validation.

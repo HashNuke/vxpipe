@@ -60,6 +60,13 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   end
 
   def call(
+        %Plug.Conn{path_info: ["api", "tenants", tenant, "providers" | segments]} = conn,
+        options
+      ) do
+    Vxpipe.Gateway.HTTP.ProviderCatalog.route(conn, options.call_spec_authoring, tenant, segments)
+  end
+
+  def call(
         %Plug.Conn{path_info: ["api", "platform", "tenants", tenant, "call-specs" | segments]} =
           conn,
         options

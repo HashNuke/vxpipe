@@ -13,6 +13,17 @@ defmodule Vxpipe.Gateway.TestCallSpecAuthoringBackend do
   def authenticate(_context, :tenant, @tenant, "calls-only"), do: {:error, :insufficient_scope}
   def authenticate(_context, _scope, _tenant, _key), do: {:error, :invalid_api_key}
 
+  def providers({observer, result}, author, tenant, capability) do
+    send(observer, {:providers, author, tenant, capability})
+    if result == :crash, do: raise("private-sentinel")
+    result
+  end
+
+  def models({observer, result}, author, tenant, provider, capability) do
+    send(observer, {:models, author, tenant, provider, capability})
+    result
+  end
+
   def save({observer, result}, author, tenant, source, id) do
     send(observer, {:save, author, tenant, source, id})
     if result == :crash, do: raise("private backend failure")

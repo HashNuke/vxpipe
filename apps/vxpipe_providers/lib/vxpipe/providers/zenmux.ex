@@ -8,6 +8,7 @@ defmodule Vxpipe.Providers.Zenmux do
   @impl true
   def capabilities do
     %{
+      llm: Vxpipe.AgentRuntime.Provider.ReqLLM,
       credential: Vxpipe.Providers.Zenmux.Credential,
       credential_validation: Vxpipe.Providers.Zenmux.CredentialValidation
     }
