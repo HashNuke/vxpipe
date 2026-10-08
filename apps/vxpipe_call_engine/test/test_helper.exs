@@ -7,4 +7,5 @@ for {app, _description, _version} <- Application.loaded_applications(),
   Code.ensure_all_loaded(modules)
 end
 
-ExUnit.start(exclude: [:integration, :live_providers])
+# Billed long sessions are selected only through their explicit long tags.
+ExUnit.start(exclude: [:integration, :live_providers, :live_long])

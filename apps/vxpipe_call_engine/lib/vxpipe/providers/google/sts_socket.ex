@@ -42,6 +42,8 @@ defmodule Vxpipe.Providers.Google.STSSocket do
   def close(socket),
     do: Socket.close(socket, ~s({"realtimeInput":{"audioStreamEnd":true}}))
 
+  def retire(socket), do: Socket.retire(socket)
+
   @impl true
   def handle_frame({:text, message}, state), do: forward(message, state)
   def handle_frame({:binary, message}, state), do: forward(message, state)
@@ -49,6 +51,18 @@ defmodule Vxpipe.Providers.Google.STSSocket do
   @impl true
   def handle_disconnect(_disconnect, state) do
     send(state.owner, {:vxpipe_sts_transport, self(), {:closed, :connection_lost}})
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_peer_close(status, reason, state) do
+    classification =
+      if status == 1_008 and
+           String.ends_with?(reason, "session is already connected to an existing client"),
+         do: :session_active,
+         else: :connection_lost
+
+    send(state.owner, {:vxpipe_sts_transport, self(), {:closed, classification}})
     {:ok, state}
   end
 

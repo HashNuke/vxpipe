@@ -103,8 +103,14 @@ defmodule Vxpipe.Console.ConfiguredTelephonyTransferFixtureTest do
 
     model = sources.outgoing.participants["assistant"]
     assert model.first_message == %{mode: "fixed", text: "Ping."}
-    assert model.prompt =~ "Every time the other party says Pong, reply with exactly: Ping."
-    assert sources.incoming.participants["assistant"].prompt =~ "reply with exactly: Pong."
+    # The long call proves the session stays alive, not word recognition: Gemini heard the
+    # phone's one-syllable "Pong" as "com." or Hindi "haan" and stalled (2026-10-08).
+    assert model.prompt =~ "Whenever the other party speaks, reply with exactly: Ping."
+    refute model.prompt =~ "says Pong"
+
+    assert sources.incoming.participants["assistant"].prompt =~
+             "Whenever the other party speaks, reply with exactly: Pong."
+
     assert sources.incoming.participants["assistant"].first_message == %{mode: "wait_for_input"}
   end
 

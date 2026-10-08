@@ -239,9 +239,11 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
       model_first_message: %{mode: "fixed", text: "Ping."},
       model_prompt:
         "This is an automated line test that lasts many minutes. You already said Ping. " <>
-          "Every time the other party says Pong, reply with exactly: Ping. Never stop, never " <>
+          "Whenever the other party speaks, reply with exactly: Ping. Never stop, never " <>
           "say anything else and never ask questions.",
-      receiver_rule: "Every time the other party says Ping, reply with exactly: Pong.",
+      # Any speech triggers the reply: the long call proves session longevity, and a
+      # one-syllable word over phone audio is often misheard.
+      receiver_rule: "Whenever the other party speaks, reply with exactly: Pong.",
       receiver_first_message: %{mode: "wait_for_input"},
       max_duration_ms: duration_ms + 180_000
     }

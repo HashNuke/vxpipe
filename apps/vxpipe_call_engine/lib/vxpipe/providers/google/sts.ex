@@ -110,6 +110,7 @@ defmodule Vxpipe.Providers.Google.STS do
         "inputAudioTranscription" => %{},
         "outputAudioTranscription" => %{},
         "sessionResumption" => %{},
+        "contextWindowCompression" => %{"slidingWindow" => %{}},
         "systemInstruction" => %{"parts" => [%{"text" => config.system_prompt}]},
         "tools" =>
           if(config.tools == [], do: [], else: [%{"functionDeclarations" => config.tools}]),
@@ -359,7 +360,7 @@ defmodule Vxpipe.Providers.Google.STS do
 
   defp model_completion(%{"turnComplete" => true} = content) do
     case Map.fetch(content, "interactionStatus") do
-      :error -> {:ok, [{:turn_complete, :unknown}]}
+      :error -> {:ok, [{:turn_complete, :omitted}]}
       {:ok, "IDLE"} -> {:ok, [{:turn_complete, :idle}]}
       {:ok, "IN_PROGRESS"} -> {:ok, [{:turn_complete, :in_progress}]}
       {:ok, "INTERACTION_STATUS_UNSPECIFIED"} -> {:ok, [{:turn_complete, :unknown}]}

@@ -23,8 +23,12 @@ defmodule Vxpipe.CallEngine.TestGoogleSTSTransport do
   end
 
   def close(socket), do: GenServer.call(socket, :close)
+  def retire(socket), do: GenServer.cast(socket, :retire)
+  def acknowledge_retirement(socket), do: GenServer.cast(socket, :retired)
+  def finish_retirement(socket), do: GenServer.stop(socket, :normal)
   def deliver(socket, message), do: GenServer.cast(socket, {:deliver, message})
   def disconnect(socket), do: GenServer.cast(socket, :disconnect)
+  def reject_session_active(socket), do: GenServer.cast(socket, :session_active)
 
   @impl true
   def init(options) do
@@ -36,7 +40,10 @@ defmodule Vxpipe.CallEngine.TestGoogleSTSTransport do
     ready_on_start =
       options |> Keyword.fetch!(:transport_options) |> Keyword.get(:ready_on_start, false)
 
-    {:ok, %{observer: observer, owner: owner, ready_on_start: ready_on_start}}
+    retire_ack? = options |> Keyword.fetch!(:transport_options) |> Keyword.get(:retire_ack?, true)
+
+    {:ok,
+     %{observer: observer, owner: owner, ready_on_start: ready_on_start, retire_ack?: retire_ack?}}
   end
 
   @impl true
@@ -57,6 +64,23 @@ defmodule Vxpipe.CallEngine.TestGoogleSTSTransport do
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, state}
 
   @impl true
+  def handle_cast(:retire, state) do
+    send(state.observer, {:test_google_sts_retire, self()})
+
+    if state.retire_ack? do
+      send(state.owner, {:vxpipe_socket_retired, self()})
+      {:stop, :normal, state}
+    else
+      {:noreply, state}
+    end
+  end
+
+  def handle_cast(:retired, state) do
+    send(state.owner, {:vxpipe_socket_retired, self()})
+    {:noreply, state}
+  end
+
+  @impl true
   def handle_cast({:deliver, message}, state) do
     send(state.owner, {:vxpipe_sts_transport, self(), {:message, message}})
     {:noreply, state}
@@ -65,5 +89,10 @@ defmodule Vxpipe.CallEngine.TestGoogleSTSTransport do
   def handle_cast(:disconnect, state) do
     send(state.owner, {:vxpipe_sts_transport, self(), {:closed, :connection_lost}})
     {:noreply, state}
+  end
+
+  def handle_cast(:session_active, state) do
+    send(state.owner, {:vxpipe_sts_transport, self(), {:closed, :session_active}})
+    {:stop, :normal, state}
   end
 end

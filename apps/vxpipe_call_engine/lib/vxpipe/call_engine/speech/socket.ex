@@ -16,8 +16,9 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   @callback handle_frame(tuple(), map()) :: {:ok, map()} | {:await, reference(), map()}
   @callback handle_disconnect(term(), map()) :: {:ok, map()}
   @callback handle_peer_close(peer_close_status(), map()) :: {:ok, map()}
+  @callback handle_peer_close(peer_close_status(), binary(), map()) :: {:ok, map()}
   @callback keepalive_frame(map()) :: tuple()
-  @optional_callbacks handle_peer_close: 2, keepalive_frame: 1
+  @optional_callbacks handle_peer_close: 2, handle_peer_close: 3, keepalive_frame: 1
 
   @send_timeout 5_000
   @output_timeout 15_000
@@ -32,7 +33,8 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
     :pending_message,
     :connect_options,
     :transport_options,
-    pending_frames: []
+    pending_frames: [],
+    retiring?: false
   ]
 
   def start_link(options, callback, callback_state) do
@@ -41,6 +43,17 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
 
   def send_frame(socket, frame), do: request(socket, {:send, frame})
   def close(socket, payload), do: request(socket, {:close, payload})
+  def retire(socket), do: GenServer.cast(socket, :retire)
+
+  @impl true
+  def handle_cast(:retire, %{retiring?: true} = state), do: {:noreply, state}
+
+  def handle_cast(:retire, state) do
+    case SocketConnection.send_frame(state.connection, {:close, 1_000, ""}) do
+      {:ok, connection} -> {:noreply, %{state | connection: connection, retiring?: true}}
+      {:error, _reason} -> {:stop, :normal, disconnect(state)}
+    end
+  end
 
   @impl true
   def init({options, callback, callback_state}) do
@@ -103,6 +116,10 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
         {:stop, reason}
     end
   end
+
+  @impl true
+  def handle_call({:send, _frame}, _from, %{retiring?: true} = state),
+    do: {:reply, {:error, :retiring}, state}
 
   @impl true
   def handle_call({:send, _frame}, _from, %{connection: nil} = state),
@@ -215,9 +232,16 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
 
   defp handle_frames([{:pong, _payload} | rest], state), do: handle_frames(rest, state)
 
-  defp handle_frames([{:close, code, _reason} | _rest], state) do
+  defp handle_frames([{:close, code, _reason} | _rest], %{retiring?: true} = state)
+       when code in [1_000, 1_001] do
+    :ok = SocketConnection.close(state.connection)
+    send(state.callback_state.owner, {:vxpipe_socket_retired, self()})
+    {:stop, :normal, %{state | connection: nil}}
+  end
+
+  defp handle_frames([{:close, code, reason} | _rest], state) do
     _ = SocketConnection.send_frame(state.connection, {:close, 1_000, ""})
-    {:stop, :normal, peer_close(state, code)}
+    {:stop, :normal, peer_close(state, code, reason)}
   end
 
   defp handle_frames([frame | rest], state) do
@@ -245,13 +269,22 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
     %{state | callback_state: callback_state}
   end
 
-  defp peer_close(state, code) do
-    if function_exported?(state.callback, :handle_peer_close, 2) do
-      status = if code == 1_000, do: :normal_or_no_status, else: code
-      {:ok, callback_state} = state.callback.handle_peer_close(status, state.callback_state)
-      %{state | callback_state: callback_state}
-    else
-      disconnect(state)
+  defp peer_close(state, code, reason) do
+    status = if code == 1_000, do: :normal_or_no_status, else: code
+
+    cond do
+      function_exported?(state.callback, :handle_peer_close, 3) ->
+        {:ok, callback_state} =
+          state.callback.handle_peer_close(status, reason, state.callback_state)
+
+        %{state | callback_state: callback_state}
+
+      function_exported?(state.callback, :handle_peer_close, 2) ->
+        {:ok, callback_state} = state.callback.handle_peer_close(status, state.callback_state)
+        %{state | callback_state: callback_state}
+
+      true ->
+        disconnect(state)
     end
   end
 

@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPeerCloseTest do
   alias Vxpipe.CallEngine.Speech.{Socket, SocketConnection}
   alias Vxpipe.CallEngine.{TestSpeechSocketCloseProbe, TestSpeechUpgradeServer}
   alias Vxpipe.Providers.Deepgram.STTSocket
+  alias Vxpipe.Providers.Google.STSSocket
 
   @moduletag :integration
   @reason "synthetic-private-peer-close-reason"
@@ -32,6 +33,52 @@ defmodule Vxpipe.CallEngine.Integration.SpeechSocketPeerCloseTest do
     assert next_event(socket) == {:peer_close, :normal_or_no_status}
     assert_receive {:DOWN, ^monitor, :process, ^socket, :normal}
     refute_received {:socket_close_probe, ^socket, _duplicate}
+  end
+
+  @tag :gemini_session_active
+  test "Google classifies only the specific active-session rejection", context do
+    {socket, monitor} = start_socket(context, STSSocket)
+    reason = "Resuming session is already connected to an existing client"
+    :ok = GenServer.call(context.peer, {:send, [{:close, 1_008, reason}]})
+    assert_receive {:vxpipe_sts_transport, ^socket, {:closed, :session_active}}
+    assert_receive {:DOWN, ^monitor, :process, ^socket, :normal}
+  end
+
+  @tag :gemini_session_active
+  test "Google does not retry an unrelated policy rejection", context do
+    {socket, monitor} = start_socket(context, STSSocket)
+    :ok = GenServer.call(context.peer, {:send, [{:close, 1_008, @reason}]})
+    assert_receive {:vxpipe_sts_transport, ^socket, {:closed, :connection_lost}}
+    assert_receive {:DOWN, ^monitor, :process, ^socket, :normal}
+    refute_received {:vxpipe_sts_transport, ^socket, {:closed, :session_active}}
+  end
+
+  @tag :gemini_retirement
+  test "transport retirement sends only close and waits for the peer acknowledgement", context do
+    {socket, monitor} = start_socket(context)
+    assert :ok = Socket.retire(socket)
+    _ = :sys.get_state(socket)
+
+    assert <<1::1, 0::3, 8::4, 1::1, _size::7, _rest::binary>> =
+             GenServer.call(context.peer, :receive_client_frame)
+
+    refute_received {:vxpipe_socket_retired, ^socket}
+    assert {:error, :retiring} = Socket.send_frame(socket, {:text, "unsent"})
+    :ok = GenServer.call(context.peer, {:send, [{:close, 1_000, @reason}]})
+    assert_receive {:vxpipe_socket_retired, ^socket}
+    assert_receive {:DOWN, ^monitor, :process, ^socket, :normal}
+    refute_received {:socket_close_probe, ^socket, _}
+  end
+
+  @tag :gemini_retirement
+  test "abnormal peer close cannot acknowledge requested retirement", context do
+    {socket, monitor} = start_socket(context)
+    assert :ok = Socket.retire(socket)
+    _ = :sys.get_state(socket)
+    :ok = GenServer.call(context.peer, {:send, [{:close, 1_008, @reason}]})
+    assert next_event(socket) == {:peer_close, 1_008}
+    assert_receive {:DOWN, ^monitor, :process, ^socket, :normal}
+    refute_received {:vxpipe_socket_retired, ^socket}
   end
 
   test "explicit normal status reports the same normalized class without raw reason", context do

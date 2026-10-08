@@ -26,7 +26,7 @@ defmodule Vxpipe.Providers.Google.STSTest do
                )
     end
 
-    assert {:ok, [{:turn_complete, :unknown}]} =
+    assert {:ok, [{:turn_complete, :omitted}]} =
              STS.decode(JSON.encode!(%{"serverContent" => %{"turnComplete" => true}}))
   end
 
@@ -312,6 +312,12 @@ defmodule Vxpipe.Providers.Google.STSTest do
              STS.public_options(model: "gemini-3.8-live", voice: "")
   end
 
+  @tag :gemini_longevity
+  test "setup enables server-side sliding-window compression" do
+    assert {:ok, config} = STS.new(api_key: "synthetic-key")
+    assert STS.setup(config)["setup"]["contextWindowCompression"] == %{"slidingWindow" => %{}}
+  end
+
   test "setup enables both transcriptions with the selected turn control" do
     {:ok, config} = STS.new(api_key: "synthetic-key", model: "gemini-3.8-live", voice: "Kore")
     setup = STS.setup(config)
@@ -464,7 +470,7 @@ defmodule Vxpipe.Providers.Google.STSTest do
     assert {:audio, audio} in events
     assert {:output_transcript, "hi there"} in events
     assert :generation_complete in events
-    assert {:turn_complete, :unknown} in events
+    assert {:turn_complete, :omitted} in events
   end
 
   test "tool calls, cancellations, go-away, resumption and usage decode safely" do

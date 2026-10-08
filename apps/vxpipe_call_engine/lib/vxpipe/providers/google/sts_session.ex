@@ -17,19 +17,17 @@ defmodule Vxpipe.Providers.Google.STSSession do
 
   alias Vxpipe.Providers.Google.{
     STS,
-    STSCommands,
     STSInput,
     STSOpening,
     STSResponseDelivery,
     STSResponses,
     STSResumption,
+    STSSubmission,
     STSSocket,
     STSToolCall
   }
 
   @setup_timeout 15_000
-  @default_renew_after 420_000
-  @default_expire_after 570_000
   import Vxpipe.Providers.Google.STSOutput,
     only: [
       buffer_audio: 2,
@@ -51,20 +49,18 @@ defmodule Vxpipe.Providers.Google.STSSession do
     :wire_options,
     :setup_timer,
     :pending_wire,
+    :retiring_wire,
     :pending_monitor,
     :pending_handle,
     :resume_attempt,
     :resume_timer,
-    :renew_timer,
-    :expire_timer,
-    :expire_deadline,
-    :renew_after,
-    :expire_after,
     :resumption_timeout_ms,
     :resume_deadline,
     ready?: false,
     renew_requested?: false,
     resuming?: false,
+    retirement_ack?: false,
+    retry_pending?: false,
     resumption_handle: nil,
     fixed_opening: nil,
     caller: nil,
@@ -79,6 +75,11 @@ defmodule Vxpipe.Providers.Google.STSSession do
     audio_after_caller_end?: false,
     interaction_status: :idle,
     resumption_ambiguous?: false,
+    clean_input_boundary?: false,
+    clean_exchange?: false,
+    clean_model_content?: false,
+    pending_input: nil,
+    rotation_reason: nil,
     response_start?: false,
     interaction_context: nil,
     responses: nil,
@@ -176,8 +177,6 @@ defmodule Vxpipe.Providers.Google.STSSession do
     config = Keyword.fetch!(private, :config)
     wire_module = Keyword.get(private, :wire_module, STSSocket)
     wire_options = Keyword.get(private, :wire_options, [])
-    renew_after = Keyword.get(private, :renew_after_ms, @default_renew_after)
-    expire_after = Keyword.get(private, :expire_after_ms, @default_expire_after)
     resume_timeout = Keyword.get(private, :resumption_timeout_ms, 5_000)
 
     with :ok <- STS.validate(config),
@@ -190,7 +189,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
            ),
          true <- descriptor == expected,
          true <- is_atom(wire_module) and is_list(wire_options) and Keyword.keyword?(wire_options),
-         true <- STSResumption.valid_deadlines?(renew_after, expire_after, resume_timeout),
+         true <- STSResumption.valid_timeout?(resume_timeout),
          :ok <- Channel.bind(channel) do
       {:ok,
        %__MODULE__{
@@ -201,8 +200,6 @@ defmodule Vxpipe.Providers.Google.STSSession do
          wire_options: wire_options,
          response_start?: descriptor.response_start?,
          responses: STSResponses.new(),
-         renew_after: renew_after,
-         expire_after: expire_after,
          resumption_timeout_ms: resume_timeout
        }, {:continue, :connect}}
     else
@@ -224,24 +221,10 @@ defmodule Vxpipe.Providers.Google.STSSession do
   @impl true
   def handle_call(
         {:submit_input, context, operation},
-        _from,
+        from,
         %{response_start?: true} = state
       ) do
-    with {:ok, command} <- STSInput.context_command(operation),
-         {:ok, bound} <- STSInput.bind_context(state, context, operation) do
-      case STSCommands.execute(command, bound) do
-        {:reply, :ok, next} ->
-          {:reply, :ok, next}
-
-        {:reply, {:error, _reason} = error, next} ->
-          {:reply, error, %{next | interaction_context: state.interaction_context}}
-
-        terminal ->
-          terminal
-      end
-    else
-      {:error, _reason} = error -> {:reply, error, state}
-    end
+    STSSubmission.submit({:context, context, operation}, from, state)
   end
 
   def handle_call({:submit_input, _context, _operation}, _from, state),
@@ -250,12 +233,12 @@ defmodule Vxpipe.Providers.Google.STSSession do
   def handle_call(:input_quiescent?, _from, state),
     do: {:reply, STSResumption.input_quiescent?(state), state}
 
-  def handle_call(command, _from, state)
+  def handle_call(command, from, state)
       when is_tuple(command) and
              elem(command, 0) in [:push_audio, :push_text, :begin_opening, :input_activity] do
     if state.response_start?,
       do: {:reply, {:error, :unsupported_operation}, state},
-      else: STSCommands.execute(command, state)
+      else: STSSubmission.submit({:command, command}, from, state)
   end
 
   def handle_call({:interrupt, turn_ref}, _from, %{response_start?: true} = state)
@@ -302,6 +285,26 @@ defmodule Vxpipe.Providers.Google.STSSession do
   end
 
   @impl true
+  def handle_info({:vxpipe_socket_retired, wire}, %{retiring_wire: wire} = state)
+      when is_pid(wire) do
+    {:noreply, %{state | retirement_ack?: true}}
+  end
+
+  def handle_info(
+        {:vxpipe_sts_transport, wire, {:message, payload}},
+        %{retiring_wire: wire} = state
+      )
+      when is_pid(wire) do
+    with {:ok, events} <- STS.decode(payload),
+         true <- Enum.all?(events, &retirement_control?/1),
+         {:ok, state} <- apply_wire_events(events, state) do
+      {:noreply, state}
+    else
+      _failure -> {:stop, {:shutdown, :session_failed}, state}
+    end
+  end
+
+  @impl true
   def handle_info({:vxpipe_sts_transport, wire, {:message, payload}}, %{wire: wire} = state) do
     case STS.decode(payload) do
       {:ok, events} ->
@@ -326,7 +329,8 @@ defmodule Vxpipe.Providers.Google.STSSession do
       ) do
     with {:ok, events} <- STS.decode(payload),
          true <- Enum.member?(events, :ready),
-         {:ok, state} <- apply_wire_events(events -- [:ready], STSResumption.complete(state)) do
+         {:ok, state} <- apply_wire_events(events -- [:ready], STSResumption.complete(state)),
+         {:ok, state} <- STSSubmission.release(state) do
       {:noreply, state}
     else
       _failure -> {:stop, {:shutdown, :session_failed}, state}
@@ -341,6 +345,12 @@ defmodule Vxpipe.Providers.Google.STSSession do
   end
 
   def handle_info(
+        {:vxpipe_sts_transport, wire, {:closed, :session_active}},
+        %{pending_wire: wire} = state
+      ),
+      do: {:noreply, %{state | retry_pending?: true}}
+
+  def handle_info(
         {:vxpipe_sts_transport, wire, {:closed, _reason}},
         %{pending_wire: wire} = state
       ),
@@ -350,10 +360,36 @@ defmodule Vxpipe.Providers.Google.STSSession do
     do: recover_connection(state)
 
   def handle_info(
+        {:DOWN, monitor, :process, _owner, _reason},
+        %{pending_input: %{monitor: monitor}} = state
+      ),
+      do: {:noreply, %{state | pending_input: nil}}
+
+  def handle_info(
+        {:DOWN, monitor, :process, wire, _reason},
+        %{pending_monitor: monitor, pending_wire: wire, retry_pending?: true} = state
+      ) do
+    case STSResumption.retry_replacement(state) do
+      {:ok, state} -> {:noreply, state}
+      {:error, _reason} -> {:stop, {:shutdown, :session_failed}, state}
+    end
+  end
+
+  def handle_info(
         {:DOWN, monitor, :process, wire, _reason},
         %{pending_monitor: monitor, pending_wire: wire} = state
       ),
       do: {:stop, {:shutdown, :session_failed}, state}
+
+  def handle_info(
+        {:DOWN, monitor, :process, wire, _reason},
+        %{wire_monitor: monitor, retiring_wire: wire, retirement_ack?: true} = state
+      ) do
+    case STSResumption.retired(state) do
+      {:ok, state} -> {:noreply, state}
+      {:error, _reason} -> {:stop, {:shutdown, :session_failed}, state}
+    end
+  end
 
   def handle_info(
         {:DOWN, monitor, :process, wire, _reason},
@@ -364,13 +400,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
   def handle_info(:setup_timeout, %{ready?: false} = state),
     do: {:stop, {:shutdown, :session_failed}, state}
 
-  def handle_info({:renew, wire}, %{wire: wire, ready?: true} = state),
-    do: {:noreply, STSResumption.request(state)}
-
   def handle_info({:resumption_timeout, attempt}, %{resume_attempt: attempt} = state),
-    do: {:stop, {:shutdown, :session_failed}, state}
-
-  def handle_info({:expire, wire}, %{wire: wire} = state),
     do: {:stop, {:shutdown, :session_failed}, state}
 
   def handle_info(:resumption_unsafe, state),
@@ -521,7 +551,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
           :model_content -> STSResumption.observed_model_content(state)
           {:output_transcript, _text} -> STSResumption.observed_model_content(state)
           {:tool_call, _id, _name, _args} -> STSResumption.observed_model_content(state)
-          _conversation_event -> STSResumption.invalidate(state)
+          _conversation_event -> state
         end
 
       case apply_wire_event(event, state) do
@@ -570,7 +600,7 @@ defmodule Vxpipe.Providers.Google.STSSession do
     Process.cancel_timer(state.setup_timer)
 
     with :ok <- Event.emit(state.channel, :ready, readiness: :provider_acknowledged) do
-      {:ok, STSResumption.schedule_renewal(%{state | ready?: true, setup_timer: nil})}
+      {:ok, %{state | ready?: true, setup_timer: nil}}
     end
   end
 
@@ -688,10 +718,13 @@ defmodule Vxpipe.Providers.Google.STSSession do
     do: {:ok, STSResumption.request(state, remaining_ms)}
 
   defp apply_session_event({:resumption, handle}, state),
-    do: {:ok, %{state | resumption_handle: handle}}
+    do: {:ok, STSResumption.observe_handle(state, handle)}
 
   defp apply_session_event({:usage, metadata}, state) when is_map(metadata),
     do: {:ok, %{state | usage: metadata}}
+
+  defp retirement_control?({kind, _value}) when kind in [:resumption, :go_away, :usage], do: true
+  defp retirement_control?(_event), do: false
 
   defp current_legacy_turn?(%{input_turn: turn}, turn) when is_reference(turn), do: true
   defp current_legacy_turn?(%{output: %{turn_ref: turn}}, turn) when is_reference(turn), do: true

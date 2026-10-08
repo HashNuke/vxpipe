@@ -54,6 +54,13 @@ defmodule Vxpipe.CallEngine.TestSpeechUpgradeServer do
   end
 
   @impl true
+  def handle_call(:receive_client_frame, _from, socket) do
+    :ok = :inet.setopts(socket, packet: 0)
+    {:ok, frame} = :gen_tcp.recv(socket, 0, 1_000)
+    {:reply, frame, socket}
+  end
+
+  @impl true
   def handle_call({:send, frames}, _from, socket) do
     :ok = :gen_tcp.send(socket, Enum.map(frames, &frame/1))
     {:reply, :ok, socket}

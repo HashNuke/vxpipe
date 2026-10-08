@@ -1182,11 +1182,20 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
 
     tail =
       facts
-      |> Enum.reject(&(&1.kind == :usage_observed))
-      |> Enum.take(-12)
-      |> Enum.map(&{DateTime.to_time(&1.occurred_at), &1.kind, Map.get(&1.payload, "reason")})
+      |> Enum.reject(
+        &(&1.kind in [:usage_observed, :agent_output_delivery_progressed, :accepted_input])
+      )
+      |> Enum.take(-24)
+      |> Enum.map(fn fact ->
+        detail =
+          Map.get(fact.payload, "text") || Map.get(fact.payload, "reason") ||
+            Map.get(fact.payload, "outcome")
 
-    IO.puts("Live #{label}: state #{current.state}; last facts #{inspect(tail, limit: 20)}")
+        {DateTime.to_time(fact.occurred_at), fact.kind, detail}
+      end)
+
+    IO.puts("Live #{label}: state #{current.state}; last facts")
+    Enum.each(tail, &IO.puts("  #{inspect(&1, printable_limit: 200)}"))
   end
 
   defp barge_in_observed?(fixture, outgoing, _incoming, "google") do

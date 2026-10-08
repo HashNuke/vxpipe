@@ -944,12 +944,12 @@ defmodule Vxpipe.CallEngine.MediaPolicy.AuthorityTest do
       server = start_authority(plan(%{"joining" => MediaPolicy.inherit()}))
       owner = start_enforcer()
       actor = start_enforcer(mode: :monotonic)
+      monitor = Process.monitor(actor)
       scope = private_scope(owner)
       assert {:ok, base} = Authority.register_private_enforcers(server, [actor], self(), scope)
       assert {:ok, candidate} = Authority.preview_presence(server, MapSet.new(["joining"]))
 
       if unquote(retirement) == :owner_loss do
-        monitor = Process.monitor(actor)
         Process.exit(owner, :kill)
         assert_receive {:DOWN, ^monitor, :process, ^actor, :killed}
       else

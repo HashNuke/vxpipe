@@ -8,22 +8,38 @@ defmodule Vxpipe.Providers.Google.STSResumption do
 
   alias Vxpipe.Providers.Google.{STS, STSResponses}
 
-  def valid_deadlines?(renew, expire, resume) do
-    is_integer(renew) and is_integer(expire) and is_integer(resume) and
-      renew > 0 and expire > renew and expire <= 600_000 and resume in 1..15_000
-  end
-
-  def invalidate(state), do: %{state | resumption_handle: nil}
+  def valid_timeout?(resume), do: is_integer(resume) and resume in 1..15_000
 
   # PCM may precede provider onset, so it invalidates idle but does not prove a
   # new model turn or manufacture overlapping model ownership.
   def invalidate_idle(state),
-    do: %{state | resumption_handle: nil, interaction_status: :unknown}
+    do: %{state | interaction_status: :unknown}
 
-  def await_model_activity(%{response_start?: true} = state),
+  def accept_audio(state, audio) do
+    if silent?(audio) do
+      state
+    else
+      %{state | clean_input_boundary?: state.clean_input_boundary? or clean_boundary?(state)}
+      |> invalidate_idle()
+      |> await_model_activity()
+      |> await_audio_final()
+    end
+  end
+
+  # Digital silence still reaches the provider, but cannot start a caller turn.
+  # No amplitude threshold is used: even one nonzero sample dirties the checkpoint.
+  defp silent?(<<0::64, rest::binary>>), do: silent?(rest)
+  defp silent?(<<0::16, rest::binary>>), do: silent?(rest)
+  defp silent?(<<>>), do: true
+  defp silent?(_audio), do: false
+
+  def await_model_activity(state),
     do: %{state | awaiting_model_activity?: true}
 
-  def await_model_activity(state), do: state
+  def observe_handle(%{retiring_wire: wire} = state, handle) when is_pid(wire),
+    do: %{state | pending_handle: handle}
+
+  def observe_handle(state, handle), do: %{state | resumption_handle: handle}
 
   def await_audio_final(%{response_start?: true, caller: %{ended?: true}} = state),
     do: %{state | awaiting_audio_final?: true, audio_after_caller_end?: true}
@@ -41,22 +57,31 @@ defmodule Vxpipe.Providers.Google.STSResumption do
     }
 
   def observed_model_content(state),
-    do: %{model_work(state) | awaiting_model_activity?: false}
+    do: %{model_work(state) | awaiting_model_activity?: false, clean_model_content?: true}
 
   def model_work(state),
-    do: %{invalidate_idle(state) | model_turn_complete?: false}
+    do: %{invalidate_idle(state) | model_turn_complete?: false, clean_input_boundary?: false}
 
   def begin_turn(state) do
+    clean? =
+      (clean_boundary?(state) or state.clean_input_boundary?) and is_nil(state.caller) and
+        map_size(state.pending_tools) == 0 and output_idle?(state)
+
     %{
       state
-      | resumption_handle: nil,
-        model_turn_complete?: false,
+      | model_turn_complete?: false,
         interaction_status: :unknown,
-        resumption_ambiguous?: state.resumption_ambiguous? or not state.model_turn_complete?
+        resumption_ambiguous?: state.resumption_ambiguous? or not state.model_turn_complete?,
+        clean_exchange?: clean?,
+        clean_input_boundary?: false,
+        clean_model_content?: false
     }
   end
 
-  def recoverable?(state), do: quiescent?(state) and is_binary(state.resumption_handle)
+  def recoverable?(state),
+    do:
+      not state.resumption_ambiguous? and settled_boundary?(state) and
+        is_binary(state.resumption_handle)
 
   def request(state, remaining_ms \\ nil)
 
@@ -68,25 +93,33 @@ defmodule Vxpipe.Providers.Google.STSResumption do
   end
 
   def request(state, remaining_ms) do
-    if state.renew_timer, do: Process.cancel_timer(state.renew_timer)
-
     now = now_ms()
-    available = max(state.expire_deadline - now, 0)
-    available = if is_integer(remaining_ms), do: min(available, remaining_ms), else: available
 
     budget =
-      if quiescent?(state), do: min(available, state.resumption_timeout_ms), else: available
+      if is_integer(remaining_ms), do: max(remaining_ms, 0), else: state.resumption_timeout_ms
 
-    %{state | renew_requested?: true, renew_timer: nil}
+    reason = if is_integer(remaining_ms), do: :go_away, else: :connection_lost
+
+    %{state | renew_requested?: true, rotation_reason: reason}
     |> arm_deadline(now + budget)
     |> advance()
   end
 
-  def advance(%{renew_requested?: true, resuming?: false} = state) do
-    if recoverable?(state), do: start_replacement(state), else: state
+  def advance(state) do
+    state = clear_clean_ambiguity(state)
+
+    if state.renew_requested? and not state.resuming? and recoverable?(state),
+      do: start_replacement(state),
+      else: state
   end
 
-  def advance(state), do: state
+  defp clear_clean_ambiguity(state) do
+    if state.clean_exchange? and state.clean_model_content? and settled_boundary?(state) do
+      %{state | resumption_ambiguous?: false, clean_exchange?: false, clean_model_content?: false}
+    else
+      state
+    end
+  end
 
   def connected(state) do
     setup =
@@ -99,7 +132,12 @@ defmodule Vxpipe.Providers.Google.STSResumption do
 
   def complete(state) do
     if state.resume_timer, do: Process.cancel_timer(state.resume_timer)
-    if state.expire_timer, do: Process.cancel_timer(state.expire_timer)
+
+    :telemetry.execute(
+      [:vxpipe, :providers, :google, :sts, :resumed],
+      %{count: 1},
+      %{reason: state.rotation_reason}
+    )
 
     state
     |> Map.merge(%{
@@ -113,21 +151,9 @@ defmodule Vxpipe.Providers.Google.STSResumption do
       resuming?: false,
       resume_attempt: nil,
       resume_timer: nil,
-      resume_deadline: nil
+      resume_deadline: nil,
+      rotation_reason: nil
     })
-    |> schedule_renewal()
-  end
-
-  def schedule_renewal(state) do
-    if state.renew_timer, do: Process.cancel_timer(state.renew_timer)
-    if state.expire_timer, do: Process.cancel_timer(state.expire_timer)
-
-    %{
-      state
-      | renew_timer: Process.send_after(self(), {:renew, state.wire}, state.renew_after),
-        expire_timer: Process.send_after(self(), {:expire, state.wire}, state.expire_after),
-        expire_deadline: now_ms() + state.expire_after
-    }
   end
 
   def start_socket(state, extra) do
@@ -149,39 +175,87 @@ defmodule Vxpipe.Providers.Google.STSResumption do
   defp start_replacement(state) do
     deadline = min(state.resume_deadline, now_ms() + state.resumption_timeout_ms)
     state = arm_deadline(state, deadline)
-    if state.wire_monitor, do: Process.demonitor(state.wire_monitor, [:flush])
-
-    # Retire through the owning supervisor. A protocol close would send
-    # audioStreamEnd, changing the conversation after its checkpoint.
-    if is_pid(state.wire) do
-      _ = DynamicSupervisor.terminate_child(state.socket_supervisor, state.wire)
-    end
 
     state = %{
       state
-      | wire: nil,
-        wire_monitor: nil,
+      | retiring_wire: state.wire,
         resuming?: true,
         pending_handle: state.resumption_handle,
         resumption_handle: nil
     }
 
+    if state.rotation_reason == :connection_lost do
+      case retired(state) do
+        {:ok, next} ->
+          next
+
+        {:error, _reason} ->
+          send(self(), :resumption_unsafe)
+          state
+      end
+    else
+      :ok = state.wire_module.retire(state.wire)
+      state
+    end
+  end
+
+  def retired(state) do
+    if not state.resumption_ambiguous? and settled_boundary?(state) and
+         is_binary(state.pending_handle) and now_ms() < state.resume_deadline do
+      open_replacement(state)
+    else
+      {:error, :unsafe_checkpoint}
+    end
+  end
+
+  def retry_replacement(state) do
+    if now_ms() < state.resume_deadline and is_binary(state.pending_handle) do
+      if state.pending_monitor, do: Process.demonitor(state.pending_monitor, [:flush])
+      state = %{state | pending_wire: nil, pending_monitor: nil, retry_pending?: false}
+      connect_replacement(state)
+    else
+      {:error, :resumption_expired}
+    end
+  end
+
+  defp open_replacement(state) do
+    if state.wire_monitor, do: Process.demonitor(state.wire_monitor, [:flush])
+    _ = DynamicSupervisor.terminate_child(state.socket_supervisor, state.wire)
+    state = %{state | wire: nil, wire_monitor: nil, retiring_wire: nil, retirement_ack?: false}
+
+    connect_replacement(state)
+  end
+
+  defp connect_replacement(state) do
     case start_socket(state, deferred: true) do
       {:ok, pending} ->
-        %{state | pending_wire: pending, pending_monitor: Process.monitor(pending)}
+        {:ok, %{state | pending_wire: pending, pending_monitor: Process.monitor(pending)}}
 
       _failure ->
-        send(self(), :resumption_unsafe)
-        state
+        {:error, :connection_unavailable}
     end
   end
 
   def quiescent?(state) do
-    not state.resumption_ambiguous? and not state.awaiting_model_activity? and
-      not state.awaiting_audio_final? and
+    not state.resumption_ambiguous? and state.interaction_status == :idle and
+      settled_boundary?(state)
+  end
+
+  defp settled_boundary?(state) do
+    not state.awaiting_model_activity? and not state.awaiting_audio_final? and
       state.model_turn_complete? and
-      state.interaction_status == :idle and is_nil(state.caller) and
+      state.interaction_status in [:idle, :omitted] and is_nil(state.caller) and
       map_size(state.pending_tools) == 0 and output_idle?(state)
+  end
+
+  # An interrupted exchange may never produce model content. Its stale
+  # awaiting-model flag must not prevent a subsequent, attributable exchange
+  # from repairing ambiguity. It still cannot authorize a socket rotation.
+  defp clean_boundary?(state) do
+    settled_boundary?(state) or
+      (state.resumption_ambiguous? and not state.awaiting_audio_final? and
+         state.model_turn_complete? and state.interaction_status in [:idle, :omitted] and
+         is_nil(state.caller) and map_size(state.pending_tools) == 0 and output_idle?(state))
   end
 
   def input_quiescent?(state),

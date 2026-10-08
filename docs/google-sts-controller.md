@@ -36,12 +36,17 @@ This also prevents thought text from being published as spoken output.
 Earlier local playback must not move the resumption boundary earlier. Track
 model-turn completion separately and require it along with idle caller/output,
 settled playback, no pending tools and a valid private handle. Model completion
-invalidates a previously received handle; a newer checkpoint is required. If a
-new caller/typed turn starts before the previous model end, this allocation
-remains non-resumable: an unqualified end cannot disambiguate ownership, and a
-later handle cannot clear that uncertainty. Connection loss then fails explicitly;
-renewal remains bounded by its existing deadline. This conservative interim
-guard does not complete the separately required overlap-correlation support.
+invalidates earlier idle evidence; the latest non-revoked session token is retained. If a
+new caller/typed turn starts before the previous model end, an unqualified end
+cannot disambiguate ownership, and a later handle cannot clear that uncertainty.
+A subsequent genuinely new, attributable exchange at a settled idle boundary
+can repair it after fresh model content, caller completion and settled output.
+Omitted status on a completed turn is sufficient only for same-allocation rotation;
+new input origins still need explicit idle.
+Pending rotation keeps accepting input; only the actual switch holds its one
+unsent ordered command. Connection loss without a safe checkpoint still fails.
+See [the lifecycle decision](gemini-live-session-lifecycle.md). These guards do
+not complete separately required overlap-correlation support.
 
 Retain existing PCM/credit bounds, cap assembled text at the shared 65,536-byte
 bound, and erase retained text on settlement/fencing. At the sixteen-chunk queue
@@ -199,8 +204,9 @@ evidence needed to reach idle. A real caller end requires subsequent model-end
 evidence before renewal; an earlier interrupted model end cannot mark the fresh
 reply complete. General overlapping model-response ownership is still separate.
 If that interrupted-model end has not arrived when the caller ends, ownership of
-a subsequent model end remains ambiguous. Latch the allocation as non-resumable;
-later ends and handles cannot restore certainty. The reversed-order controller
+a subsequent model end remains ambiguous; later unqualified ends and handles
+cannot restore certainty. The 2026-10-08 lifecycle repair allows a subsequent
+clean attributable exchange to discharge that uncertainty. The reversed-order controller
 regression and combined recognition/startup/room group pass 229 tests locally.
 
 ## Interaction and new-text profile
@@ -216,10 +222,13 @@ model turns. The [pinned Python SDK](https://github.com/googleapis/python-genai/
 defines `IDLE` and `IN_PROGRESS`, plus unspecified and deprecated
 `REQUIRES_ACTION`. The field accompanies model completion. Decode a closed enum
 with that completion; reject invalid types or an unaccompanied status. Missing
-status becomes unknown, not an inherited earlier idle.
+status becomes `:omitted`, distinct from explicit unspecified/unknown status; it
+does not inherit earlier idle for origin cutover.
 
-The local conservative renewal rule requires explicit `IDLE` after conversational
+The local origin-cutover rule requires explicit `IDLE` after conversational
 work as well as the existing model, caller, playback, tool and ambiguity fences.
+Same-allocation rotation also accepts an omitted status on a genuinely completed
+turn, matching the current hosted wire; explicit non-idle status still defers it.
 Unspecified and deprecated status do not grant renewal. Treating deprecated
 `REQUIRES_ACTION` conservatively is this adapter's decision, not a claim that the
 SDK calls it active reasoning. New caller/typed work and accepted tool results
@@ -228,10 +237,11 @@ it. A pristine setup with no conversational work may still use its first handle;
 there is no old response to settle. No resumption deadline is extended.
 
 Verification uses exact codec payloads and the actual capability with a fake wire:
-one new typed input yields one normally credited reply; missing/unspecified/
-in-progress/deprecated model ends defer renewal; explicit idle still requires a
-newer handle; and delivering a tool result after idle requires fresh model/idle
-evidence. Keep late caller-final and pending-playback guards intact.
+one new typed input yields one normally credited reply; a completed exchange with
+omitted status can rotate with the latest valid token, while explicit unspecified,
+in-progress and deprecated status defer it. Delivering a tool result after idle
+requires fresh model/completion evidence. Keep late caller-final and pending-playback
+guards intact; omitted status still cannot authorize a new input origin.
 
 Review extends invalidation to accepted PCM before provider onset without
 inventing model/caller onset or an overlap latch. A private model-activity marker

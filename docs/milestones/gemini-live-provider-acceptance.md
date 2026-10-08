@@ -183,7 +183,94 @@ limits. The five-participant listener-reconnection investigation is deferred.
 The deadline-closing bypass now has owning red/green and repeated native proof;
 the earlier listener-re-entry audio-loss cause remains unresolved. Evidence lives in
 [the owning transfer milestone](transfer-readiness-and-wait-sounds.md#webrtc-transfer-follow-up-2026-10-08).
-Run Gemini's ten-minute acceptance after these WebRTC repairs are verified.
+Run Gemini's phone ten-minute acceptance after these WebRTC repairs are verified.
+The later approved hosted longevity slice below is independent of telephony and
+does not require those WebRTC repairs.
+
+### Hosted session longevity (2026-10-08)
+
+Design review, before implementation: Google's context limit and socket lifetime
+are separate. Enable server-side sliding-window compression; replace local
+seven-minute renewal/nine-and-a-half-minute expiry with `goAway`-driven rotation
+using the latest safe private handle. Continue input while rotation is pending;
+retain one unsent ordered command only during actual replacement setup. Preserve
+the five-second setup budget and all caller/model/tool/playback fences. A clean
+attributable later exchange can clear old ambiguity; unqualified ends cannot.
+Exactly zero microphone PCM does not manufacture an unresolved caller obligation.
+Missing/unsafe handles still fail explicitly; unsupported history reconstruction
+cannot silently start a new conversation. No dependency or shared-room contract
+change is needed. Details and rejected alternatives are in
+[Gemini Live session lifecycle](../gemini-live-session-lifecycle.md).
+
+Follow-up wire-contract design review, before the corresponding fixes: the real
+endpoint sends `turnComplete` without `interactionStatus`, and its session tokens
+are periodic. Keep the latest non-revoked token; completed work with omitted status
+can authorize same-allocation resumption, while origin cutover still requires
+explicit idle. Never treat generation completion or a token alone as quiet proof.
+The hosted marker probe confirms that an initial token restores subsequently
+remembered context, rather than a local initial-state snapshot.
+
+Retirement sends WebSocket close, closes transport explicitly after peer ack, and
+waits for monitored termination before replacement. Google can still reject resumed
+setup briefly with code 1008 because its old client remains registered. Only this
+specific private reason retries after the rejected socket terminates, inside the
+original five-second budget. All other rejection is fatal; held input and the
+original deadline remain unchanged. No raw close reason, wait or fresh context is
+introduced. Local reds precede each change.
+
+The user approved an eighteen-minute **hosted, Gemini-only** run. Its tags are
+`live_long` and `live_long_google_gemini_live_hosted`; never ordinary provider or
+Gemini tags. It exchanges real caller audio and credited replies while streaming
+microphone frames continuously, requires replies past fifteen minutes, and
+requires an actual successful resumed connection. If Google has not already
+rotated, the test injects one goAway notification at seven minutes; server expiry
+timing is not a project-owned test input. Handles, reconnection and continuing
+speech remain real, and the controlled trigger is reported explicitly. Existing
+reply/setup bounds remain unchanged. This does not establish long carrier playback acceptance.
+
+- [x] Red/green setup compression, continued pending input, held unsent command,
+  obsolete timer immunity and clean-exchange ambiguity recovery: ten initial reds.
+- [x] Red/green digital silence preserving the checkpoint: two further reds;
+  every nonzero sample keeps the prior unresolved-input guard.
+- [x] Additional wire-contract red/green: omitted status, retained periodic
+  token, peer-close acknowledgement plus termination, and the precise active-session
+  rejection. Keep caller-final, stale-idle, playback, tools and private-status guards.
+- [x] Owning Google codec/session/controller group and local socket integration
+  are green. Default selection excludes both explicitly tagged hosted checks.
+- [x] Preserve the user-owned Console long-fixture and bounded lifecycle
+  diagnostics; include their owning fixture assertions with this checkpoint.
+- [x] Hosted context-retention probe: one real resumed connection, remembered
+  word and credited output, 30.7 seconds, seed 431707. The observed single temporary
+  code-1008 rejection resolves on the next attempt inside the original budget.
+  Clean final selection also passes in 30.8 seconds, seed 107378, with the real
+  transport and no temporary wire diagnostics.
+- [x] Hosted eighteen-minute acceptance: 72 received replies, 50,776 microphone
+  frames and one successful resumed connection; 1080.7 seconds, seed 485926.
+  The test controls one goAway notification at 420 seconds; real replacement
+  setup acknowledges at 421 seconds and replies continue through eighteen minutes.
+- [x] All five root gates and Lean verification for this lifecycle checkpoint:
+  3,292 default tests, zero failures, 120 exclusions (seed 492336); focused
+  Google/socket group 198/0 (seed 70174); Lean build/oracle/replay passes
+  (seed 231893). Final Gateway is 577/0 and Console is 221/0. Earlier local
+  transfer intermittence remains recorded without claiming a runtime repair.
+
+Red/green, diagnostic runs and final acceptance are recorded in
+[the longevity labnote](../../labnotes/20261008-0220-gemini-session-longevity.md).
+
+Initial hosted evidence: the first eighteen-minute run produces 72 completed
+replies but records no rotations. Its observer captured a nil provider PID before
+setup readiness, so it cannot establish rotation evidence. Short controlled probes
+then expose the omitted status, discarded periodic token and active-client setup
+rejection. Temporary wire/close diagnostics are removed; the final long selection
+records a controlled notification and genuine successful resumption. It proves
+continuity across completed-exchange boundaries; it does not claim a naturally
+observed provider expiry or long carrier playback.
+
+The earlier long phone stalled in four runs around 367–502 seconds without a
+provider error. The adapter's pending rotation rejected thousands of audio
+frames, and latched ambiguity blocked renewal. The current slice repairs those
+local lifecycle contracts; it does not claim that every separate phone or
+provider-history gate has passed.
 
 ### Configured provider acceptance
 
@@ -222,7 +309,7 @@ Run Gemini's ten-minute acceptance after these WebRTC repairs are verified.
   requires this fail-closed boundary. Correcting the long receiver's unrelated
   Bravo opening preserves it (seed 133655, stopped after 37 s).
   Qualified caller association remains an open parent dependency; retaining the
-  guard avoids guessing which caller owns late text. Long acceptance stays
+  guard avoids guessing which caller owns late text. Long phone acceptance stays
   unchecked. No timer was raised.
 - Static root gates pass. The first default run found twelve Morse manual-clock
   fixture races with asynchronous delivery and two obsolete Google-gating
@@ -244,7 +331,10 @@ loading. These selections keep the long lane separate:
 bin/livetests run --only live_gemini apps/vxpipe_call_engine/test/integration/gemini_live_hosted_test.exs
 bin/livetests run --only live_telephony_sts_gemini apps/vxpipe_console/test/integration/live_telephony_test.exs
 bin/livetests run --only live_telephony_sts apps/vxpipe_console/test/integration/live_telephony_test.exs
-# Explicitly approved long call; currently reproduces ambiguous_input.
+# Explicit hosted selectors; excluded from ordinary Gemini/provider selection.
+bin/livetests run --only live_gemini_resumption apps/vxpipe_call_engine/test/integration/gemini_live_hosted_long_test.exs
+bin/livetests run --only live_long_google_gemini_live_hosted apps/vxpipe_call_engine/test/integration/gemini_live_hosted_long_test.exs
+# Separate long phone gate; hosted longevity is verified independently.
 bin/livetests run --only live_telephony_long_google_gemini_live apps/vxpipe_console/test/integration/live_telephony_test.exs
 ```
 

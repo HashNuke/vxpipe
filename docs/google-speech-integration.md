@@ -32,12 +32,16 @@ with its final text. It emits `turn_ended` only after both facts arrive, keeping
 the earlier `ACTIVITY_START`. A bounded queue rejects ambiguous accumulation. It does not invent a
 silence timer or treat a partial transcript as a turn boundary.
 
-The Live API limits a session to ten minutes. The adapter prepares a new socket after seven
-minutes (or when the provider sends `goAway`) and switches at a completed turn. It fails closed at
+The speech-recognition adapter retains its earlier conservative socket schedule:
+prepare a new socket after seven minutes (or on `goAway`) and switch at a completed turn. It fails closed at
 9.5 minutes if a replacement cannot be prepared or the active turn never ends. Consequently, one
-uninterrupted utterance spanning that expiry cannot be transcribed continuously. This is a known
-provider lifetime limit, not a silent restart or cross-call fallback. Setup has a 15-second bound;
+uninterrupted utterance spanning that expiry cannot be transcribed continuously. This is a conservative
+STT adapter lifetime policy, with no silent restart or cross-call fallback. Setup has a 15-second bound;
 replacement failures retry while the active socket remains usable.
+
+These STT rules do not define the Gemini STS lifetime. The conversational adapter
+uses server-side sliding-window compression and `goAway`-driven resumption without
+local connection-age timers; see [Gemini Live session lifecycle](gemini-live-session-lifecycle.md).
 
 TTS sends one complete text request, reads bounded streaming PCM deltas, and publishes one chunk
 at a time only after exact Channel credit. The task can be killed on cancellation; its generation

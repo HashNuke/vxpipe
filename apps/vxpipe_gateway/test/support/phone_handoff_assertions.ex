@@ -241,7 +241,10 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
     refute_receive {:test_stt_transport_started, _, _}, 0
     refute_receive {:test_tts_transport_started, _, _}, 0
 
-    assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
+    assert_receive {:test_agent_runtime_stream, provider, request}, 2_000
+    recovery = List.last(request.messages).content
+    assert recovery =~ ~s("type":"tool_invocation_completion")
+    assert recovery =~ ~s("status":"failed")
     send(provider, {:test_agent_runtime_delta, "We can continue.", self()})
     assert_receive {:test_agent_runtime_delta_result, :ok}, 2_000
     assert {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: "We can continue.")

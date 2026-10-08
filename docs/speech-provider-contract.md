@@ -190,9 +190,11 @@ tool, response or playback, no ambiguity, and no unresolved accepted input.
 Accepted PCM additionally waits for its caller's activity end and independent
 final input transcription before origin cutover. If more PCM arrives after an
 ended caller but before its delayed final, that final cannot discharge the
-later audio obligation. Silence without an observed final remains busy.
-Rejected input never reaches the wire or changes the bound context; fresh
-input during renewal is also busy. These are local fake-wire rules, not
+later audio obligation. Exactly zero PCM is delivered without opening a new
+audio obligation; any nonzero sample retains these guards.
+Rejected input never reaches the wire or changes the bound context. Pending
+rotation accepts ordinary same-context input; the actual socket switch retains
+one unsent ordered command until setup acknowledgement. These are local rules, not
 complete policy-qualified output or hosted interoperability approval.
 Direct legacy input callbacks are rejected for that opted-in allocation; only
 the context-bearing ordered callback can send input to its wire.
@@ -840,41 +842,51 @@ hosted compatibility. See [the configuration decision](google-speech-integration
 
 #### Private Google resumption
 
-Google same-allocation renewal and idle connection-loss recovery use only the latest valid,
-safe provider-issued handle, retained privately. New accepted input or revocation invalidates
-the old checkpoint. Handoff waits for an idle input boundary, no pending tools and local
-playback settlement, the model's `turnComplete`, and explicit interaction `IDLE`
-after conversational work. Generation completion, local playback or a model end
-with missing/unspecified/`IN_PROGRESS` status alone is insufficient. The local
-profile also conservatively declines deprecated `REQUIRES_ACTION` as idle proof.
-Accepted PCM before onset, new caller/typed input, observed model work (including
-unpublished thought-only parts), and accepted tool results invalidate prior idle evidence;
-a newer handle alone cannot restore it. Pristine setup with no conversational
-work may still use its first safe handle. Pending caller final or activity-end
-evidence also prevents renewal. An accepted PCM chunk with no corresponding
-caller final remains unresolved even if the model reports `IDLE`; a delayed
-older caller final cannot clear later PCM sent after that caller ended. This
-conservatively blocks silent-input renewal. The [Live WebSocket reference](https://ai.google.dev/api/live)
-does not guarantee input-transcription ordering relative to other server
-messages. Model completion invalidates any earlier handle,
-so renewal also needs a subsequently valid checkpoint. The current local adapter
-latches overlapping model-turn ownership as non-resumable until independent
-correlation is implemented; a later unqualified end/handle cannot clear that
-uncertainty. This also covers an unfinished caller preserved through model
-interruption whose caller end precedes the interrupted model's completion.
-It fails on connection loss or the existing expiry, with no replay
-or fresh fallback. This guard does not satisfy full overlap support. Retire the old socket
-through its owner and reject new input as `:busy` until replacement setup is acknowledged.
+Google same-allocation rotation and idle connection-loss recovery retain the latest
+provider-issued session token privately across accepted input and completed exchanges.
+A non-resumable update revokes it. The token is not a fresh local per-turn receipt;
+local caller, model, tool, playback and ambiguity fences independently govern its use.
 
-The default connection/setup attempt budget is five seconds, capped by the original local
-expiry or `goAway` deadline and never restarted at an internal stage. The replacement receives
-setup with the handle and then genuinely new input: no historical microphone audio,
-conversation-history replay, tool replay or regeneration of earlier replies. Missing, revoked
-or rejected safe handles, uncertain in-flight work, failed setup or expiry fail explicitly;
-there is no fresh-session fallback. This is provider-private socket handoff, not restoration
-after loss of the capability or provider process. `STSProvider` has no engine context-restore
-callback. See [STS context restoration](sts-context-restoration.md) for exact deadline,
-invalidation and local test evidence.
+Handoff requires caller end and independent final transcription, completed model
+work, settled output and no pending tools or ambiguous ownership. Generation
+completion alone is insufficient. Accepted nonzero PCM, new typed/caller work and
+accepted tool results invalidate idle evidence; unresolved input or a delayed old
+caller final cannot authorize rotation. Exactly zero PCM still reaches the provider
+without manufacturing an unresolved caller obligation.
+
+The hosted endpoint omits `interactionStatus` from `turnComplete`. Decode that
+omission separately from an explicit unspecified status. Same-allocation resumption
+accepts idle or omitted status after the other completion fences: the
+[Live API reference](https://ai.google.dev/api/live) says a completed turn waits for
+new client input before generating again. Explicit `IN_PROGRESS`, unspecified and
+deprecated status remain insufficient. **Origin/context cutover still requires
+explicit `IDLE`**; the omission rule never changes the authorized input origin.
+
+Unqualified late ends and handles cannot clear overlapping ownership. A new clean,
+attributable exchange can repair earlier ambiguity only after fresh model content,
+caller completion/final, model completion and settled output. A competing caller
+with a discarded final cannot establish that evidence. Full overlap correlation
+and interrupted provider-history reconciliation remain separate open contracts.
+
+Setup enables server-side sliding-window compression. Healthy sockets have no
+local age limit: `goAway` supplies the pending deadline, and ordinary caller input
+continues. At a safe boundary the transport sends only WebSocket close, explicitly
+closes its connection after peer acknowledgement and stops. Wait for acknowledgement
+and monitored termination before opening a replacement under the owning supervisor.
+Hold one ordered unsent command through actual replacement; after `setupComplete`,
+send it once and reply. Monitor its submitter and discard abandoned input.
+
+The five-second total retirement/connection/setup budget is capped by the original
+`goAway` deadline and never restarted internally. Google may briefly reject setup
+with code `1008` because the prior session is still connected. Only that specific
+private reason becomes `:session_active`; after the rejected socket terminates,
+retry the same token within the unchanged deadline and retain the unsent command.
+Other rejection, missing/revoked handles, unsafe work or deadline exhaustion fail
+explicitly. Never log the raw reason, replay historical audio/tools, regenerate
+old speech or fall back to fresh context. This handoff does not restore a lost
+provider process or capability. `STSProvider` has no engine context-restore callback.
+See [the lifecycle decision and live lanes](gemini-live-session-lifecycle.md) and
+[the separate checkpoint audit](sts-context-restoration.md#implemented-handle-handoff).
 
 Genuinely new Gemini 3.x typed input uses `realtimeInput.text`, not history
 append. This does not introduce replay or a placeholder trigger. The

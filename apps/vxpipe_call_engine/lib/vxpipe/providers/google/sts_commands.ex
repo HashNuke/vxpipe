@@ -9,33 +9,10 @@ defmodule Vxpipe.Providers.Google.STSCommands do
              elem(command, 0) in [:push_audio, :push_text, :begin_opening, :input_activity],
       do: {:reply, {:error, :busy}, state}
 
-  def execute(command, %{response_start?: true, renew_requested?: true} = state)
-      when is_tuple(command) and
-             elem(command, 0) in [:push_audio, :push_text, :begin_opening, :input_activity] and
-             command != {:input_activity, :ended},
-      do: {:reply, {:error, :busy}, state}
-
-  def execute(
-        {:input_activity, :ended},
-        %{response_start?: true, renew_requested?: true, caller: nil} = state
-      ),
-      do: {:reply, {:error, :busy}, state}
-
-  def execute(command, %{renew_requested?: true, input_turn: nil, output: nil} = state)
-      when is_tuple(command) and
-             elem(command, 0) in [:push_audio, :push_text, :begin_opening, :input_activity] and
-             command != {:input_activity, :ended} do
-    {:reply, {:error, :busy}, state}
-  end
-
   def execute({:push_audio, audio}, %{ready?: true} = state) do
     with {:ok, _encoded} <- STS.encode_audio(audio),
          :ok <- state.wire_module.send_audio(state.wire, audio) do
-      {:reply, :ok,
-       state
-       |> STSResumption.invalidate_idle()
-       |> STSResumption.await_model_activity()
-       |> STSResumption.await_audio_final()}
+      {:reply, :ok, STSResumption.accept_audio(state, audio)}
     else
       {:error, :invalid_audio} -> {:reply, {:error, :session_failed}, state}
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
@@ -58,13 +35,13 @@ defmodule Vxpipe.Providers.Google.STSCommands do
            ),
          :ok <- opening_started(state, reference, turn) do
       next =
-        STSResumption.begin_turn(%{
-          state
+        %{
+          STSResumption.begin_turn(state)
           | input_turn: turn,
             input_text: nil,
             input_ended?: true,
             fixed_opening: fixed
-        })
+        }
 
       {:reply, :ok, STSResumption.await_model_activity(next)}
     else
@@ -88,13 +65,11 @@ defmodule Vxpipe.Providers.Google.STSCommands do
              provenance: :provider_reported
            ),
          {:ok, state} <-
-           STSInput.open_text_turn(
-             STSResumption.begin_turn(%{
-               state
-               | input_turn: turn,
-                 input_text: text
-             })
-           ) do
+           STSInput.open_text_turn(%{
+             STSResumption.begin_turn(state)
+             | input_turn: turn,
+               input_text: text
+           }) do
       {:reply, :ok, STSResumption.await_model_activity(state)}
     else
       {:error, :invalid_text} -> {:reply, {:error, :invalid_text}, state}
@@ -129,7 +104,7 @@ defmodule Vxpipe.Providers.Google.STSCommands do
   def execute({:input_activity, boundary}, %{ready?: true} = state)
       when boundary in [:started, :ended] do
     with :ok <- state.wire_module.send_activity(state.wire, boundary),
-         {:ok, state} <- STSInput.activity_boundary(boundary, STSResumption.invalidate(state)) do
+         {:ok, state} <- STSInput.activity_boundary(boundary, state) do
       {:reply, :ok, STSResumption.await_model_activity(state)}
     else
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}

@@ -50,8 +50,8 @@ defmodule Vxpipe.Providers.Google.STSInput do
 
   def bind_context(%{interaction_context: previous} = state, context, operation)
       when is_reference(previous) and is_reference(context) do
-    if operation != {:activity, :ended} and not state.renew_requested? and
-         not state.resuming? and STSResumption.quiescent?(state) do
+    if operation != {:activity, :ended} and not state.resuming? and
+         STSResumption.quiescent?(state) do
       {:ok, %{state | interaction_context: context}}
     else
       {:error, :busy}
@@ -90,8 +90,8 @@ defmodule Vxpipe.Providers.Google.STSInput do
     case result do
       :ok ->
         {:ok,
-         STSResumption.begin_turn(%{
-           state
+         %{
+           STSResumption.begin_turn(state)
            | caller: %{
                turn_ref: turn,
                ended?: false,
@@ -103,7 +103,7 @@ defmodule Vxpipe.Providers.Google.STSInput do
              input_text: nil,
              input_ended?: false,
              audio_fenced?: audio_fenced?
-         })}
+         }}
 
       :discarded ->
         {:ok, state}
@@ -140,6 +140,8 @@ defmodule Vxpipe.Providers.Google.STSInput do
             audio_fenced?: false,
             resumption_ambiguous?: state.resumption_ambiguous? or ambiguous?
         }
+
+        state = if ambiguous?, do: %{state | clean_exchange?: false}, else: state
 
         {:ok, retire(state, %{caller | ended?: true})}
 
@@ -195,7 +197,7 @@ defmodule Vxpipe.Providers.Google.STSInput do
   end
 
   defp discard_next_final(%{caller: caller} = state) when is_map(caller),
-    do: %{state | caller: %{caller | discard_final?: true}}
+    do: %{state | caller: %{caller | discard_final?: true}, clean_exchange?: false}
 
   defp discard_next_final(state), do: state
 

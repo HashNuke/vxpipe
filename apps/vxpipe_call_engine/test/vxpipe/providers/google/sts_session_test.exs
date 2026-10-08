@@ -514,14 +514,14 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   end
 
   test "provider-rejected first use does not bind a Google interaction origin" do
-    {session, wire} = start_session(response_start?: true)
+    {session, _wire} = start_session(response_start?: true)
     rejected = make_ref()
-    deliver_sync(session, wire, %{"goAway" => %{"timeLeft" => "60s"}})
-
-    assert {:error, :busy} = Session.push_audio(session, <<1, 0>>, response_context: rejected)
+    # Exercise the provider's rollback rather than the channel's input validation.
+    assert {:error, :session_failed} =
+             STSSession.submit_input(Session.provider(session), rejected, {:audio, <<1>>})
 
     assert :sys.get_state(Session.provider(session)).interaction_context == nil
-    refute_received {:test_google_sts_audio, ^wire, _rejected_audio}
+    refute_received {:test_google_sts_audio, _, _rejected_audio}
   end
 
   test "opted-in Google tool calls carry the bound interaction origin" do
@@ -1256,10 +1256,179 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert :ok = Session.ack(session, input)
   end
 
+  for response_start? <- [false, true] do
+    @tag :gemini_longevity
+    test "silent microphone PCM preserves a settled checkpoint with response-start #{response_start?}" do
+      {session, wire} = start_session(response_start?: unquote(response_start?))
+      context = make_ref()
+      options = if unquote(response_start?), do: [response_context: context], else: []
+      # Establish the authorized input context before accepting a checkpoint.
+      silence = :binary.copy(<<0, 0>>, 320)
+      assert :ok = Session.push_audio(session, silence, options)
+      assert_receive {:test_google_sts_audio, ^wire, ^silence}
+      update_handle(session, wire, "synthetic-silent-checkpoint")
+      assert :ok = Session.push_audio(session, silence, options)
+      assert_receive {:test_google_sts_audio, ^wire, ^silence}
+      deliver_sync(session, wire, %{"goAway" => %{"timeLeft" => "60s"}})
+      assert_receive {:test_google_sts_started, pending, _connection}
+      assert_receive {:test_google_sts_control, ^pending, setup}
+
+      assert JSON.decode!(setup)["setup"]["sessionResumption"] ==
+               %{"handle" => "synthetic-silent-checkpoint"}
+    end
+
+    @tag :gemini_longevity
+    test "pending rotation keeps caller audio flowing with response-start #{response_start?}" do
+      {session, wire} = start_session(response_start?: unquote(response_start?))
+      context = make_ref()
+      options = if unquote(response_start?), do: [response_context: context], else: []
+      assert :ok = Session.push_audio(session, <<1, 0>>, options)
+      assert_receive {:test_google_sts_audio, ^wire, <<1, 0>>}
+      deliver_sync(session, wire, %{"goAway" => %{"timeLeft" => "60s"}})
+
+      for sample <- 2..5 do
+        pcm = <<sample::little-signed-16>>
+        assert :ok = Session.push_audio(session, pcm, options)
+        assert_receive {:test_google_sts_audio, ^wire, ^pcm}
+      end
+
+      refute_received {:test_google_sts_started, _, _}
+    end
+
+    @tag :gemini_longevity
+    test "the actual socket switch retains one unsent command with response-start #{response_start?}" do
+      {session, wire} = start_session(response_start?: unquote(response_start?))
+      update_handle(session, wire, "synthetic-longevity-handle")
+      deliver_sync(session, wire, %{"goAway" => %{"timeLeft" => "60s"}})
+      assert_receive {:test_google_sts_started, pending, _connection}
+      provider = Session.provider(session)
+
+      command =
+        if unquote(response_start?),
+          do: {:submit_input, make_ref(), {:audio, <<17, 0>>}},
+          else: {:push_audio, <<17, 0>>}
+
+      request = :gen_server.send_request(provider, command)
+      _ = :sys.get_state(provider)
+      assert :timeout = :gen_server.wait_response(request, 0)
+      # The ordered input slot normally prevents this, but a second direct
+      # provider submission must never grow the switchover buffer.
+      assert {:error, :busy} = GenServer.call(provider, command)
+      refute_received {:test_google_sts_audio, ^wire, _}
+      refute_received {:test_google_sts_audio, ^pending, _}
+
+      deliver_sync(session, pending, %{"setupComplete" => %{}})
+      assert {:reply, :ok} = :gen_server.wait_response(request, 1_000)
+      assert_receive {:test_google_sts_audio, ^pending, <<17, 0>>}
+      refute_received {:test_google_sts_audio, ^pending, _duplicate}
+    end
+
+    @tag :gemini_longevity
+    test "closing during a socket switch discards held input with response-start #{response_start?}" do
+      {session, wire} = start_session(response_start?: unquote(response_start?))
+      update_handle(session, wire, "synthetic-closing-handle")
+      deliver_sync(session, wire, %{"goAway" => %{"timeLeft" => "60s"}})
+      assert_receive {:test_google_sts_started, pending, _connection}
+      provider = Session.provider(session)
+      monitor = session |> Session.tree() |> Process.monitor()
+      pending_monitor = Process.monitor(pending)
+
+      command =
+        if unquote(response_start?),
+          do: {:submit_input, make_ref(), {:audio, <<19, 0>>}},
+          else: {:push_audio, <<19, 0>>}
+
+      request = :gen_server.send_request(provider, command)
+      _ = :sys.get_state(provider)
+      assert :timeout = :gen_server.wait_response(request, 0)
+      assert :ok = Session.close(session)
+      assert_receive {:DOWN, ^monitor, :process, _, _}
+      assert_receive {:DOWN, ^pending_monitor, :process, ^pending, _}
+      assert {:error, {_reason, ^provider}} = :gen_server.wait_response(request, 1_000)
+      refute_received {:test_google_sts_audio, ^pending, _}
+      refute_received {:test_google_sts_audio, ^wire, _}
+    end
+  end
+
+  for timer <- [:renew, :expire] do
+    @tag :gemini_longevity
+    test "a healthy connection ignores the obsolete #{timer} timer" do
+      {session, wire} = start_session()
+      update_handle(session, wire, "synthetic-healthy-handle")
+      provider = Session.provider(session)
+      send(provider, {unquote(timer), wire})
+      _ = :sys.get_state(provider)
+      assert :ok = Session.push_audio(session, <<21, 0>>)
+      assert_receive {:test_google_sts_audio, ^wire, <<21, 0>>}
+      refute_received {:test_google_sts_started, _, _}
+    end
+  end
+
+  @tag :gemini_retirement
+  test "replacement waits for old peer retirement and retains its one unsent frame" do
+    {session, wire} = start_session(retire_ack?: false)
+    update_handle(session, wire, "synthetic-retiring-handle")
+    deliver_sync(session, wire, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert_receive {:test_google_sts_retire, ^wire}
+    refute_received {:test_google_sts_started, _, _}
+    provider = Session.provider(session)
+    request = :gen_server.send_request(provider, {:push_audio, <<23, 0>>})
+    _ = :sys.get_state(provider)
+    assert :timeout = :gen_server.wait_response(request, 0)
+    TestGoogleSTSTransport.acknowledge_retirement(wire)
+    _ = :sys.get_state(wire)
+    _ = :sys.get_state(provider)
+    refute_received {:test_google_sts_started, _, _}
+    TestGoogleSTSTransport.finish_retirement(wire)
+    assert_receive {:test_google_sts_started, pending, _}
+    deliver_sync(session, pending, %{"setupComplete" => %{}})
+    assert {:reply, :ok} = :gen_server.wait_response(request, 1_000)
+    assert_receive {:test_google_sts_audio, ^pending, <<23, 0>>}
+    refute_received {:test_google_sts_audio, ^wire, _}
+  end
+
+  @tag :gemini_retirement
+  test "unacknowledged retirement consumes the original reconnect budget" do
+    {session, wire} = start_session(retire_ack?: false, resumption_timeout_ms: 50)
+    monitor = session |> Session.tree() |> Process.monitor()
+    update_handle(session, wire, "synthetic-stuck-retirement")
+    deliver_sync(session, wire, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert_receive {:test_google_sts_retire, ^wire}
+    assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+    refute_received {:test_google_sts_started, _, _}
+  end
+
+  @tag :gemini_session_active
+  test "a still-active rejection retries the same handle without replay or a new budget" do
+    {session, wire} = start_session()
+    update_handle(session, wire, "synthetic-active-session")
+    deliver_sync(session, wire, %{"goAway" => %{"timeLeft" => "60s"}})
+    assert_receive {:test_google_sts_started, first, _}
+    provider = Session.provider(session)
+    deadline = :sys.get_state(provider).resume_deadline
+    request = :gen_server.send_request(provider, {:push_audio, <<29, 0>>})
+    _ = :sys.get_state(provider)
+    TestGoogleSTSTransport.reject_session_active(first)
+    assert_receive {:test_google_sts_started, second, _}
+    assert first != second
+    assert_receive {:test_google_sts_control, ^second, setup}
+
+    assert JSON.decode!(setup)["setup"]["sessionResumption"] ==
+             %{"handle" => "synthetic-active-session"}
+
+    assert :sys.get_state(provider).resume_deadline == deadline
+    assert :timeout = :gen_server.wait_response(request, 0)
+    refute_received {:test_google_sts_audio, ^first, _}
+    deliver_sync(session, second, %{"setupComplete" => %{}})
+    assert {:reply, :ok} = :gen_server.wait_response(request, 1_000)
+    assert_receive {:test_google_sts_audio, ^second, <<29, 0>>}
+    refute_received {:test_google_sts_audio, ^second, _}
+  end
+
   test "go-away without a resumption handle fails closed instead of restarting silently" do
     {session, wire} = start_session(resumption_timeout_ms: 50)
     monitor = session |> Session.tree() |> Process.monitor()
-    deliver(wire, %{"goAway" => %{"timeLeft" => "60s"}})
+    deliver(wire, %{"goAway" => %{"timeLeft" => "0.050s"}})
     assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
   end
 
@@ -1276,7 +1445,6 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert_receive {:test_google_sts_control, ^pending, setup}
     assert get_in(JSON.decode!(setup), ["setup", "sessionResumption", "handle"]) == handle
     assert_receive {:DOWN, ^old_monitor, :process, ^wire, _reason}
-    assert {:error, :busy} = Session.push_audio(session, <<1, 0>>)
     refute_received {:test_google_sts_audio, ^pending, _}
 
     deliver_sync(session, pending, %{"setupComplete" => %{}})
@@ -1315,7 +1483,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert_receive {:test_google_sts_audio, ^pending, <<4, 0>>}
   end
 
-  test "accepted input invalidates a handle until a newer resumable checkpoint arrives" do
+  test "unresolved accepted input blocks connection-loss resumption despite a retained token" do
     {session, wire} = start_session()
     monitor = session |> Session.tree() |> Process.monitor()
     update_handle(session, wire, "synthetic-before-input")
@@ -1442,8 +1610,8 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
       [
         config: config,
         wire_module: TestGoogleSTSTransport,
-        wire_options: [observer: self()]
-      ] ++ Keyword.take(opts, [:renew_after_ms, :expire_after_ms, :resumption_timeout_ms])
+        wire_options: [observer: self(), retire_ack?: Keyword.get(opts, :retire_ack?, true)]
+      ] ++ Keyword.take(opts, [:resumption_timeout_ms])
 
     {:ok, session, :starting} =
       Session.start(CapabilityTree.scope(scope),
