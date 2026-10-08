@@ -467,3 +467,48 @@ participant inspectors and the complete error/page/review checkpoints remain.
 Fresh Chrome session rendering the nested-variable inspector reports zero browser
 errors after the final changes. The original session retains its earlier preview
 hot-reload errors; they were not discarded as a substitute for verification.
+
+
+## Checkpoint U4: Entry and human inspectors
+
+Adapted the committed Callpipe inbound and human inspector snapshots. Entry now
+exposes caller/callee connections, opening text with explicit TTS selection or a
+file URL, and outgoing ring timeout. Human destinations expose service, fixed or
+variable phone routing, description, private briefing and the one call-wide
+transfer attempt timeout. Both expose all five participant capability overrides
+and presence policy through the existing standard controls. Renaming and removal
+reuse the source layer's atomic reference edits; entry has no delete action.
+
+Focused red runs first failed on missing inspector modules, then caught optional
+text clearing as invalid empty strings, missing inherited-default context after
+an override, and an inherited provider named `__proto__` triggering prototype
+lookup. The implementation removes explicitly cleared optional text, retains
+call-default context alongside an override and uses own-property catalog lookup.
+Opening saved source preserves nulls, omitted dial admission and combined legacy
+model IDs. The original snapshots remain recoverable at the committed baseline.
+
+Nine stories rendered in Chrome at dark 1440x1000 and light 390x844; all eighteen
+views were inspected with no horizontal page overflow. A scrolled phone view
+verified changing the opening voice to haley while keeping the Flux model. The
+first browser fill ran before the preview mounted and found no control; waiting
+for the mounted editor resolved that inspection race. Existing admin.css design
+hook findings remain the previously recorded unrelated Console styles.
+
+Initial concurrent frontend verification ended with six 5-second test timeouts
+and the deliberately added missing-default assertion (394 passed, seven failed).
+The focused inspector run passed ten tests once those overlapping checks ended;
+the later inherited-provider regression was independently confirmed red. Root
+non-test gates launched through an exec session exited 143 before completion;
+the persistent rerun passed. Neither incomplete run is acceptance evidence.
+
+Final focused verification passes all eleven inspector tests. The full frontend
+suite then passes 402 tests in 52 files with one worker, followed by type check,
+lint and the final Storybook build. No timeout settings were relaxed. The full
+default umbrella suite passes 3,448 tests, zero failures, 120 excluded, seed
+991936. The other four root gates pass with explicit exit 0. No live tests ran;
+this UI work does not change a production speech/source-cutover state machine.
+
+Additional Chrome interactions verified the human deletion confirmation and
+removal, and a participant voice override while retaining visible call-default
+context. The current browser session reports zero errors. U4 is checked off;
+Agent inspector, full error presentation, page stories and user review remain.

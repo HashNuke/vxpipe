@@ -584,7 +584,7 @@ adaptation.
 - [x] **U3 — Call settings inspector (adapted from `flow-level-inspector`).** Keep its tab
   structure; drop channels, starters, knowledge and the chat agent. Add tabs Direction, Defaults,
   Variables, Media and recording, Wait sounds, Advanced.
-- [ ] **U4 — Entry and human inspectors (adapted from `inbound-inspector` and
+- [x] **U4 — Entry and human inspectors (adapted from `inbound-inspector` and
   `human-inspector`).** Replace the number pool with the caller or callee connection, turn the
   recording disclosure into opening audio, add the outgoing ring timeout. For humans, keep the
   phone field and add service selection, web destinations, `number_from_variable`, description
@@ -626,8 +626,15 @@ All 391 frontend tests, type check, lint and Storybook build pass. The full defa
 umbrella suite passes 3,448 tests with zero failures (seed 991936), and all other
 root gates pass. Eight inspector stories and the model/option compositions have
 dark desktop and light phone rendered checks, including nested values, permission
-changes, read-only fields, inline errors and selected-tab visibility. U4–U8 remain;
-this is not the complete editor review.
+changes, read-only fields, inline errors and selected-tab visibility.
+U4 is implemented: Entry and human inspectors expose role-specific connections,
+opening audio, outgoing ring timeout, private briefing, the call-wide transfer
+attempt timeout, and participant capability/presence overrides. Nine stories were
+inspected at desktop and phone widths, including scrolled voice controls and the
+delete confirmation. All 402 frontend tests, type check, lint and Storybook build
+pass; all five root gates pass, including 3,448 tests with zero failures and 120
+excluded (seed 991936). No live tests ran. U5–U8 remain; this is not the complete
+editor review.
 
 ## Checkpoint C — Console authoring endpoints
 

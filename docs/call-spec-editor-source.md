@@ -70,6 +70,16 @@ grants so the operator can clear a reference to a missing section; it cannot gra
 new access to a missing section. Section and top-level field renames still use the
 source functions that rewrite permissions and dial references atomically.
 
+Entry and human inspectors edit the same participant records. Changing connection
+service applies the selected role's admission rules and removes phone-only fields
+when switching to web. An outgoing callee uses a fixed number or the outgoing
+request's `to`; transfer destinations also support a declared string variable.
+Saved connections are not normalized on load. Opening text has an explicit TTS
+selection, independent of participant defaults. Clearing optional descriptions or
+private briefings removes the field; opening a saved null leaves it unchanged.
+Participant capability panels show the call default and any explicit override.
+The human inspector's transfer timeout edits the one call-wide transfer policy.
+
 ## Alternatives and implications
 
 A mutable graph compiled into JSON was rejected because it could lose fields and
