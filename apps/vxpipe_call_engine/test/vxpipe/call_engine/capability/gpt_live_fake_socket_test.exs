@@ -391,6 +391,37 @@ defmodule Vxpipe.CallEngine.Capability.GPTLiveFakeSocketTest do
     refute_receive {:test_gpt_live_started, _, _}, 50
   end
 
+  # A long call can lose its connection more than once. The reseed allowance returns once a
+  # replacement has completed a clean exchange; a replacement that drops before that still fails.
+  test "a replacement that completed an exchange can be reseeded after a later drop" do
+    {capability, wire} = start_ready_capability(output_gap_ms: 40)
+    TestGPTLiveTransport.disconnect(wire)
+
+    assert_receive {:test_gpt_live_started, replacement, _connection}, 1_000
+    assert_receive {:test_gpt_live_control, ^replacement, %{"type" => "session.start"}}, 1_000
+
+    TestGPTLiveTransport.deliver_sync(replacement, %{
+      "type" => "session.started",
+      "session" => %{"id" => "s2"}
+    })
+
+    assert :ok = SpeechToSpeech.push_audio(capability, "human1", <<1, 0>>)
+
+    assert_receive {:test_gpt_live_control, ^replacement,
+                    %{"type" => "session.input_audio.append"}},
+                   1_000
+
+    assert_replacement_speaks(capability, replacement)
+
+    TestGPTLiveTransport.disconnect(replacement)
+    assert_receive {:test_gpt_live_started, second_replacement, _connection}, 1_000
+
+    assert_receive {:test_gpt_live_control, ^second_replacement, %{"type" => "session.start"}},
+                   1_000
+
+    refute_received {:vxpipe_sts_unavailable, ^capability, _reason}
+  end
+
   test "an idle replacement waits for caller input before speaking" do
     {capability, wire} = start_ready_capability(output_gap_ms: 40)
     TestGPTLiveTransport.disconnect(wire)

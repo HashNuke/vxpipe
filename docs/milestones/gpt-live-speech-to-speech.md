@@ -279,8 +279,10 @@ trigger, delay or block the model's response.
 - If the session duration limit is documented, renew before it: start the
   replacement at the first quiet point (no open caller turn and no active agent
   burst) inside a renewal window, and switch over without an audible gap.
-- On `expired` or `connection_lost`, start at most one replacement session
-  within a bounded deadline, seeded with the room's published transcript
+- On `expired` or `connection_lost`, start one replacement session
+  within a bounded deadline (the allowance returns once the replacement completes an agent
+  output on a ready session, so a long call can recover from a later loss; a replacement that
+  drops before that fails with `:reseed_failed`), seeded with the room's published transcript
   history truncated from the oldest end to the provider's startup limits. Only
   text is seeded; no audio is replayed and nothing unheard is presented as
   heard. Failure to reseed in time fails the capability explicitly.
@@ -2475,3 +2477,14 @@ receiver-first Twilio -> Telnyx GPT-Live case passed again in review (one run, 1
   Closed 2026-10-07: `Speech.Descriptor` rejects every STS output format except raw mono
   signed little-endian `linear16` (`valid_format?/1` and the STS `valid_kind?/1` clause), so
   no other format reaches the converter.
+
+### Repeated reseeds in long calls (2026-10-08)
+
+Review against OpenAI's session guide: GPT-Live compacts its own context (a replacement voice
+engine with recent history and a summary once usage exceeds 90%), so no compaction setting is
+needed, and sessions can still end with `expired` or `connection_lost`. The adapter allowed only
+one reseed per call: `reseed_attempted?` was set and never cleared, so a second loss, however
+late, ended the call. Red test in `gpt_live_fake_socket_test.exs`: "a replacement that completed
+an exchange can be reseeded after a later drop" (no third connection started). The flag now
+clears when an agent output completes on a ready session; the existing test that a replacement
+dropping before readiness fails with `:reseed_failed` still passes.

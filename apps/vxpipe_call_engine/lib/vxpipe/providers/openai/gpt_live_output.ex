@@ -367,7 +367,10 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveOutput do
         request_ref: segment.output_ref
       )
 
-    %{state | segments: Map.delete(state.segments, seg_ref)}
+    # A completed output on a ready session proves its connection works, so a later loss may
+    # reseed again. A replacement that drops before reaching this point still fails.
+    reseed_attempted? = state.reseed_attempted? and not state.ready?
+    %{state | segments: Map.delete(state.segments, seg_ref), reseed_attempted?: reseed_attempted?}
   end
 
   defp maybe_complete(state, _seg_ref, _segment), do: state
