@@ -50,12 +50,35 @@ bin/livetests telephony:hangup [--all-calls]
 bin/livetests telnyx:hangup [--all-calls]
 bin/livetests twilio:hangup [--all-calls]
                                        end calls on one carrier
+bin/livetests release                 release this branch after its live work ends
 bin/livetests help
 ```
 
 `run` starts the tools it needs and stops only what it started; tools started by `tools:up`
 remain up. `run` and `tools:*` never provision carrier resources. `telephony:provision`
 buys numbers only with `--allow-purchase`; the explicit `*:hangup` commands end existing calls.
+
+### Branch ownership
+
+The first `run` or mutating tool command reserves live testing for the current named
+Git branch. A shared file at `${XDG_STATE_HOME:-$HOME/.local/state}/vxpipe/livetests/owner`
+contains only its branch name. Other branches stop before credentials are loaded,
+including AI-only selections, empty carrier configuration and explicit public URLs.
+The same branch can run tests and recovery hangups throughout its work session.
+Read-only `tools:status` and `telephony:status` remain available to everyone.
+
+Success, failure, interruption and tool teardown retain the reservation. Once all
+live activity has stopped and the branch's work is finished, run `bin/livetests release`
+from that branch **before switching or deleting it**. Only the recorded owner can
+release it. For an abandoned/deleted branch, check that its live activity has ended,
+then manually remove the owner file. There is no timeout or automatic expiry.
+
+This is cooperative branch coordination: two invocations on the owning branch are
+not serialized, and separate clones with the same branch name are indistinguishable.
+Ordinary setup, local development and default tests do not acquire this reservation.
+Synthetic shell tests redirect `VXPIPE_LIVETESTS_STATE_DIR` to temporary state; normal
+worktrees must share the default location. No additional Tailscale nodes or carrier
+resources are needed per worktree.
 
 ### Call cleanup
 
@@ -173,7 +196,7 @@ restricted to `a-z0-9-`, overridable with `VXP_TEST_MACHINE`.
 - `tailscale funnel --bg --https=443 http://127.0.0.1:<port>` starts the mapping; the same command
   with `off` removes it. The harness removes only mappings it created and refuses to replace an
   existing 443 configuration on its node.
-- `run` holds a per-machine lock so two runs on one machine cannot share the node and numbers.
+- Every live selection and mutating tool command requires the shared branch reservation described above.
 
 Recovery check, 2026-10-07: the dedicated test node was online with Funnel and HTTPS
 capabilities, while some public relays stalled during TLS setup. Restarting only

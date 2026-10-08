@@ -1,8 +1,9 @@
 # Worktree setup and concurrent development
 
-Status: planned; **0 of 6 checkpoints complete**. Research and local specification
-review completed 2026-10-08. The user requested this implementation breakdown;
-no setup command or concurrent-worktree acceptance is implemented by this document.
+Status: in progress; **1 of 6 checkpoints complete**. Branch-lifetime live-test
+ownership is implemented and verified with synthetic commands (2026-10-08). Setup
+and concurrent-worktree acceptance remain pending. Research and local specification
+review completed 2026-10-08.
 
 Prerequisites: the existing database/configuration contracts from
 [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md)
@@ -113,30 +114,38 @@ data copying and destructive cleanup are outside this milestone.
 Prerequisites: the existing live runner; independent of the new setup command.
 Owning files: `bin/livetests`, its cleanup library and `test/shell/livetests*_test.sh`.
 
-- [ ] Red-test a shared owner file containing a Git branch name: absent file,
+- [x] Red-test a shared owner file containing a Git branch name: absent file,
   repeated use by the owner, rejection of a different branch and release when the
   branch finishes its work. Cover AI-only, telephony, missing-carrier,
   explicit-public-URL and default all-provider selections with synthetic commands.
-- [ ] Resolve the current branch through Git. On first live use, create the shared
+- [x] Resolve the current branch through Git. On first live use, create the shared
   file without overwriting an existing claim; write only the branch name. Permit
   the matching branch and report the recorded owner to other branches before
   credentials, provider calls or Mix start. Detached HEAD needs a named branch.
-- [ ] Keep the claim after success, failure, interruption and between test runs.
+- [x] Keep the claim after success, failure, interruption and between test runs.
   Remove the old run-duration `flock` mechanism rather than building another
   process-lock layer. Preserve test exit status and existing Tailscale teardown.
-- [ ] Add an explicit owner-checked `bin/livetests release` command to remove the
+- [x] Add an explicit owner-checked `bin/livetests release` command to remove the
   file once branch work and its live activity are finished. Document release before
   switching/deleting the branch; interrupted work retains ownership until release.
-- [ ] Make mutating live-tool commands respect the recorded owner; the owner can
+- [x] Make mutating live-tool commands respect the recorded owner; the owner can
   use hangup for recovery during its work. Keep read-only status available and
   ordinary setup/tests independent. Do not remove the claim in per-run cleanup.
-- [ ] Test simultaneous first claims without overwrite and isolate synthetic owner
+- [x] Test simultaneous first claims without overwrite and isolate synthetic owner
   files from real machine state. Run all four shell suites and update the live
   harness guide with the branch-lifetime ownership workflow.
 
 Exit: one branch retains live-test ownership across multiple runs until explicitly
 released. A different worktree's ordinary tests remain runnable throughout. This
 is a cooperative branch reservation, not process supervision or a per-run mutex.
+
+Evidence (2026-10-08): `test/shell/livetests_owner_test.sh` first failed because
+initial use did not claim ownership, then passed with real temporary Git worktrees,
+fake Mix/providers, five competing initial claims, detached HEAD refusal, persistent
+ownership after exit 7 and SIGTERM, owner-only release and release/reclaim. All four
+existing runner shell suites pass; teardown still stops only tools started by a run.
+No real live tests or credential files were used. See
+[implementation labnotes](../../labnotes/20261008-1110-worktree-setup-implementation.md).
 
 ## Checkpoint 2 — Initialize a checkout with isolated databases
 

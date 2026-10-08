@@ -36,6 +36,7 @@ TELNYX_API_KEY=todo
 TELEPHONY_TEST_PUBLIC_URL=https://todo
 ENV
 
+export VXPIPE_LIVETESTS_STATE_DIR="$scratch/state"
 export VXPIPE_LIVE_RUNNER_TEST_OUTPUT="$scratch/output"
 export VXPIPE_LIVE_PROVIDERS_ENV_FILE="$scratch/live_providers.env"
 export VXPIPE_LIVE_PROVIDERS_MIX_BIN="$scratch/bin/mix"

@@ -19,6 +19,8 @@ Commands:
                             every live_providers test in the integration lanes.
                             Telephony selections start this machine's public
                             test endpoint and stop it afterwards.
+  release                   Release this branch's reservation after its work
+                            and live activity have finished.
   tools:up                  Start this machine's vxp-test-<machine> Tailscale
                             node and its Funnel; leave them running.
   tools:down                Remove the Funnel mapping and stop the node.
@@ -103,19 +105,45 @@ node_dir="$state_root/$node_name"
 ts_socket="$node_dir/tailscaled.sock"
 ts_pidfile="$node_dir/tailscaled.pid"
 funnel_target="http://127.0.0.1:$test_port"
-lock_held=false
 
 ts() {
   "$tailscale_bin" --socket="$ts_socket" "$@"
 }
 
-acquire_lock() {
-  [[ "$lock_held" == true ]] && return 0
-  mkdir -p "$node_dir"
-  chmod 700 "$state_root" "$node_dir" 2>/dev/null || true
-  exec 9> "$node_dir/lock"
-  flock -n 9 || die "another live test run or tools command is using $node_name; wait for it to finish"
-  lock_held=true
+# Branch ownership lasts across invocations. Publish a fully written candidate
+# with an atomic hard link: simultaneous first users cannot overwrite the winner
+# or observe an empty/partially written owner. No process lock or expiry is used.
+current_branch() {
+  git -C "$repo_root" symbolic-ref --quiet --short HEAD ||
+    die "live testing requires a named branch; check out a branch first"
+}
+
+claim_owner() {
+  local branch candidate owner
+  branch="$(current_branch)" || exit 1
+  mkdir -p "$state_root"
+  chmod 700 "$state_root"
+  [[ ! -d "$state_root/owner" ]] || die "owner is a directory; repair the shared owner file"
+  candidate="$(mktemp "$state_root/.owner.XXXXXXXX")"
+  printf '%s\n' "$branch" > "$candidate"
+  if ln "$candidate" "$state_root/owner" 2>/dev/null; then
+    rm -f "$candidate"
+    return 0
+  fi
+  rm -f "$candidate"
+  owner="$(cat "$state_root/owner")" || die "cannot read the shared owner file"
+  [[ "$owner" == "$branch" ]] ||
+    die "live testing belongs to branch '$owner'; finish its live work and run bin/livetests release from that branch"
+}
+
+release_owner() {
+  local branch owner
+  branch="$(current_branch)" || exit 1
+  [[ -f "$state_root/owner" ]] || die "there is no live-test owner to release"
+  owner="$(cat "$state_root/owner")"
+  [[ "$owner" == "$branch" ]] || die "live testing belongs to branch '$owner'; only that branch can release it"
+  rm -- "$state_root/owner"
+  printf 'Released live-test ownership for %s\n' "$branch"
 }
 
 tailscaled_running() {
@@ -139,13 +167,14 @@ current_funnel_target() {
 start_tailscaled() {
   tailscaled_running && return 0
   mkdir -p "$node_dir/state"
+  chmod 700 "$node_dir" "$node_dir/state"
   # The daemon outlives this script: give it no inherited descriptors (fd 3 carries
-  # progress reports, fd 9 the run lock), or callers piping our output never see EOF.
+  # progress reports), or callers piping our output never see EOF.
   nohup "$tailscaled_bin" \
     --tun=userspace-networking \
     --statedir="$node_dir/state" \
     --socket="$ts_socket" \
-    --port=0 > "$node_dir/tailscaled.log" 2>&1 3>&- 9>&- &
+    --port=0 > "$node_dir/tailscaled.log" 2>&1 3>&- &
   printf '%s\n' "$!" > "$ts_pidfile"
 
   local attempt
@@ -181,7 +210,6 @@ register_node() {
 }
 
 tools_up() {
-  acquire_lock
   start_tailscaled
   register_node
 
@@ -237,7 +265,6 @@ relay_reachable() {
 }
 
 tools_down() {
-  acquire_lock
   if tailscaled_running; then
     local dns
     dns="$(node_dns)"
@@ -603,7 +630,6 @@ run_tests() {
     exec "$mix_bin" test "${mix_arguments[@]}"
   fi
 
-  acquire_lock
   export_carrier_resources "$(twilio_requirement "$@")"
   if tools_running; then
     public_url="https://$(node_dns)"
@@ -623,7 +649,14 @@ run_tests() {
 command="${1:-}"
 [[ $# -gt 0 ]] && shift
 
+# Check ownership before loading credentials or performing any live operation.
 case "$command" in
+  run|tools:up|tools:down|telephony:provision|telephony:hangup|telnyx:hangup|twilio:hangup)
+    claim_owner ;;
+esac
+
+case "$command" in
+  release) release_owner ;;
   run) run_tests "$@" ;;
   tools:up)
     load_credentials

@@ -56,7 +56,10 @@ Copy the [template](../config/live_providers.env.example) to
 `~/.config/vxpipe/live_providers.env`, then replace the `todo` placeholders
 only for the providers being run. URL placeholders include `https://`; the
 runner treats unchanged placeholders as missing settings.
-`bin/livetests run` loads that file for its child Mix process. It clears
+`bin/livetests run` first reserves live testing for the current named Git branch,
+then loads that file for its child Mix process. Ownership persists between runs,
+including failures and interruption. Finish live activity and run `bin/livetests release`
+before switching/deleting the branch. See [branch ownership](live-telephony-harness.md#branch-ownership). It clears
 ambient provider credentials first, so a dotenv hook on entering the directory
 does not silently provide credentials. No arguments run every current live
 provider test from the four owning directories (AgentRuntime, CallEngine,

@@ -233,16 +233,9 @@ livetests tools:status > "$scratch/status"
 rg -q -F 'vxp-test-wheel-jack-local' "$scratch/status" || fail "tools:status missing node"
 rg -q -F 'http://127.0.0.1:4600' "$scratch/status" || fail "tools:status missing funnel target"
 
-# Two runs cannot share the node.
-lock_file="$(find "$scratch/state" -name lock | head -n 1)"
-[[ -n "$lock_file" ]] || fail "no lock file"
-flock "$lock_file" sleep 2 &
-sleep 0.3
-if livetests run --only live_telnyx apps/vxpipe_gateway/test/integration 2> "$scratch/stderr"; then
-  fail "concurrent run was not refused"
-fi
-rg -q -F 'another live test run' "$scratch/stderr" || fail "lock refusal not explained"
-wait
+# Per-run teardown leaves the branch reservation intact.
+[[ "$(cat "$scratch/state/owner")" == "$(git -C "$repo_root" symbolic-ref --short HEAD)" ]] || fail "branch ownership lost"
+[[ -z "$(find "$scratch/state" -name lock)" ]] || fail "obsolete process lock remains"
 
 livetests tools:down
 tailscaled_running && fail "tools:down left tailscaled running"
