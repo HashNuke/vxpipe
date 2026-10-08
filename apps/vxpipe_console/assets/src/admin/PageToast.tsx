@@ -1,14 +1,17 @@
 import { CircleCheck, CircleX, X } from "lucide-react";
+import { Button } from "./components/ui/button";
 import { useEffect } from "react";
 
 export function PageToast({
   message,
   kind = "success",
   onDismiss,
+  action,
 }: {
   message: string;
   kind?: "success" | "error";
   onDismiss: () => void;
+  action?: { label: string; onClick: () => void; disabled?: boolean };
 }) {
   useEffect(() => {
     if (kind === "error") return;
@@ -27,7 +30,7 @@ export function PageToast({
       ) : (
         <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-[var(--admin-green)]" />
       )}
-      <span>{message}</span>
+      <div className="min-w-0 flex-1 space-y-2"><p className="wrap-anywhere">{message}</p>{action && <Button variant="outline" size="sm" onClick={action.onClick} disabled={action.disabled}>{action.label}</Button>}</div>
       <button
         aria-label="Dismiss notification"
         className="-mr-1 -mt-1 inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-[var(--admin-muted)] hover:bg-[var(--admin-soft)] hover:text-[var(--admin-ink)] focus-visible:outline-2"

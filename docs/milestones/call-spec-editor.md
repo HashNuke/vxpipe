@@ -598,11 +598,11 @@ adaptation.
   mode. Replace the prompt editor with a plain textarea, and variable access grants with the
   section permission matrix. Copy and adapt `AgentInspectorDefault`, `AgentVariables` and
   `AgentTransfers`.
-- [ ] **U6 — Errors and source view.** Badges on nodes, Call settings and tabs; header issue
+- [x] **U6 — Errors and source view.** Badges on nodes, Call settings and tabs; header issue
   count; issues list; inline messages for the visible tab only; toasts with **Show**,
   **Retry**, **Open services** and **Reload** actions, all per
   [Error presentation](#error-presentation); read-only JSON with copy and download.
-- [ ] **U7 — Stories.** Starting from `flow_editor.stories.jsx`, page stories for default,
+- [x] **U7 — Stories.** Starting from `flow_editor.stories.jsx`, page stories for default,
   loading, load failure, new spec, client validation errors, save blocked by client errors, one
   story per row of the save and publish outcomes table, mappable and unmappable backend errors,
   published revision, outgoing call, historical schema (read-only), narrow viewport and long
@@ -642,7 +642,28 @@ transfer search/add and tool editing/renaming. All 418 frontend tests, type chec
 lint and Storybook build pass. All five root gates pass, including 3,448 tests
 with zero failures and 120 excluded (seed 991936). The frontend teardown awaits
 queued focus-scope cleanup before leaving each jsdom realm. No live tests ran.
-U6–U8 remain; this is not the complete editor review.
+U6/U7 are implemented: the full editor now composes the canvas, inspectors,
+request lifecycle, source view, badges and issue navigation. Back, Open services
+and Reload confirm before discarding edits; browser unload is guarded. Failed
+reload and other action failures retain drafts. Recovery cannot race a pending
+write. Phone Add and Show open the inspector and Show focuses the requested field.
+
+There are 34 full-page stories adapted from Callpipe, covering every outcome row,
+loading/spec/catalog failures, new/published/outgoing/historical/long/narrow states,
+and Add, Rename, Draw transfer, Show and issues-list interactions. Production
+endpoints and router integration remain behind U8's review gate.
+
+All 491 frontend tests, TypeScript checking and lint pass. After execution
+permissions were restored, the full-page Storybook production build and all five
+root gates passed: 3,448 tests, zero failures, 120 excluded (seed 991936).
+All 34 page stories were inspected with agent-browser at 1440px dark and 390px
+light widths, with passing story interactions and no document overflow. A
+deliberately paused desktop capture was rerun, and source drawers were captured
+after opening. Browser checks also verify Back cancellation/confirmation,
+confirmed conflict reload, Open services with unsaved edits, catalog Retry,
+clipboard success and a downloaded JSON retaining the added agent and transfer.
+Heavy verification jobs were serialized after checking system resources.
+U8 user review remains pending before C/W production integration. No live tests ran.
 
 ## Checkpoint C — Console authoring endpoints
 

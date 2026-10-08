@@ -87,7 +87,7 @@ export const NodeCards: Story = {
   },
 };
 
-function CanvasShellStory() {
+function CanvasShellStory({ issues }: { issues?: Record<string, number> } = {}) {
   const [document, setDocument] = useState(editorFixture);
   const [selected, setSelected] = useState<string | null>(null);
   const [edge, setEdge] = useState<string | null>(null);
@@ -95,7 +95,7 @@ function CanvasShellStory() {
   const [name, setName] = useState(document.source.name ?? "");
   const [dirty, setDirty] = useState(false);
   const title = edge ? "Selected transfer" : selected === "$entry" ? "Entry" : selected ?? "Call settings";
-  return <EditorTheme><FlowEditorLayout {...header} document={document} selectedNodeId={selected}
+  return <EditorTheme><FlowEditorLayout {...header} document={document} selectedNodeId={selected} issues={issues}
     onSelectNode={(id) => { setSelected(id); setEdge(null); }} onSelectEdge={(id) => { setEdge(id); setSelected(null); }}
     onConnect={(source, target) => { setDocument((current) => setTransfer(current, source, target, true)); setDirty(true); }}
     onAddNode={(kind) => {
@@ -111,3 +111,10 @@ function CanvasShellStory() {
   </EditorTheme>;
 }
 export const CanvasShell: Story = { render: () => <CanvasShellStory /> };
+
+export const CanvasIssues: Story = {
+  render: () => <CanvasShellStory issues={{ $settings: 1, intake: 2 }} />,
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole("button", { name: "Call settings" })).toHaveAttribute("aria-description", "1 issue");
+  },
+};

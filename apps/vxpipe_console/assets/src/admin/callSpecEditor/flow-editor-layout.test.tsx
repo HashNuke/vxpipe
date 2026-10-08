@@ -25,3 +25,12 @@ test("historical source shows its notice and disables authoring", () => {
   expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Add agent" })).toBeDisabled();
 });
+
+test("Call settings carries its issue count and an external Show request opens the phone inspector", () => {
+  vi.stubGlobal("innerWidth", 390);
+  render(<FlowEditorLayout document={editorFixture} backHref="/specs" onEditFlowName={vi.fn()} onSaveDraft={vi.fn()} onPublish={vi.fn()} onShowIssues={vi.fn()}
+    onAddNode={vi.fn()} onConnect={vi.fn()} onSelectNode={vi.fn()} onSelectEdge={vi.fn()} selectedNodeId={null} issues={{ $settings: 2 }} inspectorRequest={1}
+    inspector={<p>Inspector content</p>} inspectorTitle="Call settings" />);
+  expect(screen.getByRole("dialog", { name: "Call settings" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Call settings", hidden: true })).toHaveAttribute("aria-description", "2 issues");
+});

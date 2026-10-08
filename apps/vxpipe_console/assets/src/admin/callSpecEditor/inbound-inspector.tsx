@@ -21,7 +21,7 @@ export function InboundInspector({ catalog, lookups, tab, onTabChange, ...props 
   const Icon = source.outgoing_call ? PhoneOutgoing : PhoneIncoming;
   return <aside className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background">
     <div className="shrink-0 p-4 pb-2"><div className="flex items-center gap-2 text-sm font-semibold"><Icon className="h-4 w-4 text-muted-foreground" /><span>Entry · {source.outgoing_call ? "Callee" : "Caller"}</span></div></div>
-    <HumanInspectorTabs tab={tab} onTabChange={onTabChange} connection={<div className="space-y-5 text-sm">
+    <HumanInspectorTabs document={document} issues={issues} focusRequest={props.focusRequest} nodeId={"$entry"} tab={tab} onTabChange={onTabChange} connection={<div className="space-y-5 text-sm">
       <RenameField key={key} name={key} label="Participant key" path={["participants", key]} disabled={readOnly} onRename={(next) => onChange(renameParticipant(document, key, next))} />
       <TextField label="Description" path={["participants", key, "description"]} issues={issues} disabled={readOnly} value={target.description ?? ""} multiline
         onChange={(description) => onChange(editSource(document, (source) => { const target = participant(source, key); if (description === "") delete target.description; else target.description = description; }))} />

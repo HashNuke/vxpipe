@@ -26,7 +26,7 @@ export function HumanInspector({ catalog, lookups, participantKey, onRenamed, on
       <div className="flex items-center gap-2"><Handshake className="h-3.5 w-3.5" /><span>Human destination</span></div>
       {participantKey !== entry && <Button variant="ghost" size="icon-sm" aria-label="Delete participant" disabled={document.readOnly} onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4" /></Button>}
     </div></div>
-    <HumanInspectorTabs tab={tab} onTabChange={onTabChange} connection={<div className="space-y-5">
+    <HumanInspectorTabs document={document} issues={issues} focusRequest={props.focusRequest} nodeId={participantKey === entry ? "$entry" : participantKey} tab={tab} onTabChange={onTabChange} connection={<div className="space-y-5">
       <RenameField key={participantKey} name={participantKey} label="Participant key" path={path} disabled={document.readOnly} onRename={(key) => { onChange(renameParticipant(document, participantKey, key)); onRenamed?.(key); }} />
       <TextField label="Description" path={[...path, "description"]} issues={issues} disabled={document.readOnly} multiline value={target.description ?? ""}
         onChange={(description) => onChange(editSource(document, (source) => { const target = participant(source, participantKey); if (description === "") delete target.description; else target.description = description; }))} />

@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { useIssueRequest } from "./issue-context";
 import { Plus, Trash2, ChevronDown } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
@@ -13,6 +15,10 @@ type Props = { value: VariableSchema; onChange: (value: VariableSchema) => void;
 
 /** Schema controls retain omitted keywords and every unedited nested schema. */
 export function VariableSchemaFields({ value, onChange, label, path, disabled, issues, root, onRenameProperty, onRemoveProperty }: Props) {
+  const request = useIssueRequest();
+  const [expanded, setExpanded] = useState(constraints.some((key) => value[key] !== undefined));
+  const [dismissedRequest, setDismissedRequest] = useState<number>();
+  const reveal = request && request.id !== dismissedRequest && request.path.length === path.length + 1 && path.every((part, index) => part === request.path[index]) && constraints.some((key) => key === request.path.at(-1));
   const base = Array.isArray(value.type) ? value.type.find((type) => type !== "null") : value.type;
   const nullable = Array.isArray(value.type) && value.type.includes("null");
   const applicable = base === "string" ? ["minLength", "maxLength"] : base === "array" ? ["minItems", "maxItems"] : base === "number" || base === "integer" ? ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"] : base ? [] : constraints;
@@ -61,7 +67,7 @@ export function VariableSchemaFields({ value, onChange, label, path, disabled, i
     </section>}
     <ChoiceField {...common} label={`${label} allowed values`} path={[...path, "enum"]} value={value.enum === undefined ? "" : "enum"} choices={[{ value: "", label: "Any value" }, { value: "enum", label: "Enumeration" }]} onChange={(mode) => mode ? patch({ enum: [""] }) : remove("enum")} />
     {value.enum !== undefined && <ArrayFields {...common} label={`${label} enum`} path={[...path, "enum"]} value={value.enum} onChange={(values) => patch({ enum: values })} />}
-    {visibleConstraints.length > 0 && <Collapsible defaultOpen={constraints.some((key) => value[key] !== undefined)} className="space-y-3">
+    {visibleConstraints.length > 0 && <Collapsible open={expanded || !!reveal} onOpenChange={(open) => { setExpanded(open); if (!open) setDismissedRequest(request?.id); }} className="space-y-3">
       <CollapsibleTrigger asChild><Button variant="ghost" size="sm" aria-label={`Constraints for ${label}`}>Constraints<ChevronDown /></Button></CollapsibleTrigger>
       <CollapsibleContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">{visibleConstraints.map((key) => <NumberField {...common} key={key} label={`${label} ${key}`} path={[...path, key]} value={value[key]} onChange={(next) => next === undefined ? remove(key) : patch({ [key]: next })} />)}</CollapsibleContent>
     </Collapsible>}

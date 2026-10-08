@@ -561,3 +561,241 @@ cleanup to finish in its original realm. This changes test teardown only; no
 dependency behavior is mocked or suppressed. The full rerun passes all 418 tests
 in 54 files, type check and lint with exit 0. No live tests ran. U5 is checked off;
 full error presentation, page stories and user review remain.
+
+
+## Checkpoint U6: Error and source surfaces
+
+The previous goal turn completed and committed U5 as b54c6211. U6 begins with
+focused red tests for issue counts and persistence, field focus and placement,
+recovery actions, JSON export, and header/phone-inspector behavior. An initial
+test-file creation used a root-relative path from the assets directory and wrote
+nothing; the corrected command created the test and confirmed the missing module
+as the expected red failure.
+
+Client issues remain distinct from the last field-related backend failure. Pure
+helpers count canonical node/tab locations, retain a server error through unrelated
+edits, and remove it when its source value changes. Private-material failures use
+client text rather than echoing the backend reason. Permission, network, conflict
+and malformed-request failures are excluded from field-error state.
+
+Visible inspector fields register their source paths with an issue scope. Exact
+controls own inline errors; collection paths use the nearest represented control,
+and unrepresented errors have a focusable summary in the active tab. A newly
+opened tool dialog owns a duplicate path ahead of the underlying tool card. Red
+tests caught both missing dialog/constraint revelation and the duplicate-path
+focus conflict. Show now reveals tool steps and collapsed constraints before
+focusing. A request identifier prevents edits from repeatedly stealing focus.
+
+All inspector tabs show counts without adding error messages to hidden panels.
+The existing Console toast gains an optional standard Button action; the editor
+provides Show, Retry, Open services and Reload labels. JSON uses a standard Sheet
+and read-only textarea with exact source copy/download. Publish requires an
+unchanged saved revision without client errors; Save remains actionable for
+client-error feedback. An external focus request can open the phone inspector.
+
+These components still need complete editor/controller integration and its action
+lifecycle tests in the next U6/U7 work. U6 remains unchecked pending that evidence.
+Full frontend and rendered checks are in progress.
+
+
+Additional focused red cases caught duplicate issues with differently ordered JSON
+keys, focus restoration after closing drawers, and replaying a completed Show
+request when its field disappeared. Deduplication now compares issue values,
+drawers return focus to their opener unless Show intentionally moved it, and
+focus moves only toward a more precise target for the same request. Field-error
+assignment is computed once per scope render rather than once per field.
+
+A pure action-feedback lifecycle retains backend field failures across retry and
+publish outcomes, clears them after successful saves, preserves authoring/session
+gates, and avoids attaching late errors to fields changed since submission. Its
+five focused tests pass.
+
+The initial complete frontend run passes 442 tests, type check and lint; subsequent
+focused cases pass, and a final full run is queued after the existing root run.
+The Storybook build passes. Nine error/source stories were inspected in dark
+desktop and light phone views, plus the canvas-count story at both sizes. Chrome
+interactions verify drawer-to-tab focus, client-blocked Save feedback, unmappable
+errors opening the list, backend errors clearing only after the affected edit,
+and successful copy feedback. The downloaded JSON exactly matches the displayed
+source. Clipboard readback was denied by browser permission; the unit test checks
+the exact payload passed to clipboard.writeText. The current browser has no errors.
+One interaction script clicked during the Sheet entrance animation; waiting for
+that animation resolved the observation. A later close-focus run was interrupted
+by Storybook hot reload during a source edit and passed when rerun after editing.
+
+Execution permissions changed during final verification: the Git directory became
+read-only and the existing tmux socket became inaccessible. Source edits and log
+reads remain available. No attempt was made to bypass those restrictions. Existing
+root/frontend jobs were not restarted; their output and exit files remain the
+authoritative evidence. The checkpoint cannot be committed under these settings.
+
+
+Final verification completes with explicit exit 0 for the full frontend lane
+(450 tests in 58 files, type check and lint), Storybook build, the root test lane
+(3,448 tests, zero failures, 120 excluded, seed 991936) and the other four root
+gates. No live tests ran. No production speech/source-cutover state machine
+changed. Final browser interaction replay passes both widths with zero browser
+errors; the final close-focus replay completed desktop checks before the execution
+environment changed, while the earlier complete replay verified both widths.
+All twenty component views and four interaction screenshots were inspected.
+Milestone U6 remains unchecked until full editor/controller wiring and other
+action-failure feedback are implemented and verified. Changes are unstaged and
+uncommitted because the current environment exposes the Git directory read-only.
+
+### U6 continuation — draft lifecycle and inspector dispatch
+
+Added reducer tests before implementation; the red run failed on the absent
+editor-state module, then nine tests passed. The reducer retains a submitted
+snapshot separately from the current draft, advances revision metadata without
+discarding in-flight edits, blocks invalid/read-only/concurrent actions, and
+ignores stale results after explicit reload. Malformed success metadata must not
+claim a save. Calls allocates revisions when saving; inspection confirmed no
+expected-revision argument belongs in the frontend contract.
+
+Added transport-hook tests before implementation; the absent use-editor import
+was red, then seven cases passed. An injected transport receives the exact source
+snapshot and AbortSignal. Duplicate clicks issue one request; synchronous throws
+and rejected promises retain edits and produce retry feedback; retry uses the
+current draft. Reload/unmount abort pending work; late results cannot update the
+replacement document or trigger session handling after unmount. Session expiry
+notifies the host once and retains the draft. The full frontend suite then passed
+466 tests, type check and lint. Initial lint found unused mock parameters; typed
+mock signatures fixed them without suppression.
+
+Copied/adapted the remaining inspector dispatcher and selected-edge presentation.
+Five focused tests were red on the missing dispatcher, then passed for selection
+routing, requested tabs, transfer deletion, the locked Entry edge, read-only
+transfers and a safely rendered stale selection. The generic inspector is a stale
+selection summary because all supported participant kinds have dedicated editors.
+Type check and lint passed after this addition.
+
+Fresh required root verification cannot start under current restrictions:
+Mix.PubSub fails opening its local TCP socket with eperm. The prior 3,448-test
+green run covers the earlier component checkpoint, not these new files.
+An agent-browser snapshot of the existing session fails because its socket
+directory is read-only; new inspector composition has not been rendered-verified.
+No bypass was attempted. Git metadata remains read-only, so no commit is possible.
+U6/U7 remain incomplete; full-page composition, other action-failure feedback,
+recovery/navigation guards, page stories and prototype review still remain.
+
+Final frontend verification for this increment passes 471 tests in 61 files,
+TypeScript checking and ESLint (exit 0). git diff --check passes. No live tests
+ran. The existing GPT Luna notification agent sent the checkpoint progress update
+through pushnotify successfully; no implementation or Git work was delegated.
+
+### U6/U7 continuation — full editor prototype
+
+Started with eight full-editor boundary tests, red on the missing flow-editor
+module. The composed editor uses the existing source reducer, injected transport,
+canvas, inspectors, issue scopes, drawers and toast. The tests cover exact source
+submission, revision/published badges, client-blocked requests, Show focus, backend
+field-error lifetime, Retry with current edits, Back/Reload confirmation, and
+add/connect/rename/delete transfer synchronization in exported JSON.
+
+Additional tests exposed two integration issues before their fixes: adding a
+participant on a phone selected it without opening the inspector; and an old
+Reload action remained enabled during a new save. Dedicated inspector requests
+now open the phone sheet after Add or Show. Recovery actions disable during writes
+and reloads. Show remains available. Sixteen full-editor tests now pass, including
+phone field focus, unmapped errors, Open services confirmation, failed reload
+retention, browser unload cleanup, and tool/rename failure feedback preserving
+local drafts. Seven existing error-surface tests pass alongside them.
+
+Added three page-state tests before implementation (red on the missing module)
+for loading and spec/catalog load failures with page Retry. Added a red hook test
+for invalid-request defect logging, then logged only a fixed message plus action
+name; source and backend reason are never logged. The hook's eight tests pass.
+
+Adapted Callpipe's full-page story pattern into 34 stories covering default, new,
+loading, spec/catalog failures, client issues/blocked save, every save/publish
+outcome row, outgoing/published/historical/long/narrow states, and Add, Rename,
+Draw transfer, Show and issues-list interactions. These stories inject transport
+outcomes through the actual editor; they do not wire production endpoints.
+
+Storybook build is blocked before bundling: the existing main configuration cannot
+spawn bin/worktree-port (EPERM). The first command used the wrong npm script name;
+the corrected build-storybook invocation reached that environment failure.
+agent-browser still reports its socket directory read-only, so the 34 new stories
+and new full-page layout/interactions have not been rendered-verified. Prior
+component screenshots do not prove this increment. No alternate process or Git
+write mechanism was used. Git remains read-only and no commit was created.
+The existing admin.css design-hook findings remain the previously triaged global
+styles; this increment does not change that stylesheet.
+
+U6/U7 remain unchecked pending the missing build/render evidence. U8 requires the
+rendered pass before user review. C/W production integration remains behind that
+review gate; no live tests were run.
+
+Final frontend lane passed 491 tests in 63 files, TypeScript and ESLint (exit 0).
+The repeated root gate attempt failed at Mix.PubSub's local TCP socket (eperm).
+git diff --check passes. The milestone and index distinguish the earlier verified
+component checkpoint from the currently unverified full-page prototype.
+
+### Verification blocker audit
+
+The preceding goal turn made implementation progress: full-page composition,
+34 stories, the phone Add fix, recovery concurrency fix and 491 passing frontend
+tests. This audit rechecked the actual worktree, milestone gate and last commit
+(b54c6211, Agent inspector). Storybook still fails before bundling when spawning
+bin/worktree-port (EPERM), and agent-browser still reports its socket directory
+read-only. The filesystem policy still exposes Git metadata read-only.
+
+These environment restrictions have recurred over more than three consecutive
+goal turns. Source implementation could proceed in earlier turns, but the next
+required work is now the missing build, umbrella verification, rendered prototype
+inspection and commit. U8 explicitly requires browser inspection followed by user
+review before C/W production integration. No acceptance evidence permits crossing
+that gate, and additional status-only retries would not advance the milestone.
+The goal is blocked pending an execution environment that permits the required
+processes, local sockets and Git writes. The implementation remains preserved and
+uncommitted; no live tests ran.
+
+Resume by running the standard root gates and Storybook build, inspecting the new
+page stories at desktop/phone widths with agent-browser, fixing any findings, and
+committing the coherent U6/U7 checkpoint. Then obtain and record U8 review before
+implementing C, W and Z. The milestone remains incomplete.
+
+### U6/U7 verification resumed
+
+Execution permissions now permit local sockets, subprocesses and Git writes. The
+Storybook production build passed for the full-page prototype. The root gate
+chain is running with seed 991936; formatting, compilation and Credo passed,
+and the Call Engine suite passed 2,066 tests with zero failures (74 excluded).
+The remaining umbrella suites are still in progress.
+
+The user requested resource checks before heavy jobs and no parallel heavy work.
+After observing CPU pressure during the desktop browser sweep, paused its owned
+runner and replaced the polling Vite server with a lightweight static server for
+the completed Storybook build. The root suite now runs alone; the phone sweep
+will resume after it finishes and resources are checked. Desktop stories checked
+so far report finished interactions and no document overflow. Portal screenshots
+must be captured after their entrance animation settles; a finished Storybook
+play function alone does not establish the final rendered sheet position.
+
+The resumed root command completed successfully: all five required gates pass,
+including 3,448 tests, zero failures and 120 excluded (seed 991936). The Gateway
+suite passed 593 tests, Artifacts 20, Persistence 214 and Console 241. After the
+root process exited, available memory recovered to 4.7 GiB and the paused browser
+runner resumed. No live tests ran; no speech/source-cutover state machine changed.
+
+All 34 page stories now have dark desktop (1440×1000) and light phone (390×844)
+rendered inspection. Story play functions passed and no document overflow was
+reported. The desktop IssuesList navigation timed out while its runner was
+intentionally stopped; a separate capture passed after resumption. Reopened the
+source drawer for final desktop/phone inspection instead of relying on captures
+taken at the start of its entrance animation. The browser reported no page errors.
+
+Additional browser interactions passed: Back/Keep editing and confirmed departure,
+revision-conflict Reload with unsaved changes and replacement by revision 4,
+Open services with a discard confirmation, catalog-load Retry, phone Back
+cancellation, successful clipboard feedback, and a real downloaded JSON containing
+the added agent and drawn transfer. The temporary recovery harness needed corrected
+selector quoting, scoping around Storybook's hidden headings, and an explicit wait
+for a closing modal to unmount before accessing background links. These were
+verification-script corrections; no implementation changes were needed.
+
+U6/U7 are now checked off. The frontend lane's 491 tests, TypeScript and lint
+results remain applicable because no source changed during the resumed build and
+browser pass. U8 remains unchecked: the complete prototype is ready for the user's
+required review. The static Storybook server remains available on port 6021 for
+that review. C/W production integration has not started.

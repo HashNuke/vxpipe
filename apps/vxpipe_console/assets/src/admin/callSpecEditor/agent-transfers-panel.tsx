@@ -5,6 +5,7 @@ import { Input } from "../components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { ChoiceField, NumberField } from "./editor-fields";
 import { editSource } from "./editSource";
+import { IssueAnchor } from "./issue-anchor";
 import { agent } from "./edits";
 import type { InspectorProps } from "./inspectorTypes";
 import { isTransferDestination, setTransfer } from "./participants";
@@ -37,12 +38,11 @@ export function AgentTransfersPanel({ document, onChange, issues, participantKey
       </div>
       {transfers.map((key, index) => {
         const destination = Object.hasOwn(document.source.participants, key) ? document.source.participants[key] : undefined;
-        const errors = issues?.filter((issue) => issue.path.join("\0") === [...path, "transfers", String(index)].join("\0")) ?? [];
-        return <div key={`${key}:${index}`} className="rounded-md border border-border/70 bg-card p-3" data-field-path={JSON.stringify([...path, "transfers", String(index)])}>
+        return <IssueAnchor key={`${key}:${index}`} className="rounded-md border border-border/70 bg-card p-3" path={[...path, "transfers", String(index)]} issues={issues}>
           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="wrap-anywhere text-sm font-semibold">{key}</p><p className="mt-1 wrap-anywhere text-xs text-muted-foreground">{destination?.description || (destination ? destination.type === "agent" ? "Agent" : "Human destination" : "Missing participant")}</p></div>
             <Button variant="ghost" size="icon-sm" disabled={document.readOnly} aria-label={`Remove transfer to ${key}`} onClick={() => onChange(setTransfer(document, participantKey, key, false))}><Trash2 className="h-4 w-4" /></Button>
-          </div>{errors.map((issue, index) => <p key={index} className="mt-2 text-xs text-destructive">{issue.reason}</p>)}
-        </div>;
+          </div>
+        </IssueAnchor>;
       })}
       {!transfers.length && <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">Add a destination to let this agent transfer the call.</p>}
     </section>

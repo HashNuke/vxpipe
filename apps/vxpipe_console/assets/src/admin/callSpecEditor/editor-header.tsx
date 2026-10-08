@@ -1,5 +1,5 @@
 import type { FormEventHandler } from "react"
-import { ArrowLeft, CircleAlert, Pencil, Rocket, Save } from "lucide-react"
+import { ArrowLeft, CircleAlert, Code, Pencil, Rocket, Save } from "lucide-react"
 
 import { Input } from "@/admin/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/admin/components/ui/dialog"
@@ -9,6 +9,7 @@ import { Badge } from "../components/ui/badge"
 
 export type EditorHeaderProps = {
   backHref: string;
+  onBack?: () => void;
   flowName?: string | null;
   revision?: number;
   publishedRevision?: number;
@@ -23,10 +24,14 @@ export type EditorHeaderProps = {
   onSaveDraft: () => void;
   onPublish: () => void;
   onShowIssues: () => void;
+  onShowSource?: () => void;
+  saveDisabled?: boolean;
+  authoringDisabled?: boolean;
 };
 
 export function FlowEditorHeader({
   backHref,
+  onBack,
   flowName,
   saving,
   publishing = false,
@@ -41,6 +46,9 @@ export function FlowEditorHeader({
   onSaveDraft,
   onPublish,
   onShowIssues,
+  onShowSource,
+  saveDisabled = false,
+  authoringDisabled = false,
 }: EditorHeaderProps) {
   const busy = saving || loading || publishing;
   const disabled = busy || readOnly;
@@ -56,7 +64,7 @@ export function FlowEditorHeader({
     >
       <div className="flex min-w-0 items-center gap-2">
         <Button asChild variant="secondary" size="icon" className="h-8 w-8 shrink-0" aria-label="Back to call specs">
-          <a href={backHref} aria-label="Back to call specs">
+          <a href={backHref} aria-label="Back to call specs" onClick={onBack ? (event) => { event.preventDefault(); onBack(); } : undefined}>
             <ArrowLeft className="h-4 w-4" />
           </a>
         </Button>
@@ -81,14 +89,15 @@ export function FlowEditorHeader({
         {readOnly && <Badge variant="outline">Read only</Badge>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        {onShowSource && <Button variant="outline" size="sm" onClick={onShowSource} disabled={loading}><Code className="h-4 w-4" />View JSON</Button>}
         {issueCount > 0 && <Button variant="outline" size="sm" onClick={onShowIssues} className="text-destructive">
           <CircleAlert className="h-4 w-4" />{issueCount} {issueCount === 1 ? "issue" : "issues"}
         </Button>}
-        <Button variant="secondary" size="sm" className="h-8 px-3" onClick={onSaveDraft} disabled={disabled}>
+        <Button variant="secondary" size="sm" className="h-8 px-3" onClick={onSaveDraft} disabled={disabled || saveDisabled || authoringDisabled}>
           <Save className="h-4 w-4" />
           {saving ? "Saving…" : "Save draft"}
         </Button>
-        <Button size="sm" className="h-8 px-3" onClick={onPublish} disabled={disabled}>
+        <Button size="sm" className="h-8 px-3" onClick={onPublish} disabled={disabled || authoringDisabled || revision === undefined || dirty || issueCount > 0}>
           <Rocket className="h-4 w-4" />
           {publishing ? "Publishing…" : "Publish"}
         </Button>

@@ -51,3 +51,25 @@ test("toolbar offers only supported participant types and arranging", () => {
   expect(screen.getByRole("button", { name: "Add human" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Arrange nodes" })).toBeEnabled();
 });
+
+test("source inspection remains available for read-only specs", () => {
+  const source = vi.fn();
+  render(<FlowEditorHeader backHref="/specs" readOnly onShowSource={source} {...callbacks()} />);
+  fireEvent.click(screen.getByRole("button", { name: "View JSON" }));
+  expect(source).toHaveBeenCalledOnce();
+});
+test.each([{ revision: undefined }, { revision: 3, dirty: true }, { revision: 3, issueCount: 1 }])("publish requires a saved unchanged revision with no client issues: %j", (state) => {
+  render(<FlowEditorHeader backHref="/specs" {...state} {...callbacks()} />);
+  expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Save draft" })).toBeEnabled();
+});
+test("an unchanged saved revision can be published; missing and forbidden outcomes have separate gates", () => {
+  const { rerender } = render(<FlowEditorHeader backHref="/specs" revision={3} {...callbacks()} />);
+  expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
+  rerender(<FlowEditorHeader backHref="/specs" revision={3} saveDisabled {...callbacks()} />);
+  expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
+  rerender(<FlowEditorHeader backHref="/specs" revision={3} authoringDisabled {...callbacks()} />);
+  expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+});
