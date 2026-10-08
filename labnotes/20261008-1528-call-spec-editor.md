@@ -93,3 +93,33 @@ failures, 120 excluded (seed 468087), including existing room and adapter tests.
 No live tests ran. L implementation was applied after the root run had completed
 its Agent Runtime phase; it is excluded from this checkpoint and receives a
 separate full suite.
+
+## Checkpoint L implementation
+
+- Before implementation, nine catalog tests failed because ModelCatalog was absent.
+  The focused catalog/selection group now passes 17 tests (seed 779757).
+- Added a local snapshot listing for six runtime providers, text/tool filtering,
+  one pinned recommendation each, and shared ModelOverrides declarations. Added
+  the directly used llm_db dependency to Agent Runtime; the locked version is
+  already present, so no lockfile change is required.
+- Prepared L in temporary files during P verification, then applied it after the
+  running root process had already finished Agent Runtime. P's evidence and commit
+  exclude these L changes; L requires its own full verification.
+- OpenRouter measurement after LLMDB.load: 260 models, first listing 100,335 us,
+  ten warm listings 64,855–89,008 us, serialized result 36,125 bytes and temporary
+  process-heap growth 141,848–229,520 bytes. No extra cache justified for operator
+  listings; decision and limitations are recorded in docs/llm-model-catalog.md.
+- Initial benchmark in child dev mode hit the existing umbrella runtime-config
+  dependency on Persistence.CredentialKeyring. Re-ran in MIX_ENV=test, which isolates
+  local model listing without provider credentials or network requests.
+
+Agent Runtime suite passes 108 tests, zero failures, eight excluded (seed 256901).
+Root formatting, warnings-as-errors compile, strict Credo and unused-dependency
+checks pass. Full root suite is the remaining L gate.
+
+### Checkpoint L exit evidence
+
+All five root gates pass. The default umbrella suite passes 3,352 tests, zero
+failures, 120 excluded (seed 226406). No live tests ran. K facade and endpoint work
+began after this process had loaded the relevant preceding app tests; K changes
+are excluded from the L commit and need their own complete verification.

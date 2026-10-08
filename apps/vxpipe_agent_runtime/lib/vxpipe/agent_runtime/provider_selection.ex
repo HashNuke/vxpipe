@@ -129,22 +129,8 @@ defmodule Vxpipe.AgentRuntime.ProviderSelection do
   defp direct_provider("openrouter"), do: {:openrouter, "https://openrouter.ai/api/v1"}
   defp direct_provider("fireworks"), do: {:fireworks_ai, "https://api.fireworks.ai/inference/v1"}
 
-  # This provider alias postdates the installed LLMDB snapshot. Keep the current
-  # wire identity and documented limits instead of substituting a retired alias.
-  defp direct_model(:deepseek, "deepseek-flash") do
-    ReqLLM.model(%{
-      provider: :deepseek,
-      id: "deepseek-flash",
-      name: "DeepSeek V4.1 Flash",
-      limits: %{context: 1_048_576, output: 393_216},
-      capabilities: %{
-        tools: %{enabled: true, streaming: true},
-        streaming: %{text: true, tool_calls: true}
-      }
-    })
-  end
-
-  defp direct_model(provider, model), do: ReqLLM.model(Atom.to_string(provider) <> ":" <> model)
+  defp direct_model(provider, model),
+    do: Vxpipe.AgentRuntime.ModelOverrides.resolve(provider, model)
 
   defp direct_options("deepseek", input) do
     with {:ok, options} <- options(input, [:thinking]),
@@ -161,20 +147,7 @@ defmodule Vxpipe.AgentRuntime.ProviderSelection do
     byte_size(model) in 1..256 and Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9._\/-]*\z/, model)
   end
 
-  # The current Luna alias is newer than LLMDB. Its tool-enabled surface uses Responses;
-  # preserve its output token bound and retain the wire identity without inventing pricing.
-  defp openai_model("gpt-6-luna") do
-    ReqLLM.model(%{
-      provider: :openai,
-      id: "gpt-6-luna",
-      extra: %{
-        "constraints" => %{"token_limit_key" => "max_output_tokens"},
-        "wire" => %{"protocol" => "openai_responses"}
-      }
-    })
-  end
-
-  defp openai_model(model), do: ReqLLM.model("openai:" <> model)
+  defp openai_model(model), do: Vxpipe.AgentRuntime.ModelOverrides.resolve(:openai, model)
   defp openai_model_spec("gpt-6-luna", resolved), do: resolved
   defp openai_model_spec(model, _resolved), do: "openai:" <> model
 

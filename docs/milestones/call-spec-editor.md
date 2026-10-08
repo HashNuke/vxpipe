@@ -1,6 +1,6 @@
 # Call spec editor
 
-Status: implementation started 2026-10-08; checkpoints V and P complete; L is next. Design review complete.
+Status: implementation started 2026-10-08; checkpoints V, P and L complete; K is next. Design review complete.
 Prerequisites: [Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md),
 [Operator login and admin dashboard](operator-login-and-admin-dashboard.md),
 [Operator admin Storybook](operator-admin-storybook.md) and the
@@ -451,24 +451,29 @@ zero failures, 120 excluded (seed 468087). No live tests were run.
 Outcome: for each LLM provider the runtime supports, Agent Runtime lists models it can actually
 run, with one recommended default.
 
-- [ ] **L1 — Red tests.** In `apps/vxpipe_agent_runtime/test/vxpipe/agent_runtime/`, expect a
+- [x] **L1 — Red tests.** In `apps/vxpipe_agent_runtime/test/vxpipe/agent_runtime/`, expect a
   listing per supported provider (google, openai, deepseek, openrouter, fireworks, zenmux) where
   every entry resolves through `ProviderSelection`, non-chat entries (image or video output, no
   text output) are excluded, the runtime overrides (`deepseek-flash`, `gpt-6-luna`) are included,
   and exactly one entry is the default.
-- [ ] **L2 — Listing module.** Add an Agent Runtime module that reads the `llm_db` snapshot,
+- [x] **L2 — Listing module.** Add an Agent Runtime module that reads the `llm_db` snapshot,
   filters to text output with tool calling, adds the `ProviderSelection` overrides and returns
   the shared descriptor shape (ID, display name, default flag, context limit). Keep the override
   definitions in one place so the listing and `ProviderSelection` cannot drift.
-- [ ] **L3 — Defaults.** Declare one default per provider, matching `setupCatalog.json`
+- [x] **L3 — Defaults.** Declare one default per provider, matching `setupCatalog.json`
   (google `gemini-2.5-flash`, openai `gpt-5`, zenmux `openai/gpt-5`, deepseek `deepseek-flash`,
   openrouter `google/gemini-3.5-flash-lite`, fireworks
   `accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b`). A test fails if a default is not
   in the provider's listing.
-- [ ] **L4 — Load cost.** Measure listing time and memory for the largest provider (openrouter)
+- [x] **L4 — Load cost.** Measure listing time and memory for the largest provider (openrouter)
   after `LLMDB.load/0`; record it. Cache the filtered result in `:persistent_term` only if the
   measurement justifies it.
-- [ ] **Exit L.** Agent Runtime suite and root gates pass; the listing makes no network calls.
+- [x] **Exit L.** Agent Runtime suite and root gates pass; the listing makes no network calls.
+
+Checkpoint L progress: all 108 Agent Runtime tests pass (eight excluded, seed
+256901). Local OpenRouter measurements and the no-cache decision are recorded in
+[the catalog decision](../llm-model-catalog.md). All five root gates pass; the default umbrella suite passes
+3,352 tests, zero failures, 120 excluded (seed 226406). No live tests ran.
 
 ## Checkpoint K — Provider and model listing endpoints
 
