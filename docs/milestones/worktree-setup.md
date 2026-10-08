@@ -1,9 +1,9 @@
 # Worktree setup and concurrent development
 
-Status: in progress; **4 of 6 checkpoints complete**. Branch ownership, isolated
-databases, fresh/repeatable bootstrap and temporary-file isolation are verified
-(2026-10-08). Development port/session integration and complete concurrent acceptance
-remain in progress. Research and local specification review completed 2026-10-08.
+Status: in progress; **5 of 6 checkpoints complete**. Branch ownership, isolated
+databases, fresh/repeatable bootstrap, temporary-file and development port/session
+isolation are verified (2026-10-08). Complete concurrent umbrella acceptance remains
+in progress. Research and local specification review completed 2026-10-08.
 
 Prerequisites: the existing database/configuration contracts from
 [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md)
@@ -246,43 +246,59 @@ see [checkout isolation](../worktree-isolation.md).
 Prerequisites: checkpoints 2 and 3. Owning files: setup metadata/port allocation,
 `bin/dev`, `bin/site-dev`, Storybook launch/configuration and optional tooling setup.
 
-- [ ] Red-test distinct port assignment under concurrent setup, stable reruns,
+- [x] Red-test distinct port assignment under concurrent setup, stable reruns,
   occupied listeners and explicit reassignment. Use a short shared allocator lock
   and persistent reservations; reserve live-test port 4600. Handle abandoned
   reservations without reclaiming another running checkout's ports.
-- [ ] Store Console/Astro/Storybook ports and integrate launchers with explicit
+- [x] Store Console/Astro/Storybook ports and integrate launchers with explicit
   override precedence and clear bind-collision errors. Keep public origins and
   live-reload URLs consistent with the actual listener.
-- [ ] Verify cookie/session behavior for two Consoles on the same hostname; use
+- [x] Verify cookie/session behavior for two Consoles on the same hostname; use
   checkout-specific development session cookie names if needed, keeping production
   behavior intact. Add a focused regression for the project-owned isolation.
-- [ ] Add `--with-docs` (Astro `npm ci`) and `--with-lean` (pinned Lean build) options
+- [x] Add `--with-docs` (Astro `npm ci`) and `--with-lean` (pinned Lean build) options
   with missing-tool/failure tests. Tailscale is optional for local setup; never
   start a daemon, Funnel, carrier operation or live test as a setup side effect.
-- [ ] Inspect both Consoles and optional Astro/Storybook servers using
+- [x] Inspect both Consoles and optional Astro/Storybook servers using
   `agent-browser` with headless Chrome. Cover relevant desktop/mobile layouts,
   authentication and live reload. Record any blocked optional HTTPS inspection.
-- [ ] Document assigned URLs, overrides, optional tooling, existing-checkout
+- [x] Document assigned URLs, overrides, optional tooling, existing-checkout
   adoption and the separate explicit cleanup policy for retired worktrees.
 
 Exit: two prepared checkouts can serve development interfaces simultaneously at
 stable distinct URLs, with independent browser sessions and optional tools.
 
+Evidence (2026-10-08): 32 synthetic setup checks and launcher tests pass, plus
+runtime port/cookie regressions and three Astro configuration checks. Both fresh
+worktrees pass optional docs and pinned Lean setup. Fresh verification exposed a
+missing default oracle target; adding it makes build, drift detection and Elixir
+replay pass. No toolchain installation was required.
+
+Headless Chrome via `agent-browser` inspected both Consoles, both Astro servers and
+both Storybook servers at distinct assigned ports. At 1440×1000 and 390×844, login,
+onboarding and docs/service dialogs render correctly. Console A's session does
+not authenticate B; both authenticate independently, and logging out of B preserves
+A. Console and Astro live reload were exercised with reversible local changes.
+Storybook webhook previews use the correct checkout Console origin. The host needs
+Chrome's `--no-sandbox` flag. Optional real Tailscale HTTPS was not exercised;
+synthetic launcher/configuration tests cover it without daemon or Funnel changes.
+Task-owned browser and servers were stopped after inspection.
+
 ## Checkpoint 6 — Prove the complete worktree workflow
 
 Prerequisites: checkpoints 1–5.
 
-- [ ] Create two independent worktrees containing the implementation; run setup
+- [x] Create two independent worktrees containing the implementation; run setup
   concurrently, rerun it, and inspect identities, DB targets and mutable outputs.
   Record commands and results without secrets or machine-specific absolute paths.
 - [ ] Run two full default umbrella suites concurrently. Run focused child suites,
   relevant npm tests/builds and optional Lean verification in separate worktrees.
   Record actual overlap and independent state, not just two sequential passes.
-- [ ] Claim live testing from one branch; prove another branch is refused for every
+- [x] Claim live testing from one branch; prove another branch is refused for every
   supported selection while default tests and local development remain runnable.
   Verify ownership persists between runs and after exit/failure, then release it
   explicitly and prove the other branch can claim it.
-- [ ] Complete rendered multi-server checks and all four runner shell suites.
+- [x] Complete rendered multi-server checks and all four runner shell suites.
   Real live-provider execution is not required to prove exclusion; any separately
   requested smoke run must use the owning branch and existing resources.
 - [ ] Pass root formatting, warnings-as-errors compilation, strict Credo, default

@@ -188,3 +188,22 @@
   remains logged out; after authenticating B both session endpoints return 200.
   Signing out of B leaves A authenticated. A's live reload fires on a watched
   asset change and retains its session. No provider configuration was submitted.
+
+
+## Rendered acceptance completed; concurrent umbrella gates running
+
+- Headless Chrome inspected two Consoles, two Astro servers and two Storybook
+  servers using reserved ports. Desktop 1440×1000 and mobile 390×844 screenshots
+  were reviewed. Local login and onboarding, docs and service dialog layouts render
+  correctly. Astro's temporary live-reload text was observed and then restored.
+- Storybook service dialogs show webhook origins for each assigned Console port.
+  Browser errors were empty. All task-owned browser/server processes were stopped;
+  the preexisting user Storybook listener was left untouched and its port skipped.
+- Real optional Tailscale HTTPS was not exercised; synthetic TLS launcher/config
+  checks pass, with no live credentials or daemon/Funnel operations.
+- All five synthetic runner/ownership suites pass again. Carrier-looking output
+  comes exclusively from shell fixtures, never real commands or services.
+- Final concurrent umbrella runs use two schedulers per checkout; both include
+  plain `mix test` from their roots and unused-dependency checks. The first also
+  runs formatting, warnings-as-errors compilation and strict Credo. Logs capture
+  complete output and UTC start/end timestamps for overlap evidence.

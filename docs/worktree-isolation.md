@@ -128,6 +128,7 @@ unexpected lockfile changes. All external commands in that suite are fixtures.
 Real local acceptance has initialized and rerun the original checkout and two fresh
 worktrees, verified distinct marked dev/test databases and private output directories,
 preserved secrets/metadata, and passed both owning child suites concurrently.
-Synthetic port/launcher/cookie checks pass. Rendered multi-server checks and complete
+Synthetic port/launcher/cookie checks and rendered multi-server acceptance pass,
+including same-host login/logout and Console/Astro live reload. Complete
 simultaneous umbrella suites remain required in the
 [worktree setup milestone](milestones/worktree-setup.md).

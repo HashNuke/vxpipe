@@ -153,7 +153,7 @@ call-engine code resolves tenant credentials through the injected credential sou
 The call engine, gateway, and Console applications run in one BEAM instance.
 The Console's Phoenix endpoint supervises its esbuild development watcher,
 serves the React assets, and mounts the reusable gateway on the same endpoint.
-By default Phoenix serves HTTP at `http://localhost:4000/`, with no Tailscale
+Phoenix serves HTTP at its assigned Console URL (port 4000 without metadata), with no Tailscale
 dependency. WebRTC media continues to use its negotiated ICE path. The sample
 pages and diagnostics are under `/admin` and require installation-operator
 authentication. The Pipecat sample is available at `/admin/samples/pipecat-console`.
@@ -170,16 +170,16 @@ bin/dev --tailscale
 ```
 
 This discovers the machine's FQDN and Tailscale IPv4 address and serves the Console
-at `https://<machine-fqdn>:4000/`. It asks the local Tailscale daemon for a
+at `https://<machine-fqdn>:<console-port>/`. It asks the local Tailscale daemon for a
 certificate for the discovered `.ts.net` hostname and gives its ignored runtime
 paths to Phoenix/Bandit. MagicDNS and HTTPS certificates must be enabled for the
 tailnet. The stack runs as the calling user; no root process, reverse proxy,
 `TS_PERMIT_CERT_UID`, or manually exported TLS variables are required. Phoenix binds
-only to the discovered Tailscale address on port 4000. This does not use Tailscale
+only to the discovered Tailscale address on the selected Console port. This does not use Tailscale
 Funnel or make the development stack public.
 
 To serve the optional Astro site over Tailscale, run `bin/site-dev --tailscale`
-in another shell. It uses the same discovered hostname and certificate on port 4321.
+in another shell. It uses the same discovered hostname and certificate on its assigned Astro port.
 
 With `APP_HOST` unset or empty, normal `bin/dev` binds to localhost. An explicit
 `APP_HOST` in the shell or `.env` selects the hostname and bind address; that
