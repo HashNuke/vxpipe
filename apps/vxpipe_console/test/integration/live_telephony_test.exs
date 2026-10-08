@@ -9,6 +9,8 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
   alias Vxpipe.Console.Test.PublicTelephonyEndpoint
 
   alias Vxpipe.Console.Test.{
+    LiveTelephonyAdapter,
+    LiveTelephonyCallCleanup,
     LiveTelephonyPeer,
     LiveTelephonyPeerSocket,
     LiveTelephonyTransferModel
@@ -29,6 +31,13 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     TelephonyServiceStore,
     UsageStore
   }
+
+  setup_all do
+    # Test-supervised children stop before on_exit callbacks. The case supervisor
+    # keeps this handle collector available throughout each test's teardown.
+    tracker = start_supervised!({LiveTelephonyCallCleanup, name: LiveTelephonyCallCleanup})
+    %{carrier_cleanup: tracker}
+  end
 
   setup context do
     if is_nil(Process.whereis(Repo)), do: start_supervised!(Repo)
@@ -911,6 +920,13 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
         |> Map.reject(fn {_endpoint, number} -> is_nil(number) end)
     }
 
+    cleanup_scope =
+      LiveTelephonyCallCleanup.open(context.carrier_cleanup, Map.values(settings.numbers))
+
+    on_exit(fn ->
+      assert :ok = LiveTelephonyCallCleanup.close(cleanup_scope, context.carrier_cleanup)
+    end)
+
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     on_exit(fn ->
@@ -925,7 +941,10 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     port = System.fetch_env!("TELEPHONY_TEST_PORT") |> String.to_integer()
 
     endpoint_options =
-      ConfiguredTelephonyFixture.endpoint_options(fixture)
+      ConfiguredTelephonyFixture.endpoint_options(fixture, %{
+        telnyx: LiveTelephonyAdapter,
+        twilio: LiveTelephonyAdapter
+      })
       |> Keyword.update!(
         :telephony,
         &Keyword.merge(&1,

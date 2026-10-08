@@ -140,6 +140,18 @@ The endpoint test starts the production gateway endpoint on the test port and re
 `/healthz` through the public URL. Setting `TELEPHONY_TEST_PUBLIC_URL` in the env file
 uses that origin instead and leaves Tailscale alone.
 
+Live tests register Elixir teardown that ends and verifies only their captured
+Telnyx call-control IDs or Twilio call SIDs. This cleanup is independent of room
+shutdown and performs no account sweep.
+
+For recovery after an interrupted VM or an unknown dial outcome,
+`bin/livetests telephony:hangup` ends
+calls to or from this machine's provisioned test numbers on both configured
+carriers. Use `telnyx:hangup` or `twilio:hangup` to select one provider. The optional
+`--all-calls` flag includes unrelated calls across the configured accounts. Cleanup
+does not need a running public endpoint and fails if calls remain or cannot be
+verified; see [call cleanup](live-telephony-harness.md#call-cleanup).
+
 ## Configured-service fixture
 
 For automated tests, provision a dedicated temporary tenant and the chosen

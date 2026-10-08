@@ -1,8 +1,8 @@
 defmodule Vxpipe.Gateway.Integration.TelnyxVoiceAPITest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, EndLeg, LegReference, Submission}
-  alias Vxpipe.Gateway.TestTelephonyServiceRepository
+  alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, Submission}
+  alias Vxpipe.Gateway.{TestLiveCallCleanup, TestTelephonyServiceRepository}
   alias Vxpipe.Providers.Telnyx.Adapter, as: TelnyxAdapter
   alias Vxpipe.Providers.Telnyx.PublicEndpoint
 
@@ -57,18 +57,7 @@ defmodule Vxpipe.Gateway.Integration.TelnyxVoiceAPITest do
             }} = Adapter.dial(TelnyxAdapter, options, request)
 
     on_exit(fn ->
-      _result =
-        Adapter.end_leg(
-          TelnyxAdapter,
-          options,
-          %EndLeg{
-            leg: %LegReference{
-              leg_id: leg_id,
-              provider_call_control_id: call_control_id
-            },
-            reason: :test_complete
-          }
-        )
+      assert :ok = TestLiveCallCleanup.hangup(:telnyx, options, call_control_id)
     end)
 
     assert is_binary(call_control_id) and call_control_id != ""

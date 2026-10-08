@@ -29,10 +29,15 @@ Commands:
                             and point them at this machine. Buys numbers only
                             with --allow-purchase. Safe to re-run.
   telephony:status          Show this machine's carrier resources (read-only).
+  telephony:hangup [--all-calls]
+                            End this machine's calls on configured carriers.
+  telnyx:hangup [--all-calls] End calls to/from this machine's Telnyx numbers.
+  twilio:hangup [--all-calls] End calls to/from this machine's Twilio number.
+                            --all-calls targets the configured accounts instead.
   help                      Show this help.
 
 Credentials are read from ~/.config/vxpipe/live_providers.env (override with
-VXPIPE_LIVE_PROVIDERS_ENV_FILE) and passed only to the child mix test process.
+VXPIPE_LIVE_PROVIDERS_ENV_FILE) only inside the runner and its child processes.
 See config/live_providers.env.example and docs/live-telephony-harness.md.
 USAGE
 }
@@ -628,6 +633,11 @@ case "$command" in
   tools:status) tools_status ;;
   telephony:provision) telephony_provision "$@" ;;
   telephony:status) telephony_status ;;
+  telephony:hangup|telnyx:hangup|twilio:hangup)
+    # shellcheck source=bin/lib/livetests-call-cleanup.sh
+    source "$repo_root/bin/lib/livetests-call-cleanup.sh"
+    hangup_calls "${command%%:*}" "$@"
+    ;;
   help|-h|--help) usage ;;
   '')
     usage >&2

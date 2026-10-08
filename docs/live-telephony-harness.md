@@ -45,12 +45,90 @@ bin/livetests tools:status             node, public URL, Funnel target, running 
 bin/livetests telephony:provision [--allow-purchase]
                                        find or create this machine's carrier resources
 bin/livetests telephony:status         what exists for this machine and where it points
+bin/livetests telephony:hangup [--all-calls]
+                                       end calls on both configured carriers
+bin/livetests telnyx:hangup [--all-calls]
+bin/livetests twilio:hangup [--all-calls]
+                                       end calls on one carrier
 bin/livetests help
 ```
 
 `run` starts the tools it needs and stops only what it started; tools started by `tools:up`
-remain up. `run` and `tools:*` never create or change carrier resources; only
-`telephony:provision` does, and it buys numbers only with `--allow-purchase`.
+remain up. `run` and `tools:*` never provision carrier resources. `telephony:provision`
+buys numbers only with `--allow-purchase`; the explicit `*:hangup` commands end existing calls.
+
+### Call cleanup
+
+After a failed or interrupted test, run:
+
+```shell
+bin/livetests telephony:hangup
+```
+
+The default ends only calls **to or from this machine's provisioned test numbers**:
+Telnyx numbers with the exact tags `vxp-test-<machine>` and `vxp-test-<machine>-b`, and
+Twilio numbers with the exact `FriendlyName` `vxp-test-<machine>`. Both incoming and
+outgoing legs are included, along with Twilio calls still queued or ringing. Telnyx
+calls are matched by number across every Voice API application, including calls on
+a shared application or an application whose name/webhook has changed. Application
+ownership alone does not establish that a call belongs to a test number.
+
+Use `telnyx:hangup` or `twilio:hangup` to select one carrier. The combined command
+attempts every configured carrier even if another fails; it skips providers with no
+credentials, and fails for incomplete selected-provider credentials or when none are
+configured. Cleanup discovers resources read-only and needs neither provisioning
+repairs nor a public endpoint, Tailscale, webhook verification keys or a running app.
+
+The optional `--all-calls` flag expands cleanup to every active call in the configured
+Twilio account and every Telnyx Voice API (Call Control) application accessible to the
+API key, including calls unrelated to this machine or its provisioned numbers:
+
+```shell
+bin/livetests telephony:hangup --all-calls
+```
+
+The runner follows all inventory pages before submitting hangups, then reads the
+active inventory again. It makes at most three cleanup passes and returns nonzero
+if matching calls remain or their state cannot be verified. Paired legs that end
+between listing and hangup are successful once the final inventory is empty. Every
+HTTP request has a ten-second connection timeout and a thirty-second overall timeout.
+Reports contain scope, counts and HTTP status, without phone numbers, credentials,
+provider response bodies or Telnyx call-control tokens. The runner never invokes
+these recovery commands automatically.
+
+Every live test that allocates carrier calls also registers **Elixir teardown for
+its captured call-control IDs or call SIDs**. Gateway's direct carrier tests use
+the handle returned by dialing. Console's live endpoint wraps the real adapters
+to capture outgoing submissions and authenticated incoming/outgoing callbacks;
+incoming handles are retained even when answering fails. Callback capture checks
+the fixture numbers, and deduplicates handles within the test. Teardown queries
+and hangs up each exact handle, then verifies that it ended. It performs no account
+listing, number discovery or call sweep. An unverified or still-live handle fails
+teardown with a sanitized result, while other captured handles are still attempted.
+
+Console keeps its collector under the ExUnit **case** supervisor so per-test
+teardown can use it after the test's own supervised processes have stopped. The
+carrier callback is separate from room shutdown and credential/sandbox restoration,
+so it still runs if local cleanup fails. Handles arriving after their test scope
+has closed are ended immediately. The recovery commands remain useful when the
+VM is killed or a dial outcome is unknown and no call handle reaches the test.
+
+Telnyx's [active-call API](https://developers.telnyx.com/api-reference/call-information/list-all-active-calls-for-given-connection)
+exposes leg identifiers without phone numbers. Default cleanup uses the documented
+[`call_events` filters](https://developers.telnyx.com/api-reference/debugging/list-call-events)
+for the exact leg, `call.initiated` event, and from/to number. If the initiated event
+is unavailable, cleanup fails without widening its scope. `--all-calls` needs no
+number evidence. Hangups use the [Telnyx hangup command](https://developers.telnyx.com/api-reference/call-commands/hangup-call)
+and the [Twilio Call resource](https://www.twilio.com/docs/voice/api/call-resource):
+`completed` for connected calls, `canceled` for queued or ringing calls.
+
+The offline regression suite is `bash test/shell/livetests_hangup_test.sh`. It covers
+number scope (including unrelated calls sharing a Telnyx application), account-wide
+scope, pagination, provider selection, missing evidence, credentials, paired-leg
+races, remaining-call verification and failure isolation. Focused Gateway and
+Console tests cover handle teardown, failed answering, callback scope, duplicate
+and late handles, and verification failures. Live cleanup has not been verified
+against the carriers in this checkpoint.
 
 ### Credentials
 

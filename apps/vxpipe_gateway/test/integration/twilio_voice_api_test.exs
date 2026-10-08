@@ -1,8 +1,8 @@
 defmodule Vxpipe.Gateway.Integration.TwilioVoiceAPITest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, EndLeg, LegReference, Submission}
-  alias Vxpipe.Gateway.TestTelephonyServiceRepository
+  alias Vxpipe.CallEngine.Telephony.{Adapter, Dial, Submission}
+  alias Vxpipe.Gateway.{TestLiveCallCleanup, TestTelephonyServiceRepository}
   alias Vxpipe.Providers.Twilio.Adapter, as: TwilioAdapter
   alias Vxpipe.Providers.Twilio.PublicEndpoint
 
@@ -56,18 +56,7 @@ defmodule Vxpipe.Gateway.Integration.TwilioVoiceAPITest do
             }} = Adapter.dial(TwilioAdapter, options, request)
 
     on_exit(fn ->
-      _result =
-        Adapter.end_leg(
-          TwilioAdapter,
-          options,
-          %EndLeg{
-            leg: %LegReference{
-              leg_id: leg_id,
-              provider_call_control_id: call_sid
-            },
-            reason: :test_complete
-          }
-        )
+      assert :ok = TestLiveCallCleanup.hangup(:twilio, options, call_sid)
     end)
 
     assert String.starts_with?(call_sid, "CA")
