@@ -176,3 +176,59 @@ All five root gates pass. The completed umbrella suite exits successfully with
 Gateway and Console suites. Frontend and rendered evidence is recorded above.
 No live tests ran. Checkpoint S files under callSpecEditor remain outside this
 checkpoint and need their own validation.
+
+## Checkpoint S implementation
+
+- Added source types, preserving parser/serializer and deterministic graph projection.
+  The three portable examples round-trip by JSON value without added defaults or
+  layout fields; historical sources stay read-only. Six initial source tests and
+  five participant-edit tests passed after missing-module red runs.
+- Added immutable participant, capability, direction, tools, wait/media and variable
+  edits. Participant renames rewrite structural references, not literal prompts.
+  Variable renames update permissions, required fields and dial references. Removing
+  a referenced variable leaves an explicit invalid choice for the operator to fix.
+  The initial seven direction/field/variable tests failed on missing modules and
+  then passed. A later red test exposed over-restrictive JSON Schema property names;
+  property names now preserve the backend's arbitrary-string contract, including
+  safe own-property handling of `__proto__`.
+- Added 73 shared JSON cases executed by both Call Engine and Console validation.
+  The first fixture run exposed two cases that triggered earlier unrelated backend
+  failures; corrected the fixture setup to isolate each intended rule. All 73
+  backend cases now pass. Client validation accumulated errors and passed 74 checks,
+  including value-free messages. It covers UTF-8 byte limits rather than JS length.
+  Additional policy/schema cases first failed 24 frontend checks before implementation.
+- Error placement and feedback started with a missing-module red run; 30 tests
+  cover node/tab/field labels, unknown-path fallback and every save/publish outcome.
+  The UI still owns toast lifetime, focus and dirty-state handling in U/W.
+- New source uses the development example's incoming web caller and text-capable
+  agent, taking the recommended model from the supplied catalog. Voice additions
+  use the adapter's voice parameter, including Rime speaker and separate Flux voice.
+- A new portable-selection contract failed because Deepgram STT model and voice
+  metadata alone omitted mandatory encoding/sample rate. Added adapter-owned public
+  option defaults (linear16/48000) to that model descriptor, parser and captured
+  fixture; this avoids introducing provider rules into the editor. The backend
+  model/recommendation and shared-validation group passes 91 tests (seed 700026).
+- Source/presentation/options focused frontend group passed 128 tests plus type
+  check and lint. First full frontend run passed 348 tests across 41 files; the
+  later property-name fix has its focused green test and needs a final full run.
+  Root formatting, warnings-as-errors compile, strict Credo and unused-dependency
+  checks pass. The complete umbrella suite is still running. No live tests ran.
+- Some initial shell invocations used the repository root for npm or doubled paths
+  from the assets working directory. Re-ran from the owning assets directory;
+  only the observed expected failing tests are counted as red evidence.
+
+### S verification follow-up
+
+The final frontend run passes 349 tests across 41 files, plus type check and lint.
+The first umbrella run (seed 647735) exposed an existing Cartesia room-test race:
+its explicit second `Ingress.prepare_track` returned `unavailable`. Attachment
+already declares the same input track and asynchronous room startup prepares it.
+The explicit call can observe one policy/resource generation and submit after
+startup has replaced that generation; the ingress correctly rejects the stale
+snapshot. The unchanged isolated five-test file passed with the failing seed.
+Removed the test's duplicate preparation and ad hoc collector: the synthetic
+provider now acknowledges connection, then the test waits on the existing room
+startup readiness acknowledgement before inspecting resources and pushing audio.
+The corrected five-test file passes. No production speech/source state machine was
+changed; no Lean lane is needed for this test synchronization correction. The
+first full run remains failed evidence; a complete final run is still required.

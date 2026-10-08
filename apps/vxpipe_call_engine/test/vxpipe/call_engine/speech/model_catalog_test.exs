@@ -59,6 +59,41 @@ defmodule Vxpipe.CallEngine.Speech.ModelCatalogTest do
     assert {:error, :invalid_configuration} = adapter.configure(model: "flux", voice: "../secret")
   end
 
+  test "public recommendations include the options required by portable speech selections" do
+    kinds = %{stt: :speech_to_text, tts: :text_to_speech, sts: :speech_to_speech}
+
+    for {provider, capabilities} <- Registry.catalog(),
+        capability <- capabilities,
+        capability in [:stt, :tts, :sts] do
+      {:ok, adapter} = Registry.resolve_capability(provider, capability)
+
+      for model <- adapter.models() do
+        options = Map.get(model, :options, %{})
+
+        options =
+          case model.voices do
+            nil ->
+              options
+
+            %{type: :free_text, default: voice, parameter: parameter} ->
+              Map.put(options, parameter, voice)
+
+            %{type: :list, values: voices, parameter: parameter} ->
+              Map.put(options, parameter, Enum.find(voices, & &1.default).id)
+          end
+
+        source = %{"provider" => provider, "model" => model.id, "options" => options}
+
+        assert {:ok, _selection} =
+                 Vxpipe.CallEngine.CallSpec.CapabilitySelection.new(
+                   source,
+                   Map.fetch!(kinds, capability),
+                   ["selection"]
+                 )
+      end
+    end
+  end
+
   defp assert_models(adapter) do
     Code.ensure_loaded!(adapter)
     assert function_exported?(adapter, :models, 0), "#{inspect(adapter)} must declare models/0"

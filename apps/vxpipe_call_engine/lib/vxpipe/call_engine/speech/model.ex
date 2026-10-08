@@ -6,7 +6,13 @@ defmodule Vxpipe.CallEngine.Speech.Model do
           nil
           | %{type: :free_text, default: String.t(), parameter: String.t()}
           | %{type: :list, values: [voice()], parameter: String.t()}
-  @type t :: %{id: String.t(), name: String.t(), default: boolean(), voices: voices()}
+  @type t :: %{
+          :id => String.t(),
+          :name => String.t(),
+          :default => boolean(),
+          :voices => voices(),
+          optional(:options) => %{String.t() => String.t() | number() | boolean() | nil}
+        }
 
   @spec new(String.t(), String.t(), boolean(), voices()) :: t()
   def new(id, name, default, voices \\ nil),

@@ -292,7 +292,9 @@ The model response for Deepgram TTS is:
 
 Use `model: "flux"` and `options: {"voice": "hannah"}` in the call spec; the
 adapter constructs its concrete model ID. Opening an existing source preserves its
-model and voice. Every listing has exactly one recommended model. `voices` is null,
+model and voice. Every listing has exactly one recommended model. An optional public `options` object supplies
+required adapter defaults, such as Deepgram STT encoding and sample rate. Copy
+those into a new selection, then set its separate voice option when declared. `voices` is null,
 a free-text descriptor, or `{"type":"list","parameter":"voice","values":[...]}`
 whose entries have `id`, `name`, and one `default: true`. The parameter identifies
 the source option (`voice`, or `speaker` for Rime). LLM models also have

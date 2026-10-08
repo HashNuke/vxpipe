@@ -1,0 +1,1622 @@
+{
+  "bases": {
+    "incoming": {
+      "schema_version": "20261004.01",
+      "incoming_call": {
+        "caller": "caller",
+        "handled_by": "assistant"
+      },
+      "participants": {
+        "caller": {
+          "type": "human",
+          "connection": {
+            "service": "web",
+            "mode": "receive",
+            "admission": "start_call"
+          }
+        },
+        "assistant": {
+          "type": "agent",
+          "prompt": "Help the caller."
+        },
+        "support": {
+          "type": "human",
+          "connection": {
+            "service": "web",
+            "mode": "receive",
+            "admission": "transfer"
+          }
+        }
+      }
+    },
+    "outgoing": {
+      "schema_version": "20261004.01",
+      "participants": {
+        "caller": {
+          "type": "human",
+          "connection": {
+            "service": "office",
+            "mode": "dial"
+          }
+        },
+        "assistant": {
+          "type": "agent",
+          "prompt": "Help the caller."
+        },
+        "support": {
+          "type": "human",
+          "connection": {
+            "service": "web",
+            "mode": "receive",
+            "admission": "transfer"
+          }
+        }
+      },
+      "outgoing_call": {
+        "callee": "caller",
+        "handled_by": "assistant"
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "missing prompt",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "prompt"
+          ],
+          "delete": true
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "prompt"
+      ]
+    },
+    {
+      "name": "blank prompt",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "prompt"
+          ],
+          "value": "  "
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "prompt"
+      ]
+    },
+    {
+      "name": "prompt byte limit",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "prompt"
+          ],
+          "value": "é",
+          "repeat": 16385
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "prompt"
+      ]
+    },
+    {
+      "name": "name byte limit",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "name"
+          ],
+          "value": "é",
+          "repeat": 129
+        }
+      ],
+      "expected_path": [
+        "name"
+      ]
+    },
+    {
+      "name": "description byte limit",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "description"
+          ],
+          "value": "é",
+          "repeat": 513
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "description"
+      ]
+    },
+    {
+      "name": "transfer notice byte limit",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "support",
+            "transfer_notice"
+          ],
+          "value": "é",
+          "repeat": 2049
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "support",
+        "transfer_notice"
+      ]
+    },
+    {
+      "name": "fixed first message required",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "first_message"
+          ],
+          "value": {
+            "mode": "fixed"
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "first_message",
+        "text"
+      ]
+    },
+    {
+      "name": "fixed first message byte limit",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "first_message"
+          ],
+          "value": {
+            "mode": "fixed",
+            "text": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "first_message",
+        "text"
+      ]
+    },
+    {
+      "name": "unsupported first message text",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "first_message"
+          ],
+          "value": {
+            "mode": "generated",
+            "text": "Hello"
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "first_message",
+        "text"
+      ]
+    },
+    {
+      "name": "unknown handler",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "incoming_call",
+            "handled_by"
+          ],
+          "value": "missing"
+        }
+      ],
+      "expected_path": [
+        "incoming_call",
+        "handled_by"
+      ]
+    },
+    {
+      "name": "same handler and caller",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "incoming_call",
+            "handled_by"
+          ],
+          "value": "caller"
+        }
+      ],
+      "expected_path": [
+        "incoming_call",
+        "handled_by"
+      ]
+    },
+    {
+      "name": "caller must be human",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "incoming_call",
+            "caller"
+          ],
+          "value": "assistant"
+        },
+        {
+          "path": [
+            "incoming_call",
+            "handled_by"
+          ],
+          "value": "support"
+        }
+      ],
+      "expected_path": [
+        "incoming_call",
+        "caller"
+      ]
+    },
+    {
+      "name": "incoming connection intent",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "caller",
+            "connection",
+            "admission"
+          ],
+          "value": "transfer"
+        }
+      ],
+      "expected_path": [
+        "incoming_call",
+        "caller"
+      ]
+    },
+    {
+      "name": "invalid participant identifier",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "bad name"
+          ],
+          "value": {
+            "type": "agent",
+            "prompt": "Help"
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "bad name"
+      ]
+    },
+    {
+      "name": "unknown transfer target",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "transfers"
+          ],
+          "value": [
+            "missing"
+          ]
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "transfers",
+        "0"
+      ]
+    },
+    {
+      "name": "self transfer",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "transfers"
+          ],
+          "value": [
+            "assistant"
+          ]
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "transfers",
+        "0"
+      ]
+    },
+    {
+      "name": "entry transfer",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "transfers"
+          ],
+          "value": [
+            "caller"
+          ]
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "transfers",
+        "0"
+      ]
+    },
+    {
+      "name": "duplicate transfer",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "transfers"
+          ],
+          "value": [
+            "support",
+            "support"
+          ]
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "transfers",
+        "1"
+      ]
+    },
+    {
+      "name": "invalid direction identifier",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "incoming_call",
+            "handled_by"
+          ],
+          "value": "bad key"
+        }
+      ],
+      "expected_path": [
+        "incoming_call",
+        "handled_by"
+      ]
+    },
+    {
+      "name": "both directions",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "outgoing_call"
+          ],
+          "value": {
+            "callee": "caller",
+            "handled_by": "assistant"
+          }
+        }
+      ],
+      "expected_path": []
+    },
+    {
+      "name": "missing direction",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "incoming_call"
+          ],
+          "delete": true
+        }
+      ],
+      "expected_path": []
+    },
+    {
+      "name": "outgoing handler must be agent",
+      "base": "outgoing",
+      "changes": [
+        {
+          "path": [
+            "outgoing_call",
+            "handled_by"
+          ],
+          "value": "support"
+        }
+      ],
+      "expected_path": [
+        "outgoing_call",
+        "handled_by"
+      ]
+    },
+    {
+      "name": "outgoing human callee",
+      "base": "outgoing",
+      "changes": [
+        {
+          "path": [
+            "outgoing_call",
+            "callee"
+          ],
+          "value": "assistant"
+        },
+        {
+          "path": [
+            "participants",
+            "caller",
+            "connection"
+          ],
+          "value": {
+            "service": "web",
+            "mode": "receive",
+            "admission": "transfer"
+          }
+        },
+        {
+          "path": [
+            "participants",
+            "other"
+          ],
+          "value": {
+            "type": "agent",
+            "prompt": "Help."
+          }
+        },
+        {
+          "path": [
+            "outgoing_call",
+            "handled_by"
+          ],
+          "value": "other"
+        }
+      ],
+      "expected_path": [
+        "outgoing_call",
+        "callee"
+      ]
+    },
+    {
+      "name": "outgoing connection intent",
+      "base": "outgoing",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "caller",
+            "connection"
+          ],
+          "value": {
+            "service": "web",
+            "mode": "receive",
+            "admission": "start_call"
+          }
+        }
+      ],
+      "expected_path": [
+        "outgoing_call",
+        "callee"
+      ]
+    },
+    {
+      "name": "outgoing variable prohibited",
+      "base": "outgoing",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "caller",
+            "connection",
+            "number_from_variable"
+          ],
+          "value": {
+            "section": "contact",
+            "variable": "phone"
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "caller",
+        "connection",
+        "number_from_variable"
+      ]
+    },
+    {
+      "name": "phone format",
+      "base": "outgoing",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "caller",
+            "connection",
+            "number"
+          ],
+          "value": "123"
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "caller",
+        "connection",
+        "number"
+      ]
+    },
+    {
+      "name": "ring minimum",
+      "base": "outgoing",
+      "changes": [
+        {
+          "path": [
+            "outgoing_call",
+            "ring_timeout_ms"
+          ],
+          "value": 4999
+        }
+      ],
+      "expected_path": [
+        "outgoing_call",
+        "ring_timeout_ms"
+      ]
+    },
+    {
+      "name": "ring maximum",
+      "base": "outgoing",
+      "changes": [
+        {
+          "path": [
+            "outgoing_call",
+            "ring_timeout_ms"
+          ],
+          "value": 60001
+        }
+      ],
+      "expected_path": [
+        "outgoing_call",
+        "ring_timeout_ms"
+      ]
+    },
+    {
+      "name": "ring integer",
+      "base": "outgoing",
+      "changes": [
+        {
+          "path": [
+            "outgoing_call",
+            "ring_timeout_ms"
+          ],
+          "value": 5000.5
+        }
+      ],
+      "expected_path": [
+        "outgoing_call",
+        "ring_timeout_ms"
+      ]
+    },
+    {
+      "name": "transfer timeout minimum",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "transfer_policy"
+          ],
+          "value": {
+            "attempt_timeout_ms": 999
+          }
+        }
+      ],
+      "expected_path": [
+        "transfer_policy",
+        "attempt_timeout_ms"
+      ]
+    },
+    {
+      "name": "transfer timeout maximum",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "transfer_policy"
+          ],
+          "value": {
+            "attempt_timeout_ms": 120001
+          }
+        }
+      ],
+      "expected_path": [
+        "transfer_policy",
+        "attempt_timeout_ms"
+      ]
+    },
+    {
+      "name": "reserved tool transfer",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "tools"
+          ],
+          "value": {
+            "transfer": {
+              "type": "host",
+              "tool": "lookup"
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "tools",
+        "transfer"
+      ]
+    },
+    {
+      "name": "reserved tool read_variables",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "tools"
+          ],
+          "value": {
+            "read_variables": {
+              "type": "host",
+              "tool": "lookup"
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "tools",
+        "read_variables"
+      ]
+    },
+    {
+      "name": "reserved tool update_variables",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "tools"
+          ],
+          "value": {
+            "update_variables": {
+              "type": "host",
+              "tool": "lookup"
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "tools",
+        "update_variables"
+      ]
+    },
+    {
+      "name": "reserved tool update_variable",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "tools"
+          ],
+          "value": {
+            "update_variable": {
+              "type": "host",
+              "tool": "lookup"
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "tools",
+        "update_variable"
+      ]
+    },
+    {
+      "name": "MCP integration required",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "tools"
+          ],
+          "value": {
+            "lookup": {
+              "type": "mcp",
+              "tool": "lookup"
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "tools",
+        "lookup",
+        "integration"
+      ]
+    },
+    {
+      "name": "wrong tool integration",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "tools"
+          ],
+          "value": {
+            "lookup": {
+              "type": "host",
+              "tool": "lookup",
+              "integration": "tools"
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "tools",
+        "lookup",
+        "integration"
+      ]
+    },
+    {
+      "name": "empty participants",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants"
+          ],
+          "value": {}
+        }
+      ],
+      "expected_path": [
+        "participants"
+      ]
+    },
+    {
+      "name": "unknown property",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "layout"
+          ],
+          "value": {}
+        }
+      ],
+      "expected_path": [
+        "layout"
+      ]
+    },
+    {
+      "name": "name boundary",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "name"
+          ],
+          "value": "é",
+          "repeat": 128
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "prompt boundary",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "prompt"
+          ],
+          "value": "a",
+          "repeat": 32768
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "ring lower boundary",
+      "base": "outgoing",
+      "changes": [
+        {
+          "path": [
+            "outgoing_call",
+            "ring_timeout_ms"
+          ],
+          "value": 5000
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "ring upper boundary",
+      "base": "outgoing",
+      "changes": [
+        {
+          "path": [
+            "outgoing_call",
+            "ring_timeout_ms"
+          ],
+          "value": 60000
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "transfer lower boundary",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "transfer_policy"
+          ],
+          "value": {
+            "attempt_timeout_ms": 1000
+          }
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "transfer upper boundary",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "transfer_policy"
+          ],
+          "value": {
+            "attempt_timeout_ms": 120000
+          }
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "nullable name",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "name"
+          ],
+          "value": null
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "wait audio URL",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "wait_sounds"
+          ],
+          "value": {
+            "call_setup": "ftp://example.test/audio.wav"
+          }
+        }
+      ],
+      "expected_path": [
+        "wait_sounds",
+        "call_setup"
+      ]
+    },
+    {
+      "name": "wait URL fragment",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "wait_sounds"
+          ],
+          "value": {
+            "transfer_joining": "https://example.test/audio.wav#fragment"
+          }
+        }
+      ],
+      "expected_path": [
+        "wait_sounds",
+        "transfer_joining"
+      ]
+    },
+    {
+      "name": "wait explicit silence",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "wait_sounds"
+          ],
+          "value": {
+            "call_setup": null
+          }
+        }
+      ],
+      "expected_path": null
+    },
+    {
+      "name": "opening requires HTTPS",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "opening_audio"
+          ],
+          "value": {
+            "type": "file_url",
+            "url": "http://example.test/audio.wav"
+          }
+        }
+      ],
+      "expected_path": [
+        "opening_audio",
+        "url"
+      ]
+    },
+    {
+      "name": "opening fixed text required",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "opening_audio"
+          ],
+          "value": {
+            "type": "text",
+            "text_to_speech": {
+              "provider": "morse",
+              "model": "morse-v1"
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "opening_audio",
+        "text"
+      ]
+    },
+    {
+      "name": "media permission type",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "media_policy"
+          ],
+          "value": {
+            "record_audio": "yes"
+          }
+        }
+      ],
+      "expected_path": [
+        "media_policy",
+        "record_audio"
+      ]
+    },
+    {
+      "name": "media route unknown source",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "media_policy"
+          ],
+          "value": {
+            "audio_routes": {
+              "missing": [
+                "caller"
+              ]
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "media_policy",
+        "audio_routes",
+        "missing"
+      ]
+    },
+    {
+      "name": "media route unknown recipient",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "media_policy"
+          ],
+          "value": {
+            "audio_routes": {
+              "caller": [
+                "missing"
+              ]
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "media_policy",
+        "audio_routes",
+        "caller",
+        "0"
+      ]
+    },
+    {
+      "name": "media duplicate recipient",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "media_policy"
+          ],
+          "value": {
+            "audio_routes": {
+              "caller": [
+                "assistant",
+                "assistant"
+              ]
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "media_policy",
+        "audio_routes",
+        "caller",
+        "1"
+      ]
+    },
+    {
+      "name": "presence unknown recipient",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "while_present"
+          ],
+          "value": {
+            "transcript_routes": {
+              "caller": [
+                "missing"
+              ]
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "while_present",
+        "transcript_routes",
+        "caller",
+        "0"
+      ]
+    },
+    {
+      "name": "invalid default visibility",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "tool_visibility"
+          ],
+          "value": "everything"
+        }
+      ],
+      "expected_path": [
+        "tool_visibility"
+      ]
+    },
+    {
+      "name": "visibility human forbidden",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "tool_visibility_overrides"
+          ],
+          "value": {
+            "caller": {}
+          }
+        }
+      ],
+      "expected_path": [
+        "tool_visibility_overrides",
+        "caller"
+      ]
+    },
+    {
+      "name": "visibility missing tool",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "tool_visibility_overrides"
+          ],
+          "value": {
+            "assistant": {
+              "lookup": "full"
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "tool_visibility_overrides",
+        "assistant",
+        "lookup"
+      ]
+    },
+    {
+      "name": "visibility no transfer tool",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "tool_visibility_overrides"
+          ],
+          "value": {
+            "assistant": {
+              "transfer": "full"
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "tool_visibility_overrides",
+        "assistant",
+        "transfer"
+      ]
+    },
+    {
+      "name": "capability missing model",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "defaults"
+          ],
+          "value": {
+            "capabilities": {
+              "model_inference": {
+                "provider": "google"
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "defaults",
+        "capabilities",
+        "model_inference",
+        "model"
+      ]
+    },
+    {
+      "name": "capability private options",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "defaults"
+          ],
+          "value": {
+            "capabilities": {
+              "model_inference": {
+                "provider": "google",
+                "model": "gemini-2.5-flash",
+                "options": {
+                  "api_key": "example-test-secret"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "defaults",
+        "capabilities",
+        "model_inference",
+        "options"
+      ]
+    },
+    {
+      "name": "unknown capability",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "defaults"
+          ],
+          "value": {
+            "capabilities": {
+              "unknown": {}
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "defaults",
+        "capabilities",
+        "unknown"
+      ]
+    },
+    {
+      "name": "variable root object",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "call_variables"
+          ],
+          "value": {
+            "sections": {
+              "case": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "call_variables",
+        "sections",
+        "case",
+        "schema",
+        "type"
+      ]
+    },
+    {
+      "name": "variable unsupported keyword",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "call_variables"
+          ],
+          "value": {
+            "sections": {
+              "case": {
+                "schema": {
+                  "type": "object",
+                  "title": "Case"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "call_variables",
+        "sections",
+        "case",
+        "schema",
+        "title"
+      ]
+    },
+    {
+      "name": "variable additional properties",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "call_variables"
+          ],
+          "value": {
+            "sections": {
+              "case": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "call_variables",
+        "sections",
+        "case",
+        "schema",
+        "additionalProperties"
+      ]
+    },
+    {
+      "name": "variable nullable types",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "call_variables"
+          ],
+          "value": {
+            "sections": {
+              "case": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "call_variables",
+        "sections",
+        "case",
+        "schema",
+        "properties",
+        "id",
+        "type"
+      ]
+    },
+    {
+      "name": "variable enum duplicate",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "call_variables"
+          ],
+          "value": {
+            "sections": {
+              "case": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "enum": [
+                        "a",
+                        "a"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "call_variables",
+        "sections",
+        "case",
+        "schema",
+        "properties",
+        "id",
+        "enum"
+      ]
+    },
+    {
+      "name": "variable size bound",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "call_variables"
+          ],
+          "value": {
+            "sections": {
+              "case": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "minLength": -1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "call_variables",
+        "sections",
+        "case",
+        "schema",
+        "properties",
+        "id",
+        "minLength"
+      ]
+    },
+    {
+      "name": "unknown permission section",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "variable_permissions"
+          ],
+          "value": {
+            "missing": [
+              "read"
+            ]
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "variable_permissions",
+        "missing"
+      ]
+    },
+    {
+      "name": "permission requires read",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "participants",
+            "assistant",
+            "variable_permissions"
+          ],
+          "value": {
+            "missing": [
+              "write"
+            ]
+          }
+        }
+      ],
+      "expected_path": [
+        "participants",
+        "assistant",
+        "variable_permissions",
+        "missing"
+      ]
+    },
+    {
+      "name": "duration minimum",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "limits"
+          ],
+          "value": {
+            "max_duration_ms": 999
+          }
+        }
+      ],
+      "expected_path": [
+        "limits",
+        "max_duration_ms"
+      ]
+    },
+    {
+      "name": "valid nullable nested variable",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "call_variables"
+          ],
+          "value": {
+            "sections": {
+              "case": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": null
+    }
+  ]
+}

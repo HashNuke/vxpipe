@@ -14,6 +14,7 @@ export type ModelDescriptor = {
   voices: ModelVoices | null;
   tool_support?: boolean;
   context_limit?: number | null;
+  options?: Record<string, string | number | boolean | null>;
 };
 export type ModelCatalog = Partial<Record<CatalogCapability, Record<string, ModelDescriptor[]>>>;
 
@@ -37,6 +38,8 @@ function voices(value: unknown): value is ModelVoices | null {
 
 function model(value: unknown): value is ModelDescriptor {
   return named(value) && record(value) && voices(value.voices) &&
+    (value.options === undefined || (record(value.options) && Object.values(value.options).every((option) =>
+      option === null || typeof option === "string" || typeof option === "boolean" || (typeof option === "number" && Number.isFinite(option))))) &&
     (value.tool_support === undefined || typeof value.tool_support === "boolean") &&
     (value.context_limit === undefined || value.context_limit === null ||
       (typeof value.context_limit === "number" && Number.isSafeInteger(value.context_limit) && value.context_limit > 0));

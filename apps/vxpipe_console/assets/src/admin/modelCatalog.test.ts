@@ -9,7 +9,7 @@ test("parses the backend model and separate voice contract", () => {
 });
 
 test("a malformed catalog cannot silently replace provider recommendations", () => {
-  for (const value of [null, [], { unknown: {} }, { text_to_speech: { deepgram: [] } },
+  for (const value of [{ speech_to_text: { deepgram: [{ ...model, options: "invalid" }] } }, null, [], { unknown: {} }, { text_to_speech: { deepgram: [] } },
     { text_to_speech: { deepgram: [model, { ...model, id: "duplicate-default" }] } },
     { text_to_speech: { deepgram: [{ ...model, voices: { type: "free_text", default: "hannah" } }] } },
   ]) expect(() => parseModelCatalog(value)).toThrow("Model catalog could not be loaded");

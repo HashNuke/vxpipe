@@ -75,7 +75,11 @@
         "default": true,
         "id": "flux-general-multi",
         "name": "Flux General Multilingual",
-        "voices": null
+        "voices": null,
+        "options": {
+          "encoding": "linear16",
+          "sample_rate": 48000
+        }
       }
     ],
     "elevenlabs": [
@@ -151,7 +155,11 @@
         "default": true,
         "id": "flux-general-multi",
         "name": "Flux General Multilingual",
-        "voices": null
+        "voices": null,
+        "options": {
+          "encoding": "linear16",
+          "sample_rate": 48000
+        }
       }
     ],
     "elevenlabs": [

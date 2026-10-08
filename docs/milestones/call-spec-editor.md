@@ -514,37 +514,43 @@ suite passes 3,374 tests, zero failures, 120 excluded (seed 487098). No live tes
 Outcome: framework-free TypeScript functions hold a call spec source, edit it, validate it on the
 client and project it to a graph, round-tripping every supported source without loss.
 
-- [ ] **S1 — Red round-trip tests.** Under `apps/vxpipe_console/assets/src/admin/callSpecEditor/`,
+- [x] **S1 — Red round-trip tests.** Under `apps/vxpipe_console/assets/src/admin/callSpecEditor/`,
   load each file in `examples/call-specs/` and expect parse → project → serialize to produce an
   identical JSON value. Fails because the module does not exist.
-- [ ] **S2 — Types.** Define TypeScript types for schema `20261004.01`: direction blocks,
+- [x] **S2 — Types.** Define TypeScript types for schema `20261004.01`: direction blocks,
   participants (human and agent fields), connection, capabilities, first message, tools,
   transfers, transfer history, variable sections and permissions, media policy, wait sounds,
   tool visibility, limits, opening audio and transfer policy. Historical `20260915.01` sources
   open read-only with a notice; the editor does not rewrite them.
-- [ ] **S3 — Edit functions.** Red tests then pure functions: add/remove agent or human
+- [x] **S3 — Edit functions.** Red tests then pure functions: add/remove agent or human
   participant, rename a participant (rewriting `handled_by`, `caller`/`callee`, `transfers`,
   route maps and tool visibility overrides), add/remove a transfer, switch direction, set or
   clear a capability override, set a section permission, add/edit/remove variable sections and
   fields, and set first message, tools, wait sounds and media policy.
-- [ ] **S4 — Graph projection.** Entry node from the direction block, agent and human nodes,
+- [x] **S4 — Graph projection.** Entry node from the direction block, agent and human nodes,
   transfer edges from `transfers`, deterministic layout (entry, then agents, then human
   destinations, ordered by `transfers`) and no positions in the source.
-- [ ] **S5 — Client validation.** Rules returning the same JSON paths the backend uses: required
+- [x] **S5 — Client validation.** Rules returning the same JSON paths the backend uses: required
   fields, string lengths (name 256, description 1,024, transfer notice 4,096, fixed first message
   4,096, prompt 32,768), identifier format, E.164 numbers, ring timeout 5,000 to 60,000, transfer
   attempt timeout 1,000 to 120,000, reference integrity, direction rules (outgoing handler is an
   agent, callee is a human with a phone `dial` connection, no `number_from_variable` on the callee)
   and reserved tool names. A table-driven test checks each rule against the matching V1 backend
   case so client and server paths agree.
-- [ ] **S5b — Error placement and messages.** Pure functions mapping a JSON path to a location
+- [x] **S5b — Error placement and messages.** Pure functions mapping a JSON path to a location
   (node or Call settings, tab, field, operator-facing label such as "Agent assistant › Prompt")
   and an error code plus path pattern to toast text, covering every row of the
   [save and publish outcomes](#error-presentation) table. Table-driven tests include unmappable
   paths falling back to the issues list and the backend `reason`.
-- [ ] **S6 — New spec seed.** A function returning the default new spec (incoming web caller, one
+- [x] **S6 — New spec seed.** A function returning the default new spec (incoming web caller, one
   agent) with recommended defaults filled from a catalog argument.
 - [ ] **Exit S.** Console frontend unit tests, type check and lint pass; no React in this module.
+
+Checkpoint S progress: source operations, graph projection, client validation,
+error placement and catalog-driven seed are implemented. All 73 shared backend
+validation cases pass; the full frontend suite passes 349 tests, type check and
+lint. Final umbrella verification is in progress after the existing Cartesia room
+test was synchronized with startup readiness. See the [source-model decision](../call-spec-editor-source.md).
 
 ## Checkpoint U — Editor in Storybook
 

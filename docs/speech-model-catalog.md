@@ -13,6 +13,10 @@ recommended. A voice descriptor is either a known list with one recommended entr
 or free text with an explicit default; its `parameter` names the source option.
 This preserves provider-specific option names, including Rime's `speaker`, without
 teaching the editor wire formats. STT and Morse models have no voice selector.
+An optional public `options` map supplies required selection defaults. Deepgram STT
+declares `encoding: "linear16"` and `sample_rate: 48000`, so selecting its model
+produces a runnable portable selection without provider-specific frontend logic.
+These recommendations do not change existing saved selections or runtime fallbacks.
 
 Deepgram exposes the public pseudo-model `flux` and a separate voice, as requested
 by the user. This is already supported by the portable selection contract; the

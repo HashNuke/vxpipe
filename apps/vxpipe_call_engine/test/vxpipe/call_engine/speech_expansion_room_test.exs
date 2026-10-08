@@ -24,7 +24,6 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
   }
 
   alias Vxpipe.CallEngine.Media.AudioFrame
-  alias Vxpipe.CallEngine.Readiness.Collector
   alias Vxpipe.CallEngine.Media.Ingress
   alias Vxpipe.CallEngine.{TestAudioOutputSink, TestRoomTTSRequest}
   alias Vxpipe.CallEngine.TestCartesiaSTTTransport, as: CartesiaWire
@@ -156,30 +155,12 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
     attachment = attach(plan, room, nil, false)
     assert_receive {:cartesia_stt_started, wire, _config}, 2_000
 
-    assert :ok =
-             Ingress.prepare_track(attachment.media_ingress, %{
-               track_id: "provider-room",
-               codec: :linear16,
-               sample_rate: 16_000,
-               channels: 1
-             })
-
-    assert {:ok, resources} = Ingress.readiness_resources(attachment.media_ingress)
-    resource = Enum.find(resources, &(&1.kind == :speech_to_text))
-
-    collector =
-      start_supervised!(
-        {Collector,
-         owner: self(),
-         incarnation_id: room.incarnation_id,
-         attempt_id: "cartesia-room",
-         resources: [resource],
-         deadline_ms: System.monotonic_time(:millisecond) + 5_000}
-      )
-
+    # Attach declares the input track; room startup owns preparing it. A second
+    # prepare here can race the startup policy generation and correctly be rejected.
     assert :ok = CartesiaWire.deliver(wire, %{type: "connected", request_id: "room"})
-    assert_receive {:vxpipe_readiness_changed, ^collector, %{status: :ready}}, 2_000
     TestCallStartup.await_ready(plan.room_id)
+    assert {:ok, resources} = Ingress.readiness_resources(attachment.media_ingress)
+    assert Enum.any?(resources, &(&1.kind == :speech_to_text))
     participant = Map.fetch!(plan.participants, plan.entry_caller).participant_id
 
     assert :ok =
