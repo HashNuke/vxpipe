@@ -44,6 +44,26 @@ publication leaves no half-written identity; migration failures retain identity
 and already committed database data for retry. No automatic retired-checkout or
 abandoned-database deletion occurs.
 
+## Repeatable bootstrap
+
+Setup preserves an existing `.env` byte for byte. A new `.env` is atomically
+published with mode 0600, a fresh base64 32-byte credential key, a checkout-specific
+key ID and a random `SECRET_KEY_BASE`. Reruns never rotate these secrets. No invalid
+sample placeholders or live provider credentials enter the generated file.
+
+After `mix deps.get`, setup runs the existing `mix assets.setup` and
+`mix assets.build` aliases, then both database migrations. Every required step must
+succeed before readiness is reported. Unexpected lockfile changes stop setup and
+remain available for review. Build output stays in the private, redacted
+`.vxpipe/setup.log`. Interruptions stop the active build process group and retain
+checkout identity, secrets and data for a later retry.
+
+Mutable dependency/output directories must remain private. Setup rejects inherited
+Mix build/dependency paths outside the checkout and symlinked mutable directories,
+including frontend outputs and Lean's `.lake`. Nested npm workspace links inside
+an ordinary local `node_modules` directory remain supported. Setup does not change
+user overrides, install toolchains, start daemons or contact live providers.
+
 ## Verification and limits
 
 The synthetic setup suite covers missing tools, unsupported versions, unavailable
@@ -55,6 +75,6 @@ unexpected lockfile changes. All external commands in that suite are fixtures.
 Real local acceptance has initialized and rerun one checkout, verified separate
 dev/test targets through actual root/child Mix startup, preserved marker rows across
 rerun, and passed plain child database tests. This is partial milestone evidence;
-fresh concurrent checkout bootstrap, asset/configuration setup, port/session isolation
+fresh concurrent checkout bootstrap, port/session isolation
 and complete simultaneous suites remain required in the
 [worktree setup milestone](milestones/worktree-setup.md).

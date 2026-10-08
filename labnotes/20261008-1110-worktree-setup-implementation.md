@@ -82,3 +82,20 @@
   root database/runtime configuration selection passes 12 tests, seed 908011.
 - Two-worktree proof and complete fresh bootstrap remain pending; checkpoint 2
   stays incomplete. No real live credentials, provider commands or daemon changes.
+
+
+## Checkpoint 3: complete bootstrap (partial)
+
+- Four initial synthetic failures covered absent `.env`, omitted asset steps,
+  accepted shared Mix paths and accepted symlinked mutable directories. The green
+  implementation creates secrets once with private atomic publication, preserves
+  existing files and uses the existing asset aliases in order.
+- A synchronized FIFO/child-process test then reproduced SIGTERM leaving the build
+  running (parent exit -15). Signal forwarding now stops/waits for the active build
+  group and exits 143; rerun retains identity. No timing sleep is used in the probe.
+- All 24 synthetic setup tests pass. Existing private log redaction and unexpected
+  lockfile-change coverage remain green. Shared overrides are refused, not rewritten.
+- Full bootstrap on the current checkout passes dependencies, asset installation,
+  asset checks/build, dev migration and test migration with unchanged lockfiles.
+  Existing `.env` was preserved. Fresh checkout builds and a complete rerun remain
+  the acceptance gates before completing this checkpoint.

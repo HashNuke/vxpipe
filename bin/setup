@@ -3,31 +3,48 @@
 import argparse
 from pathlib import Path
 import sys
+import signal
+import shlex
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from setup_preflight import SetupError, preflight
 from worktree_state import identity, setup_lock
 from setup_database import preflight_connections, prepare_databases
 from setup_steps import run_step
+from setup_environment import initialize_environment
+from setup_isolation import check_isolation
 
 
 def main():
     parser = argparse.ArgumentParser(usage="Usage: bin/setup", description=__doc__)
     parser.parse_args()
     root = Path(__file__).resolve().parent.parent
+    check_isolation(root)
     preflight(root)
     preflight_connections()
     with setup_lock(root):
         metadata = identity(root)
         print(f"Checkout identity: {metadata['id']}", flush=True)
+        initialize_environment(root, metadata["id"])
         prepare_databases(metadata)
         run_step(root, "dev", ["mix", "deps.get"], "Mix dependencies")
+        run_step(root, "dev", ["mix", "assets.setup"], "frontend dependencies")
+        run_step(root, "dev", ["mix", "assets.build"], "frontend build")
         for environment in ("dev", "test"):
             run_step(root, environment, ["mix", "ecto.migrate"], f"{environment} database migration")
-        print("Databases initialized. Asset and local configuration bootstrap remain pending.")
+        print("Ready for local development. Next commands:")
+        print(f"  cd {shlex.quote(str(root))} && bin/dev")
+        print(f"  cd {shlex.quote(str(root))} && mix test")
+        print("Ordinary startup needs no live credentials. Voice samples require separate tenant/provider provisioning.")
+
+
+def interrupted(signum, _frame):
+    raise SystemExit(128 + signum)
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
     try:
         main()
     except SetupError as error:

@@ -32,7 +32,10 @@ def run_step(root, environment, arguments, label):
     try:
         output, _ = process.communicate()
     except BaseException:
-        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
         try:
             process.communicate(timeout=10)
         except subprocess.TimeoutExpired:

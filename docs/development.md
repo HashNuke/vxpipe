@@ -15,11 +15,11 @@ Rust, C/C++ build tools, `pkg-config`, and OpenSSL development headers.
 
 The `--tailscale` mode of either development launcher also requires Tailscale and `jq`.
 
-## Initialize checkout databases
+## Initialize a checkout
 
-`bin/setup` currently prepares Mix dependencies and isolated development/test
-databases; asset installation and local `.env` bootstrap are the next worktree
-milestone checkpoint. It requires Python 3.10+, Git and the prerequisites above.
+`bin/setup` prepares Mix dependencies, frontend dependencies/builds, private local
+platform secrets and isolated development/test databases. It preserves existing
+`.env` files and database contents. It requires Python 3.10+, Git and the prerequisites above.
 Run it from either a root checkout or a linked Git worktree:
 
 ```shell
@@ -39,10 +39,14 @@ Existing legacy databases are preserved. Explicit database URLs/names override
 metadata, but setup refuses shared dev/test targets or an existing database without
 this checkout's ownership marker. See [checkout isolation](worktree-isolation.md)
 for connection selection, failure recovery and current acceptance limits.
+Setup rejects shared `MIX_BUILD_PATH` / `MIX_DEPS_PATH` overrides and symlinked
+mutable output directories. Keep caches shared only through package-manager download
+caches, then rerun after fixing failures reported in the private `.vxpipe/setup.log`.
 
 ## Start the development stack
 
-Install the application and Console frontend dependencies from the repository root:
+After `bin/setup`, proceed to `bin/dev` below. For manual setup, install the
+application and Console frontend dependencies from the repository root:
 
 ```shell
 mix deps.get
@@ -56,8 +60,9 @@ After `bin/setup`, these commands use the checkout-specific database instead:
 mix do ecto.create, ecto.migrate
 ```
 
-Copy the visible [`env.sample`](../env.sample) to the ignored repository-root `.env`
-and replace its encryption-key placeholders. Follow
+For manual setup without `bin/setup`, copy the visible [`env.sample`](../env.sample)
+to the ignored repository-root `.env` and replace its encryption-key placeholders.
+Keep an existing setup-generated `.env`; its keys are already valid. Follow
 [provider credential setup](provider-credential-storage.md#configure-and-provision) to
 bootstrap a tenant and provision its Google and Deepgram credentials through protected stdin.
 Operator Mix commands need these platform variables exported in their launching shell.

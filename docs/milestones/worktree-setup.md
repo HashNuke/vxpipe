@@ -2,7 +2,8 @@
 
 Status: in progress; **1 of 6 checkpoints complete**. Branch-lifetime live-test
 ownership is implemented and verified with synthetic commands (2026-10-08). Setup
-and concurrent-worktree acceptance remain pending. Research and local specification
+now prepares databases, assets and local secrets; fresh/concurrent acceptance,
+temporary-file isolation and development port/session isolation remain pending. Research and local specification
 review completed 2026-10-08.
 
 Prerequisites: the existing database/configuration contracts from
@@ -92,8 +93,8 @@ cd ../vxpipe-feature
 bin/setup
 ```
 
-The initial `bin/setup` now prepares dependencies and isolated databases; complete
-asset/configuration bootstrap and concurrent acceptance remain pending. A new
+The initial `bin/setup` now prepares dependencies, assets, local secrets and isolated
+databases; fresh/concurrent acceptance remains pending. A new
 worktree receives committed files, so its branch must contain the setup
 implementation. Uncommitted setup changes in another checkout are not inherited.
 
@@ -154,23 +155,23 @@ Prerequisites: existing persistence configuration; no dependency on checkpoint 1
 Owning files: new `bin/setup`, a focused metadata reader, runtime/test configuration,
 `.gitignore`, shell setup tests and configuration boundary tests.
 
-- [ ] Red-test root/linked worktree discovery from another directory, absent tools,
+- [x] Red-test root/linked worktree discovery from another directory, absent tools,
   unusable PostgreSQL, insufficient DB privileges and actionable non-secret errors.
-- [ ] Implement setup preflight for the documented toolchain and the selected DB
+- [x] Implement setup preflight for the documented toolchain and the selected DB
   connection. Do not install system packages or change roles/toolchains implicitly.
-- [ ] Red-test first initialization, rerun, interrupted write, concurrent setup of
+- [x] Red-test first initialization, rerun, interrupted write, concurrent setup of
   the same checkout, duplicate copied metadata and malformed/unsupported metadata.
-- [ ] Persist an ignored versioned `.vxpipe/worktree.json` with an atomically written
+- [x] Persist an ignored versioned `.vxpipe/worktree.json` with an atomically written
   random lowercase hexadecimal checkout ID and bounded dev/test database names.
   Use a local setup lock; keep IDs stable across reruns and branch switches.
-- [ ] Red-test effective dev/test database selection in actual root and child Mix
+- [x] Red-test effective dev/test database selection in actual root and child Mix
   invocations, existing environment overrides, no-metadata legacy behavior and
   production ignoring checkout metadata. Implement the runtime defaults described
   below, preserving sandbox settings and test/dev separation.
-- [ ] Support this machine's socket/current-role dev connection when no explicit
+- [x] Support this machine's socket/current-role dev connection when no explicit
   URL is supplied. Preserve explicit remote/container URL precedence. Reject
   conflicting shared targets before a setup migration; never log credential URLs.
-- [ ] Fetch Mix dependencies and create/migrate only the selected dev and test DBs.
+- [x] Fetch Mix dependencies and create/migrate only the selected dev and test DBs.
   Red-test partial migration/setup failure and data-preserving reruns. Never reset,
   drop or silently adopt another checkout's DB. Document focused child-test use.
 
@@ -191,19 +192,19 @@ focused tests using plain `mix test`, without shell activation or shared DB stat
 Prerequisite: checkpoint 2. Owning files: `bin/setup`, existing asset aliases,
 setup shell tests and the development guide.
 
-- [ ] Red-test preservation of an existing `.env`, first creation, private file
+- [x] Red-test preservation of an existing `.env`, first creation, private file
   permissions, no secret output and reruns without key rotation. Generate a fresh
   32-byte credential encryption key/key ID and suitable local `SECRET_KEY_BASE`
   only for a new `.env`; do not copy invalid placeholders from `env.sample`.
-- [ ] Run `mix assets.setup` then `mix assets.build` after `mix deps.get`. Reuse the
+- [x] Run `mix assets.setup` then `mix assets.build` after `mix deps.get`. Reuse the
   existing root npm/package build and Console installation sequence. Detect and
   report unexpected lockfile changes; keep build and installation output local.
-- [ ] Red-test failure propagation and successful rerun after dependency, asset and
+- [x] Red-test failure propagation and successful rerun after dependency, asset and
   database failures. Never report full readiness after an incomplete required step.
-- [ ] Detect inherited shared `MIX_BUILD_PATH` / `MIX_DEPS_PATH` and shared/symlinked
+- [x] Detect inherited shared `MIX_BUILD_PATH` / `MIX_DEPS_PATH` and shared/symlinked
   mutable dependency/output directories before claiming isolation. Preserve user
   configuration and explain how to resolve conflicting settings.
-- [ ] Print completed steps and exact next commands without credentials. Explain
+- [x] Print completed steps and exact next commands without credentials. Explain
   that ordinary local startup needs no live credentials, while actual voice samples
   still require separate tenant/provider provisioning.
 - [ ] Verify fresh bootstrap on the existing machine and a data-preserving rerun;
@@ -211,6 +212,12 @@ setup shell tests and the development guide.
 
 Exit: one command prepares dependencies, assets, configuration and databases for
 local development; a repeat invocation retains all existing data and secrets.
+
+Partial bootstrap evidence (2026-10-08): 24 synthetic tests pass, including new
+secret generation/preservation, required asset ordering, dependency/asset/migration
+failures, private output checks and interruption cleanup. Full bootstrap passes on
+the existing machine checkout with unchanged lockfiles. Fresh-checkout bootstrap
+and the complete rerun are still pending; checkpoint 3 remains incomplete.
 
 ## Checkpoint 4 — Remove cross-process temporary-file collisions
 

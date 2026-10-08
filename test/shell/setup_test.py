@@ -1,8 +1,10 @@
 """Setup CLI contracts; external tools are fixtures, never live providers."""
+import base64
 import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import tempfile
 import unittest
@@ -218,6 +220,117 @@ assert not list((root / '.vxpipe').glob('.worktree.json.*'))
         subprocess.run([str(self.fake / "python3"), "-c", script, str(self.root / "bin/lib"), str(self.root)], check=True)
         result = self.setup()
         self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_new_env_has_private_valid_secrets_and_rerun_does_not_rotate(self):
+        result = self.setup()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        path = self.root / ".env"
+        self.assertTrue(path.exists(), "setup did not create .env")
+        contents = path.read_text()
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        entries = dict(line.split("=", 1) for line in contents.splitlines() if line and not line.startswith("#"))
+        keyring = json.loads(entries["VXPIPE_CREDENTIAL_KEYS"].strip("'"))
+        self.assertEqual(len(base64.b64decode(keyring[entries["VXPIPE_CREDENTIAL_KEY_ID"]])), 32)
+        self.assertGreaterEqual(len(entries["SECRET_KEY_BASE"]), 64)
+        for secret in keyring.values():
+            self.assertNotIn(secret, result.stdout)
+        second = self.setup()
+        self.assertEqual(second.returncode, 0, second.stdout)
+        self.assertEqual(path.read_text(), contents)
+
+    def test_existing_env_is_preserved_byte_for_byte(self):
+        path = self.root / ".env"
+        path.write_text("# existing settings\nSECRET_KEY_BASE=synthetic-existing-secret\n")
+        contents = path.read_bytes()
+        mode = path.stat().st_mode
+        result = self.setup()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(path.read_bytes(), contents)
+        self.assertEqual(path.stat().st_mode, mode)
+        self.assertNotIn("synthetic-existing-secret", result.stdout)
+
+    def test_assets_follow_dependencies_and_failures_never_report_readiness(self):
+        self.tool("mix", 'printf "%s\\n" "$*" >> "$SETUP_COMMAND_LOG"; [[ "$*" != "${SETUP_FAIL_STEP:-never}" ]]')
+        log = self.base / "commands"
+        for failed in ("assets.setup", "assets.build"):
+            result = self.setup(SETUP_COMMAND_LOG=str(log), SETUP_FAIL_STEP=failed)
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertNotIn("Ready", result.stdout)
+        log.write_text("")
+        result = self.setup(SETUP_COMMAND_LOG=str(log))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(log.read_text().splitlines()[:3], ["deps.get", "assets.setup", "assets.build"])
+        self.assertIn("bin/dev", result.stdout)
+        self.assertIn("mix test", result.stdout)
+        self.assertIn("provider", result.stdout)
+
+    def test_shared_build_overrides_fail_before_writing_metadata(self):
+        for name in ("MIX_BUILD_PATH", "MIX_DEPS_PATH"):
+            result = self.setup(**{name: str(self.base / "shared")})
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn(name, result.stdout)
+            self.assertFalse((self.root / ".vxpipe/worktree.json").exists())
+
+    def test_symlinked_mutable_output_is_refused(self):
+        shared = self.base / "shared"
+        shared.mkdir()
+        for name in ("deps", "_build", "node_modules", "packages/core/dist", "apps/vxpipe_console/assets/node_modules", "verification/.lake"):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.symlink_to(shared, target_is_directory=True)
+            result = self.setup()
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("private", result.stdout)
+            path.unlink()
+
+    def test_build_logs_redact_environment_secrets(self):
+        self.tool("mix", 'printf "%s\\n" "$SECRET_KEY_BASE" "$VXPIPE_DB_URL"; exit 1')
+        result = self.setup(SECRET_KEY_BASE="synthetic-private-secret", VXPIPE_DB_URL="postgres://fixture:synthetic-password@localhost/private")
+        self.assertNotEqual(result.returncode, 0)
+        output = result.stdout + (self.root / ".vxpipe/setup.log").read_text()
+        self.assertNotIn("synthetic-private-secret", output)
+        self.assertNotIn("synthetic-password", output)
+
+    def test_interrupt_stops_the_active_build_and_rerun_keeps_identity(self):
+        ready = self.base / "ready"
+        stopped = self.base / "stopped"
+        os.mkfifo(ready)
+        helper = self.fake / "mix"
+        helper.write_text("""#!/usr/bin/env python3
+import os, signal, sys
+from pathlib import Path
+def stop(signum, frame):
+    Path(os.environ['SETUP_STOPPED']).touch()
+    sys.exit(143)
+signal.signal(signal.SIGTERM, stop)
+with open(os.environ['SETUP_READY'], 'w') as stream:
+    stream.write(str(os.getpid()) + '\\n')
+signal.pause()
+""")
+        helper.chmod(0o755)
+        process = subprocess.Popen([str(self.root / "bin/setup")], cwd=self.base,
+                                   env=self.environment | {"SETUP_READY": str(ready), "SETUP_STOPPED": str(stopped)},
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        with ready.open() as stream:
+            child = int(stream.read().strip())
+        try:
+            metadata = (self.root / ".vxpipe/worktree.json").read_text()
+            process.terminate()
+            output, _ = process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 143, output)
+            self.assertTrue(stopped.exists(), "setup left its build running")
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.communicate()
+            try:
+                os.killpg(child, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        self.tool("mix", "exit 0")
+        result = self.setup()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual((self.root / ".vxpipe/worktree.json").read_text(), metadata)
 
 
 if __name__ == "__main__":
