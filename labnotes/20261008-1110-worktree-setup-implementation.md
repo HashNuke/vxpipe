@@ -283,3 +283,27 @@
 - B's already-failing run is stopped and its logs preserved. Its replacement full
   suite includes both assertion corrections and overlaps A's restarted suite.
   Runtime implementation remains identical between the acceptance worktrees.
+
+## Complete acceptance
+
+- A at `0e0b0186`: default umbrella `mix test` runs 13:09:47–13:22:25 UTC.
+  B at `5c8dd446`: default umbrella `mix test` runs 13:12:02–13:24:31 UTC.
+  Both complete all nine app summaries: 3,322 reported tests, zero failures,
+  120 exclusions. Actual overlap is 10 minutes 23 seconds. Both use two schedulers.
+- Runtime code is identical in these revisions. A is then fast-forwarded to the
+  final test correction and all 12 outgoing HTTP tests pass. Earlier interrupted
+  runs are not acceptance evidence even when SIGTERM made the VM return zero.
+- Both unused-dependency checks pass. Root formatting, warnings-as-errors compile
+  and strict Credo pass. The latest runtime change already passed Lean's build,
+  oracle comparison and Elixir replay. Optional setup reruns with docs and Lean
+  pass in both checkouts; six mutable directory pairs remain separate.
+- The synthetic owner file retains A throughout ordinary tests. A explicitly
+  releases, B claims with fake Mix and empty fixture credentials, and B releases.
+  Temporary ownership fixtures are removed. The real credential file is untouched;
+  no actual live test, carrier operation or Tailscale daemon operation occurred.
+- Rendered acceptance, frontend checks and focused concurrent child evidence are
+  recorded above. Optional real Tailscale HTTPS was not exercised. Task-owned
+  browser/server processes are stopped; worktrees/databases remain for reuse.
+- Documentation relative links and whitespace checks pass. The milestone and
+  index now mark all six checkpoints complete. Unrelated preexisting labnotes
+  remain untouched and untracked.

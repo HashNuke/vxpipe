@@ -1,9 +1,9 @@
 # Worktree setup and concurrent development
 
-Status: in progress; **5 of 6 checkpoints complete**. Branch ownership, isolated
-databases, fresh/repeatable bootstrap, temporary-file and development port/session
-isolation are verified (2026-10-08). Complete concurrent umbrella acceptance remains
-in progress. Research and local specification review completed 2026-10-08.
+Status: complete; **6 of 6 checkpoints complete** (2026-10-08). Repeatable setup,
+branch ownership, database/build/file/port/session isolation, rendered development
+servers and two overlapping complete default umbrella suites pass. Research and
+local specification review completed 2026-10-08. No real live tests were run.
 
 Prerequisites: the existing database/configuration contracts from
 [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md)
@@ -291,7 +291,7 @@ Prerequisites: checkpoints 1–5.
 - [x] Create two independent worktrees containing the implementation; run setup
   concurrently, rerun it, and inspect identities, DB targets and mutable outputs.
   Record commands and results without secrets or machine-specific absolute paths.
-- [ ] Run two full default umbrella suites concurrently. Run focused child suites,
+- [x] Run two full default umbrella suites concurrently. Run focused child suites,
   relevant npm tests/builds and optional Lean verification in separate worktrees.
   Record actual overlap and independent state, not just two sequential passes.
 - [x] Claim live testing from one branch; prove another branch is refused for every
@@ -301,15 +301,58 @@ Prerequisites: checkpoints 1–5.
 - [x] Complete rendered multi-server checks and all four runner shell suites.
   Real live-provider execution is not required to prove exclusion; any separately
   requested smoke run must use the owning branch and existing resources.
-- [ ] Pass root formatting, warnings-as-errors compilation, strict Credo, default
+- [x] Pass root formatting, warnings-as-errors compilation, strict Credo, default
   tests and unused-dependency checks. Fix project-owned failures and document
   resource limits or unresolved barriers rather than checking off partial work.
-- [ ] Synchronize development/live-runner instructions, checkpoint evidence,
+- [x] Synchronize development/live-runner instructions, checkpoint evidence,
   labnotes and this milestone's index entry. Mark the milestone complete only
   after every required exit and acceptance gate passes.
 
 Exit: the documented one-command setup and concurrent non-live workflow have
 end-to-end evidence, with the shared branch-name file controlling live-test ownership.
+
+### Complete acceptance evidence — 2026-10-08
+
+Both worktrees ran ordinary `mix test` from their umbrella roots with
+`ERL_FLAGS='+S 2:2'`. Each reports **3,322 tests, zero failures, 120 excluded**
+across all nine umbrella applications. External-service/live lanes stayed excluded.
+
+| Worktree branch | Tested revision | Full default suite (UTC) | Result |
+| --- | --- | --- | --- |
+| `worktree-setup-acceptance-a` | `0e0b0186` | 13:09:47–13:22:25 | Pass |
+| `worktree-setup-acceptance-b` | `5c8dd446` | 13:12:02–13:24:31 | Pass |
+
+The complete passing runs overlap for **10 minutes 23 seconds**. Runtime code is
+identical in both revisions; B additionally contains the Registry-cleanup test
+correction and labnotes. A was then fast-forwarded and all 12 affected outgoing
+HTTP tests passed. No source was changed in either checkout during its full run.
+
+- Root `mix format --check-formatted`, `mix compile --warnings-as-errors`,
+  `mix credo --strict`, and `mix deps.unlock --check-unused` pass. Both completed
+  umbrella runs also pass the unused-dependency check.
+- Fresh concurrent setup, stable reruns and final `bin/setup --with-docs --with-lean`
+  reruns pass. IDs, dev/test targets, ports and six mutable dependency/build
+  directories remain independent. Earlier Providers/Persistence child suites ran
+  concurrently and passed (checkpoint 4).
+- All 32 synthetic setup tests, five runner/ownership shell suites and launcher
+  checks pass. Frontend acceptance passes 40 workspace tests, 219 Console tests,
+  TypeScript/build, three Astro tests and Astro build. Lean build, oracle drift
+  comparison and Elixir replay pass, including a fresh checkout.
+- The synthetic branch claim persists through ordinary tests and local Console
+  startup on the non-owning branch. A explicitly releases it, B claims with fake
+  Mix, then B releases it. Only temporary fixture state and empty fixture
+  credentials are used; the real live credential file is never accessed.
+- Concurrent acceptance exposed and corrected temporary-file collisions, startup
+  and teardown assertion races, archive-test capacity, speech-tree shutdown
+  handling and [obsolete speech after handoff recovery](../stale-speech-output.md).
+  Earlier failed/interrupted runs are recorded in the
+  [implementation labnotes](../../labnotes/20261008-1110-worktree-setup-implementation.md),
+  not counted as passing acceptance.
+
+Rendered browser evidence is recorded in checkpoint 5. Optional real Tailscale
+HTTPS remains unexercised; synthetic coverage passes. Task-owned servers and the
+browser are stopped. Acceptance worktrees and their databases remain available;
+no destructive cleanup or real live-provider run was performed.
 
 ## Configuration must work after setup exits
 
@@ -411,7 +454,7 @@ or process supervision. Release before switching or deleting the owning branch.
   databases and URLs stable. Worktree deletion/database cleanup should be a future
   explicit operation, not an automatic setup side effect.
 
-## Research evidence
+## Research evidence before implementation
 
 - Read the launchers, runtime/test configuration, Mix/npm manifests, native build
   configuration, database durability tests, live runner and existing shell tests.
@@ -424,7 +467,8 @@ or process supervision. Release before switching or deleting the owning branch.
   exited zero. This confirms the lock bypass; no live service was contacted.
 - No actual live credential file was read or modified. No real live tests, carrier
   operations, Tailscale changes, new databases or new worktrees were performed.
-  Full concurrent umbrella acceptance remains unverified.
+  Full concurrent umbrella acceptance was unverified at that research stage;
+  implementation evidence is recorded in checkpoint 6 above.
 
 ## Specification review
 

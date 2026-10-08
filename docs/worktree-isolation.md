@@ -129,6 +129,9 @@ Real local acceptance has initialized and rerun the original checkout and two fr
 worktrees, verified distinct marked dev/test databases and private output directories,
 preserved secrets/metadata, and passed both owning child suites concurrently.
 Synthetic port/launcher/cookie checks and rendered multi-server acceptance pass,
-including same-host login/logout and Console/Astro live reload. Complete
-simultaneous umbrella suites remain required in the
-[worktree setup milestone](milestones/worktree-setup.md).
+including same-host login/logout and Console/Astro live reload. Two complete default
+umbrella suites each report 3,322 tests with zero failures (120 excluded), overlapping
+for 10 minutes 23 seconds. Root quality gates, frontend checks and Lean verification
+pass. See the [worktree setup milestone](milestones/worktree-setup.md#complete-acceptance-evidence--2026-10-08)
+for revisions and evidence. No real live-provider tests were run; optional real
+Tailscale HTTPS remains outside the exercised acceptance.
