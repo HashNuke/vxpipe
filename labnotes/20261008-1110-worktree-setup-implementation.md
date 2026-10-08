@@ -215,3 +215,26 @@
   already corrected above. Gateway passes all 585 cases (8 excluded), including
   the previously intermittent five-participant handoff; Console passes 237 cases
   (15 excluded). Final concurrent runs contain the acknowledgement fix.
+
+
+## Concurrent acceptance failure fixes
+
+- The first simultaneous complete runs each find one additional CallEngine issue.
+  One loses the speech connection tree between `DynamicSupervisor.start_child`
+  returning and child discovery during provider-start failure. The resulting
+  `:noproc` exits the attaching caller instead of returning the existing typed
+  unavailable error. Two deterministic boundary tests reproduce dead/missing child
+  discovery; both fail before the fix and pass afterward.
+- Connection-tree child discovery now returns `{:error, :unavailable}` when the
+  tree exits or either required child is missing, using the existing attachment
+  failure path. This changes failure handling, not speech/source-cutover transitions.
+- The generated variable-action archival test used a four-fact queue for a much
+  larger event stream. Bounded archive handoff deliberately drops on overflow;
+  contention can discard the expected variable snapshot. That scenario now uses
+  capacity 64. Existing small-queue overflow tests remain unchanged.
+- The affected tree, lifecycle and call-spec suites pass together: 50 tests with
+  two schedulers. The first concurrent umbrella runs continue to collect remaining
+  failures; final green umbrella acceptance is still pending.
+- Formatting, warnings-as-errors compilation, strict Credo and unused-dependency
+  checks pass after these fixes. Lean build, oracle comparison and Elixir replay
+  also pass from the original umbrella root.

@@ -1188,7 +1188,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     plan = compile_variables_plan(room_id)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
-    archive = archive_options()
+    archive = archive_options(maximum_pending_facts: 64)
 
     assert {:ok, room} =
              Vxpipe.CallEngine.TestCallStartup.start_call(plan,

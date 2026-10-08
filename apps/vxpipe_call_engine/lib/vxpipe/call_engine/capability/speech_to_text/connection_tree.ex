@@ -28,7 +28,16 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.ConnectionTree do
 
   def children(tree) do
     children = Map.new(Supervisor.which_children(tree), fn {id, pid, _, _} -> {id, pid} end)
-    {:ok, Map.fetch!(children, SpeechToText), Map.fetch!(children, Ingress)}
+
+    case {Map.get(children, SpeechToText), Map.get(children, Ingress)} do
+      {capability, ingress} when is_pid(capability) and is_pid(ingress) ->
+        {:ok, capability, ingress}
+
+      _unavailable ->
+        {:error, :unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :unavailable}
   end
 
   def parent(capability) when is_pid(capability) do
