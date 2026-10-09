@@ -4,7 +4,7 @@ import type { EditorSnapshot } from "./editor-state";
 import { newCallSpec } from "./seed";
 import { parseSource } from "./source";
 
-export type EditorScenario = "default" | "new" | "invalid" | "published" | "outgoing" | "historical" | "long";
+export type EditorScenario = "default" | "new" | "invalid" | "published" | "outgoing" | "historical" | "long" | "large-integers";
 export function pageSnapshot(scenario: EditorScenario): EditorSnapshot {
   if (scenario === "new") return { document: newCallSpec(modelCatalogFixture) };
   const document = structuredClone(editorFixture);
@@ -20,6 +20,11 @@ export function pageSnapshot(scenario: EditorScenario): EditorSnapshot {
     document.source.name = "New patient appointment intake, appointment changes, follow-up questions and specialist transfer for the regional care team";
     intake.prompt = "Ask one question at a time. Confirm the appointment date with the caller before booking.\n".repeat(120);
     intake.description = "Handles appointment scheduling and routes complex questions to the appropriate specialist. ".repeat(8);
+  }
+  if (scenario === "large-integers") {
+    document.source.call_variables!.sections!.account = { schema: { type: "object", properties: {
+      id: { type: "integer", enum: [9007199254740992n, 9007199254740993n], minimum: -9007199254740993n },
+    } } };
   }
   if (scenario === "historical") {
     document.source.schema_version = "20260915.01";

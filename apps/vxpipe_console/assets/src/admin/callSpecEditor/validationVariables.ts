@@ -1,3 +1,4 @@
+import { stringifySourceJson } from "./source-json";
 import { Fields, record, type ObjectValue } from "./validationFields";
 
 const types = ["array", "boolean", "integer", "null", "number", "object", "string"];
@@ -40,8 +41,11 @@ function schema(fields: Fields, value: unknown, path: string[]): void {
     if (!Array.isArray(node.enum) || !node.enum.length) fields.issue([...path, "enum"], "must be a non-empty array");
     else if (new Set(node.enum.map(canonical)).size !== node.enum.length) fields.issue([...path, "enum"], "must contain unique JSON values");
   }
-  for (const keyword of integers) if (Object.hasOwn(node, keyword)) fields.integer(node[keyword], [...path, keyword], 0, Number.MAX_SAFE_INTEGER);
-  for (const keyword of numbers) if (Object.hasOwn(node, keyword) && (typeof node[keyword] !== "number" || !Number.isFinite(node[keyword]))) fields.issue([...path, keyword], "must be a number");
+  for (const keyword of integers) if (Object.hasOwn(node, keyword)) {
+    const value = node[keyword];
+    if (typeof value === "bigint" ? value < 0n : typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) fields.issue([...path, keyword], "must be a non-negative integer");
+  }
+  for (const keyword of numbers) if (Object.hasOwn(node, keyword) && (typeof node[keyword] !== "bigint" && (typeof node[keyword] !== "number" || !Number.isFinite(node[keyword])))) fields.issue([...path, keyword], "must be a number");
   if (node.properties !== undefined) for (const [key, child] of Object.entries(fields.object(node.properties, [...path, "properties"]))) schema(fields, child, [...path, "properties", key]);
   if (Object.hasOwn(node, "items")) schema(fields, node.items, [...path, "items"]);
 }
@@ -49,7 +53,7 @@ function schema(fields: Fields, value: unknown, path: string[]): void {
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (record(value)) return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
-  return JSON.stringify(value);
+  return stringifySourceJson(value)!;
 }
 
 function dialReference(fields: Fields, key: string, ref: ObjectValue, sections: ObjectValue, participants: ObjectValue): void {

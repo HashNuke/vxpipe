@@ -225,3 +225,27 @@ seed 991936). Desktop/phone browser checks cover authoring, failures, history an
 responsive refitting. All three examples preserve source digests through tenant
 API creation and editor saves. A published editor route starts a local call with
 a synthetic credential and no provider generation request. No live tests ran.
+
+## Exact source integers
+
+The editor parses source JSON with [lossless-json](https://github.com/josdejong/lossless-json), retaining integer tokens beyond
+JavaScript's safe integer range as native `bigint` values. Safe integers and
+floating-point tokens retain ordinary number behavior. Source serialization emits
+big integers as unquoted JSON numbers; the backend contract is unchanged. The
+codec is shared by API reads/writes, source export, dirty-state comparison and
+backend-issue retention. Structured numeric controls parse their input text through
+the same integer conversion, and schema validation accepts arbitrary-size integer
+bounds while retaining non-negative checks on length/item constraints.
+
+Native `Response.json()` was rejected for source reads because precision is
+already lost before a later serializer can recover it. Converting large integers
+to strings would change enum and option types. Making valid documents read-only
+would avoid corruption but unnecessarily remove authoring support. A dedicated
+JSON parser avoids relying on newly introduced browser reviver/raw-JSON APIs or
+maintaining a project-owned JSON tokenizer. Native bigint also survives the
+editor's structured clones without custom object reconstruction.
+
+The original API round-trip regression now preserves `9007199254740993` exactly.
+Focused tests cover negative and larger integers, adjacent enum values, numeric
+bounds, numeric-looking strings, revision state, unrelated edits and source export.
+The Large Integers page story exercises the same inspector and editor lifecycle.

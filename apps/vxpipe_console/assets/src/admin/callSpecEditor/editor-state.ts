@@ -1,3 +1,4 @@
+import { stringifySourceJson } from "./source-json";
 import { applyActionResult, emptyActionFeedback, feedbackAfterEdit, type EditorActionFeedback } from "./action-feedback";
 import type { ActionFeedback, ActionResult } from "./errorPresentation";
 import type { CallSpecSource, SourceDocument, SourceIssue } from "./types";
@@ -35,7 +36,7 @@ export function createEditorState(snapshot: EditorSnapshot): EditorState {
 }
 
 export function isDirty(state: EditorState): boolean {
-  return !state.savedSource || JSON.stringify(state.document.source) !== JSON.stringify(state.savedSource);
+  return !state.savedSource || stringifySourceJson(state.document.source) !== stringifySourceJson(state.savedSource);
 }
 
 export function editorReducer(state: EditorState, event: EditorEvent): EditorState {

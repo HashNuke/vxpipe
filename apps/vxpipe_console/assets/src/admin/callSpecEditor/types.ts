@@ -1,6 +1,7 @@
 import type { CatalogCapability } from "../modelCatalog";
 
-export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+// Large integers are bigint in memory; source-json preserves their JSON number encoding.
+export type JsonValue = null | boolean | number | bigint | string | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 export type CapabilitySelection = {
   provider: string;
@@ -62,14 +63,14 @@ export type VariableSchema = {
   additionalProperties?: boolean;
   enum?: JsonValue[];
   items?: VariableSchema;
-  minimum?: number;
-  maximum?: number;
-  exclusiveMinimum?: number;
-  exclusiveMaximum?: number;
-  minItems?: number;
-  maxItems?: number;
-  minLength?: number;
-  maxLength?: number;
+  minimum?: number | bigint;
+  maximum?: number | bigint;
+  exclusiveMinimum?: number | bigint;
+  exclusiveMaximum?: number | bigint;
+  minItems?: number | bigint;
+  maxItems?: number | bigint;
+  minLength?: number | bigint;
+  maxLength?: number | bigint;
 };
 export type VariableSection = { schema: VariableSchema };
 export type WaitSoundSlot = "call_setup" | "transfer_to_agent" | "transfer_to_human" | "transfer_joining";

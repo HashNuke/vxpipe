@@ -1,3 +1,4 @@
+import { stringifySourceJson } from "./source-json";
 import { useRef } from "react";
 import { Copy, Download } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -7,7 +8,7 @@ import type { ActionFeedback } from "./errorPresentation";
 import type { CallSpecSource } from "./types";
 export function SourceView({ open, onOpenChange, source, onFeedback }: { open: boolean; onOpenChange: (open: boolean) => void; source: CallSpecSource; onFeedback: (feedback: ActionFeedback) => void }) {
   const opener = useRef<HTMLElement | null>(null);
-  const text = JSON.stringify(source, null, 2);
+  const text = stringifySourceJson(source, 2)!;
   async function copy() {
     try { await navigator.clipboard.writeText(text); onFeedback({ tone: "success", persistent: false, message: "Copied call spec JSON" }); }
     catch { onFeedback({ tone: "error", persistent: true, message: "Couldn't copy JSON. Select the text and copy it manually." }); }

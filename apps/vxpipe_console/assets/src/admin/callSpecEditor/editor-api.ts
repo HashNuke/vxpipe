@@ -1,3 +1,4 @@
+import { parseSourceJson, stringifySourceJson } from "./source-json";
 import { catalogCapabilities, parseModelCatalog, type ModelCatalog } from "../modelCatalog";
 import type { EditorSnapshot } from "./editor-state";
 import type { AuthoringError } from "./errorPresentation";
@@ -20,7 +21,7 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
   async function get(path: string, signal: AbortSignal): Promise<Record<string, unknown>> {
     const response = await fetch(path, options(signal));
     if (!response.ok) throw new EditorReadError(response.status);
-    const body: unknown = await response.json();
+    const body: unknown = parseSourceJson(await response.text());
     if (!record(body)) throw new Error("Invalid editor response");
     return body;
   }
@@ -29,7 +30,7 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     const saved = body.call_spec;
     if (!record(saved) || saved.call_spec_id !== id || !revision(saved.revision) || !revision(saved.latest_revision) ||
       !(saved.published_revision === null || revision(saved.published_revision))) throw new Error("Invalid saved revision");
-    const document = parseSource(JSON.stringify(saved.source));
+    const document = parseSource(stringifySourceJson(saved.source)!);
     if (requestedRevision !== undefined) {
       document.readOnly = true;
       document.notice = `Viewing revision ${saved.revision}. This saved revision is read-only.`;
@@ -42,7 +43,7 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
       : request.callSpecId ? specPath(request.callSpecId) : `${base}/call-specs`;
     const response = await fetch(path, { ...options(signal), method: request.action === "save" && request.callSpecId ? "PUT" : "POST",
       headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": csrf },
-      body: JSON.stringify(request.action === "publish" ? {} : { source: request.source }) });
+      body: stringifySourceJson(request.action === "publish" ? {} : { source: request.source }) });
     // A gateway may return an HTML login/error page. Preserve the HTTP outcome.
     const body: unknown = await response.json().catch(() => undefined);
     if (!response.ok) {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { ChoiceField, NumberField, TextField } from "./editor-fields";
+import { ChoiceField, SourceNumberField, TextField } from "./editor-fields";
 import type { JsonObject, JsonValue, SourceIssue } from "./types";
 
 type Common = { label: string; path: string[]; disabled?: boolean; issues?: SourceIssue[] };
@@ -14,7 +14,7 @@ function initialValue(kind: string): JsonValue {
 function valueKind(value: JsonValue): string {
   if (value === null) return "Null";
   if (Array.isArray(value)) return "Array";
-  return typeof value === "object" ? "Object" : typeof value === "number" ? "Number" : typeof value === "boolean" ? "Boolean" : "String";
+  return typeof value === "object" ? "Object" : (typeof value === "number" || typeof value === "bigint") ? "Number" : typeof value === "boolean" ? "Boolean" : "String";
 }
 
 /** Typed JSON values shared by provider options and schema enumeration values. */
@@ -24,7 +24,7 @@ export function ValueFields({ value, onChange, ...props }: ValueProps) {
     {value === null ? <p className="text-xs text-muted-foreground" data-field-path={JSON.stringify(props.path)}>Null</p>
       : Array.isArray(value) ? <ArrayFields {...props} value={value} onChange={onChange} />
       : typeof value === "object" ? <ObjectFields {...props} value={value} onChange={(next) => onChange(next ?? {})} clearable={false} />
-      : typeof value === "number" ? <NumberField {...props} value={value} onChange={(next) => onChange(next ?? 0)} />
+      : (typeof value === "number" || typeof value === "bigint") ? <SourceNumberField {...props} value={value} onChange={(next) => onChange(next ?? 0)} />
       : typeof value === "boolean" ? <ChoiceField {...props} value={String(value)} choices={[{ value: "true", label: "True" }, { value: "false", label: "False" }]} onChange={(next) => onChange(next === "true")} />
       : <TextField {...props} value={value} onChange={onChange} />}
   </div>;

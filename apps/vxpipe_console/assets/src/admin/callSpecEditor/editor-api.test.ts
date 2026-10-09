@@ -3,6 +3,7 @@ import { modelCatalogFixture } from "../modelCatalogFixtures";
 import { catalogCapabilities } from "../modelCatalog";
 import { editorFixture } from "./editorFixtures";
 import { createEditorApi } from "./editor-api";
+import { validateSource } from "./validation";
 
 const reply = (value: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(value), { status }));
 const stored = { call_spec_id: "hello", revision: 2, latest_revision: 3, published_revision: 1, source: editorFixture.source };
@@ -51,4 +52,25 @@ test("loads installed provider/model listings and safe named lookups without liv
   const signal = new AbortController().signal;
   expect(await api.catalog(signal)).toEqual(Object.fromEntries(catalogCapabilities.map((capability) => [capability, modelCatalogFixture[capability] ?? {}])));
   expect(await api.lookups(signal)).toEqual({ credentialNames: { google: ["primary"] }, telephonyServices: [{ key: "phone", name: "phone" }], mcpIntegrations: ["help"] });
+});
+
+test("a no-op editor save preserves an API-authored integer enum beyond Number precision", async () => {
+  const source = {
+    ...editorFixture.source,
+    call_variables: { sections: { ...editorFixture.source.call_variables?.sections, account: { schema: {
+      type: "object", properties: { external_id: { type: "integer", enum: ["EXACT_INTEGER"] } },
+    } } } },
+  };
+  // Use the actual JSON spelling returned by the server, not an already rounded JS number.
+  const response = JSON.stringify({ call_spec: { ...stored, source } })
+    .replace('"EXACT_INTEGER"', "9007199254740993");
+  const fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+    init?.method === "PUT" ? reply({ call_spec: stored }, 201) : Promise.resolve(new Response(response)));
+  const api = createEditorApi("tenant", "csrf", fetch);
+  const signal = new AbortController().signal;
+  const snapshot = await api.read("hello", signal);
+  expect(validateSource(snapshot.document.source)).toEqual([]);
+  await api.execute({ id: 1, action: "save", callSpecId: "hello", source: snapshot.document.source }, signal);
+
+  expect(fetch.mock.calls.at(-1)?.[1]?.body).toContain('"enum":[9007199254740993]');
 });

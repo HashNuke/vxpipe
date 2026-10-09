@@ -5,7 +5,7 @@ import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
 import { Label } from "../components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/ui/collapsible";
-import { ChoiceField, NumberField, TextField } from "./editor-fields";
+import { ChoiceField, SourceNumberField, TextField } from "./editor-fields";
 import { RenameField } from "./rename-field";
 import { ArrayFields } from "./structured-value-fields";
 import type { SourceIssue, VariableSchema, VariableType } from "./types";
@@ -69,7 +69,7 @@ export function VariableSchemaFields({ value, onChange, label, path, disabled, i
     {value.enum !== undefined && <ArrayFields {...common} label={`${label} enum`} path={[...path, "enum"]} value={value.enum} onChange={(values) => patch({ enum: values })} />}
     {visibleConstraints.length > 0 && <Collapsible open={expanded || !!reveal} onOpenChange={(open) => { setExpanded(open); if (!open) setDismissedRequest(request?.id); }} className="space-y-3">
       <CollapsibleTrigger asChild><Button variant="ghost" size="sm" aria-label={`Constraints for ${label}`}>Constraints<ChevronDown /></Button></CollapsibleTrigger>
-      <CollapsibleContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">{visibleConstraints.map((key) => <NumberField {...common} key={key} label={`${label} ${key}`} path={[...path, key]} value={value[key]} onChange={(next) => next === undefined ? remove(key) : patch({ [key]: next })} />)}</CollapsibleContent>
+      <CollapsibleContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">{visibleConstraints.map((key) => <SourceNumberField {...common} key={key} label={`${label} ${key}`} path={[...path, key]} value={value[key]} onChange={(next) => next === undefined ? remove(key) : patch({ [key]: next })} />)}</CollapsibleContent>
     </Collapsible>}
   </div>;
 }

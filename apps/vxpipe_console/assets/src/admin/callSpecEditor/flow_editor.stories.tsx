@@ -76,6 +76,7 @@ export const PublishedRevision: Story = { args: { scenario: "published" } };
 export const OutgoingCall: Story = { args: { scenario: "outgoing" } };
 export const HistoricalSchema: Story = { args: { scenario: "historical" } };
 export const NarrowViewport: Story = { globals: { viewport: { value: "mobile1", isRotated: false } } };
+export const LargeIntegers: Story = { args: { scenario: "large-integers" } };
 export const LongContent: Story = { args: { scenario: "long" } };
 export const AddParticipant: Story = { play: async ({ canvasElement }) => {
   const body = within(canvasElement.ownerDocument.body); await userEvent.click(body.getByRole("button", { name: "Add agent" }));

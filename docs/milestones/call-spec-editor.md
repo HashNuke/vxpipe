@@ -775,6 +775,11 @@ Outcome: operators create, edit, save and publish call specs in `/admin`.
   validation after rename. All three files under `examples/call-specs/` were also
   created through the tenant API, opened in the production editor and saved without
   edits; each stored JSON value and source digest remained unchanged.
+- Integer-preservation follow-up: the source codec, structured numeric controls,
+  API bodies, exports and change tracking preserve arbitrary-size JSON integers.
+  `integer-source.test.tsx` and the original `editor-api.test.ts` regression cover
+  exact round trips and editing; the Large Integers story was inspected at desktop
+  and phone widths. See the [follow-up labnote](../../labnotes/20261009-0345-preserve-source-integers.md).
 - Server-owned identity follow-up: API/CLI updates cannot create a spec under a
   caller-selected ID. Creation assigns a public UUID internally. Routing tests
   exercise a server-issued UUID; stored legacy IDs are not rewritten. See the

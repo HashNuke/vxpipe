@@ -28,6 +28,8 @@ saved revision after confirming that unsaved changes can be discarded.
 
 **View JSON** lets you inspect, copy or download the portable source. The graph is
 a projection of that source, so a no-op save preserves its meaning and digest.
+Large integer values in enums, schema bounds and provider options retain their
+exact digits when edited, saved or exported. They remain JSON numbers.
 The editor does not store canvas positions or silently migrate older schemas.
 Sources using schema `20260915.01` open read-only.
 

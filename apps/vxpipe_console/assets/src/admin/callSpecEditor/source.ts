@@ -1,7 +1,8 @@
+import { parseSourceJson, stringifySourceJson } from "./source-json";
 import type { CallSpecSource, SourceDocument } from "./types";
 
 export function parseSource(json: string): SourceDocument {
-  const source: unknown = JSON.parse(json);
+  const source: unknown = parseSourceJson(json);
   if (!record(source) || !record(source.participants)) {
     throw new Error("The call spec must be an object with participants.");
   }
@@ -17,7 +18,7 @@ export function parseSource(json: string): SourceDocument {
 }
 
 export function serializeSource(document: SourceDocument): string {
-  return JSON.stringify(document.source, null, 2);
+  return stringifySourceJson(document.source, 2)!;
 }
 
 function record(value: unknown): value is Record<string, unknown> {

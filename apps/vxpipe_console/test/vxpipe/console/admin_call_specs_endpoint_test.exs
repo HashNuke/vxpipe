@@ -195,6 +195,33 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       refute response.resp_body =~ "private-editor-sentinel"
     end
 
+    test "preserves large integer enums in portable source returned to the editor", %{
+      tenant: tenant,
+      authenticated: auth
+    } do
+      source =
+        Map.put(editor_source(), "call_variables", %{
+          "sections" => %{
+            "account" => %{
+              "schema" => %{
+                "type" => "object",
+                "properties" => %{
+                  "external_id" => %{"type" => "integer", "enum" => [9_007_199_254_740_993]}
+                }
+              }
+            }
+          }
+        })
+
+      path = "/admin/api/tenants/#{tenant.key}/call-specs"
+      saved = write(auth, :post, path, %{"source" => source}) |> json_response(201)
+      assert saved["call_spec"]["source"] == source
+      assert saved["call_spec"]["validation_errors"] == []
+      id = saved["call_spec"]["call_spec_id"]
+      read = auth |> recycle() |> https_get(path <> "/#{id}") |> json_response(200)
+      assert read["call_spec"]["source"] == source
+    end
+
     test "identity is generated on creation and cannot be assigned through authoring input", %{
       tenant: tenant,
       authenticated: auth

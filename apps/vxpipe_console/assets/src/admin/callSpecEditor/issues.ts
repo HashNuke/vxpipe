@@ -1,3 +1,4 @@
+import { stringifySourceJson } from "./source-json";
 import { actionOutcome, locateIssue, type ActionResult } from "./errorPresentation";
 import type { CallSpecSource, SourceIssue } from "./types";
 
@@ -25,7 +26,7 @@ export function backendIssue(source: CallSpecSource, result: ActionResult): Sour
   return { code: error.code, path: error.path ?? [], reason: error.code === "private_call_spec_material" ? actionOutcome(source, "save", result).message : error.reason || actionOutcome(source, "save", result).message };
 }
 export function retainBackendIssue(issue: SourceIssue | undefined, previous: CallSpecSource, next: CallSpecSource): SourceIssue | undefined {
-  return issue && JSON.stringify(pathValue(previous, issue.path)) === JSON.stringify(pathValue(next, issue.path)) ? issue : undefined;
+  return issue && stringifySourceJson(pathValue(previous, issue.path)) === stringifySourceJson(pathValue(next, issue.path)) ? issue : undefined;
 }
 function pathValue(source: CallSpecSource, path: string[]): unknown {
   let value: unknown = source;
