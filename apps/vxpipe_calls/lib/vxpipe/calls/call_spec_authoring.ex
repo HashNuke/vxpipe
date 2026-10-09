@@ -3,7 +3,8 @@ defmodule Vxpipe.Calls.CallSpecAuthoring do
   alias Vxpipe.Calls.{CallSpecs, InstallationOperator, Principal, ProviderAuth}
 
   def save(authority, tenant_key, source, options) do
-    with {:ok, options} <- authorize(authority, tenant_key, options) do
+    with {:ok, options} <- authorize(authority, tenant_key, options),
+         :ok <- existing_target(tenant_key, options) do
       CallSpecs.save(tenant_key, source, options)
     end
   end
@@ -11,6 +12,18 @@ defmodule Vxpipe.Calls.CallSpecAuthoring do
   def publish(authority, tenant_key, id, revision, options) do
     with {:ok, options} <- authorize(authority, tenant_key, options) do
       CallSpecs.publish(tenant_key, id, revision, options)
+    end
+  end
+
+  # A supplied ID is only a locator for an existing tenant-owned spec. Creation
+  # leaves it unset so CallSpecs allocates the public UUID internally.
+  defp existing_target(tenant_key, options) do
+    case Keyword.fetch(options, :call_spec_id) do
+      :error ->
+        :ok
+
+      {:ok, id} ->
+        with {:ok, _revision} <- CallSpecs.fetch(tenant_key, id, 1, options), do: :ok
     end
   end
 

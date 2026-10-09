@@ -8,7 +8,7 @@ import { newCallSpec } from "./admin/callSpecEditor/seed";
 vi.mock("./admin/callSpecEditor/flow-canvas", () => ({ FlowCanvas: () => <div>Flow canvas</div> }));
 afterEach(() => { cleanup(); window.history.replaceState({}, "", "/admin"); });
 const source = { ...newCallSpec(modelCatalogFixture).source, name: "Original" };
-const stored = { call_spec_id: "hello", revision: 2, latest_revision: 2, published_revision: 1, source };
+const stored = { call_spec_id: "1c94f0f7-05d5-4919-a7d5-01d7250e4caf", revision: 2, latest_revision: 2, published_revision: 1, source };
 const reply = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
 function transport() {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -19,7 +19,7 @@ function transport() {
       return url.pathname.endsWith("/models") ? reply({ models: models[url.pathname.split("/").at(-2)!] }) : reply({ providers: Object.keys(models).map((id) => ({ id })) });
     }
     if (init?.method === "POST" || init?.method === "PUT") return reply({ call_spec: stored }, 201);
-    if (url.pathname.endsWith("/hello")) return reply({ call_spec: stored });
+    if (url.pathname.endsWith("/1c94f0f7-05d5-4919-a7d5-01d7250e4caf")) return reply({ call_spec: stored });
     if (url.pathname.endsWith("/call-specs")) return reply({ tenant: { key: "demo", name: "Demo" }, call_specs: [], pagination: { page: 1, page_size: 25, total: 0, total_pages: 0 } });
     return reply({}, 404);
   });
@@ -30,17 +30,20 @@ test("new route creates a spec, replaces its URL without losing edits, and publi
   window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
   const fetch = transport(); render(<App csrfToken="csrf" fetchImpl={fetch} />);
   await screen.findByRole("textbox", { name: "Call spec name" }); fill("New draft");
+  expect(screen.queryByLabelText(/public.?id|call spec id/i)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
   await screen.findByText("Saved as revision 2");
-  expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/hello");
+  const submitted = fetch.mock.calls.find(([, init]) => init?.method === "POST");
+  expect(Object.keys(JSON.parse(String(submitted?.[1]?.body)))).toEqual(["source"]);
+  expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   expect(screen.getByRole("textbox", { name: "Call spec name" })).toHaveValue("New draft");
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
   await screen.findByText("Published revision 2");
-  expect(fetch).toHaveBeenCalledWith("/admin/api/tenants/demo/call-specs/hello/revisions/2/publish", expect.objectContaining({ body: "{}" }));
+  expect(fetch).toHaveBeenCalledWith("/admin/api/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf/revisions/2/publish", expect.objectContaining({ body: "{}" }));
 });
 
 test("session expiry keeps the source and disables writes without navigating away", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/hello");
+  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   const fetch = transport(); const expired = vi.fn(); render(<App csrfToken="csrf" fetchImpl={fetch} onSessionExpired={expired} />);
   await screen.findByRole("textbox", { name: "Call spec name" }); fill("Keep this draft");
   fetch.mockImplementation(() => reply({}, 401));
@@ -53,7 +56,7 @@ test("session expiry keeps the source and disables writes without navigating awa
 
 test("browser back and editor Back use a single discard confirmation", async () => {
   window.history.replaceState({}, "", "/admin/tenants/demo/call-specs");
-  window.history.pushState({}, "", "/admin/tenants/demo/call-specs/hello");
+  window.history.pushState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   render(<App csrfToken="csrf" fetchImpl={transport()} />);
   await screen.findByRole("textbox", { name: "Call spec name" }); fill("Unsaved");
   fireEvent.click(screen.getByRole("link", { name: "Back to call specs" }));
@@ -66,7 +69,7 @@ test("browser back and editor Back use a single discard confirmation", async () 
 });
 
 test("explicit revisions are read-only and can open the latest editable revision", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/hello?revision=1");
+  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf?revision=1");
   render(<App csrfToken="csrf" fetchImpl={transport()} />);
   await screen.findByText(/Viewing revision/);
   expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
@@ -76,9 +79,9 @@ test("explicit revisions are read-only and can open the latest editable revision
 });
 
 test("failed initial reads show Retry and unmount aborts requests", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/hello");
+  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   const fetch = transport(); const good = fetch.getMockImplementation()!;
-  fetch.mockImplementation((input, init) => String(input).endsWith("/hello") ? reply({}, 503) : good(input, init));
+  fetch.mockImplementation((input, init) => String(input).endsWith("/1c94f0f7-05d5-4919-a7d5-01d7250e4caf") ? reply({}, 503) : good(input, init));
   const view = render(<App csrfToken="csrf" fetchImpl={fetch} />);
   await screen.findByText("Call spec unavailable");
   fetch.mockImplementation(good); fireEvent.click(screen.getByRole("button", { name: "Retry" }));
@@ -114,8 +117,28 @@ test("URL replacement after creation preserves changes made during the request",
   fill("Newer draft");
   await act(async () => complete(await reply({ call_spec: stored }, 201)));
   expect(await screen.findByText("Saved as revision 2")).toBeVisible();
-  expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/hello");
+  expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   expect(screen.getByRole("textbox", { name: "Call spec name" })).toHaveValue("Newer draft");
   expect(screen.getByText("Unsaved changes")).toBeVisible();
   expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+});
+
+test("the list opens a saved spec by its server-generated public UUID", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs");
+  const fetch = transport(); const good = fetch.getMockImplementation()!;
+  fetch.mockImplementation((input, init) => {
+    const path = new URL(String(input), "https://console.test").pathname;
+    if (path.endsWith("/call-specs")) return reply({
+      tenant: { key: "demo", name: "Demo" },
+      call_specs: [{ id: stored.call_spec_id, name: "Existing API-authored spec", latest_revision: 2,
+        published_revision: 1, call_count: 0, updated_at: "2026-10-08T00:00:00Z" }],
+      pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 },
+    });
+    if (path.endsWith("/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf")) return reply({ call_spec: { ...stored, call_spec_id: stored.call_spec_id } });
+    return good(input, init);
+  });
+  render(<App csrfToken="csrf" fetchImpl={fetch} />);
+  fireEvent.click(await screen.findByRole("link", { name: "Existing API-authored spec" }));
+  expect(await screen.findByRole("textbox", { name: "Call spec name" })).toHaveValue("Original");
+  expect(screen.getByText("Revision 2")).toBeVisible();
 });

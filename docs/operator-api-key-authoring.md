@@ -107,13 +107,17 @@ The authoring step implements the three operations for both URL scopes:
 | Method and suffix | Body | Result |
 | --- | --- | --- |
 | `POST /call-specs` | `{"source": PORTABLE_CALL_SPEC}` | `201`, a new generated spec ID and draft revision |
-| `PUT /call-specs/:call_spec_id` | `{"source": PORTABLE_CALL_SPEC}` | `201`, append a revision under that ID (or create it if absent) |
+| `PUT /call-specs/:call_spec_id` | `{"source": PORTABLE_CALL_SPEC}` | `201`, append a revision to an existing tenant-owned spec; absent IDs return `404` |
 | `POST /call-specs/:call_spec_id/revisions/:revision/publish` | `{}` | `200`, explicitly publish that revision |
 
 Prepend `/api/platform/tenants/:tenant_key` when using an operator key, or
 `/api/tenants/:tenant_key` when using that tenant's `admin` key. Send the key as a
 bearer Authorization header and use `application/json`. Body fields other than the
-ones above are rejected. IDs remain bounded to 128 bytes; revision numbers must be
+ones above are rejected, including `id`, `public_id` and `call_spec_id`. Creation
+allocates a UUID inside the server. A path ID only locates an existing spec; even
+a well-formed client-chosen UUID cannot create a spec through `PUT`. Identity is
+immutable across revisions, and IDs from another tenant return `404` without
+creating a local spec. Existing ID locators remain bounded to 128 bytes; revision numbers must be
 positive database integers. Requests cannot select authority, repositories or
 service-owner options.
 
@@ -321,3 +325,25 @@ installation-operator browser session. Its existing platform/tenant service
 inventory also includes `model_catalog`, grouped by capability then provider,
 with these same model descriptors. Onboarding therefore loads recommendations
 before a tenant exists, without keeping a separate frontend model inventory.
+
+## Server-owned identity correction (2026-10-09)
+
+The user clarified that public identity is server-owned. Keep private numeric SQL
+keys and public UUIDs separate; do not expose an identity assignment/rename field
+in the API or editor. The shared principal-aware authoring boundary now requires
+an existing revision in the same tenant when an ID is supplied. This applies to
+operator keys, tenant admin keys, Console sessions and the trusted save CLI.
+
+The former PUT upsert behavior was rejected because it let callers allocate public
+IDs through a URL. Merely validating UUID syntax would still allow callers to
+choose identity. Replacing public UUIDs with database primary keys was also
+rejected by the user's clarification. POST remains the creation operation; PUT is
+append-only. The CLI's `--call-spec-id` flag likewise locates an existing spec.
+
+This is an intentional API behavior change: clients using PUT to create must use
+POST and retain the returned ID. No stored IDs or foreign keys are rewritten. The
+trusted internal seed/fixture workflow is not exposed as an external allocation
+API. Regression tests prove the old 201 response for unknown IDs becomes 404,
+including client-selected UUIDs and foreign-tenant IDs, while generated creation
+and immutable revision append continue to work. See the
+[implementation labnote](../labnotes/20261009-0416-server-owned-spec-ids.md).

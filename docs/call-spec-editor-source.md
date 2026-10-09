@@ -187,7 +187,9 @@ endpoint/router integration and the remaining acceptance work.
 Console's installation-operator endpoints reuse Calls authoring and persistence.
 Reads resolve the latest immutable revision or an explicit revision, and return
 source plus the latest and currently published revision numbers. Appending to a
-spec first checks that the ID exists in the requested tenant; a foreign or missing
+spec first checks that the ID exists in the requested tenant; shared principal-aware
+authoring enforces the same rule for Gateway and CLI writes. Creation assigns a
+public UUID internally and request bodies cannot assign or rename identity. A foreign or missing
 ID returns 404. Publishing addresses an explicit saved revision. No new repository
 protocol or database schema is needed.
 

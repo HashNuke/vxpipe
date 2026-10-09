@@ -141,6 +141,7 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       assert [%{"participant_ref" => "caller", "published" => false}] = first["routes"]
       assert Plug.Conn.get_resp_header(created, "cache-control") == ["private, no-store"]
       id = first["call_spec_id"]
+      assert id =~ ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
 
       published = write(auth, :post, path <> "/#{id}/revisions/1/publish", %{})
       assert json_response(published, 200)["call_spec"]["published"]
@@ -192,6 +193,31 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       response = write(auth, :post, path, %{"source" => private})
       assert json_response(response, 422)["error"]["code"] == "private_call_spec_material"
       refute response.resp_body =~ "private-editor-sentinel"
+    end
+
+    test "identity is generated on creation and cannot be assigned through authoring input", %{
+      tenant: tenant,
+      authenticated: auth
+    } do
+      path = "/admin/api/tenants/#{tenant.key}/call-specs"
+
+      for id <- ["new", "11111111-1111-4111-8111-111111111111"] do
+        assert {:error, :not_found} =
+                 Vxpipe.Calls.save_authorized_call_spec(
+                   Vxpipe.Calls.InstallationOperator.authority(),
+                   tenant.key,
+                   editor_source(),
+                   call_spec_id: id
+                 )
+
+        response = write(auth, :put, path <> "/" <> id, %{"source" => editor_source()})
+        assert json_response(response, 404)["error"]["code"] == "call_spec_not_found"
+      end
+
+      for field <- ["id", "public_id", "call_spec_id"] do
+        response = write(auth, :post, path, %{"source" => editor_source(), field => "new"})
+        assert json_response(response, 400)["error"]["code"] == "invalid_request"
+      end
     end
 
     test "rejects malformed requests and unavailable revisions", %{

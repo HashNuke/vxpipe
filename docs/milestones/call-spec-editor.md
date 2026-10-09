@@ -775,6 +775,14 @@ Outcome: operators create, edit, save and publish call specs in `/admin`.
   validation after rename. All three files under `examples/call-specs/` were also
   created through the tenant API, opened in the production editor and saved without
   edits; each stored JSON value and source digest remained unchanged.
+- Server-owned identity follow-up: API/CLI updates cannot create a spec under a
+  caller-selected ID. Creation assigns a public UUID internally. Routing tests
+  exercise a server-issued UUID; stored legacy IDs are not rewritten. See the
+  [identity correction](../operator-api-key-authoring.md#server-owned-identity-correction-2026-10-09)
+  and [implementation labnote](../../labnotes/20261009-0416-server-owned-spec-ids.md).
+  Verification alongside the integer-preservation follow-up passed 511 frontend
+  tests, TypeScript, lint and all five root gates: 3,464 tests, zero failures,
+  120 excluded (seed 303191).
 - Persistence/privacy: Console `admin_call_specs_endpoint_test.exs` verifies
   immutable revisions and current publication, cross-tenant 404s, CSRF, safe lookup
   names/errors, no credential disclosure and source-body log filtering.

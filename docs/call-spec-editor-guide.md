@@ -2,7 +2,8 @@
 
 Sign in as an installation operator, open a tenant's **Call specs** page, then
 choose **New call spec** or an existing spec's name. The Calls column opens that
-spec's calls. The editor does not start test calls.
+spec's calls. The editor does not start test calls. New specs receive a server-generated public
+UUID. The ID is not editable; saves append revisions under that same ID.
 
 The canvas shows participants and transfer destinations. Select a participant to
 edit its fields; **Call settings** opens direction, defaults, variables and call

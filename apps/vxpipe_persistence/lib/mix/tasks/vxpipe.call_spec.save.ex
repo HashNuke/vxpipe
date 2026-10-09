@@ -25,7 +25,8 @@ defmodule Mix.Tasks.Vxpipe.CallSpec.Save do
       end
 
     revision =
-      Vxpipe.Calls.save_call_spec(
+      Vxpipe.Calls.save_authorized_call_spec(
+        Vxpipe.Calls.InstallationOperator.authority(),
         Keyword.fetch!(options, :tenant),
         source,
         workflow_options
