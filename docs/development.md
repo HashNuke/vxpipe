@@ -13,7 +13,7 @@ Vxpipe from source.
 The localhost demo requires Elixir 1.19 / Erlang/OTP 28, PostgreSQL, Node.js 24 and npm,
 Rust, C/C++ build tools, `pkg-config`, and OpenSSL development headers.
 
-The `--tailscale` mode of either development launcher also requires Tailscale and `jq`.
+The development launcher's `--tailscale` mode also requires Tailscale and `jq`.
 
 ## Initialize a checkout
 
@@ -43,18 +43,19 @@ Setup rejects shared `MIX_BUILD_PATH` / `MIX_DEPS_PATH` overrides and symlinked
 mutable output directories. Keep caches shared only through package-manager download
 caches, then rerun after fixing failures reported in the private `.vxpipe/setup.log`.
 
-Setup also reserves persistent Console, Astro and Storybook ports. Run `npm run
-storybook` for the assigned Storybook URL. Explicit shell `PORT`, `ASTRO_PORT` and
-`STORYBOOK_PORT` override those defaults. Console additionally reads `.env` `PORT`,
-with the shell value taking precedence. Storybook uses the selected Console origin.
+Setup also reserves persistent Console and Storybook ports.
+Run `npm run storybook` for the assigned Storybook URL.
+Explicit shell `PORT` and `STORYBOOK_PORT` override those defaults.
+Console additionally reads `.env` `PORT`, with the shell value taking precedence.
+Storybook uses the selected Console origin.
 An occupied listener causes startup to fail with recovery instructions. Stop this
 checkout's servers before `bin/setup --reassign-ports`; databases and identity stay
 unchanged. Port 4600 remains reserved for the separate live-test workflow.
 
-Use `bin/setup --with-docs --with-lean` to install locked Astro dependencies and
-build verification with the pinned, already installed elan toolchain. Omit either
-flag if that tool is unnecessary. Setup never installs system tools or a Lean
-toolchain automatically. Ordinary setup needs neither Tailscale nor provider keys.
+Use `bin/setup --with-lean` to build verification with the pinned, already installed
+elan toolchain. Omit the flag if it is unnecessary. Setup never installs system
+tools or a Lean toolchain automatically. Ordinary setup needs neither Tailscale
+nor provider keys.
 
 Existing checkouts can run setup directly: existing `.env` and legacy database data
 remain intact, while new metadata selects isolated databases. Do not copy ignored
@@ -97,16 +98,8 @@ Then start the Vxpipe umbrella and Console frontend:
 bin/dev
 ```
 
-Use the Console `/admin` URL printed by setup (port 4000 without metadata). `bin/dev` starts only the Elixir
-application. To work on the Astro site separately, run these in another shell:
-
-```shell
-npm --prefix vxpipe-docs ci
-bin/site-dev
-```
-
-Use the Astro URL printed by setup (port 4321 without metadata), with docs at `/en/docs/`. Astro handles
-its own live reload. Either launcher accepts `--tailscale` for HTTPS access.
+Use the Console `/admin` URL printed by setup (port 4000 without metadata).
+`bin/dev` starts the Elixir application and accepts `--tailscale` for HTTPS access.
 
 `bin/dev` loads the repository-root `.env`; direct `mix` commands do not. Export
 platform settings in the launching shell or inject them through your secret manager
@@ -177,9 +170,6 @@ tailnet. The stack runs as the calling user; no root process, reverse proxy,
 `TS_PERMIT_CERT_UID`, or manually exported TLS variables are required. Phoenix binds
 only to the discovered Tailscale address on the selected Console port. This does not use Tailscale
 Funnel or make the development stack public.
-
-To serve the optional Astro site over Tailscale, run `bin/site-dev --tailscale`
-in another shell. It uses the same discovered hostname and certificate on its assigned Astro port.
 
 With `APP_HOST` unset or empty, normal `bin/dev` binds to localhost. An explicit
 `APP_HOST` in the shell or `.env` selects the hostname and bind address; that

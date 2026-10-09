@@ -3485,7 +3485,7 @@ supplies one stable secure browser origin without a reverse-proxy hop or second 
 
 The Console Phoenix endpoint supervises Phoenix's esbuild wrapper as a development
 asset watcher and uses Phoenix LiveReload for browser refreshes. `bin/dev` starts
-the shared BEAM runtime directly; `bin/site-dev` starts the optional Astro site.
+the shared BEAM runtime directly.
 React remains the sample UI and is
 not replaced by LiveView. There is no separate frontend HTTP listener: esbuild writes
 the watched bundle into Console `priv/static`, and Phoenix serves it on the same endpoint

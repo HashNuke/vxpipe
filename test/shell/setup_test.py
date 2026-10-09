@@ -53,13 +53,10 @@ class SetupTest(unittest.TestCase):
         self.assertEqual(self.setup().returncode, 0)
         ports = json.loads((self.root / ".vxpipe/worktree.json").read_text())["ports"]
         self.tool("mix", 'printf "console:%s" "$PORT"')
-        self.tool("npm", 'printf "astro:%s" "$ASTRO_PORT"')
         self.assertEqual(self.launch("dev").stdout, f"console:{ports['console']}")
-        self.assertEqual(self.launch("site-dev").stdout, f"astro:{ports['astro']}")
         (self.root / ".env").write_text("PORT=19501\n")
         self.assertEqual(self.launch("dev").stdout, "console:19501")
         self.assertEqual(self.launch("dev", PORT="19502").stdout, "console:19502")
-        self.assertEqual(self.launch("site-dev", ASTRO_PORT="19503").stdout, "astro:19503")
 
     def test_launcher_refuses_occupied_or_live_port_before_command(self):
         self.assertEqual(self.setup().returncode, 0)
@@ -104,10 +101,9 @@ class SetupTest(unittest.TestCase):
         (self.root / "verification/lean-toolchain").write_text("leanprover/lean4:v4.34.1\n")
         self.tool("lake", "exit 0")
         self.tool("elan", '[[ "$PWD" == */verification ]] && [[ "$*" == "run leanprover/lean4:v4.34.1 lake build" ]]')
-        self.tool("npm", '[[ "$*" == "--prefix vxpipe-docs ci" ]]')
-        result = self.setup("--with-lean", "--with-docs")
+        result = self.setup("--with-lean")
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("Completed Astro dependencies", result.stdout)
+        self.assertNotIn("Astro", result.stdout)
         self.assertIn("Completed Lean build", result.stdout)
         self.tool("elan", "exit 3")
         failed = self.setup("--with-lean")
@@ -119,6 +115,7 @@ class SetupTest(unittest.TestCase):
         result = self.setup("--help")
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("Usage:", result.stdout)
+        self.assertNotIn("--with-docs", result.stdout)
         self.assertFalse((self.root / ".vxpipe").exists())
 
     def test_missing_tool_fails_before_metadata_or_mix(self):

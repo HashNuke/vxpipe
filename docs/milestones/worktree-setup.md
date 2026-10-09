@@ -259,6 +259,8 @@ Prerequisites: checkpoints 2 and 3. Owning files: setup metadata/port allocation
 - [x] Add `--with-docs` (Astro `npm ci`) and `--with-lean` (pinned Lean build) options
   with missing-tool/failure tests. Tailscale is optional for local setup; never
   start a daemon, Funnel, carrier operation or live test as a setup side effect.
+  The `--with-docs` option and `bin/site-dev` launcher have since been retired.
+  Existing Astro port metadata remains readable for compatibility.
 - [x] Inspect both Consoles and optional Astro/Storybook servers using
   `agent-browser` with headless Chrome. Cover relevant desktop/mobile layouts,
   authentication and live reload. Record any blocked optional HTTPS inspection.

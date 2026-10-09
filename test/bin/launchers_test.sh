@@ -41,11 +41,8 @@ done
 
 make_executable mix \
   'printf "%s\n" "$PWD" "$VXPIPE_DEV_TLS" "${APP_HOST:-}" "${VXPIPE_TAILSCALE_IP:-}" "${VXPIPE_DEV_TLS_CERTFILE:-}" "${VXPIPE_TEST_DOTENV:-}" "$@" >"$VXPIPE_TEST_COMMAND_LOG"'
-make_executable npm \
-  'printf "%s\n" "$PWD" "$VXPIPE_DEV_TLS" "${APP_HOST:-}" "${VXPIPE_TAILSCALE_IP:-}" "${VXPIPE_DEV_TLS_CERTFILE:-}" "${ASTRO_DEV_BACKGROUND:-}" "$@" >"$VXPIPE_TEST_COMMAND_LOG"'
 
 app_log="$test_tmp/app"
-site_log="$test_tmp/site"
 PATH="$fake_bin" VXPIPE_TEST_COMMAND_LOG="$app_log" "$repo_root/bin/dev"
 assert_line "$app_log" "$repo_root"
 assert_line "$app_log" "http"
@@ -59,15 +56,7 @@ printf '%s\n' 'VXPIPE_TEST_DOTENV=loaded' >"$test_tmp/repo/.env"
 PATH="$fake_bin" VXPIPE_TEST_COMMAND_LOG="$app_log" "$test_tmp/repo/bin/dev"
 assert_line "$app_log" "loaded"
 
-PATH="$fake_bin" VXPIPE_TEST_COMMAND_LOG="$site_log" "$repo_root/bin/site-dev"
-assert_line "$site_log" "$repo_root"
-assert_line "$site_log" "http"
-assert_line "$site_log" "0"
-assert_line "$site_log" "--prefix"
-assert_line "$site_log" "vxpipe-docs"
-assert_line "$site_log" "dev"
-
-for launcher in dev site-dev; do
+for launcher in dev; do
   if output="$(PATH="$fake_bin" "$repo_root/bin/$launcher" --invalid 2>&1)"; then
     fail "expected bin/$launcher to reject invalid arguments"
   fi
@@ -86,11 +75,5 @@ assert_line "$app_log" "phoenix"
 assert_line "$app_log" "launchers-test.example.ts.net"
 assert_line "$app_log" "100.64.0.12"
 assert_line "$app_log" "$repo_root/tmp/tls/launchers-test.example.ts.net.crt"
-
-PATH="$fake_bin" VXPIPE_TEST_COMMAND_LOG="$site_log" "$repo_root/bin/site-dev" --tailscale
-assert_line "$site_log" "phoenix"
-assert_line "$site_log" "launchers-test.example.ts.net"
-assert_line "$site_log" "100.64.0.12"
-assert_line "$site_log" "$repo_root/tmp/tls/launchers-test.example.ts.net.crt"
 
 echo "launcher integration tests passed"

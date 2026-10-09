@@ -9,8 +9,7 @@ def check_isolation(root):
     directories = [root / name for name in (
         ".vxpipe", "deps", "_build", "node_modules", "tmp", "storybook-static",
         "apps/vxpipe_console/assets/node_modules", "apps/vxpipe_console/assets/storybook-static",
-        "apps/vxpipe_console/priv/static/assets", "vxpipe-docs/node_modules", "vxpipe-docs/dist",
-        "vxpipe-docs/.astro", "verification/.lake")]
+        "apps/vxpipe_console/priv/static/assets", "verification/.lake")]
     directories.extend(path for package in (root / "packages").glob("*")
                        for path in (package / "dist", package / "node_modules", package / "storybook-static"))
     for variable in ("MIX_BUILD_PATH", "MIX_DEPS_PATH"):
