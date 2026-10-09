@@ -3,6 +3,7 @@
 
 # If you run "mix test --cover", coverage assets end up here.
 /cover/
+/apps/*/cover/
 
 # The directory Mix downloads your dependencies sources to.
 /deps/
@@ -25,6 +26,7 @@ erl_crash.dump
 /apps/vxpipe_console/assets/*.tsbuildinfo
 /apps/vxpipe_console/assets/.env*
 /apps/vxpipe_console/assets/storybook-static/
+/apps/vxpipe_console/assets/coverage/
 /apps/vxpipe_console/assets/debug-storybook.log
 /apps/vxpipe_console/priv/static/assets/
 
