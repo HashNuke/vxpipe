@@ -1,301 +1,82 @@
-# Developing Vxpipe
+# Local development
 
-For a first voice call, follow [Get started with Elixir](../getting-started-elixir.md).
-This guide covers the development stack, local fixtures, PostgreSQL storage,
-and how the sample works.
-
-Docker packaging is planned in the
-[delivery quickstart specification](../../labnotes/milestones/container-quickstart-plan.md);
-a verified Docker installation is not available yet. This guide is for developing
-Vxpipe from source.
+Use this guide to prepare a checkout and run the Console while working on Vxpipe.
+For a first provider-backed voice call, follow
+[Get started with Elixir](../getting-started-elixir.md).
 
 ## Prerequisites
 
-The localhost demo requires Elixir 1.19 / Erlang/OTP 28, PostgreSQL, Node.js 24 and npm,
-Rust, C/C++ build tools, `pkg-config`, and OpenSSL development headers.
+Install these tools and have PostgreSQL running locally:
 
-The development launcher's `--tailscale` mode also requires Tailscale and `jq`.
+- Elixir 1.19 and Erlang/OTP 28.
+- Node.js 24 and npm.
+- Python 3.10+ and Git.
+- Rust, C/C++ build tools, `pkg-config` and OpenSSL development headers.
 
 ## Initialize a checkout
 
-`bin/setup` prepares Mix dependencies, frontend dependencies/builds, private local
-platform secrets and isolated development/test databases. It preserves existing
-`.env` files and database contents. It requires Python 3.10+, Git and the prerequisites above.
-Run it from either a root checkout or a linked Git worktree:
+From the repository root, run:
 
 ```shell
 bin/setup
 ```
 
-The ignored `.vxpipe/worktree.json` keeps the checkout ID and database defaults
-stable across reruns and branch changes. Ordinary `mix test`, including commands
-from a child application, reads these defaults without shell activation. For example:
+Setup installs project dependencies, builds frontend assets, prepares local
+configuration and migrates the development and test databases. It prints the
+assigned Console and Storybook URLs. Rerunning it preserves existing local
+configuration and database data.
 
-```shell
-cd apps/vxpipe_persistence
-mix test test/vxpipe/persistence/operator_tasks_test.exs
-```
-
-Existing legacy databases are preserved. Explicit database URLs/names override
-metadata, but setup refuses shared dev/test targets or an existing database without
-this checkout's ownership marker. See [checkout isolation](worktree-isolation.md)
-for connection selection, failure recovery and current acceptance limits.
-Setup rejects shared `MIX_BUILD_PATH` / `MIX_DEPS_PATH` overrides and symlinked
-mutable output directories. Keep caches shared only through package-manager download
-caches, then rerun after fixing failures reported in the private `.vxpipe/setup.log`.
-
-Setup also reserves persistent Console and Storybook ports.
-Run `npm run storybook` for the assigned Storybook URL.
-Explicit shell `PORT` and `STORYBOOK_PORT` override those defaults.
-Console additionally reads `.env` `PORT`, with the shell value taking precedence.
-Storybook uses the selected Console origin.
-An occupied listener causes startup to fail with recovery instructions. Stop this
-checkout's servers before `bin/setup --reassign-ports`; databases and identity stay
-unchanged. Port 4600 remains reserved for the separate live-test workflow.
-
-Use `bin/setup --with-lean` to build verification with the pinned, already installed
-elan toolchain. Omit the flag if it is unnecessary. Setup never installs system
-tools or a Lean toolchain automatically. Ordinary setup needs neither Tailscale
-nor provider keys.
-
-Existing checkouts can run setup directly: existing `.env` and legacy database data
-remain intact, while new metadata selects isolated databases. Do not copy ignored
-metadata, secrets or build directories into another checkout. Retiring a worktree
-is an explicit operation: stop its servers and release any live-branch ownership
-before removing it. Setup never deletes databases or files. Stale port reservations
-are reclaimed only after the checkout directory is gone and all its ports are free.
+Run setup separately in each checkout. See
+[worktree isolation](worktree-isolation.md) for how Vxpipe keeps their state separate.
 
 ## Start the development stack
-
-After `bin/setup`, proceed to `bin/dev` below. For manual setup, install the
-application and Console frontend dependencies from the repository root:
-
-```shell
-mix deps.get
-mix assets.setup
-```
-
-For an uninitialized checkout, the manual database default remains `vxpipe_dev`.
-After `bin/setup`, these commands use the checkout-specific database instead:
-
-```shell
-mix do ecto.create, ecto.migrate
-```
-
-For manual setup without `bin/setup`, copy the visible [`env.sample`](../../env.sample)
-to the ignored repository-root `.env` and replace its encryption-key placeholders.
-Keep an existing setup-generated `.env`; its keys are already valid. Follow
-[provider credential setup](../provider-credential-storage.md#configure-and-provision) to
-bootstrap a tenant and provision its Google and Deepgram credentials through protected stdin.
-Operator Mix commands need these platform variables exported in their launching shell.
-
-Set `VXPIPE_DEV_TENANT` to that tenant's public key. The sample selects Google Gemini and
-Deepgram Flux directly in its call spec and resolves their `default` tenant bindings.
-The server can boot without provider credentials; an unprovisioned sample cannot create calls.
-
-Then start the Vxpipe umbrella and Console frontend:
 
 ```shell
 bin/dev
 ```
 
-Use the Console `/admin` URL printed by setup (port 4000 without metadata).
-`bin/dev` starts the Elixir application and accepts `--tailscale` for HTTPS access.
+Open the Console `/admin` URL printed by setup. The launcher loads the checkout's
+`.env` and starts the umbrella applications together. Frontend assets rebuild
+while it runs; restart the launcher after backend or runtime configuration changes.
 
-`bin/dev` loads the repository-root `.env`; direct `mix` commands do not. Export
-platform settings in the launching shell or inject them through your secret manager
-when running Mix directly.
+For component development, run `npm run storybook` in another terminal.
 
-For existing Telnyx/Twilio calls, provision a tenant carrier credential and register its service
-as described in [tenant telephony setup](../tenant-telephony-services.md#trusted-registration-and-lookup).
-Public `APP_HOST` supplies the HTTPS callback origin. Use
-`TELEPHONY_HOST` to override it, including a mounted path prefix.
-Local HTTP URLs are previews and do not enable live telephony ingress. Provider
-credentials come from PostgreSQL. See [scoped Telnyx setup](../scoped-telnyx-service-bindings.md)
-for platform inheritance, tenant overrides and matching Console webhook URLs.
-
-When `TELEPHONY_HOST` is configured, requests using that host are restricted to
-Telnyx and Twilio webhook/media routes plus `/healthz`. Tailscale and localhost
-hosts retain access to the full application.
+The server starts without provider credentials. To use the browser voice sample,
+follow [provider credential setup](../provider-credential-storage.md#configure-and-provision)
+and select the provisioned tenant as described in the
+[first-call guide](../getting-started-elixir.md#run-the-voice-demo).
 
 ## Local fixtures
 
-Local calls select `%{provider: "fixture", model: "test:scripted"}` for model inference
-and `%{provider: "morse", model: "morse", options: %{sample_rate: 16_000}}` for speech.
-The embedding host explicitly configures the fixture adapter and Morse session provider in
-the closed STT/TTS provider maps.
-These local selections need no provider credential. The repository's default browser sample
-uses the provisioned Google/Deepgram tenant; there is no environment switch for changing it.
-
-Run the deterministic direct-PCM voice round trip from the owning application:
+The fixture model and Morse speech providers let you exercise calls without
+external providers. Run their voice round trip from the owning application:
 
 ```shell
 cd apps/vxpipe_call_engine
 mix test test/vxpipe/call_engine/provider/morse_code/room_round_trip_test.exs
 ```
 
-That test configures a supervised local model fixture and both Morse semantic sessions, sends
-encoded caller audio, and verifies the reply through the real audio output path.
-Browser microphone RTP is Opus; Morse STT accepts mono little-endian linear16.
+See the [local Morse provider documentation](../../apps/vxpipe_call_engine/README.md#local-morse-audio-providers)
+for the supported audio and fixture behavior. The browser sample uses its
+configured providers; it does not automatically select these fixtures.
 
-## Reloading and HTTPS
+## HTTPS development
 
-`bin/dev` loads platform configuration from `.env` before starting the BEAM.
-Runtime configuration supplies the database and encryption keyring; reusable
-call-engine code resolves tenant credentials through the injected credential source.
-
-The call engine, gateway, and Console applications run in one BEAM instance.
-The Console's Phoenix endpoint supervises its esbuild development watcher,
-serves the React assets, and mounts the reusable gateway on the same endpoint.
-Phoenix serves HTTP at its assigned Console URL (port 4000 without metadata), with no Tailscale
-dependency. WebRTC media continues to use its negotiated ICE path. The sample
-pages and diagnostics are under `/admin` and require installation-operator
-authentication. The Pipecat sample is available at `/admin/samples/pipecat-console`.
-
-The Console asset watcher consumes its Phoenix parent's lifecycle. Restart
-`bin/dev` after changes to umbrella code or runtime configuration that Phoenix
-does not reload; a restart discards development rooms, sessions, and WebRTC
-connections.
-
-To enable HTTPS on the machine's Tailscale address, run:
+With Tailscale and `jq` installed and HTTPS enabled on your tailnet, run:
 
 ```shell
 bin/dev --tailscale
 ```
 
-This discovers the machine's FQDN and Tailscale IPv4 address and serves the Console
-at `https://<machine-fqdn>:<console-port>/`. It asks the local Tailscale daemon for a
-certificate for the discovered `.ts.net` hostname and gives its ignored runtime
-paths to Phoenix/Bandit. MagicDNS and HTTPS certificates must be enabled for the
-tailnet. The stack runs as the calling user; no root process, reverse proxy,
-`TS_PERMIT_CERT_UID`, or manually exported TLS variables are required. Phoenix binds
-only to the discovered Tailscale address on the selected Console port. This does not use Tailscale
-Funnel or make the development stack public.
+This serves the Console on the machine's Tailscale address. The
+[HTTPS launcher](../../bin/with-tailscale) owns hostname discovery and certificates.
+For carrier ingress and live-call testing, see the
+[live telephony harness](live-telephony-harness.md).
 
-With `APP_HOST` unset or empty, normal `bin/dev` binds to localhost. An explicit
-`APP_HOST` in the shell or `.env` selects the hostname and bind address; that
-address must be available on this machine. Use `--tailscale` to discover the
-Tailscale hostname and address automatically.
+## Where to look next
 
-Local development accepts Phoenix socket connections from both `localhost` and
-`127.0.0.1` on the configured scheme and port, so either address supports live
-reload. Remote development hosts and production retain Phoenix's configured-host
-origin check.
-
-The visible repository-root `env.sample` documents platform settings. `bin/dev`
-loads the shell-compatible `.env` from the repository root, including when it is
-launched from another directory. Those values are exported to the Elixir process.
-
-## PostgreSQL storage
-
-Development defaults to `postgres://localhost/vxpipe_dev` in `config/runtime.exs`.
-`config/dev.exs` supplies the local `postgres` username and password. Set a complete
-`VXPIPE_DB_URL` when your local PostgreSQL account uses different credentials.
-`VXPIPE_DB_URL` or its lower-priority alias `DATABASE_URL` overrides the database.
-`VXPIPE_DB_POOL_SIZE` or `DB_POOL_SIZE` overrides the default pool of 10. Blank values are
-absent; invalid selected values fail. These aliases never replace the dedicated test database.
-The Console reuses the provisioned tenant selected by `VXPIPE_DEV_TENANT` across BEAM
-restarts. It saves/publishes the sample call spec, then issues a call-scoped API key.
-PostgreSQL retains only that key’s digest; the plaintext key and configured initial
-variables stay inside the supervised Console sample process. Failed call spec setup
-does not create tenants or issue keys.
-Each **Create room** action then prepares a new durable call and obtains its
-participant-bound join token through the public Calls workflows.
-
-The development Repo starts with the local database default. The managed caller/transfer
-sample is enabled only when `VXPIPE_DEV_TENANT` selects a provisioned tenant. PostgreSQL
-must be running and the database migrated before `bin/dev`.
-Migration, one-time tenant/key bootstrap, key rotation/revocation, and immutable
-call spec publication are documented in
-[Tenant control-plane operations](../tenant-control-plane.md).
-
-The human transfer desk at `/admin/samples/transfer` requires this PostgreSQL-backed sample.
-After migrating the database, start `bin/dev`, create
-a new room in `/admin/samples/pipecat-console`, and request human support before connecting the
-desk. Follow the [human-transfer walkthrough](../../apps/vxpipe_console/assets/README.md#manual-human-transfer-test)
-for the two-browser flow.
-
-The umbrella test alias creates and migrates the configured test database
-(the checkout-specific test database after setup, otherwise `vxpipe_test` as your Unix user). With no settings it uses the local server's Unix
-socket (`/var/run/postgresql`, then `/tmp`), where peer authentication needs no
-password, and otherwise TCP localhost. `VXPIPE_TEST_DATABASE_URL`, standard PostgreSQL
-variables and `VXPIPE_TEST_DATABASE` remain optional overrides, for example for a
-server in a container. Running the call-engine tests from
-its child directory remains database-free.
-
-## How the sample works
-
-Without `APP_HOST`, HTTP mode binds the Console endpoint to `127.0.0.1`. The React
-page and mounted gateway are same-origin in both modes, so no frontend proxy or
-second asset port is involved.
-
-The gateway reads its listener and CORS options from the `vxpipe_gateway`
-application environment. In development, `APP_HOST` becomes the exact allowed
-origin on the selected Console port, using the selected HTTPS or HTTP scheme. Environment variables
-are read from `config/runtime.exs`; `config/dev.exs` supplies local defaults.
-
-With a provisioned tenant selected, the playground's **Create room** action first asks the
-Console's same-origin sample endpoint for a managed admission. The Console uses its
-private API key and configured initial variables to create a prepared call; the
-browser receives only the public tenant/call/participant locator and a five-minute
-join token. It presents that token to the gateway's participant-session route, which
-atomically claims it and starts the pinned plan exactly once. Neither the API key nor
-the initial variables enter browser requests or responses. The sample endpoint and
-managed admission routes are disabled by default outside repository development.
-
-An embedding host can configure an explicit trusted inline call spec and credential source
-through the gateway API. The repository sample uses the durable tenant admission path.
-
-The first playground uses the Pipecat Voice UI Kit console and Small WebRTC. It
-targets `/api/rtvi/offer`, completes SDP and trickle-ICE signalling, and performs
-the RTVI 2.x `client-ready` / `bot-ready` exchange. Incoming Opus audio is routed
-through a bounded, protocol-neutral media ingress to Deepgram Flux. Flux turn
-signals become RTVI speaking and replacement-transcription messages; a committed
-turn is sent through the room's participant-owned Agent Runtime session using the pinned Gemini
-model selection. Its
-complete text response is streamed through Flux TTS as 48 kHz linear16, encoded
-to 20 ms Opus packets, and paced onto the negotiated browser audio track. RTVI
-bot speaking boundaries and 2.x bot-output progress follow the gateway's paced
-output queue rather than provider generation completion. Microphone RTP
-continues through the bounded STT ingress while bot output is playing. A
-provider `StartOfTurn` interrupts current and queued agent work immediately,
-stops unsent RTP, and attributes the
-interruption to the authenticated participant connection; its later committed
-transcript begins the replacement model and spoken response. This uses hosted
-provider turn detection, not local VAD. Typed RTVI input with
-`run_immediately: true` uses the same cancellation path, while
-`run_immediately: false` remains queued. Provider bursts are absorbed by a
-bounded ten-second packet queue and then backpressured while RTP drains; later
-spoken outputs are announced and played in order. Without provider word
-timestamps, spoken text stays pending until paced playout completes rather than
-using a character estimate. The implemented
-`/healthz` route verifies the gateway listener.
-
-The development agent also exposes the engine-owned `get_current_time` tool.
-Asking for the current UTC time exercises a model/tool/model loop inside the
-original supervised turn and produces standard RTVI function-call lifecycle
-events before the streamed spoken answer. Exact browser verification steps are
-in the [Console asset README](../../apps/vxpipe_console/assets/README.md#manual-tool-call-test).
-The browser uses the session's server-issued offer endpoint; no browser build-time
-endpoint setting is required.
-
-The optional local Morse provider contract, direct-PCM test command, supported alphabet,
-signal settings, and transport limits are documented in the
-[call-engine README](../../apps/vxpipe_call_engine/README.md#local-morse-audio-providers).
-
-## Release assets
-
-For release assets, build and minify the React application through Phoenix's
-esbuild integration into the Console's
-`priv/static` directory before assembling the release:
-
-```shell
-mix assets.deploy
-cd apps/vxpipe_console
-MIX_ENV=prod mix release
-```
-
-The generated JS/CSS bundle is ignored by Git and packaged with `vxpipe_console`
-by Mix; the small SPA index is tracked. At runtime, the Console serves the index
-with no-store caching and revalidates the stable bundle names. Missing compiled
-JS or CSS returns 503 instead of a nonfunctional shell.
+- [Setup command](../../bin/setup) and [development launcher](../../bin/dev): checkout preparation and startup.
+- [Platform settings](../../env.sample) and [runtime configuration](../../config/runtime.exs): local configuration and how it is consumed.
+- [Tenant operations](../tenant-control-plane.md): tenant keys and call-spec publication.
+- [Console walkthroughs](../../apps/vxpipe_console/assets/README.md): browser samples, tools and human transfers.
+- [Development documentation](../README.md#development): testing, verification and frontend topics.
