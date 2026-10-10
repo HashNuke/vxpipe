@@ -14,10 +14,21 @@ const preview: Preview = {
     options: {
       storySort: {
         order: [
-          "vxpipe_console",
-          ["Full journey", "Tenants", "Tenant call specs", "Calls", "Call details"],
-          "@vxpipe/react",
-          "Console",
+          "Vxpipe",
+          [
+            "React",
+            "Console",
+            [
+              "Full journey",
+              "Tenants",
+              "Tenant call specs",
+              "Calls",
+              "Call details",
+              "Onboarding",
+              "Services",
+              "Call spec editor",
+            ],
+          ],
         ],
       },
     },
