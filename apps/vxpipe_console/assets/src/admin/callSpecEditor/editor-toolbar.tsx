@@ -1,4 +1,4 @@
-import { Bot, Handshake, Workflow } from "lucide-react"
+import { Bot, UserRound, Workflow } from "lucide-react"
 
 import { Button } from "../components/ui/button"
 
@@ -17,16 +17,16 @@ export function FlowEditorToolbar({ onAddNode, onArrangeNodes, readOnly = false 
     >
       <div role="group" aria-label={"Add participants"} className="flex shrink-0 items-center gap-1 rounded-sm bg-muted p-1">
         <span className="px-1.5 text-xs font-medium text-muted-foreground">{"Add"}</span>
-        <Button variant="secondary" size="sm" className="h-8 justify-center border-border bg-secondary text-secondary-foreground hover:bg-accent px-3" disabled={readOnly} onClick={() => onAddNode("agent")} aria-label={"Add agent"}>
+        <Button variant="secondary" size="sm" className="h-8 justify-center px-3" disabled={readOnly} onClick={() => onAddNode("agent")} aria-label={"Add agent"}>
           <Bot className="h-4 w-4" />
           Agent
         </Button>
-        <Button variant="secondary" size="sm" className="h-8 justify-center border-border bg-secondary text-secondary-foreground hover:bg-accent px-3" disabled={readOnly} onClick={() => onAddNode("human")} aria-label={"Add human"}>
-          <Handshake className="h-4 w-4" />
+        <Button variant="secondary" size="sm" className="h-8 justify-center px-3" disabled={readOnly} onClick={() => onAddNode("human")} aria-label={"Add human"}>
+          <UserRound className="h-4 w-4" />
           Human
         </Button>
       </div>
-      <Button variant="secondary" size="sm" className="h-8 justify-center border-border bg-secondary text-secondary-foreground hover:bg-accent px-3" onClick={onArrangeNodes} aria-label={"Arrange nodes"}>
+      <Button variant="secondary" size="sm" className="h-8 justify-center px-3" onClick={onArrangeNodes} aria-label={"Arrange nodes"}>
         <Workflow className="h-4 w-4" />
         Arrange
       </Button>

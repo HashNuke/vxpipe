@@ -99,6 +99,50 @@ defmodule Vxpipe.Calls.CallSpecsTest do
              CallSpecs.save(tenant.key, unsupported, options)
   end
 
+  test "direction is fixed by the first revision while same-direction edits remain writable", %{
+    tenant: tenant,
+    options: options
+  } do
+    incoming =
+      call_spec_input()
+      |> Map.drop([:entry_caller, :entry_receiver])
+      |> Map.put(:schema_version, "20261004.01")
+      |> Map.put(:incoming_call, %{caller: "caller", handled_by: "assistant"})
+
+    outgoing =
+      incoming
+      |> Map.delete(:incoming_call)
+      |> Map.put(:outgoing_call, %{callee: "caller", handled_by: "assistant"})
+      |> put_in([:participants, "caller", :connection], %{
+        service: "primary-phone",
+        mode: "dial",
+        number: "+15550001000"
+      })
+
+    for {original, changed} <- [
+          {incoming, outgoing},
+          {outgoing, incoming},
+          {call_spec_input(), outgoing}
+        ] do
+      assert {:ok, first} = CallSpecs.save(tenant.key, original, options)
+      update_options = Keyword.put(options, :call_spec_id, first.call_spec_id)
+
+      assert {:error, %Vxpipe.CallEngine.Error{code: :invalid_call_spec} = error} =
+               CallSpecs.save(tenant.key, changed, update_options)
+
+      assert error.details["reason"] ==
+               "cannot be changed after creation; create a new call spec"
+
+      assert {:error, :not_found} = CallSpecs.fetch(tenant.key, first.call_spec_id, 2, options)
+
+      assert {:ok, second} =
+               CallSpecs.save(tenant.key, Map.put(original, :name, "Renamed"), update_options)
+
+      assert second.revision == 2
+      assert second.compiled_metadata["direction"] == first.compiled_metadata["direction"]
+    end
+  end
+
   test "rejects private material instead of persisting it in a call spec revision", %{
     tenant: tenant,
     options: options

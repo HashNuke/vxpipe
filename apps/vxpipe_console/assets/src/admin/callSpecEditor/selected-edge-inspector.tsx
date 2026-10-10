@@ -11,7 +11,7 @@ export function SelectedEdgeInspector({ selectedEdge, readOnly, onDeleteEdge }: 
         <InspectorRow label="Source" value={selectedEdge.source === "$entry" ? "Entry" : selectedEdge.source} />
         <InspectorRow label="Target" value={selectedEdge.target} />
       </dl>
-      {selectedEdge.locked ? <p className="text-sm text-muted-foreground">Change the call handler in Call settings.</p>
+      {selectedEdge.locked ? <p className="text-sm text-muted-foreground">Change Handled by in the Entry card’s Connection tab.</p>
         : <Button variant="secondary" size="sm" className="w-full justify-start text-destructive" disabled={readOnly} onClick={() => onDeleteEdge(selectedEdge)}>
           <Trash2 className="h-4 w-4" />Delete transfer
         </Button>}

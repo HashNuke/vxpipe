@@ -102,20 +102,25 @@ test("deleting a human destination confirms removal and cleans transfer referenc
   expect(saved().participants).not.toHaveProperty("specialist");
   expect(saved().participants.intake.transfers).toEqual([]);
 });
-test("human capabilities show inheritance and edit only the selected participant", async () => {
+test("human Models show only speech recognition and edit only the selected participant", async () => {
   const initial = structuredClone(editorFixture);
-  initial.source.defaults = { capabilities: { text_to_speech: { provider: "deepgram", model: "flux", options: { voice: "haley" } } } };
+  initial.source.defaults = { capabilities: { speech_to_text: { provider: "deepgram", model: "flux-general-multi" } } };
   render(<Harness initial={initial} />);
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Voice and model" }), { button: 0 });
-  const tts = within(screen.getByRole("region", { name: "Text to speech" }));
-  expect(tts.getByText(/Inherited: deepgram · flux · haley/)).toBeInTheDocument();
-  fireEvent.keyDown(tts.getByRole("combobox", { name: "Provider" }), { key: "ArrowDown" });
-  fireEvent.click(await screen.findByRole("option", { name: "deepgram" }));
-  expect(saved().participants.specialist.capabilities.text_to_speech.options.voice).toBe("hannah");
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Models" }), { button: 0 });
+  expect(screen.getAllByRole("region").map((region) => region.getAttribute("aria-label"))).toEqual(["Speech to text"]);
+  const stt = within(screen.getByRole("region", { name: "Speech to text" }));
+  expect(stt.getByRole("combobox", { name: "Provider" })).toHaveTextContent("deepgram");
+  expect(stt.getByRole("combobox", { name: "Model" })).toHaveTextContent("Flux General Multilingual");
+  fireEvent.keyDown(stt.getByRole("combobox", { name: "Provider" }), { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "cartesia" }));
+  expect(saved().participants.specialist.capabilities.speech_to_text.model).toBe("ink-2");
   expect(saved().defaults).toEqual(initial.source.defaults);
-  expect(tts.getByText("Participant override")).toBeInTheDocument();
-  expect(tts.getByText(/Call default: deepgram · flux · haley/)).toBeInTheDocument();
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Presence" }), { button: 0 });
+  expect(screen.queryByText("Participant override")).not.toBeInTheDocument();
+  fireEvent.keyDown(stt.getByRole("combobox", { name: "Provider" }), { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "Use default" }));
+  expect(saved().participants.specialist).not.toHaveProperty("capabilities");
+  expect(stt.getByRole("combobox", { name: "Provider" })).toHaveTextContent("deepgram");
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Media" }), { button: 0 });
   await choose("Record audio", "Deny");
   expect(saved().participants.specialist.while_present).toEqual({ record_audio: false });
 });
@@ -157,9 +162,28 @@ test("opening a saved document preserves nullable fields, omitted admission and 
 
 test("an inherited provider absent from the catalog stays visible without changing saved source", () => {
   const initial = structuredClone(editorFixture);
-  initial.source.defaults = { capabilities: { text_to_speech: { provider: "__proto__", model: "saved" } } };
+  initial.source.defaults = { capabilities: { speech_to_text: { provider: "__proto__", model: "saved" } } };
   render(<Harness initial={initial} />);
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Voice and model" }), { button: 0 });
-  expect(screen.getByText("Inherited: __proto__ · saved")).toBeInTheDocument();
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Models" }), { button: 0 });
+  expect(screen.getByRole("combobox", { name: "Provider" })).toHaveTextContent("__proto__ (saved)");
+  expect(screen.getByRole("combobox", { name: "Model" })).toHaveTextContent("saved (saved)");
   expect(saved()).toEqual(initial.source);
+});
+
+test("entry owns incoming handler selection and excludes the caller", async () => {
+  render(<Harness entry />);
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Handled by" }), { key: "ArrowDown" });
+  expect(screen.queryByRole("option", { name: "caller" })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("option", { name: "specialist" }));
+  expect(saved().incoming_call.handled_by).toBe("specialist");
+});
+
+test("outgoing entry can select only agent handlers", async () => {
+  const initial = outgoing();
+  initial.source.participants.reviewer = { type: "agent", prompt: "Review" };
+  render(<Harness entry initial={initial} />);
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Handled by" }), { key: "ArrowDown" });
+  expect(screen.queryByRole("option", { name: "specialist" })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("option", { name: "reviewer" }));
+  expect(saved().outgoing_call.handled_by).toBe("reviewer");
 });

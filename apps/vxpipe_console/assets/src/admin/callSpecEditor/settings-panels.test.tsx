@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
-import { DirectionPanel } from "./direction-panel";
+import { EntryHandlerField } from "./entry-handler-field";
 import { MediaPolicyFields } from "./media-policy-fields";
 import { WaitSoundsPanel } from "./wait-sounds-panel";
 import { AdvancedPanel } from "./advanced-panel";
 import { editorFixture } from "./editorFixtures";
+import { pageSnapshot } from "./page-fixtures";
 import type { SourceDocument } from "./types";
 
 afterEach(cleanup);
 function Harness({ panel, initial = editorFixture }: { panel: "direction" | "media" | "wait" | "advanced"; initial?: SourceDocument }) {
   const [document, onChange] = useState(initial);
   const props = { document, onChange };
-  return <>{panel === "direction" ? <DirectionPanel {...props} services={[{ key: "phone", name: "Reception phone" }]} />
+  return <>{panel === "direction" ? <EntryHandlerField {...props} />
     : panel === "media" ? <MediaPolicyFields {...props} participantKey={null} />
     : panel === "wait" ? <WaitSoundsPanel {...props} /> : <AdvancedPanel {...props} />}
     <output data-testid="source">{JSON.stringify(document.source)}</output></>;
@@ -24,15 +25,13 @@ async function choose(label: string, option: string) {
   fireEvent.click(await screen.findByRole("option", { name: option }));
 }
 
-test("direction changes retain participants and require explicit outgoing service and agent", async () => {
-  render(<Harness panel="direction" />);
-  fireEvent.click(screen.getByRole("button", { name: "Switch to outgoing" }));
-  expect(saved().incoming_call).toBeDefined();
-  await choose("Outgoing phone service", "Reception phone");
-  fireEvent.click(screen.getByRole("button", { name: "Use outgoing direction" }));
-  expect(saved().outgoing_call).toEqual({ callee: "caller", handled_by: "intake" });
-  expect(saved().participants.caller.connection).toEqual({ service: "phone", mode: "dial", admission: "start_call" });
-  expect(saved().participants.intake.prompt).toBe(editorFixture.source.participants.intake?.type === "agent" ? editorFixture.source.participants.intake.prompt : "");
+test.each(["default", "outgoing"] as const)("entry handler field leaves participant identity on its card: %s", (scenario) => {
+  const initial = pageSnapshot(scenario).document;
+  render(<Harness panel="direction" initial={initial} />);
+  expect(screen.queryByRole("combobox", { name: /^(Caller|Callee)$/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "Handled by" })).toHaveTextContent("intake");
+  expect(screen.queryByRole("button", { name: /Switch to/ })).not.toBeInTheDocument();
+  expect(saved()).toEqual(initial.source);
 });
 
 test("media controls preserve omitted defaults, explicit denials and other routes", async () => {

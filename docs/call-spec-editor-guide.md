@@ -2,19 +2,70 @@
 
 Sign in as an installation operator, open a tenant's **Call specs** page, then
 choose **New call spec** or an existing spec's name. The Calls column opens that
-spec's calls. The editor does not start test calls. New specs receive a server-generated public
+spec's calls. New specs first ask for **Incoming call** or **Outgoing call**;
+outgoing calls also require a configured phone service. The chosen direction
+cannot be changed in the editor, JSON or later saved revisions. Create a separate
+spec for a different direction. The editor does not start test calls. New specs receive a server-generated public
 UUID. The ID is not editable; saves append revisions under that same ID.
+Rename the call spec by selecting its name in the editor header. Call settings
+contains the call configuration; it does not repeat the name field. The **Entry**
+card represents the caller (or outgoing callee); configure that participant on its
+card, including **Handled by** on its Connection tab. Call settings shows **Incoming call**
+or **Outgoing call** at the other end of its title row.
 
-The canvas shows participants and transfer destinations. Select a participant to
-edit its fields; **Call settings** opens direction, defaults, variables and call
+The canvas shows participants and transfer destinations. Agent cards show their
+name, tool count and the number of variables they can write. Variable counts include
+top-level properties in writable sections; nested objects count as one variable.
+Prompts and descriptions stay in the inspector. Select a participant to
+edit its fields; **Call settings** opens model defaults, variables and call
 policies. On a phone, these controls open in a side sheet. Model and voice choices
 come from the installed provider catalog. Choosing a provider selects its
-recommended model and voice. Existing saved selections are preserved. A public
+recommended model and voice without adding recommendation badges to their names.
+Provider and Model share a row. Credential selection is managed outside this editor.
+Existing saved selections are preserved. A public
 speech model such as `flux` and its `options.voice` remain separate in the source;
 the provider adapter composes its concrete model ID.
 
-**Save draft** creates the first immutable revision or appends a revision to the
-same spec. It does not change which revision is published. **Publish** publishes
+An agent's **Models** tab offers two model types: **Speech-to-Speech** uses one
+speech model; **LLM + Text-to-Speech** shows a language model and a voice model.
+Changing type removes incompatible selections and supplies missing selections
+from the installed catalog's recommendations. Other agents keep their effective
+models. Human participants' **Models** tab contains only **Speech to text**.
+Participant media policies live in **Media**.
+
+**Call settings → Models** groups defaults under **AI agents** and **Human
+participants**. The AI group shows both **LLM + Text-to-Speech** (language and voice
+models) and **Speech-to-Speech**; the human group contains **Speech to text**.
+These are the existing capability defaults, and each agent still chooses its model
+type in its own **Models** tab.
+
+In **Call settings → Variables**, each section is a card with variable rows.
+**Add variable** and a row's edit button open the same modal for its name, type,
+required status, enum values and constraints, including nested schemas. Changes
+apply only with **Add variable** or **Save variable**; **Cancel** discards the modal
+edits. Section-level schema rules remain under **Section constraints**. Access is
+configured exclusively in each agent's **Variables** tab.
+
+**Speech to text** transcribes incoming participant audio. The editor does not show
+an **Output speech to text** control. Existing source values remain intact when
+other models are edited. The source field `output_speech_to_text`
+is the fallback for generated agent audio when a speech-to-speech provider declares
+that it has no output transcript. The installed Google Gemini 3.8 Live (`gemini-3.8-live`) and OpenAI GPT-Live 1
+(`gpt-live-1`) adapters both provide output transcripts; leave this fallback unconfigured for
+them. The credential-free Morse test provider can disable transcripts with
+`options.output_transcript: false`; that configuration requires output STT.
+The compiler rejects missing fallback STT in that mode and duplicate STT when the
+provider already supplies transcripts. See Google's [Live API transcription](https://ai.google.dev/gemini-api/docs/live-api/capabilities)
+and OpenAI's [GPT-Live transcript events](https://developers.openai.com/api/docs/guides/live-conversations).
+
+**First message** offers **Wait for input**, **Generated**, and **Fixed text**.
+It shows the effective choice directly: incoming agents wait for input, while the
+initial outgoing agent generates an introduction by default. Selecting the
+direction's default omits the override; there is no separate Default item.
+
+**Save as draft**, in the vertical ellipsis menu beside **Publish**, creates the
+first immutable revision or appends a revision to the same spec. It does not
+change which revision is published. **Publish** publishes
 the saved revision and is available only when the draft has no unsaved edits.
 The header shows the open and published revision numbers. Editing while a save is
 in progress retains the later changes as unsaved; publishing waits for another save.
@@ -26,8 +77,18 @@ failures link to the tenant's Services page. A failed request keeps the current
 source; **Retry** uses the current draft. A conflict offers to reload the latest
 saved revision after confirming that unsaved changes can be discarded.
 
-**View JSON** lets you inspect, copy or download the portable source. The graph is
-a projection of that source, so a no-op save preserves its meaning and digest.
+**JSON** in the header opens the entire call spec for viewing, editing, copying or downloading.
+The **JSON** toggle in each participant sidebar header edits just that participant.
+Use these editors for advanced model `options` and `provider_options`; the model
+forms contain provider, model and voice controls.
+
+**Apply JSON** validates the edit and updates the local draft. **Discard JSON changes**
+restores the current source. Apply does not save a revision; use **Save as draft** afterwards.
+Unapplied JSON survives closing its view or switching participants. **Review JSON edits**
+returns to pending edits, and saving stays disabled until they are applied or discarded.
+If another edit changes the same source, the JSON editor asks you to copy your work
+and reload the current source before applying it, preventing an overwrite.
+The graph is a projection of the source, so a no-op save preserves its meaning and digest.
 Large integer values in enums, schema bounds and provider options retain their
 exact digits when edited, saved or exported. They remain JSON numbers.
 The editor does not store canvas positions or silently migrate older schemas.

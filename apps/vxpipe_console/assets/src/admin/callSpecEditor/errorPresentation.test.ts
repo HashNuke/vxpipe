@@ -13,11 +13,11 @@ const locations = [
   [["participants", "assistant", "tools", "lookup", "integration"], "assistant", "tools", "Agent assistant › Tools"],
   [["participants", "support", "connection", "number"], "support", "connection", "Human support › Connection"],
   [["participants", "caller", "connection", "number"], "$entry", "connection", "Caller › Connection"],
-  [["incoming_call", "handled_by"], "$settings", "direction", "Call settings › Handled by"],
+  [["incoming_call", "handled_by"], "$entry", "connection", "Caller › Handled by"],
   [["defaults", "capabilities", "model_inference", "provider"], "$settings", "defaults", "Call settings › Model inference"],
   [["call_variables", "sections", "contact", "schema", "properties", "phone", "type"], "$settings", "variables", "Call settings › Variables"],
   [["wait_sounds", "call_setup"], "$settings", "wait", "Call settings › Wait sounds"],
-  [["media_policy", "record_audio"], "$settings", "media", "Call settings › Media and recording"],
+  [["media_policy", "record_audio"], "$settings", "media", "Call settings › Media"],
   [["opening_audio", "url"], "$entry", "connection", "Caller › Opening audio"],
   [["tool_visibility_overrides", "assistant", "lookup"], "$settings", "advanced", "Call settings › Tool visibility"],
 ] as const;

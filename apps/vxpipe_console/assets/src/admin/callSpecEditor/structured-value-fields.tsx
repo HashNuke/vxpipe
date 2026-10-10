@@ -4,7 +4,7 @@ import { Button } from "../components/ui/button";
 import { ChoiceField, SourceNumberField, TextField } from "./editor-fields";
 import type { JsonObject, JsonValue, SourceIssue } from "./types";
 
-type Common = { label: string; path: string[]; disabled?: boolean; issues?: SourceIssue[] };
+type Common = { label: string; compact?: boolean; path: string[]; disabled?: boolean; issues?: SourceIssue[] };
 type ValueProps = Common & { value: JsonValue; onChange: (value: JsonValue) => void };
 const kinds = ["String", "Number", "Boolean", "Null", "Object", "Array"];
 function initialValue(kind: string): JsonValue {
@@ -20,13 +20,13 @@ function valueKind(value: JsonValue): string {
 /** Typed JSON values shared by provider options and schema enumeration values. */
 export function ValueFields({ value, onChange, ...props }: ValueProps) {
   return <div className="min-w-0 space-y-3">
-    <ChoiceField {...props} label={`${props.label} type`} path={[...props.path, "$type"]} value={valueKind(value)} choices={kinds.map((kind) => ({ value: kind, label: kind }))} onChange={(kind) => onChange(initialValue(kind))} />
+    <ChoiceField {...props} label={`${props.label} type`} displayLabel={props.compact ? "Value type" : undefined} path={[...props.path, "$type"]} value={valueKind(value)} choices={kinds.map((kind) => ({ value: kind, label: kind }))} onChange={(kind) => onChange(initialValue(kind))} />
     {value === null ? <p className="text-xs text-muted-foreground" data-field-path={JSON.stringify(props.path)}>Null</p>
       : Array.isArray(value) ? <ArrayFields {...props} value={value} onChange={onChange} />
       : typeof value === "object" ? <ObjectFields {...props} value={value} onChange={(next) => onChange(next ?? {})} clearable={false} />
-      : (typeof value === "number" || typeof value === "bigint") ? <SourceNumberField {...props} value={value} onChange={(next) => onChange(next ?? 0)} />
-      : typeof value === "boolean" ? <ChoiceField {...props} value={String(value)} choices={[{ value: "true", label: "True" }, { value: "false", label: "False" }]} onChange={(next) => onChange(next === "true")} />
-      : <TextField {...props} value={value} onChange={onChange} />}
+      : (typeof value === "number" || typeof value === "bigint") ? <SourceNumberField {...props} displayLabel={props.compact ? "Value" : undefined} value={value} onChange={(next) => onChange(next ?? 0)} />
+      : typeof value === "boolean" ? <ChoiceField {...props} displayLabel={props.compact ? "Value" : undefined} value={String(value)} choices={[{ value: "true", label: "True" }, { value: "false", label: "False" }]} onChange={(next) => onChange(next === "true")} />
+      : <TextField {...props} displayLabel={props.compact ? "Value" : undefined} value={value} onChange={onChange} />}
   </div>;
 }
 

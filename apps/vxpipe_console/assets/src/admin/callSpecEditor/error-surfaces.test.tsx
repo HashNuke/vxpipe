@@ -73,13 +73,13 @@ test("an unmappable Show keeps the drawer open and Close restores its opener", a
   await waitFor(() => expect(opener).toHaveFocus());
 });
 
-test("closing source inspection restores the View JSON button", async () => {
+test("closing source inspection restores the JSON button", async () => {
   function Harness() {
     const [open, setOpen] = useState(false);
-    return <><button onClick={() => setOpen(true)}>View JSON</button><SourceView open={open} onOpenChange={setOpen} source={editorFixture.source} onFeedback={vi.fn()} /></>;
+    return <><button onClick={() => setOpen(true)}>JSON</button><SourceView open={open} onOpenChange={setOpen} source={editorFixture.source} onFeedback={vi.fn()} /></>;
   }
   render(<Harness />);
-  const opener = screen.getByRole("button", { name: "View JSON" }); opener.focus(); fireEvent.click(opener);
+  const opener = screen.getByRole("button", { name: "JSON" }); opener.focus(); fireEvent.click(opener);
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   await waitFor(() => expect(opener).toHaveFocus());
 });

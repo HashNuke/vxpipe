@@ -5,7 +5,7 @@ afterEach(cleanup);
 test("loading shows a page status without authoring actions", () => {
   render(<EditorPageState status="loading" backHref="/specs" onRetry={vi.fn()} />);
   expect(screen.getByRole("status")).toHaveTextContent("Loading call spec editor");
-  expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "More actions" })).not.toBeInTheDocument();
 });
 test.each(["spec", "catalog"] as const)("a %s load failure offers page retry", (resource) => {
   const retry = vi.fn(); render(<EditorPageState status="error" resource={resource} backHref="/specs" onRetry={retry} />);

@@ -19,6 +19,7 @@ function Harness({ initial = editorFixture, initialTab = "prompt" }: { initial?:
     <output data-testid="source">{JSON.stringify(document.source)}</output><output data-testid="edges">{JSON.stringify(projectGraph(document).edges)}</output></>;
 }
 const saved = () => JSON.parse(screen.getByTestId("source").textContent!);
+const modelSections = () => screen.getAllByRole("region", { name: /^(Language model|Text to speech|Speech to speech|Speech to text|Output speech to text)$/ }).map((region) => region.getAttribute("aria-label"));
 const switchTab = (name: string) => fireEvent.mouseDown(screen.getByRole("tab", { name }), { button: 0 });
 async function choose(label: string, option: string) {
   fireEvent.keyDown(screen.getByRole("combobox", { name: label }), { key: "ArrowDown" });
@@ -29,26 +30,89 @@ const fill = (label: string, value: string) => fireEvent.change(screen.getByRole
 test("agent prompt and first-message controls preserve source on load and remove mode-specific text", async () => {
   render(<Harness />);
   expect(saved()).toEqual(editorFixture.source);
-  expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Prompt", "Voice and model", "Variables", "Transfers", "Tools", "Presence"]);
-  expect(screen.getByRole("combobox", { name: "First message" })).toHaveTextContent("Default (wait for input)");
+  expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Prompt", "Models", "Variables", "Transfers", "Tools", "Media"]);
+  expect(screen.getByRole("combobox", { name: "First message" })).toHaveTextContent("Wait for input");
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "First message" }), { key: "ArrowDown" });
+  expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual(["Wait for input", "Generated", "Fixed text"]);
+  fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
   fill("Prompt", "Ask one question at a time."); fill("Description", "Reception agent");
   await choose("First message", "Fixed text"); fill("First message text", "Hello there.");
   expect(saved().participants.intake).toMatchObject({ prompt: "Ask one question at a time.", description: "Reception agent", first_message: { mode: "fixed", text: "Hello there." } });
   await choose("First message", "Generated");
   expect(saved().participants.intake.first_message).toEqual({ mode: "generated" });
-  await choose("First message", "Default (wait for input)"); fill("Description", "");
+  await choose("First message", "Wait for input"); fill("Description", "");
   expect(saved().participants.intake).not.toHaveProperty("first_message");
   expect(saved().participants.intake).not.toHaveProperty("description");
 });
-test("only the outgoing handler shows the generated first-message default", () => {
+test("only the outgoing handler defaults to Generated and can explicitly wait for input", async () => {
   const initial = structuredClone(editorFixture);
   delete initial.source.incoming_call;
   initial.source.outgoing_call = { callee: "caller", handled_by: "intake" };
   const view = render(<Harness initial={initial} />);
-  expect(screen.getByRole("combobox", { name: "First message" })).toHaveTextContent("Default (generated)");
+  expect(screen.getByRole("combobox", { name: "First message" })).toHaveTextContent("Generated");
+  expect(saved()).toEqual(initial.source);
+  await choose("First message", "Wait for input");
+  expect(saved().participants.intake.first_message).toEqual({ mode: "wait_for_input" });
+  await choose("First message", "Generated");
+  expect(saved().participants.intake).not.toHaveProperty("first_message");
   view.unmount(); initial.source.outgoing_call.handled_by = "other";
   render(<Harness initial={initial} />);
-  expect(screen.getByRole("combobox", { name: "First message" })).toHaveTextContent("Default (wait for input)");
+  expect(screen.getByRole("combobox", { name: "First message" })).toHaveTextContent("Wait for input");
+});
+
+test("agent models show only LLM and TTS without changing an existing source on load", () => {
+  render(<Harness initialTab="voice" />);
+  expect(screen.getByRole("combobox", { name: "Model type" })).toHaveTextContent("LLM + Text-to-Speech");
+  expect(modelSections()).toEqual(["Language model", "Text to speech"]);
+  expect(saved()).toEqual(editorFixture.source);
+});
+
+test("switching to STS removes conflicting defaults while preserving other participants' effective models", async () => {
+  const initial = structuredClone(editorFixture);
+  const llm = { provider: "google", model: "saved-llm", provider_options: { keep: true } };
+  const tts = { provider: "deepgram", model: "flux", options: { voice: "custom" } };
+  const stt = { provider: "deepgram", model: "flux-general-multi" };
+  initial.source.defaults = { capabilities: { model_inference: llm, text_to_speech: tts, speech_to_text: stt } };
+  initial.source.participants.reviewer = { type: "agent", prompt: "Review." };
+  initial.source.participants.intake!.capabilities = { speech_to_text: stt };
+  render(<Harness initial={initial} initialTab="voice" />);
+  await choose("Model type", "Speech-to-Speech");
+  expect(modelSections()).toEqual(["Speech to speech"]);
+  expect(Object.keys(saved().participants.intake.capabilities)).toEqual(["speech_to_speech"]);
+  expect(saved().participants.reviewer.capabilities).toEqual({ model_inference: llm, text_to_speech: tts });
+  expect(saved().defaults.capabilities).toEqual({ speech_to_text: stt });
+  expect(saved().participants.caller).toEqual(initial.source.participants.caller);
+  expect(saved().participants.specialist).toEqual(initial.source.participants.specialist);
+  switchTab("Prompt"); switchTab("Models");
+  expect(screen.getByRole("combobox", { name: "Model type" })).toHaveTextContent("Speech-to-Speech");
+  await choose("Model type", "LLM + Text-to-Speech");
+  expect(Object.keys(saved().participants.intake.capabilities).sort()).toEqual(["model_inference", "text_to_speech"]);
+  expect(saved().participants.reviewer.capabilities).toEqual({ model_inference: llm, text_to_speech: tts });
+});
+
+test("inherited STS loads unchanged and switching to LLM preserves another agent's STS selection", async () => {
+  const initial = structuredClone(editorFixture);
+  const sts = { provider: "morse", model: "morse", options: { output_transcript: false } };
+  const output = { provider: "morse", model: "morse" };
+  initial.source.defaults = { capabilities: { speech_to_speech: sts, output_speech_to_text: output } };
+  initial.source.participants.reviewer = { type: "agent", prompt: "Review." };
+  render(<Harness initial={initial} initialTab="voice" />);
+  expect(modelSections()).toEqual(["Speech to speech"]);
+  expect(saved()).toEqual(initial.source);
+  await choose("Model type", "LLM + Text-to-Speech");
+  expect(Object.keys(saved().participants.intake.capabilities).sort()).toEqual(["model_inference", "text_to_speech"]);
+  expect(saved().participants.reviewer.capabilities).toEqual({ speech_to_speech: sts, output_speech_to_text: output });
+  expect(saved()).not.toHaveProperty("defaults");
+});
+
+test("historical agent models remain visible with every model control disabled", () => {
+  const initial = structuredClone(editorFixture);
+  initial.readOnly = true;
+  initial.source.participants.intake!.capabilities = { speech_to_speech: { provider: "google", model: "saved-model" } };
+  render(<Harness initial={initial} initialTab="voice" />);
+  expect(screen.getByRole("combobox", { name: "Model type" })).toHaveTextContent("Speech-to-Speech");
+  for (const control of screen.getAllByRole("combobox")) expect(control).toBeDisabled();
+  expect(saved()).toEqual(initial.source);
 });
 test("agent renaming rewrites the entry handler and deletion leaves a required handler choice", async () => {
   render(<Harness />);
@@ -76,7 +140,7 @@ test("agent permissions and presence edit the selected participant only", async 
   render(<Harness initialTab="variables" />);
   await choose("appointment access for intake", "Read");
   expect(saved().participants.intake.variable_permissions).toEqual({ appointment: ["read"] });
-  switchTab("Presence"); await choose("Record audio", "Deny");
+  switchTab("Media"); await choose("Record audio", "Deny");
   expect(saved().participants.intake.while_present).toEqual({ record_audio: false });
   expect(saved().participants.specialist).toEqual(editorFixture.source.participants.specialist);
 });
@@ -164,4 +228,14 @@ test("historical agent inspectors allow tab navigation and disable mutation cont
   switchTab("Tools"); expect(screen.getByRole("button", { name: "Add tool" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Edit availability" })).toBeDisabled();
   expect(saved()).toEqual(editorFixture.source);
+});
+
+test("agent variables retain saved grants for missing sections so they can be cleared", async () => {
+  const initial = structuredClone(editorFixture);
+  initial.source.call_variables = { sections: {} };
+  initial.source.participants.intake = { type: "agent", prompt: "Collect information", variable_permissions: { contact: ["read"] } };
+  render(<Harness initial={initial} initialTab="variables" />);
+  expect(screen.getByRole("combobox", { name: "contact access for intake" })).toHaveTextContent("Read");
+  await choose("contact access for intake", "No access");
+  expect(saved().participants.intake.variable_permissions).toEqual({});
 });

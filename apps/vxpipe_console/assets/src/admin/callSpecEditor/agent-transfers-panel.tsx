@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bot, Handshake, Plus, Search, Trash2 } from "lucide-react";
+import { Bot, UserRound, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
@@ -28,7 +28,7 @@ export function AgentTransfersPanel({ document, onChange, issues, participantKey
           <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-2">
             <div className="mb-2 flex items-center gap-2"><Search className="h-4 w-4 shrink-0 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search destinations" aria-label="Search destinations" /></div>
             <div className="max-h-60 overflow-auto">{available.map(([key, value]) => {
-              const Icon = value.type === "agent" ? Bot : Handshake;
+              const Icon = value.type === "agent" ? Bot : UserRound;
               return <Button key={key} variant="ghost" className="h-auto w-full justify-start gap-3 px-2 py-2 text-left" aria-label={`Add ${key}`} onClick={() => { onChange(setTransfer(document, participantKey, key, true)); setOpen(false); setQuery(""); }}>
                 <Icon className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="min-w-0 whitespace-normal"><span className="block wrap-anywhere font-medium">{key}</span>{value.description && <span className="block wrap-anywhere text-xs font-normal text-muted-foreground">{value.description}</span>}</span>
               </Button>;

@@ -6,7 +6,7 @@ import { parseSource } from "./source";
 
 export type EditorScenario = "default" | "new" | "invalid" | "published" | "outgoing" | "historical" | "long" | "large-integers";
 export function pageSnapshot(scenario: EditorScenario): EditorSnapshot {
-  if (scenario === "new") return { document: newCallSpec(modelCatalogFixture) };
+  if (scenario === "new") return { document: newCallSpec(modelCatalogFixture, { direction: "incoming" }) };
   const document = structuredClone(editorFixture);
   document.source.defaults = { capabilities: { model_inference: { provider: "google", model: "gemini-2.5-flash" } } };
   const intake = document.source.participants.intake;

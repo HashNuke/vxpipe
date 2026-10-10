@@ -8,10 +8,11 @@ import { EditorTheme } from "./admin/callSpecEditor/EditorTheme";
 import { CallSpecEditor } from "./admin/callSpecEditor/flow-editor";
 import type { EditorLookups } from "./admin/callSpecEditor/inspectorTypes";
 import { LeaveEditorDialog } from "./admin/callSpecEditor/leave-editor-dialog";
-import { newCallSpec } from "./admin/callSpecEditor/seed";
+import { NewCallSpec } from "./admin/callSpecEditor/new-call-spec";
 
 const defaultFetch: EditorFetch = (input, init) => window.fetch(input, init);
 type Page = { status: "loading" } | { status: "error"; resource: "spec" | "catalog"; expired: boolean } |
+  { status: "new"; catalog: ModelCatalog; lookups: EditorLookups; key: string } |
   { status: "ready"; snapshot: EditorSnapshot; catalog: ModelCatalog; lookups: EditorLookups; key: string };
 
 export function CallSpecEditorRoute({ csrfToken, fetchImpl = defaultFetch }: { csrfToken: string; fetchImpl?: EditorFetch }) {
@@ -55,8 +56,13 @@ export function CallSpecEditorRoute({ csrfToken, fetchImpl = defaultFetch }: { c
         const lookups = await api.lookups(controller.signal);
         const requested = revisionQuery === null ? undefined : Number(revisionQuery);
         if (requested !== undefined && (!/^[1-9]\d*$/.test(revisionQuery!) || !Number.isSafeInteger(requested) || requested > 2147483647)) throw new Error("Invalid revision");
-        const snapshot = callSpecId === "new" ? { document: newCallSpec(catalog) } : await api.read(callSpecId, controller.signal, requested);
-        if (!controller.signal.aborted) setPage({ status: "ready", snapshot, catalog, lookups, key: `${tenantKey}/${callSpecId}/${revisionQuery ?? "latest"}/${attempt}` });
+        const key = `${tenantKey}/${callSpecId}/${revisionQuery ?? "latest"}/${attempt}`;
+        if (callSpecId === "new") {
+          if (!controller.signal.aborted) setPage({ status: "new", catalog, lookups, key });
+        } else {
+          const snapshot = await api.read(callSpecId, controller.signal, requested);
+          if (!controller.signal.aborted) setPage({ status: "ready", snapshot, catalog, lookups, key });
+        }
       } catch (error) {
         if (!controller.signal.aborted) setPage({ status: "error", resource, expired: error instanceof EditorReadError && error.status === 401 });
       }
@@ -66,7 +72,8 @@ export function CallSpecEditorRoute({ csrfToken, fetchImpl = defaultFetch }: { c
   }, [api, tenantKey, callSpecId, revisionQuery, attempt]);
   const reload = useCallback((signal: AbortSignal) => api.read(created.current ?? callSpecId, signal), [api, callSpecId]);
   return <EditorTheme>
-    {page.status === "ready" ? <>
+    {page.status === "new" ? <NewCallSpec key={page.key} catalog={page.catalog} services={page.lookups.telephonyServices} servicesHref={`${base}/services`}
+      onCancel={() => approvedNavigate(backHref)} onCreate={(document) => setPage({ ...page, status: "ready", snapshot: { document } })} /> : page.status === "ready" ? <>
       <CallSpecEditor noticeAction={revisionQuery !== null ? <Link className="underline" to={`${backHref}/${encodeURIComponent(callSpecId)}`}>Continue editing latest revision</Link> : undefined} key={page.key} snapshot={page.snapshot} catalog={page.catalog} lookups={page.lookups} execute={api.execute}
         backHref={backHref} servicesHref={`${base}/services`} onNavigate={approvedNavigate} onReload={reload} onGuardChange={onGuardChange} onSaved={onSaved} />
     </> : page.status === "error" && page.expired ? <main className="min-h-dvh bg-background p-6"><h1>Your session expired</h1><a className="underline" href="/auth/login">Sign in to open the editor</a></main> :

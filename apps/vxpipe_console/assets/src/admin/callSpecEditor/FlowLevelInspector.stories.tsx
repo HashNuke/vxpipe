@@ -19,12 +19,11 @@ const variables: SourceDocument = { ...editorFixture, source: { ...editorFixture
   },
 } };
 type Props = { theme: "dark" | "light"; initial?: SourceDocument; initialTab?: CallSettingsTab };
-function CallSettingsStory({ theme, initial = editorFixture, initialTab = "direction" }: Props) {
+function CallSettingsStory({ theme, initial = editorFixture, initialTab = "defaults" }: Props) {
   const [document, onChange] = useState(initial);
   const [tab, onTabChange] = useState(initialTab);
   return <EditorTheme theme={theme}><main className="min-h-screen bg-muted p-0 sm:p-6"><div className="mx-auto h-dvh min-h-[32rem] w-full max-w-[34rem] overflow-hidden border border-border sm:h-[calc(100dvh-3rem)] sm:rounded-md">
-    <FlowLevelInspector document={document} onChange={onChange} issues={validateSource(document.source)} catalog={modelCatalogFixture} tab={tab} onTabChange={onTabChange}
-      lookups={{ telephonyServices: [{ key: "phone", name: "Reception phone" }], credentialNames: { deepgram: ["production"] }, mcpIntegrations: [] }} />
+    <FlowLevelInspector document={document} onChange={onChange} issues={validateSource(document.source)} catalog={modelCatalogFixture} tab={tab} onTabChange={onTabChange} />
   </div></main></EditorTheme>;
 }
 const meta = { title: "Vxpipe/Console/Call spec editor/Call settings inspector", component: CallSettingsStory, parameters: { layout: "fullscreen" }, args: { theme: "dark" }, argTypes: { theme: { control: "select", options: ["dark", "light"] } } } satisfies Meta<typeof CallSettingsStory>;

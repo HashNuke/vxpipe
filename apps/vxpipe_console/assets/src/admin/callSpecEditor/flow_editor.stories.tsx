@@ -7,6 +7,8 @@ import { EditorPageState } from "./editor-page-state";
 import type { EditorResult } from "./editor-state";
 import { EditorTheme } from "./EditorTheme";
 import { CallSpecEditor } from "./flow-editor";
+import { NewCallSpec } from "./new-call-spec";
+import type { SourceDocument } from "./types";
 import { pageSnapshot, type EditorScenario } from "./page-fixtures";
 import "../admin.css";
 
@@ -14,14 +16,16 @@ type Props = { theme: "dark" | "light"; scenario: EditorScenario; outcome?: Edit
 // Adapted from Callpipe's flow_editor.stories: whole-page fixtures and real UI actions.
 function FlowEditorStory({ theme, scenario, outcome, pageStatus }: Props) {
   const [destination, setDestination] = useState<string>();
+  const [created, setCreated] = useState<SourceDocument>();
   const [retried, setRetried] = useState(false);
   const [revision, setRevision] = useState(() => pageSnapshot(scenario).saved?.revision ?? 0);
-  const snapshot = pageSnapshot(scenario);
+  const snapshot = scenario === "new" && created ? { document: created } : pageSnapshot(scenario);
   return <EditorTheme theme={theme}>{destination ? <main className="grid min-h-dvh place-content-center gap-4 bg-background p-6">
     <h1 className="text-lg font-semibold">{destination === "#services" ? "Tenant services" : "Call specs"}</h1>
     <p className="text-sm text-muted-foreground">Navigation confirmed. Return to the editor to continue the prototype.</p>
     <Button variant="outline" onClick={() => setDestination(undefined)}>Return to editor</Button>
   </main> : pageStatus && !retried ? <EditorPageState status={pageStatus === "loading" ? "loading" : "error"} resource={pageStatus === "catalog-error" ? "catalog" : "spec"} backHref="#call-specs" onRetry={() => setRetried(true)} />
+    : scenario === "new" && !created ? <NewCallSpec catalog={modelCatalogFixture} services={[{ key: "office-phone", name: "Office phone" }]} servicesHref="#services" onCreate={setCreated} onCancel={() => setDestination("#call-specs")} />
     : <CallSpecEditor key={scenario} snapshot={snapshot} catalog={modelCatalogFixture} lookups={{ telephonyServices: [{ key: "office-phone", name: "Office phone" }], credentialNames: { google: ["primary"] }, mcpIntegrations: ["calendar"] }}
       backHref="#call-specs" servicesHref="#services" onNavigate={setDestination} onReload={async () => ({ ...pageSnapshot("default"), saved: { callSpecId: "appointments", revision: revision + 1, publishedRevision: null } })}
       execute={async (request) => {
@@ -35,16 +39,23 @@ const meta = { title: "Vxpipe/Console/Call spec editor/Page", component: FlowEdi
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-function actionStory(outcome: EditorResult, message: string, action: "Save draft" | "Publish" = "Save draft", scenario: EditorScenario = "default"): Story {
+async function saveDraft(body: ReturnType<typeof within>) {
+  await userEvent.click(body.getByRole("button", { name: "More actions" }));
+  await userEvent.click(await body.findByRole("menuitem", { name: "Save as draft" }));
+}
+
+function actionStory(outcome: EditorResult, message: string, action: "Save as draft" | "Publish" = "Save as draft", scenario: EditorScenario = "default"): Story {
   return { args: { outcome, scenario }, play: async ({ canvasElement }) => {
-    const body = within(canvasElement.ownerDocument.body); await userEvent.click(body.getByRole("button", { name: action }));
+    const body = within(canvasElement.ownerDocument.body);
+    if (action === "Save as draft") await saveDraft(body);
+    else await userEvent.click(body.getByRole("button", { name: action }));
     await expect(body.findByText(message)).resolves.toBeVisible();
   } };
 }
 export const Default: Story = { play: async ({ canvasElement }) => {
   const body = within(canvasElement.ownerDocument.body);
   await expect(body.getByRole("heading", { name: "New Patient Appointment Intake" })).toBeInTheDocument();
-  await expect(body.getByRole("button", { name: "Save draft" })).toBeEnabled();
+  await expect(body.getByRole("button", { name: "More actions" })).toBeEnabled();
 } };
 export const Loading: Story = { args: { pageStatus: "loading" } };
 export const LoadFailure: Story = { args: { pageStatus: "spec-error" } };
@@ -52,7 +63,7 @@ export const CatalogFailure: Story = { args: { pageStatus: "catalog-error" } };
 export const NewSpec: Story = { args: { scenario: "new" } };
 export const ClientValidationErrors: Story = { args: { scenario: "invalid" } };
 export const SaveBlocked: Story = { args: { scenario: "invalid" }, play: async ({ canvasElement }) => {
-  const body = within(canvasElement.ownerDocument.body); await userEvent.click(body.getByRole("button", { name: "Save draft" }));
+  const body = within(canvasElement.ownerDocument.body); await saveDraft(body);
   await expect(body.getByText("Fix 2 issues before saving")).toBeVisible();
 } };
 export const Saved: Story = actionStory({ status: 201, revision: 4 }, "Saved as revision 4");
@@ -62,8 +73,8 @@ export const BackendUnmappedError: Story = actionStory({ status: 422, error: { c
 export const NotPublishable: Story = actionStory({ status: 409, error: { code: "call_spec_not_publishable", path: ["participants", "intake", "prompt"], reason: "requires a supported configuration" } }, "Couldn't publish: Agent intake › Prompt requires a supported configuration", "Publish");
 export const MissingCredential: Story = actionStory({ status: 422, error: { code: "provider_credential_unavailable", path: ["defaults", "capabilities", "model_inference"] } }, "No usable google credential for this tenant");
 export const ProviderForbidden: Story = actionStory({ status: 403, error: { code: "provider_service_forbidden", path: ["defaults", "capabilities", "model_inference"] } }, "This tenant can't use google");
-export const MissingCallerId: Story = actionStory({ status: 422, error: { code: "telephony_caller_id_missing", path: ["participants", "caller", "connection"] } }, "office-phone has no outbound caller ID number", "Save draft", "outgoing");
-export const InvalidPhoneRoute: Story = actionStory({ status: 422, error: { code: "invalid_telephony_route", path: ["participants", "caller", "connection"] } }, "The phone number isn't routable through office-phone", "Save draft", "outgoing");
+export const MissingCallerId: Story = actionStory({ status: 422, error: { code: "telephony_caller_id_missing", path: ["participants", "caller", "connection"] } }, "office-phone has no outbound caller ID number", "Save as draft", "outgoing");
+export const InvalidPhoneRoute: Story = actionStory({ status: 422, error: { code: "invalid_telephony_route", path: ["participants", "caller", "connection"] } }, "The phone number isn't routable through office-phone", "Save as draft", "outgoing");
 export const PrivateMaterial: Story = actionStory({ status: 422, error: { code: "private_call_spec_material", path: ["defaults", "capabilities", "model_inference", "provider_options"] } }, "Remove credentials or secrets from Call settings › Model inference");
 export const RevisionConflict: Story = actionStory({ status: 409, error: { code: "revision_conflict" } }, "This spec changed while saving. Reload to see the latest revision");
 export const NotFound: Story = actionStory({ status: 404, error: { code: "call_spec_not_found" } }, "This call spec no longer exists");
@@ -92,7 +103,7 @@ export const DrawTransfer: Story = { play: async ({ canvasElement }) => {
   const close = body.queryByRole("button", { name: "Close" });
   if (close) { await userEvent.click(close); await waitFor(() => expect(body.queryByRole("dialog")).not.toBeInTheDocument()); }
   await userEvent.click(body.getByLabelText("Transfer from intake")); await userEvent.click(body.getByLabelText("Transfer to agent"));
-  await userEvent.click(body.getByRole("button", { name: "View JSON" }));
+  await userEvent.click(body.getByRole("button", { name: "JSON" }));
   await waitFor(() => {
     const source = JSON.parse((body.getByRole("textbox", { name: "Call spec JSON" }) as HTMLTextAreaElement).value);
     expect(source.participants.intake.transfers).toContain("agent");

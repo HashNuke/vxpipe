@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { parseSource } from "./source";
-import { setCapability, setFirstMessage, setMediaPolicy, setTools, setWaitSounds, switchDirection } from "./edits";
+import { setCapability, setFirstMessage, setMediaPolicy, setTools, setWaitSounds } from "./edits";
 
 function document() {
   return parseSource(JSON.stringify({ schema_version: "20261004.01", incoming_call: { caller: "caller", handled_by: "assistant" }, participants: {
@@ -9,18 +9,7 @@ function document() {
   }, defaults: { capabilities: { model_inference: { provider: "google", model: "original" } } } }));
 }
 
-test("switching direction retains the entry key and explicit first message; requires a phone service for outgoing", () => {
-  const original = document();
-  const outgoing = switchDirection(original, "outgoing", "office");
-  expect(outgoing.source.incoming_call).toBeUndefined();
-  expect(outgoing.source.outgoing_call).toEqual({ callee: "caller", handled_by: "assistant" });
-  expect(outgoing.source.participants.caller).toMatchObject({ connection: { service: "office", mode: "dial", admission: "start_call" } });
-  expect(outgoing.source.participants.assistant).toEqual(original.source.participants.assistant);
-  expect(switchDirection(outgoing, "incoming")).toEqual(original);
-  expect(() => switchDirection(original, "outgoing", "web")).toThrow("phone service");
-  expect(() => switchDirection(original, "outgoing")).toThrow("phone service");
-  expect(original).toEqual(document());
-});
+
 
 test("capability overrides can be set and cleared without changing inherited selections", () => {
   const original = document();

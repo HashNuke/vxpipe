@@ -10,7 +10,7 @@ const props = { document: editorFixture, onChange: vi.fn(), catalog: modelCatalo
 
 test("selection routes to call settings, entry, agent and human inspectors", () => {
   const view = render(<Inspector {...props} />);
-  expect(screen.getByRole("textbox", { name: "Call spec name" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("data-state", "active");
   view.rerender(<Inspector {...props} selectedNodeId="$entry" />);
   expect(screen.getByText("Entry · Caller")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Delete participant" })).not.toBeInTheDocument();
@@ -31,7 +31,7 @@ test("selected transfers expose their endpoints and deletion of that exact edge"
 
 test("the entry edge is locked and historical transfers cannot be deleted", () => {
   const view = render(<Inspector {...props} selectedEdgeId="$entry-edge" />);
-  expect(screen.getByText("Change the call handler in Call settings.")).toBeInTheDocument();
+  expect(screen.getByText("Change Handled by in the Entry card’s Connection tab.")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Delete transfer" })).not.toBeInTheDocument();
   view.rerender(<Inspector {...props} document={{ ...editorFixture, readOnly: true }} selectedEdgeId="transfer:intake:specialist" />);
   expect(screen.getByRole("button", { name: "Delete transfer" })).toBeDisabled();

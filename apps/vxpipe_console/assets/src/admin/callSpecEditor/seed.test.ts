@@ -4,12 +4,22 @@ import { validateSource } from "./validation";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
 import type { ModelCatalog } from "../modelCatalog";
 
+test("outgoing seeds dial the selected service and use the outgoing first-message default", () => {
+  const document = newCallSpec(modelCatalogFixture, { direction: "outgoing", service: "office" });
+  expect(document.source.incoming_call).toBeUndefined();
+  expect(document.source.outgoing_call).toEqual({ callee: "callee", handled_by: "assistant" });
+  expect(document.source.participants.callee).toMatchObject({ type: "human", connection: { service: "office", mode: "dial", admission: "start_call" } });
+  expect(document.source.participants.assistant).not.toHaveProperty("first_message");
+  expect(validateSource(document.source)).toEqual([]);
+  expect(() => newCallSpec(modelCatalogFixture, { direction: "outgoing", service: "web" })).toThrow("phone service");
+});
+
 test("a new spec starts with an incoming web caller and agent using the catalog recommendation", () => {
   const catalog: ModelCatalog = { model_inference: { custom: [
     { id: "old-model", name: "Old", default: false, voices: null },
     { id: "new-model", name: "New", default: true, voices: null },
   ] } };
-  const doc = newCallSpec(catalog);
+  const doc = newCallSpec(catalog, { direction: "incoming" });
   expect(doc.readOnly).toBe(false);
   expect(doc.source.incoming_call).toEqual({ caller: "caller", handled_by: "assistant" });
   expect(doc.source.participants.caller).toMatchObject({ type: "human", connection: { service: "web", mode: "receive", admission: "start_call" } });
@@ -17,7 +27,7 @@ test("a new spec starts with an incoming web caller and agent using the catalog 
   expect(doc.source.defaults?.capabilities).toEqual({ model_inference: { provider: "custom", model: "new-model" } });
   expect(validateSource(doc.source)).toEqual([]);
   doc.source.participants.assistant!.description = "Changed";
-  expect(newCallSpec(catalog).source.participants.assistant?.description).toBeUndefined();
+  expect(newCallSpec(catalog, { direction: "incoming" }).source.participants.assistant?.description).toBeUndefined();
 });
 
 test("voice recommendations use descriptor-owned parameters and never combine the public model ID", () => {
@@ -29,8 +39,8 @@ test("voice recommendations use descriptor-owned parameters and never combine th
 });
 
 test("new source prefers the existing Google default and fails clearly without a runnable model catalog", () => {
-  expect(newCallSpec(modelCatalogFixture).source.defaults?.capabilities?.model_inference?.provider).toBe("google");
-  expect(() => newCallSpec({})).toThrow("model");
+  expect(newCallSpec(modelCatalogFixture, { direction: "incoming" }).source.defaults?.capabilities?.model_inference?.provider).toBe("google");
+  expect(() => newCallSpec({}, { direction: "incoming" })).toThrow("model");
   expect(() => recommendedSelection(modelCatalogFixture, "text_to_speech", "missing")).toThrow("model");
 });
 

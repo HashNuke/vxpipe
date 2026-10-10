@@ -118,6 +118,7 @@ defmodule Vxpipe.Calls.CallSpecs do
            Repositories.call(repository, :next_revision, [tenant_key, call_spec_id]),
          {:ok, call_spec} <-
            CallSpec.new(source, resource_id: call_spec_id, revision: revision_number),
+         :ok <- preserve_direction(repository, tenant_key, call_spec),
          :ok <- CallSpecCredentials.check(call_spec, tenant_key, options) do
       validation_errors = validate_support(call_spec, tenant_key, options)
       routes = participant_routes(call_spec, tenant_key, options)
@@ -156,6 +157,27 @@ defmodule Vxpipe.Calls.CallSpecs do
 
         result ->
           result
+      end
+    end
+  end
+
+  defp preserve_direction(_repository, _tenant_key, %CallSpec{revision: 1}), do: :ok
+
+  defp preserve_direction(repository, tenant_key, call_spec) do
+    with {:ok, first} <-
+           Repositories.call(repository, :fetch_revision, [tenant_key, call_spec.resource_id, 1]) do
+      original = if is_map(first.source["outgoing_call"]), do: :outgoing, else: :incoming
+
+      if call_spec.direction == original do
+        :ok
+      else
+        {:error,
+         Error.new(:invalid_call_spec, "Call direction cannot be changed.",
+           details: %{
+             "path" => ["#{call_spec.direction}_call"],
+             "reason" => "cannot be changed after creation; create a new call spec"
+           }
+         )}
       end
     end
   end

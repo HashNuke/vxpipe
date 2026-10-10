@@ -23,14 +23,14 @@ const capabilityNames: Record<string, string> = {
 const participantFields: Record<string, [string, string]> = {
   type: ["prompt", "Participant type"], description: ["prompt", "Description"], prompt: ["prompt", "Prompt"],
   first_message: ["prompt", "First message"], connection: ["connection", "Connection"],
-  transfer_notice: ["connection", "Private briefing"], capabilities: ["voice", "Voice and model"],
+  transfer_notice: ["connection", "Private briefing"], capabilities: ["voice", "Models"],
   transfers: ["transfers", "Transfer destinations"], transfer_history: ["transfers", "Transfer history"],
-  variable_permissions: ["variables", "Section permissions"], tools: ["tools", "Tools"], while_present: ["presence", "Presence"],
+  variable_permissions: ["variables", "Section permissions"], tools: ["tools", "Tools"], while_present: ["presence", "Media"],
 };
 const settingsFields: Record<string, [string, string]> = {
-  name: ["direction", "Name"], schema_version: ["advanced", "Schema version"], participants: ["direction", "Participants"],
-  defaults: ["defaults", "Voice and model"], call_variables: ["variables", "Variables"],
-  media_policy: ["media", "Media and recording"], wait_sounds: ["wait", "Wait sounds"],
+  schema_version: ["advanced", "Schema version"], participants: ["advanced", "Participants"],
+  defaults: ["defaults", "Models"], call_variables: ["variables", "Variables"],
+  media_policy: ["media", "Media"], wait_sounds: ["wait", "Wait sounds"],
   tool_visibility: ["advanced", "Tool visibility"], tool_visibility_overrides: ["advanced", "Tool visibility"],
   limits: ["advanced", "Call limits"], transfer_policy: ["advanced", "Transfer timeout"],
 };
@@ -40,7 +40,8 @@ export function locateIssue(source: CallSpecSource, path: string[]): IssueLocati
   const entry = source.incoming_call?.caller ?? source.outgoing_call?.callee ?? source.entry_caller;
   const entryLabel = source.outgoing_call ? "Callee" : "Caller";
   const location = (nodeId: string, tab: string, label: string): IssueLocation => ({ nodeId, tab, field: path, label });
-  if (!root) return location("$settings", "direction", "Call settings › Direction");
+  if (root === "name") return location("$header", "name", "Call spec name");
+  if (!root) return location("$settings", "advanced", "Call settings");
   if (root === "participants" && key) {
     if (!Object.hasOwn(source.participants, key)) return null;
     const participant = source.participants[key]!;
@@ -55,7 +56,7 @@ export function locateIssue(source: CallSpecSource, path: string[]): IssueLocati
   if (root === "incoming_call" || root === "outgoing_call") {
     if (key === "ring_timeout_ms") return location("$entry", "connection", `${entryLabel} › Ring timeout`);
     if (key && !["caller", "callee", "handled_by"].includes(key)) return null;
-    return location("$settings", "direction", `Call settings › ${key === "handled_by" ? "Handled by" : "Direction"}`);
+    return location("$entry", "connection", `${entryLabel} › ${key === "handled_by" ? "Handled by" : "Connection"}`);
   }
   if (root === "opening_audio") return location("$entry", "connection", `${entryLabel} › Opening audio`);
   if (!Object.hasOwn(settingsFields, root)) return null;

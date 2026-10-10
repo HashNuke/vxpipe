@@ -1,7 +1,6 @@
 import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
 import { ChoiceField, TextField } from "./editor-fields";
 import { recommendedSelection, selectionForModel } from "./seed";
-import { ObjectFields } from "./structured-value-fields";
 import type { CapabilitySelection, SourceIssue } from "./types";
 
 type Props = {
@@ -10,56 +9,42 @@ type Props = {
   value?: CapabilitySelection;
   onChange: (value: CapabilitySelection | undefined) => void;
   catalog: ModelCatalog;
-  credentialNames: Record<string, string[]>;
   disabled?: boolean;
   issues?: SourceIssue[];
   defaultLabel?: string;
+  defaultDisabled?: boolean;
 };
 
 /** Public model and voice remain separate; adapters own their wire-format mapping. */
-export function CapabilityFields({ kind, path, value, onChange, catalog, credentialNames, disabled, issues, defaultLabel = "Use default" }: Props) {
+export function CapabilityFields({ kind, path, value, onChange, catalog, disabled, issues, defaultLabel = "Use default", defaultDisabled = false }: Props) {
   const providers = catalog[kind] ?? {};
   const models = value && Object.hasOwn(providers, value.provider) ? providers[value.provider]! : [];
   const model = models.find((model) => model.id === value?.model);
   const voices = model?.voices;
-  const names = value && Object.hasOwn(credentialNames, value.provider) ? credentialNames[value.provider]! : [];
   const voice = voices && value?.options?.[voices.parameter];
-  return <fieldset disabled={disabled} className="space-y-4">
-    <ChoiceField label="Provider" path={[...path, "provider"]} issues={issues} disabled={disabled}
-      value={value?.provider ?? ""} choices={[{ value: "", label: defaultLabel }, ...Object.keys(providers).sort().map((provider) => ({ value: provider, label: provider }))]}
-      onChange={(provider) => onChange(provider ? recommendedSelection(catalog, kind, provider) : undefined)} />
-    {value && <>
-      <ChoiceField label="Model" path={[...path, "model"]} issues={issues} disabled={disabled} value={value.model}
-        choices={models.map((model) => ({ value: model.id, label: `${model.name}${model.default ? " · Recommended" : ""}` }))}
+  return <fieldset disabled={disabled} className="grid min-w-0 gap-4 [&_[data-field-path]]:space-y-1.5 [&_[data-slot=label]]:text-xs [&_[data-slot=label]]:text-muted-foreground">
+    <div className="grid grid-cols-2 items-start gap-3">
+      <ChoiceField label="Provider" path={[...path, "provider"]} issues={issues} disabled={disabled}
+        value={value?.provider ?? ""} choices={[{ value: "", label: defaultLabel, disabled: defaultDisabled }, ...Object.keys(providers).sort().map((provider) => ({ value: provider, label: provider }))]}
+        onChange={(provider) => onChange(provider ? recommendedSelection(catalog, kind, provider) : undefined)} />
+      <ChoiceField label="Model" path={[...path, "model"]} issues={issues} disabled={disabled || !value} value={value?.model ?? ""}
+        choices={value ? models.map((model) => ({ value: model.id, label: model.name })) : [{ value: "", label: "Choose provider first", disabled: true }]}
         onChange={(id) => {
           const selected = models.find((model) => model.id === id);
-          if (selected) {
+          if (selected && value) {
             const next = { ...value };
             delete next.options;
             onChange({ ...next, ...selectionForModel(value.provider, selected) });
           }
         }} />
+    </div>
+    {value && <>
       {voices && (voices.type === "free_text"
         ? <TextField label="Voice" path={[...path, "options", voices.parameter]} issues={issues} disabled={disabled} value={typeof voice === "string" ? voice : ""}
-          hint={`Recommended: ${voices.default}`} onChange={(voice) => onChange({ ...value, options: { ...value.options, [voices.parameter]: voice } })} />
+          onChange={(voice) => onChange({ ...value, options: { ...value.options, [voices.parameter]: voice } })} />
         : <ChoiceField label="Voice" path={[...path, "options", voices.parameter]} issues={issues} disabled={disabled} value={typeof voice === "string" ? voice : ""}
-          choices={voices.values.map((voice) => ({ value: voice.id, label: `${voice.name}${voice.default ? " · Recommended" : ""}` }))}
+          choices={voices.values.map((voice) => ({ value: voice.id, label: voice.name }))}
           onChange={(voice) => onChange({ ...value, options: { ...value.options, [voices.parameter]: voice } })} />)}
-      <ChoiceField label="Credential" path={[...path, "credential_name"]} issues={issues} disabled={disabled} value={value.credential_name ?? ""}
-        choices={[{ value: "", label: "Service default" }, ...names.map((name) => ({ value: name, label: name }))]}
-        onChange={(name) => { const next = { ...value }; if (name) next.credential_name = name; else delete next.credential_name; onChange(next); }} />
-      <ObjectFields label="Options" path={[...path, "options"]} issues={issues} disabled={disabled}
-        reservedKeys={voices ? [voices.parameter] : []}
-        value={value.options === undefined ? undefined : Object.fromEntries(Object.entries(value.options).filter(([key]) => key !== voices?.parameter))}
-        onChange={(options) => {
-          const next = { ...value };
-          const hasVoice = voices && value.options && Object.hasOwn(value.options, voices.parameter);
-          if (options === undefined && !hasVoice) delete next.options;
-          else next.options = { ...options, ...(hasVoice ? { [voices.parameter]: value.options![voices.parameter]! } : {}) };
-          onChange(next);
-        }} />
-      <ObjectFields label="Provider options" path={[...path, "provider_options"]} issues={issues} disabled={disabled} value={value.provider_options}
-        onChange={(options) => { const next = { ...value }; if (options === undefined) delete next.provider_options; else next.provider_options = options; onChange(next); }} />
     </>}
   </fieldset>;
 }

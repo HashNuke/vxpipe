@@ -16,14 +16,19 @@ rewritten. Removing a referenced variable leaves an empty required selection so
 validation asks the operator to choose a replacement. It never substitutes a
 fixed phone number or changes a transfer destination silently.
 
-Switching to outgoing requires an explicit phone service and an agent handler.
-Switching back seeds an incoming web connection. Both keep the entry participant
-key and explicit first-message choice; each direction's omitted first-message
-behavior remains owned by the backend. Capability overrides can be removed to
+New specs require an explicit incoming/outgoing choice before the editor opens.
+Outgoing creation requires a configured phone service and seeds a dial callee
+handled by an agent; incoming creation seeds a web caller. Direction has no switch
+in Call settings, and applying full JSON cannot change the chosen direction.
+The shared Calls save workflow compares later revisions with revision one's
+direction, including legacy incoming specs, before persisting. This applies to
+Console, API and trusted host writes. A direction change requires a new spec;
+existing history remains intact. Each direction's omitted first-message behavior
+remains owned by the backend. Capability overrides can be removed to
 inherit defaults, and omitted wait slots remain distinct from explicit silence.
 
-The new-spec seed matches the development example: an incoming web caller and a
-text-capable agent. It uses Google's catalog recommendation when installed, or
+The new-spec seed uses the selected direction and a text-capable agent. It uses
+Google's catalog recommendation when installed, or
 the first available language-model provider in deterministic order. The model ID
 always comes from the catalog. Voice capabilities are explicit additions. Public
 speech options and voice parameter names also come from adapter descriptors;
@@ -53,10 +58,12 @@ presentation data; the UI owns focus, badges, toast replacement and dismissal.
 ## Inspector edits
 
 Call settings composes standard form controls over the source-edit functions.
-Typed option fields support JSON scalars, arrays and nested objects; operators
-never need to edit raw JSON. Removing the last key retains an explicit empty
-object, while Clear omits the optional object. Voice parameters are edited by the
-catalog-driven voice field and reserved against collisions in the other options.
+Model controls show Provider and Model side by side, followed by a catalog-driven
+Voice field when relevant. Recommendations select defaults without decorating names.
+Credential selectors and generic option forms are omitted. Existing credential names,
+model options and provider options are preserved until explicitly replaced.
+Advanced `options` and `provider_options` are edited in the full call-spec or
+participant JSON editor, retaining explicit empty objects, nulls and nested values.
 Changing provider replaces the whole selection with that provider's recommendation;
 changing model preserves the provider's credential name and provider_options while
 resetting model options to the descriptor's defaults.
@@ -80,14 +87,37 @@ private briefings removes the field; opening a saved null leaves it unchanged.
 Participant capability panels show the call default and any explicit override.
 The human inspector's transfer timeout edits the one call-wide transfer policy.
 
-The Agent inspector keeps omitted first-message and transfer-history defaults
-implicit. Changing either mode replaces its dependent fields in one edit. Its
+The Agent inspector displays the effective first-message mode without a redundant
+Default option. Opening a source preserves omission; selecting the direction's
+default removes an override. Transfer-history defaults also stay implicit.
+Changing either mode replaces its dependent fields in one edit. Its
 transfer picker and canvas share the eligibility rule, and existing invalid
 references remain removable. Tool editing preserves per-tool visibility across a
 key rename, rejects reserved keys and collisions, and keeps host keys equal to
 their registered tool names. MCP integration names come from lookups; tool names
 are entered explicitly and resolved by the backend. The tool dialog holds its
 draft locally until Add or Save, so Cancel does not change the source.
+
+### Agent model types
+
+The Models tab separates Speech-to-Speech from LLM plus Text-to-Speech. Human
+inspectors expose only Speech-to-Text. Opening existing selections never normalizes
+the source, including text-only agents and saved output-recognition selections.
+Only the active model type's controls appear; a type change removes incompatible
+agent overrides and seeds missing selections from catalog recommendations in
+provider-name order. A type is unavailable when a required selection has neither
+a saved/default selection nor a catalog recommendation. A required provider can
+revert to a call default only when one exists.
+
+Capability inheritance is per capability, and the portable source has no value
+that disables one inherited capability for one participant. When a type change
+conflicts with call defaults, the editor copies those defaults to other agents
+that inherit them, preserving their explicit overrides, then removes the
+conflicting defaults. This is one source edit and leaves human speech recognition
+unchanged. Keeping incompatible defaults would make the selected type fail backend
+compilation; changing backend inheritance or adding a new schema flag was rejected
+for this UI change. The tradeoff is that those other agents now hold explicit
+selections for the removed defaults.
 
 ## Issue presentation boundary
 
@@ -106,8 +136,24 @@ carry an identifier so normal edits do not steal focus; tool dialogs and collaps
 constraints reveal their controls before focus moves. Global DOM selectors alone
 were rejected because hidden tabs, portals and duplicate paths make them ambiguous.
 
-The JSON view serializes the current portable source without normalization. It is
-read-only and exports the same bytes through copy and download. Existing Console
+The JSON editors serialize the current portable source without normalization. The
+full editor replaces the entire source; the participant editor replaces only the
+selected participant and validates its fields and newly introduced cross-reference
+errors. Existing unrelated issues do not block a participant edit. Both preserve
+large integers using the existing lossless parser. They reject syntax errors,
+unsupported fields and schema-version changes before updating the draft. Historical
+sources remain read-only, including at the source-edit boundary.
+
+JSON drafts are staged explicitly with Apply and Discard. Page-owned draft storage
+retains incomplete input across inspector unmounts and contributes to departure
+protection. Save and publish wait for pending JSON edits. Review returns to the
+pending editor, including drafts for participants removed by a different edit.
+An original-source snapshot prevents stale JSON from overwriting newer changes.
+Copy and download export the visible full JSON text, including unapplied input.
+Generic key/type/value option forms were removed because they obscured routine model
+selection; JSON is the deliberate escape hatch for advanced configuration.
+
+Existing Console
 toasts provide action feedback with an optional standard Button; their success
 expiry and persistent failure behavior are reused. The full editor connects these
 components to request handling, selection and recovery. Show selects the source's

@@ -40,7 +40,7 @@ export const Header: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole("button", { name: "Edit call spec name" })).toBeEnabled();
-    await expect(canvas.getByRole("button", { name: "Save draft" })).toBeEnabled();
+    await expect(canvas.getByRole("button", { name: "More actions" })).toBeEnabled();
     await expect(canvas.getByText("Published: 2")).toBeVisible();
   },
 };

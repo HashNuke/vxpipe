@@ -1,8 +1,10 @@
 import { useLayoutEffect, type ReactNode } from "react";
 import { TooltipProvider } from "../components/ui/tooltip";
+import { useInputModality } from "../input-modality";
 
 /** One page editor owns the body portal theme only while it is mounted. */
 export function EditorTheme({ theme = "dark", children }: { theme?: "dark" | "light"; children: ReactNode }) {
+  useInputModality();
   useLayoutEffect(() => {
     const previous = document.body.getAttribute("data-admin-editor-theme");
     document.body.setAttribute("data-admin-editor-theme", theme);
