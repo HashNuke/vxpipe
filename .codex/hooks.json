@@ -6,10 +6,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f \"$HOME/.agents/skills/impeccable/scripts/hook.mjs\" ] || node \"$HOME/.agents/skills/impeccable/scripts/hook.mjs\"",
+            "command": "[ ! -f \"$HOME/.agents/skills/impeccable/scripts/impeccable\" ] || \"$HOME/.agents/skills/impeccable/scripts/impeccable\" hook",
             "timeout": 5,
             "statusMessage": "Checking UI changes",
-            "commandWindows": "if exist \"%USERPROFILE%\\.agents\\skills\\impeccable\\scripts\\hook.mjs\" (node \"%USERPROFILE%\\.agents\\skills\\impeccable\\scripts\\hook.mjs\" & exit /b)"
+            "commandWindows": "if exist \"%USERPROFILE%\\.agents\\skills\\impeccable\\scripts\\impeccable.cmd\" (\"%USERPROFILE%\\.agents\\skills\\impeccable\\scripts\\impeccable.cmd\" hook & exit /b)"
           }
         ]
       }
@@ -19,10 +19,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f \"$HOME/.agents/skills/impeccable/scripts/hook.mjs\" ] || node \"$HOME/.agents/skills/impeccable/scripts/hook.mjs\"",
+            "command": "[ ! -f \"$HOME/.agents/skills/impeccable/scripts/impeccable\" ] || \"$HOME/.agents/skills/impeccable/scripts/impeccable\" hook",
             "timeout": 30,
             "statusMessage": "Design deep pass",
-            "commandWindows": "if exist \"%USERPROFILE%\\.agents\\skills\\impeccable\\scripts\\hook.mjs\" (node \"%USERPROFILE%\\.agents\\skills\\impeccable\\scripts\\hook.mjs\" & exit /b)"
+            "commandWindows": "if exist \"%USERPROFILE%\\.agents\\skills\\impeccable\\scripts\\impeccable.cmd\" (\"%USERPROFILE%\\.agents\\skills\\impeccable\\scripts\\impeccable.cmd\" hook & exit /b)"
           }
         ]
       }
