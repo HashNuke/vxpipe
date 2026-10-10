@@ -18,7 +18,7 @@ matching end; hybrid needs only the end, with provider onset retained.
 
 The pre-existing red tests and the approved design/task breakdown are in
 `labnotes/20260923-0121-external-room-control.md`,
-`docs/sts-external-room-control.md`, and the B checklist. This checkpoint
+`labnotes/20260923-0131-sts-external-room-control.md`, and the B checklist. This checkpoint
 does not claim hold/reopen or native source-time acceptance. Those require
 acknowledged upstream cutover and recognizer retirement before regrant.
 

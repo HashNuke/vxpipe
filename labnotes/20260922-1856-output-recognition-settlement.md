@@ -107,7 +107,7 @@ Exact checkpoint paths (all relative to this worktree):
 - `apps/vxpipe_call_engine/test/vxpipe/call_engine/speech/event_contract_test.exs`
 - `apps/vxpipe_call_engine/test/vxpipe/call_engine/speech/stt_finish_input_test.exs`
 - `docs/google-speech-integration.md`
-- `docs/milestones/agent-speech-to-speech.md`
+- `labnotes/milestones/agent-speech-to-speech.md`
 - `docs/output-recognition-settlement.md`
 - `docs/speech-integration-guide.md`
 - `docs/speech-provider-contract.md`

@@ -1,7 +1,7 @@
 # STS code mapping (2026-09-22)
 
 ## Task
-Review `docs/milestones/agent-speech-to-speech.md` against latest codebase; list
+Review `labnotes/milestones/agent-speech-to-speech.md` against latest codebase; list
 exact files + required changes per checkpoint; add suggestions to the milestone.
 
 ## Method
@@ -25,7 +25,7 @@ exact files + required changes per checkpoint; add suggestions to the milestone.
   `call_inspection_presenter.ex capability_name/1`) need S2S entries.
 
 ## Change
-- `docs/milestones/agent-speech-to-speech.md` +130 lines (suggestions only).
+- `labnotes/milestones/agent-speech-to-speech.md` +130 lines (suggestions only).
 - No runtime code touched; no tests run (doc-only change).
 
 ## Next

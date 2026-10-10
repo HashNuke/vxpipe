@@ -25,4 +25,4 @@ utilities. Tailwind v4 therefore matches the intended source-installable distrib
 - Migrate the current prototype before expanding the component set; do not create parallel npm and
   registry component implementations.
 
-Durable rationale and migration gates are in `docs/react-component-styling.md`.
+Durable rationale and migration gates are in `docs/development/react-component-styling.md`.

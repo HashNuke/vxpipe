@@ -1,0 +1,362 @@
+# Native WebRTC startup and transfer checks
+
+Use the existing ExWebRTC peers in
+`apps/vxpipe_gateway/test/vxpipe/gateway/http/human_transfer_webrtc_test.exs` to reproduce
+handoff, readiness, audio and transcript failures. These exercise real local WebRTC connections
+and the ordinary Gateway signalling handlers. Browser interaction is unnecessary for these
+contracts. Keep rendered browser checks for actual UI changes and browser interoperability.
+
+Run the complete transfer boundary from the owning application:
+
+```shell
+cd apps/vxpipe_gateway
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs
+```
+
+From the umbrella root, verify the full suite on a shared host with:
+
+```shell
+mix test --preload-modules --max-requires 1 --seed 235296 --max-cases 4
+```
+
+Module preloading keeps first-use dependency loading outside the tests' bounded
+media calls. A captured full-suite timeout had the mixer waiting in the code
+loader during PCM mixing; the same recording checks passed independently.
+Serializing test-file compilation also limits compilation contention while four
+async test modules can still run. These options preserve runtime deadlines and
+integration exclusions. See the
+[verification labnote](../../labnotes/20260915-0815-preacceptance-listener-changes.md)
+for the original failure and diagnostic stack, and the
+[preparation/cue labnote](../../labnotes/20260915-0913-preparing-listener-changes.md)
+for the current passing full run.
+
+For human wait configurations, cue/conversation ordering and private model-history isolation,
+including a real public HTTPS WAV download:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --include integration --name-pattern 'human handoff gates|recovers the held caller'
+```
+
+The `live_url` case uses [HTTPbun's mix endpoint](https://httpbun.com/) to serve a generated
+250 Hz, 48 kHz PCM16 WAV. It requires public internet access and uses the production fetcher,
+public-address policy, TLS, MIME/size checks and an empty cache. It sends only a synthetic tone
+in the URL. This case is excluded from the default suite; the controlled custom-URL variant
+remains deterministic. Both peers receive the wait, cue and conversation in order. The recovery
+case plays the private notice and checks actual subsequent model requests for retained caller
+content without private notice text, blocked caller input or the configured wait URL.
+
+The ordinary handoffs include a third planned human with its own selected recognizer. Destination
+STT, that remaining recognizer and the room recording writer each become the final readiness
+blocker in custom/nil configurations. All three peers decode the cue before conversational tones;
+held microphones are discarded, subsequent audio reaches STT/recordings, and the remaining
+participant retains its existing speech and media bindings. Additional planned humans resolve
+their selected STT on attachment through the same supervised runtime path as initial callers.
+The private briefing transport must stop after playback acknowledgement and before acceptance;
+subsequent waiting, cues, required STT and conversation continue independently of that retired TTS.
+
+For recording demand changes while a writer is the final handoff blocker:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'human handoff gates recording and reconciles'
+```
+
+These cases readmit a connected listener with either recording denied or unchanged permissions.
+Denial retires the private destination writer and completes the handoff while writer readiness
+remains withheld, with no recorded conversation. An unrelated revision retains the same writer
+and records conversation on its original stream. Both preserve the preparation worker, deadline,
+room services and source capabilities until adoption, retain existing speech/media bindings,
+and deliver a cue before conversation to the readmitted listener too.
+
+For independent resource loss during preparation, adoption and partial release:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'human handoff gates.*loss'
+```
+
+Nine three-peer cases lose destination STT, remaining-human STT or required room recording at
+each stage. The adoption cases pause the actual destination acknowledgement while output remains
+held; the release cases confirm its output gate is already open before injecting loss. Required
+speech loss waits for the transport to terminate. No fatal case may activate the desk or report
+completion to a caller. Destination loss before adoption instead restores the original recorded
+conversation: retained listeners receive cues before conversation, the caller hears the restored
+assistant, human audio reaches the remaining recognizer and recordings, and authorized assistant
+text reaches the other listener without taking over its local spoken-turn queue. Synthesized replies
+use the requesting caller's output; the other listener's audio assertion uses the mixed human route.
+
+For early human-transfer failure and recovery:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'recovers the held caller after (briefing_destination|briefing_voice|briefing_timeout|acceptance_timeout)'
+```
+
+These cases disconnect the private destination during briefing, fail its voice provider, or let
+the configured five-second total attempt timer expire during briefing or acceptance. Each requires
+one private-admission release, old-phase termination, no destination activation, the correct
+bounded failure reason and recovery on the retained caller/media actors. The native caller receives
+its recovery cue and spoken assistant response, then submits another turn. The existing
+`destination` loss case also completes another transfer after recovery. These early-boundary cases
+cover their own failures; the output-readiness case below provides a separate causal reproduction.
+
+For the reproduced output-readiness race during destination-disconnect recovery:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'destination_output_clear loss'
+```
+
+This case pauses the recovery hold's real native-output readiness query, begins an actual clear,
+and allows the observer to read the changed clearing status before completing that clear. The
+old observer reports `unavailable` and closes the caller at the same recovery assertion as the
+historical failure. The check requires recovery cue and speech, another caller turn and a later
+accepted transfer on the original peer. The output's resource identity remains unchanged; status
+changes must report current readiness instead of invalidating that identity.
+
+For the local speech-provider round trip:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs --only morse
+```
+
+The peers exchange ICE/DTLS/SRTP/SCTP traffic. HTTP signalling invokes the real Plug endpoint
+in process; it does not verify deployment TLS or a reverse proxy. The fixture owns room/session
+setup and supervised peers, so an existing development server and external speech credentials
+are unnecessary. These checks also run in the ordinary umbrella suite, except the explicitly
+tagged public-URL integration variant above.
+
+For AI model/voice/tool preparation, wait configuration and failed-model recovery:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'AI handoff|agent_model loss'
+```
+
+The model/voice case admits a planned receive-only monitor while model construction is blocked.
+It decodes that listener's waiting audio before releasing the model and retains the original
+caller player, connection, room services and deadline. Both listeners later receive their cues;
+the caller receives the targeted AI greeting, and the monitor receives permitted live caller
+audio. This checks audience refresh during construction through actual WebRTC, without creating
+microphone permission for the monitor.
+
+These delay model initialization and TTS readiness independently. Four additional cases delay
+scoped MCP initialization and the local tool registry's readiness reply with default, URL,
+per-slot nil and whole-object nil waits. Local bindings use ordinary compilation; readiness
+does not invoke a tool. After release, a model-issued MCP invocation reaches the pinned remote
+operation. The URL fetcher and remote protocol client are controlled fixtures.
+
+The native peers verify wait/cue/greeting order, held microphone/text and late-source exclusion,
+retained caller STT/media and room services, unchanged prepared tool bindings and one greeting/
+completion. Failed-model preparation restores spoken conversation through the retained source.
+The Morse case uses the real local speech providers; precise readiness failures use controlled
+providers.
+
+For policy revisions after handoff adoption but before media release:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'after_.*adoption.*preparation'
+```
+
+Three native cases remove speech demand, make an unrelated revision, or change the permissions
+of a still-required recognizer. Unaffected media actors remain installed; only the affected STT
+transport is replaced, and its readiness gates completion. Both peers exchange audio after the
+handoff. Exact fresh-cue drain and unchanged deadline checks also run in the owning engine suite.
+
+For policy changes during an outstanding media-release acknowledgement:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'release_.*change preparation'
+```
+
+These two cases close the room and its media connections without transfer activation when release
+can no longer be validated. They complement the successful retries before release shown above.
+
+For cancellation and required destination STT loss during media release:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'release_(deadline|speech_loss)'
+```
+
+These pause the real destination release command, cancel the attempt or disconnect its required
+recognizer, and observe terminal failed progress on the caller's RTVI channel. All room connections
+close without activation, recovery or redial. The engine suite also queues a real successful recovery
+result behind cancellation and verifies that cancellation wins; its release cases check failure history.
+
+For initial caller waiting during independent model and voice startup delays:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --only initial_wait
+```
+
+Room creation returns while model construction is blocked. Ten cases cover default, URL-selected,
+per-slot nil and whole-object nil waiting, with and without file/text openings. Selected STT/TTS
+readiness and a local recording writer are delayed independently. Held microphone audio reaches
+neither STT nor recordings; conversation reaches both after readiness. File/text notices take
+priority over waiting, then waiting resumes while model setup remains blocked. The fixed greeting
+follows release once, including repeated client-ready, and opening text stays out of model history.
+The URL fetcher is controlled; these checks exercise selected bytes and native playout, not live
+CDN retrieval. Exact PCM cursor continuity and late readiness after skipped waiting are checked
+at the owning engine output boundary.
+
+For deterministic incoming phone startup and phone handoff acceptance:
+
+```shell
+mix test test/vxpipe/gateway/telephony/telnyx_call_harness_test.exs \
+  test/vxpipe/gateway/telephony/twilio_call_harness_test.exs
+```
+
+The signed provider ingress, negotiated phone codecs, selected STT, normal and silent startup,
+original readiness/duration clocks, failure before/after media attachment and provider hangup
+submission are exercised locally. The transfer matrix selects caller and destination STT with
+default, URL and silent waits. Telnyx Opus and Twilio PCMU output is decoded to verify waiting,
+cue and bidirectional conversation. The final cue mark is withheld; replayed clear marks cannot
+release it. Exact acknowledgement admits the destination while retaining media and speech actors,
+and both phone sessions receive the opposite participant's permitted transcript.
+
+Destination socket loss during preparation or while cue drain is held restores source speech and
+another caller turn on the original connection. The configured URL fetcher, speech providers and
+carrier socket/acknowledgements are controlled; the actual provider adapters and native codecs run.
+The existing guarded live API tests only establish control submission when enabled. Live carrier
+wait/cue/clear/recovery audibility remains a separate acceptance boundary.
+
+For the five-participant call, listener re-entry, added output and monitor reconnection:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs --only changing_listeners
+```
+
+Four existing listeners, including humans admitted with the monitor role, receive a shared
+ten-second URL asset through native WebRTC. Two actual players pause at seven and three seconds
+after their native output acknowledges the selected frames. An existing monitor adds another
+receive-only connection while support STT remains unready. The new connection must already hold
+input/output while the handoff worker is paused, then share the original participant cursor when
+reconciliation resumes. Existing players, room bindings and the attempt deadline remain unchanged;
+all listening connections receive cue before conversation. Monitor admission supplies the absence
+of microphone permission; SDP direction alone does not change an ordinary human's server role.
+
+The case then closes the first monitor's data channel from its actual native client and observes
+the server connection exit. Its second connection continues receiving waiting audio; a replacement
+connection joins the same retained player before support STT is released. The original attempt,
+deadline, room services and surviving connection bindings remain. Both monitor outputs receive
+the cue before conversation.
+
+Before destination briefing/acceptance, the same case also admits a late monitor and requires
+received waiting audio. It pauses that player's cursor at two seconds, removes the participant
+through its owning supervisor and observes both connection and player termination. Re-entry creates
+a fresh player, paused at half a second, without replacing any original player's instance. That
+listener joins the later cue/conversation assertions.
+
+The monitor also leaves and re-enters while accepted support STT remains unready. A one-shot
+output callback then pauses its actual cue player after the first acknowledged 20 ms frame;
+removal/re-entry during that unfinished cue invalidates the old candidate. The caller receives the
+first cue and renewed waiting, then every current connection receives a subsequent cue before
+conversation. The ordering helper permits renewed waits only in this explicit replay case and
+requires another cue after each one. Original room services and surviving connection bindings
+remain after release.
+
+Finally, pause the destination's adoption acknowledgement after policy has changed but before
+conversation opens. Admit another monitor while withholding its WebRTC attachment. The requesting
+human receives the existing `preparing` phase with the `media` blocker, and the audience resumes
+waiting. Attachment refreshes the adopted resource inventory under the original deadline; every
+current connection must receive another cue before conversation. The internal `media_connection`
+resource kind is normalized to the public `media` blocker. This retry applies only while all
+conversation gates remain closed; errors after any release retain the terminal-failure contract.
+
+For repeated AI transfers with changing membership and per-transfer recording assertions:
+
+```shell
+mix test test/vxpipe/gateway/http/human_transfer_webrtc_test.exs \
+  --name-pattern 'native repeated AI transfers'
+```
+
+A native caller transfers reception → billing → reception → billing using Morse speech and
+scripted model tool calls. Each destination model is independently blocked while both humans
+receive waiting. The monitor leaves and re-enters during the second attempt; the caller keeps its
+player/cursor, connection, recognizer and room services. Each transfer has a distinct attempt and
+new agent activation. Re-entering agents do not replay their first greeting. After every transfer,
+both peers receive the caller transcript, the monitor decodes caller speech, the caller decodes
+the active agent's reply, and new recorded chunks contain speech without wait/cue audio.
+
+Keep one Opus decoder per Morse peer across all audio-consuming helpers. Begin Morse decoding
+at the first coherent speech carrier after a verified cue; retain timing checks thereafter. For a
+short initial greeting, send `client-ready` once and observe `bot-ready` without the ordinary
+connection helper's startup-audio drain. Match scripted model requests to the active prompt and
+latest utterance because an old source continuation may still be queued in the fixture mailbox.
+
+## Protocol boundary
+
+The caller's `chat` data channel carries RTVI 2.1 messages with `label: "rtvi-ai"`, including
+`client-ready`, `send-text` and received `user-transcription` messages. The correlated `bot-ready`
+reply waits for complete startup readiness and opening completion. A connected peer can receive
+setup waiting before that reply. Transfer progress uses
+the existing `server-message` envelope, with `data.t: "vxpipe.transfer"`, `data.v: 1`, and
+`data.d` containing attempt ID, destination, phase, blocker categories and elapsed milliseconds.
+Recovery and failure progress also carry an optional `reason` code: `timeout`,
+`destination_disconnected`, `speech_to_text_unavailable`, `text_to_speech_unavailable`,
+`media_unavailable`, `policy_changed`, `preparation_failed`, or `unavailable`. These reflect the
+known engine failure category, never provider error text. Successful transfer progress omits the
+field; successful source recovery retains the reason the transfer failed. Both the caller's RTVI
+channel and the destination's `transfer.progress` sideband carry it. Recovery progress is sent
+before private-destination cleanup; the caller still receives the outcome if the desk has gone.
+
+The human destination's `vxpipe` channel carries the existing transfer controls. It waits for
+`transfer.acceptance_ready` after the private briefing, sends `transfer.accept` with the exact
+attempt ID, and awaits `transfer.active`. Media remains held through readiness and cue drain.
+This is a Vxpipe acceptance channel alongside RTVI; audio travels over RTP, not in those messages.
+
+## Transfer diagnostic observations
+
+The existing `Vxpipe.Console.TelemetryReporter.snapshot/1` includes `transfers.phases` for
+audience, preparation, release, recovery, briefing, acceptance and cue durations. Briefing ends
+after acknowledged playback; acceptance ends on valid acceptance or failure. Cue durations are
+per finite playback episode through final drain, including repeated cues after readiness changes.
+
+Additional bounded aggregates under `transfers` are:
+
+- `workers`: counts of confirmed `cancelled` phase workers and exact monitored `unexpected`
+  exits, observed by the surviving supervisor or room authority.
+- `playback`: sample count and peak depth/capacity by wait/cue kind and playback status. Depth is
+  occupied player output slots in the current frame/drain batch, with one slot per sink. Samples
+  occur on the first frame, every 50 frames and drain/terminal transitions; this is not a live
+  per-listener queue view.
+- `output_drops`: rejected/discarded output frame submissions by room/direct source and bounded
+  reason. These measure arbiter admission and clearing, not RTP/network loss.
+
+The corresponding new telemetry events are `[:vxpipe, :call_engine, :transfer, :worker, :stop]`,
+`[:vxpipe, :call_engine, :wait_sounds, :pressure]`, and
+`[:vxpipe, :gateway, :audio_output, :drop]`. Existing transfer phase events carry the additional
+durations. Metadata has fixed categories; the reporter removes private fields before queueing.
+These observations add no call configuration or UI component.
+
+## Audio boundary and evidence
+
+The Morse case selects real local Morse STT/TTS with a scripted model response. It:
+
+- Sends paced 48 kHz Opus caller audio and receives exact transcripts from 16 kHz Morse STT.
+- Decodes the assistant's synthesized Morse reply and the destination's private briefing.
+- Accepts the human transfer, verifies both connection cues, and receives the support transcript
+  at the original caller alongside the distinct 700 Hz conversational signal.
+- Sends another caller utterance and verifies its transcript and audio at the support peer.
+- Checks that the caller's existing speech ingress and native decoder survive the handoff.
+
+Gateway converts negotiated Opus into the selected PCM speech format when needed. Readiness
+prepares that same format and decoder before release. Opus speech providers retain their existing
+passthrough. Decoder state belongs to the existing connection and is reused for unchanged input;
+the room mixing path retains its own existing normalizer.
+
+Use the configured Morse timing/detection settings in this fixture for Opus audio. Pristine PCM
+defaults and bursting an entire utterance are unsuitable substitutes for a paced microphone.
+Keep encoder/decoder history and RTP sequence continuity across utterances. Consume verified
+cue tails before measuring subsequent conversation.
+
+Exact symbol reconstruction after the human bridge's second Opus encode remains timing-sensitive.
+The bridge assertions therefore combine exact STT transcripts with peer-decoded spectral evidence;
+TTS reply/briefing assertions decode the actual text. These checks establish transport and provider
+behavior, not physical speaker audibility or external provider availability. Existing controlled
+provider tests remain useful for delaying readiness and injecting precise failures.

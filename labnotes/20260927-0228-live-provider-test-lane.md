@@ -11,7 +11,7 @@ variables. Current default test helpers exclude `:integration` in the apps
 that own live tests. Calls and Providers currently start ExUnit without that
 exclusion, so future live tests there need the helper updated first.
 
-The current service contract in `docs/platform-and-tenant-services.md` and
+The current service contract in `labnotes/milestones/platform-and-tenant-services.md` and
 `ScopedProviderCredentialsTest` is tenant presence first, platform if absent,
 and fail closed on an unusable tenant credential. The engine's
 `CredentialSource` accepts a platform-owned resolved credential only through
@@ -27,7 +27,7 @@ With the previous harness guard and `OPENAI_API_KEY` unset,
 CallEngine child selected two tests and skipped both, zero failures. No live
 connection was opened.
 
-The decision and staged migration are in `docs/live-provider-tests.md`. Added
+The decision and staged migration are in `docs/development/live-provider-tests.md`. Added
 valued `live_provider` tags to the 11 current real-service integration modules.
 All eleven modules now use `VXPIPE_LIVE=1` as their only run gate; the user
 chose this shorter name after the first draft used a long run flag, then asked

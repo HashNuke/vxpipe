@@ -23,7 +23,7 @@ clients. It adds no transfer/recovery feature and no third-party credential life
 - Independent source audit also found reachable global hosted readers under legacy `CreateRoom`.
   Record them as remaining checkpoint 2 work; do not claim this focused fix closes the checkpoint.
 
-The durable [reader inventory](../docs/credential-reader-boundaries.md) records paths, rationale,
+The durable [reader inventory](20260915-1521-credential-reader-boundaries.md) records paths, rationale,
 rejected alternatives and remaining destination binding/override checks.
 
 ## Red / green evidence

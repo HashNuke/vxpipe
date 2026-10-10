@@ -6,7 +6,7 @@
 - Existing call-spec milestone/review edits and the unrelated cache-repair labnote
   were present at the start and are outside this task. The user subsequently
   requested a commit of this task's documentation changes.
-- Wrote `docs/milestones/worktree-setup.md` with observed behavior, proposed setup/configuration
+- Wrote `labnotes/milestones/worktree-setup.md` with observed behavior, proposed setup/configuration
   contracts, alternatives, implementation acceptance gates and source references.
 - Recommend independent checkout databases, build outputs, temporary files and
   development ports, plus one shared live-run exclusion boundary.
@@ -47,7 +47,7 @@
 ## Milestone conversion
 
 - User requested that the research become an implementation milestone with tasks.
-  Moved it to `docs/milestones/worktree-setup.md`; the standalone document is removed.
+  Moved it to `labnotes/milestones/worktree-setup.md`; the standalone document is removed.
 - Added six unchecked checkpoints: live-run serialization, checkout/database
   initialization, repeatable bootstrap, temporary-file isolation, concurrent dev
   tools and full workflow acceptance. Each names prerequisites, ownership, focused

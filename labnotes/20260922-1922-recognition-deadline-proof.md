@@ -62,7 +62,7 @@ Staged exact paths and reviewed the cached diff before the separate repair commi
 
 - `apps/vxpipe_call_engine/lib/vxpipe/call_engine/capability/speech_to_speech/output.ex`
 - `apps/vxpipe_call_engine/test/vxpipe/call_engine/capability/speech_to_speech_output_stt_test.exs`
-- `docs/milestones/agent-speech-to-speech.md`
+- `labnotes/milestones/agent-speech-to-speech.md`
 - `docs/output-recognition-settlement.md`
 - `labnotes/20260922-1922-recognition-deadline-proof.md`
 

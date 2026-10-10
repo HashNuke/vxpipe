@@ -7,8 +7,8 @@ calls. This note tracks the shared response-start boundary, not Google adoption.
 
 ## Design review before tests/runtime
 
-Read the milestone's open response-ownership tasks, `docs/google-sts-response-ownership.md`,
-`docs/sts-input-context.md`, Event/EventDelivery/EventQueue, STSOutput and legacy
+Read the milestone's open response-ownership tasks, `labnotes/20260922-2053-google-sts-response-ownership.md`,
+`labnotes/20260922-2102-sts-input-context.md`, Event/EventDelivery/EventQueue, STSOutput and legacy
 STS conformance tests. The channel already serializes event enqueue/ack, input
 acceptance and output admission. A small pure owner can keep bounded private
 response refs and the allocation-local high-water mark; Channel keeps IO and

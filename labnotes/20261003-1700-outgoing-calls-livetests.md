@@ -43,8 +43,8 @@ endpoint, and `bin/livetests` (`run`, `tools:*`, `telephony:*`) replaces `bin/te
 
 ## Decisions
 
-Recorded in `docs/live-telephony-harness.md` with rejected alternatives; checkpoints in
-`docs/milestones/outgoing-calls-and-live-telephony.md` (index entry 37).
+Recorded in `docs/development/live-telephony-harness.md` with rejected alternatives; checkpoints in
+`labnotes/milestones/outgoing-calls-and-live-telephony.md` (index entry 37).
 
 ## Status
 

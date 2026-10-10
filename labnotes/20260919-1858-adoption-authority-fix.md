@@ -64,7 +64,7 @@ handle fields granting close authority).
   p95 1.511/1.615 ms. Scoped overhead remains measurable; no overall speedup or
   production capacity claim is made.
 - Durable decision, methodology, results and report links live in
-  `docs/speech-adoption-fix.md`. The machine was Apple M2, 8 cores, 16 GiB RAM,
+  `labnotes/20260919-1220-speech-adoption-fix.md`. The machine was Apple M2, 8 cores, 16 GiB RAM,
   with 8 online BEAM schedulers.
 - Root format, warnings-as-errors compilation, strict Credo (992 source files)
   and unused-lock checks passed. Full umbrella tests passed: 1,845 tests,

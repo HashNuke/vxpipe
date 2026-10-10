@@ -26,7 +26,7 @@ readiness cannot clear it. Where STS is retired or its route is denied, selected
 human STT may resume only after the source cutover has completed and only under
 its own current room policy; this does not authorize STS input or activity.
 
-This sequence follows the reviewed contract in `docs/sts-activity-provenance.md`.
+This sequence follows the reviewed contract in `labnotes/20260923-0243-sts-activity-provenance.md`.
 The source protocol applies only to WebRTC in this checkpoint. No transport
 receipt-time, remote capture, ICE/DTLS buffering or telephony drain claim is
 included. The discovery-first task breakdown and verification expectations are

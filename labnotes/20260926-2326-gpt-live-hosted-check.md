@@ -5,7 +5,7 @@ still uncommitted.
 
 ## Research and decisions
 
-- Read Package 9 in `docs/gpt-live-completion-plan.md` and the F acceptance
+- Read Package 9 in `labnotes/milestones/gpt-live-completion-plan.md` and the F acceptance
   checklist. The tagged hosted check is opt-in, requires explicit billable
   authorization, and is capped at five sessions and three minutes of voice.
   A real Twilio or Telnyx leg is also required for manual backchannel,

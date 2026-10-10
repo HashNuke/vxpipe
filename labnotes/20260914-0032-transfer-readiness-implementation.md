@@ -1,7 +1,7 @@
 # Transfer readiness implementation
 
 Current delivery tasks and curated status now live in the
-[milestone checkpoints](../docs/milestones/transfer-readiness-and-wait-sounds.md#implementation-checkpoints).
+[milestone checkpoints](milestones/transfer-readiness-and-wait-sounds.md#implementation-checkpoints).
 The entries below record implementation, verification and detours chronologically.
 Earlier sections are historical evidence, not parallel current task lists.
 

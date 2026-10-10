@@ -32,7 +32,7 @@ cleanup/descendant-teardown assertions and additionally reject late clean failur
 publication. The handoff benchmark's rejection latency now includes failed-event ACK;
 historical JSON stays unchanged. Broader focused checks are running.
 
-The design is recorded in `docs/native-tts-request-admission.md`. A consumer-retained
+The design is recorded in `labnotes/20260920-0041-native-tts-request-admission.md`. A consumer-retained
 bounded receipt is preferred over a ScopeControl ledger to survive whole-scope loss.
 OTP's documented atomics ordering/lifetime informs the representation; project-owned
 publication, authority, snapshot finality and metadata bounds still need red tests.

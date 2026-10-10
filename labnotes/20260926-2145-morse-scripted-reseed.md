@@ -23,7 +23,7 @@ Date: 2026-09-26. Starting revision: `57a712a1`.
 - Kept the response context and admitted old output while resetting the local
   generation. A mid-burst test settles the old output and the new audible
   continuation. The focused design record is
-  `docs/morse-duplex-scripted-reseed.md`.
+  `labnotes/20260926-2218-morse-duplex-scripted-reseed.md`.
 - The first strict Credo run found the session module above its line limit.
   Moved the reset and continuation queue into a focused `ScriptedReseed`
   module; the focused suite and strict Credo then passed.

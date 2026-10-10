@@ -13,7 +13,7 @@ The preceding prototype, isolated tests and benchmark remain uncommitted in the 
   admission coupling in the prototype; it does not establish a live-call drop or app crash.
 - The preceding benchmark completed 68,400 measured local Morse turns with zero failures,
   including 19,200 already-ready semantic turns during held startup. Its burst timings and
-  limits remain recorded in [the evidence document](../docs/speech-startup-isolation.md) and
+  limits remain recorded in [the evidence document](20260919-1124-speech-startup-isolation.md) and
   [canonical metrics](20260919-1624-speech-latency-metrics.json). This replan did not rerun or
   alter those measurements.
 - Existing rooms still use the old provider/transport path. Restoring a running room therefore

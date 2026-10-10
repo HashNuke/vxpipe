@@ -67,7 +67,7 @@ existing pause reason; none of the simplification candidates is presented as a
 newly tested failure or an implemented fix. Prior green load/root results do not
 certify current early-admission source.
 
-Created `docs/speech-complexity-audit.md`, revised D2/D4 and the separate design
+Created `labnotes/20260920-0041-speech-complexity-audit.md`, revised D2/D4 and the separate design
 review in the milestone, linked the audit from the index, and marked the receipt
 representation in the admission report as superseded. R/A remain accepted (2/9);
 no implementation checkbox was advanced. D becomes one complete tested workflow,

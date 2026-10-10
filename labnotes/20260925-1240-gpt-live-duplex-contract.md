@@ -3,7 +3,7 @@
 ## Task
 
 Implement the [GPT-Live speech-to-speech
-milestone](../docs/milestones/gpt-live-speech-to-speech.md) beyond its frozen
+milestone](milestones/gpt-live-speech-to-speech.md) beyond its frozen
 specification. This labnote covers checkpoint A; later checkpoints get their own
 sections or notes.
 

@@ -7,7 +7,7 @@
 - Telnyx belongs to both groups through independent capability membership. Both cards reference one connection. The telephony card says Public key needed until supplied. Updating credentials from either group preserves the other card and an already-configured public key. Manage keeps the originating group in the dropdown.
 - Public-key input is an opt-in to the shared credential form, used by onboarding only. Production endpoints/payloads stay as before. Added Rime to shared types/labels without adding it to the production credential chooser.
 - No Rime/Telnyx AI model defaults were invented. Runtime sample capability gates remain separate from provider labels. Credential collection does not imply live Rime/Telnyx AI adapters or phone-number routing.
-- Primary provider references and integration boundaries are recorded in docs/tenant-setup-experience.md. Local Telnyx webhook verifier confirms a 32-byte key contract.
+- Primary provider references and integration boundaries are recorded in labnotes/milestones/tenant-setup-experience.md. Local Telnyx webhook verifier confirms a 32-byte key contract.
 
 ## Verification
 

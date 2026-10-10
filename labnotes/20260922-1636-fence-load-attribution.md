@@ -28,7 +28,7 @@ two-call modes, zero failures, seed 0, two schedulers, about 25 seconds. Each mo
 retains five completions, two interruptions, one post-fault survivor and two clean
 room teardowns, with no input drops or output rejection. Targeted formatting,
 `git diff --check` and child test-environment warnings-as-errors compilation pass.
-Reproduction commands are in `docs/sts-comparative-call-load.md`.
+Reproduction commands are in `docs/development/sts-comparative-call-load.md`.
 
 No measured lane, production fix, or umbrella suite was run. Final integrated
 acceptance remains parent-owned and awaits the quiet window.

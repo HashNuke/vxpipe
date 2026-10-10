@@ -2,7 +2,7 @@
 
 ## Objective
 
-Complete checkpoint G of `docs/milestones/simpler-speech-integrations.md`: extract a shared
+Complete checkpoint G of `labnotes/milestones/simpler-speech-integrations.md`: extract a shared
 provider conformance harness, exercise request, context, batch and segmented provider shapes, and
 publish a runnable provider-authoring guide without depending on a hosted account.
 

@@ -48,7 +48,7 @@ client support without assigning aggregate or unrelated measurements to a call.
 
 - Source review covered Call Engine telemetry, model/TTS/STT usage projections, Room Authority turn
   events, archive facts, live inspection, the RTVI codec, Core/React contracts and ReqLLM telemetry.
-- Durable findings and formulas are recorded in `docs/debug-console-metrics.md` and linked from the
+- Durable findings and formulas are recorded in `labnotes/milestones/debug-console-metrics.md` and linked from the
   call-debug-console milestone.
 - GPT-6 Astra xhigh independently reviewed each metric and the relevant model/STT/TTS/WebRTC paths;
   its boundary, token-semantics, backpressure, aggregation, and fixture corrections were applied.

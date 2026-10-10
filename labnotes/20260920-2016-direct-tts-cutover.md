@@ -2,7 +2,7 @@
 
 ## Objective
 
-Complete checkpoint E of `docs/milestones/simpler-speech-integrations.md`: move conversation,
+Complete checkpoint E of `labnotes/milestones/simpler-speech-integrations.md`: move conversation,
 opening and private-transfer speech for Morse and Deepgram onto the owned semantic TTS session,
 then delete the old public provider/transport path and global audio-output task supervisor.
 

@@ -12,7 +12,7 @@ and broken into milestone tasks before implementation starts.
 Implementation paused on that clarification: the converter helper already
 existed with four green tests and two new callback tests were red. Added the
 native microphone task breakdown and local design/dependency review to
-`docs/milestones/agent-speech-to-speech.md` before continuing. Future findings
+`labnotes/milestones/agent-speech-to-speech.md` before continuing. Future findings
 must be added there first, including discoveries during verification.
 
 ## Evidence so far

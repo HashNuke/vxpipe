@@ -41,6 +41,6 @@ participant and participant-capability scopes; turn metrics remain attached to m
 - Source inspection: `Vxpipe.CallEngine.CallVariables` snapshot/revision/size contracts and
   `Vxpipe.Gateway.RTVI.Codec` extension envelopes.
 - Protocol reference: <https://docs.pipecat.ai/client/rtvi-standard> (`server-message`).
-- Durable design: `docs/rtvi-call-variable-projection.md`.
+- Durable design: `labnotes/milestones/rtvi-call-variable-projection.md`.
 - Documentation-only checkpoint; Markdown links and diffs were inspected. Runtime and browser
   acceptance remain pending in the call-debug-console milestone.

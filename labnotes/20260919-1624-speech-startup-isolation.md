@@ -79,7 +79,7 @@ Keep implementation paused. Do not migrate rooms, claim checkpoint A complete, o
 as an accepted checkpoint. Revisit startup isolation and admission-time deadlines, then make
 the red regression green before integration. No rollback is currently needed to restore the
 old call path. Durable decision and exact reproduction commands are in
-`docs/speech-startup-isolation.md`.
+`labnotes/20260919-1124-speech-startup-isolation.md`.
 
 ## Final verification
 

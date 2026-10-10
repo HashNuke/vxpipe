@@ -7,7 +7,7 @@ and root gates. This checkpoint permits tests/support and focused docs only.
 ## Design and tasks before tests/code
 
 Recorded concrete tasks and separate design review in the STS milestone, plus
-`docs/flux-close-stream-probe.md`. Re-read the official Flux CloseStream page:
+`labnotes/20260922-2102-flux-close-stream-probe.md`. Re-read the official Flux CloseStream page:
 latest updates precede closure; no guaranteed EndOfTurn/summary; unspecified
 observable status-less close remains the evidence gap. No SDK audit repeated.
 

@@ -61,7 +61,7 @@ tested-instability instruction. The code and red tests are preserved uncommitted
 no repair or rollback was performed after reproduction. Production rooms retain
 the legacy providers and R/A remain the accepted baseline (2/9).
 
-The [finding report](../docs/native-tts-cancellation-findings.md) records evidence,
+The [finding report](20260920-0041-native-tts-cancellation-findings.md) records evidence,
 repair proposals, review-only concerns and the remaining acceptance gates. A
 `WORK PAUSED` notification reports the stop; no `WORK COMPLETE` notification is
 appropriate while the full goal remains unfinished.

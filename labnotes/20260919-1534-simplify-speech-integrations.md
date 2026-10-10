@@ -46,7 +46,7 @@ catalog, usage projection, readiness, config and focused test names. Read prereq
 specifications and linked architecture, interruption, opening, credential and privacy contracts.
 
 Read current official provider docs with the web tool. Sources and precise observed differences
-are in `docs/speech-provider-comparison.md`; design/rejected alternatives are in
+are in `labnotes/20260919-0858-speech-provider-comparison.md`; design/rejected alternatives are in
 `docs/speech-provider-contract.md`. This avoids relying on remembered API capabilities.
 
 Some guessed source paths did not exist; used `rg` to find the actual state/connector modules.

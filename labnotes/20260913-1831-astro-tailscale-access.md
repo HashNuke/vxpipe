@@ -7,7 +7,7 @@
   address, and reuse the certificate for HTTPS on port 4321. Ordinary development
   retains localhost HTTP, even if stale Tailscale variables are present.
 - Preserve unrelated worktree changes, including the database setup edits in
-  `docs/development.md`. This is a development-tooling change, outside the pending
+  `docs/development/local-development.md`. This is a development-tooling change, outside the pending
   packaging and retention milestones.
 - Add focused Node tests at the Astro configuration boundary before changing
   configuration. The existing shell suite already verifies the launcher's

@@ -2,7 +2,7 @@
 
 The goal now includes Cartesia STT/TTS and ElevenLabs STT/TTS/STS. No speech
 implementation is claimed yet. Design evidence and unresolved contracts are in
-[the expansion decision](../docs/speech-provider-expansion.md).
+[the expansion decision](20260930-0648-speech-provider-expansion.md).
 
 ## Current evidence
 

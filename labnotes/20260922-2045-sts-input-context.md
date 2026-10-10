@@ -19,7 +19,7 @@ Descriptor validation. Read the parent's Google response-ownership design withou
 changing the parent worktree. Channel already provides the required ordered slot;
 no second queue/process is needed.
 
-Recorded milestone tasks and separated review in `docs/sts-input-context.md`
+Recorded milestone tasks and separated review in `labnotes/20260922-2102-sts-input-context.md`
 before tests or code. Proposed ResponseContexts stage/accept/rollback/status API
 and exact-reference future retain/release seam sent to parent. Last-root retention
 and obligation bounds need coordination before runtime implementation. No automatic

@@ -15,7 +15,7 @@ durable architecture and milestone specifications; implementation is still pendi
 Latest follow-up: keep Jido AI's LLM/tool loop, select ExMCP directly behind
 `vxpipe_mcp`, and require a public Jido runtime-tool interface extension before live
 tenant MCP tools ship. The earlier direct Jido MCP and wait-for-Connect recommendations
-below are historical. See [the durable decision](../docs/jido-tool-execution.md).
+below are historical. See [the durable decision](20260908-1637-jido-tool-execution.md).
 
 ## Finding
 
@@ -538,7 +538,7 @@ opening a second task log.
 The initial probe invocation from a temporary working directory could not find the
 project-selected Elixir runtime. Running through the project shell activated it and
 completed the five checks. Source inspection and failed workarounds are recorded in
-[the focused decision](../docs/jido-tool-execution.md); no credentials or live services
+[the focused decision](20260908-1637-jido-tool-execution.md); no credentials or live services
 were used. Repository documentation verification is recorded at completion below.
 
 Completion verification for this follow-up:

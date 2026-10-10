@@ -77,7 +77,7 @@ additional implementation was performed. Existing rooms use the legacy path.
 Full umbrella gates and D load diagnostics have not run. R/A remain the last
 accepted baseline at `935d554` (2/9 checkpoints).
 
-The [finding report](../docs/native-tts-deadline-findings.md) records causal limits,
+The [finding report](20260920-0041-native-tts-deadline-findings.md) records causal limits,
 the proposed original-deadline/authority recheck and kind guard, and required
 repair/load/acceptance gates. Milestone and index now reflect the pause, including
 correcting the index's stale R-only review row. No `WORK COMPLETE` notification

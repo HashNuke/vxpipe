@@ -26,7 +26,7 @@ cleaned calls, 2,106 accepted input frames, no rejected/dropped input, no
 rejected/cleared sink chunks and no errors. All recorded latency distributions
 have samples; missing values were not converted into zeros. Retained all p50/
 p95/p99 values with sample counts, drop/cleanup and sampled memory/mailbox
-observations in [the load methodology/results](../docs/sts-comparative-call-load.md).
+observations in [the load methodology/results](../docs/development/sts-comparative-call-load.md).
 The raw report remains temporary log `vxpipe-sts-load-measured.log`.
 
 Host facts captured before the run: four x86-64 AMD EPYC-Genoa CPUs, 7,750 MiB

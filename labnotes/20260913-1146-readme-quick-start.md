@@ -8,7 +8,7 @@
 - Replace it with a short product introduction, concrete capabilities, one local
   voice-demo path, and links to further guides. Describe implemented features
   without performance claims or implying a packaged release is available.
-- Preserve the previous technical material in `docs/development.md`, organize it
+- Preserve the previous technical material in `docs/development/local-development.md`, organize it
   with focused headings, and adjust relative links. Keep provider configuration
   before the launch command. Keep CI details out of the README as requested
   earlier in the session.

@@ -75,7 +75,7 @@ known non-submission failures. For an ambiguous timeout, return the unknown
 outcome to the agent. A later agent-requested call is a separate invocation,
 not an internal retry or a guarantee against duplicate external actions.
 Explicit per-invocation cancellation is deferred to
-[a separate issue](../docs/issues/explicit-tool-call-cancellation.md) for later
+[a separate issue](issues/explicit-tool-call-cancellation.md) for later
 review, not required for this slice. Its opt-in and generated-tool policy has
 not been approved.
 Late booking confirmations and similar notifications are external events for a
@@ -464,7 +464,7 @@ Human-only portions do not depend on an agent that no longer exists.
 Long tools trigger no automatic periodic progress speech. The same agent's
 instructions coordinate kickoff/result speech and regular conversation through
 one voice while background work continues. Music for startup or long-tool waits
-is [deferred](../docs/issues/wait-music.md); no wait-music option, playback feature,
+is [deferred](issues/wait-music.md); no wait-music option, playback feature,
 or transfer-consultation behavior is approved now.
 
 The whole live call defaults to 30 minutes (`1800000` ms), using
@@ -499,7 +499,7 @@ An unknown transfer continues awaiting explicit recipient acceptance within the
 existing total 30-second attempt deadline, without resetting or extending it.
 Classification is not an accuracy guarantee or a replacement for acceptance.
 No local classifier, beep inference, provider tuning, or automatic message is added.
-Leaving voicemail is [deferred for later review](../docs/issues/voicemail-message-delivery.md),
+Leaving voicemail is [deferred for later review](issues/voicemail-message-delivery.md),
 without reintroducing the rejected platform closing-speech workflow.
 
 ### One participant per definition key — approved G2 decision
@@ -1883,7 +1883,7 @@ dispatcher. The live-MCP milestone binds those descriptors to the scoped ExMCP c
 submit-only Call Engine executor. Standalone ExMCP conformance remains independent of that live
 binding. Direct Jido MCP and unreleased Jido Connect selection are superseded/not required; the
 earlier investigation remains historical evidence in
-[the prior decision](../docs/jido-tool-execution.md).
+[the prior decision](20260908-1637-jido-tool-execution.md).
 
 Use the [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 as the source of truth and pin matching versions of the
@@ -1946,10 +1946,10 @@ file, an understood document, or permission for a new reader. No automatic
 attachment fetching/playback or generic media-inspection ability is approved.
 An uninspected file does not change a reported business success into failure.
 Detailed result-to-model projection, output normalization, and document/resource
-inspection support are [deferred in the result issue](../docs/issues/mcp-result-and-document-inspection.md).
+inspection support are [deferred in the result issue](issues/mcp-result-and-document-inspection.md).
 
 Server-requested sampling, elicitation, and related interactions are
-[deferred separately](../docs/issues/mcp-server-requested-interactions.md).
+[deferred separately](issues/mcp-server-requested-interactions.md).
 Do not advertise unimplemented capabilities, gain authority from server input,
 or silently perform such requests; report missing capability clearly. The selected
 profile uses server-initiated sampling/elicitation requests, not the earlier
@@ -2064,7 +2064,7 @@ or rollback of an action already submitted to the remote system. Timeout outcome
 reporting is approved below. No automatic executor retries apply initially,
 including known non-submission failures; retry/idempotency enhancements are
 deferred. Explicit cancellation is deferred to the
-[cancellation issue](../docs/issues/explicit-tool-call-cancellation.md), not
+[cancellation issue](issues/explicit-tool-call-cancellation.md), not
 required for this slice. Generic platform confirmation is out of scope as
 documented below. External recovery notifications after timeout or shutdown are
 deferred to the future event mechanism.
@@ -2163,7 +2163,7 @@ automatic-retry exception based on tool classification or idempotency metadata
 is approved now. Skip the trusted read-only/idempotent-write/side-effect
 classification layer (R15). Automatic retries and business-idempotency exceptions
 (R16) are deferred to the
-[retry/idempotency issue](../docs/issues/automatic-tool-retries-and-idempotency.md),
+[retry/idempotency issue](issues/automatic-tool-retries-and-idempotency.md),
 not required to implement this baseline. Call-creation idempotency (R39) is not
 offered; admission recovery (R40) finishes bookkeeping for existing work without
 repeating a crashed call. Ordinary database transaction semantics remain separate;
@@ -4893,7 +4893,7 @@ failed-attempt outcomes. G7/G8's initial-scope decisions are resolved; deferred
 voicemail delivery and broader consultation features remain separate from approved work.
 The completed numbered decision register is in the focused review document.
 Detailed reasoning and evidence live in the
-[call-definition gap review](../docs/call-spec-gap-review.md).
+[call-definition gap review](20260906-1452-call-spec-gap-review.md).
 
 ### Remaining review count — 2026-09-08
 
@@ -6577,7 +6577,7 @@ For the approved 2026-09-07 Call Variables naming and MCP-result decisions:
 ### Explicit tool cancellation deferred — 2026-09-07
 
 - Moved the opt-in cancellation proposal to
-  [its issue](../docs/issues/explicit-tool-call-cancellation.md) for later review.
+  [its issue](issues/explicit-tool-call-cancellation.md) for later review.
   Recording the proposal does not approve a `cancellable` schema option,
   generated cancellation tools, or their implementation.
 - Retained the background-tool workflow and existing interruption,
@@ -6978,7 +6978,7 @@ storage/client projection boundary and credential exclusions still apply.
   an exactly-once or deduplication guarantee.
 - Resolved R15 by skipping trusted read-only/idempotent-write/side-effect
   classification now. Deferred R16's automatic retry/business-idempotency
-  exceptions to `docs/issues/automatic-tool-retries-and-idempotency.md`, recording
+  exceptions to `labnotes/issues/automatic-tool-retries-and-idempotency.md`, recording
   future correlation/idempotency, attempts, budgets, and verification questions
   without adopting a retry mechanism. R39 call-creation idempotency, R40 admission
   recovery, and normal database transactions are not deferred or changed by it.
@@ -7477,7 +7477,7 @@ including its former PostgreSQL-before-variable-success requirement.
 
 This checkpoint records the earlier direct-client choice. It was superseded first by
 Jido MCP selection and then by direct ExMCP behind `vxpipe_mcp`; see the current
-[loop/tool-binding decision](../docs/jido-tool-execution.md). Preserve this as history,
+[loop/tool-binding decision](20260908-1637-jido-tool-execution.md). Preserve this as history,
 not the current dependency instruction.
 
 - Selected `anubis_mcp` (evaluated published version 2.0.0) and its supported
@@ -7520,7 +7520,7 @@ is direct ExMCP, with Agent Runtime model-tool integration in the engine rather 
 ### Implementation milestone planning — completed 2026-09-08
 
 - Began by documenting the milestone layout/progress rules in AGENTS.md. The
-  ordered implementation checklist lives in docs/milestones/index.md; milestone
+  ordered implementation checklist lives in labnotes/milestones/index.md; milestone
   filenames and titles are descriptive and unnumbered so that the index alone
   owns ordering. This follows the subsequent naming clarification.
 - Created 21 runnable vertical-slice specifications with Markdown implementation

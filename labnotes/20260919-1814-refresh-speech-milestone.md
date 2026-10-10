@@ -13,7 +13,7 @@ Its top-level status remained zero of nine checkpoints complete. It linked the n
 but its task/evidence sections did not yet explicitly incorporate the subsequent discussion of
 latency, capacity, fault handling and OTP-replaceable cleanup code.
 
-Updated `docs/milestones/simpler-speech-integrations.md` and its index entry:
+Updated `labnotes/milestones/simpler-speech-integrations.md` and its index entry:
 
 - Clarified that the reproduced global-startup defect belongs to the first uncommitted
   prototype; corresponding original-path controls passed. Existing production rooms are

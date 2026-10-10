@@ -1,7 +1,7 @@
 
 ## 2026-09-27 planning pass
 
-- Extracted every unchecked box in `docs/milestones/agent-speech-to-speech.md`
+- Extracted every unchecked box in `labnotes/milestones/agent-speech-to-speech.md`
   (awk over `- [ ]` items) and compared it with commits since 2026-09-23 and
   the GPT-Live completion plan.
 - Finding: many open parent boxes are stale. Their children are checked, or
@@ -16,7 +16,7 @@
   providers fail closed with `:unsafe_hold` on a dirty hold.
 - Four scope decisions (Google STS, hosted output-STT, `:stop` hold reuse,
   STS tool conversation semantics) are left for the user, with
-  recommendations. Plan: `docs/agent-sts-completion-plan.md`.
+  recommendations. Plan: `labnotes/milestones/agent-sts-completion-plan.md`.
 - D4 agreed with the user: one native result per STS tool call by default.
   Non-blocking uses the model's native async support where it exists,
   otherwise a context append (GPT-Live commentary/thinking), never user text.

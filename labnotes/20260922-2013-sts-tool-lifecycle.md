@@ -12,7 +12,7 @@ timer; interruption removes the only room association. Existing Invocation
 already owns a linked action task and reports timeout as unknown. Registry owns
 bounded records and lease/commit delivery. Reuse these APIs unchanged.
 
-The milestone task breakdown and docs/sts-tool-lifecycle.md were added before
+The milestone task breakdown and labnotes/milestones/sts-tool-lifecycle.md were added before
 tests or runtime edits. Proposed shared seam was reported to the parent in the
 coordination update: private completion submission plus exact commit receipt,
 running acknowledgement and conversation-mode admission. Shared provider and

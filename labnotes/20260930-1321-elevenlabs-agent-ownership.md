@@ -54,7 +54,7 @@ This is a consumer-ready local ownership component, not room-capable STS. A
 killed request worker, VM loss or ambiguous create response still needs durable
 identity/reconciliation evidence before production provisioning acceptance.
 Neither zero retention nor hosted conversation-record deletion is claimed.
-The [ownership design](../docs/elevenlabs-agent-ownership.md) records the local
+The [ownership design](20260930-2255-elevenlabs-agent-ownership.md) records the local
 review separately from acceptance. Call-spec agent/tool configuration, native
 session state, credit, interruption, policy, history, usage, scoped publication
 and Console acceptance remain required. Standalone Scribe turn ownership is

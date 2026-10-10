@@ -9,7 +9,7 @@ Read AGENTS, milestone index/current D tasks, finite settlement decision and
 provider finite-input contract, existing Deepgram Flux/session/socket and shared
 socket receive/close paths. Added finer protocol-proof/transport/test tasks and
 separate design review before any runtime/test edits. See
-[the decision, exact source pins and proposed seam](../docs/deepgram-finite-input-proof.md).
+[the decision, exact source pins and proposed seam](20260922-2032-deepgram-finite-input-proof.md).
 
 ## Methods and outcome
 

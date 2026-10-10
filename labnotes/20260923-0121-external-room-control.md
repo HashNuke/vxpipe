@@ -11,7 +11,7 @@ Recorded a design-review and implementation breakdown under the milestone's
 open caller-publication gate before runtime edits. The design selects bound
 human STT as the first room activity source, keeps transcript source independent
 of response control, and rejects external/hybrid room selections without a
-proven activity source. See `docs/sts-external-room-control.md` for alternatives,
+proven activity source. See `labnotes/20260923-0131-sts-external-room-control.md` for alternatives,
 authority requirements, and verification plan.
 
 Focused red: added a compiled-room Morse external test with selected human STT.
@@ -193,7 +193,7 @@ clear. The reviewer did not run tests; these are source-backed design gaps,
 not independently reproduced runtime defect claims. The chosen candidate is
 an immutable activity binding per native allocation, acknowledged ingress
 cutover, checked provider retirement before new control input, and exact room
-matching; see `docs/sts-activity-provenance.md` for tradeoffs and gates.
+matching; see `labnotes/20260923-0243-sts-activity-provenance.md` for tradeoffs and gates.
 
 Focused provider-retention red: with selected activity STT and transcript
 retention still on, an audio-only route denial left the old STT provider alive

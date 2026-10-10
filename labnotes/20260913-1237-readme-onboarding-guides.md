@@ -13,7 +13,7 @@
   command preview and one Console link. Keep source commands in the Elixir guide.
   Mark the Docker command as a preview in one line: container packaging remains
   unimplemented, and no runnable/released-image verification is claimed.
-- Add `docs/getting-started-docker.md` and `docs/getting-started-elixir.md`, keeping
+- Add `labnotes/milestones/container-quickstart-plan.md` and `docs/getting-started-elixir.md`, keeping
   `vxpipe/vxpipe` as the planned Docker image and `HashNuke/vxpipe` as the source.
   Docker remains the primary planned package. The Docker guide explains the
   proposed mounted-config/environment-file inputs and identifies the schema,

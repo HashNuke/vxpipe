@@ -2,7 +2,7 @@
 
 Date: 2026-10-08. Task: review the Callpipe flow editor and write a milestone to recreate call spec
 authoring in the Vxpipe operator Console. Result:
-[call spec editor milestone](../docs/milestones/call-spec-editor.md), index entry 42.
+[call spec editor milestone](milestones/call-spec-editor.md), index entry 42.
 
 ## Sources read
 
@@ -13,7 +13,7 @@ authoring in the Vxpipe operator Console. Result:
 - Vxpipe: `Vxpipe.CallEngine.CallSpec` and its `call_spec/*` modules, `docs/call-spec-direction.md`,
   `examples/call-specs/development.json`, Gateway `call_spec_writes.ex`,
   `Vxpipe.Calls.CallSpecAuthoring`, Console router and `AdminCallSpecsController`, Console admin
-  React sources and `docs/console-react-routing.md`.
+  React sources and `docs/development/console-react-routing.md`.
 
 ## Findings
 

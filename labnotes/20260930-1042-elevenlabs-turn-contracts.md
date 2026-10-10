@@ -78,7 +78,7 @@ server auto-commit accumulation, transcript completion ordering, cancellation,
 close/drain, allocation supervision and usage. A local/external boundary owner
 requires a reviewed contract amendment; no inferred event is labelled provider VAD.
 
-The focused [input turn proposal](../docs/elevenlabs-turn-ownership.md) makes the
+The focused [input turn proposal](20260930-1119-elevenlabs-turn-ownership.md) makes the
 next work concrete: per-allocation genuine detector state, per-turn isolated Scribe
 contexts, safe overlap bounds and transcript completion independent of endpoint
 evidence. Silero's official ONNX wrapper uses 512 new/64 context samples at 16 kHz

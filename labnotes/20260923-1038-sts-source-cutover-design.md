@@ -16,7 +16,7 @@ currently consults only the transfer handoff gate. `AudioFrame` already carries
 origin generation and policy intervals, not that epoch. `STTAudioAdmission`
 can bind a fresh recognizer origin independently of any upstream source hold.
 
-The reviewed design added to `docs/sts-activity-provenance.md` uses an
+The reviewed design added to `labnotes/20260923-0243-sts-activity-provenance.md` uses an
 internal room-authorized Connection hold/cutover/arm protocol. Room closes STT
 and STS admission first. Connection holds local RTP before its receiver call
 and keeps holding after old→held rotation. After the room binds the fresh STT

@@ -51,7 +51,7 @@ it must equal exactly round × 10. This is numerical caller-report evidence, not
 physical playback. The harness also checks stale cast/credit/timer rejection,
 idempotent bounded replay, last-result eviction, same-scope STT progress under
 withheld TTS credit and exact descendant cleanup. Per-repeat distributions and
-limitations are recorded in `docs/native-tts-cancellation-findings.md` and the
+limitations are recorded in `labnotes/20260920-0041-native-tts-cancellation-findings.md` and the
 adjacent `20260919-2245-tts-cancellation.json`. Process count returns to 244 every
 trial; final total memory 86.19–88.42 MB. Largest STT text observation 8.215 ms is
 retained, without attributing it causally to the repair.

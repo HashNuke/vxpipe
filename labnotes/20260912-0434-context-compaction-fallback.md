@@ -529,7 +529,7 @@ mix test --include integration test/integration/req_llm_provider_test.exs:82 --t
 - The rendered audit still reports inaccessible third-party icon/tab controls,
   third-party contrast failures, and the Vxpipe playground shell's missing
   level-one heading. Preserved that debt in
-  `docs/issues/sample-voice-ui-accessibility.md`; no unrelated UI was changed
+  `labnotes/issues/sample-voice-ui-accessibility.md`; no unrelated UI was changed
   during this runtime milestone.
 - The separate transfer desk could not connect in this run because the
   development BEAM had no database URL and therefore did not enable durable

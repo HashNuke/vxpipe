@@ -3,7 +3,7 @@
 ## Starting point
 
 - Date: 2026-09-22.
-- The target milestone is `docs/milestones/agent-speech-to-speech.md`.
+- The target milestone is `labnotes/milestones/agent-speech-to-speech.md`.
 - Checkpoint A is recorded as implemented; checkpoints B–F remain open and the
   milestones index entry is unchecked.
 - Existing worktree changes in `AGENTS.md`, `bin/teammate`,

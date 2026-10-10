@@ -81,7 +81,7 @@ all final serial umbrella gates. Output-STT timeout/usage and output-policy audi
 work is parent scope; this harness neither repairs nor claims to prove those gates.
 No proven runtime blocker was found by these smoke workloads.
 
-Reproduce with the script or the focused commands in `docs/sts-comparative-call-load.md`.
+Reproduce with the script or the focused commands in `docs/development/sts-comparative-call-load.md`.
 The lane is tagged `:integration`, excluded by default. Synthetic sink consumption
 does not prove physical hearing, WebRTC/carrier transport or provider reconnection.
 Room-authority fault injection proves the local room-supervision isolation boundary.

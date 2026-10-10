@@ -2,7 +2,7 @@
 
 ## Scope
 
-Complete checkpoint H of `docs/milestones/simpler-speech-integrations.md`: remove the remaining
+Complete checkpoint H of `labnotes/milestones/simpler-speech-integrations.md`: remove the remaining
 open host configuration shape, verify every consumer/credential boundary, run bounded end-to-end
 and load acceptance, update durable documentation, inspect the rendered sample when available,
 audit simplification and pass the root gates. Runtime speech execution was already cut over in C/E;

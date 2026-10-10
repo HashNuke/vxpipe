@@ -19,10 +19,10 @@ collecting billable usage or emitting events without a usable interface.
 
 ## Changes and rationale
 
-- Added [Observable sample call](../docs/milestones/observable-sample-call.md) directly
+- Added [Observable sample call](milestones/observable-sample-call.md) directly
   after the definition-driven call. Its end-to-end result is a sample conversation plus
   visible metrics and a controlled provider-failure scenario. It needs no persistence.
-- Added [Call inspection and debugging](../docs/milestones/call-inspection-and-debugging.md)
+- Added [Call inspection and debugging](milestones/call-inspection-and-debugging.md)
   directly after asynchronous history, reusing tenant admission, variable and background
   tool work. Its result is a read-only operator workflow over live and persisted facts,
   including ended calls, permitted snapshots, timelines and honest archival gaps.

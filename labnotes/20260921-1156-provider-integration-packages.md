@@ -117,7 +117,7 @@ package while preserving the existing Console, CallEngine and Gateway runtime ow
 - Rendered the local operator service connection dialog in Chrome at desktop and 390-pixel mobile
   widths. Google displayed separate Test credentials and Save actions, and the form remained usable.
   The static frontend badges describe future provider offerings rather than currently installed
-  runtime capabilities; the separate `docs/issues/setup-catalog-runtime-capabilities.md` records
+  runtime capabilities; the separate `labnotes/issues/setup-catalog-runtime-capabilities.md` records
   that pre-existing difference. No credential was submitted in the browser pass.
 - Final acceptance: the root default suite passes 1,979 tests, zero failures and 42 excluded. The
   controlled local speech-socket integration lane passes 13/13. Root format, warnings-as-errors

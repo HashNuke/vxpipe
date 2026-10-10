@@ -151,7 +151,7 @@ same scenarios. This is a benchmark dispatch correction, not a provider/runtime 
   no commit created, and no goal resume/rollback performed.
 
 Decision: retain local semantic execution as a candidate, with production migration paused.
-The durable [report](../docs/scoped-speech-experiment.md) records measured latency differences,
+The durable [report](20260919-1124-scoped-speech-experiment.md) records measured latency differences,
 behavioral evidence and exclusions. Agree latency acceptance budgets before migrating; use
 source/worker/publication timestamps to assign the burst overhead before treating it as a
 production defect. Checkpoints R/B/E still own actual capability nesting, admission/lease

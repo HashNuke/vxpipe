@@ -46,7 +46,7 @@ tests passed after those corrections. This is not final checkpoint acceptance.
 A shared-supervisor startup concern caused the user-requested pause. The subsequent
 verification-only task proved it with isolated actual Morse sessions and measured local
 latency under load. See `20260919-1624-speech-startup-isolation.md` and
-`docs/speech-startup-isolation.md` for the new failing regression, controls and 68,400-turn
+`labnotes/20260919-1124-speech-startup-isolation.md` for the new failing regression, controls and 68,400-turn
 latency evidence. The milestone is updated to paused/zero completed checkpoints; no runtime
 fix or checkpoint commit occurred in that verification task. Current room paths remain old.
 

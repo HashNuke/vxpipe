@@ -41,7 +41,7 @@
 - Hosted interoperability remains a future opt-in gate because it can incur
   charges. The milestone explicitly leaves the Google badge gated until that
   gate passes. No credentials were inspected or logged.
-- This task produced `docs/milestones/agent-speech-to-speech.md` and an index
+- This task produced `labnotes/milestones/agent-speech-to-speech.md` and an index
   entry. Implementation checkboxes remain open.
 
 ## Verification

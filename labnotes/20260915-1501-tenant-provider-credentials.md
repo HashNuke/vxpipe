@@ -47,7 +47,7 @@ call definitions and platform infrastructure settings in deployment environment 
 - Reviewed the current milestone index, tenant control-plane specification, definition workflow,
   provider startup, prepared-call persistence, API-key schema/store, runtime configuration, and
   S3 configuration boundaries.
-- Created `docs/milestones/tenant-provider-credentials-and-platform-configuration.md` with
+- Created `labnotes/milestones/tenant-provider-credentials-and-platform-configuration.md` with
   runnable checkpoints, approved contracts, acceptance/failure checks, manual verification, and
   scope boundaries.
 - Updated the milestone index from 25 to 26 entries, inserting this unchecked milestone before

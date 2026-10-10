@@ -28,7 +28,7 @@ without sleeping; actual Gateway receiver ordering stays covered by the prior
 checkpoint's receiver/Connection tests.
 
 This extends the recorded room-coordinator task in
-`docs/milestones/agent-speech-to-speech.md`; selected external/hybrid transfer
+`labnotes/milestones/agent-speech-to-speech.md`; selected external/hybrid transfer
 overlap, full native acceptance, telephony and final umbrella gates remain
 separate unfinished items.
 

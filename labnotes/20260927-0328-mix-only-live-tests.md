@@ -43,4 +43,4 @@ remain a test stability risk; no source-cutover or speech state machine code
 changed in this checkpoint.
 
 The current selection contract and remaining configured-service fixture work
-are recorded in `docs/live-provider-tests.md`. No live provider was called.
+are recorded in `docs/development/live-provider-tests.md`. No live provider was called.

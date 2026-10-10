@@ -1,0 +1,234 @@
+# Room-owned STS external and hybrid turn control
+
+> Relocated from `docs/sts-external-room-control.md` on 2026-10-09. First recorded source commit: `7914ac6b755d` (2026-09-23T01:31:11+00:00).
+> Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
+> Related task records: [20260923-0121-external-room-control](20260923-0121-external-room-control.md).
+> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [agent-speech-to-speech](milestones/agent-speech-to-speech.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+
+Status: partial room implementation. Compiled Morse external/hybrid response
+control and selected-origin replacement have focused local proof. Controller
+retirement on demand loss, source-time hold/reopen, upstream late evidence and
+full transfer acceptance remain open; this is not full native-room acceptance.
+
+## Decision
+
+The selected human STT stream is the first candidate room activity source for
+external and hybrid STS. Its `turn_started`/`turn_ended` signals are activity
+evidence, not response text. The room must enqueue admitted external starts and
+ends through `STSIngress.activity/4`, which shares ordered credit with PCM and
+delivers them to the capability's validated submission path. Direct
+`input_activity/2` is rejected once a room ingress owns input. Hybrid
+uses provider speech onset and human-STT end; it must not send a second start.
+Provider-controlled mode must receive no external activity commands even when
+human STT supplies caller text. Transcript-source choice remains independent of
+this controller selection.
+
+An external or hybrid selection without a selected human STT has no room activity
+source today. Reject that combination at startup until a separate source detector
+is designed and proven. Selection alone is insufficient: STT demand currently
+follows transcript retention or live transcript recipients, so selected STT can
+be dormant while STS remains demanded. Make controller activity an explicit
+readiness/session demand independent of transcript publication, including when
+transcript demand is removed mid-call, or reject/retire the selection before
+readiness. Do not infer boundaries from transcript deltas, PCM arrival, or
+silence. The provider descriptor must still declare and validate the selected
+mode; the room cannot repair an unsupported provider configuration.
+
+The current demand slice pins the entry caller and selected external/hybrid
+entry receiver in the plan, then carries that agent identity into the STT
+runtime, readiness inventory, capability and ingress. It requires source and
+agent presence plus both audio routes, independent of transcript retention.
+An audio-only route change closes or recreates the STT session even if the STT
+transcript interval is unchanged. Closing a recognizer during an active turn
+does not itself settle or cancel the room controller; that remains a separate
+room-wiring requirement.
+
+Prepared activity-only replacements need the same fence. A review probe
+reproduced a retained prepared provider and `:preparation_conflict` after an
+audio-only demand loss that left the transcript interval unchanged. The
+preparation now compares selected-agent presence and both exact audio routes
+before retaining a pending session; a focused test covers both invalidation
+and unrelated membership rebase. Astra xhigh re-review independently verified
+the original race, regrant and transfer refresh with no remaining reproduced
+defect in this demand slice.
+
+Only signals from the currently bound human STT capability and exact active
+source connection may control STS. Require the selected STS capability, open
+input epoch, same source identity, current presence, unheld source, and permitted
+caller-to-agent audio route. Pin the accepted STT turn reference and its source
+audio interval/lifecycle epoch at the producer, before asynchronous room
+delivery; an end may close only that active pair. Current STT signals carry
+only the STT transcript interval, which can remain unchanged across an
+audio-only revoke/regrant. Stamping the room's current STS epoch when a delayed
+signal is first handled would relabel old evidence. Add a producer-side fence
+before enabling this path. Do not let an old end close a new start. Revocation,
+hold, source replacement, capability replacement or handoff retires the pair
+before any new controller interval. Unrelated global policy revisions must not
+invalidate an unchanged source interval. Accepted boundaries must be sent to
+the STS capability in signal order. STS PCM and controls share one
+channel input slot; route controls through a bounded ordered admission/barrier
+with the STS ingress rather than racing a direct capability call against
+in-flight PCM. Revalidate source, epoch and policy at capability delivery;
+`ResponseOrigins.prepare/1` by itself skips those checks for descriptors
+without response-start context support; the new bound-ingress delivery path
+therefore performs them before submission. A busy or rejected boundary does not
+count as delivered and must not unlock a response. Separate STT/STS ingress
+lanes have no common source-frame watermark today. Late STT detection relative
+to already accepted later PCM needs explicit test evidence; message ordering
+alone does not solve it.
+
+Producer provenance remains unresolved. Private STT signals now preserve
+native allocation generation, turn reference and source audio intervals at
+capability emission, but they do not carry an STS lifecycle binding. A delayed
+signal cannot be assigned the room's current STS epoch on receipt. Selected
+STT now rotates its native provider on scoped audio-route changes even when
+transcripts remain demanded, and selected ingress PCM checks that generation;
+neither establishes a source-time hold/reopen fence for evidence first surfaced
+after a new epoch. The remaining proof must coordinate source-ingress
+admission, semantic-session retirement, frozen signal provenance, and room
+comparison. Hold/release requires an equivalent producer lifecycle fence
+before releasing the new STS epoch; a room-only watermark cannot classify
+provider evidence that has not surfaced yet.
+The [activity-provenance design](20260923-0243-sts-activity-provenance.md) records the
+allocation-bound signal and acknowledged PCM cutover requirements in detail.
+
+The human-STT publication path remains the sole public caller-turn owner when
+human STT is selected. Forwarding activity may prompt or end an STS response,
+but cannot publish a second caller pair or trigger a second room interruption.
+STS response and playback stay under the existing authorization and egress
+fences. A delayed human-STT onset must not cancel a newer STS reply.
+
+## Selected-origin replacement
+
+A recording-only policy change can rotate the selected STT allocation and its
+audio-input interval while leaving the transcript interval unchanged. A
+transcript-only change can rotate that allocation while leaving both audio
+intervals unchanged. Focused
+external/hybrid compiled-room probes reproduced two failures: an active old
+activity pair blocks a fresh start, and an old start first handled after
+rotation can occupy the public caller-turn slot. Public STT turn identity must
+include the native allocation generation and turn reference, independently of
+the transcript-policy interval. Reject a known-stale start before publication;
+updates and ends must match the current turn's native identity. Preserve the
+human's selected transcript without giving STT text a second model-dispatch
+path.
+
+Room pair retirement alone is not provider-input retirement. The provider's
+`input_quiescent?/1` plus native-channel idleness is the existing bounded proof
+for same-session reuse. An accepted Morse external start is already dirty;
+hybrid PCM can be dirty even without a room start. Sending an ordinary end to
+clear state can itself generate an old reply. If the proof is absent, close
+admission and replace the STS allocation before reopening a fresh input epoch.
+The room must observe the policy-origin change, coordinate with selected-STT
+readiness and source cutover, and bind a new ingress before accepting fresh
+PCM. A fresh room epoch or response-origin token alone is insufficient. The
+compiled-room regression primes distinguishable old `NO` PCM and requires a
+fresh-only `RECEIVED HI` reply; passing only an old-STT-onset test would not
+establish provider-state retirement. The local room path now closes the old
+ingress on scoped interval change, receives an exact-capability owner
+notification, retires the allocation, waits for a fresh selected-STT activity
+origin, and starts a fresh allocation with the same prepared track and a new
+input epoch. A source-time transport hold/fence and native reopen remain
+separate acceptance gates; this compiled-room proof does not establish them.
+The replacement trigger observes the selected STT transcript interval, both
+source audio intervals, and selected-agent presence. Agent leave/regrant can
+rotate the selected STT allocation while all caller intervals remain stable;
+the same old-input retirement and fresh-origin recovery are required. Focused
+external/hybrid room regressions prime an old `NO` pair and require a fresh
+`RECEIVED HI` reply after regrant. If a route change removes activity demand,
+the current origin is nil and delayed old signals are ignored without
+publishing a new caller turn or crashing the room.
+That nil activity origin does not revoke independently permitted human STT
+transcription. After STS retirement, the room still binds the selected human
+recognizer's current `audio_origin` to its ingress when transcription is
+demanded. Public STT turn/text validation compares that transcription origin;
+only STS activity admission requires `activity_origin`. Denying audio routes
+while live transcript routes remain permitted therefore closes STS control
+without dropping the human's final recognized text.
+
+## Hold of provider-owned external activity
+
+A focused Morse capability test reproduced a caller-visible stale reply:
+after an accepted external start and `HI` PCM, the former capability
+hold/release path blocked the old end while held but an end after release
+prompted an old-input reply. The provider had retained its decoder, input turn
+and external-start state. The interim fail-closed gate below now prevents that
+reuse; it does not implement reusable active-turn hold.
+
+The interim safety gate closes input admission and fences playback, then fails
+the owned STS allocation closed whenever accepted external/hybrid input remains
+dirty and a quiescent provider/native-event boundary cannot be proven. A
+completed external end by itself is insufficient: an old native end can still
+be queued behind hold and first handled after release. Track accepted PCM as
+well as explicit starts so hybrid PCM-only input is covered. A settled-idle
+Google session should remain reusable only when its provider-owned quiescence
+and outstanding native-event state both prove the old origin retired. No
+billable hosted check is implied by this local decision.
+
+Reusable hold/release needs a later acknowledged input discard/reset plus a
+barrier for already-emitted native events. Merely clearing Morse decoder
+fields would leave an old end in the channel/capability queue; sending the
+ordinary external `:ended` boundary would instead trigger the old response.
+Fail-closed retirement sacrifices that interrupted STS allocation but prevents
+relabeling its input into a new room epoch. The milestone keeps successful
+hold/release acceptance open until reusable semantics are proven.
+
+The interim local implementation performs that fail-closed check after ingress
+hold and output fencing. A provider must synchronously report quiescence, and
+the owning capability then asks the native channel to prove its event queue
+has neither awaiting nor pending evidence and no input command in flight.
+Morse regards accepted PCM or an external start as dirty until the matching
+audio turn completes; unrelated text-tool completion cannot clear buffered
+audio. A completed Morse output is retired only after exact local playback
+settlement, so genuinely idle external input can hold and release. Google
+reuses its settled-idle resumption predicate. A missing callback,
+negative result, or unacknowledged native event ends the capability with
+`:unsafe_hold`; a genuinely idle provider can still release. Focused Morse,
+hybrid, Google fake-wire and queued-native-event tests pass locally. This
+does not add reusable active-turn hold or hosted Google proof.
+
+## Rejected alternatives
+
+- Inferring external end from a final transcript conflates recognition latency
+  with speech activity and can respond after hold or route denial.
+- Sending the human-STT start into hybrid mode creates a competing onset; the
+  provider is responsible for hybrid onset.
+- Reusing provider-controlled detection when `external` is selected silently
+  changes the call's response-triggering contract.
+- Broadcasting every STT signal to any STS capability loses exact source,
+  policy and lifecycle attribution.
+
+## Independent design review
+
+Codex Astra xhigh reviewed the candidate against the current readiness,
+policy-interval, STT signal and STS capability paths. It found three unresolved
+dependencies, not reproduced runtime defects: transcript demand may leave the
+selected activity source dormant; an already-emitted STT signal lacks the
+source-audio/lifecycle provenance needed after audio-only revocation or hold;
+and the original direct `input_activity/2` did not revalidate authority for
+descriptors without response-start context support. The ordered ingress and
+capability-delivery prerequisite has focused local proof, but selected STT
+demand and producer provenance remain open. Provider-side activity state after
+hold also needs an observable-consequence test. The controller design is not
+approved until these are resolved with focused evidence.
+
+Final scoped Astra xhigh review of the ordered ingress/capability seam found no
+remaining concrete defect after the five reproduced review findings were fixed.
+The owning ingress/capability/origins group passed 87 tests on seeds 0 and 1,
+and the reviewer ran eight additional in-memory probes. This clears only that
+prerequisite, not the room controller or its remaining dependencies.
+
+## Implications and verification
+
+The room needs a bounded, single active controller association for the one
+permitted human source, plus an explicit runtime/descriptor mode check. Startup
+must reject a missing activity source, and readiness must demand that source
+whenever its activity controls STS. Producer-side lifecycle/audio attribution
+and delivery-side authority checks must precede accepted room wiring. Focused
+compiled-room tests must first reproduce the absent boundary, then prove
+external and hybrid response timing, one public caller pair, no duplicate
+text-model response, and stale signal
+rejection across hold/release, source replacement, and policy revoke/regrant.
+Capability/session tests already prove the Morse boundary protocol; they do not
+prove the room wiring. Provider-level late evidence first observed after a new
+epoch and complete transfer/hosted acceptance remain separate milestone gates.

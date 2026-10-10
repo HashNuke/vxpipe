@@ -62,14 +62,14 @@ STS milestone. Documentation only; no runtime changes.
 - Usage reuses the existing `:milliseconds` unit
   (`usage/measurement.ex`).
 - No OpenAI provider package or credential exists yet
-  (`docs/existing-provider-credentials.md`); checkpoint D adds one.
+  (`labnotes/20260915-1655-existing-provider-credentials.md`); checkpoint D adds one.
 - A Morse duplex provider shares the inference modules so the default suite
   covers the room paths without billing.
 
 ## Output
 
-- `docs/milestones/gpt-live-speech-to-speech.md`
-- Index entry 34 and specification-review row in `docs/milestones/index.md`.
+- `labnotes/milestones/gpt-live-speech-to-speech.md`
+- Index entry 34 and specification-review row in `labnotes/milestones/index.md`.
 
 ## Verification
 

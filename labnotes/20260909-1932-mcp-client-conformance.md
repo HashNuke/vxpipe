@@ -193,7 +193,7 @@ evidence that this production concern is solved.
   the discovered `add_numbers` schema. No Jido, database, call engine, or model provider is
   started by the task.
 - Added `bin/test-mcp-conformance`, an opt-in tagged ExUnit wrapper, and
-  `docs/mcp-client-conformance.md`. The matrix names all harness scenarios selected for
+  `docs/development/mcp-client-conformance.md`. The matrix names all harness scenarios selected for
   `2025-11-25`: OAuth and elicitation are out of this milestone's scope, while `sse-retry`
   remains pending and is not represented as a pass.
 - The initial manual red harness run saved diagnostic results under `/tmp`; no generated
@@ -407,7 +407,7 @@ evidence that this production concern is solved.
   unchanged Codex tests; changed files pass the formatter.
 - The response-budget commit bypassed ExMCP's pre-commit hook only because that hook runs the
   already-red repository-wide formatter. No unrelated upstream file was changed.
-- Added `docs/ex_mcp-fixes.md` as the durable branch policy, pull-request order, verification,
+- Added `labnotes/20260910-0059-exmcp-fork-fixes.md` as the durable branch policy, pull-request order, verification,
   and eventual fork-removal record. Remote publication and Vxpipe dependency verification
   remain pending until the fork is reachable.
 
@@ -415,7 +415,7 @@ evidence that this production concern is solved.
 
 - Published every local branch to `HashNuke/ex_mcp` and verified the remote tips:
   `master` at `56880c6`, four independently reviewable `fix/*` branches at the commits
-  listed in `docs/ex_mcp-fixes.md`, and combined `vxp` at `2d31d26`.
+  listed in `labnotes/20260910-0059-exmcp-fork-fixes.md`, and combined `vxp` at `2d31d26`.
 - Replaced the Hex dependency with the public HTTPS `vxp` branch. `mix.lock` pins
   `2d31d26270024c123de8b7c80833fcf4d089e3a5`; no local path or SSH credential is needed
   by builds. The existing Mint 1.9.3 lock remains unchanged.

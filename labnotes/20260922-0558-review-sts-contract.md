@@ -3,7 +3,7 @@
 ## Scope
 
 Reviewed `a31a479f` and `9fc90819` against checkpoint A of
-`docs/milestones/agent-speech-to-speech.md`. The worktree was initially clean.
+`labnotes/milestones/agent-speech-to-speech.md`. The worktree was initially clean.
 This is a review, not implementation of checkpoints B–F. No application source,
 existing tests, milestone checklists or commits were changed.
 

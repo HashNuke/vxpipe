@@ -27,7 +27,7 @@ speech-start event. An isolated synthetic-audio probe is required before declari
 STT because barge-in currently depends on prompt speech-start evidence.
 
 Design decision and vertical acceptance gates are in
-`docs/milestones/rime-and-google-speech-providers.md`.
+`labnotes/milestones/rime-and-google-speech-providers.md`.
 
 Rime adapter progress: focused protocol, semantic-session and call-plan tests were red before the
 adapter/manifest work, then passed. The adapter serializes text and flush with `segment=never`,

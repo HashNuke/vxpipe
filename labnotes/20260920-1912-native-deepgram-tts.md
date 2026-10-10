@@ -105,7 +105,7 @@ p50 1.404 ms, p95 3.822 ms, p99 4.622 ms and max 4.743 ms. Full settlement laten
 hosted-provider capacity or end-to-end call claim.
 
 The durable decision and its limits are recorded in
-[`docs/native-deepgram-tts-session.md`](../docs/native-deepgram-tts-session.md).
+[`labnotes/20260920-1314-native-deepgram-tts-session.md`](20260920-1314-native-deepgram-tts-session.md).
 
 ## Final gates and hosted evidence
 

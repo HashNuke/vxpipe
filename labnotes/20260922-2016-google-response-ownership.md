@@ -12,7 +12,7 @@
   a completed generation's queue while transcript is ignored. Reproduce both
   before implementation rather than assuming the status guard handles them.
 - Added concrete milestone tasks and a focused proposed architecture in
-  `docs/google-sts-response-ownership.md` before tests/code. The actual output
+  `labnotes/20260922-2053-google-sts-response-ownership.md` before tests/code. The actual output
   reference remains engine-issued; explicit provider response evidence must not
   fabricate caller turns or bypass policy. Record successful multi-response,
   bounded retention, caller separation and queued-policy proof as requirements.

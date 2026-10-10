@@ -1,6 +1,6 @@
 # Observable sample call
 
-Milestone: [Observable sample call](../docs/milestones/observable-sample-call.md), sequence 2.
+Milestone: [Observable sample call](milestones/observable-sample-call.md), sequence 2.
 Started: 2026-09-08.
 
 ## Checkpoint 1: reusable gateway mounting boundary

@@ -62,7 +62,7 @@
 - The versioned JSON provider catalog mirrors existing sample defaults; it is
   prototype data, not a new server model-selection or credential authority.
 - The user-facing flow and production follow-up boundaries are recorded in
-  `docs/tenant-setup-experience.md`; milestone notes explicitly leave durable
+  `labnotes/milestones/tenant-setup-experience.md`; milestone notes explicitly leave durable
   integration and root-home/demo-mode acceptance unchecked.
 - Storybook initially held an old story index after new exports. Restarting with
   Chokidar polling refreshed discovery. Broad polling also consumed substantial

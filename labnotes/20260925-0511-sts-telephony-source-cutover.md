@@ -5,7 +5,7 @@ slice. Twilio/Telnyx raw WebSock media must carry a source epoch fixed before
 asynchronous `SocketDispatch`, stale epochs must drop at the room/Gateway
 boundary without killing the socket, and marks/readiness/lifecycle must keep
 flowing during a hold. This is the milestone task at
-`docs/milestones/agent-speech-to-speech.md` ("Red-test Twilio and Telnyx raw
+`labnotes/milestones/agent-speech-to-speech.md` ("Red-test Twilio and Telnyx raw
 media queued at their WebSock callbacks before cutover ..."). Telephony room
 coordination (close/retire/bind/arm/reopen) is the dependent task, not this
 checkpoint.
@@ -28,7 +28,7 @@ checkpoint.
   (`telephony/media_session_setup.ex:42` calls
   `engine.attach_connection(command, output)`), so `RoomAuthority.STSSourceCutover`
   never selects it as a source connection.
-- The design contract is [STS activity provenance](../docs/sts-activity-provenance.md)
+- The design contract is [STS activity provenance](20260923-0243-sts-activity-provenance.md)
   lines 82-105 and 229-242: assign the epoch in the WebSock callback before
   async dispatch, carry it unchanged to `MediaSession`, drop stale media with a
   successful dispatch ack, keep marks/readiness/lifecycle alive, and do not

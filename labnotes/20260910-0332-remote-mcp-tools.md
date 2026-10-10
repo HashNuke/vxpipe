@@ -238,7 +238,7 @@ supported Jido-owned loop without generating modules or using private APIs.
   error carrying another request ID were accepted. Green: ExMCP now accepts either envelope only
   when its ID exactly matches the generated request ID and reports mismatches as non-retryable.
 - Published the isolated fix at `8ae7684`, merged it into the fork's `vxp` branch, and
-  updated the ordered upstream contribution notes in `docs/ex_mcp-fixes.md`.
+  updated the ordered upstream contribution notes in `labnotes/20260910-0059-exmcp-fork-fixes.md`.
 - All 12 focused ExMCP result-validation tests, warnings-as-errors compilation, and strict Credo
   passed. The full upstream suite ran 4,622 tests with two unrelated baseline/environment failures:
   a local Claude authentication-method expectation and the modern stdio fixture's child Mix process
