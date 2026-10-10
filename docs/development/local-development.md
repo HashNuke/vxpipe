@@ -1,21 +1,49 @@
 # Local development
 
-Use this guide to prepare a checkout and run the Console while working on Vxpipe.
+Here's how to get Vxpipe running on your machine. You can start the Console
+without provider credentials and use local fixtures while developing.
 For a first provider-backed voice call, follow
 [Get started with Elixir](../getting-started-elixir.md).
 
 ## Prerequisites
 
-Install these tools and have PostgreSQL running locally:
+You'll need these tools:
 
 - Elixir 1.19 and Erlang/OTP 28.
-- Node.js 24 and npm.
+- Node.js and npm, using the version in [`.tool-versions`](../../.tool-versions).
 - Python 3.10+ and Git.
+- PostgreSQL, running locally.
 - Rust, C/C++ build tools, `pkg-config` and OpenSSL development headers.
+
+## Get a checkout
+
+Clone the repository and step into its directory:
+
+```shell
+git clone https://github.com/HashNuke/vxpipe.git
+cd vxpipe
+```
+
+If you use asdf or mise, you can install the versions pinned in
+[`.tool-versions`](../../.tool-versions) from this directory. Choose the command
+for your version manager.
+
+With [asdf](https://asdf-vm.com/manage/configuration.html#tool-versions), with
+the Erlang, Elixir, Node.js and Python plugins installed:
+
+```shell
+asdf install
+```
+
+With [mise](https://mise.jdx.dev/cli/install.html):
+
+```shell
+mise install
+```
 
 ## Initialize a checkout
 
-From the repository root, run:
+Now prepare your checkout:
 
 ```shell
 bin/setup
@@ -23,13 +51,14 @@ bin/setup
 
 Setup installs project dependencies, builds frontend assets, prepares local
 configuration and migrates the development and test databases. It prints the
-assigned Console and Storybook URLs. Rerunning it preserves existing local
-configuration and database data.
+assigned Console URL.
 
 Run setup separately in each checkout. See
 [worktree isolation](worktree-isolation.md) for how Vxpipe keeps their state separate.
 
 ## Start the development stack
+
+Start the Console:
 
 ```shell
 bin/dev
