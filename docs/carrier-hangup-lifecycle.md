@@ -64,4 +64,4 @@ closure (Twilio seed 106192, Telnyx seed 662627). The separate unanswered case p
 no_answer within its five-second ring bound plus margin (seed 247633). The test node is
 stopped. See the
 [checkpoint labnotes](../labnotes/20261005-0927-carrier-hangup-lifecycle.md) and
-[live milestone](milestones/outgoing-calls-and-live-telephony.md).
+[live milestone](../labnotes/milestones/outgoing-calls-and-live-telephony.md).

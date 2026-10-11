@@ -213,7 +213,7 @@ would preserve Jido's ReAct loop, but current released and upstream APIs do not 
 required seam. Consuming it before release requires a maintained fork or patch, while the
 remaining Vxpipe-specific lifecycle, background work, visibility, and room coordination
 still stay outside Jido. The prior investigation remains in
-[the superseded Jido decision](jido-tool-execution.md).
+[the superseded Jido decision](../labnotes/20260908-1637-jido-tool-execution.md).
 
 ### Keep ReqLLM orchestration inside Call Engine
 
@@ -245,7 +245,7 @@ local tool remains a distinct model-visible descriptor backed by a private bindi
 
 ## Implications and migration
 
-The completed [ReqLLM agent-runtime milestone](milestones/reqllm-agent-runtime.md) sits after
+The completed [ReqLLM agent-runtime milestone](../labnotes/milestones/reqllm-agent-runtime.md) sits after
 the standalone MCP client milestone and before live MCP tools. It proved the package in isolation,
 migrated the former Jido-backed activation while retaining cohesive Call Engine domain contracts,
 and removed Jido after production/test references were gone and parity was demonstrated.

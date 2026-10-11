@@ -78,6 +78,6 @@ and 105 exclusions (seed 113691); all five root gates and Lean verification pass
 The clean real carrier test passed, both direct hosted checks passed, and all three
 runner shell suites passed. Full evidence is recorded in the
 [continuation labnote](../labnotes/20261006-1547-protect-phone-openings.md) and
-[GPT-Live milestone](milestones/gpt-live-speech-to-speech.md#hosted-phone-check-first-carrier-run-2026-10-06).
+[GPT-Live milestone](../labnotes/milestones/gpt-live-speech-to-speech.md#hosted-phone-check-first-carrier-run-2026-10-06).
 This change does not claim the remaining phone interruption, tool, hold/reseed or
 speakerphone echo gates of that milestone have passed.

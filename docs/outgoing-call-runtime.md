@@ -59,8 +59,8 @@ below. Archive/details/inspection project the outgoing outcome and timestamps th
 D6 checkpoint below. Native STS opening is tracked in the [opening decision](native-sts-opening.md);
 turn Morse and Google fixture support pass focused and final root/Lean verification.
 Duplex support and the three carrier acceptance cases subsequently passed; see the final
-[milestone evidence](milestones/outgoing-calls-and-live-telephony.md#e-live-acceptance-and-incoming-hangup-repair-2026-10-05).
-The [milestone](milestones/outgoing-calls-and-live-telephony.md) tracks these contracts
+[milestone evidence](../labnotes/milestones/outgoing-calls-and-live-telephony.md#e-live-acceptance-and-incoming-hangup-repair-2026-10-05).
+The [milestone](../labnotes/milestones/outgoing-calls-and-live-telephony.md) tracks these contracts
 and the two answered carrier calls plus one non-answer live acceptance.
 
 ## Durable admission checkpoint
@@ -239,5 +239,5 @@ with `retryable: false`; a new key is required for a new attempt. Redialing a sa
 was rejected because an uncertain earlier submission may already have reached the carrier.
 The live harness requires every public DNS relay to serve gateway health before any dial.
 Current reliability acceptance is tracked in the
-[review milestone](milestones/outgoing-call-review-fixes.md), independently of historical
+[review milestone](../labnotes/milestones/outgoing-call-review-fixes.md), independently of historical
 single-run proofs.

@@ -1,7 +1,7 @@
 # Google STS controller boundaries
 
 Status: sequential controller and configured Google selection are implemented.
-See [Gemini provider acceptance](milestones/gemini-live-provider-acceptance.md)
+See [Gemini provider acceptance](../labnotes/milestones/gemini-live-provider-acceptance.md)
 for real-provider evidence. Fake-wire acceptance is not hosted interoperability
 or interruption-history proof.
 

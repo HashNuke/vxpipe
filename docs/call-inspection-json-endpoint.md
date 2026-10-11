@@ -2,7 +2,7 @@
 
 Status: database query, response projection, authenticated HTTP resource and Console host are
 implemented. Further live call interaction remains in the
-[call debug console milestone](milestones/call-debug-console.md).
+[call debug console milestone](../labnotes/milestones/call-debug-console.md).
 
 ## Decision
 

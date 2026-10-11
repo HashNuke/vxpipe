@@ -7,7 +7,7 @@ are implemented, along with bounded asynchronous private call history
 
 The [initial outgoing-call runtime](outgoing-call-runtime.md) describes direction,
 deferred durable admission, one-shot dial ownership and bounded lifecycle projection.
-The [outgoing milestone](milestones/outgoing-calls-and-live-telephony.md) tracks native
+The [outgoing milestone](../labnotes/milestones/outgoing-calls-and-live-telephony.md) tracks native
 STS opening and carrier audio acceptance separately from local implementation evidence.
 
 ## Decision
@@ -146,7 +146,7 @@ It does not own room/participant authority, tool authorization or worker executi
 conversation admission, MCP transport, variables, transfers, TTS, client visibility, or
 persistence. Those remain Call Engine concerns. See the
 [runtime decision](reqllm-agent-runtime.md), [tool execution model](tool-execution-model.md),
-and [intermediate milestone](milestones/reqllm-agent-runtime.md).
+and [intermediate milestone](../labnotes/milestones/reqllm-agent-runtime.md).
 
 The package implements the submit-only executor behavior and the bounded, timeout-enforced
 pending-invocation context-source boundary. Its package-local loop resolves and validates complete
@@ -474,7 +474,7 @@ The [Everything reference server](https://github.com/modelcontextprotocol/server
 adds client interoperability examples, not complete conformance proof; verify its
 actual revision and remote transport match. Any loopback-HTTP allowance belongs
 only to an isolated test runner, never production endpoint policy. See the
-[client-library milestone](milestones/mcp-client-library.md).
+[client-library milestone](../labnotes/milestones/mcp-client-library.md).
 
 MCP routing uses only trusted application/tenant integration endpoints, never a
 model-supplied URL. Require verified HTTPS; a configured private CA is acceptable,
@@ -503,9 +503,9 @@ descriptors, preserving reported success/error and unknown outcomes. The agent
 chooses further steps through its authorized tools; saving a descriptor does not
 download or inspect its target. No automatic file fetch/playback or arbitrary
 media reader is added. Detailed projection/inspection is
-[deferred](issues/mcp-result-and-document-inspection.md).
+[deferred](../labnotes/issues/mcp-result-and-document-inspection.md).
 Server-requested sampling, elicitation, and related interactions are separately
-[deferred](issues/mcp-server-requested-interactions.md): do not advertise
+[deferred](../labnotes/issues/mcp-server-requested-interactions.md): do not advertise
 unimplemented capabilities or acquire authority from their requests. Under the
 selected profile these are server-initiated requests, not the superseded profile's
 input-required continuation flow. Report missing capability clearly without
@@ -528,11 +528,11 @@ known error or unknown outcome to the agent. A later agent-requested tool call i
 a separate invocation, not an internal retry or an exactly-once guarantee. Do not
 add a trusted read-only/idempotent-write/side-effect classification layer now.
 Automatic retries and business-idempotency exceptions are
-[deferred for later review](issues/automatic-tool-retries-and-idempotency.md).
+[deferred for later review](../labnotes/issues/automatic-tool-retries-and-idempotency.md).
 Tool retries are separate from call-creation idempotency (not offered initially)
 and admission bookkeeping recovery (never repeat a crashed call). Ordinary
 database transaction handling is unchanged. Explicit per-invocation cancellation is
-[deferred for later review](issues/explicit-tool-call-cancellation.md), not
+[deferred for later review](../labnotes/issues/explicit-tool-call-cancellation.md), not
 required for the current slice; its opt-in policy is not approved.
 This is planned behavior, not the current model-task cancellation behavior
 described in the implemented slices below.
@@ -857,7 +857,7 @@ explicitly suspend the same lifecycle state before waiting on a destination.
 Long tools do not cause automatic periodic progress speech. Agent instructions
 control kickoff/results through the same agent and one coordinated voice while
 the approved background-tool conversation can continue. Possible music during
-startup or tool waiting is [deferred](issues/wait-music.md); no playback option is
+startup or tool waiting is [deferred](../labnotes/issues/wait-music.md); no playback option is
 introduced.
 
 The whole live call defaults to a 30-minute limit (`1800000` ms). Resolve
@@ -906,7 +906,7 @@ An unknown transfer keeps waiting for explicit recipient acceptance within the
 existing total 30-second attempt deadline, without extending it. Classification
 is not an accuracy guarantee or a substitute for acceptance. No local classifier,
 beep inference, provider tuning, or automatic message delivery is added. Leaving
-voicemail is [deferred for later review](issues/voicemail-message-delivery.md),
+voicemail is [deferred for later review](../labnotes/issues/voicemail-message-delivery.md),
 without reintroducing a platform closing-speech workflow.
 
 Until a transfer successfully commits, the source agent retains conversational
@@ -1401,7 +1401,7 @@ the source connection or publish the private briefing as ordinary room transcrip
 The voice selection is pinned; a new briefing or replacement source speech client resolves its
 tenant credential again inside the existing preparation worker. Running clients keep their
 initialized configuration. Missing credentials fail before new client construction; see the
-[credential reader boundaries](credential-reader-boundaries.md).
+[credential reader boundaries](../labnotes/20260915-1521-credential-reader-boundaries.md).
 
 The protocol-neutral `ParticipantTransferControl` command accepts only `media_ready` or `accept`
 from the exact attached destination process, actor, participant, connection, room incarnation, and
@@ -3319,11 +3319,11 @@ from the call-engine application setting `telemetry: [sample_interval_ms: ...]`.
 
 Two planned vertical slices make these goals runnable:
 
-- [Observable sample call](milestones/observable-sample-call.md) follows the
+- [Observable sample call](../labnotes/milestones/observable-sample-call.md) follows the
   call-spec-driven call. A developer runs the existing sample and sees live timing,
   safe provider failures and VM health on a separate dashboard, without waiting for
   persistence or expanding the voice console.
-- [Call inspection and debugging](milestones/call-inspection-and-debugging.md) follows
+- [Call inspection and debugging](../labnotes/milestones/call-inspection-and-debugging.md) follows
   asynchronous history. An authorized operator inspects a live or ended call's
   participant/turn/tool timeline, permitted variable snapshots and observed timings,
   distinguishing live state from archive lag, unavailable facts and known gaps.
@@ -3517,7 +3517,7 @@ arbitrary chunks, with explicit final-flush, malformed-signal, duration, text, a
 bounds. Provider failures use the existing speech failure lifecycle rather than fabricated
 text or silence. Exact alphabet, timing, safety defaults and verification commands are in
 the [call-engine README](../apps/vxpipe_call_engine/README.md#local-morse-audio-providers) and
-[Morse audio milestone](milestones/morse-code-audio-providers.md).
+[Morse audio milestone](../labnotes/milestones/morse-code-audio-providers.md).
 
 These encode/decode controlled tones, not ordinary speech, VAD, or a local speech model.
 The complete local STT/model/TTS round trip runs at the engine's direct-PCM boundary without
@@ -3598,7 +3598,7 @@ The gateway owns the session, WebRTC, and RTVI processes and their dependencies.
 The call engine sees only participant admission and contains no ExWebRTC,
 Pipecat, JSON, or RTVI types. The detailed decision, supervision topology,
 failure behavior, and verification evidence are recorded in
-[`rtvi-participant-connection.md`](rtvi-participant-connection.md).
+[`rtvi-participant-connection.md`](../labnotes/20260903-1823-rtvi-participant-connection.md).
 
 At that checkpoint this was transport and protocol readiness, not a voice
 conversation pipeline. Incoming RTP terminated at a diagnostic sink, and there
@@ -3643,7 +3643,7 @@ runtime capability instance. It does not add transcription, model inference,
 speech synthesis, outbound audio, provider credentials, reconnection,
 production authentication, TURN policy, persistence, or room recovery. The
 detailed decision and verification evidence are in
-[`deterministic-text-turn.md`](deterministic-text-turn.md).
+[`deterministic-text-turn.md`](../labnotes/20260903-1851-deterministic-text-turn.md).
 
 ### Current scoped speech-session boundary
 
@@ -3789,7 +3789,7 @@ the rejected PCMU path, and detailed evidence are in
 This section records the original implementation. The tenant-credential cutover removed its
 `CreateRoom` preset and global provider readers. Current model/speech calls use inline call specs,
 Agent Runtime and the tenant credential source, including credential-free fixture/Morse embedding.
-See [credential reader boundaries](credential-reader-boundaries.md).
+See [credential reader boundaries](../labnotes/20260915-1521-credential-reader-boundaries.md).
 
 The sixth slice replaced the repository development agent's deterministic echo
 with room-scoped conversational generation while preserving the established
@@ -3835,7 +3835,7 @@ fallback remain later checkpoints. R47–R50 approve design contracts above, not
 these runtime features or a Vxpipe fallback coordinator.
 Provider-driven spoken barge-in is implemented by the later checkpoint below.
 The detailed decision and verification evidence are in
-[`model-inference-turn.md`](model-inference-turn.md).
+[`model-inference-turn.md`](../labnotes/20260904-2202-model-inference-turn.md).
 
 ### Superseded model tool-invocation slice
 
@@ -3873,7 +3873,7 @@ execution into RTVI or a provider adapter:
 The first tool runs within the model request task. Separate per-tool supervision,
 parallel calls, approval gates, durable results, idempotency, and external action
 providers remain later checkpoints. Detailed decisions and verification evidence
-are in [`model-tool-invocation.md`](model-tool-invocation.md).
+are in [`model-tool-invocation.md`](../labnotes/20260905-1125-model-tool-invocation.md).
 
 ### Implemented typed turn-interruption slice
 
@@ -3955,7 +3955,7 @@ Current schema `20260915.01` uses inline provider/model/options and tenant crede
 The ReqLLM runtime supports the existing Google/Zenmux model integrations; speech uses Deepgram
 or credential-free Morse, while model fixtures are credential-free. Prepared hosted phone plans pin canonical tenant service
 references, and each new live reader resolves the corresponding encrypted record. See
-[inline selections](inline-provider-selections.md), [reader boundaries](credential-reader-boundaries.md)
+[inline selections](inline-provider-selections.md), [reader boundaries](../labnotes/20260915-1521-credential-reader-boundaries.md)
 and [tenant telephony services](tenant-telephony-services.md) for current contracts.
 
 #### Historical initial implementation

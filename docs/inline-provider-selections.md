@@ -1,7 +1,7 @@
 # Inline provider selections
 
 Status: inline tenant selections and all existing provider readers are implemented and independently
-reviewed. Final configuration acceptance is tracked in the [milestone ledger](milestones/tenant-provider-credentials-and-platform-configuration.md#evidence-ledger).
+reviewed. Final configuration acceptance is tracked in the [milestone ledger](../labnotes/milestones/tenant-provider-credentials-and-platform-configuration.md#evidence-ledger).
 
 ## Ownership and representation
 
@@ -83,7 +83,7 @@ letters/digits, dots, underscores or hyphens and start with a letter/digit. Unkn
 credential/transport options and executable values fail local validation. Only these fixed
 JSON keys are translated to ReqLLM's internal atom keys; the encoded routing object is unchanged.
 The request builder translates `max_tokens` to Zenmux's `max_completion_tokens` field.
-The [provider inventory](existing-provider-credentials.md) records the pre-cutover support evidence;
+The [provider inventory](../labnotes/20260915-1655-existing-provider-credentials.md) records the pre-cutover support evidence;
 this migration adds no direct OpenAI/Anthropic authentication or other SDK provider integration.
 
 The Google text adapter selects streaming explicitly. The installed model data omitted the
@@ -172,5 +172,5 @@ independent reviews cover the implemented reader checkpoints and final configura
 The final reviewed source at `58d7b34` passes **1,622 tests, zero failures, 39 exclusions** and all five
 root gates; all seven credential/configuration checkpoints are complete. Earlier intermittent native
 audio observations remain recorded; a passing run does not establish their cause.
-See the [current milestone ledger](milestones/tenant-provider-credentials-and-platform-configuration.md#evidence-ledger)
+See the [current milestone ledger](../labnotes/milestones/tenant-provider-credentials-and-platform-configuration.md#evidence-ledger)
 and [original checkpoint labnotes](../labnotes/20260915-1719-inline-tenant-voice.md).

@@ -185,5 +185,5 @@ a failure; the [admission checkpoint](../labnotes/20261001-0522-scribe-input-adm
 adds ordered bounded PCM buffering and monitor-confirmed native worker retirement
 with focused local red/green evidence. The original remote/native failure cause
 is not asserted from the passing retry. Other provider room checks are recorded in
-the [acceptance review](provider-expansion-acceptance.md). Final root and Lean
+the [acceptance review](../labnotes/milestones/provider-expansion-acceptance.md). Final root and Lean
 gates pass and coherent checkpoints publish the accepted STT/TTS milestone.

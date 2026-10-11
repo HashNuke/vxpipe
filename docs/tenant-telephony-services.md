@@ -6,8 +6,8 @@ save/publish/web/incoming write guards are implemented. Twilio media authenticat
 the initialized leg configuration. Telnyx now requires a scoped primary credential binding
 through the [platform/tenant service contract](scoped-telnyx-service-bindings.md);
 Twilio retains exact tenant credentials. The original tenant-reader work is recorded in
-[checkpoint 3](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage)
-and [checkpoint 4](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-4--move-twilio-credential-readers-to-tenant-storage).
+[checkpoint 3](../labnotes/milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-3--move-telnyx-credential-readers-to-tenant-storage)
+and [checkpoint 4](../labnotes/milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-4--move-twilio-credential-readers-to-tenant-storage).
 
 ## Ownership and identity
 

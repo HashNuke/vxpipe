@@ -1,10 +1,10 @@
 # Speech sessions owned by the call tree
 
 Status: revised ownership design, 2026-09-19. Replaces the application-wide execution ownership
-in the baseline prototype. The isolated R implementation and its [adoption repair](speech-adoption-fix.md)
+in the baseline prototype. The isolated R implementation and its [adoption repair](../labnotes/20260919-1220-speech-adoption-fix.md)
 are under verification; existing rooms still use their original speech path. See the
-[milestone](milestones/simpler-speech-integrations.md) for acceptance checkpoints and the
-[original measured failure](speech-startup-isolation.md) for baseline evidence.
+[milestone](../labnotes/milestones/simpler-speech-integrations.md) for acceptance checkpoints and the
+[original measured failure](../labnotes/20260919-1124-speech-startup-isolation.md) for baseline evidence.
 
 ## Decision
 
@@ -256,14 +256,14 @@ documentation checks is recorded in the
 
 Writing this proposal did not make an isolation gate green. Subsequent R implementation
 repaired the original startup test, then exposed and repaired an adoption-authority defect
-under the user's stop/fix procedure. The [repair report](speech-adoption-fix.md) records actual
-tests and load evidence. The subsequent [deadline and failure-containment work](speech-deadlines-and-failure-containment.md)
+under the user's stop/fix procedure. The [repair report](../labnotes/20260919-1220-speech-adoption-fix.md) records actual
+tests and load evidence. The subsequent [deadline and failure-containment work](../labnotes/20260919-1312-speech-deadline-evidence.md)
 adds persistent local admission/input workers, atomic handoff abandonment and truthful close
 completion. Its deterministic race tests and concurrent fault diagnostic address R's remaining
 contracts. R is now accepted with all five root gates green (1,868 tests, zero failures,
 40 excluded). A and D remain required before room migration.
 
-The subsequent [scoped speech experiment](scoped-speech-experiment.md) checks semantic STT/TTS
+The subsequent [scoped speech experiment](../labnotes/20260919-1124-scoped-speech-experiment.md) checks semantic STT/TTS
 substitution through real room policy, turn and interruption paths. Its test-owned scopes and
 private legacy bridge establish bounded feasibility evidence, not final room nesting or full
 permission/hosted-provider acceptance. Migration remains pending its revised gates.

@@ -17,7 +17,7 @@ implementations stay in the existing umbrella child that owns their runtime depe
 AI gateway routing is a separate concern from these provider manifests. Cloudflare,
 Vercel and future gateway routes must preserve upstream model identity and reuse
 verified protocol adapters without maintaining duplicate provider/model catalogs.
-The [AI gateway design milestone](milestones/ai-gateway-routing.md) records this
+The [AI gateway design milestone](../labnotes/milestones/ai-gateway-routing.md) records this
 direction; its public routing contract and implementation remain deferred.
 
 Those modules still use the provider namespace. Elixir module identity gives each provider one
@@ -69,7 +69,7 @@ Google, Zenmux and OpenAI model support continues through the agent-runtime cata
 The Console's authenticated service-binding response includes `provider_capabilities` from the
 fixed registry. Setup offers only registered credential providers and intersects speech/telephony
 badges with that response. Google, Zenmux and OpenAI LLM labels remain explicit Console metadata for the
-shared ReqLLM path. See the [setup catalog decision](issues/setup-catalog-runtime-capabilities.md).
+shared ReqLLM path. See the [setup catalog decision](../labnotes/issues/setup-catalog-runtime-capabilities.md).
 
 ## Existing provider manifests
 
@@ -114,7 +114,7 @@ Vxpipe.Providers.Twilio.TelephonyMediaSocket
 ```
 
 Rime TTS and Google speech were added after the original package migration; their implementation
-and acceptance are tracked in [Rime and Google speech providers](milestones/rime-and-google-speech-providers.md).
+and acceptance are tracked in [Rime and Google speech providers](../labnotes/milestones/rime-and-google-speech-providers.md).
 The socket names describe provider wire implementations. Public speech consumers continue to use
 semantic STT/TTS sessions, and telephony consumers continue to use the provider-neutral telephony
 contracts. Generic room, turn, policy, permission, readiness, media and persistence modules remain

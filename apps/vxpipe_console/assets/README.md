@@ -106,7 +106,7 @@ ordinary negotiated audio tracks for private briefing and active room media.
 
 The default browser sample uses its provisioned Google/Deepgram tenant. Local model and Morse
 selections are explicit inline call spec fields with host-configured adapters; environment
-profile switches are removed. See [local fixtures](../../../docs/development.md#local-fixtures)
+profile switches are removed. See [local fixtures](../../../docs/development/local-development.md#local-fixtures)
 for the deterministic direct-PCM voice test. It verifies local STT and audible Morse output
 without provider credentials. Browser microphone RTP is Opus, while Morse STT takes linear16.
 

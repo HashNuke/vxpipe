@@ -147,7 +147,7 @@ controls the notification at 420 seconds and observes real replacement setup at
 that Google naturally issued its expiry notification during this run.
 
 Live and final gate evidence is recorded in
-[the milestone](milestones/gemini-live-provider-acceptance.md#hosted-session-longevity-2026-10-08)
+[the milestone](../labnotes/milestones/gemini-live-provider-acceptance.md#hosted-session-longevity-2026-10-08)
 and [the labnote](../labnotes/20261008-0220-gemini-session-longevity.md).
 Direct PCM consumption proves receipt, not remote carrier playback. Long telephony
 acceptance remains a separate gate.

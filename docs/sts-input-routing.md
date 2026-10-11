@@ -4,7 +4,7 @@ Status: directional formats, bounded ingress and the embedded real-room PCM
 round trip have focused implementation evidence. Native WebRTC/telephony input
 conversion, delivery and phone-room readiness now pass focused tests; complete
 multi-mode native calls and milestone acceptance remain unfinished. This preserves the existing
-[STS milestone](milestones/agent-speech-to-speech.md) requirements.
+[STS milestone](../labnotes/milestones/agent-speech-to-speech.md) requirements.
 
 ## Evidence and decision
 

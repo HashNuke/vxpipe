@@ -1,6 +1,6 @@
 # Operator API keys and call-spec authoring
 
-This implements A3 of [platform and tenant services](platform-and-tenant-services.md).
+This implements A3 of [platform and tenant services](../labnotes/milestones/platform-and-tenant-services.md).
 Calls owns authentication and authority; Persistence owns hash-only storage and trusted
 issuance commands; Gateway owns the HTTP protocol. Browser operator sessions remain
 independent credentials.

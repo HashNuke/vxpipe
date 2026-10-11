@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.Telephony.SourceGateConformanceTest do
   # Replays the Lean-generated slice-1 oracle against the Elixir SourceGate.
   # The oracle is the checked-in `verification/oracle/source_gate.txt`, produced
   # by `verification/Oracle.lean`. `bin/verify-lean` rebuilds the model, fails
-  # on oracle drift, then runs this test. See docs/formal-verification.md.
+  # on oracle drift, then runs this test. See docs/development/formal-verification.md.
 
   alias Vxpipe.Gateway.Telephony.SourceGate
 

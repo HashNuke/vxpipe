@@ -57,12 +57,17 @@ Never read or modify `~/.config/vxpipe/live_providers.env` file
 - Do not create labnotes for simple status checks, read-only inspection, or a
   request that only runs an existing command or script.
 - Commit labnotes with the implementation or research work they document.
+- `labnotes/` also holds planning records that are not user-facing documentation:
+  implementation milestones in `labnotes/milestones/` and deferred issues in
+  `labnotes/issues/`. `bin/create-labnotes` files stay at the top level of
+  `labnotes/`.
 
 ### Implementation milestones
 
 - Implementation specifications and progress checklists live in
-  `docs/milestones/`. Start with [the milestones index](docs/milestones/index.md),
-  whose Markdown checklist gives the intended implementation order.
+  `labnotes/milestones/`. Start with
+  [the milestones index](labnotes/milestones/index.md), whose Markdown checklist
+  gives the intended implementation order.
 - Milestone filenames and titles are descriptive and unnumbered. Only the index
   owns implementation order; reordering or inserting a milestone must not require
   renaming files or changing their identities.
@@ -74,7 +79,8 @@ Never read or modify `~/.config/vxpipe/live_providers.env` file
   leave the index entry unchecked until the milestone's acceptance gates pass.
 - Keep the milestone checklist, evidence, and index synchronized with implementation
   commits. Record blockers or approved scope changes rather than checking off partial
-  work. Deferred issues do not become requirements merely by being linked.
+  work. Deferred issues in `labnotes/issues/` do not become requirements merely
+  by being linked.
 - Review each new or materially changed milestone for missing contracts and dependency
   order. Record that design review separately from implementation progress.
 
@@ -214,7 +220,7 @@ bin/verify-lean
 
 It builds the Lean models under `verification/`, fails on oracle drift, and
 replays the modelled transitions against the Elixir implementation. See
-[docs/formal-verification.md](docs/formal-verification.md).
+[docs/development/formal-verification.md](docs/development/formal-verification.md).
 
 For documentation-only changes, verify the changed documentation and use
 proportionate checks when it changes generated configuration.

@@ -55,7 +55,7 @@ inference continues through shared ReqLLM. Rime's credential shape and probe use
 `Vxpipe.Providers.Twilio`. Zenmux's credential shape and probe use
 `Vxpipe.Providers.Zenmux`; model inference remains in shared ReqLLM. Console executes the declared
 probes. The
-[provider-package milestone](milestones/provider-integration-packages.md) tracks that progression.
+[provider-package milestone](../labnotes/milestones/provider-integration-packages.md) tracks that progression.
 
 This is the current lightweight provider-package boundary. Adding a provider means adding its local
 credential schema, optional credential-test module, and only the runtime adapters it actually

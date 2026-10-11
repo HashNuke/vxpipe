@@ -42,7 +42,7 @@ waveform or remote hearing. When absent, fixed Google opening completion require
 generation and physical playback settlement, publishes no agent transcript and
 releases opening protection only after playback. Generated openings and ordinary
 responses retain their selected transcript requirements. Configured Google is
-advertised; the [Gemini acceptance milestone](milestones/gemini-live-provider-acceptance.md)
+advertised; the [Gemini acceptance milestone](../labnotes/milestones/gemini-live-provider-acceptance.md)
 records hosted evidence. Tagged tests independently confirm missing text from
 actual PCM through Deepgram; this test-only recognition is not a runtime fallback.
 

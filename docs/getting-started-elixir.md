@@ -14,7 +14,7 @@ own Elixir application. The repository is
 
 Docker, Tailscale, and the development reloader are not required for
 this local demo. For a run without provider keys, see the
-[local fixture instructions](development.md#local-fixtures).
+[local fixture instructions](development/local-development.md#local-fixtures).
 
 ## Run the voice demo
 
@@ -71,11 +71,11 @@ Start with the component that matches your use case:
 | `vxpipe_call_engine` | Agent conversations, tools, and call lifecycles | [Call Engine](../apps/vxpipe_call_engine/README.md) |
 | `vxpipe_gateway` | HTTP and WebRTC connections, including mounting routes in your app | [Gateway](../apps/vxpipe_gateway/README.md) |
 | `vxpipe_agent_runtime` | Streamed model responses and tool execution | [Agent Runtime](reqllm-agent-runtime.md) |
-| `vxpipe_mcp` | Connecting to remote MCP tools | [MCP client](mcp-client-conformance.md) |
+| `vxpipe_mcp` | Connecting to remote MCP tools | [MCP client](development/mcp-client-conformance.md) |
 
 The current checkout is an umbrella project. Independent dependency installation
 and a complete consuming-host example are still part of the
-[delivery milestone](milestones/embedded-and-container-delivery.md). Until those
+[delivery milestone](../labnotes/milestones/embedded-and-container-delivery.md). Until those
 are verified, use the checkout for the runnable demo and the references above to
 explore the library APIs.
 
@@ -83,4 +83,4 @@ explore the library APIs.
 
 - [Sample walkthroughs](../apps/vxpipe_console/assets/README.md) cover tools, human transfers, and diagnostics.
 - [Tenants and call specs](tenant-control-plane.md) covers persistent storage and your own call specs.
-- [Development guide](development.md) covers reloading, HTTPS, fixtures, and working on Vxpipe itself.
+- [Development guide](development/local-development.md) covers reloading, HTTPS, fixtures, and working on Vxpipe itself.

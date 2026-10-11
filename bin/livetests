@@ -40,7 +40,7 @@ Commands:
 
 Credentials are read from ~/.config/vxpipe/live_providers.env (override with
 VXPIPE_LIVE_PROVIDERS_ENV_FILE) only inside the runner and its child processes.
-See config/live_providers.env.example and docs/live-telephony-harness.md.
+See config/live_providers.env.example and docs/development/live-telephony-harness.md.
 USAGE
 }
 

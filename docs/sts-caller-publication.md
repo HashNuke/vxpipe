@@ -2,7 +2,7 @@
 
 Status: focused implementation verified in embedded provider-controlled calls.
 This refines the existing caller publication
-tasks in [Agent speech-to-speech](milestones/agent-speech-to-speech.md), not the
+tasks in [Agent speech-to-speech](../labnotes/milestones/agent-speech-to-speech.md), not the
 response-triggering turn controller or the full hold/transfer contract.
 
 ## Decision and ownership

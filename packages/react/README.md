@@ -37,7 +37,7 @@ creation and disposal; components subscribe and unsubscribe without taking owner
 lifetime. All public source and declaration output is TypeScript.
 
 The current prefixed stylesheet is prototype debt. The approved
-[styling contract](../../docs/react-component-styling.md) migrates component rules to Tailwind v4
+[styling contract](../../docs/development/react-component-styling.md) migrates component rules to Tailwind v4
 utilities colocated with TSX, retaining a small semantic-token stylesheet and generated npm CSS.
 Complete that migration before publishing a shadcn registry.
 

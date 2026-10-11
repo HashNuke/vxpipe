@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.Telephony.SourceGate do
   # a source hold is in force, and `{:active, epoch}` after an arm. Admitted
   # media must carry the exact active epoch; stale or unqualified media is
   # acknowledged and dropped so the socket stays healthy. This gate is separate
-  # from the transfer `handoff_gate`. See `docs/sts-activity-provenance.md`.
+  # from the transfer `handoff_gate`. See `labnotes/20260923-0243-sts-activity-provenance.md`.
 
   @type t :: nil | {:held, reference() | nil} | {:active, reference()}
 

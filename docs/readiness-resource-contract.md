@@ -3,7 +3,7 @@
 Status: barrier, asynchronous collection, speech/model/tool, recording and core room-service adapters
 implemented; the complete prospective inventory and lifecycle integration remain in progress.
 This is a decision for
-[transfer readiness and wait sounds](milestones/transfer-readiness-and-wait-sounds.md), not a
+[transfer readiness and wait sounds](../labnotes/milestones/transfer-readiness-and-wait-sounds.md), not a
 claim that calls or transfers now wait for the full barrier.
 
 ## Identity and evidence

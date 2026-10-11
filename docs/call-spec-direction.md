@@ -62,7 +62,7 @@ The schema and plan/storage checkpoint is implemented. The
 [outgoing room runtime](outgoing-call-runtime.md) and HTTP submission endpoint pass focused
 local tests. Native STS generated opening and carrier audio
 acceptance remain open under the
-[milestone](milestones/outgoing-calls-and-live-telephony.md). Saving or publishing an
+[milestone](../labnotes/milestones/outgoing-calls-and-live-telephony.md). Saving or publishing an
 outgoing source does not dial, and its callee creates no inbound web or phone route.
 
 The complete [outgoing Morse example](../examples/call-specs/outgoing-morse.json) selects

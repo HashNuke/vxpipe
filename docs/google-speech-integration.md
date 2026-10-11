@@ -2,7 +2,7 @@
 
 Current configured slice, 2026-10-07: the Google manifest now advertises STS
 with `gemini-3.8-live`, the existing saved Google key, and public voice/turn
-control. See [Gemini provider acceptance](milestones/gemini-live-provider-acceptance.md)
+control. See [Gemini provider acceptance](../labnotes/milestones/gemini-live-provider-acceptance.md)
 for live evidence and outstanding checks. Gating statements in the historical
 checkpoints below describe their source revision, not current selection.
 
@@ -52,7 +52,7 @@ WebRTC's existing speech input path decodes Opus into the selected STT PCM forma
 path now converts Telnyx Opus 16 kHz and Twilio μ-law 8 kHz into mono PCM16 16 kHz for Google STT,
 while the room-audio path keeps its original frame. The telephony normalizer belongs to its media
 session and is replaced when the speech ingress changes. Stereo Opus input remains the separate
-[deferred issue](issues/webrtc-opus-stereo-input.md).
+[deferred issue](../labnotes/issues/webrtc-opus-stereo-input.md).
 
 ## Alternatives and implications
 

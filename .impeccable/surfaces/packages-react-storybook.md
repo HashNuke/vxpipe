@@ -107,4 +107,4 @@ captures are local inspection evidence, not shipping raster assets:
 - [Mobile setup](../review/storybook/setup-mobile.png)
 
 This brief documents the reviewed prototype. Live-call and durable-setup acceptance
-remain governed by [the milestone index](../../docs/milestones/index.md).
+remain governed by [the milestone index](../../labnotes/milestones/index.md).

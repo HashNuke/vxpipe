@@ -6,7 +6,7 @@ defmodule Vxpipe.Gateway.Telephony.SourceEpoch do
   # `SocketDispatch`. A hold rotates that epoch in mailbox order, so raw frames
   # already queued keep the old stamp, and an arm adopts the room-chosen active
   # epoch. The MediaSession compares the stamp with its expected epoch and drops
-  # stale media. See `docs/sts-activity-provenance.md`.
+  # stale media. See `labnotes/20260923-0243-sts-activity-provenance.md`.
 
   @type gate :: %{
           held?: boolean(),

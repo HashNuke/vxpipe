@@ -21,7 +21,7 @@ Then open the [voice console](http://localhost:4000/pipecat-console).
 
 ## Get started
 
-- **[Get started with Docker](docs/getting-started-docker.md)** — configuration, credentials, and running Vxpipe as a service.
+- **[Docker delivery plan](labnotes/milestones/container-quickstart-plan.md)** — planned packaging; a verified Docker installation is not available yet.
 - **[Get started with Elixir](docs/getting-started-elixir.md)** — run from source and explore components for your own Elixir applications.
 
 ## License

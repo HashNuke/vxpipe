@@ -45,7 +45,7 @@ Use sample values in that form. Reloading discards prototype setup state.
 
 The `packages/react/stories/` directory owns the fake controller and the application-specific Getting Started page;
 neither is exported by the React package. Real protocol/media adapters, platform bootstrap,
-durable setup and production route integration remain in the [milestones](../docs/milestones/index.md).
+durable setup and production route integration remain in the [milestones](../labnotes/milestones/index.md).
 
 ## Verification
 

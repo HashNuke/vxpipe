@@ -9,25 +9,25 @@ The [speech integration guide](../../docs/speech-integration-guide.md) defines t
 TTS behaviours, descriptor and event rules, private credential flow, bounded audio credit,
 cancellation lifecycle, closed production registration, and exact conformance commands. Its
 complete minimal TTS provider is compiled from test support and run by the shared contract suite.
-The [provider comparison](../../docs/speech-provider-comparison.md) explains which request,
+The [provider comparison](../../labnotes/20260919-0858-speech-provider-comparison.md) explains which request,
 streaming, batching, segment and turn-detection shapes fit the current contracts and which modes
 remain separate or deferred.
 
 ## Standalone semantic Morse recognition
 
-The experimental scoped implementation of [simpler speech integrations](../../docs/milestones/simpler-speech-integrations.md)
+The experimental scoped implementation of [simpler speech integrations](../../labnotes/milestones/simpler-speech-integrations.md)
 provides a native STT session without a socket or JSON. From this application's directory,
 start `MIX_ENV=test iex -S mix` and paste this example. It constructs an independent Morse
 dot plus an end gap; it does not use the Morse encoder to supply its expected result.
 
-The [original startup-isolation defect](../../docs/speech-startup-isolation.md) and latency
+The [original startup-isolation defect](../../labnotes/20260919-1124-speech-startup-isolation.md) and latency
 measurements remain recorded. The new API requires the explicit local scopes described in
 the [ownership plan](../../docs/speech-session-ownership.md); its isolated held-start and
 adoption tests pass. Checkpoints R and A are accepted; native TTS D has completed its standalone
 slices, and room STT integration is in progress. See the
-[native STT verification](../../docs/native-stt-contract.md) for contract, load and regression
+[native STT verification](../../labnotes/20260919-1348-native-stt-contract.md) for contract, load and regression
 evidence.
-The [scoped room experiment](../../docs/scoped-speech-experiment.md) supplies a separate test-only
+The [scoped room experiment](../../labnotes/20260919-1124-scoped-speech-experiment.md) supplies a separate test-only
 prototype and reproducible paired load checks for policy, turns, output and interruption.
 
 ```elixir
@@ -95,7 +95,7 @@ Standalone Session does not emit usage observations; room wiring belongs to chec
 Input age starts at API entry; captured-frame age remains the upstream ingress's responsibility.
 Descriptor metadata is validated before
 provider startup, and emitted readiness/endpointing must match its declared evidence.
-See [deadline and fault evidence](../../docs/speech-deadlines-and-failure-containment.md). Owner loss, failed commands and
+See [deadline and fault evidence](../../labnotes/20260919-1312-speech-deadline-evidence.md). Owner loss, failed commands and
 explicit close tear down owned work; close discards incomplete speech rather than inventing
 a final transcript. A local ready event means initialized, and turn end means the decoder
 observed its configured silence gap. The descriptor reports locally measured usage without
@@ -305,7 +305,7 @@ agent/runtime process or before the tool lifecycle can be archived.
 `CreateRoom` supports empty rooms and deterministic text. Model and speech calls use a compiled
 inline call spec and `start_call`; the legacy model preset and automatic global speech readers
 have been removed. Embedded fixture/Morse selections remain available without provider credentials.
-See [credential reader boundaries](../../docs/credential-reader-boundaries.md).
+See [credential reader boundaries](../../labnotes/20260915-1521-credential-reader-boundaries.md).
 
 Terminal tool results are now leased before caller work and submitted through the Session's private
 engine-origin continuation API. Successful committed continuation acknowledges and removes the

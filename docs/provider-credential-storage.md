@@ -1,7 +1,7 @@
 # Tenant provider credential storage
 
 Trusted operators can provision Google, Deepgram, Zenmux and Telnyx API keys, plus Twilio Account
-SID/Auth Token credentials, in PostgreSQL and list their metadata through the [tenant provider milestone](milestones/tenant-provider-credentials-and-platform-configuration.md).
+SID/Auth Token credentials, in PostgreSQL and list their metadata through the [tenant provider milestone](../labnotes/milestones/tenant-provider-credentials-and-platform-configuration.md).
 Inline Google/Deepgram/Zenmux call specs now resolve this store at save, publication, preparation
 and capability creation; see [inline selections](inline-provider-selections.md). Telnyx credential
 provisioning and trusted Telnyx/Twilio service registration are available; live carrier DB readers

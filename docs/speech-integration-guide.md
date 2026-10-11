@@ -541,7 +541,7 @@ history reconciliation remains declared false. The Google manifest now offers
 `:sts`, and configured agents select `provider: "google"`,
 `model: "gemini-3.8-live"` with public voice and turn-control options. Startup
 resolves the saved Google key privately and uses response-owned output.
-The [Gemini acceptance milestone](milestones/gemini-live-provider-acceptance.md)
+The [Gemini acceptance milestone](../labnotes/milestones/gemini-live-provider-acceptance.md)
 records the actual hosted and phone evidence and remaining acceptance checks;
 these checks do not establish interrupted-history reconciliation.
 
@@ -645,5 +645,5 @@ mix deps.unlock --check-unused
 The shared harness proves Vxpipe's public contract, local lifetime, bounds, and isolation. It does
 not prove a hosted service's current wire compatibility, quota, latency, voice quality, remote
 cancellation, or billing behavior. Record those separately for the exact provider endpoint and
-model. The [provider comparison](speech-provider-comparison.md) lists supported structural modes
+model. The [provider comparison](../labnotes/20260919-0858-speech-provider-comparison.md) lists supported structural modes
 and deferred contracts; it is not an integration claim.

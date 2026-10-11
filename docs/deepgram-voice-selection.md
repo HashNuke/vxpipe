@@ -39,5 +39,5 @@ after provider translation. It checks `flux` plus `haley` resolves to `flux-hale
 voice input fails, and the WebSocket URL uses the derived model. The inline activation test
 passes the voice selection through credential resolution and retains the same public descriptor.
 The demo sample test similarly went red, then green when its specs used the new selection. The
-existing explicit-model tests continue to pass. The [speech provider milestone](milestones/rime-and-google-speech-providers.md)
+existing explicit-model tests continue to pass. The [speech provider milestone](../labnotes/milestones/rime-and-google-speech-providers.md)
 tracks remaining umbrella and bounded-load acceptance.

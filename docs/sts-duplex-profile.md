@@ -2,7 +2,7 @@
 
 Status: checkpoint A profile, recorded 2026-09-25 against OpenAI's published
 GPT-Live guides. This document records the verified wire facts the
-[GPT-Live speech-to-speech milestone](milestones/gpt-live-speech-to-speech.md)
+[GPT-Live speech-to-speech milestone](../labnotes/milestones/gpt-live-speech-to-speech.md)
 depends on, plus the facts that remain unverified. An unverified item is a
 hosted-check task in checkpoint F, never an assumption in ordinary code.
 
@@ -162,7 +162,7 @@ There is no provider event that announces a yield, so the adapter infers the
 yield from output audio stopping. **Verified on a carrier leg (2026-10-07):** a
 caller speaking over a GPT-Live count on a Twilio -> Telnyx call made the model
 stop and answer, with the overlap recorded as an `:overlapped` agent turn; see the
-[GPT-Live milestone](milestones/gpt-live-speech-to-speech.md#phone-barge-in-2026-10-07).
+[GPT-Live milestone](../labnotes/milestones/gpt-live-speech-to-speech.md#phone-barge-in-2026-10-07).
 **Unverified:** whether an always-listening model reacts to its own returned
 speech (speakerphone echo). Hosted-check item.
 

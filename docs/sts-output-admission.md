@@ -2,7 +2,7 @@
 
 Decision: the speech consumer explicitly authorizes each STS output generation
 after its policy checks. This is the shared contract for checkpoint A of
-[Agent speech-to-speech](milestones/agent-speech-to-speech.md); room integration
+[Agent speech-to-speech](../labnotes/milestones/agent-speech-to-speech.md); room integration
 and actual Morse responses remain checkpoint B.
 
 ## Ownership and lifecycle

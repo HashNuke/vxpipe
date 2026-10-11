@@ -1,17 +1,17 @@
 # Semantic speech provider contract
 
 Status: normative provider contract, synchronized on 2026-09-22. The baseline
-[Simpler speech integrations](milestones/simpler-speech-integrations.md) migration
+[Simpler speech integrations](../labnotes/milestones/simpler-speech-integrations.md) migration
 has all nine checkpoints accepted. The separate
-[Agent speech-to-speech milestone](milestones/agent-speech-to-speech.md) remains
+[Agent speech-to-speech milestone](../labnotes/milestones/agent-speech-to-speech.md) remains
 incomplete. Local adapter and embedded-call evidence does not establish hosted
 Google interoperability or complete STS room lifecycle acceptance.
 
 The original research below dates to 2026-09-19 against `51a9a17`. The historical
-[startup-isolation defect](speech-startup-isolation.md),
-[adoption repair and load evidence](speech-adoption-fix.md),
-[deadline/fault evidence](speech-deadlines-and-failure-containment.md), and
-[native STT verification](native-stt-contract.md) record the migration's evolution.
+[startup-isolation defect](../labnotes/20260919-1124-speech-startup-isolation.md),
+[adoption repair and load evidence](../labnotes/20260919-1220-speech-adoption-fix.md),
+[deadline/fault evidence](../labnotes/20260919-1312-speech-deadline-evidence.md), and
+[native STT verification](../labnotes/20260919-1348-native-stt-contract.md) record the migration's evolution.
 The [scoped ownership contract](speech-session-ownership.md) supersedes the rejected
 global execution prototype and applies to all three speech capabilities.
 
@@ -59,7 +59,7 @@ the current implementation. Present-tense observations in this table refer to th
 | `readiness/provider.ex` declares an absent `readiness_mode/0` a failure although the old behaviours label the callback optional. | Replace this mismatch with one explicit ready event and documented evidence. |
 | `usage/text_to_speech_attempt.ex` and capability tests distinguish rejected Speak from accepted Speak followed by failed Flush. | Operation admission and actual provider submission must remain separate accounting facts. |
 | [Speech transport privacy](speech-transport-privacy.md) documents credential exposure from an earlier socket dependency and the current bounded Mint transport. | Reuse that transport where it fits. Preserve redaction, active-once reads, cancellation and deadlines. |
-| [TTS egress buffer](issues/tts-egress-buffer.md) records long-response truncation without backpressure. | A stream abstraction must preserve bounded delivery and responsive cancellation. |
+| [TTS egress buffer](../labnotes/issues/tts-egress-buffer.md) records long-response truncation without backpressure. | A stream abstraction must preserve bounded delivery and responsive cancellation. |
 
 These are source/test inspections, not fresh test results. Existing test names and target
 files are mapped in the milestone so implementation can reproduce the relevant evidence.
@@ -69,7 +69,7 @@ files are mapped in the milestone so implementation can reproduce the relevant e
 Reviewed 2026-09-19; these support the shape of the boundary, not claims of newly supported
 providers or working live credentials. The subsequent user-requested comparison of Cartesia,
 AssemblyAI, Rime, ElevenLabs and Gemini TTS/STT is recorded in
-[Speech provider API comparison](speech-provider-comparison.md), including exact source links,
+[Speech provider API comparison](../labnotes/20260919-0858-speech-provider-comparison.md), including exact source links,
 API/model differences and limits on what fits this milestone.
 
 | Source | Observed contract | Design implication |
@@ -228,7 +228,7 @@ at the room sink boundary while retaining original PCM for provider credit,
 recognition and usage; see [protected openings and phone PCM](protected-agent-openings.md).
 WebRTC classifies channel mode from each Opus packet rather than SDP FMTP. Its bounded
 per-connection decoder accepts mono/stereo packets and normalizes provider input to the
-selected strict mono format. The [stereo input issue](issues/webrtc-opus-stereo-input.md)
+selected strict mono format. The [stereo input issue](../labnotes/issues/webrtc-opus-stereo-input.md)
 records the accepted conversion and its verification; this does not make provider PCM stereo.
 
 `private_init` contains the validated descriptor, private resolved credentials, trusted host
@@ -451,8 +451,8 @@ relabeling queued native events under the new interval. Checked retirement,
 hold/reopen cutover and room acceptance remain open. This is a design candidate
 with open prerequisites, not room-level
 implementation; see the
-[external room-control decision](sts-external-room-control.md) and
-[activity-provenance design](sts-activity-provenance.md).
+[external room-control decision](../labnotes/20260923-0131-sts-external-room-control.md) and
+[activity-provenance design](../labnotes/20260923-0243-sts-activity-provenance.md).
 
 An active external/hybrid input must not survive a hold as an unfinished
 provider-side turn. Safe reuse requires acknowledged input discard and
@@ -653,7 +653,7 @@ continuation commit receipts, blocking/nonblocking model admission, full schema
 checks and supported tool-binding coverage are milestone tasks. Until commit
 receipts exist, retained completions occupy capacity for the allocation lifetime.
 The existing active-call final-result path is an incremental implementation, not
-acceptance of the final conversation protocol. See [STS tool lifecycle](sts-tool-lifecycle.md).
+acceptance of the final conversation protocol. See [STS tool lifecycle](../labnotes/milestones/sts-tool-lifecycle.md).
 
 Provider cancellation retires the provider call/speech association; ordinary
 speech interruption does not authorize cancellation of an already-submitted
@@ -799,7 +799,7 @@ already closed output. A continuous provider may omit alignment only when it
 can still satisfy the ordinary turn-level settlement contract without
 claiming unheard text.
 GPT-Live's aligned burst profile is specified in
-[the duplex milestone](milestones/gpt-live-speech-to-speech.md#adapter-design).
+[the duplex milestone](../labnotes/milestones/gpt-live-speech-to-speech.md#adapter-design).
 
 #### Bounded provider buffering and lossless PCM
 
@@ -914,10 +914,10 @@ provider turn as a public ID. See the
 deduplication and Google cross-origin proof remain separate.
 Complete turn-controller/lifecycle coverage, full
 native conversations, usage/load and final UI acceptance remain open
-in the [STS milestone](milestones/agent-speech-to-speech.md); normative requirements above
+in the [STS milestone](../labnotes/milestones/agent-speech-to-speech.md); normative requirements above
 do not check those tasks off. Google declares `history_reconciliation?: false`.
 Its manifest and service badge now advertise configured `gemini-3.8-live`.
-The separately authorized [Gemini acceptance slice](milestones/gemini-live-provider-acceptance.md)
+The separately authorized [Gemini acceptance slice](../labnotes/milestones/gemini-live-provider-acceptance.md)
 records real-provider evidence; local fake-socket tests do not establish hosted
 continuity or interrupted-history semantics.
 Independent review also identified directional output-revocation,
@@ -949,8 +949,8 @@ ingress must continue enforcing its existing frame-capture age limits. A busy pr
 rejects the current chunk without replacing accepted work or automatically replaying it.
 Startup deadlines must include queue wait, and one call's provider initialization must not
 block admission for unrelated calls. The earlier application-global prototype failed this
-requirement in an [isolated process-tree test](speech-startup-isolation.md). Checkpoint R's
-scoped ownership and [deadline/fault evidence](speech-deadlines-and-failure-containment.md)
+requirement in an [isolated process-tree test](../labnotes/20260919-1124-speech-startup-isolation.md). Checkpoint R's
+scoped ownership and [deadline/fault evidence](../labnotes/20260919-1312-speech-deadline-evidence.md)
 replace that rejected startup design. The completed baseline milestone records both native
 directions and their room migration; STS room acceptance remains a separate checklist.
 

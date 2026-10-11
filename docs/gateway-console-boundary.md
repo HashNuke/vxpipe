@@ -124,9 +124,9 @@ workflow adds no audio capture, playback, variable editing, tool execution, or c
 
 ## Delivery and verification evidence
 
-The [observable sample call](milestones/observable-sample-call.md) delivers the
-first console-backed vertical slice; [call inspection](milestones/call-inspection-and-debugging.md)
-adds authorized durable views. The [embedded/container slice](milestones/embedded-and-container-delivery.md)
+The [observable sample call](../labnotes/milestones/observable-sample-call.md) delivers the
+first console-backed vertical slice; [call inspection](../labnotes/milestones/call-inspection-and-debugging.md)
+adds authorized durable views. The [embedded/container slice](../labnotes/milestones/embedded-and-container-delivery.md)
 verifies the reusable and packaged compositions. This decision adds no milestone
 or implementation-completion claim.
 

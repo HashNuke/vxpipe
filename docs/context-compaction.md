@@ -89,14 +89,14 @@ settings with [inline selections](inline-provider-selections.md) and tenant DB
 credentials. The inline catalog supports Google and the existing Zenmux model integration.
 Zenmux's inline selection, named tenant credential and native routing now reach the internal
 ReqLLM adapter; focused verification is recorded in
-[checkpoint 5](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-5--preserve-existing-provider-credential-integrations).
+[checkpoint 5](../labnotes/milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-5--preserve-existing-provider-credential-integrations).
 
 The pre-cutover Engine activation test verified `zenmux:openai/gpt-5`, nested
 `provider_options.provider` routing data and ordinary generation options. The
 inline migration preserves that existing contract while rejecting executable
 hooks and protected transport/authentication fields. `openai` and `anthropic`
 inside that routing data are Zenmux destinations; they do not require separate
-Vxpipe credentials. The [provider inventory](existing-provider-credentials.md)
+Vxpipe credentials. The [provider inventory](../labnotes/20260915-1655-existing-provider-credentials.md)
 records the source evidence and current migration limits.
 
 Vxpipe does not define a fallback list, retry coordinator, alternate credential

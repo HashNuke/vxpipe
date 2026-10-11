@@ -1,7 +1,7 @@
 # Scoped Telnyx service bindings
 
 Decision: 2026-09-19. Design, implementation and final C/D acceptance complete under the
-[platform and tenant services plan](platform-and-tenant-services.md).
+[platform and tenant services plan](../labnotes/milestones/platform-and-tenant-services.md).
 
 ## Credential ownership and application identity
 

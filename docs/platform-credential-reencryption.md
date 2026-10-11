@@ -1,7 +1,7 @@
 # Platform credential re-encryption
 
 Status: the bounded storage operation, operator CLI and fresh-VM transition are implemented and verified in
-[checkpoint 6](milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-6--rotate-the-platform-owned-encryption-key).
+[checkpoint 6](../labnotes/milestones/tenant-provider-credentials-and-platform-configuration.md#checkpoint-6--rotate-the-platform-owned-encryption-key).
 
 ## Operation and ownership
 
