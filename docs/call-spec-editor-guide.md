@@ -26,6 +26,13 @@ Existing saved selections are preserved. A public
 speech model such as `flux` and its `options.voice` remain separate in the source;
 the provider adapter composes its concrete model ID.
 
+Participant **Description** is optional. When an AI or human participant is an
+allowed transfer destination, its description is included in the transfer tool
+shown to the AI. For example, `billing` with a description of “Handles invoices
+and refunds” tells the AI what that destination handles. Without a description,
+the tool lists only the participant key. This is separate from an AI participant's
+prompt and a human participant's transfer notice.
+
 An agent's **Models** tab offers two model types: **Speech-to-Speech** uses one
 speech model; **LLM + Text-to-Speech** shows a language model and a voice model.
 Changing type removes incompatible selections and supplies missing selections
