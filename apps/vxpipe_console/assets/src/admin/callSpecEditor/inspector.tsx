@@ -2,12 +2,11 @@ import type { ModelCatalog } from "../modelCatalog";
 import { AgentInspector, type AgentInspectorTab } from "./agent-inspector";
 import { FlowLevelInspector, type CallSettingsTab } from "./flow-level-inspector";
 import { GenericNodeInspector } from "./generic-node-inspector";
-import { projectGraph, type TransferEdge } from "./graph";
+import { projectGraph } from "./graph";
 import { HumanInspector } from "./human-inspector";
 import type { HumanInspectorTab } from "./human-inspector-tabs";
 import { InboundInspector } from "./inbound-inspector";
 import type { EditorLookups, InspectorProps } from "./inspectorTypes";
-import { SelectedEdgeInspector } from "./selected-edge-inspector";
 import { useJsonDrafts } from "./json-drafts";
 import { ParticipantSource } from "./participant-source";
 
@@ -15,20 +14,16 @@ type Props = InspectorProps & {
   catalog: ModelCatalog;
   lookups: EditorLookups;
   selectedNodeId?: string | null;
-  selectedEdgeId?: string | null;
   tab?: string;
   onTabChange: (tab: string) => void;
-  onDeleteEdge: (edge: TransferEdge) => void;
   onRenamed: (key: string) => void;
   onRemoved: () => void;
 };
 
 /** Callpipe's inspector dispatch, using a projection of the source document. */
-export function Inspector({ selectedNodeId, selectedEdgeId, tab, onDeleteEdge, onRenamed, onRemoved, ...props }: Props) {
+export function Inspector({ selectedNodeId, tab, onRenamed, onRemoved, ...props }: Props) {
   const { drafts } = useJsonDrafts();
   const graph = projectGraph(props.document);
-  const edge = graph.edges.find((candidate) => candidate.id === selectedEdgeId);
-  if (edge) return <SelectedEdgeInspector selectedEdge={edge} readOnly={props.document.readOnly} onDeleteEdge={onDeleteEdge} />;
   if (!selectedNodeId || selectedNodeId === "$settings") return <FlowLevelInspector {...props}
     tab={member<CallSettingsTab>(tab, ["defaults", "variables", "media", "wait", "advanced"], "defaults")} />;
   const node = graph.nodes.find((candidate) => candidate.id === selectedNodeId);

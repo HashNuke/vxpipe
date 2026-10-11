@@ -113,11 +113,45 @@ test("conflict reload asks before discarding changes and replaces them only afte
   expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent(snapshot.document.source.name!);
 });
 
-test("add, connect, rename and delete a transfer keep the portable source in sync", () => {
+test.each([{ width: 1440, readOnly: false }, { width: 390, readOnly: false }, { width: 1440, readOnly: true }])("a transfer edge opens its source's Transfers tab at $width px with readOnly=$readOnly", ({ width, readOnly }) => {
+  vi.stubGlobal("innerWidth", width);
+  const props = properties();
+  render(<CallSpecEditor {...props} snapshot={{ ...snapshot, document: { ...snapshot.document, readOnly } }} />);
+  if (width >= 1024) click("Select specialist");
+  click("Select transfer:intake:specialist");
+  const sidebar = within(screen.getByRole(width < 1024 ? "dialog" : "region", { name: "Participant intake" }));
+  expect(sidebar.getByRole("textbox", { name: "Participant key" })).toHaveValue("intake");
+  expect(sidebar.getByRole("tab", { name: "Transfers" })).toHaveAttribute("data-state", "active");
+  expect(sidebar.getByRole("button", { name: "Remove transfer to specialist" })).toHaveProperty("disabled", readOnly);
+  expect(sidebar.queryByText("Source", { exact: true })).not.toBeInTheDocument();
+  expect(sidebar.queryByText("Target", { exact: true })).not.toBeInTheDocument();
+  expect(sidebar.queryByRole("button", { name: "Delete transfer" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+  expect(props.execute).not.toHaveBeenCalled();
+});
+
+test("after following an edge, tabs stay navigable and clicking the edge returns to Transfers", () => {
+  render(<CallSpecEditor {...properties()} />);
+  click("Select transfer:intake:specialist");
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Prompt" }), { button: 0 });
+  expect(screen.getByRole("textbox", { name: "Prompt" })).toBeVisible();
+  click("Select transfer:intake:specialist");
+  expect(screen.getByRole("tab", { name: "Transfers" })).toHaveAttribute("data-state", "active");
+});
+
+test("the call entry edge opens Entry connection settings", () => {
+  render(<CallSpecEditor {...properties()} />);
+  click("Select $entry-edge");
+  expect(screen.getByRole("region", { name: "Entry settings" })).toBeVisible();
+  expect(screen.getByRole("tab", { name: "Connection" })).toHaveAttribute("data-state", "active");
+  expect(screen.queryByRole("button", { name: "Delete participant" })).not.toBeInTheDocument();
+});
+
+test("add, connect, rename and remove a transfer keep the portable source in sync", () => {
   render(<CallSpecEditor {...properties()} />); click("Add agent");
   expect(screen.getByRole("textbox", { name: "Participant key" })).toHaveValue("agent");
   click("Connect intake to agent"); click("Select agent"); fill("Participant key", "helper"); fireEvent.blur(screen.getByRole("textbox", { name: "Participant key" }));
-  click("Select transfer:intake:helper"); click("Delete transfer"); click("JSON");
+  click("Select transfer:intake:helper"); click("Remove transfer to helper"); click("JSON");
   const source = JSON.parse((screen.getByRole("textbox", { name: "Call spec JSON" }) as HTMLTextAreaElement).value);
   expect(source.participants.helper.type).toBe("agent");
   expect(source.participants.intake.transfers).toEqual(["specialist"]);

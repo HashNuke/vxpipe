@@ -20,12 +20,3 @@ export function InspectorShell({ title, subtitle, icon: Icon, children }: { titl
     </aside>
   )
 }
-
-export function InspectorRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <dt className="shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="text-right font-medium text-foreground">{value}</dd>
-    </div>
-  )
-}

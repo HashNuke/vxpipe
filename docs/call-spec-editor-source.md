@@ -199,9 +199,11 @@ save workflow allocates and appends immutable revisions.
 
 Incomplete success metadata produces retryable feedback without claiming a save.
 The transport adapter will still validate response shapes at the production API
-boundary. The copied inspector dispatcher selects the existing settings, Entry,
-Agent and Human panels; transfer edges expose their endpoints and deletion, while
-the Entry edge stays locked. Adding a participant opens its inspector on phones.
+boundary. The inspector dispatcher selects the settings, Entry, Agent and Human
+panels. Clicking a transfer edge opens the source participant's Transfers tab;
+destinations are managed there, with editing disabled for read-only revisions.
+The locked Entry edge opens Entry's Connection tab. Selecting an edge or adding
+a participant also opens the corresponding inspector sheet on phones.
 Rename and tool failures retain their local field drafts and replace the editor's
 notification. Failed reload keeps the current document; recovery actions are
 disabled during a write or reload so an old notification cannot start concurrent

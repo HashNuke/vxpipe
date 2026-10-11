@@ -7,6 +7,7 @@ import type { EditorSnapshot, SavedRevision } from "./editor-state";
 import { EditorToast } from "./editor-toast";
 import { locateIssue, type ActionFeedback } from "./errorPresentation";
 import { FlowEditorLayout } from "./flow-editor-layout";
+import { projectGraph } from "./graph";
 import { Inspector } from "./inspector";
 import type { EditorLookups } from "./inspectorTypes";
 import type { IssueRequest } from "./issue-context";
@@ -39,7 +40,6 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
   const editor = useEditor(snapshot, execute, onSessionExpired);
   const { state, reportFeedback } = editor;
   const [selectedNodeId, setSelectedNode] = useState<string | null>(null);
-  const [selectedEdgeId, setSelectedEdge] = useState<string | null>(null);
   const [tab, setTab] = useState<string>();
   const [focusRequest, setFocusRequest] = useState<IssueRequest>();
   const [inspectorRequest, setInspectorRequest] = useState<number>();
@@ -68,7 +68,13 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
     return () => window.removeEventListener("beforeunload", preventLeave);
   }, [guarded]);
   const reportFailure = useCallback((message: string) => reportFeedback({ tone: "error", persistent: true, message }), [reportFeedback]);
-  function selectNode(id: string | null) { setSelectedNode(id); setSelectedEdge(null); setTab(undefined); setFocusRequest(undefined); }
+  function selectNode(id: string | null) { setSelectedNode(id); setTab(undefined); setFocusRequest(undefined); }
+  function selectEdge(id: string) {
+    const edge = projectGraph(document).edges.find((edge) => edge.id === id);
+    if (!edge) return;
+    selectNode(edge.source);
+    setTab(edge.locked ? "connection" : "transfers");
+  }
   function change(operation: (document: SourceDocument) => SourceDocument, failure: string): boolean {
     try { editor.edit(operation(state.document)); return true; }
     catch { reportFailure(failure); return false; }
@@ -85,7 +91,7 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
     if (!location) { setIssuesOpen(true); return; }
     if (location.nodeId === "$header") { setIssuesOpen(false); setNameDraft(state.document.source.name ?? ""); return; }
     setSelectedNode(location.nodeId === "$settings" ? null : location.nodeId);
-    setSelectedEdge(null); setTab(location.tab); setIssuesOpen(false);
+    setTab(location.tab); setIssuesOpen(false);
     const id = ++requestId.current;
     setFocusRequest({ id, path: issue.path }); setInspectorRequest(id);
   }
@@ -128,15 +134,13 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
     }
   }
   const inspector = <Inspector key={inspectorRequest} document={document} onChange={editor.edit} catalog={catalog} lookups={lookups} issues={issues} focusRequest={focusRequest}
-    selectedNodeId={selectedNodeId} selectedEdgeId={selectedEdgeId} tab={tab} onTabChange={(tab) => { setTab(tab); setFocusRequest(undefined); }}
-    onRenamed={selectNode} onRemoved={() => selectNode(null)} onDeleteEdge={(edge) => {
-      if (!edge.locked && change((document) => setTransfer(document, edge.source, edge.target, false), "Couldn't delete this transfer. Try again.")) selectNode(null);
-    }} />;
+    selectedNodeId={selectedNodeId} tab={tab} onTabChange={(tab) => { setTab(tab); setFocusRequest(undefined); }}
+    onRenamed={selectNode} onRemoved={() => selectNode(null)} />;
   return <JsonDraftContext value={{ drafts: jsonDrafts, setDrafts: setJsonDrafts }}><ActionFailureContext value={reportFailure}>
     <FlowEditorLayout noticeAction={noticeAction} document={document} selectedNodeId={selectedNodeId} issues={counts.nodes} onSelectNode={selectNode}
-      onSelectEdge={(id) => { setSelectedEdge(id); setSelectedNode(null); setFocusRequest(undefined); }} onAddNode={add}
+      onSelectEdge={selectEdge} onAddNode={add}
       onConnect={(from, to) => { change((document) => setTransfer(document, from, to, true), "Couldn't connect these participants. Choose an agent and a transfer destination."); }}
-      inspector={inspector} inspectorTitle={selectedEdgeId ? "Selected edge" : selectedNodeId === "$entry" ? "Entry settings" : selectedNodeId ? `Participant ${selectedNodeId}` : "Call settings"} inspectorRequest={inspectorRequest}
+      inspector={inspector} inspectorTitle={selectedNodeId === "$entry" ? "Entry settings" : selectedNodeId ? `Participant ${selectedNodeId}` : "Call settings"} inspectorRequest={inspectorRequest}
       backHref={backHref} onBack={() => depart({ kind: "leave", href: backHref })} revision={state.saved?.revision} publishedRevision={state.saved?.publishedRevision ?? undefined}
       dirty={dirty} issueCount={state.clientIssues.length} saving={state.pending?.action === "save"} publishing={state.pending?.action === "publish"} loading={reloading}
       saveDisabled={state.feedback.saveDisabled || hasJsonDrafts} jsonDraftCount={Object.keys(jsonDrafts).length} onShowJsonDraft={reviewJsonDraft}
