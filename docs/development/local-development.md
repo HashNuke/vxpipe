@@ -89,6 +89,27 @@ See the [local Morse provider documentation](../../apps/vxpipe_call_engine/READM
 for the supported audio and fixture behavior. The browser sample uses its
 configured providers; it does not automatically select these fixtures.
 
+## Native VAD on macOS
+
+Silero VAD runs locally through Ortex on macOS. The shared build configuration
+disables Cargo release-profile stripping for Ortex on macOS, while retaining
+release optimization. This avoids a
+[Rust/LLVM Mach-O alignment bug](https://github.com/rust-lang/rust/issues/157750)
+that can make macOS 27 reject the native library with
+`mis-aligned LINKEDIT string pool`. Linux builds use the existing defaults.
+
+If a checkout has an older, broken Ortex artifact, rebuild it from the umbrella
+root, then run the native inference tests:
+
+```shell
+mix deps.compile ortex --force
+MIX_ENV=test mix deps.compile ortex --force
+mix test apps/vxpipe_call_engine/test/vxpipe/call_engine/speech/silero_test.exs
+```
+
+These tests execute real inference and remain enabled. A call spec's optional
+`vad` setting controls whether that call prepares a local detector.
+
 ## HTTPS development
 
 With Tailscale and `jq` installed and HTTPS enabled on your tailnet, run:

@@ -9,6 +9,14 @@
 # move said applications out of the umbrella.
 import Config
 
+# Rust/LLVM stripping can misalign Mach-O string tables rejected by macOS 27.
+# Rustler builds Ortex in Cargo's release profile in every Mix environment.
+# Keep release optimization and bypass only the affected stripping step.
+# https://github.com/rust-lang/rust/issues/157750
+if :os.type() == {:unix, :darwin} do
+  config :ortex, Ortex.Native, env: [{"CARGO_PROFILE_RELEASE_STRIP", "none"}]
+end
+
 config :phoenix, :filter_parameters, [
   "source",
   "password",
