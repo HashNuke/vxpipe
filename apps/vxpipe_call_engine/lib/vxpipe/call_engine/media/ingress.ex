@@ -360,6 +360,9 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
       not accepted_format?(frame, state.prepared_track) ->
         {:reply, {:error, :unsupported_audio}, state}
 
+      AudioFrame.bytes(frame) > 131_072 ->
+        {:reply, {:error, :unsupported_audio}, state}
+
       stale?(frame, state) ->
         {:reply, {:error, :stale_frame}, state}
 
@@ -373,7 +376,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
         state = %{
           state
           | queue: queue,
-            total_bytes: state.total_bytes + byte_size(frame.payload),
+            total_bytes: state.total_bytes + AudioFrame.bytes(frame),
             track_id: state.track_id || frame.track_id
         }
 
@@ -394,7 +397,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
            %{
              state
              | queue: queue,
-               total_bytes: state.total_bytes - byte_size(frame.payload)
+               total_bytes: state.total_bytes - AudioFrame.bytes(frame)
            }}
         else
           reference = make_ref()
@@ -411,7 +414,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
           forward_sts_audio(state, frame)
 
           in_flight = %{
-            bytes: byte_size(frame.payload),
+            bytes: AudioFrame.bytes(frame),
             reference: reference,
             sequence_number: frame.sequence_number
           }
@@ -501,7 +504,7 @@ defmodule Vxpipe.CallEngine.Media.Ingress do
     total_frames = :queue.len(state.queue) + if(state.in_flight == nil, do: 0, else: 1)
 
     total_frames >= state.maximum_frames or
-      state.total_bytes + byte_size(frame.payload) > state.maximum_bytes
+      state.total_bytes + AudioFrame.bytes(frame) > state.maximum_bytes
   end
 
   defp stale?(frame, state) do

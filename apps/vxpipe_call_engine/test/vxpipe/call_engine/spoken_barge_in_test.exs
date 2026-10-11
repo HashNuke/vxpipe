@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
     TextOutput
   }
 
-  alias Vxpipe.CallEngine.Media.AudioOutputFrame
+  alias Vxpipe.CallEngine.Media.{AudioFrame, AudioOutputFrame}
 
   alias Vxpipe.CallEngine.{
     TestCallStartup,
@@ -196,7 +196,7 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
     refute_receive {:vxpipe_event, %AgentTurnInterrupted{}}
   end
 
-  test "Google live activity interrupts playout and its final transcript completes the same turn" do
+  test "Google first partial interrupts playout and its final transcript completes the same turn" do
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     {room, participant, _attachment} = create_attached_room(sink, :google)
     assert_receive {:test_tts_transport_started, tts_transport, _connection}
@@ -219,6 +219,13 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
     assert_receive {:vxpipe_event, %AgentSpeechStarted{correlation_id: "google-barge"}}
 
     TestGoogleSTTTransport.deliver(stt_transport, ~s({"voiceActivity":{"type":"ACTIVITY_START"}}))
+    refute_receive {:test_audio_output_interrupt, ^sink, "google-barge", _played_ms}, 20
+
+    TestGoogleSTTTransport.deliver(
+      stt_transport,
+      ~s({"serverContent":{"interimInputTranscription":{"text":"hello"}}})
+    )
+
     assert_receive {:test_audio_output_interrupt, ^sink, "google-barge", _played_ms}
     assert_receive {:vxpipe_event, %AgentTurnInterrupted{correlation_id: "google-barge"}}
 
@@ -250,13 +257,93 @@ defmodule Vxpipe.CallEngine.SpokenBargeInTest do
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{correlation_id: ^turn}}
   end
 
-  defp create_attached_room(sink, stt_provider \\ :deepgram) do
+  test "optional VAD interrupts playout before Google words and retains one caller turn" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    {room, participant, attachment} = create_attached_room(sink, :google, true)
+    assert_receive {:test_tts_transport_started, tts_transport, _connection}
+    assert_receive {:test_google_stt_started, stt_transport, _connection}
+    first = text_command(room, participant, "acoustic-barge", "give me a long answer")
+    assert :ok = TestTransferConnection.send_text(first)
+    assert_receive {:vxpipe_event, %TextOutput{correlation_id: "acoustic-barge"}}
+    assert_receive {:test_tts_control, ^tts_transport, _speak}
+    assert_receive {:test_tts_control, ^tts_transport, _flush}
+
+    TestTextToSpeechTransport.deliver_control(
+      tts_transport,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"dg_sp_acoustic_barge"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(tts_transport, <<1, 0, 2, 0>>)
+    assert_receive {:test_audio_output, ^sink, _frame}
+    assert :ok = TestAudioOutputSink.playback_started(sink)
+    assert_receive {:vxpipe_event, %AgentSpeechStarted{correlation_id: "acoustic-barge"}}
+
+    <<pcm::binary-size(32_000), _rest::binary>> =
+      File.read!(Vxpipe.Providers.Deepgram.LiveFixture.pcm_path())
+
+    assert :ok =
+             Vxpipe.CallEngine.push_audio(attachment, %AudioFrame{
+               tenant_id: "tenant-demo",
+               room_id: room.room_id,
+               incarnation_id: room.incarnation_id,
+               participant_id: participant.participant_id,
+               connection_id: "conn-audio",
+               track_id: "embedded",
+               codec: :linear16,
+               sample_rate: 16_000,
+               channels: 1,
+               sequence_number: 0,
+               timestamp: 0,
+               payload: pcm,
+               received_at: System.monotonic_time(:millisecond)
+             })
+
+    assert_receive {:test_audio_output_interrupt, ^sink, "acoustic-barge", _played_ms}, 2_000
+    assert_receive {:vxpipe_event, %AgentTurnInterrupted{correlation_id: "acoustic-barge"}}
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTurnStarted{modality: :audio, correlation_id: turn}}
+
+    refute_received {:vxpipe_event, %ParticipantTranscription{}}
+    refute_received {:vxpipe_event, %TextOutput{correlation_id: ^turn}}
+
+    TestGoogleSTTTransport.deliver(stt_transport, ~s({"voiceActivity":{"type":"ACTIVITY_START"}}))
+
+    TestGoogleSTTTransport.deliver(
+      stt_transport,
+      ~s({"serverContent":{"interimInputTranscription":{"text":"hello"}}})
+    )
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTranscription{correlation_id: ^turn, final: false, text: "hello"}}
+
+    TestGoogleSTTTransport.deliver(stt_transport, ~s({"voiceActivity":{"type":"ACTIVITY_END"}}))
+
+    TestGoogleSTTTransport.deliver(
+      stt_transport,
+      ~s({"serverContent":{"inputTranscription":{"text":"hello there"}}})
+    )
+
+    assert_receive {:vxpipe_event,
+                    %ParticipantTranscription{
+                      correlation_id: ^turn,
+                      final: true,
+                      text: "hello there"
+                    }}
+
+    assert_receive {:vxpipe_event, %ParticipantTurnCompleted{correlation_id: ^turn}}
+    assert_receive {:vxpipe_event, %TextOutput{correlation_id: ^turn}}
+    refute_received {:vxpipe_event, %AgentTurnInterrupted{}}
+    refute_received {:vxpipe_event, %ParticipantTurnStarted{modality: :audio}}
+  end
+
+  defp create_attached_room(sink, stt_provider \\ :deepgram, vad \\ false) do
     room_id = unique_id("room")
 
     stt =
       case stt_provider do
         :deepgram -> true
-        :google -> %{provider: "google", model: "gemini-3.5-transcribe-live"}
+        :google -> %{provider: "google", model: "gemini-3.5-transcribe-live", vad: vad}
       end
 
     {_plan, room, participant} =

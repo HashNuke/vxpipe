@@ -30,7 +30,11 @@ export function CapabilityFields({ kind, path, value, onChange, catalog, disable
     <div className="grid grid-cols-2 items-start gap-3">
       <ChoiceField label="Provider" path={[...path, "provider"]} issues={issues} disabled={disabled}
         value={value?.provider ?? ""} choices={[{ value: "", label: defaultLabel, disabled: defaultDisabled }, ...Object.keys(providers).sort().map((provider) => ({ value: provider, label: provider }))]}
-        onChange={(provider) => onChange(provider ? recommendedSelection(catalog, kind, provider) : undefined)} />
+        onChange={(provider) => {
+          const selected = provider ? recommendedSelection(catalog, kind, provider) : undefined;
+          onChange(selected && kind === "speech_to_text" && typeof value?.vad === "boolean"
+            ? { ...selected, vad: value.vad } : selected);
+        }} />
       <ChoiceField label="Model" path={[...path, "model"]} issues={issues} disabled={disabled || !value} value={value?.model ?? ""}
         choices={value ? models.map((model) => ({ value: model.id, label: model.name })) : [{ value: "", label: "Choose provider first", disabled: true }]}
         onChange={(id) => {

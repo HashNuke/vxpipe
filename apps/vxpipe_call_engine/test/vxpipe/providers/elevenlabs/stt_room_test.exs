@@ -39,8 +39,12 @@ defmodule Vxpipe.Providers.ElevenLabs.STTRoomTest do
     end)
   end
 
-  test "compiled room keeps manual segments within one caller turn and admits the next turn" do
+  test "historical pinned room keeps manual segments within one caller turn and admits the next turn" do
     plan = plan()
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    legacy = Map.delete(caller.capabilities.speech_to_text, :vad)
+    caller = %{caller | capabilities: %{caller.capabilities | speech_to_text: legacy}}
+    plan = %{plan | participants: Map.put(plan.participants, plan.entry_caller, caller)}
     bindings = %{{plan.tenant_id, "elevenlabs", "default"} => %{"api_key" => "synthetic-key"}}
 
     assert {:ok, room} =

@@ -57,6 +57,9 @@ defmodule Vxpipe.CallEngine.Speech.STSInput do
   def supported?(%{kind: :sts} = descriptor, %{operation: {:input_activity, _}}),
     do: descriptor.turn_control != "provider"
 
+  def supported?(%{kind: :stt, settings: %{vad: vad}}, %{operation: {:stt_frame, _frame}}),
+    do: is_boolean(vad)
+
   def supported?(%{kind: kind}, command),
     do: kind in [:stt, :sts] and not Map.has_key?(command, :operation)
 

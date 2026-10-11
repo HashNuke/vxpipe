@@ -21,11 +21,18 @@ must declare a real turn-boundary authority:
   silence endpoints independently of recognition. This STT-only mode does not
   admit eager-end evidence or relax STS controller rules.
 
-`:none` describes recognition without a conversational end signal and is rejected by the current
-room STT admission. The conversational path also requires genuine acoustic speech-start
-evidence for barge-in. External endpointing, transcript-only recognition, and manual finalization
-alone are not admitted. The reviewed [local STT composition](elevenlabs-stt-session.md)
-owns the detector and recognition lifetime within the allocation. A stable or committed
+- `:inferred_gap` for an explicitly documented transcript-inactivity inference;
+  STT admission requires a declared `speech_start_evidence` of `:transcript` or
+  `:local_acoustic` for this mode. Label the heuristic honestly and document its
+  failure bounds; a committed segment alone is insufficient.
+
+`:none` describes recognition without a conversational end signal and is rejected by
+room STT admission. Human input uses the shared allocation-owned coordinator:
+first nonempty text starts the turn by default; `speech_to_text.vad: true` adds
+local onset with transcript fallback. Native start hints are correlation evidence
+and cannot bypass that choice. External endpointing and manual finalization
+alone are not admitted. The [STT composition](stt-speech-start-detection.md)
+owns optional detection and recognition within the allocation. A stable or committed
 segment is not automatically a speaker turn. Keep segment assembly inside the provider and publish
 `:turn_ended` only when the declared authority has ended the turn.
 

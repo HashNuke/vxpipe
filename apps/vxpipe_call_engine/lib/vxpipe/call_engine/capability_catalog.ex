@@ -322,7 +322,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     do: {:error, :provider_not_configured}
 
   def speech_options(%CapabilitySelection{kind: :output_speech_to_text} = selection),
-    do: speech_options(%{selection | kind: :speech_to_text})
+    do: speech_options(selection |> Map.delete(:vad) |> Map.put(:kind, :speech_to_text))
 
   def speech_options(%CapabilitySelection{
         provider: "deepgram",
@@ -370,14 +370,19 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     end
   end
 
-  def speech_options(%CapabilitySelection{
-        provider: "elevenlabs",
-        kind: :speech_to_text,
-        model: model,
-        options: input
-      }) do
+  def speech_options(
+        %CapabilitySelection{
+          provider: "elevenlabs",
+          kind: :speech_to_text,
+          model: model,
+          options: input
+        } = selection
+      ) do
+    strategy = if Map.has_key?(selection, :vad), do: :vad, else: :manual
+
     with {:ok, options} <- normalize(input, [:language_code]),
-         {:ok, public} <- Scribe.public_options(Keyword.put(options, :model, model)) do
+         {:ok, public} <-
+           Scribe.public_options(Keyword.merge(options, model: model, commit_strategy: strategy)) do
       {:ok,
        [
          model: public.model,

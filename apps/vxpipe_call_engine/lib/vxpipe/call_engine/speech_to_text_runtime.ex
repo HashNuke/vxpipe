@@ -32,6 +32,30 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
           activity_agent_id: String.t() | nil
         }
 
+  @doc false
+  def conversation(
+        %Vxpipe.CallEngine.CallSpec.CapabilitySelection{kind: :speech_to_text, vad: vad},
+        {provider, options},
+        private
+      )
+      when is_boolean(vad) do
+    public = [provider: provider, options: options, vad: vad]
+
+    with {:ok, _descriptor} <- Vxpipe.CallEngine.Speech.ConversationalSTT.configure(public) do
+      {:ok, {Vxpipe.CallEngine.Speech.ConversationalSTT, public},
+       [
+         recognizer: provider,
+         recognizer_options: options,
+         recognizer_private: private,
+         activity_options: Keyword.get(private, :activity_options, [])
+       ]}
+    end
+  end
+
+  # Persisted pre-change plans do not contain the common field. Preserve their
+  # existing native onset/manual Scribe behavior instead of rewriting a pin.
+  def conversation(_historical_selection, provider, private), do: {:ok, provider, private}
+
   def provider({FluxSession, %Flux{} = config}, settings) do
     with nil <- Keyword.get(settings, :transport),
          nil <- Keyword.get(settings, :transport_options),

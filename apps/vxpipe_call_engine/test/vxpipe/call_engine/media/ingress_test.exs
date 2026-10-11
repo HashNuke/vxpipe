@@ -422,6 +422,27 @@ defmodule Vxpipe.CallEngine.Media.IngressTest do
     assert generation == origin.allocation_generation
   end
 
+  test "decoded activity PCM shares the existing ingress byte credit" do
+    {capability, transport} = start_capability()
+    ingress = start_ingress(capability, maximum_bytes: 6)
+    connect_transport(capability, transport)
+    assert :ok = Ingress.prepare_track(ingress, @track)
+    decoded = %{payload: :binary.copy(<<0>>, 8), sample_rate: 48_000, channels: 1, timestamp: 960}
+
+    assert {:error, :queue_full} =
+             Ingress.push(
+               ingress,
+               audio_frame(1, <<1, 2>>, activity_pcm: decoded)
+             )
+
+    valid = %{decoded | payload: <<0, 0>>}
+    assert :ok = Ingress.push(ingress, audio_frame(2, <<1, 2>>, activity_pcm: valid))
+    assert_receive {:test_stt_audio, ^transport, <<1, 2>>}
+    assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 2}}
+    assert :ok = Ingress.push(ingress, audio_frame(3, <<3, 4>>, activity_pcm: valid))
+    assert_receive {:vxpipe_media_ingress, ^ingress, {:delivered, 3}}
+  end
+
   test "bounds queued audio while preserving accepted frame order" do
     {capability, transport} = start_capability(send_mode: :manual)
 

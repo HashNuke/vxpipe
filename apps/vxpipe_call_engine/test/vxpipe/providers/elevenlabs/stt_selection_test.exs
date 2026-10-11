@@ -6,7 +6,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSelectionTest do
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
   alias Vxpipe.Providers.Registry
 
-  test "inline Scribe selection resolves a private manual recognizer with local gap authority" do
+  test "inline Scribe selection resolves a private continuous recognizer with inferred gap authority" do
     assert {:ok, STTSession} = Registry.fetch_capability("elevenlabs", :stt)
 
     assert {:ok, selection} =
@@ -25,7 +25,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSelectionTest do
     assert {:ok, public} = CapabilityCatalog.speech_options(selection)
     assert {:ok, config} = Scribe.new(Keyword.put(public, :api_key, "synthetic-private-key"))
     assert config.language_code == "en"
-    assert config.commit_strategy == :manual
+    assert config.commit_strategy == :vad
 
     assert {:ok, {STTSession, ^public}, private} =
              SpeechToTextRuntime.provider({STTSession, config}, enabled: true, media_ingress: [])
@@ -33,7 +33,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSelectionTest do
     assert Keyword.fetch!(private, :config) == config
     refute inspect(private) =~ "synthetic-private-key"
     assert {:ok, descriptor} = STTSession.configure(public)
-    assert descriptor.endpointing == :local_gap
+    assert descriptor.endpointing == :inferred_gap
     refute descriptor.finite_input?
 
     assert {:ok, [name: "elevenlabs", model: "scribe_v2_realtime"]} =

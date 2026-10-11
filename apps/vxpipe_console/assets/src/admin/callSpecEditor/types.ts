@@ -9,6 +9,7 @@ export type CapabilitySelection = {
   credential_name?: string;
   options?: JsonObject;
   provider_options?: JsonObject;
+  vad?: boolean;
 };
 export type Capabilities = Partial<Record<CatalogCapability, CapabilitySelection>>;
 export type Connection = {

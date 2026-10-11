@@ -31,6 +31,9 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   def address(allocation), do: CapabilityTree.address({allocation.generation, :channel})
   def bind(channel), do: GenServer.call(channel, :bind, 5_000)
 
+  @doc false
+  def input_active?(channel), do: GenServer.call(channel, :provider_input_active?, 5_000)
+
   def configure(allocation, module, descriptor, usage?, timeout),
     do:
       GenServer.call(
@@ -121,6 +124,14 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
     do: {:reply, :ok, activate(%{state | started?: true})}
 
   def handle_call({:started, _producer}, _from, state), do: {:reply, {:error, :closed}, state}
+
+  def handle_call(:provider_input_active?, {producer, _tag}, state) do
+    active? =
+      producer == state.producer and state.active? and state.ready_acked? and
+        Allocation.valid?(state.allocation)
+
+    {:reply, active?, state}
+  end
 
   def handle_call(:metadata, {caller, _tag}, state) do
     cond do
@@ -738,30 +749,7 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
 
   defp accept_event(event, state), do: EventDelivery.accept_event(event, state)
 
-  defp dispatch_audio(
-         %{
-           active?: true,
-           ready_acked?: true,
-           output: %OutputState{
-             request: %{
-               ref: reference,
-               terminal?: false,
-               fenced?: false
-             },
-             pending_audio: %{request_ref: reference} = audio
-           }
-         } = state
-       ) do
-    if Allocation.valid?(state.allocation) do
-      send(state.consumer, {:vxpipe_speech_audio, audio})
-      {_audio, output} = OutputState.take_pending(state.output)
-      %{state | output: output}
-    else
-      state
-    end
-  end
-
-  defp dispatch_audio(state), do: state
+  defp dispatch_audio(state), do: EventDelivery.dispatch_audio(state)
 
   defp finished_input(%{operation: {:cancel, _reference}}, :ok, state) do
     TTSFlow.finish_cancel(state)

@@ -124,6 +124,41 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodecTest do
     end
   end
 
+  test "stored onset choice and historical absence survive decoding without rewriting pinned identities" do
+    alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
+    alias Vxpipe.CallEngine.SpeechToTextRuntime
+    alias Vxpipe.CallEngine.Provider.MorseCodeSTT.Session, as: MorseSession
+
+    assert {:ok, selection} =
+             CapabilitySelection.new(%{provider: "morse", model: "morse"}, :speech_to_text, [
+               "speech_to_text"
+             ])
+
+    for pinned <- [Map.delete(selection, :vad), selection, %{selection | vad: true}] do
+      capabilities = %{
+        __struct__: Vxpipe.CallEngine.ResolvedCallPlan.Capabilities,
+        speech_to_text: pinned,
+        model_inference: nil,
+        text_to_speech: nil
+      }
+
+      encoded = :erlang.term_to_binary(legacy_plan(capabilities), [:deterministic])
+      assert {:ok, plan} = Vxpipe.Persistence.ResolvedPlanCodec.decode(encoded)
+      decoded = Map.fetch!(plan.participants, "caller").capabilities.speech_to_text
+      assert decoded == pinned
+
+      assert CapabilitySelection.identity(decoded, "tenant") ==
+               CapabilitySelection.identity(pinned, "tenant")
+
+      assert :ok = CapabilitySelection.validate(decoded, [])
+
+      if not Map.has_key?(pinned, :vad) do
+        assert {:ok, {MorseSession, []}, []} =
+                 SpeechToTextRuntime.conversation(decoded, {MorseSession, []}, [])
+      end
+    end
+  end
+
   test "preserves explicit outgoing direction and deadline across stored-plan decoding" do
     encoded =
       legacy_plan(%{})

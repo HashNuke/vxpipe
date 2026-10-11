@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.WebRTC.Connection.SourceCutover do
   @moduledoc false
 
   alias Vxpipe.CallEngine.ConnectionAttachment
-  alias Vxpipe.Gateway.WebRTC.SourceReceiver
+  alias Vxpipe.Gateway.WebRTC.{SourceReceiver, SpeechInput}
 
   # ExWebRTC's controlling_process call can occupy five seconds. Leave a
   # bounded margin for the receiver marker and Connection reply.
@@ -24,7 +24,9 @@ defmodule Vxpipe.Gateway.WebRTC.Connection.SourceCutover do
              remaining
            ) do
         :ok ->
-          if before_deadline?(scope.deadline_ms) do
+          with true <- before_deadline?(scope.deadline_ms),
+               {:ok, input} <- SpeechInput.reset(Map.get(held, :speech_input)),
+               true <- before_deadline?(scope.deadline_ms) do
             receipt = %{
               attachment: scope.attachment,
               token: scope.token,
@@ -35,12 +37,12 @@ defmodule Vxpipe.Gateway.WebRTC.Connection.SourceCutover do
 
             {:ok, receipt,
              %{
-               held
+               Map.put(held, :speech_input, input)
                | source_epoch: held_epoch,
                  source_gate: %{gate | receipt: receipt, status: :held}
              }}
           else
-            uncertain(held)
+            _failure -> uncertain(held)
           end
 
         {:error, _reason} ->

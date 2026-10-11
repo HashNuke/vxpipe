@@ -8,6 +8,10 @@ legacy concrete model IDs. Serialization sends only this source; the graph and
 inspector state are separate projections. Historical schema `20260915.01` opens
 read-only and cannot be edited by changing the document's read-only flag.
 
+API-authored `speech_to_text.vad` is preserved through source round-trips and
+provider/model changes. It accepts only a boolean on human input STT. Omission
+means false; the editor adds no VAD control or implicit source field.
+
 Participant edits clone the source and update structural references together:
 direction, transfers, audio/transcript route keys and recipients, and visibility
 overrides. Variable section and field renames update grants, required fields and

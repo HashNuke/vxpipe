@@ -55,6 +55,8 @@ defmodule Vxpipe.Console.Integration.ElevenLabsConfiguredRoomTest do
     await_ready(caller, receiver)
 
     events = stream(caller, File.read!(LiveFixture.pcm_path()), [], 0)
+    :ok = ScribeTransport.deliver(wire, {:partial, "Public telescope."})
+    :ok = ScribeTransport.deliver(wire, {:segment, "Public telescope."})
     events = await_final(events, System.monotonic_time(:millisecond) + 5_000)
 
     assert [
@@ -65,15 +67,40 @@ defmodule Vxpipe.Console.Integration.ElevenLabsConfiguredRoomTest do
              }
            ] = finals(events)
 
-    assert_receive {:DOWN, ^monitor, :process, ^wire, _reason}, 5_000
     retire_room(caller, receiver)
+    assert_receive {:DOWN, ^monitor, :process, ^wire, _reason}, 5_000
   end
 
   @tag :live_providers
   @tag :live_elevenlabs
-  test "configured Scribe room preserves one long acoustic turn across manual segments",
+  test "configured Scribe room preserves one long caller turn across automatic segments",
        context do
-    configure(context.original, [])
+    if System.get_env("VXPIPE_TRACE_SCRIBE") == "1" do
+      handler = {__MODULE__, self(), make_ref()}
+
+      :ok =
+        :telemetry.attach(
+          handler,
+          [:vxpipe, :test, :scribe_outbound_audio],
+          &__MODULE__.capture_outbound_audio/4,
+          self()
+        )
+
+      on_exit(fn -> :telemetry.detach(handler) end)
+      Process.put({__MODULE__, :outbound_audio}, [])
+    end
+
+    configure(
+      context.original,
+      if(System.get_env("VXPIPE_TRACE_SCRIBE") == "1",
+        do: [
+          wire_module: Vxpipe.CallEngine.ScribeEvidenceSocket,
+          wire_options: [observer: self()]
+        ],
+        else: []
+      )
+    )
+
     # The key is only input to encrypted provisioning. Room startup resolves it
     # through the normal production credential source; no adapter is called here.
     {plan, room} = published_room(context.options, System.fetch_env!("ELEVENLABS_API_KEY"))
@@ -87,7 +114,8 @@ defmodule Vxpipe.Console.Integration.ElevenLabsConfiguredRoomTest do
     events = stream(caller, prefix, [], 0)
     assert finals(events) == [], "recognizer segmentation ended the caller turn early"
     events = stream(caller, tail, events, prefix_size)
-    events = await_final(events, System.monotonic_time(:millisecond) + 15_000)
+    events = drain(caller, events, byte_size(audio), System.monotonic_time(:millisecond) + 15_000)
+    verify_outbound_audio(audio)
     assert [ended] = finals(events)
     assert ended.provider_turn_index == 0
     assert ended.participant_id == Map.fetch!(plan.participants, plan.entry_caller).participant_id
@@ -272,7 +300,7 @@ defmodule Vxpipe.Console.Integration.ElevenLabsConfiguredRoomTest do
   defp stream(_caller, "", events, _position), do: events
 
   defp stream(caller, audio, events, position) do
-    size = min(byte_size(audio), 3_200)
+    size = min(byte_size(audio), 640)
     <<chunk::binary-size(size), rest::binary>> = audio
     attachment = SpeechConnection.attachment(caller.connection)
     identity = caller.command
@@ -288,7 +316,7 @@ defmodule Vxpipe.Console.Integration.ElevenLabsConfiguredRoomTest do
                codec: :linear16,
                sample_rate: 16_000,
                channels: 1,
-               sequence_number: div(position, 3_200),
+               sequence_number: div(position, 640),
                timestamp: div(position, 2),
                payload: chunk,
                received_at: System.monotonic_time(:millisecond)
@@ -300,6 +328,18 @@ defmodule Vxpipe.Console.Integration.ElevenLabsConfiguredRoomTest do
     stream(caller, rest, events, position + size)
   end
 
+  defp drain(caller, events, position, deadline) do
+    if finals(events) == [] do
+      assert System.monotonic_time(:millisecond) < deadline,
+             "continuous recognition did not settle"
+
+      events = stream(caller, :binary.copy(<<0>>, 640), events, position)
+      drain(caller, events, position + 640, deadline)
+    else
+      events
+    end
+  end
+
   defp await_final(events, deadline) do
     if finals(events) == [], do: collect(events, :final, deadline), else: events
   end
@@ -309,6 +349,14 @@ defmodule Vxpipe.Console.Integration.ElevenLabsConfiguredRoomTest do
     assert remaining > 0, "configured room observation exceeded its deadline"
 
     receive do
+      {:scribe_outbound_audio, observation} ->
+        retain_outbound_audio(observation)
+        collect(events, target, deadline)
+
+      {:scribe_wire_evidence, summary} ->
+        IO.puts("Configured Scribe wire evidence: " <> inspect(summary))
+        collect(events, target, deadline)
+
       {:configured_pcm_pace, ref} when target == {:pace, ref} ->
         events
 
@@ -321,6 +369,65 @@ defmodule Vxpipe.Console.Integration.ElevenLabsConfiguredRoomTest do
     after
       remaining -> flunk("configured room acknowledgement missing")
     end
+  end
+
+  def capture_outbound_audio(_event, measurements, metadata, observer) do
+    send(
+      observer,
+      {:scribe_outbound_audio, {metadata.socket, measurements.bytes, metadata.digest}}
+    )
+  end
+
+  defp retain_outbound_audio(observation) do
+    key = {__MODULE__, :outbound_audio}
+    Process.put(key, [observation | Process.get(key, [])])
+  end
+
+  defp verify_outbound_audio(audio) do
+    if System.get_env("VXPIPE_TRACE_SCRIBE") == "1" do
+      expected = pcm_digests(audio)
+      await_outbound_audio(length(expected), System.monotonic_time(:millisecond) + 2_000)
+      observed = Process.get({__MODULE__, :outbound_audio}, []) |> Enum.reverse()
+      fixture = Enum.take(observed, length(expected))
+
+      assert Enum.map(fixture, fn {_socket, _bytes, digest} -> digest end) == expected,
+             "configured room changed, omitted or reordered fixture PCM before the socket"
+
+      assert fixture
+             |> Enum.map(fn {socket, _bytes, _digest} -> socket end)
+             |> Enum.uniq()
+             |> length() == 1
+
+      assert Enum.sum(Enum.map(fixture, fn {_socket, bytes, _digest} -> bytes end)) ==
+               byte_size(audio)
+
+      IO.puts(
+        "Configured Scribe outbound PCM: exact fixture verified; bytes=#{byte_size(audio)}; one socket"
+      )
+    end
+  end
+
+  defp await_outbound_audio(count, deadline) do
+    if length(Process.get({__MODULE__, :outbound_audio}, [])) < count do
+      remaining = deadline - System.monotonic_time(:millisecond)
+      assert remaining > 0, "configured fixture audio did not reach the socket"
+
+      receive do
+        {:scribe_outbound_audio, observation} ->
+          retain_outbound_audio(observation)
+          await_outbound_audio(count, deadline)
+      after
+        remaining -> flunk("configured fixture audio did not reach the socket")
+      end
+    end
+  end
+
+  defp pcm_digests(""), do: []
+
+  defp pcm_digests(pcm) do
+    size = min(byte_size(pcm), 640)
+    <<chunk::binary-size(size), rest::binary>> = pcm
+    [:crypto.hash(:sha256, chunk) | pcm_digests(rest)]
   end
 
   defp finals(events), do: Enum.filter(events, & &1.final)

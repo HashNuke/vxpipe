@@ -278,6 +278,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.DestinationCredentialsTest do
   end
 
   defp session_configuration(runtime) do
+    runtime = Vxpipe.CallEngine.SpeechRecognizerTestConfig.native(runtime)
     assert {FluxSession, public_config} = runtime.provider
     assert is_binary(public_config[:model])
 

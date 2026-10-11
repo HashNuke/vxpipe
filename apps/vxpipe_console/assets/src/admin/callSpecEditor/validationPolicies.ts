@@ -26,7 +26,9 @@ function capabilities(fields: Fields, value: unknown, path: string[]): void {
 }
 
 function capability(fields: Fields, value: unknown, path: string[]): void {
-  const selection = fields.object(value, path, ["provider", "model", "credential_name", "options", "provider_options"]);
+  const isHumanSTT = path.at(-1) === "speech_to_text";
+  const selection = fields.object(value, path, ["provider", "model", "credential_name", "options", "provider_options", ...(isHumanSTT ? ["vad"] : [])]);
+  if (isHumanSTT && Object.hasOwn(selection, "vad") && typeof selection.vad !== "boolean") fields.issue([...path, "vad"], "must be a boolean");
   fields.text(selection.provider, [...path, "provider"], 256);
   fields.text(selection.model, [...path, "model"], 256);
   if (selection.credential_name !== undefined) {

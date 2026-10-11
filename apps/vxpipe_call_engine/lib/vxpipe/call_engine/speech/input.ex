@@ -53,6 +53,9 @@ defmodule Vxpipe.CallEngine.Speech.Input do
   defp accepted({:error, :busy}), do: {:error, :busy}
   defp accepted(_failure), do: {:error, :session_failed}
 
+  defp execute_provider(module, provider, %{operation: {:stt_frame, frame}}, _audio),
+    do: accepted(module.push_frame(provider, frame))
+
   defp execute_provider(module, provider, %{response_context: context} = command, payload) do
     operation =
       case Map.get(command, :operation) do

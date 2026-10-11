@@ -18,7 +18,7 @@ defmodule Vxpipe.CallEngine.Media.AudioFrame do
     :payload,
     :received_at
   ]
-  defstruct @enforce_keys ++ [source_epoch: nil]
+  defstruct @enforce_keys ++ [source_epoch: nil, activity_pcm: nil]
 
   @type t :: %__MODULE__{
           tenant_id: String.t(),
@@ -34,6 +34,23 @@ defmodule Vxpipe.CallEngine.Media.AudioFrame do
           timestamp: non_neg_integer(),
           payload: binary(),
           received_at: integer(),
-          source_epoch: nil | reference()
+          source_epoch: nil | reference(),
+          activity_pcm:
+            nil
+            | %{
+                payload: binary(),
+                sample_rate: pos_integer(),
+                channels: 1,
+                timestamp: non_neg_integer()
+              }
         }
+  @doc "Retained payload bytes, including decoded PCM carried for optional activity detection."
+  def bytes(%__MODULE__{payload: payload, activity_pcm: nil}) when is_binary(payload),
+    do: byte_size(payload)
+
+  def bytes(%__MODULE__{payload: payload, activity_pcm: %{payload: pcm} = decoded})
+      when is_binary(payload) and is_binary(pcm) and map_size(decoded) == 4,
+      do: byte_size(payload) + byte_size(pcm)
+
+  def bytes(_frame), do: 131_073
 end

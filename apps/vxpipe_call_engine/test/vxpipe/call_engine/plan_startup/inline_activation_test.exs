@@ -28,7 +28,12 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     refute inspect(startup) =~ "private-marker"
 
     caller = plan.participants["caller"]
-    stt = Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
+
+    stt =
+      startup.speech_to_text_runtimes
+      |> Map.fetch!(caller.participant_id)
+      |> Vxpipe.CallEngine.SpeechRecognizerTestConfig.native()
+
     assert {FluxSession, public_stt_config} = stt.provider
     assert public_stt_config[:model] == "flux-general-en"
 
@@ -53,6 +58,49 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     end
 
     refute :erlang.term_to_binary(plan) =~ "private-marker"
+  end
+
+  test "human startup composes API-selected onset while old pinned plans retain native behavior" do
+    alias Vxpipe.CallEngine.Speech.ConversationalSTT
+
+    for vad <- [false, true] do
+      plan =
+        plan(
+          %{provider: "deepgram", model: "flux", options: %{voice: "haley"}},
+          %{
+            provider: "deepgram",
+            model: "flux-general-en",
+            vad: vad,
+            options: %{encoding: "opus", sample_rate: 48_000}
+          }
+        )
+
+      caller = plan.participants["caller"]
+      assert {:ok, startup} = PlanStartup.new(plan, options())
+      runtime = Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
+      assert {ConversationalSTT, public} = runtime.provider
+      assert public[:provider] == FluxSession
+      assert public[:vad] == vad
+      assert runtime.usage_provider.name == "deepgram"
+
+      assert runtime.provider_private[:recognizer_private][:config].api_key ==
+               "deepgram-tenant-private-marker"
+
+      # A byte-decoded pre-change plan keeps the historical absence of the field.
+      if not vad do
+        old_selection = Map.delete(caller.capabilities.speech_to_text, :vad)
+
+        old_caller = %{
+          caller
+          | capabilities: %{caller.capabilities | speech_to_text: old_selection}
+        }
+
+        historical = %{plan | participants: Map.put(plan.participants, "caller", old_caller)}
+        assert {:ok, startup} = PlanStartup.new(historical, options())
+        runtime = Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
+        assert {FluxSession, _options} = runtime.provider
+      end
+    end
   end
 
   test "Rime TTS activation resolves its own credential and exposes only public options" do
@@ -278,7 +326,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
 
     assert {:ok, startup} = PlanStartup.new(plan, Keyword.put(options, :speech_to_text, stt))
     caller = plan.participants["caller"]
-    runtime = Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
+
+    runtime =
+      Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
+      |> Vxpipe.CallEngine.SpeechRecognizerTestConfig.native()
+
     assert {GoogleSTTSession, public} = runtime.provider
     assert public[:encoding] == :linear16
     assert public[:sample_rate] == 16_000
@@ -324,7 +376,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
 
     assert {:ok, startup} = PlanStartup.new(plan, options)
     caller = Map.fetch!(plan.participants, "caller")
-    runtime = Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
+
+    runtime =
+      Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
+      |> Vxpipe.CallEngine.SpeechRecognizerTestConfig.native()
+
     assert {CartesiaSTTSession, public} = runtime.provider
     assert Keyword.fetch!(public, :sample_rate) == 16_000
 
@@ -451,6 +507,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     assert worker in Task.Supervisor.children(Vxpipe.CallEngine.ReadinessTaskSupervisor)
     send(worker, :resolve)
     assert_receive {:connection_speech_prepared, {:ok, runtime}}
+    runtime = Vxpipe.CallEngine.SpeechRecognizerTestConfig.native(runtime)
     assert {FluxSession, _public_stt_config} = runtime.provider
 
     assert [

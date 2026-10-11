@@ -20,3 +20,7 @@
 
 - [Console routing](development/console-react-routing.md) — Console entry points and Phoenix route integration.
 - [React component styling](development/react-component-styling.md) — component styles, semantic tokens and package CSS.
+
+## Speech
+
+- [STT speech-start detection](stt-speech-start-detection.md) — transcript-based start and API-only optional local VAD.

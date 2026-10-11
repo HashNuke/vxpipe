@@ -82,6 +82,49 @@ defmodule Vxpipe.Persistence.CallSpecStoreTest do
     assert Repo.aggregate(ParticipantRoute, :count) == 2
   end
 
+  test "save and publish retain API-authored onset choices and reject invalid field values", %{
+    tenant: tenant,
+    options: options
+  } do
+    spec_id = Enum.reduce([false, true], nil, fn vad, previous_id ->
+      save_options =
+        if previous_id, do: Keyword.put(options, :call_spec_id, previous_id), else: options
+
+      input =
+        put_in(call_spec_input(), [:defaults, :capabilities, :speech_to_text], %{
+          provider: "morse",
+          model: "morse",
+          vad: vad
+        })
+
+      assert {:ok, saved} = CallSpecs.save(tenant.key, input, save_options)
+      assert saved.source["defaults"]["capabilities"]["speech_to_text"]["vad"] == vad
+
+      assert {:ok, published} =
+               CallSpecs.publish(tenant.key, saved.call_spec_id, saved.revision, options)
+
+      assert published.source == saved.source
+
+      assert {:ok, fetched} =
+               CallSpecs.fetch(tenant.key, saved.call_spec_id, saved.revision, options)
+
+      assert fetched.source == saved.source
+      saved.call_spec_id
+    end)
+
+    for invalid <- [nil, "false", 0] do
+      input =
+        put_in(call_spec_input(), [:defaults, :capabilities, :speech_to_text], %{
+          provider: "morse",
+          model: "morse",
+          vad: invalid
+        })
+
+      assert {:error, error} = CallSpecs.save(tenant.key, input, Keyword.put(options, :call_spec_id, spec_id))
+      assert error.details["path"] == ["defaults", "capabilities", "speech_to_text", "vad"]
+    end
+  end
+
   test "tenant and route unique constraints reject cross-scope disclosure and duplicates", %{
     tenant: tenant,
     options: options

@@ -447,8 +447,14 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         {:ok, nil}
 
       {:ok, {provider_module, provider_config} = provider, settings} ->
-        with {:ok, runtime_provider, provider_private} <-
+        with {:ok, native_provider, native_private} <-
                SpeechToTextRuntime.provider(provider, settings),
+             {:ok, runtime_provider, provider_private} <-
+               SpeechToTextRuntime.conversation(
+                 participant.capabilities.speech_to_text,
+                 native_provider,
+                 native_private
+               ),
              media_ingress when is_list(media_ingress) <-
                Keyword.get(settings, :media_ingress),
              {:ok, usage_provider} <-

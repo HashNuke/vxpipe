@@ -14,6 +14,31 @@ defmodule Vxpipe.CallEngine.Speech.EventDelivery do
     TTSUsage
   }
 
+  def dispatch_audio(
+        %{
+          active?: true,
+          ready_acked?: true,
+          output: %OutputState{
+            request: %{
+              ref: reference,
+              terminal?: false,
+              fenced?: false
+            },
+            pending_audio: %{request_ref: reference} = audio
+          }
+        } = state
+      ) do
+    if Allocation.valid?(state.allocation) do
+      send(state.consumer, {:vxpipe_speech_audio, audio})
+      {_audio, output} = OutputState.take_pending(state.output)
+      %{state | output: output}
+    else
+      state
+    end
+  end
+
+  def dispatch_audio(state), do: state
+
   def dispatch(%{active?: true} = state) do
     if Allocation.valid?(state.allocation) do
       case if(staged_context_input?(state), do: :empty, else: EventQueue.take(state.events)) do

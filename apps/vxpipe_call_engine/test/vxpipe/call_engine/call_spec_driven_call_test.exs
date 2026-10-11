@@ -1527,6 +1527,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     speech_to_text =
       Map.fetch!(startup.speech_to_text_runtimes, caller.participant_id)
+      |> Vxpipe.CallEngine.SpeechRecognizerTestConfig.native()
 
     assert {MorseSTTSession, stt_options} = speech_to_text.provider
     assert Keyword.fetch!(stt_options, :sample_rate) == 16_000

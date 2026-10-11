@@ -52,7 +52,17 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   defdelegate models(), to: Vxpipe.Providers.ElevenLabs.Scribe
 
   @impl true
-  def configure(options) do
+  def configure(options) when is_list(options) do
+    if Keyword.keyword?(options) and Keyword.get(options, :commit_strategy, :manual) == :vad do
+      Vxpipe.Providers.ElevenLabs.ContinuousSTT.configure(options)
+    else
+      configure_manual(options)
+    end
+  end
+
+  def configure(_options), do: {:error, :invalid_configuration}
+
+  defp configure_manual(options) do
     with {:ok, public} <- Scribe.public_options(options),
          :manual <- public.commit_strategy do
       Descriptor.new(
@@ -81,7 +91,12 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   end
 
   @impl true
-  def start_link(options), do: STTProvider.start_link(__MODULE__, options)
+  def start_link(options) do
+    if Keyword.fetch!(options, :descriptor).settings.commit_strategy == :vad,
+      do: Vxpipe.Providers.ElevenLabs.ContinuousSTT.start_link(options),
+      else: STTProvider.start_link(__MODULE__, options)
+  end
+
   @impl true
   def push_audio(pid, audio), do: GenServer.call(pid, {:push_audio, audio}, 5_000)
   @impl true

@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 43 milestone specifications: 33 complete and 10 incomplete. Milestone 17, Telnyx calls and
+Status: 44 milestone specifications: 34 complete and 10 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -171,15 +171,22 @@ progress without claiming the entire milestone is complete.
 38. [x] [Outgoing calls and two-call live telephony](outgoing-calls-and-live-telephony.md) — Review of `b1fd2f57` reopened acceptance after six reproduced defects and four failures in nine Telnyx → Twilio reruns. Corrections are committed as `817453a4`; ten consecutive passing live calls in each direction, all root gates and Lean now pass. Final default evidence: 3,192 tests, zero failures, 104 excluded, seed 394892.
 39. [x] [Outgoing call review fixes](outgoing-call-review-fixes.md) — Safe webhook diagnostics, supervised dialing with identity-checked early events, service/handler validation, answer/decline outcomes, failed-request replay and all-relay preflight pass. Twenty paired directional live cases pass. Receiver-owned Opus decoder history repairs the observed WebRTC fixture distortion without weakening assertions; all 562 Gateway cases and the final umbrella pass. Residual `leg_not_found` callbacks and earlier failures remain recorded.
 40. [x] [Worktree setup and concurrent development](worktree-setup.md) — Complete 2026-10-08; all six checkpoints pass. Repeatable `bin/setup` isolates databases, builds, temporary files, development ports and browser sessions. Shared branch ownership persists until explicit release. Two complete default umbrella suites pass with 10m23s overlap; rendered checks and synthetic ownership acceptance pass without real live tests.
-41. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-42. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
-43. [x] [Call spec editor](call-spec-editor.md) — Complete 2026-10-08. The operator Console creates, edits, saves and publishes portable call specs with participant/transfer canvas, field validation, provider/model/voice listings, safe tenant lookups, immutable revisions and unsaved-change recovery. Production desktop/phone acceptance and all three example digest round-trips pass; a published editor route starts a local call with a synthetic credential and no provider generation request. All five root gates pass (3,458 tests, zero failures, 120 excluded, seed 991936), as do 503 frontend tests, TypeScript, lint and the production asset build. The user explicitly deferred UI review and authorized completion. No live tests ran.
+41. [x] [Call spec editor](call-spec-editor.md) — Complete 2026-10-08. The operator Console creates, edits, saves and publishes portable call specs with participant/transfer canvas, field validation, provider/model/voice listings, safe tenant lookups, immutable revisions and unsaved-change recovery. Production desktop/phone acceptance and all three example digest round-trips pass; a published editor route starts a local call with a synthetic credential and no provider generation request. All five root gates pass (3,458 tests, zero failures, 120 excluded, seed 991936), as do 503 frontend tests, TypeScript, lint and the production asset build. The user explicitly deferred UI review and authorized completion. No live tests ran.
+42. [x] [Transcript start and optional VAD](transcript-start-and-optional-vad.md) — Default human STT speech start to the first nonempty transcript, with optional local VAD across STT models and automatic Scribe VAD commits. Common onset/API composition and bounded Scribe inferred endpoint implemented. API preparation, PCM/usage and interruption/replacement checks pass, as do root/Lean and live Scribe repeated/long-turn and bounded background-noise cases. WebRTC verifies interruption during actual agent playout in both onset modes. Fresh-VM restart compatibility passes. Complete under the user-clarified first-partial speech-start criterion. Configured-room recognition accuracy and human listening remain documented follow-ups. Telephony is outside this milestone’s acceptance scope.
+43. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+44. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 The worktree setup milestone is an enabling developer-tooling slice after the
 existing live-runner fixes and before delivery. Its prerequisites are already
 implemented; it does not depend on unfinished onboarding or call-spec editing.
 Research and local specification review are complete, with all implementation
 checkboxes open. Existing delivery/retention holds remain in force.
+
+The 2026-10-11 [speech-start plan](transcript-start-and-optional-vad.md) follows
+its completed provider and call-spec editor prerequisites before delivery. The
+completed editor entry moves earlier in this index; milestone filenames and
+identities are unchanged. The speech-start milestone is complete under its recorded
+acceptance scope and releases no unrelated delivery, retention or provider hold.
 
 ## Pre-delivery review hold
 

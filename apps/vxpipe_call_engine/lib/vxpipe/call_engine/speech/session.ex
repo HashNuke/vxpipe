@@ -288,6 +288,17 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   def push_audio(_allocation, _audio, _options), do: {:error, :invalid_audio}
 
+  @doc false
+  def push_frame(allocation, %Vxpipe.CallEngine.Media.AudioFrame{} = frame) do
+    if is_binary(frame.payload) and byte_size(frame.payload) > 0 and
+         Vxpipe.CallEngine.Media.AudioFrame.bytes(frame) <= @maximum_audio_bytes do
+      command = Map.put(command(allocation), :operation, {:stt_frame, frame})
+      submit_input(allocation, command, frame.payload)
+    else
+      {:error, :invalid_audio_size}
+    end
+  end
+
   @doc """
   Admit bounded explicit text for an STS allocation through the same ordered
   input slot as audio. `:ok` means bounded provider acceptance; the provider

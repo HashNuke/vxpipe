@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionSourceCutoverTest do
   alias ExRTP.Packet
   alias Vxpipe.CallEngine.ConnectionAttachment
   alias Vxpipe.Gateway.TestWebRTCSourcePeer
-  alias Vxpipe.Gateway.WebRTC.{Connection, SourceReceiver}
+  alias Vxpipe.Gateway.WebRTC.{Connection, SourceReceiver, SpeechInput}
 
   test "only the owning room can hold and arm the exact attached WebRTC source" do
     {state, peer, receiver} = connection()
@@ -268,6 +268,60 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionSourceCutoverTest do
                {self(), make_ref()},
                uncertain
              )
+  end
+
+  test "source hold retires STT decoder and encoder history before rearming" do
+    for codec <- [:linear16, :opus] do
+      {state, _peer, _receiver} = connection()
+      track = %{track_id: "microphone", codec: :opus, sample_rate: 48_000, channels: 2}
+      target = %{codec: codec, sample_rate: 48_000, channels: 1}
+      assert {:ok, _output, input} = SpeechInput.configure(track, target)
+      ingress = make_ref()
+      input = Map.put(input, :ingress, ingress)
+      state = Map.put(state, :speech_input, input)
+      token = make_ref()
+
+      assert {:reply, {:ok, receipt}, held} =
+               Connection.handle_call(
+                 {:vxpipe_sts_source_hold, scope(state, token)},
+                 {self(), make_ref()},
+                 state
+               )
+
+      refute held.speech_input.decoder == input.decoder
+      assert held.speech_input.input == input.input
+      assert held.speech_input.output == input.output
+      assert held.speech_input.ingress == ingress
+      if codec == :opus, do: refute(held.speech_input.encoder == input.encoder)
+      fresh_epoch = make_ref()
+      arm = Map.merge(scope(held, token), %{receipt: receipt, active_epoch: fresh_epoch})
+
+      assert {:reply, {:ok, ^fresh_epoch}, active} =
+               Connection.handle_call({:vxpipe_sts_source_arm, arm}, {self(), make_ref()}, held)
+
+      assert active.speech_input == held.speech_input
+    end
+  end
+
+  test "STT normalization reset failure cannot return an armable hold receipt" do
+    {state, _peer, _receiver} = connection()
+
+    input = %{
+      normalizer: :linear16,
+      input: %{track_id: "microphone", codec: :opus, sample_rate: 48_000, channels: 2},
+      output: %{track_id: "microphone", codec: :linear16, sample_rate: 1, channels: 1}
+    }
+
+    state = Map.put(state, :speech_input, input)
+
+    assert {:reply, {:error, :source_unavailable}, uncertain} =
+             Connection.handle_call(
+               {:vxpipe_sts_source_hold, scope(state, make_ref())},
+               {self(), make_ref()},
+               state
+             )
+
+    assert %{held?: true, status: :uncertain, receipt: nil} = uncertain.source_gate
   end
 
   defp connection do

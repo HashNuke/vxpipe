@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
   alias Vxpipe.CallEngine.{CapabilityCatalog, CallSpecValidation}
 
   @enforce_keys [:kind, :provider, :model, :credential_name, :options, :provider_options]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [vad: false]
 
   @type kind ::
           :speech_to_text
@@ -19,7 +19,8 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
           model: String.t(),
           credential_name: String.t() | nil,
           options: map(),
-          provider_options: map()
+          provider_options: map(),
+          vad: boolean()
         }
 
   @code :invalid_call_spec
@@ -27,20 +28,24 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
   @fields [:provider, :model, :credential_name, :options, :provider_options]
 
   def new(input, kind, path) do
-    with {:ok, input} <- CallSpecValidation.normalize_map(input, @fields, @code, @message, path),
+    fields = if kind == :speech_to_text, do: @fields ++ [:vad], else: @fields
+
+    with {:ok, input} <- CallSpecValidation.normalize_map(input, fields, @code, @message, path),
          {:ok, provider} <- required_string(input, :provider, path),
          {:ok, model} <- required_string(input, :model, path),
          {:ok, options} <- json_object(Map.get(input, :options, %{}), path ++ ["options"]),
          {:ok, provider_options} <-
            json_object(Map.get(input, :provider_options, %{}), path ++ ["provider_options"]),
          {:ok, credential_name} <- credential_name(input, provider, path),
+         {:ok, vad} <- vad(input, kind, path),
          selection <- %__MODULE__{
            kind: kind,
            provider: provider,
            model: model,
            credential_name: credential_name,
            options: options,
-           provider_options: provider_options
+           provider_options: provider_options,
+           vad: vad
          },
          :ok <- validate(selection, path) do
       {:ok, selection}
@@ -57,7 +62,12 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
   end
 
   defp valid_shape?(selection) do
-    MapSet.new(Map.keys(selection)) == MapSet.new([:__struct__ | @enforce_keys]) and
+    keys = MapSet.new(Map.keys(selection))
+
+    keys in [
+      MapSet.new([:__struct__ | @enforce_keys]),
+      MapSet.new([:__struct__, :vad | @enforce_keys])
+    ] and valid_vad?(selection) and
       selection.kind in [
         :speech_to_text,
         :model_inference,
@@ -81,11 +91,33 @@ defmodule Vxpipe.CallEngine.CallSpec.CapabilitySelection do
     do: is_binary(name) and Regex.match?(~r/\A[A-Za-z0-9_-]{1,128}\z/, name)
 
   def identity(%__MODULE__{} = selection, tenant_id) do
+    # False is also the meaning of old snapshots without this optional field.
+    # Preserve their identity rather than rehashing existing pinned selections.
+    selection = if vad?(selection), do: selection, else: Map.delete(selection, :vad)
+
     {tenant_id, selection}
     |> :erlang.term_to_binary([:deterministic])
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
   end
+
+  def vad?(%__MODULE__{vad: enabled}) when is_boolean(enabled), do: enabled
+  def vad?(%__MODULE__{}), do: false
+
+  defp vad(input, :speech_to_text, path) do
+    case Map.get(input, :vad, false) do
+      value when is_boolean(value) -> {:ok, value}
+      _invalid -> invalid(path ++ ["vad"], "must be a boolean")
+    end
+  end
+
+  defp vad(_input, _kind, _path), do: {:ok, false}
+
+  defp valid_vad?(%__MODULE__{vad: value, kind: kind}) do
+    is_boolean(value) and (kind == :speech_to_text or value == false)
+  end
+
+  defp valid_vad?(%__MODULE__{}), do: true
 
   defp required_string(input, key, path) do
     with {:ok, value} <- CallSpecValidation.fetch(input, key, @code, @message, path) do

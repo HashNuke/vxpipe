@@ -38,6 +38,22 @@ defmodule Vxpipe.CallEngine.CallSpec.InlineCapabilitiesTest do
     assert selection.credential_name == nil
   end
 
+  test "VAD inherits as part of the whole selection and an omitted override defaults to false" do
+    source = put_in(source(), [:defaults, :capabilities, :speech_to_text, :vad], true)
+    assert {:ok, spec} = CallSpec.new(source, resource_id: "inline", revision: 1)
+    assert compile_spec(spec).participants["caller"].capabilities.speech_to_text.vad
+
+    source =
+      put_in(source, [:participants, "caller", :capabilities], %{
+        speech_to_text: %{provider: "morse", model: "morse"}
+      })
+
+    assert {:ok, spec} = CallSpec.new(source, resource_id: "inline", revision: 1)
+    refute spec.participants["caller"].capabilities.speech_to_text.vad
+    assert spec.participants["caller"].capabilities.speech_to_text.provider == "morse"
+    assert spec.default_capabilities.speech_to_text.vad
+  end
+
   test "rejects profile strings, internal adapters and credential or transport option injection" do
     path = ["defaults", "capabilities", "model_inference"]
 
@@ -74,6 +90,18 @@ defmodule Vxpipe.CallEngine.CallSpec.InlineCapabilitiesTest do
       put_in(source(), [:defaults, :capabilities, :speech_to_text, :options, :encoding], "mp3")
 
     assert {:error, _} = CallSpec.new(input, resource_id: "inline", revision: 1)
+  end
+
+  defp compile_spec(spec) do
+    assert {:ok, invocation} =
+             CallInvocation.new(
+               %{call_spec: %{id: "inline", revision: 1}, transport: %{type: "web"}},
+               tenant_id: "tenant-inline",
+               actor_id: "operator-inline"
+             )
+
+    assert {:ok, plan} = CallSpecCompiler.compile(spec, invocation, %{host_tools: %{}})
+    plan
   end
 
   defp source do

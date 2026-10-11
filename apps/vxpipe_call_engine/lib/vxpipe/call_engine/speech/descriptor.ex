@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
                 input_format: nil,
                 finite_input?: false,
                 speech_start?: false,
+                speech_start_evidence: nil,
                 response_start?: false,
                 eager_end?: false,
                 resume?: false,
@@ -31,6 +32,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
               :input_format,
               :finite_input?,
               :speech_start?,
+              :speech_start_evidence,
               :response_start?,
               :eager_end?,
               :resume?,
@@ -60,6 +62,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           endpointing:
             :provider_semantic | :provider_gap | :local_gap | :inferred_gap | :external | :none,
           speech_start?: boolean(),
+          speech_start_evidence: nil | :transcript | :local_acoustic,
           response_start?: boolean(),
           eager_end?: boolean(),
           resume?: boolean(),
@@ -97,6 +100,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
          valid_format?(descriptor.format) and valid_identity?(descriptor.usage_identity) and
          descriptor.readiness in [:initialized, :provider_acknowledged] and
          valid_endpointing?(descriptor) and
+         valid_start_evidence?(descriptor) and
          is_boolean(descriptor.speech_start?) and is_boolean(descriptor.eager_end?) and
          is_boolean(descriptor.response_start?) and
          (not descriptor.response_start? or descriptor.kind == :sts) and
@@ -118,8 +122,17 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   def validate_conversational_stt(%__MODULE__{} = descriptor) do
     with :ok <- validate(descriptor),
          true <- descriptor.kind == :stt,
-         true <- descriptor.endpointing in [:provider_semantic, :provider_gap, :local_gap],
-         true <- descriptor.speech_start? do
+         true <-
+           descriptor.endpointing in [
+             :provider_semantic,
+             :provider_gap,
+             :local_gap,
+             :inferred_gap
+           ],
+         true <- descriptor.speech_start?,
+         true <-
+           descriptor.endpointing != :inferred_gap or
+             descriptor.speech_start_evidence in [:transcript, :local_acoustic] do
       :ok
     else
       _invalid -> {:error, :invalid_descriptor}
@@ -127,6 +140,13 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   end
 
   def validate_conversational_stt(_descriptor), do: {:error, :invalid_descriptor}
+
+  defp valid_start_evidence?(%{speech_start_evidence: nil}), do: true
+
+  defp valid_start_evidence?(%{kind: :stt, speech_start?: true, speech_start_evidence: evidence}),
+    do: evidence in [:transcript, :local_acoustic]
+
+  defp valid_start_evidence?(_descriptor), do: false
 
   defp valid_endpointing?(%{kind: :stt, endpointing: :local_gap}), do: true
 

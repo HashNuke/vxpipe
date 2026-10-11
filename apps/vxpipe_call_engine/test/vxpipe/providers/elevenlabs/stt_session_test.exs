@@ -12,7 +12,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSessionTest do
     refute descriptor.eager_end? or descriptor.resume? or descriptor.finite_input?
     assert descriptor.usage_identity.model == "scribe_v2_realtime"
 
-    for options <- [[api_key: "secret"], [commit_strategy: :vad], [sample_rate: 8_000]] do
+    for options <- [[api_key: "secret"], [commit_strategy: :invalid], [sample_rate: 8_000]] do
       assert {:error, :invalid_configuration} = STTSession.configure(options)
     end
   end

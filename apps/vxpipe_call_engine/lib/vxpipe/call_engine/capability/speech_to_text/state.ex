@@ -117,13 +117,21 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
         {:error, :policy_denied}
 
       true ->
-        case Session.push_audio(state.session, frame.payload) do
+        case push_frame(state, frame) do
           :ok -> :ok
           {:error, reason} when reason in [:not_ready, :closed] -> {:error, :policy_denied}
           {:error, _reason} -> {:error, :unavailable}
         end
     end
   end
+
+  defp push_frame(
+         %__MODULE__{provider_module: Vxpipe.CallEngine.Speech.ConversationalSTT} = state,
+         frame
+       ),
+       do: Session.push_frame(state.session, frame)
+
+  defp push_frame(state, frame), do: Session.push_audio(state.session, frame.payload)
 
   @spec audio_delivery_current?(t(), map() | nil) :: boolean()
   def audio_delivery_current?(%__MODULE__{policy: nil, activity_agent_id: nil}, _intervals),
@@ -618,6 +626,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
     end
   end
 
+  defp endpointing_trigger(:inferred_gap), do: "inferred_gap"
   defp endpointing_trigger(:provider_gap), do: "provider_gap"
   defp endpointing_trigger(:local_gap), do: "local_gap"
   defp endpointing_trigger(:provider_semantic), do: "provider_semantic"

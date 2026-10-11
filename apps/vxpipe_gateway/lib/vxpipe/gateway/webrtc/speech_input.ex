@@ -27,6 +27,18 @@ defmodule Vxpipe.Gateway.WebRTC.SpeechInput do
     end
   end
 
+  def reset(nil), do: {:ok, nil}
+  def reset(%{normalizer: nil} = current), do: {:ok, current}
+
+  def reset(%{normalizer: mode, input: track, output: output} = current)
+      when mode in [:linear16, :opus] do
+    with {:ok, _output, configured} <- configure(track, output) do
+      {:ok, Map.merge(current, configured)}
+    end
+  end
+
+  def reset(_invalid), do: {:error, :unsupported_audio}
+
   def frame(frame, nil), do: {:ok, frame}
   def frame(frame, %{normalizer: nil}), do: {:ok, frame}
 
@@ -41,7 +53,8 @@ defmodule Vxpipe.Gateway.WebRTC.SpeechInput do
            sample_rate: output.sample_rate,
            channels: 1,
            timestamp: div(frame.timestamp * output.sample_rate, frame.sample_rate),
-           payload: payload
+           payload: payload,
+           activity_pcm: activity_pcm(mode, mono, output, frame)
        }}
     else
       _invalid -> {:error, :invalid_packet}
@@ -98,6 +111,16 @@ defmodule Vxpipe.Gateway.WebRTC.SpeechInput do
       {:ok, %{normalizer: mode, decoder: decoder}}
     end
   end
+
+  defp activity_pcm(:opus, mono, output, frame),
+    do: %{
+      payload: mono,
+      sample_rate: output.sample_rate,
+      channels: 1,
+      timestamp: div(frame.timestamp * output.sample_rate, frame.sample_rate)
+    }
+
+  defp activity_pcm(:linear16, _mono, _output, _frame), do: nil
 
   defp normalize_payload(:linear16, _channels, _source, mono, _input), do: {:ok, mono}
 

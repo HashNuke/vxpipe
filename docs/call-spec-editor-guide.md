@@ -40,6 +40,11 @@ from the installed catalog's recommendations. Other agents keep their effective
 models. Human participants' **Models** tab contains only **Speech to text**.
 Participant media policies live in **Media**.
 
+Human STT starts a turn when its first nonempty transcript arrives. API users can
+set `speech_to_text.vad: true` for earlier local speech detection; omission means
+false. There is no VAD control in Console. Existing values remain intact when
+providers or models are changed.
+
 **Call settings → Models** groups defaults under **AI agents** and **Human
 participants**. The AI group lets you choose either **LLM + Text-to-Speech**
 (language and voice models) or **Speech-to-Speech**, showing only that type's

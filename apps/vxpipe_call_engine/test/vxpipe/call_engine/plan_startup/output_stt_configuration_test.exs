@@ -61,7 +61,10 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     assert {:ok, startup} =
              PlanStartup.new(plan(16_000, morse(), %{speech_to_text: google()}), options())
 
-    runtime = startup.speech_to_text_runtimes[startup.caller.participant_id]
+    runtime =
+      startup.speech_to_text_runtimes[startup.caller.participant_id]
+      |> Vxpipe.CallEngine.SpeechRecognizerTestConfig.native()
+
     assert {STTSession, public} = runtime.provider
     tree = start_supervised!({CapabilityTree, owner: self()})
 
@@ -109,7 +112,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     plan = plan(16_000, morse(), %{speech_to_text: google()})
     assert {:ok, startup} = PlanStartup.new(plan, options())
     runtime = startup.speech_to_speech
-    human = startup.speech_to_text_runtimes[startup.caller.participant_id]
+
+    human =
+      startup.speech_to_text_runtimes[startup.caller.participant_id]
+      |> Vxpipe.CallEngine.SpeechRecognizerTestConfig.native()
+
     assert {STTSession, public} = human.provider
     private = human.provider_private
     assert {Vxpipe.Providers.MorseCode.STTSession, _} = runtime.output_speech_to_text
@@ -220,7 +227,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     assert {:ok, startup} = PlanStartup.new(plan(16_000, morse(), human), options())
 
     assert {Vxpipe.Providers.MorseCode.STTSession, human_options} =
-             startup.speech_to_text_runtimes[startup.caller.participant_id].provider
+             Vxpipe.CallEngine.SpeechRecognizerTestConfig.native(
+               startup.speech_to_text_runtimes[startup.caller.participant_id]
+             ).provider
 
     assert human_options[:sample_rate] == 8_000
 

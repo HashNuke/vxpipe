@@ -138,10 +138,17 @@ defmodule Vxpipe.Console.CartesiaServiceActivationTest do
 
   defp stt_key(startup) do
     [runtime] = startup.speech_to_text_runtimes |> Map.values() |> Enum.reject(&is_nil/1)
-    assert {STTSession, public} = runtime.provider
+    assert {Vxpipe.CallEngine.Speech.ConversationalSTT, composed} = runtime.provider
+    assert Keyword.fetch!(composed, :vad) == false
+    assert Keyword.fetch!(composed, :provider) == STTSession
+    public = Keyword.fetch!(composed, :options)
     assert Keyword.fetch!(public, :model) == "ink-2"
     assert runtime.usage_provider.name == "cartesia"
-    Keyword.fetch!(runtime.provider_private, :config).api_key
+
+    runtime.provider_private
+    |> Keyword.fetch!(:recognizer_private)
+    |> Keyword.fetch!(:config)
+    |> Map.fetch!(:api_key)
   end
 
   defp source do

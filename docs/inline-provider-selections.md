@@ -10,6 +10,13 @@ Schema `20260915.01` carries each capability's actual provider, provider-local m
 An override replaces the entire selection. Opening TTS has its own selection.
 The typed selection has no profile field, private payload, repository context or encryption key.
 
+Human `speech_to_text` also accepts an optional boolean `vad`, defaulting to false.
+False starts the turn on its first nonempty transcript; true adds local Silero
+onset with transcript fallback. It sits beside `provider` and `model`, outside
+`options`, and is never sent upstream. Inheritance retains the setting; a whole
+selection override defaults it to false when omitted. Other capabilities reject
+this field. See [speech-start detection](stt-speech-start-detection.md).
+
 Call Engine owns parsing, a closed capability-to-adapter catalog, and the neutral credential
 source contract. Calls implements that contract through its provider repository; Persistence
 decrypts the exact tenant/provider/name binding. Engine does not depend on Calls or Persistence.

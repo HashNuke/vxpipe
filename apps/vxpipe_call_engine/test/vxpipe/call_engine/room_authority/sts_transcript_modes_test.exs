@@ -710,17 +710,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       assert {:ok, %{activity_origin: before, identity: identity}} =
                SpeechToText.input_binding(stt)
 
+      monitor = Process.monitor(context.capability)
+
       if unquote(delayed?), do: :sys.suspend(context.authority)
 
       old_turn_ref =
         try do
-          push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+          push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 6_400)})
           push_sts(%{context | pcm: old_pcm})
           _ = :sys.get_state(context.attachment.media_ingress)
           _ = :sys.get_state(stt)
           _ = :sys.get_state(Session.provider(:sys.get_state(stt).session))
           _ = :sys.get_state(stt)
-          old_turn_ref = :sys.get_state(Session.provider(:sys.get_state(stt).session)).turn_ref
+          old_turn_ref = await_stt_turn_ref(stt)
           assert is_reference(old_turn_ref)
 
           if unquote(delayed?) do
@@ -760,29 +762,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       _ = :sys.get_state(context.authority)
       if unquote(delayed?), do: refute_received({:vxpipe_event, %ParticipantTurnStarted{}})
 
-      rebound =
-        Enum.reduce_while(1..200, nil, fn _, _ ->
-          state = :sys.get_state(context.authority)
-
-          case state.speech_to_speech_capability do
-            %{pid: capability, ingress: ingress, input_epoch: epoch}
-            when capability != context.capability and is_pid(ingress) and is_reference(epoch) ->
-              {:halt, %{context | capability: capability, ingress: ingress}}
-
-            _pending ->
-              {:cont, nil}
-          end
-        end)
-
-      assert is_map(rebound),
-             inspect(
-               Map.take(:sys.get_state(context.authority), [
-                 :speech_to_speech_recovery,
-                 :speech_to_speech_capability,
-                 :speech_to_speech_ready?,
-                 :startup_ready?
-               ])
-             )
+      rebound = recovered_sts_context(context, monitor)
 
       send(context.authority, {:vxpipe_sts_activity_origin_changed, context.capability, 999})
 
@@ -790,7 +770,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
                rebound.capability
 
       push_sts(rebound)
-      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 6_400)})
 
       caller = context.caller
 
@@ -821,7 +801,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       refute_received {:vxpipe_event, %ParticipantTurnCompleted{}}
 
       push_selected_stt(
-        %{context | pcm: binary_part(context.pcm, 640, byte_size(context.pcm) - 640)},
+        %{context | pcm: binary_part(context.pcm, 6_400, byte_size(context.pcm) - 6_400)},
         1
       )
 
@@ -841,7 +821,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       assert :ok = :sys.suspend(context.authority)
 
       try do
-        push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+        push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 6_400)})
         _ = :sys.get_state(context.attachment.media_ingress)
         _ = :sys.get_state(stt)
         _ = :sys.get_state(Session.provider(:sys.get_state(stt).session))
@@ -884,7 +864,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       assert {:ok, old_pcm} = Encoder.encode(context.config, "NO")
       caller = context.caller
 
-      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 6_400)})
       push_sts(%{context | pcm: old_pcm})
       assert_receive {:vxpipe_event, %ParticipantTurnStarted{participant_id: ^caller}}, 1_000
 
@@ -943,7 +923,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       stt = connection.speech_to_text.capability
       assert {:ok, %{activity_origin: before}} = SpeechToText.input_binding(stt)
 
-      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 6_400)})
       push_sts(%{context | pcm: old_pcm})
       assert_receive {:vxpipe_event, %ParticipantTurnStarted{}}, 1_000
       assert is_map(:sys.get_state(context.authority).speech_to_speech_capability.activity_turn)
@@ -979,7 +959,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
       policy_before = MediaPolicyAuthority.snapshot(state.media_policy_authority)
       assert {:ok, %{activity_origin: before}} = SpeechToText.input_binding(stt)
 
-      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 640)})
+      push_selected_stt(%{context | pcm: binary_part(context.pcm, 0, 6_400)})
       push_sts(%{context | pcm: old_pcm})
       assert_receive {:vxpipe_event, %ParticipantTurnStarted{}}, 1_000
       assert is_map(:sys.get_state(context.authority).speech_to_speech_capability.activity_turn)
@@ -1287,6 +1267,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
              TestTransferConnection.run(context.command, fn ->
                CallEngine.push_audio(context.attachment, stt_frame(context, context.pcm, 0))
              end)
+  end
+
+  # The first H plus its letter gap supplies text while keeping the HI turn
+  # open. A native tone onset alone is no longer default human-start authority.
+  defp await_stt_turn_ref(stt) do
+    result =
+      Enum.reduce_while(1..200, nil, fn _, _ ->
+        case Map.keys(:sys.get_state(stt).turn_indexes) do
+          [reference] -> {:halt, reference}
+          [] -> {:cont, nil}
+        end
+      end)
+
+    assert is_reference(result)
+    result
   end
 
   defp push_selected_stt(context, sequence \\ 0) do

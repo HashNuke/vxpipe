@@ -319,18 +319,21 @@ recognition events in the allocation. Repeated finalization must not duplicate
 the marker. A segment endpoint, quiet period or successful callback is not this
 proof. Consumers acknowledge the marker through the same channel/session boundary.
 
-The conversational path requires authoritative endpointing and genuine speech-start evidence
-needed by its current barge-in behavior. The 2026-10-01
-[local acoustic STT amendment](elevenlabs-stt-session.md) admits `local_gap` only
-for STT when an allocation-owned detector supplies both boundaries. This mode
-does not admit eager-end evidence or change STS controller rules. A transcript-only
-or manually finalized provider without this boundary owner remains rejected. Provider VAD
-can be legitimate endpointing evidence, but a timed buffer commit is not automatically a user
-turn. The comparison's Cartesia manual STT and ElevenLabs segment commits make this distinction
-concrete. Missing input and elapsed network timers cannot invent turn ends.
-Optional finalization needs its declaring consumer; the local acoustic amendment
-does not add automatic eager-response policy. Preserve existing speech-start
-barge-in and any existing eager/resume handling.
+Human input STT is composed inside one allocation-owned coordinator. Its default
+`speech_start_evidence: :transcript` emits a canonical start before the first
+nonempty text; native onset hints establish correlation only. With
+`speech_to_text.vad: true`, `:local_acoustic` evidence can start the same turn
+earlier, with transcript fallback. Local silence does not replace provider
+endpointing, eager-end or resume behavior.
+
+Conversational admission accepts provider-semantic, provider-gap and existing
+local-gap endpoints. It also accepts `:inferred_gap` when the STT descriptor
+explicitly declares transcript or local-acoustic onset evidence. Scribe uses this
+truthful heuristic because automatic commits include forced long-input segments
+without a commit-reason discriminator. A timed commit is not an acoustic endpoint.
+See [speech-start detection](stt-speech-start-detection.md) for the inference rule,
+timeouts and tradeoffs. Raw recognition without a conversational endpoint remains
+rejected. These changes do not alter STS admission or agent-output transcription.
 
 No permitted consumer means no STT session or submitted audio. A changed speech permission
 interval requires the existing session replacement/preparation rules and fresh readiness;

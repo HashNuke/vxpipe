@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
-import type { ModelCatalog } from "../modelCatalog";
+import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
 import type { CapabilitySelection } from "./types";
 import { CapabilityFields } from "./capability-fields";
 
@@ -14,10 +14,13 @@ const catalog: ModelCatalog = { text_to_speech: {
       { id: "a", name: "Alpha", default: false }, { id: "b", name: "Beta", default: true },
     ] } },
   ],
+}, speech_to_text: {
+  deepgram: [{ id: "flux-general-en", name: "Flux", default: true, voices: null }],
+  google: [{ id: "live", name: "Live", default: true, voices: null }, { id: "next", name: "Next", default: false, voices: null }],
 } };
-function Harness({ initial, readOnly = false }: { initial?: CapabilitySelection; readOnly?: boolean }) {
+function Harness({ initial, readOnly = false, kind = "text_to_speech" }: { initial?: CapabilitySelection; readOnly?: boolean; kind?: CatalogCapability }) {
   const [value, onChange] = useState(initial);
-  return <><CapabilityFields kind="text_to_speech" path={["defaults", "capabilities", "text_to_speech"]} value={value} onChange={onChange} catalog={catalog} disabled={readOnly} />
+  return <><CapabilityFields kind={kind} path={["defaults", "capabilities", kind]} value={value} onChange={onChange} catalog={catalog} disabled={readOnly} />
     <output data-testid="selection">{JSON.stringify(value ?? null)}</output></>;
 }
 const saved = () => JSON.parse(screen.getByTestId("selection").textContent!);
@@ -79,4 +82,14 @@ test("advanced options are preserved without generic option controls", () => {
   expect(screen.queryByRole("region", { name: "Provider options" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("textbox", { name: "Voice" }), { target: { value: "haley" } });
   expect(saved()).toEqual({ ...initial, options: { ...initial.options, voice: "haley" } });
+});
+
+test.each([true, false])("API-authored vad=%s survives provider and model changes without a control", async (vad) => {
+  render(<Harness kind="speech_to_text" initial={{ provider: "deepgram", model: "flux-general-en", vad }} />);
+  await choose("Provider", "google");
+  expect(saved()).toEqual({ provider: "google", model: "live", vad });
+  await choose("Model", "Next");
+  expect(saved()).toEqual({ provider: "google", model: "next", vad });
+  expect(screen.queryByRole("checkbox", { name: /vad/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("switch", { name: /vad/i })).not.toBeInTheDocument();
 });

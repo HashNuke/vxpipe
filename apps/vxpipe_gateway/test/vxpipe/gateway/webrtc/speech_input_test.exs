@@ -57,6 +57,28 @@ defmodule Vxpipe.Gateway.WebRTC.SpeechInputTest do
     assert {:ok, 1} = Vxpipe.Gateway.WebRTC.OpusInput.packet_channels(normalized_mono)
   end
 
+  test "retains the owning decoder PCM and timestamp beside Opus recognition bytes" do
+    payload = opus_packet(2)
+    assert {:ok, reference} = OpusDecoder.new(48_000)
+    assert {:ok, pcm} = OpusDecoder.decode(reference, payload)
+    assert {:ok, _output, input} = SpeechInput.configure(@track, target(:opus))
+    assert {:ok, normalized} = SpeechInput.frame(frame(payload), input)
+
+    assert normalized.activity_pcm == %{
+             payload: pcm,
+             sample_rate: 48_000,
+             channels: 1,
+             timestamp: normalized.timestamp
+           }
+
+    assert AudioFrame.bytes(normalized) == byte_size(normalized.payload) + byte_size(pcm)
+
+    assert {:ok, detector_pcm, 320} =
+             Vxpipe.CallEngine.Speech.STTActivityPCM.normalize(normalized)
+
+    assert byte_size(detector_pcm) == 640
+  end
+
   test "supports mono and stereo packet transitions with one prepared input" do
     assert {:ok, _output, input} = SpeechInput.configure(@track, target(:linear16))
 

@@ -480,7 +480,7 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     assert_receive {:test_call_lifecycle_timer_scheduled, _idle_timer, 15_000}
   end
 
-  test "caller speech cancels an armed idle timer before transcription completes" do
+  test "first caller transcript cancels an armed idle timer before the turn completes" do
     configure_working_speech_to_text()
     plan = compile_plan(60_000, speech_to_text?: true)
     assert {:ok, room} = start_call(plan)
@@ -495,6 +495,8 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     assert_receive {:test_call_lifecycle_timer_scheduled, idle_timer, 15_000}
 
     TestSpeechToTextTransport.deliver(transport, turn_message("StartOfTurn", 1, ""))
+    refute_receive {:test_call_lifecycle_timer_cancelled, ^idle_timer}, 20
+    TestSpeechToTextTransport.deliver(transport, turn_message("Update", 2, "hello"))
     assert_receive {:test_call_lifecycle_timer_cancelled, ^idle_timer}
   end
 
