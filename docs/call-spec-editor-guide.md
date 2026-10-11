@@ -13,8 +13,10 @@ card represents the caller (or outgoing callee); configure that participant on i
 card, including **Handled by** on its Connection tab. Call settings shows **Incoming call**
 or **Outgoing call** at the other end of its title row.
 
-The canvas shows participants and transfer destinations. Agent cards show their
-name, tool count and the number of variables they can write. Variable counts include
+The canvas shows participants and transfer destinations. Human cards show only
+their name and icon. Participant descriptions are omitted from canvas cards and
+transfer destination lists; destination search matches participant keys. Agent
+cards show their name, tool count and the number of variables they can write. Variable counts include
 top-level properties in writable sections; nested objects count as one variable.
 Prompts stay in the agent inspector. Select a participant to
 edit its fields; **Call settings** opens model defaults, variables and call

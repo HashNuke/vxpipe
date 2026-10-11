@@ -17,7 +17,7 @@ export function AgentTransfersPanel({ document, onChange, issues, participantKey
   const target = agent(document.source, participantKey);
   const transfers = target.transfers ?? [];
   const path = ["participants", participantKey];
-  const available = Object.entries(document.source.participants).filter(([key, value]) => key !== participantKey && !transfers.includes(key) && isTransferDestination(document.source, key) && `${key} ${value.description ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const available = Object.entries(document.source.participants).filter(([key]) => key !== participantKey && !transfers.includes(key) && isTransferDestination(document.source, key) && key.toLowerCase().includes(query.trim().toLowerCase()));
   function history(value: TransferHistory | undefined) {
     onChange(editSource(document, (source) => { const target = agent(source, participantKey); if (value === undefined) delete target.transfer_history; else target.transfer_history = value; }));
   }
@@ -30,7 +30,7 @@ export function AgentTransfersPanel({ document, onChange, issues, participantKey
             <div className="max-h-60 overflow-auto">{available.map(([key, value]) => {
               const Icon = value.type === "agent" ? Bot : UserRound;
               return <Button key={key} variant="ghost" className="h-auto w-full justify-start gap-3 px-2 py-2 text-left" aria-label={`Add ${key}`} onClick={() => { onChange(setTransfer(document, participantKey, key, true)); setOpen(false); setQuery(""); }}>
-                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="min-w-0 whitespace-normal"><span className="block wrap-anywhere font-medium">{key}</span>{value.description && <span className="block wrap-anywhere text-xs font-normal text-muted-foreground">{value.description}</span>}</span>
+                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="min-w-0 wrap-anywhere whitespace-normal font-medium">{key}</span>
               </Button>;
             })}{!available.length && <p className="px-3 py-6 text-center text-sm text-muted-foreground">No destinations match. Add a participant or change the search.</p>}</div>
           </PopoverContent>
@@ -39,7 +39,7 @@ export function AgentTransfersPanel({ document, onChange, issues, participantKey
       {transfers.map((key, index) => {
         const destination = Object.hasOwn(document.source.participants, key) ? document.source.participants[key] : undefined;
         return <IssueAnchor key={`${key}:${index}`} className="rounded-md border border-border/70 bg-card p-3" path={[...path, "transfers", String(index)]} issues={issues}>
-          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="wrap-anywhere text-sm font-semibold">{key}</p><p className="mt-1 wrap-anywhere text-xs text-muted-foreground">{destination?.description || (destination ? destination.type === "agent" ? "Agent" : "Human destination" : "Missing participant")}</p></div>
+          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="wrap-anywhere text-sm font-semibold">{key}</p><p className="mt-1 wrap-anywhere text-xs text-muted-foreground">{destination ? destination.type === "agent" ? "Agent" : "Human destination" : "Missing participant"}</p></div>
             <Button variant="ghost" size="icon-sm" disabled={document.readOnly} aria-label={`Remove transfer to ${key}`} onClick={() => onChange(setTransfer(document, participantKey, key, false))}><Trash2 className="h-4 w-4" /></Button>
           </div>
         </IssueAnchor>;

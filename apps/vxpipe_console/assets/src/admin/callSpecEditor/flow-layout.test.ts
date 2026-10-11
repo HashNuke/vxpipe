@@ -56,5 +56,14 @@ test("agent cards omit the prompt fallback and do not count read-only variables"
   agent.variable_permissions = { appointment: ["read"] };
   const graph = canvasGraph(document);
   expect(graph.nodes.find((node) => node.id === "intake")?.data).toMatchObject({ subtitle: "", variableCount: 0 });
-  expect(graph.nodes.find((node) => node.id === "specialist")?.data.subtitle).toBe("Appointment specialist");
+});
+
+test("human cards show only their name whether or not a saved description exists", () => {
+  const document = structuredClone(editorFixture);
+  for (const description of ["Appointment specialist", undefined]) {
+    document.source.participants.specialist!.description = description;
+    const graph = canvasGraph(document);
+    expect(graph.nodes.find((node) => node.id === "specialist")?.data).toMatchObject({ label: "specialist", subtitle: "" });
+    expect(graph.nodes.find((node) => node.id === "$entry")?.data.subtitle).toBe("Incoming · caller");
+  }
 });

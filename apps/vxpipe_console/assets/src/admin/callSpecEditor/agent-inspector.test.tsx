@@ -152,11 +152,16 @@ test("transfer search adds only eligible destinations and keeps the graph projec
   initial.source.participants.reviewer = { type: "agent", prompt: "Review", description: "Billing specialist" };
   initial.source.participants.visitor = { type: "human", connection: { service: "web", mode: "receive", admission: "start_call" } };
   render(<Harness initial={initial} initialTab="transfers" />);
+  expect(screen.queryByText("Appointment specialist")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Add destination" }));
   expect(screen.queryByRole("button", { name: "Add caller" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Add visitor" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Add reviewer" })).toHaveTextContent(/^reviewer$/);
   fill("Search destinations", "billing");
+  expect(screen.queryByRole("button", { name: "Add reviewer" })).not.toBeInTheDocument();
+  fill("Search destinations", "review");
   fireEvent.click(screen.getByRole("button", { name: "Add reviewer" }));
+  expect(screen.queryByText("Billing specialist")).not.toBeInTheDocument();
   expect(saved().participants.intake.transfers).toEqual(["specialist", "reviewer"]);
   expect(JSON.parse(screen.getByTestId("edges").textContent!)).toContainEqual({ id: "transfer:intake:reviewer", source: "intake", target: "reviewer", locked: false });
   fireEvent.click(screen.getByRole("button", { name: "Remove transfer to specialist" }));
