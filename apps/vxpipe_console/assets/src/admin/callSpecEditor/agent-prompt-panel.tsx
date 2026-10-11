@@ -11,8 +11,6 @@ export function AgentPromptPanel({ document, onChange, issues, participantKey }:
   return <fieldset disabled={document.readOnly} className="space-y-5">
     <TextField label="Prompt" path={[...path, "prompt"]} issues={issues} disabled={document.readOnly} value={target.prompt} multiline rows={10} hint="Instructions for how this agent should handle the conversation."
       onChange={(prompt) => onChange(editSource(document, (source) => { agent(source, participantKey).prompt = prompt; }))} />
-    <TextField label="Description" path={[...path, "description"]} issues={issues} disabled={document.readOnly} value={target.description ?? ""} multiline hint="Describe this agent's role to other participants."
-      onChange={(description) => onChange(editSource(document, (source) => { const target = agent(source, participantKey); if (description === "") delete target.description; else target.description = description; }))} />
     <ChoiceField label="First message" path={[...path, "first_message", "mode"]} issues={issues} disabled={document.readOnly} value={target.first_message?.mode ?? defaultMode}
       choices={[{ value: "wait_for_input", label: "Wait for input" }, { value: "generated", label: "Generated" }, { value: "fixed", label: "Fixed text" }]}
       hint={generated ? "The outgoing handler introduces the call by default." : "This agent waits for input by default."}

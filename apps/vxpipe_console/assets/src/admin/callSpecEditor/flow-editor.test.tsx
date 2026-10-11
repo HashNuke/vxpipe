@@ -76,7 +76,7 @@ test("backend field errors survive unrelated edits and disappear when their fiel
   render(<CallSpecEditor {...props} />); saveDraft();
   await screen.findByText("Couldn't save: Agent intake › Prompt needs a greeting"); click("Show");
   expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveAttribute("aria-invalid", "true");
-  fill("Description", "New description");
+  rename("Renamed draft");
   expect(screen.getByText("needs a greeting")).toBeVisible();
   fill("Prompt", "Hello. How can I help?");
   expect(screen.queryByText("needs a greeting")).not.toBeInTheDocument();

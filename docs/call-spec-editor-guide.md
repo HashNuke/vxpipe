@@ -16,7 +16,7 @@ or **Outgoing call** at the other end of its title row.
 The canvas shows participants and transfer destinations. Agent cards show their
 name, tool count and the number of variables they can write. Variable counts include
 top-level properties in writable sections; nested objects count as one variable.
-Prompts and descriptions stay in the inspector. Select a participant to
+Prompts stay in the agent inspector. Select a participant to
 edit its fields; **Call settings** opens model defaults, variables and call
 policies. On a phone, these controls open in a side sheet. Model and voice choices
 come from the installed provider catalog. Choosing a provider selects its
@@ -26,12 +26,10 @@ Existing saved selections are preserved. A public
 speech model such as `flux` and its `options.voice` remain separate in the source;
 the provider adapter composes its concrete model ID.
 
-Participant **Description** is optional. When an AI or human participant is an
-allowed transfer destination, its description is included in the transfer tool
-shown to the AI. For example, `billing` with a description of “Handles invoices
-and refunds” tells the AI what that destination handles. Without a description,
-the tool lists only the participant key. This is separate from an AI participant's
-prompt and a human participant's transfer notice.
+Participant forms have no Description field. Put transfer instructions in the
+agent's prompt, referring to destination participant keys. Existing optional
+`description` values remain in the saved JSON and can be edited there; the runtime
+still includes them in transfer-tool destination details when present.
 
 An agent's **Models** tab offers two model types: **Speech-to-Speech** uses one
 speech model; **LLM + Text-to-Speech** shows a language model and a voice model.

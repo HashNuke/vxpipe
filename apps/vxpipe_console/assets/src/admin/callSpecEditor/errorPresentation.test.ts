@@ -32,6 +32,12 @@ test("unknown fields and missing participants keep the backend reason and go to 
   }
 });
 
+test("description issues stay in the issues list instead of targeting removed form fields", () => {
+  for (const key of ["assistant", "support", "caller"]) {
+    expect(locateIssue(source, ["participants", key, "description"])).toBeNull();
+  }
+});
+
 test("success and local rejection outcomes carry revision and first issue", () => {
   expect(actionOutcome(source, "save", { status: 201, revision: 3 })).toMatchObject({ tone: "success", message: "Saved as revision 3", persistent: false });
   expect(actionOutcome(source, "publish", { status: 200, revision: 3 })).toMatchObject({ tone: "success", message: "Published revision 3" });

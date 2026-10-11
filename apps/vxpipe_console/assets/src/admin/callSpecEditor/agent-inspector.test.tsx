@@ -28,21 +28,24 @@ async function choose(label: string, option: string) {
 const fill = (label: string, value: string) => fireEvent.change(screen.getByRole("textbox", { name: label }), { target: { value } });
 
 test("agent prompt and first-message controls preserve source on load and remove mode-specific text", async () => {
-  render(<Harness />);
-  expect(saved()).toEqual(editorFixture.source);
+  const initial = structuredClone(editorFixture);
+  initial.source.participants.intake!.description = "Saved transfer context";
+  render(<Harness initial={initial} />);
+  expect(saved()).toEqual(initial.source);
+  expect(screen.queryByRole("textbox", { name: "Description" })).not.toBeInTheDocument();
   expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Prompt", "Models", "Variables", "Transfers", "Tools", "Media"]);
   expect(screen.getByRole("combobox", { name: "First message" })).toHaveTextContent("Wait for input");
   fireEvent.keyDown(screen.getByRole("combobox", { name: "First message" }), { key: "ArrowDown" });
   expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual(["Wait for input", "Generated", "Fixed text"]);
   fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
-  fill("Prompt", "Ask one question at a time."); fill("Description", "Reception agent");
+  fill("Prompt", "Ask one question at a time.");
   await choose("First message", "Fixed text"); fill("First message text", "Hello there.");
-  expect(saved().participants.intake).toMatchObject({ prompt: "Ask one question at a time.", description: "Reception agent", first_message: { mode: "fixed", text: "Hello there." } });
+  expect(saved().participants.intake).toMatchObject({ prompt: "Ask one question at a time.", description: "Saved transfer context", first_message: { mode: "fixed", text: "Hello there." } });
   await choose("First message", "Generated");
   expect(saved().participants.intake.first_message).toEqual({ mode: "generated" });
-  await choose("First message", "Wait for input"); fill("Description", "");
+  await choose("First message", "Wait for input");
   expect(saved().participants.intake).not.toHaveProperty("first_message");
-  expect(saved().participants.intake).not.toHaveProperty("description");
+  expect(saved().participants.intake.description).toBe("Saved transfer context");
 });
 test("only the outgoing handler defaults to Generated and can explicitly wait for input", async () => {
   const initial = structuredClone(editorFixture);
@@ -222,7 +225,7 @@ test("reserved tool keys cannot be added, and host tools keep their registered k
 });
 test("historical agent inspectors allow tab navigation and disable mutation controls", () => {
   render(<Harness initial={{ ...editorFixture, readOnly: true }} />);
-  for (const name of ["Participant key", "Prompt", "Description"]) expect(screen.getByRole("textbox", { name })).toBeDisabled();
+  for (const name of ["Participant key", "Prompt"]) expect(screen.getByRole("textbox", { name })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Delete participant" })).toBeDisabled();
   switchTab("Transfers"); expect(screen.getByRole("button", { name: "Add destination" })).toBeDisabled();
   switchTab("Tools"); expect(screen.getByRole("button", { name: "Add tool" })).toBeDisabled();

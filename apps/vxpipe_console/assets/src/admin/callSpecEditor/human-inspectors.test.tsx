@@ -88,10 +88,10 @@ test("human identity edits rewrite references, retain literal text and reject co
   fireEvent.change(key, { target: { value: "support" } }); fireEvent.blur(key);
   expect(saved().participants.intake.transfers).toEqual(["support"]);
   expect(saved().participants.support.transfer_notice).toBe(editorFixture.source.participants.specialist!.type === "human" ? editorFixture.source.participants.specialist.transfer_notice : undefined);
-  fireEvent.change(screen.getByRole("textbox", { name: "Description" }), { target: { value: "Support team" } });
+  expect(screen.queryByRole("textbox", { name: "Description" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("textbox", { name: "Private briefing" }), { target: { value: "A caller needs your help." } });
   fireEvent.change(screen.getByRole("spinbutton", { name: "Transfer attempt timeout (ms)" }), { target: { value: "45000" } });
-  expect(saved().participants.support).toMatchObject({ description: "Support team", transfer_notice: "A caller needs your help." });
+  expect(saved().participants.support).toMatchObject({ description: editorFixture.source.participants.specialist!.description, transfer_notice: "A caller needs your help." });
   expect(saved().transfer_policy).toEqual({ attempt_timeout_ms: 45000 });
 });
 test("deleting a human destination confirms removal and cleans transfer references", async () => {
@@ -134,16 +134,20 @@ test("read-only entry and destination inspectors preserve source and disable all
   expect(saved()).toEqual(initial.source);
 });
 
-test("clearing optional description and briefing removes them instead of saving invalid empty text", () => {
+test("participant forms omit descriptions and preserve saved values when editing other fields", async () => {
   const view = render(<Harness />);
-  fireEvent.change(screen.getByRole("textbox", { name: "Description" }), { target: { value: "" } });
+  expect(screen.queryByRole("textbox", { name: "Description" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("textbox", { name: "Private briefing" }), { target: { value: "" } });
-  expect(saved().participants.specialist).not.toHaveProperty("description");
+  expect(saved().participants.specialist.description).toBe(editorFixture.source.participants.specialist!.description);
   expect(saved().participants.specialist).not.toHaveProperty("transfer_notice");
-  view.unmount(); render(<Harness entry />);
-  fireEvent.change(screen.getByRole("textbox", { name: "Description" }), { target: { value: "Caller details" } });
-  fireEvent.change(screen.getByRole("textbox", { name: "Description" }), { target: { value: "" } });
-  expect(saved().participants.caller).not.toHaveProperty("description");
+  view.unmount();
+  const initial = structuredClone(editorFixture);
+  initial.source.participants.caller!.description = "Saved caller context";
+  render(<Harness entry initial={initial} />);
+  expect(screen.queryByRole("textbox", { name: "Description" })).not.toBeInTheDocument();
+  await choose("Handled by", "specialist");
+  expect(saved().incoming_call.handled_by).toBe("specialist");
+  expect(saved().participants.caller.description).toBe("Saved caller context");
 });
 
 test("opening a saved document preserves nullable fields, omitted admission and explicit voice options", () => {

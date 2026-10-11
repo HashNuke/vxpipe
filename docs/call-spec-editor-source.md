@@ -82,8 +82,10 @@ service applies the selected role's admission rules and removes phone-only field
 when switching to web. An outgoing callee uses a fixed number or the outgoing
 request's `to`; transfer destinations also support a declared string variable.
 Saved connections are not normalized on load. Opening text has an explicit TTS
-selection, independent of participant defaults. Clearing optional descriptions or
-private briefings removes the field; opening a saved null leaves it unchanged.
+selection, independent of participant defaults. Clearing an optional private
+briefing removes the field; opening a saved null leaves it unchanged. Description
+fields are omitted from participant forms. Existing description values remain in
+the source and are editable through JSON.
 Participant capability panels show the call default and any explicit override.
 The human inspector's transfer timeout edits the one call-wide transfer policy.
 
