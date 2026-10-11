@@ -22,7 +22,7 @@ test("historical source shows its notice and disables authoring", () => {
     onEditFlowName={vi.fn()} onSaveDraft={vi.fn()} onPublish={vi.fn()} onShowIssues={vi.fn()} onAddNode={vi.fn()} onConnect={vi.fn()}
     onSelectNode={vi.fn()} onSelectEdge={vi.fn()} selectedNodeId={null} inspector={<p>Inspector content</p>} inspectorTitle="Call settings" />);
   expect(screen.getByText("Historical schema: read only")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Add agent" })).toBeDisabled();
 });
 

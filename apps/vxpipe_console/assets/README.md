@@ -140,8 +140,14 @@ npm run storybook
 ```
 
 Open `http://127.0.0.1:6006/`. Individual page stories expose their important states through
-Storybook Controls. Use **Admin / Full journey** for the linked review flow; each page checkpoint
-extends that same story until it reaches call details.
+Storybook Controls. Under **Vxpipe**, **@vxpipe/react** contains the reusable package's
+Workbench, and **Console** contains the application pages and call spec editor.
+Use **Console / Full journey** for the linked review flow.
+
+Use `Vxpipe/React/...` and `Vxpipe/Console/...` for story titles. The Storybook manager
+renders the React folder as `@vxpipe/react`, preserving the package name without treating
+its slash as another folder. Keep these prefixes consistent: `vxpipe_console` and
+`Vxpipe/Console` produce the same Storybook ID with conflicting parent relationships.
 
 The browser uses only the scoped, short-lived connection details returned by the
 gateway. There is no build-time gateway URL or frontend environment file, and

@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { OnboardingStory } from "./OnboardingStory";
 
 const meta = {
-  title: "vxpipe_console/Onboarding",
+  title: "Vxpipe/Console/Onboarding",
   component: OnboardingStory,
   parameters: {
     layout: "fullscreen",

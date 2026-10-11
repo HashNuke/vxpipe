@@ -9,15 +9,22 @@ web
 ## Users
 
 Vxpipe serves people and teams that need a backend for a voice-agent application
-or product. Elixir developers can embed it as a library in an Elixir project.
-Teams using other application stacks can run it as a Docker image and
-orchestrate calls through its APIs.
+or product. Its two intended consumption paths are embedding the runtime in an
+Elixir application and operating it as an API-driven service for other stacks.
+Docker distribution is planned; the README still labels the image release as
+coming soon.
+
+Installation operators use the browser Console to configure tenants and services,
+author and publish call specs, and inspect calls. Callers interact with the voice
+experiences those teams build, through browser or phone connections.
 
 ## Product Purpose
 
-Vxpipe provides the backend runtime for orchestrating voice-agent calls. It
-exists so product teams can build voice experiences without coupling their
-application to one model, speech, transport, or client provider.
+Vxpipe provides the backend runtime for orchestrating voice-agent calls: streaming
+speech, model and tool execution, interruptions, transfers between agents and
+people, and call visibility. It exists so product teams can build voice
+experiences without coupling their application to one model, speech, transport,
+or client provider.
 
 Success means developers can run dependable voice-agent workloads through the
 same engine whether they embed Vxpipe in an Elixir system or operate it as a
@@ -35,46 +42,87 @@ product materials must not invent one.
 
 ## Operating Context
 
-- Embedded use inside a developer's Elixir supervision tree.
-- Containerized use through a Docker image controlled through Vxpipe APIs.
-- Browser and mobile voice clients connecting through supported gateway
-  protocols and media transports.
-- Voice-agent calls composed from provider-backed capabilities such as speech
-  recognition, model inference, and speech synthesis.
-- Development and interoperability work exercised through the browser samples
-  application.
+- Elixir hosts compose the reusable umbrella applications; the Console owns
+  browser presentation and is not a requirement for every embedding host.
+- API-driven hosts use tenant-scoped call specs and call admission. Containerized
+  distribution remains an intended deployment path rather than a released image.
+- Installation operators authenticate to the Console, configure tenant services,
+  edit call specs, save immutable revisions, and explicitly publish the revision
+  to use for new calls.
+- Voice calls compose provider-backed capabilities such as speech recognition,
+  model inference, speech synthesis, and speech-to-speech. Supported browser
+  media and telephony adapters connect participants to the same call engine.
+- Operators inspect ongoing and ended calls through conversation, participant,
+  event, variable, and usage views. Missing or partial evidence must remain
+  distinguishable from a known result.
+- Local development uses `bin/setup` and `bin/dev`. Console samples exercise
+  real gateway paths; the shared Storybook provides synthetic UI states without
+  requiring provider credentials or a live call.
 
 ## Capabilities and Constraints
 
 - The call engine is protocol-neutral and OTP-native.
 - Client, media, and provider protocols belong behind adapters rather than in the
   engine's domain model.
-- The first client adapter targets unmodified RTVI 2.x clients and the RTVI 2.1
-  feature set. RTVI is an access mechanism, not Vxpipe's internal object model.
-- The engine's intended domain includes rooms, participants, capabilities,
-  routing, turn semantics, tools, transfers, and protocol-neutral events.
-- The currently implemented end-to-end slice creates a supervised development
-  room through the browser playground and gateway. Complete RTVI signaling and
-  WebRTC sessions remain future work.
-- A hosted-service offering, licensing model, performance target, and formal
-  compatibility or accessibility commitments are not yet decided.
+- The RTVI adapter targets unmodified RTVI 2.x clients and the RTVI 2.1 feature
+  set. Browser samples implement WebRTC/RTVI readiness and typed and spoken
+  turns. The target feature set is not a blanket compatibility certification.
+  RTVI remains an access mechanism, not Vxpipe's internal object model.
+- The runtime includes rooms, participants, capabilities, routing, turn semantics,
+  tools, transfers, and protocol-neutral events. Implemented paths include
+  interruptions, human handoff, and incoming and outgoing telephony. Support and
+  live acceptance depend on the selected provider and transport; a local fixture
+  does not establish interoperability with every external service.
+- Call specs describe participants, provider/model selections, tools, transfers,
+  Call Variables, media policies, and call direction. Console supports visual and
+  JSON authoring. Saving a draft and publishing a revision are separate actions;
+  editing a call spec does not itself start a call.
+- **Call Variables** are typed shared values grouped into sections.
+  **Conversation history** contains messages and tool exchanges; **model
+  context** is the information supplied to the model. These are distinct from
+  the variable store and must not be presented as interchangeable concepts.
+- Tenant control-plane storage uses PostgreSQL. API-key authorization, scoped
+  join tokens, and installation-operator sessions serve different boundaries.
+  Provider credentials are resolved server-side and stay out of portable call
+  specs and browser assets.
+- The framework-neutral `@vxpipe/core` and UI-focused `@vxpipe/react` packages
+  separate call-details state from host URLs, authentication, and transport.
+  They are private workspaces, not published npm packages. Their Storybook
+  fixtures are demonstrations, not live call evidence.
+- The repository is licensed under Apache-2.0, as recorded in `LICENSE`.
+  A hosted-service offering, pricing, comparative performance targets, and
+  formal compatibility or accessibility commitments remain undecided.
 
 ## Brand Commitments
 
-The product name is **Vxpipe**. No additional voice, identity, or brand asset
-commitments have been established.
+The product name is **Vxpipe**. The existing Console visual system is recorded
+in `DESIGN.md`; product-context refreshes do not redefine it. No additional
+product-wide voice or brand asset commitments are established by this record.
 
 ## Evidence on Hand
 
-- `docs/architecture.md` records the proposed protocol and runtime architecture,
-  the implemented create-room slice, and its verification criteria.
-- `apps/vxpipe_console/assets/` provides the Console-owned React and esbuild browser
-  playground using Pipecat's Voice UI Kit and Small WebRTC transport.
+- `docs/architecture.md` records protocol and runtime boundaries, implemented
+  slices, and remaining proposals; do not treat every architectural target as
+  released behavior.
+- `docs/tenant-control-plane.md`, `docs/provider-credential-storage.md`, and
+  `docs/tenant-telephony-services.md` describe tenant configuration and service
+  boundaries. `docs/outgoing-call-runtime.md` records outgoing-call behavior
+  and verification evidence.
+- `docs/call-spec-editor-guide.md` describes current Console authoring workflows.
+  `apps/vxpipe_console/lib/vxpipe/console/router.ex` records current route and
+  authentication boundaries.
+- `apps/vxpipe_console/assets/` contains Console administration and the browser
+  samples using Pipecat's Voice UI Kit and Small WebRTC transport.
 - `apps/vxpipe_call_engine/` contains the OTP-native call-engine application.
 - `apps/vxpipe_gateway/` contains the client-facing HTTP and protocol boundary.
-- No customer proof, testimonials, comparative benchmarks, pricing, logo, or
-  original brand imagery are currently present. Future work must not fabricate
-  them.
+- `packages/core/`, `packages/react/`, and `.storybook/` provide reusable browser
+  components and fixture-based demonstrations. `docs/development/local-development.md`
+  records the local setup workflow.
+- `LICENSE` establishes the repository license. `README.md` explicitly marks
+  the Docker release as forthcoming.
+- No verified customer proof, testimonials, comparative performance benchmarks,
+  or commercial pricing are established by this record. Future product materials
+  must not invent them or turn prototype fixtures into customer evidence.
 
 ## Product Principles
 

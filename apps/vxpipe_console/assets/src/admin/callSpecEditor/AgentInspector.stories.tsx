@@ -7,6 +7,7 @@ import { editorFixture } from "./editorFixtures";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
 import type { SourceDocument } from "./types";
 import { validateSource } from "./validation";
+import { recommendedSelection } from "./seed";
 import "../admin.css";
 
 type Props = { theme: "light" | "dark"; initial: SourceDocument; initialTab: AgentInspectorTab };
@@ -23,6 +24,8 @@ initial.source.defaults = { capabilities: { model_inference: { provider: "google
 initial.source.participants.reviewer = { type: "agent", prompt: "Help with billing questions.", description: "Billing specialist" };
 const voice = structuredClone(initial);
 voice.source.participants.intake!.capabilities = { text_to_speech: { provider: "deepgram", model: "flux", options: { voice: "haley" } } };
+const speechToSpeech = structuredClone(initial);
+speechToSpeech.source.defaults = { capabilities: { speech_to_speech: recommendedSelection(modelCatalogFixture, "speech_to_speech", "google") } };
 const fixed = structuredClone(initial);
 if (fixed.source.participants.intake?.type === "agent") fixed.source.participants.intake.first_message = { mode: "fixed", text: "Hello, how can I help you today?" };
 const tools = structuredClone(initial);
@@ -56,10 +59,11 @@ export const AgentTransfers: Story = { args: { initialTab: "transfers", initial:
   await expect(canvas.findByText("Appointment specialist")).resolves.toBeInTheDocument();
   await expect(canvas.findByRole("button", { name: "Add destination" })).resolves.toBeInTheDocument();
 } };
-export const VoiceAndModel: Story = { args: { initialTab: "voice", initial: voice } };
+export const VoiceAndModel: Story = { name: "Models", args: { initialTab: "voice", initial: voice } };
+export const SpeechToSpeech: Story = { args: { initialTab: "voice", initial: speechToSpeech } };
 export const FixedFirstMessage: Story = { args: { initial: fixed } };
 export const Tools: Story = { args: { initialTab: "tools", initial: tools } };
-export const Presence: Story = { args: { initialTab: "presence" } };
+export const Presence: Story = { name: "Media", args: { initialTab: "presence" } };
 export const ReadOnly: Story = { args: { initial: { ...fixed, readOnly: true } } };
 export const AddToolSource: Story = { args: { initialTab: "tools", initial: tools }, play: async ({ canvasElement }) => {
   await userEvent.click(await within(canvasElement).findByRole("button", { name: "Add tool" }));

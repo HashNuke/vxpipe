@@ -36,9 +36,13 @@ export function canvasGraph(document: SourceDocument, selectedNodeId: string | n
         data: {
           kind: node.kind,
           label: node.kind === "entry" ? "Entry" : node.participantKey,
-          subtitle: node.kind === "entry" ? `${document.source.outgoing_call ? "Outgoing" : "Incoming"} · ${node.participantKey}` : participant?.description || agent?.prompt || (participant?.type === "human" ? participant.connection.service : ""),
+          subtitle: node.kind === "entry" ? `${document.source.outgoing_call ? "Outgoing" : "Incoming"} · ${node.participantKey}` : "",
           toolCount: Object.keys(agent?.tools ?? {}).length,
-          variableCount: Object.keys(agent?.variable_permissions ?? {}).length,
+          variableCount: Object.entries(agent?.variable_permissions ?? {}).reduce((count, [key, permissions]) => {
+            const sections = document.source.call_variables?.sections;
+            const section = sections && Object.hasOwn(sections, key) ? sections[key] : undefined;
+            return count + (permissions.some((permission) => permission === "write") ? Object.keys(section?.schema.properties ?? {}).length : 0);
+          }, 0),
           issueCount: issues[node.id] ?? 0,
           readOnly: document.readOnly,
         },

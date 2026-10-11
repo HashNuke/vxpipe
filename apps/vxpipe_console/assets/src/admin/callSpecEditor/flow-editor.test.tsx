@@ -20,13 +20,23 @@ const properties = () => ({ snapshot, catalog: modelCatalogFixture, lookups: { t
   backHref: "/specs", servicesHref: "/services", onNavigate: vi.fn(), onReload: vi.fn(async () => snapshot),
   execute: vi.fn<ExecuteEditorRequest>(async () => ({ status: 201, revision: 4 })) });
 const click = (name: string) => fireEvent.click(screen.getByRole("button", { name }));
+const saveDraft = () => {
+  fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "ArrowDown" });
+  fireEvent.click(screen.getByRole("menuitem", { name: "Save as draft" }));
+};
 const fill = (name: string, value: string) => fireEvent.change(screen.getByRole("textbox", { name }), { target: { value } });
+const rename = (value: string) => {
+  click("Edit call spec name");
+  fireEvent.change(within(screen.getByRole("dialog", { name: "Edit call spec name" })).getByRole("textbox", { name: "Call spec name" }), { target: { value } });
+  click("Save name");
+};
 
 test("source edits save exactly, update revision badges and publish the saved revision", async () => {
   const props = properties(); render(<CallSpecEditor {...props} />);
-  fill("Call spec name", "Renamed call");
+  rename("Renamed call");
+  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Renamed call");
   expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
-  click("Save draft");
+  saveDraft();
   expect(await screen.findByText("Saved as revision 4")).toBeVisible();
   expect(props.execute).toHaveBeenCalledWith(expect.objectContaining({ action: "save", source: { ...snapshot.document.source, name: "Renamed call" } }), expect.any(AbortSignal));
   props.execute.mockResolvedValue({ status: 200, revision: 4 });
@@ -36,9 +46,22 @@ test("source edits save exactly, update revision badges and publish the saved re
   expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
 });
 
+test("name issues open the header rename dialog with the error and can be corrected", async () => {
+  const props = properties();
+  props.execute.mockResolvedValueOnce({ status: 422, error: { code: "invalid_call_spec", path: ["name"], reason: "Choose a different name" } });
+  render(<CallSpecEditor {...props} />); saveDraft();
+  await screen.findByText("Couldn't save: Call spec name Choose a different name"); click("Show");
+  const name = within(screen.getByRole("dialog", { name: "Edit call spec name" })).getByRole("textbox", { name: "Call spec name" });
+  await waitFor(() => expect(name).toHaveFocus());
+  expect(name).toHaveAccessibleDescription("Choose a different name");
+  fireEvent.change(name, { target: { value: "Updated name" } }); click("Save name");
+  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Updated name");
+  expect(screen.queryByText("Choose a different name")).not.toBeInTheDocument();
+});
+
 test("blocked save shows the first issue, selects its inspector and focuses the field", async () => {
   const props = properties(); render(<CallSpecEditor {...props} />);
-  click("Select intake"); fill("Prompt", ""); click("Call settings"); click("Save draft");
+  click("Select intake"); fill("Prompt", ""); click("Call settings"); saveDraft();
   expect(props.execute).not.toHaveBeenCalled();
   expect(screen.getByText("Fix 1 issue before saving")).toBeVisible();
   click("Show first issue");
@@ -50,10 +73,10 @@ test("blocked save shows the first issue, selects its inspector and focuses the 
 test("backend field errors survive unrelated edits and disappear when their field changes", async () => {
   const props = properties();
   props.execute.mockResolvedValue({ status: 422, error: { code: "invalid_call_spec", path: ["participants", "intake", "prompt"], reason: "needs a greeting" } });
-  render(<CallSpecEditor {...props} />); click("Save draft");
+  render(<CallSpecEditor {...props} />); saveDraft();
   await screen.findByText("Couldn't save: Agent intake › Prompt needs a greeting"); click("Show");
   expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveAttribute("aria-invalid", "true");
-  fill("Description", "New description");
+  rename("Renamed draft");
   expect(screen.getByText("needs a greeting")).toBeVisible();
   fill("Prompt", "Hello. How can I help?");
   expect(screen.queryByText("needs a greeting")).not.toBeInTheDocument();
@@ -62,18 +85,18 @@ test("backend field errors survive unrelated edits and disappear when their fiel
 
 test("retry uses current source and replaces the previous notification", async () => {
   const props = properties(); props.execute.mockRejectedValueOnce(new Error("offline"));
-  render(<CallSpecEditor {...props} />); click("Save draft");
-  await screen.findByText("Couldn't save. Try again"); fill("Call spec name", "Retry draft"); click("Retry");
+  render(<CallSpecEditor {...props} />); saveDraft();
+  await screen.findByText("Couldn't save. Try again"); rename("Retry draft"); click("Retry");
   await screen.findByText("Saved as revision 4");
   expect(props.execute).toHaveBeenLastCalledWith(expect.objectContaining({ source: expect.objectContaining({ name: "Retry draft" }) }), expect.any(AbortSignal));
   expect(screen.getAllByLabelText("Notification")).toHaveLength(1);
 });
 
 test("back navigation retains edits until the operator confirms leaving", () => {
-  const props = properties(); render(<CallSpecEditor {...props} />); fill("Call spec name", "Keep me");
+  const props = properties(); render(<CallSpecEditor {...props} />); rename("Keep me");
   fireEvent.click(screen.getByRole("link", { name: "Back to call specs" }));
   expect(props.onNavigate).not.toHaveBeenCalled();
-  click("Keep editing"); expect(screen.getByRole("textbox", { name: "Call spec name" })).toHaveValue("Keep me");
+  click("Keep editing"); expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Keep me");
   fireEvent.click(screen.getByRole("link", { name: "Back to call specs" })); click("Leave page");
   expect(props.onNavigate).toHaveBeenCalledWith("/specs");
 });
@@ -82,19 +105,19 @@ test("conflict reload asks before discarding changes and replaces them only afte
   const props = properties();
   props.execute.mockResolvedValue({ status: 409, error: { code: "revision_conflict" } });
   props.onReload.mockResolvedValue({ ...snapshot, saved: { ...snapshot.saved!, revision: 8 } });
-  render(<CallSpecEditor {...props} />); fill("Call spec name", "Unsaved draft"); click("Save draft");
+  render(<CallSpecEditor {...props} />); rename("Unsaved draft"); saveDraft();
   await screen.findByText("This spec changed while saving. Reload to see the latest revision"); click("Reload");
   expect(props.onReload).not.toHaveBeenCalled();
   fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Reload latest revision" }));
-  await screen.findByText("Revision 8");
-  expect(screen.getByRole("textbox", { name: "Call spec name" })).toHaveValue(snapshot.document.source.name);
+  await screen.findByText("v8");
+  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent(snapshot.document.source.name!);
 });
 
 test("add, connect, rename and delete a transfer keep the portable source in sync", () => {
   render(<CallSpecEditor {...properties()} />); click("Add agent");
   expect(screen.getByRole("textbox", { name: "Participant key" })).toHaveValue("agent");
   click("Connect intake to agent"); click("Select agent"); fill("Participant key", "helper"); fireEvent.blur(screen.getByRole("textbox", { name: "Participant key" }));
-  click("Select transfer:intake:helper"); click("Delete transfer"); click("View JSON");
+  click("Select transfer:intake:helper"); click("Delete transfer"); click("JSON");
   const source = JSON.parse((screen.getByRole("textbox", { name: "Call spec JSON" }) as HTMLTextAreaElement).value);
   expect(source.participants.helper.type).toBe("agent");
   expect(source.participants.intake.transfers).toEqual(["specialist"]);
@@ -118,8 +141,8 @@ test("adding a participant on a phone opens its inspector", () => {
 
 test("Open services uses the same unsaved-change guard", async () => {
   const props = properties(); props.execute.mockResolvedValue({ status: 422, error: { code: "provider_credential_unavailable", path: ["defaults", "capabilities", "model_inference"] } });
-  render(<CallSpecEditor {...props} />); fill("Call spec name", "Keep draft"); click("Save draft");
-  await screen.findByText("No usable google credential for this tenant"); click("Open services");
+  render(<CallSpecEditor {...props} />); rename("Keep draft"); saveDraft();
+  await screen.findAllByText("No usable google credential for this tenant"); click("Open services");
   expect(props.onNavigate).not.toHaveBeenCalled(); click("Leave page");
   expect(props.onNavigate).toHaveBeenCalledWith("/services");
 });
@@ -127,19 +150,19 @@ test("Open services uses the same unsaved-change guard", async () => {
 test("a failed reload keeps the current draft and offers another reload", async () => {
   const props = properties(); props.execute.mockResolvedValue({ status: 409, error: { code: "revision_conflict" } });
   props.onReload.mockRejectedValue(new Error("offline"));
-  render(<CallSpecEditor {...props} />); fill("Call spec name", "Keep draft"); click("Save draft");
+  render(<CallSpecEditor {...props} />); rename("Keep draft"); saveDraft();
   await screen.findByText("This spec changed while saving. Reload to see the latest revision"); click("Reload"); click("Reload latest revision");
   await screen.findByText("Couldn't reload. Your changes are still here.");
-  expect(screen.getByRole("textbox", { name: "Call spec name" })).toHaveValue("Keep draft");
-  expect(screen.getByText("Revision 3")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Keep draft");
+  expect(screen.getByText("v3")).toBeVisible();
   expect(screen.getByRole("button", { name: "Reload" })).toBeEnabled();
 });
 
 test("the browser unload guard clears after saving and is absent for historical viewing", async () => {
   const props = properties(); const view = render(<CallSpecEditor {...props} />);
-  fill("Call spec name", "New name");
+  rename("New name");
   const dirty = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(dirty); expect(dirty.defaultPrevented).toBe(true);
-  click("Save draft"); await screen.findByText("Saved as revision 4");
+  saveDraft(); await screen.findByText("Saved as revision 4");
   const saved = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(saved); expect(saved.defaultPrevented).toBe(false);
   view.unmount(); render(<CallSpecEditor {...properties()} snapshot={{ document: { ...snapshot.document, readOnly: true } }} />);
   const historical = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(historical); expect(historical.defaultPrevented).toBe(false);
@@ -149,14 +172,14 @@ test("Show opens the phone inspector and focuses the requested field", async () 
   vi.stubGlobal("innerWidth", 390);
   const initial = structuredClone(snapshot);
   if (initial.document.source.participants.intake?.type === "agent") initial.document.source.participants.intake.prompt = "";
-  render(<CallSpecEditor {...properties()} snapshot={initial} />); click("Save draft"); click("Show first issue");
+  render(<CallSpecEditor {...properties()} snapshot={initial} />); saveDraft(); click("Show first issue");
   expect(screen.getByRole("dialog", { name: "Participant intake" })).toBeVisible();
   await waitFor(() => expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveFocus());
 });
 
 test("an unmapped backend error opens the issues drawer through Show", async () => {
   const props = properties(); props.execute.mockResolvedValue({ status: 422, error: { code: "invalid_call_spec", path: ["new_field"], reason: "unsupported field" } });
-  render(<CallSpecEditor {...props} />); click("Save draft"); await screen.findByText("Couldn't save: unsupported field"); click("Show");
+  render(<CallSpecEditor {...props} />); saveDraft(); await screen.findByText("Couldn't save: unsupported field"); click("Show");
   const drawer = screen.getByRole("dialog", { name: "Call spec issues" });
   expect(within(drawer).getByText("unsupported field")).toBeVisible();
   fireEvent.click(within(drawer).getByRole("button", { name: "Show" }));
@@ -178,10 +201,67 @@ test("an old recovery action cannot reload while a new save is pending", async (
   props.execute.mockResolvedValueOnce({ status: 409, error: { code: "revision_conflict" } });
   let finish!: (result: EditorResult) => void;
   props.execute.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
-  render(<CallSpecEditor {...props} />); click("Save draft");
+  render(<CallSpecEditor {...props} />); saveDraft();
   await screen.findByText("This spec changed while saving. Reload to see the latest revision");
-  click("Save draft");
+  saveDraft();
   expect(screen.getByRole("button", { name: "Reload" })).toBeDisabled();
   expect(props.onReload).not.toHaveBeenCalled();
   await act(async () => finish({ status: 201, revision: 4 }));
+});
+
+
+test("call spec JSON applies to the draft and saves through the existing revision flow", async () => {
+  const props = properties(); render(<CallSpecEditor {...props} />);
+  click("JSON");
+  const next = { ...snapshot.document.source, name: "Edited in JSON" };
+  fill("Call spec JSON", JSON.stringify(next));
+  expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
+  click("Apply JSON");
+  expect(screen.getByRole("heading", { name: "Edited in JSON" })).toBeInTheDocument();
+  click("Close"); saveDraft();
+  await waitFor(() => expect(props.execute).toHaveBeenCalledWith(expect.objectContaining({ source: next }), expect.any(AbortSignal)));
+});
+
+test("unapplied participant JSON survives switching participants and guards departure", () => {
+  const props = properties(); render(<CallSpecEditor {...props} />);
+  click("Select intake"); click("Participant JSON");
+  fill("Participant JSON", '{');
+  click("Select specialist"); click("Select intake");
+  expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue('{');
+  expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("link", { name: "Back to call specs" }));
+  expect(props.onNavigate).not.toHaveBeenCalled(); click("Keep editing");
+  click("Discard JSON changes");
+  expect(screen.getByRole("button", { name: "More actions" })).toBeEnabled();
+});
+
+
+test("Review JSON edits reopens a hidden participant draft", () => {
+  render(<CallSpecEditor {...properties()} />); click("Select intake"); click("Participant JSON");
+  fill("Participant JSON", '{'); click("Participant JSON");
+  click("Review JSON edits");
+  expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue('{');
+});
+
+test("a removed participant's JSON draft remains reviewable and discardable", () => {
+  render(<CallSpecEditor {...properties()} />); click("Select specialist"); click("Participant JSON");
+  fill("Participant JSON", '{'); click("JSON");
+  const next = structuredClone(snapshot.document.source);
+  delete next.participants.specialist;
+  if (next.participants.intake.type === "agent") delete next.participants.intake.transfers;
+  fill("Call spec JSON", JSON.stringify(next)); fireEvent.click(within(screen.getByRole("dialog", { name: "Call spec source" })).getByRole("button", { name: "Apply JSON" })); click("Close");
+  click("Review JSON edits");
+  expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue('{');
+  click("Discard JSON changes");
+  expect(screen.getByRole("button", { name: "More actions" })).toBeEnabled();
+});
+
+test("retrying a failed save waits for unapplied JSON edits", async () => {
+  const props = properties(); props.execute.mockRejectedValueOnce(new Error("offline"));
+  render(<CallSpecEditor {...props} />); saveDraft();
+  await screen.findByText("Couldn't save. Try again");
+  click("Select intake"); click("Participant JSON"); fill("Participant JSON", '{');
+  click("Participant JSON"); click("Retry");
+  expect(props.execute).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue('{');
 });

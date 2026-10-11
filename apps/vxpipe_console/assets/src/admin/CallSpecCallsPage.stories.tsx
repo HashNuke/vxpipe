@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CallSpecCallsStory } from "./CallSpecCallsStory";
 
 const meta = {
-  title: "vxpipe_console/Calls",
+  title: "Vxpipe/Console/Calls",
   component: CallSpecCallsStory,
   parameters: {
     layout: "fullscreen",

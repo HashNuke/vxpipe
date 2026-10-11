@@ -50,11 +50,13 @@ test("schema controls display and edit large numeric enums and bounds without ro
     return <><VariablesPanel document={document} onChange={onChange} /><output data-testid="source">{serializeSource(document)}</output></>;
   }
   render(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit account / id" }));
   const field = screen.getByRole("spinbutton", { name: "account / id enum / 2" }) as HTMLInputElement;
   expect(field.value).toBe("9007199254740993");
   expect(field).toHaveAttribute("aria-valuetext", "9007199254740993");
   fireEvent.change(field, { target: { value: "-9007199254740995" } });
   fireEvent.change(screen.getByRole("spinbutton", { name: "account / id minimum" }), { target: { value: "-9007199254740997" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save variable" }));
   const source = screen.getByTestId("source").textContent!;
   expect(source).toContain("-9007199254740995");
   expect(source).toContain('"minimum": -9007199254740997');

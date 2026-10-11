@@ -1,5 +1,8 @@
 import type { CatalogCapability, ModelCatalog, ModelDescriptor } from "../modelCatalog";
 import type { CapabilitySelection, SourceDocument } from "./types";
+import { requireIdentifier } from "./editSource";
+
+export type NewCallDirection = { direction: "incoming" } | { direction: "outgoing"; service: string };
 
 export function recommendedSelection(catalog: ModelCatalog, capability: CatalogCapability, provider: string): CapabilitySelection {
   const providers = catalog[capability];
@@ -21,19 +24,26 @@ export function selectionForModel(provider: string, model: ModelDescriptor): Cap
 }
 
 /** Matches the text-capable development example; voice capabilities are explicit later edits. */
-export function newCallSpec(catalog: ModelCatalog): SourceDocument {
+export function newCallSpec(catalog: ModelCatalog, choice: NewCallDirection): SourceDocument {
   const providers = Object.keys(catalog.model_inference ?? {}).sort();
   const provider = providers.includes("google") ? "google" : providers[0];
   if (!provider) throw new Error("No runnable language model is available. Reload the model catalog.");
+  if (choice.direction === "outgoing") {
+    if (!choice.service || choice.service === "web") throw new Error("Choose a phone service for outgoing calls.");
+    requireIdentifier(choice.service);
+  }
+  const entry = choice.direction === "outgoing" ? "callee" : "caller";
   return {
     readOnly: false,
     source: {
       schema_version: "20261004.01",
-      incoming_call: { caller: "caller", handled_by: "assistant" },
+      ...(choice.direction === "outgoing" ? { outgoing_call: { callee: entry, handled_by: "assistant" } } : { incoming_call: { caller: entry, handled_by: "assistant" } }),
       defaults: { capabilities: { model_inference: recommendedSelection(catalog, "model_inference", provider) } },
       participants: {
-        caller: { type: "human", connection: { service: "web", mode: "receive", admission: "start_call" } },
-        assistant: { type: "agent", prompt: "Help the caller concisely.", first_message: { mode: "wait_for_input" }, tools: {}, transfers: [] },
+        [entry]: { type: "human", connection: choice.direction === "outgoing"
+          ? { service: choice.service, mode: "dial", admission: "start_call" }
+          : { service: "web", mode: "receive", admission: "start_call" } },
+        assistant: { type: "agent", prompt: "Help the caller concisely.", ...(choice.direction === "incoming" ? { first_message: { mode: "wait_for_input" as const } } : {}), tools: {}, transfers: [] },
       },
     },
   };

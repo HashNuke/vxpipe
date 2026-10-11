@@ -15,6 +15,7 @@ import { IssuesDrawer } from "./issues-drawer";
 import { LeaveEditorDialog } from "./leave-editor-dialog";
 import { addParticipant, setTransfer } from "./participants";
 import { SourceView } from "./source-view";
+import { JsonDraftContext, type JsonDrafts } from "./json-drafts";
 import type { SourceDocument, SourceIssue } from "./types";
 import { useEditor, type ExecuteEditorRequest } from "./use-editor";
 
@@ -45,11 +46,13 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
   const requestId = useRef(0);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
+  const [jsonDrafts, setJsonDrafts] = useState<JsonDrafts>({});
+  const hasJsonDrafts = Object.keys(jsonDrafts).length > 0;
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [departure, setDeparture] = useState<Departure | null>(null);
   const [reloading, setReloading] = useState(false);
   const reloadController = useRef<AbortController | undefined>(undefined);
-  const dirty = editor.dirty && !state.document.readOnly;
+  const dirty = (editor.dirty || hasJsonDrafts) && !state.document.readOnly;
   const guarded = dirty || !!state.pending;
   const issues = mergeIssues(state.clientIssues, state.feedback.backend);
   const counts = issueCounts(state.document.source, issues);
@@ -80,6 +83,7 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
   function show(issue: SourceIssue) {
     const location = locateIssue(state.document.source, issue.path);
     if (!location) { setIssuesOpen(true); return; }
+    if (location.nodeId === "$header") { setIssuesOpen(false); setNameDraft(state.document.source.name ?? ""); return; }
     setSelectedNode(location.nodeId === "$settings" ? null : location.nodeId);
     setSelectedEdge(null); setTab(location.tab); setIssuesOpen(false);
     const id = ++requestId.current;
@@ -90,7 +94,7 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
     const controller = new AbortController(); reloadController.current = controller; setReloading(true);
     try {
       const snapshot = await onReload(controller.signal);
-      if (!controller.signal.aborted) { editor.load(snapshot); selectNode(null); }
+      if (!controller.signal.aborted) { editor.load(snapshot); setJsonDrafts({}); selectNode(null); }
     } catch {
       if (!controller.signal.aborted) reportFeedback({ tone: "error", persistent: true, message: "Couldn't reload. Your changes are still here.", action: "reload" });
     } finally {
@@ -102,9 +106,19 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
     else if (next.kind === "leave") onNavigate(next.href);
     else void reload();
   }
+  function reviewJsonDraft() {
+    const scope = Object.keys(jsonDrafts)[0];
+    if (scope === "callSpec") setSourceOpen(true);
+    else if (scope) {
+      const key = scope.slice("participant:".length);
+      const entry = document.source.incoming_call?.caller ?? document.source.outgoing_call?.callee;
+      selectNode(key === entry ? "$entry" : key);
+      setInspectorRequest(++requestId.current);
+    }
+  }
   function toastAction(action: NonNullable<ActionFeedback["action"]>) {
     if (action !== "show" && (state.pending || reloading)) return;
-    if (action === "retry") editor.retry();
+    if (action === "retry") { if (hasJsonDrafts) reviewJsonDraft(); else editor.retry(); }
     else if (action === "services") depart({ kind: "leave", href: servicesHref });
     else if (action === "reload") depart({ kind: "reload" });
     else {
@@ -113,28 +127,29 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
       else setIssuesOpen(true);
     }
   }
-  const inspector = <Inspector document={document} onChange={editor.edit} catalog={catalog} lookups={lookups} issues={issues} focusRequest={focusRequest}
+  const inspector = <Inspector key={inspectorRequest} document={document} onChange={editor.edit} catalog={catalog} lookups={lookups} issues={issues} focusRequest={focusRequest}
     selectedNodeId={selectedNodeId} selectedEdgeId={selectedEdgeId} tab={tab} onTabChange={(tab) => { setTab(tab); setFocusRequest(undefined); }}
     onRenamed={selectNode} onRemoved={() => selectNode(null)} onDeleteEdge={(edge) => {
       if (!edge.locked && change((document) => setTransfer(document, edge.source, edge.target, false), "Couldn't delete this transfer. Try again.")) selectNode(null);
     }} />;
-  return <ActionFailureContext value={reportFailure}>
+  return <JsonDraftContext value={{ drafts: jsonDrafts, setDrafts: setJsonDrafts }}><ActionFailureContext value={reportFailure}>
     <FlowEditorLayout noticeAction={noticeAction} document={document} selectedNodeId={selectedNodeId} issues={counts.nodes} onSelectNode={selectNode}
       onSelectEdge={(id) => { setSelectedEdge(id); setSelectedNode(null); setFocusRequest(undefined); }} onAddNode={add}
       onConnect={(from, to) => { change((document) => setTransfer(document, from, to, true), "Couldn't connect these participants. Choose an agent and a transfer destination."); }}
       inspector={inspector} inspectorTitle={selectedEdgeId ? "Selected edge" : selectedNodeId === "$entry" ? "Entry settings" : selectedNodeId ? `Participant ${selectedNodeId}` : "Call settings"} inspectorRequest={inspectorRequest}
       backHref={backHref} onBack={() => depart({ kind: "leave", href: backHref })} revision={state.saved?.revision} publishedRevision={state.saved?.publishedRevision ?? undefined}
       dirty={dirty} issueCount={state.clientIssues.length} saving={state.pending?.action === "save"} publishing={state.pending?.action === "publish"} loading={reloading}
-      saveDisabled={state.feedback.saveDisabled} authoringDisabled={state.feedback.authoringDisabled || state.feedback.sessionExpired}
+      saveDisabled={state.feedback.saveDisabled || hasJsonDrafts} jsonDraftCount={Object.keys(jsonDrafts).length} onShowJsonDraft={reviewJsonDraft}
+      authoringDisabled={state.feedback.authoringDisabled || state.feedback.sessionExpired}
       onEditFlowName={() => setNameDraft(state.document.source.name ?? "")} onSaveDraft={editor.save} onPublish={editor.publish} onShowIssues={() => setIssuesOpen(true)} onShowSource={() => setSourceOpen(true)} />
-    <FlowNameDialog open={nameDraft !== null} value={nameDraft ?? ""} onValueChange={setNameDraft} onCancel={() => setNameDraft(null)} onSubmit={(event) => {
+    <FlowNameDialog open={nameDraft !== null} value={nameDraft ?? ""} issues={nameDraft === (state.document.source.name ?? "") ? issues : []} onValueChange={setNameDraft} onCancel={() => setNameDraft(null)} onSubmit={(event) => {
       event.preventDefault(); if (change((document) => editSource(document, (source) => { source.name = nameDraft ?? ""; }), "Couldn't change the call spec name.")) setNameDraft(null);
     }} />
     <IssuesDrawer open={issuesOpen} onOpenChange={setIssuesOpen} source={state.document.source} issues={issues} onShow={show} />
-    <SourceView open={sourceOpen} onOpenChange={setSourceOpen} source={state.document.source} onFeedback={reportFeedback} />
+    <SourceView open={sourceOpen} onOpenChange={setSourceOpen} source={state.document.source} readOnly={document.readOnly || !!state.pending || state.feedback.authoringDisabled || state.feedback.sessionExpired} onChange={editor.edit} onFeedback={reportFeedback} />
     <EditorToast feedback={state.feedback.toast} onDismiss={editor.dismissToast} onAction={toastAction} busy={!!state.pending || reloading} />
     <LeaveEditorDialog intent={departure?.kind ?? null} onCancel={() => setDeparture(null)} onConfirm={() => {
       const next = departure; setDeparture(null); if (next?.kind === "leave") onNavigate(next.href); else if (next) void reload();
     }} />
-  </ActionFailureContext>;
+  </ActionFailureContext></JsonDraftContext>;
 }

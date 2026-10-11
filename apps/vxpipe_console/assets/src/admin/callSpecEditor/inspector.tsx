@@ -8,6 +8,8 @@ import type { HumanInspectorTab } from "./human-inspector-tabs";
 import { InboundInspector } from "./inbound-inspector";
 import type { EditorLookups, InspectorProps } from "./inspectorTypes";
 import { SelectedEdgeInspector } from "./selected-edge-inspector";
+import { useJsonDrafts } from "./json-drafts";
+import { ParticipantSource } from "./participant-source";
 
 type Props = InspectorProps & {
   catalog: ModelCatalog;
@@ -23,13 +25,16 @@ type Props = InspectorProps & {
 
 /** Callpipe's inspector dispatch, using a projection of the source document. */
 export function Inspector({ selectedNodeId, selectedEdgeId, tab, onDeleteEdge, onRenamed, onRemoved, ...props }: Props) {
+  const { drafts } = useJsonDrafts();
   const graph = projectGraph(props.document);
   const edge = graph.edges.find((candidate) => candidate.id === selectedEdgeId);
   if (edge) return <SelectedEdgeInspector selectedEdge={edge} readOnly={props.document.readOnly} onDeleteEdge={onDeleteEdge} />;
   if (!selectedNodeId || selectedNodeId === "$settings") return <FlowLevelInspector {...props}
-    tab={member<CallSettingsTab>(tab, ["direction", "defaults", "variables", "media", "wait", "advanced"], "direction")} />;
+    tab={member<CallSettingsTab>(tab, ["defaults", "variables", "media", "wait", "advanced"], "defaults")} />;
   const node = graph.nodes.find((candidate) => candidate.id === selectedNodeId);
-  if (!node) return <GenericNodeInspector participantKey={selectedNodeId} />;
+  if (!node) return drafts[`participant:${selectedNodeId}`]
+    ? <aside className="flex h-full min-h-0 flex-col"><ParticipantSource {...props} participantKey={selectedNodeId} heading="Participant removed"><GenericNodeInspector participantKey={selectedNodeId} /></ParticipantSource></aside>
+    : <GenericNodeInspector participantKey={selectedNodeId} />;
   if (node.kind === "entry") return <InboundInspector {...props} tab={member<HumanInspectorTab>(tab, ["connection", "voice", "presence"], "connection")} />;
   if (node.kind === "agent") return <AgentInspector {...props} participantKey={node.participantKey} onRenamed={onRenamed} onRemoved={onRemoved}
     tab={member<AgentInspectorTab>(tab, ["prompt", "voice", "variables", "transfers", "tools", "presence"], "prompt")} />;

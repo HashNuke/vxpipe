@@ -38,14 +38,14 @@ test("inspector badges count hidden-tab errors while inline messages follow the 
   const { FlowLevelInspector } = await import("./flow-level-inspector");
   const { editorFixture } = await import("./editorFixtures");
   const { modelCatalogFixture } = await import("../modelCatalogFixtures");
-  const problems = [{ ...issue, path: ["name"], reason: "Choose a name" }, { ...issue, path: ["limits", "max_duration_ms"], reason: "Duration too short" }];
-  render(<FlowLevelInspector document={editorFixture} onChange={vi.fn()} catalog={modelCatalogFixture} lookups={{ telephonyServices: [], credentialNames: {}, mcpIntegrations: [] }} issues={problems} />);
+  const problems = [{ ...issue, path: ["incoming_call", "handled_by"], reason: "Choose a handler" }, { ...issue, path: ["limits", "max_duration_ms"], reason: "Duration too short" }];
+  render(<FlowLevelInspector document={editorFixture} onChange={vi.fn()} catalog={modelCatalogFixture} issues={problems} />);
   expect(screen.getByRole("tab", { name: "Advanced" })).toHaveAttribute("aria-description", "1 issue");
-  expect(screen.getByText("Choose a name")).toBeInTheDocument();
+  expect(screen.queryByText("Choose a handler")).not.toBeInTheDocument();
   expect(screen.queryByText("Duration too short")).not.toBeInTheDocument();
   fireEvent.mouseDown(screen.getByRole("tab", { name: "Advanced" }), { button: 0 });
   expect(screen.getByText("Duration too short")).toBeInTheDocument();
-  expect(screen.queryByText("Choose a name")).not.toBeInTheDocument();
+  expect(screen.queryByText("Choose a handler")).not.toBeInTheDocument();
 });
 
 test.each([["tool", "Tool name"], ["slots", "Local tool key"]])("Show reveals a tool dialog at its named field: %s", async (field, label) => {
@@ -67,7 +67,7 @@ test("Show expands collapsed variable constraints before focusing", async () => 
   const document = structuredClone(editorFixture);
   document.source.call_variables = { sections: { contact: { schema: { type: "object", properties: { name: { type: "string" } } } } } };
   const problem = { ...issue, path: ["call_variables", "sections", "contact", "schema", "properties", "name", "minLength"], reason: "Set a minimum length" };
-  render(<FlowLevelInspector document={document} onChange={vi.fn()} tab="variables" catalog={modelCatalogFixture} lookups={{ telephonyServices: [], credentialNames: {}, mcpIntegrations: [] }} issues={[problem]} focusRequest={{ id: 1, path: problem.path }} />);
+  render(<FlowLevelInspector document={document} onChange={vi.fn()} tab="variables" catalog={modelCatalogFixture} issues={[problem]} focusRequest={{ id: 1, path: problem.path }} />);
   expect(await screen.findByRole("spinbutton", { name: "contact / name minLength" })).toHaveFocus();
 });
 
@@ -77,4 +77,18 @@ test("removing an already focused field does not replay its old Show request", (
   screen.getByRole("textbox", { name: "Other" }).focus();
   rerender(<Fields request={request} showPrompt={false} />);
   expect(screen.getByRole("textbox", { name: "Other" })).toHaveFocus();
+});
+
+test("Show reveals section constraints when variables are already open", async () => {
+  const { FlowLevelInspector } = await import("./flow-level-inspector");
+  const { editorFixture } = await import("./editorFixtures");
+  const { modelCatalogFixture } = await import("../modelCatalogFixtures");
+  const document = structuredClone(editorFixture);
+  document.source.call_variables = { sections: { contact: { schema: { type: "object", additionalProperties: false } } } };
+  const problem = { ...issue, path: ["call_variables", "sections", "contact", "schema", "additionalProperties"], reason: "Check section properties" };
+  const props = { document, onChange: vi.fn(), tab: "variables" as const, catalog: modelCatalogFixture, issues: [problem] };
+  const view = render(<FlowLevelInspector {...props} />);
+  expect(screen.queryByRole("combobox", { name: "contact additional properties" })).not.toBeInTheDocument();
+  view.rerender(<FlowLevelInspector {...props} focusRequest={{ id: 1, path: problem.path }} />);
+  expect(await screen.findByRole("combobox", { name: "contact additional properties" })).toHaveFocus();
 });

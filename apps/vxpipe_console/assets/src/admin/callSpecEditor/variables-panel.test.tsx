@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
 import { VariablesPanel } from "./variables-panel";
 import { editorFixture } from "./editorFixtures";
@@ -28,7 +28,9 @@ function rename(label: string, next: string) {
 test("section and field renames update permissions, required membership and dial references", () => {
   render(<Harness />);
   rename("Section contact name", "customer");
-  rename("customer / phone name", "telephone");
+  fireEvent.click(screen.getByRole("button", { name: "Edit customer / phone" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Variable name" }), { target: { value: "telephone" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save variable" }));
   expect(saved().participants.intake.variable_permissions).toEqual({ customer: ["read"] });
   expect(saved().participants.support.connection.number_from_variable).toEqual({ section: "customer", variable: "telephone" });
   expect(saved().call_variables.sections.customer.schema.required).toEqual(["telephone"]);
@@ -36,18 +38,20 @@ test("section and field renames update permissions, required membership and dial
 });
 test("nested schemas, nullable types, enums and constraints are editable without resetting siblings", async () => {
   render(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit contact / nested" }));
   fireEvent.change(screen.getByRole("spinbutton", { name: "contact / nested / items minimum" }), { target: { value: "3" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save variable" }));
+  fireEvent.click(screen.getByRole("button", { name: "Edit contact / phone" }));
   fireEvent.click(screen.getByRole("checkbox", { name: "contact / phone nullable" }));
   await choose("contact / phone allowed values", "Enumeration");
   fireEvent.change(screen.getByRole("textbox", { name: "contact / phone enum / 1" }), { target: { value: "+15555550100" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save variable" }));
   expect(saved().call_variables.sections.contact.schema.properties).toEqual({ phone: { type: ["string", "null"], minLength: 2, enum: ["+15555550100"] }, nested: { type: "array", items: { type: "integer", minimum: 3 } } });
 });
-test("section permission matrix exposes read and read-write with inline validation paths", async () => {
+test("call variables leaves section permissions in agent settings", () => {
   render(<Harness />);
-  await choose("contact access for intake", "Read and write");
-  expect(saved().participants.intake.variable_permissions.contact).toEqual(["read", "write"]);
-  await choose("contact access for intake", "No access");
-  expect(saved().participants.intake.variable_permissions).toEqual({});
+  expect(screen.queryByText("Section permissions")).not.toBeInTheDocument();
+  expect(screen.queryByRole("combobox", { name: "contact access for intake" })).not.toBeInTheDocument();
 });
 test("add and remove sections and fields preserve unrelated data and reject name collisions", () => {
   render(<Harness />);
@@ -55,7 +59,9 @@ test("add and remove sections and fields preserve unrelated data and reject name
   expect(saved().call_variables.sections.section_1.schema.type).toBe("object");
   rename("Section section_1 name", "contact");
   expect(screen.getByRole("alert")).toHaveTextContent("already exists");
-  fireEvent.click(screen.getByRole("button", { name: "Add contact field" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add variable to contact" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Variable name" }), { target: { value: "field_1" } });
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add variable" }));
   expect(saved().call_variables.sections.contact.schema.properties.field_1).toEqual({ type: "string" });
   fireEvent.click(screen.getByRole("button", { name: "Remove contact / phone" }));
   expect(saved().call_variables.sections.contact.schema.required).toEqual([]);
@@ -66,22 +72,47 @@ test("add and remove sections and fields preserve unrelated data and reject name
 });
 test("historical variables can be inspected but not edited", () => {
   render(<Harness readOnly />);
-  for (const role of ["textbox", "spinbutton", "combobox", "checkbox"] as const) for (const control of screen.getAllByRole(role)) expect(control).toBeDisabled();
+  for (const role of ["textbox", "spinbutton", "combobox", "checkbox"] as const) for (const control of screen.queryAllByRole(role)) expect(control).toBeDisabled();
   expect(screen.getByRole("button", { name: "Add section" })).toBeDisabled();
-});
-
-test("saved grants for missing sections remain visible and can be cleared", async () => {
-  render(<Harness initialDocument={{ ...initial, source: { ...initial.source, call_variables: { sections: {} } } }} />);
-  expect(screen.getByRole("combobox", { name: "contact access for intake" })).toHaveTextContent("Read");
-  await choose("contact access for intake", "No access");
-  expect(saved().participants.intake.variable_permissions).toEqual({});
 });
 
 test("constraint controls follow the field type while retaining unusual stored constraints", () => {
   const configured = structuredClone(initial);
   configured.source.call_variables!.sections!.contact!.schema.properties!.nested!.items!.minLength = 5;
   render(<Harness initialDocument={configured} />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit contact / phone" }));
   expect(screen.getByRole("spinbutton", { name: "contact / phone minLength" })).toHaveValue(2);
   expect(screen.queryByRole("spinbutton", { name: "contact / phone minimum" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Edit contact / nested" }));
   expect(screen.getByRole("spinbutton", { name: "contact / nested / items minLength" })).toHaveValue(5);
+});
+
+test("variable modal stages additions, rejects duplicate names and discards cancelled edits", () => {
+  render(<Harness />);
+  expect(screen.queryByRole("textbox", { name: "Variable name" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Add variable to contact" }));
+  const dialog = within(screen.getByRole("dialog", { name: "Add variable" }));
+  fireEvent.change(dialog.getByRole("textbox", { name: "Variable name" }), { target: { value: "phone" } });
+  fireEvent.click(dialog.getByRole("button", { name: "Add variable" }));
+  expect(dialog.getByRole("alert")).toHaveTextContent("already exists");
+  expect(saved()).toEqual(initial.source);
+  fireEvent.change(dialog.getByRole("textbox", { name: "Variable name" }), { target: { value: "email" } });
+  fireEvent.click(dialog.getByRole("button", { name: "Add variable" }));
+  expect(saved().call_variables.sections.contact.schema.properties.email).toEqual({ type: "string" });
+  fireEvent.click(screen.getByRole("button", { name: "Edit contact / phone" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Variable name" }), { target: { value: "changed" } });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(saved().call_variables.sections.contact.schema.properties.phone).toEqual({ type: "string", minLength: 2 });
+});
+
+test("historical variable schemas open for inspection without editing", () => {
+  render(<Harness readOnly />);
+  fireEvent.click(screen.getByRole("button", { name: "View contact / phone" }));
+  expect(screen.getByRole("dialog", { name: "View variable" })).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Variable name" })).toBeDisabled();
+  expect(screen.getByRole("spinbutton", { name: "contact / phone minLength" })).toHaveValue(2);
+  expect(screen.getByRole("spinbutton", { name: "contact / phone minLength" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Save variable" })).not.toBeInTheDocument();
+  expect(saved()).toEqual(initial.source);
 });

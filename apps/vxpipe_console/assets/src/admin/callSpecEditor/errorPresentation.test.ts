@@ -13,11 +13,11 @@ const locations = [
   [["participants", "assistant", "tools", "lookup", "integration"], "assistant", "tools", "Agent assistant › Tools"],
   [["participants", "support", "connection", "number"], "support", "connection", "Human support › Connection"],
   [["participants", "caller", "connection", "number"], "$entry", "connection", "Caller › Connection"],
-  [["incoming_call", "handled_by"], "$settings", "direction", "Call settings › Handled by"],
+  [["incoming_call", "handled_by"], "$entry", "connection", "Caller › Handled by"],
   [["defaults", "capabilities", "model_inference", "provider"], "$settings", "defaults", "Call settings › Model inference"],
   [["call_variables", "sections", "contact", "schema", "properties", "phone", "type"], "$settings", "variables", "Call settings › Variables"],
   [["wait_sounds", "call_setup"], "$settings", "wait", "Call settings › Wait sounds"],
-  [["media_policy", "record_audio"], "$settings", "media", "Call settings › Media and recording"],
+  [["media_policy", "record_audio"], "$settings", "media", "Call settings › Media"],
   [["opening_audio", "url"], "$entry", "connection", "Caller › Opening audio"],
   [["tool_visibility_overrides", "assistant", "lookup"], "$settings", "advanced", "Call settings › Tool visibility"],
 ] as const;
@@ -29,6 +29,12 @@ test("unknown fields and missing participants keep the backend reason and go to 
   for (const path of [["new_field"], ["participants", "missing", "prompt"], ["participants", "assistant", "new_field"]]) {
     expect(locateIssue(source, path)).toBeNull();
     expect(actionOutcome(source, "save", { status: 422, error: { code: "invalid_call_spec", path, reason: "New server rule." } })).toMatchObject({ message: "Couldn't save: New server rule.", action: "show", location: null, issue: { path } });
+  }
+});
+
+test("description issues stay in the issues list instead of targeting removed form fields", () => {
+  for (const key of ["assistant", "support", "caller"]) {
+    expect(locateIssue(source, ["participants", key, "description"])).toBeNull();
   }
 });
 

@@ -1,5 +1,5 @@
 import { Handle, Position } from "@xyflow/react"
-import { Bot, CircleAlert, Handshake, PhoneIncoming, Variable, Wrench } from "lucide-react"
+import { Bot, CircleAlert, UserRound, PhoneIncoming, Variable, Wrench } from "lucide-react"
 
 import { cn as cx } from "cn"
 import type { FlowNodeData } from "./flow-layout"
@@ -18,7 +18,7 @@ const nodeTone = {
     handle: "bg-primary"
   },
   human: {
-    icon: Handshake,
+    icon: UserRound,
     iconClassName: "h-4 w-4",
     className: "border-border bg-card text-card-foreground",
     handle: "bg-primary"
@@ -88,9 +88,9 @@ export function FlowNode({ data, selected }: { data: FlowNodeData; selected?: bo
             <Wrench className="h-3 w-3" />
             {data.toolCount} {data.toolCount === 1 ? "tool" : "tools"}
           </span>
-          <span className="inline-flex items-center gap-1 rounded-sm bg-background/80 px-2 py-1 font-medium shadow-sm">
+          <span title="Variables this agent can write" className="inline-flex items-center gap-1 rounded-sm bg-background/80 px-2 py-1 font-medium shadow-sm">
             <Variable className="h-3 w-3" />
-            {data.variableCount} {data.variableCount === 1 ? "section" : "sections"}
+            {data.variableCount} {data.variableCount === 1 ? "variable" : "variables"}
           </span>
         </div>
       )}

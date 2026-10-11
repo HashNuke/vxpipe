@@ -7,7 +7,7 @@ import { newCallSpec } from "./admin/callSpecEditor/seed";
 
 vi.mock("./admin/callSpecEditor/flow-canvas", () => ({ FlowCanvas: () => <div>Flow canvas</div> }));
 afterEach(() => { cleanup(); window.history.replaceState({}, "", "/admin"); });
-const source = { ...newCallSpec(modelCatalogFixture).source, name: "Original" };
+const source = { ...newCallSpec(modelCatalogFixture, { direction: "incoming" }).source, name: "Original" };
 const stored = { call_spec_id: "1c94f0f7-05d5-4919-a7d5-01d7250e4caf", revision: 2, latest_revision: 2, published_revision: 1, source };
 const reply = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
 function transport() {
@@ -24,19 +24,32 @@ function transport() {
     return reply({}, 404);
   });
 }
-const fill = (value: string) => fireEvent.change(screen.getByRole("textbox", { name: "Call spec name" }), { target: { value } });
+const createIncoming = async () => {
+  fireEvent.click(await screen.findByRole("radio", { name: "Incoming call" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create call spec" }));
+};
+const saveDraft = () => {
+  fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "ArrowDown" });
+  fireEvent.click(screen.getByRole("menuitem", { name: "Save as draft" }));
+};
+const rename = (value: string) => {
+  fireEvent.click(screen.getByRole("button", { name: "Edit call spec name" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Call spec name" }), { target: { value } });
+  fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+};
 
 test("new route creates a spec, replaces its URL without losing edits, and publishes saved identity", async () => {
   window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
   const fetch = transport(); render(<App csrfToken="csrf" fetchImpl={fetch} />);
-  await screen.findByRole("textbox", { name: "Call spec name" }); fill("New draft");
+  await createIncoming();
+  await screen.findByRole("button", { name: "Edit call spec name" }); rename("New draft");
   expect(screen.queryByLabelText(/public.?id|call spec id/i)).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  saveDraft();
   await screen.findByText("Saved as revision 2");
   const submitted = fetch.mock.calls.find(([, init]) => init?.method === "POST");
   expect(Object.keys(JSON.parse(String(submitted?.[1]?.body)))).toEqual(["source"]);
-  expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
-  expect(screen.getByRole("textbox", { name: "Call spec name" })).toHaveValue("New draft");
+  await waitFor(() => expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf"));
+  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("New draft");
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
   await screen.findByText("Published revision 2");
   expect(fetch).toHaveBeenCalledWith("/admin/api/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf/revisions/2/publish", expect.objectContaining({ body: "{}" }));
@@ -45,23 +58,23 @@ test("new route creates a spec, replaces its URL without losing edits, and publi
 test("session expiry keeps the source and disables writes without navigating away", async () => {
   window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   const fetch = transport(); const expired = vi.fn(); render(<App csrfToken="csrf" fetchImpl={fetch} onSessionExpired={expired} />);
-  await screen.findByRole("textbox", { name: "Call spec name" }); fill("Keep this draft");
+  await screen.findByRole("button", { name: "Edit call spec name" }); rename("Keep this draft");
   fetch.mockImplementation(() => reply({}, 401));
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+  saveDraft();
   await screen.findByText(/Your session expired/);
   expect(expired).not.toHaveBeenCalled();
-  expect(screen.getByRole("textbox", { name: "Call spec name" })).toHaveValue("Keep this draft");
-  expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Keep this draft");
+  expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
 });
 
 test("browser back and editor Back use a single discard confirmation", async () => {
   window.history.replaceState({}, "", "/admin/tenants/demo/call-specs");
   window.history.pushState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   render(<App csrfToken="csrf" fetchImpl={transport()} />);
-  await screen.findByRole("textbox", { name: "Call spec name" }); fill("Unsaved");
+  await screen.findByRole("button", { name: "Edit call spec name" }); rename("Unsaved");
   fireEvent.click(screen.getByRole("link", { name: "Back to call specs" }));
   fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
-  expect(screen.getByRole("textbox", { name: "Call spec name" })).toHaveValue("Unsaved");
+  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Unsaved");
   fireEvent.click(screen.getByRole("link", { name: "Back to call specs" }));
   fireEvent.click(screen.getByRole("button", { name: "Leave page" }));
   await screen.findByText("No call specs yet");
@@ -72,9 +85,9 @@ test("explicit revisions are read-only and can open the latest editable revision
   window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf?revision=1");
   render(<App csrfToken="csrf" fetchImpl={transport()} />);
   await screen.findByText(/Viewing revision/);
-  expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
   fireEvent.click(screen.getByRole("link", { name: "Continue editing latest revision" }));
-  await waitFor(() => expect(screen.getByRole("button", { name: "Save draft" })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole("button", { name: "More actions" })).toBeEnabled());
   expect(window.location.search).toBe("");
 });
 
@@ -85,7 +98,7 @@ test("failed initial reads show Retry and unmount aborts requests", async () => 
   const view = render(<App csrfToken="csrf" fetchImpl={fetch} />);
   await screen.findByText("Call spec unavailable");
   fetch.mockImplementation(good); fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-  await screen.findByRole("textbox", { name: "Call spec name" });
+  await screen.findByRole("button", { name: "Edit call spec name" });
   const signal = fetch.mock.calls.at(-1)?.[1]?.signal;
   act(() => view.unmount()); expect(signal?.aborted).toBe(true);
 });
@@ -94,11 +107,12 @@ test("browser history back restores the editor until discard is confirmed", asyn
   window.history.replaceState({}, "", "/admin/tenants/demo/call-specs");
   render(<App csrfToken="csrf" fetchImpl={transport()} />);
   fireEvent.click(await screen.findByRole("link", { name: "New call spec" }));
-  await screen.findByRole("textbox", { name: "Call spec name" }); fill("Unsaved history");
+  await createIncoming();
+  await screen.findByRole("button", { name: "Edit call spec name" }); rename("Unsaved history");
   act(() => window.history.back());
   await screen.findByRole("alertdialog");
   fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
-  expect(screen.getByRole("textbox", { name: "Call spec name" })).toHaveValue("Unsaved history");
+  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Unsaved history");
   await waitFor(() => { expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(); expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/new"); });
   act(() => window.history.back());
   await screen.findByRole("alertdialog");
@@ -112,13 +126,15 @@ test("URL replacement after creation preserves changes made during the request",
   let complete!: (response: Response) => void;
   fetch.mockImplementation((input, init) => init?.method === "POST" ? new Promise((resolve) => { complete = resolve; }) : good(input, init));
   render(<App csrfToken="csrf" fetchImpl={fetch} />);
-  await screen.findByRole("textbox", { name: "Call spec name" }); fill("Sent draft");
-  fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
-  fill("Newer draft");
+  await createIncoming();
+  await screen.findByRole("button", { name: "Edit call spec name" }); rename("Sent draft");
+  fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
+  saveDraft();
+  fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), { target: { value: "Newer prompt" } });
   await act(async () => complete(await reply({ call_spec: stored }, 201)));
   expect(await screen.findByText("Saved as revision 2")).toBeVisible();
   expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
-  expect(screen.getByRole("textbox", { name: "Call spec name" })).toHaveValue("Newer draft");
+  expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveValue("Newer prompt");
   expect(screen.getByText("Unsaved changes")).toBeVisible();
   expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
 });
@@ -139,6 +155,49 @@ test("the list opens a saved spec by its server-generated public UUID", async ()
   });
   render(<App csrfToken="csrf" fetchImpl={fetch} />);
   fireEvent.click(await screen.findByRole("link", { name: "Existing API-authored spec" }));
-  expect(await screen.findByRole("textbox", { name: "Call spec name" })).toHaveValue("Original");
-  expect(screen.getByText("Revision 2")).toBeVisible();
+  expect(await screen.findByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Original");
+  expect(screen.getByText("v2")).toBeVisible();
+});
+
+
+test("new specs ask for direction before showing the editor", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
+  const fetch = transport(); render(<App csrfToken="csrf" fetchImpl={fetch} />);
+  expect(await screen.findByRole("heading", { name: "New call spec" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "More actions" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Create call spec" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("radio", { name: /Incoming call/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Create call spec" }));
+  expect(await screen.findByRole("button", { name: "More actions" })).toBeEnabled();
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+});
+
+test("outgoing creation requires a phone service and saves the chosen direction", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
+  const fetch = transport(); const good = fetch.getMockImplementation()!;
+  fetch.mockImplementation((input, init) => String(input).endsWith("/call-spec-editor-lookups")
+    ? reply({ credential_names: {}, telephony_services: [{ key: "office", name: "Office phone" }], mcp_integrations: [] }) : good(input, init));
+  render(<App csrfToken="csrf" fetchImpl={fetch} />);
+  fireEvent.click(await screen.findByRole("radio", { name: /Outgoing call/ }));
+  expect(screen.getByRole("button", { name: "Create call spec" })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Phone service" }), { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "Office phone" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create call spec" }));
+  await screen.findByRole("button", { name: "More actions" }); saveDraft();
+  await screen.findByText("Saved as revision 2");
+  const submitted = fetch.mock.calls.find(([, init]) => init?.method === "POST");
+  const saved = JSON.parse(String(submitted?.[1]?.body)).source;
+  expect(saved.incoming_call).toBeUndefined();
+  expect(saved.outgoing_call).toEqual({ callee: "callee", handled_by: "assistant" });
+  expect(saved.participants.callee.connection).toEqual({ service: "office", mode: "dial", admission: "start_call" });
+});
+
+test("outgoing creation explains missing phone services and can be cancelled", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
+  render(<App csrfToken="csrf" fetchImpl={transport()} />);
+  fireEvent.click(await screen.findByRole("radio", { name: /Outgoing call/ }));
+  expect(screen.getByRole("button", { name: "Create call spec" })).toBeDisabled();
+  expect(screen.getByRole("link", { name: "Configure a phone service" })).toHaveAttribute("href", "/admin/tenants/demo/services");
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(await screen.findByText("No call specs yet")).toBeVisible();
 });

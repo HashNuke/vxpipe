@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Breadcrumbs, type BreadcrumbItem } from "./Breadcrumbs";
+import { useInputModality } from "./input-modality";
 
 export function AdminShell({
   breadcrumbs,
@@ -17,6 +18,7 @@ export function AdminShell({
   showHeader?: boolean;
   theme?: "dark" | "light";
 }) {
+  useInputModality();
   return (
     <div className="vx-admin" data-theme={theme}>
       {showHeader ? (

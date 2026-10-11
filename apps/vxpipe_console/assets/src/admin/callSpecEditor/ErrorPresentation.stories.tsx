@@ -46,7 +46,7 @@ function ErrorPresentationStory({ theme, initial, result, drawer = false, source
   const props = { document, onChange: change, issues, focusRequest: request, catalog: modelCatalogFixture, lookups: { telephonyServices: [], credentialNames: {}, mcpIntegrations: ["calendar"] } };
   return <EditorTheme theme={theme}><main className="min-h-screen bg-muted sm:p-6"><div className="mx-auto flex h-dvh w-full max-w-[34rem] flex-col overflow-hidden border bg-background sm:h-[calc(100dvh-3rem)] sm:rounded-md">
     <FlowEditorHeader backHref="#call-specs" layout="settings" flowName={document.source.name} revision={3} readOnly={document.readOnly} issueCount={client.length}
-      onEditFlowName={() => { setSettings(true); setTab("direction"); }} onShowSource={() => setJsonOpen(true)} onShowIssues={() => setIssuesOpen(true)}
+      onEditFlowName={() => { setSettings(true); setTab("defaults"); }} onShowSource={() => setJsonOpen(true)} onShowIssues={() => setIssuesOpen(true)}
       onSaveDraft={() => setFeedback(actionOutcome(document.source, "save", client.length ? { clientIssues: client } : result ?? { status: 201, revision: 4 }))}
       onPublish={() => setFeedback(actionOutcome(document.source, "publish", { status: 200, revision: 3 }))} />
     <div className="min-h-0 flex-1">{settings ? <FlowLevelInspector {...props} tab={tab as CallSettingsTab} onTabChange={(tab) => { setTab(tab); setRequest(undefined); }} />

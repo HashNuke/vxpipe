@@ -30,3 +30,40 @@ test("transfer drawing rejects humans without transfer admission and accepts imp
   document.source.participants.visitor.connection = { service: "phone", mode: "dial", number: "+15550001000" };
   expect(canConnectParticipants(document, "intake", "visitor")).toBe(true);
 });
+
+test("agent cards count declared writable variables instead of permission sections", () => {
+  const document = structuredClone(editorFixture);
+  document.source.call_variables = { sections: {
+    contact: { schema: { type: "object", properties: { name: { type: "string" }, address: { type: "object", properties: { city: { type: "string" } } } } } },
+    appointment: { schema: { type: "object", properties: { date: { type: "string" }, time: { type: "string" }, reason: { type: "string" } } } },
+    routing: { schema: { type: "object", properties: { phone: { type: "string" } } } },
+    empty: { schema: { type: "object" } },
+  } };
+  const agent = document.source.participants.intake;
+  if (agent.type !== "agent") throw new Error("Expected agent fixture");
+  agent.description = "Long agent description";
+  agent.variable_permissions = { contact: ["read", "write"], appointment: ["write", "read"], routing: ["read"], missing: ["read", "write"], empty: ["read", "write"] };
+  const before = structuredClone(document);
+  const card = canvasGraph(document).nodes.find((node) => node.id === "intake")!;
+  expect(card.data).toMatchObject({ label: "intake", subtitle: "", variableCount: 5 });
+  expect(document).toEqual(before);
+});
+
+test("agent cards omit the prompt fallback and do not count read-only variables", () => {
+  const document = structuredClone(editorFixture);
+  const agent = document.source.participants.intake;
+  if (agent.type !== "agent") throw new Error("Expected agent fixture");
+  agent.variable_permissions = { appointment: ["read"] };
+  const graph = canvasGraph(document);
+  expect(graph.nodes.find((node) => node.id === "intake")?.data).toMatchObject({ subtitle: "", variableCount: 0 });
+});
+
+test("human cards show only their name whether or not a saved description exists", () => {
+  const document = structuredClone(editorFixture);
+  for (const description of ["Appointment specialist", undefined]) {
+    document.source.participants.specialist!.description = description;
+    const graph = canvasGraph(document);
+    expect(graph.nodes.find((node) => node.id === "specialist")?.data).toMatchObject({ label: "specialist", subtitle: "" });
+    expect(graph.nodes.find((node) => node.id === "$entry")?.data.subtitle).toBe("Incoming · caller");
+  }
+});
