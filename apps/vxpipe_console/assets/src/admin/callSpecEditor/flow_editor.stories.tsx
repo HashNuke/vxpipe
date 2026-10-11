@@ -3,6 +3,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import { Button } from "../components/ui/button";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
+import { VoiceCatalogContext } from "../voiceCatalog";
+import { storyVoiceCatalog } from "../voiceCatalogFixtures";
 import { EditorPageState } from "./editor-page-state";
 import type { EditorResult } from "./editor-state";
 import { EditorTheme } from "./EditorTheme";
@@ -35,7 +37,7 @@ function FlowEditorStory({ theme, scenario, outcome, pageStatus }: Props) {
         return { status: 201, revision: next, callSpecId: "appointments" };
       }} />}</EditorTheme>;
 }
-const meta = { title: "Vxpipe/Console/Call spec editor/Page", component: FlowEditorStory, parameters: { layout: "fullscreen" }, args: { theme: "dark", scenario: "default" } } satisfies Meta<typeof FlowEditorStory>;
+const meta = { title: "Vxpipe/Console/Call spec editor/Page", component: FlowEditorStory, decorators: [Story => <VoiceCatalogContext.Provider value={storyVoiceCatalog}><Story /></VoiceCatalogContext.Provider>], parameters: { layout: "fullscreen" }, args: { theme: "dark", scenario: "default" } } satisfies Meta<typeof FlowEditorStory>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

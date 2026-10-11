@@ -1,4 +1,7 @@
 import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
+import { useContext } from "react";
+import { VoiceCatalogContext } from "../voiceCatalog";
+import { VoiceField } from "./voice-field";
 import { ChoiceField, TextField } from "./editor-fields";
 import { recommendedSelection, selectionForModel } from "./seed";
 import type { CapabilitySelection, SourceIssue } from "./types";
@@ -17,6 +20,7 @@ type Props = {
 
 /** Public model and voice remain separate; adapters own their wire-format mapping. */
 export function CapabilityFields({ kind, path, value, onChange, catalog, disabled, issues, defaultLabel = "Use default", defaultDisabled = false }: Props) {
+  const voiceCatalog = useContext(VoiceCatalogContext);
   const providers = catalog[kind] ?? {};
   const models = value && Object.hasOwn(providers, value.provider) ? providers[value.provider]! : [];
   const model = models.find((model) => model.id === value?.model);
@@ -39,7 +43,10 @@ export function CapabilityFields({ kind, path, value, onChange, catalog, disable
         }} />
     </div>
     {value && <>
-      {voices && (voices.type === "free_text"
+      {voices && (voiceCatalog && (kind === "text_to_speech" || kind === "speech_to_speech")
+        ? <VoiceField client={voiceCatalog} provider={value.provider} model={value.model} capability={kind} path={[...path, "options", voices.parameter]} issues={issues} disabled={disabled}
+          value={typeof voice === "string" ? voice : ""} onChange={voice => onChange({ ...value, options: { ...value.options, [voices.parameter]: voice } })} />
+        : voices.type === "free_text"
         ? <TextField label="Voice" path={[...path, "options", voices.parameter]} issues={issues} disabled={disabled} value={typeof voice === "string" ? voice : ""}
           onChange={(voice) => onChange({ ...value, options: { ...value.options, [voices.parameter]: voice } })} />
         : <ChoiceField label="Voice" path={[...path, "options", voices.parameter]} issues={issues} disabled={disabled} value={typeof voice === "string" ? voice : ""}
