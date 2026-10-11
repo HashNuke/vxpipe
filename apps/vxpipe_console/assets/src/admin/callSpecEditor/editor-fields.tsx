@@ -7,15 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { useIssueField } from "./issue-context";
 import type { SourceIssue } from "./types";
 
-type FieldProps = { label: string; displayLabel?: string; path: string[]; issues?: SourceIssue[]; hint?: string; disabled?: boolean; labelHidden?: boolean };
+type FieldProps = { label: string; displayLabel?: string; path: string[]; issues?: SourceIssue[]; hint?: string; disabled?: boolean; labelHidden?: boolean; layout?: "stacked" | "inline" };
 type ControlProps = { id: string; "aria-describedby"?: string; "aria-invalid"?: boolean; disabled?: boolean };
-function Field({ label, displayLabel, path, issues = [], hint, disabled, labelHidden, children }: FieldProps & { children: (props: ControlProps) => ReactNode }) {
+function Field({ label, displayLabel, path, issues = [], hint, disabled, labelHidden, layout = "stacked", children }: FieldProps & { children: (props: ControlProps) => ReactNode }) {
   const id = useId();
   const { ref, errors } = useIssueField(path, issues);
-  return <div ref={ref} tabIndex={-1} className="space-y-2 outline-none focus-visible:ring-2 focus-visible:ring-ring" data-field-path={JSON.stringify(path)}>
+  return <div ref={ref} tabIndex={-1} className={`${layout === "inline" ? "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2" : "space-y-2"} outline-none focus-visible:ring-2 focus-visible:ring-ring`} data-field-path={JSON.stringify(path)}>
     <Label htmlFor={id} className={labelHidden ? "sr-only" : "wrap-anywhere leading-snug"}>{displayLabel ? <><span aria-hidden="true">{displayLabel}</span><span className="sr-only">{label}</span></> : label}</Label>
     {children({ id, disabled, "aria-invalid": errors.length > 0, "aria-describedby": hint || errors.length ? `${id}-help` : undefined })}
-    {(hint || errors.length > 0) && <div id={`${id}-help`} className="space-y-1 text-xs">
+    {(hint || errors.length > 0) && <div id={`${id}-help`} className={`${layout === "inline" ? "col-span-2 " : ""}space-y-1 text-xs`}>
       {hint && <p className="text-muted-foreground">{hint}</p>}
       {errors.map((issue, index) => <p className="text-destructive" key={index}>{issue.reason}</p>)}
     </div>}

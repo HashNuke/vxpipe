@@ -119,6 +119,16 @@ compilation; changing backend inheritance or adding a new schema flag was reject
 for this UI change. The tradeoff is that those other agents now hold explicit
 selections for the removed defaults.
 
+Call settings also exposes one AI model type at a time. It derives the selected
+type from the default capabilities without rewriting source on load. An explicit
+call-wide type change removes incompatible defaults and agent overrides in one
+edit, then fills missing defaults using catalog recommendations. Compatible
+overrides and human participants stay untouched. Switching to LLM also removes
+output speech recognition, which belongs to the speech-to-speech path. Preserving
+conflicting overrides would leave agents inheriting both model paths under the
+existing source contract. Required AI providers cannot be cleared to an absent default, and a
+type with no saved selection or catalog recommendation is unavailable.
+
 ## Issue presentation boundary
 
 Client validation and the last field-related server error remain separate. The

@@ -1,5 +1,7 @@
 import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
 import { CapabilityFields } from "./capability-fields";
+import { canSelectDefaultAgentModels, defaultAgentModelMode, setDefaultAgentModelMode } from "./default-agent-models";
+import { ChoiceField } from "./editor-fields";
 import { setCapability } from "./edits";
 import type { InspectorProps } from "./inspectorTypes";
 
@@ -13,21 +15,24 @@ const labels: Record<DefaultModelKind, string> = {
   model_inference: "Language model",
 };
 export function DefaultsPanel(props: DefaultsPanelProps) {
+  const { document, onChange, catalog, issues } = props;
+  const mode = defaultAgentModelMode(document.source);
   return <div className="space-y-6">
     <p className="text-xs text-muted-foreground">Participants inherit these models unless they choose their own provider and model.</p>
     <section aria-label="AI agents" className="space-y-6 rounded-md border p-4">
       <h3 className="text-base font-semibold">AI agents</h3>
-      <fieldset className="min-w-0">
-        <legend className="mb-4 text-sm font-semibold">LLM + Text-to-Speech</legend>
-        <div className="space-y-6">
-          <DefaultCapability {...props} kind="model_inference" />
-          <DefaultCapability {...props} kind="text_to_speech" />
-        </div>
-      </fieldset>
-      <fieldset className="min-w-0">
-        <legend className="mb-4 text-sm font-semibold">Speech-to-Speech</legend>
+      <ChoiceField label="Model type" layout="inline" path={["defaults", "capabilities"]} issues={issues} disabled={document.readOnly} value={mode}
+        choices={[
+          { value: "llm", label: "LLM + Text-to-Speech", disabled: !canSelectDefaultAgentModels(document.source, "llm", catalog) },
+          { value: "speech_to_speech", label: "Speech-to-Speech", disabled: !canSelectDefaultAgentModels(document.source, "speech_to_speech", catalog) },
+        ]}
+        onChange={(next) => { if (next === "llm" || next === "speech_to_speech") onChange(setDefaultAgentModelMode(document, next, catalog)); }} />
+      {mode === "llm" ? <div className="space-y-6">
+        <DefaultCapability {...props} kind="model_inference" />
+        <DefaultCapability {...props} kind="text_to_speech" />
+      </div> :
         <DefaultCapability {...props} kind="speech_to_speech" showHeading={false} />
-      </fieldset>
+      }
     </section>
     <section aria-label="Human participants" className="space-y-6 rounded-md border p-4">
       <div className="space-y-1">
@@ -44,6 +49,7 @@ function DefaultCapability({ document, onChange, issues, catalog, kind, showHead
     {showHeading && <h4 className="text-sm font-medium">{labels[kind]}</h4>}
     <CapabilityFields kind={kind} path={["defaults", "capabilities", kind]} value={document.source.defaults?.capabilities?.[kind]}
       onChange={(selection) => onChange(setCapability(document, null, kind, selection))} catalog={catalog}
-      issues={issues} disabled={document.readOnly} defaultLabel="Not configured" />
+      issues={issues} disabled={document.readOnly} defaultLabel={kind === "speech_to_text" ? "Not configured" : "Choose provider"}
+      defaultDisabled={kind !== "speech_to_text"} />
   </section>;
 }

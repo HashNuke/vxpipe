@@ -8,7 +8,7 @@ export function AgentModelsPanel(props: InspectorProps & { participantKey: strin
   const { document, participantKey, catalog, onChange, issues } = props;
   const mode = agentModelMode(document.source, participantKey);
   return <div className="space-y-5">
-    <ChoiceField label="Model type" path={["participants", participantKey, "capabilities"]} issues={issues} disabled={document.readOnly} value={mode}
+    <ChoiceField label="Model type" layout="inline" path={["participants", participantKey, "capabilities"]} issues={issues} disabled={document.readOnly} value={mode}
       choices={[
         { value: "speech_to_speech", label: "Speech-to-Speech", disabled: !canSelectAgentModels(document.source, participantKey, "speech_to_speech", catalog) },
         { value: "llm", label: "LLM + Text-to-Speech", disabled: !canSelectAgentModels(document.source, participantKey, "llm", catalog) },

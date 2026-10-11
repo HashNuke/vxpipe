@@ -34,10 +34,12 @@ models. Human participants' **Models** tab contains only **Speech to text**.
 Participant media policies live in **Media**.
 
 **Call settings → Models** groups defaults under **AI agents** and **Human
-participants**. The AI group shows both **LLM + Text-to-Speech** (language and voice
-models) and **Speech-to-Speech**; the human group contains **Speech to text**.
-These are the existing capability defaults, and each agent still chooses its model
-type in its own **Models** tab.
+participants**. The AI group lets you choose either **LLM + Text-to-Speech**
+(language and voice models) or **Speech-to-Speech**, showing only that type's
+fields. Changing this type switches all AI agents, removes incompatible model
+selections, and fills missing defaults from catalog recommendations. Compatible
+provider/model overrides stay intact. Each agent can subsequently choose its own
+type in its **Models** tab. The human group's **Speech to text** is unchanged.
 
 In **Call settings → Variables**, each section is a card with variable rows.
 **Add variable** and a row's edit button open the same modal for its name, type,
