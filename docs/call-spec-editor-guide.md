@@ -118,8 +118,17 @@ edit button open the same modal for its name. Changes apply only with **Add
 section** or **Save section**; **Cancel** discards the draft. Renaming preserves
 agent permissions and phone-routing references to that section.
 
-**Add variable** and a row's edit button open the same modal for its name, type,
-required status, enum values and constraints, including nested schemas. Changes
+**Add variable** and a row's edit button open the same compact modal. **Name**
+and **Type** each share a row with their control. **Required?** and **Enum?** each have their own label-first row. Name, Type,
+and Valid values place labels beside inputs on desktop and above them on mobile. Enabling Enum shows **Valid values**: type a value and press Enter to
+add a tag, or use its × button to remove it. Each value uses the field's type;
+numbers and booleans are stored as those types, not as strings. Duplicate values
+are rejected. Nested object fields and array items use the same controls.
+
+Constraints and nullable controls are omitted. Existing constraints remain in
+JSON and can be edited there. Variables accept null by default on the backend,
+including enums; section roots remain objects. Advanced JSON authors can set
+`nullable: false` on a variable to retain strict null rejection. Changes
 apply only with **Add variable** or **Save variable**; **Cancel** discards the modal
 edits. New sections and newly selected object types default to declared fields
 only; there is no Additional properties control. Access is configured exclusively

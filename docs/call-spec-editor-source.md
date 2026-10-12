@@ -72,11 +72,14 @@ Changing provider replaces the whole selection with that provider's recommendati
 changing model preserves the provider's credential name and provider_options while
 resetting model options to the descriptor's defaults.
 
-Variable rows belong to named sections. Their type, nullable flag, required
-membership, enums, nested object fields, array items and supported constraints are
-editable independently. Controls expose constraints appropriate to the selected
-type, plus any unusual constraints already present in the source. They do not
-normalize away stored keywords. A section permission matrix includes obsolete
+Variable rows belong to named sections. Their name and type use inline fields;
+Enum and Required use one checkbox row. Enum entries are typed tags with no
+per-value type selector. Nested fields and array items share these controls.
+Constraint and nullable controls are absent, while existing source keywords are
+preserved. Invalid hidden constraints retain focused error guidance to the JSON
+editor. The backend makes variable values nullable by default; see
+[variable nullability](variable-nullability.md) for the source contract and migration
+implications. A section permission matrix includes obsolete
 grants so the operator can clear a reference to a missing section; it cannot grant
 new access to a missing section. Section and top-level field renames still use the
 source functions that rewrite permissions and dial references atomically.

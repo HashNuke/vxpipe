@@ -44,22 +44,23 @@ test.each(["-9007199254740993", "999999999999999999999999999999999999", "9007199
   expect(serialized).toContain('"label": "9007199254740993"');
 });
 
-test("schema controls display and edit large numeric enums and bounds without rounding", () => {
+test("enum tags preserve large integers and hidden bounds without rounding", () => {
   function Harness() {
     const [document, onChange] = useState(() => parseSource(json));
     return <><VariablesPanel document={document} onChange={onChange} /><output data-testid="source">{serializeSource(document)}</output></>;
   }
   render(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "Edit account / id" }));
-  const field = screen.getByRole("spinbutton", { name: "account / id enum / 2" }) as HTMLInputElement;
-  expect(field.value).toBe("9007199254740993");
-  expect(field).toHaveAttribute("aria-valuetext", "9007199254740993");
-  fireEvent.change(field, { target: { value: "-9007199254740995" } });
-  fireEvent.change(screen.getByRole("spinbutton", { name: "account / id minimum" }), { target: { value: "-9007199254740997" } });
+  expect(screen.getByText("9007199254740993")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Remove valid value 9007199254740993" }));
+  const field = screen.getByRole("textbox", { name: "account / id valid values" });
+  fireEvent.change(field, { target: { value: "9007199254740995" } });
+  fireEvent.keyDown(field, { key: "Enter" });
+  expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Save variable" }));
   const source = screen.getByTestId("source").textContent!;
-  expect(source).toContain("-9007199254740995");
-  expect(source).toContain('"minimum": -9007199254740997');
+  expect(source).toContain("9007199254740995");
+  expect(source).toContain('"minimum": 9007199254740992');
   expect(validateSource(parseSource(source).source)).toEqual([]);
 });
 

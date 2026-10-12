@@ -60,7 +60,7 @@ test.each([["tool", "Tool name"], ["slots", "Local tool key"]])("Show reveals a 
   expect(screen.getByRole("textbox", { name: label })).toHaveFocus();
   expect(screen.getByRole("textbox", { name: label })).toHaveAccessibleDescription(expect.stringContaining("Tool not found"));
 });
-test("Show expands collapsed variable constraints before focusing", async () => {
+test("Show focuses hidden variable constraint errors with JSON editing guidance", async () => {
   const { FlowLevelInspector } = await import("./flow-level-inspector");
   const { editorFixture } = await import("./editorFixtures");
   const { modelCatalogFixture } = await import("../modelCatalogFixtures");
@@ -68,7 +68,9 @@ test("Show expands collapsed variable constraints before focusing", async () => 
   document.source.call_variables = { sections: { contact: { schema: { type: "object", properties: { name: { type: "string" } } } } } };
   const problem = { ...issue, path: ["call_variables", "sections", "contact", "schema", "properties", "name", "minLength"], reason: "Set a minimum length" };
   render(<FlowLevelInspector document={document} onChange={vi.fn()} tab="variables" catalog={modelCatalogFixture} issues={[problem]} focusRequest={{ id: 1, path: problem.path }} />);
-  expect(await screen.findByRole("spinbutton", { name: "contact / name minLength" })).toHaveFocus();
+  expect(await screen.findByText("Update this constraint in the JSON editor.")).toBeVisible();
+  expect(screen.getByText("Set a minimum length").parentElement).toHaveFocus();
+  expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
 });
 
 test("removing an already focused field does not replay its old Show request", () => {

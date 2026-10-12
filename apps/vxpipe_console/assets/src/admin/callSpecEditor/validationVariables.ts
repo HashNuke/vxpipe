@@ -4,7 +4,7 @@ import { Fields, record, type ObjectValue } from "./validationFields";
 const types = ["array", "boolean", "integer", "null", "number", "object", "string"];
 const integers = ["maxItems", "maxLength", "minItems", "minLength"];
 const numbers = ["exclusiveMaximum", "exclusiveMinimum", "maximum", "minimum"];
-const keywords = ["additionalProperties", "enum", "items", "properties", "required", "type", ...integers, ...numbers];
+const keywords = ["additionalProperties", "enum", "items", "properties", "required", "type", "nullable", ...integers, ...numbers];
 
 export function validateVariables(fields: Fields, source: ObjectValue, participants: ObjectValue): void {
   const variables = source.call_variables === undefined ? {} : fields.object(source.call_variables, ["call_variables"], ["sections"]);
@@ -35,6 +35,7 @@ export function validateVariables(fields: Fields, source: ObjectValue, participa
 function schema(fields: Fields, value: unknown, path: string[]): void {
   const node = fields.object(value, path, keywords);
   const type = node.type;
+  if (Object.hasOwn(node, "nullable") && typeof node.nullable !== "boolean") fields.issue([...path, "nullable"], "must be a boolean");
   if (type !== undefined && type !== null && !(typeof type === "string" && types.includes(type)) && !(Array.isArray(type) && type.length === 2 && new Set(type).size === 2 && type.includes("null") && type.every((item) => typeof item === "string" && types.includes(item)))) fields.issue([...path, "type"], "must be one supported type or one nullable type");
   if (node.required !== undefined && (!Array.isArray(node.required) || node.required.some((name) => typeof name !== "string") || new Set(node.required).size !== node.required.length)) fields.issue([...path, "required"], "must contain unique string names");
   if (Object.hasOwn(node, "additionalProperties") && node.additionalProperties !== false) fields.issue([...path, "additionalProperties"], "must be false");

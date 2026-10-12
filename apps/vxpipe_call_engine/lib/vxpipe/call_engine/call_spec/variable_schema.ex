@@ -15,6 +15,7 @@ defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
     "minItems",
     "minLength",
     "minimum",
+    "nullable",
     "properties",
     "required",
     "type"
@@ -71,6 +72,7 @@ defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
   defp validate_node(schema, path) when is_map(schema) do
     with :ok <- validate_keywords(schema, path),
          :ok <- validate_type(Map.get(schema, "type"), path),
+         :ok <- validate_nullable(schema, path),
          :ok <- validate_required(Map.get(schema, "required", []), path),
          :ok <- validate_additional_properties(schema, path),
          :ok <- validate_enum(schema, path),
@@ -106,6 +108,14 @@ defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
 
   defp validate_type(_type, path) do
     invalid(path ++ ["type"], "must be one supported type or one nullable type")
+  end
+
+  defp validate_nullable(schema, path) do
+    if is_boolean(Map.get(schema, "nullable", true)) do
+      :ok
+    else
+      invalid(path ++ ["nullable"], "must be a boolean")
+    end
   end
 
   defp validate_required(required, _path) when required == [], do: :ok
@@ -205,6 +215,7 @@ defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
   defp relax_required(schema) do
     schema
     |> Map.delete("required")
+    |> Map.delete("nullable")
     |> relax_properties()
     |> relax_items()
   end
@@ -216,7 +227,7 @@ defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
           schema,
           "properties",
           Map.new(properties, fn {name, node} ->
-            {name, relax_required(node)}
+            {name, nullable_node(node)}
           end)
         )
 
@@ -227,10 +238,35 @@ defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
 
   defp relax_items(schema) do
     case Map.fetch(schema, "items") do
-      {:ok, items} -> Map.put(schema, "items", relax_required(items))
+      {:ok, items} -> Map.put(schema, "items", nullable_node(items))
       :error -> schema
     end
   end
+
+  # Section roots remain objects. Only variables and item schemas inherit nullability.
+  defp nullable_node(schema) do
+    normalized = relax_required(schema)
+
+    if Map.get(schema, "nullable", true) do
+      normalized
+      |> nullable_type()
+      |> nullable_enum()
+    else
+      normalized
+    end
+  end
+
+  defp nullable_type(%{"type" => type} = schema) do
+    Map.put(schema, "type", Enum.uniq(List.wrap(type) ++ ["null"]))
+  end
+
+  defp nullable_type(schema), do: schema
+
+  defp nullable_enum(%{"enum" => values} = schema) do
+    Map.put(schema, "enum", Enum.uniq(values ++ [nil]))
+  end
+
+  defp nullable_enum(schema), do: schema
 
   defp continue(:ok), do: {:cont, :ok}
   defp continue({:error, _error} = error), do: {:halt, error}

@@ -32,3 +32,12 @@ test("client validation accumulates independent errors without echoing submitted
   expect(issues.map((issue) => issue.path)).toEqual(expect.arrayContaining([["name"], ["participants", "assistant", "prompt"]]));
   expect(JSON.stringify(issues)).not.toContain("private-secret");
 });
+
+test("variable nullable overrides accept booleans without exposing them as UI fields", () => {
+  const path = ["call_variables", "sections", "contact", "schema"];
+  const schema = { type: "object", properties: { name: { type: "string", nullable: false } } };
+  const source = changed(fixture.bases.incoming, [{ path, value: schema }]);
+  expect(validateSource(source)).toEqual([]);
+  const invalid = changed(source, [{ path: [...path, "properties", "name", "nullable"], value: "yes" }]);
+  expect(validateSource(invalid)).toEqual(expect.arrayContaining([expect.objectContaining({ path: [...path, "properties", "name", "nullable"], reason: "must be a boolean" })]));
+});

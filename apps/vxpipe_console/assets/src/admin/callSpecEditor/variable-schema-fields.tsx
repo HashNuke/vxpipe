@@ -1,29 +1,18 @@
-import { useState } from "react";
-import { useIssueRequest } from "./issue-context";
-import { Plus, Trash2, ChevronDown } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
 import { Label } from "../components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/ui/collapsible";
-import { ChoiceField, SourceNumberField, TextField } from "./editor-fields";
+import { ChoiceField, TextField } from "./editor-fields";
 import { RenameField } from "./rename-field";
-import { ArrayFields } from "./structured-value-fields";
+import { VariableEnumInput } from "./variable-enum-input";
+import { variableType } from "./variable-enum-values";
 import type { SourceIssue, VariableSchema, VariableType } from "./types";
-const types: VariableType[] = ["string", "number", "integer", "boolean", "object", "array", "null"];
-const constraintLabels = { minimum: "Minimum", maximum: "Maximum", exclusiveMinimum: "Greater than", exclusiveMaximum: "Less than", minLength: "Minimum length", maxLength: "Maximum length", minItems: "Minimum items", maxItems: "Maximum items" };
-const constraints = ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "minItems", "maxItems"] as const;
-type Props = { value: VariableSchema; onChange: (value: VariableSchema) => void; label: string; path: string[]; disabled?: boolean; issues?: SourceIssue[]; root?: boolean; hideProperties?: boolean; onRenameProperty?: (previous: string, next: string) => void; onRemoveProperty?: (key: string) => void };
+const types: VariableType[] = ["string", "number", "integer", "boolean", "object", "array"];
+type Props = { value: VariableSchema; onChange: (value: VariableSchema) => void; label: string; path: string[]; disabled?: boolean; issues?: SourceIssue[]; root?: boolean; required?: boolean; onRequiredChange?: (required: boolean) => void; hideProperties?: boolean; onRenameProperty?: (previous: string, next: string) => void; onRemoveProperty?: (key: string) => void };
 
 /** Schema controls retain omitted keywords and every unedited nested schema. */
-export function VariableSchemaFields({ value, onChange, label, path, disabled, issues, root, hideProperties, onRenameProperty, onRemoveProperty }: Props) {
-  const request = useIssueRequest();
-  const [expanded, setExpanded] = useState(constraints.some((key) => value[key] !== undefined));
-  const [dismissedRequest, setDismissedRequest] = useState<number>();
-  const reveal = request && request.id !== dismissedRequest && request.path.length === path.length + 1 && path.every((part, index) => part === request.path[index]) && constraints.some((key) => key === request.path.at(-1));
-  const base = Array.isArray(value.type) ? value.type.find((type) => type !== "null") : value.type;
-  const nullable = Array.isArray(value.type) && value.type.includes("null");
-  const applicable = base === "string" ? ["minLength", "maxLength"] : base === "array" ? ["minItems", "maxItems"] : base === "number" || base === "integer" ? ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"] : base ? [] : constraints;
-  const visibleConstraints = constraints.filter((key) => applicable.includes(key) || value[key] !== undefined);
+export function VariableSchemaFields({ value, onChange, label, path, disabled, issues, root, required, onRequiredChange, hideProperties, onRenameProperty, onRemoveProperty }: Props) {
+  const base = variableType(value);
   const common = { disabled, issues };
   function patch(update: Partial<VariableSchema>) { onChange({ ...value, ...update }); }
   function remove(key: keyof VariableSchema) { const next = { ...value }; delete next[key]; onChange(next); }
@@ -41,17 +30,22 @@ export function VariableSchemaFields({ value, onChange, label, path, disabled, i
     }
   }
   return <div className="min-w-0 space-y-4 empty:hidden">
-    {!root && <div className="flex flex-wrap items-end gap-3"><div className="min-w-0 flex-1"><ChoiceField {...common} label={`${label} type`} displayLabel="Type" path={[...path, "type"]} value={base ?? ""}
-      choices={[{ value: "", label: "Any type" }, ...types.map((type) => ({ value: type, label: type }))]}
-      onChange={(type) => { if (!type) remove("type"); else patch({ type: nullable && type !== "null" ? [type as VariableType, "null"] : type as VariableType, ...(type === "object" && base !== "object" && value.additionalProperties === undefined ? { additionalProperties: false } : {}) }); }} /></div>
-      <Label className="pb-2 text-xs"><Checkbox disabled={disabled || !base || base === "null"} checked={nullable} aria-label={`${label} nullable`} onCheckedChange={(checked) => patch({ type: checked ? [base!, "null"] : base })} />Nullable</Label>
-    </div>}
+    {!root && <>
+      <ChoiceField {...common} layout="responsive-inline" labelClassName="sm:w-24" label={`${label} type`} displayLabel="Type" path={[...path, "type"]} value={base ?? ""}
+        choices={[{ value: "", label: "Any type" }, ...types.map((type) => ({ value: type, label: type }))]}
+        onChange={(type) => { if (!type) remove("type"); else patch({ type: type as VariableType, ...(type === "object" && base !== "object" && value.additionalProperties === undefined ? { additionalProperties: false } : {}) }); }} />
+      <div className="space-y-4">
+        {onRequiredChange && <Label className="gap-3 text-sm"><span className="w-24">Required?</span><Checkbox disabled={disabled} checked={required} aria-label={`${label} required`} onCheckedChange={(checked) => onRequiredChange(checked === true)} /></Label>}
+        <Label className="gap-3 text-sm"><span className="w-24">Enum?</span><Checkbox disabled={disabled} checked={value.enum !== undefined} aria-label={`${label} enum`} onCheckedChange={(checked) => checked ? patch({ enum: [] }) : remove("enum")} /></Label>
+      </div>
+      {value.enum !== undefined && <VariableEnumInput {...common} key={base ?? "any"} label={label} path={[...path, "enum"]} type={base} value={value.enum} onChange={(values) => patch({ enum: values })} />}
+    </>}
     {!hideProperties && (base === "object" || value.properties !== undefined || root) && <div className="space-y-3">
       {Object.entries(value.properties ?? {}).map(([key, schema]) => <div key={key} className="space-y-3 rounded-md border border-border/70 bg-card p-3">
-        <div className="flex items-end gap-2"><div className="min-w-0 flex-1"><RenameField name={key} label={`${label} / ${key} name`} displayLabel="Variable name" path={[...path, "properties", key, "$name"]} disabled={disabled} onRename={(next) => renameProperty(key, next)} /></div>
+        <div className="flex items-end gap-2"><div className="min-w-0 flex-1"><RenameField layout="responsive-inline" labelClassName="sm:w-24" name={key} label={`${label} / ${key} name`} displayLabel="Name" path={[...path, "properties", key, "$name"]} disabled={disabled} onRename={(next) => renameProperty(key, next)} /></div>
           <Button variant="ghost" size="icon" disabled={disabled} aria-label={`Remove ${label} / ${key}`} onClick={() => removeProperty(key)}><Trash2 /></Button></div>
-        <VariableSchemaFields {...common} label={`${label} / ${key}`} path={[...path, "properties", key]} value={schema} onChange={(next) => patch({ properties: { ...value.properties, [key]: next } })} />
-        <Label className="text-xs"><Checkbox disabled={disabled} checked={value.required?.includes(key) ?? false} aria-label={`${label} / ${key} required`} onCheckedChange={(checked) => patch({ required: checked ? [...(value.required ?? []).filter((name) => name !== key), key] : (value.required ?? []).filter((name) => name !== key) })} />Required</Label>
+        <VariableSchemaFields {...common} label={`${label} / ${key}`} path={[...path, "properties", key]} value={schema} onChange={(next) => patch({ properties: { ...value.properties, [key]: next } })}
+          required={value.required?.includes(key) ?? false} onRequiredChange={(checked) => patch({ required: checked ? [...(value.required ?? []).filter((name) => name !== key), key] : (value.required ?? []).filter((name) => name !== key) })} />
       </div>)}
       <Button variant="outline" size="sm" disabled={disabled} aria-label={`Add ${label} field`} onClick={() => { let index = 1; while (Object.hasOwn(value.properties ?? {}, `field_${index}`)) index++; patch({ properties: { ...value.properties, [`field_${index}`]: { type: "string" } } }); }}><Plus />Add field</Button>
     </div>}
@@ -63,13 +57,5 @@ export function VariableSchemaFields({ value, onChange, label, path, disabled, i
       <Button variant="ghost" size="sm" disabled={disabled} onClick={() => value.items === undefined ? patch({ items: {} }) : remove("items")}>{value.items === undefined ? "Define items" : "Clear items"}</Button></div>
       {value.items && <VariableSchemaFields {...common} label={`${label} / items`} path={[...path, "items"]} value={value.items} onChange={(items) => patch({ items })} />}
     </section>}
-    {!root && <>
-      <ChoiceField {...common} label={`${label} allowed values`} displayLabel="Allowed values" path={[...path, "enum"]} value={value.enum === undefined ? "" : "enum"} choices={[{ value: "", label: "Any value" }, { value: "enum", label: "Enumeration" }]} onChange={(mode) => mode ? patch({ enum: [""] }) : remove("enum")} />
-      {value.enum !== undefined && <ArrayFields {...common} compact label={`${label} enum`} path={[...path, "enum"]} value={value.enum} onChange={(values) => patch({ enum: values })} />}
-    </>}
-    {visibleConstraints.length > 0 && <Collapsible open={expanded || !!reveal} onOpenChange={(open) => { setExpanded(open); if (!open) setDismissedRequest(request?.id); }} className="space-y-3">
-      <CollapsibleTrigger asChild><Button variant="ghost" size="sm" aria-label={`Constraints for ${label}`}>Constraints<ChevronDown /></Button></CollapsibleTrigger>
-      <CollapsibleContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">{visibleConstraints.map((key) => <SourceNumberField {...common} key={key} label={`${label} ${key}`} displayLabel={constraintLabels[key]} path={[...path, key]} value={value[key]} onChange={(next) => next === undefined ? remove(key) : patch({ [key]: next })} />)}</CollapsibleContent>
-    </Collapsible>}
   </div>;
 }

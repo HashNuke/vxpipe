@@ -58,6 +58,7 @@ export type AgentParticipant = ParticipantBase & {
 export type Participant = HumanParticipant | AgentParticipant;
 export type VariableType = "array" | "boolean" | "integer" | "null" | "number" | "object" | "string";
 export type VariableSchema = {
+  nullable?: boolean;
   type?: VariableType | VariableType[];
   properties?: Record<string, VariableSchema>;
   required?: string[];
