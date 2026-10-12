@@ -14,6 +14,17 @@ defmodule Vxpipe.Providers.Twilio.Adapter do
     WebhookVerifier
   }
 
+  @doc "Lists existing account voice numbers through the provider's inventory adapter."
+  def list_phone_numbers(connection, credentials, search, page, options \\ []) do
+    Vxpipe.Providers.Twilio.PhoneNumberCatalog.list(
+      connection,
+      credentials,
+      search,
+      page,
+      options
+    )
+  end
+
   @impl true
   def dial(options, %Dial{} = request), do: DialCommand.submit(options, request)
 

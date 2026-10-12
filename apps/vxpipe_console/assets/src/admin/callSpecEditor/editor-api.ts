@@ -2,7 +2,7 @@ import { parseSourceJson, stringifySourceJson } from "./source-json";
 import { catalogCapabilities, parseModelCatalog, type ModelCatalog } from "../modelCatalog";
 import type { EditorSnapshot } from "./editor-state";
 import type { AuthoringError } from "./errorPresentation";
-import type { EditorLookups } from "./inspectorTypes";
+import type { EditorLookups, PhoneNumberPage } from "./inspectorTypes";
 import { parseSource } from "./source";
 import type { ExecuteEditorRequest } from "./use-editor";
 import { record } from "./validationFields";
@@ -78,5 +78,13 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
       !Array.isArray(value.telephony_services) || !value.telephony_services.every((service) => record(service) && typeof service.key === "string" && typeof service.name === "string")) throw new Error("Invalid editor lookups");
     return { credentialNames: value.credential_names as Record<string, string[]>, telephonyServices: value.telephony_services, mcpIntegrations: value.mcp_integrations };
   }
-  return { read, execute, catalog, lookups };
+  async function phoneNumbers(service: string, search: string, page: string | null, signal: AbortSignal, callSpecId?: string): Promise<PhoneNumberPage> {
+    const query = new URLSearchParams({ search });
+    if (page) query.set("page", page);
+    if (callSpecId) query.set("call_spec_id", callSpecId);
+    const value = await get(`${base}/telephony-services/${encodeURIComponent(service)}/numbers?${query}`, signal);
+    if (!Array.isArray(value.numbers) || value.numbers.length > 50 || !value.numbers.every((item) => record(item) && typeof item.id === "string" && typeof item.number === "string" && typeof item.name === "string" && typeof item.available === "boolean" && names(item.assigned_to)) || !(value.next_page === null || typeof value.next_page === "string")) throw new Error("Invalid phone number inventory");
+    return { numbers: value.numbers.map((item) => ({ id: item.id, number: item.number, name: item.name, available: item.available, assignedTo: item.assigned_to })), nextPage: value.next_page };
+  }
+  return { read, execute, catalog, lookups, phoneNumbers };
 }

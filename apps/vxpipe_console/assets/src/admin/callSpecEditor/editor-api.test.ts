@@ -74,3 +74,11 @@ test("a no-op editor save preserves an API-authored integer enum beyond Number p
 
   expect(fetch.mock.calls.at(-1)?.[1]?.body).toContain('"enum":[9007199254740993]');
 });
+
+test("phone inventory uses a scoped abortable request with server search, pagination and current-spec exclusion", async () => {
+  const fetch = vi.fn(() => reply({ numbers: [{ id: "1", number: "+15550001000", name: "Office", available: false, assigned_to: ["Reception"] }], next_page: "next" }));
+  const signal = new AbortController().signal;
+  const result = await createEditorApi("tenant", "csrf", fetch).phoneNumbers("office / phone", "555", "page-token", signal, "current");
+  expect(result).toEqual({ numbers: [{ id: "1", number: "+15550001000", name: "Office", available: false, assignedTo: ["Reception"] }], nextPage: "next" });
+  expect(fetch).toHaveBeenCalledWith("/admin/api/tenants/tenant/telephony-services/office%20%2F%20phone/numbers?search=555&page=page-token&call_spec_id=current", expect.objectContaining({ signal, credentials: "same-origin", cache: "no-store" }));
+});

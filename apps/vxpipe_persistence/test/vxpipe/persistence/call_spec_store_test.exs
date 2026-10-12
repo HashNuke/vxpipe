@@ -86,31 +86,32 @@ defmodule Vxpipe.Persistence.CallSpecStoreTest do
     tenant: tenant,
     options: options
   } do
-    spec_id = Enum.reduce([false, true], nil, fn vad, previous_id ->
-      save_options =
-        if previous_id, do: Keyword.put(options, :call_spec_id, previous_id), else: options
+    spec_id =
+      Enum.reduce([false, true], nil, fn vad, previous_id ->
+        save_options =
+          if previous_id, do: Keyword.put(options, :call_spec_id, previous_id), else: options
 
-      input =
-        put_in(call_spec_input(), [:defaults, :capabilities, :speech_to_text], %{
-          provider: "morse",
-          model: "morse",
-          vad: vad
-        })
+        input =
+          put_in(call_spec_input(), [:defaults, :capabilities, :speech_to_text], %{
+            provider: "morse",
+            model: "morse",
+            vad: vad
+          })
 
-      assert {:ok, saved} = CallSpecs.save(tenant.key, input, save_options)
-      assert saved.source["defaults"]["capabilities"]["speech_to_text"]["vad"] == vad
+        assert {:ok, saved} = CallSpecs.save(tenant.key, input, save_options)
+        assert saved.source["defaults"]["capabilities"]["speech_to_text"]["vad"] == vad
 
-      assert {:ok, published} =
-               CallSpecs.publish(tenant.key, saved.call_spec_id, saved.revision, options)
+        assert {:ok, published} =
+                 CallSpecs.publish(tenant.key, saved.call_spec_id, saved.revision, options)
 
-      assert published.source == saved.source
+        assert published.source == saved.source
 
-      assert {:ok, fetched} =
-               CallSpecs.fetch(tenant.key, saved.call_spec_id, saved.revision, options)
+        assert {:ok, fetched} =
+                 CallSpecs.fetch(tenant.key, saved.call_spec_id, saved.revision, options)
 
-      assert fetched.source == saved.source
-      saved.call_spec_id
-    end)
+        assert fetched.source == saved.source
+        saved.call_spec_id
+      end)
 
     for invalid <- [nil, "false", 0] do
       input =
@@ -120,7 +121,9 @@ defmodule Vxpipe.Persistence.CallSpecStoreTest do
           vad: invalid
         })
 
-      assert {:error, error} = CallSpecs.save(tenant.key, input, Keyword.put(options, :call_spec_id, spec_id))
+      assert {:error, error} =
+               CallSpecs.save(tenant.key, input, Keyword.put(options, :call_spec_id, spec_id))
+
       assert error.details["path"] == ["defaults", "capabilities", "speech_to_text", "vad"]
     end
   end
@@ -185,6 +188,33 @@ defmodule Vxpipe.Persistence.CallSpecStoreTest do
                route.number,
                options
              )
+  end
+
+  test "drafts may share a number but publishing rejects another spec's active assignment", %{
+    tenant: tenant,
+    options: options
+  } do
+    assert {:ok, first} = CallSpecs.save(tenant.key, phone_call_spec_input(), options)
+    assert {:ok, second} = CallSpecs.save(tenant.key, phone_call_spec_input(), options)
+    assert {:ok, _} = CallSpecs.publish(tenant.key, first.call_spec_id, first.revision, options)
+
+    assert {:error, :phone_number_in_use} =
+             CallSpecs.publish(tenant.key, second.call_spec_id, second.revision, options)
+
+    assert {:ok, replacement} =
+             CallSpecs.save(
+               tenant.key,
+               phone_call_spec_input(),
+               Keyword.put(options, :call_spec_id, first.call_spec_id)
+             )
+
+    assert {:ok, _} =
+             CallSpecs.publish(tenant.key, first.call_spec_id, replacement.revision, options)
+
+    assert {:ok, current} =
+             CallSpecs.fetch(tenant.key, second.call_spec_id, second.revision, options)
+
+    assert is_nil(current.published_at)
   end
 
   defp sequence(values) do

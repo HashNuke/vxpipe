@@ -84,6 +84,8 @@ export function actionOutcome(source: CallSpecSource, action: "save" | "publish"
   const placed = { issue: error, location };
   if (result.status === 401) return failure("Your session expired. Changes in this tab are kept until you leave the page", undefined, { sessionExpired: true });
   switch (error?.code) {
+    case "phone_number_in_use":
+      return failure("This phone number is already assigned to another published call spec. Choose a different number.");
     case "invalid_call_spec":
     case "unsupported_call_plan":
     case "call_spec_not_publishable":

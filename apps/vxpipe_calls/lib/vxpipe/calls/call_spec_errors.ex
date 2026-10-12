@@ -9,6 +9,8 @@ defmodule Vxpipe.Calls.CallSpecErrors do
   alias Vxpipe.CallEngine.Error
 
   @failures %{
+    phone_number_in_use:
+      {409, "This phone number is already assigned to another published call spec."},
     provider_service_forbidden: {403, "This tenant cannot use the selected provider service."},
     provider_credential_unavailable:
       {422, "No usable credential is available for this provider."},

@@ -117,6 +117,10 @@ defmodule Vxpipe.Console.Router do
         Vxpipe.Console.AdminCallSpecLookupsController,
         :index
 
+    get "/tenants/:tenant_key/telephony-services/:service/numbers",
+        Vxpipe.Console.AdminPhoneNumbersController,
+        :index
+
     get "/tenants/:tenant_key/call-specs", Vxpipe.Console.AdminCallSpecsController, :index
 
     get "/tenants/:tenant_key/call-specs/:id",

@@ -1,3 +1,4 @@
+import { storyPhoneNumbers } from "./phone-number-fixtures";
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
@@ -9,7 +10,7 @@ import type { SourceDocument } from "./types";
 import { validateSource } from "./validation";
 
 afterEach(cleanup);
-const lookups = { telephonyServices: [{ key: "phone", name: "Reception phone" }], credentialNames: { deepgram: ["production"] }, mcpIntegrations: [] };
+const lookups = { phoneNumbers: storyPhoneNumbers, telephonyServices: [{ key: "phone", name: "Reception phone", provider: "telnyx" as const }], credentialNames: { deepgram: ["production"] }, mcpIntegrations: [] };
 function Harness({ entry = false, initial = editorFixture }: { entry?: boolean; initial?: SourceDocument }) {
   const [document, onChange] = useState(initial);
   const [participantKey, onRenamed] = useState("specialist");
@@ -33,10 +34,13 @@ test("entry connection edits preserve incoming admission and remove phone fields
   render(<Harness entry />);
   expect(saved()).toEqual(editorFixture.source);
   expect(screen.queryByRole("button", { name: "Delete participant" })).not.toBeInTheDocument();
-  await choose("Connection service", "Reception phone");
-  fireEvent.change(screen.getByRole("textbox", { name: "Phone number" }), { target: { value: "+15550001000" } });
+  fireEvent.click(screen.getByRole("radio", { name: "Phone" }));
+  if (screen.queryByRole("button", { name: "Assign number" })) {
+    fireEvent.click(await screen.findByRole("radio", { name: /Reception/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign number" }));
+  } else fireEvent.click(screen.getByRole("button", { name: "Use service" }));
   expect(saved().participants.caller.connection).toEqual({ service: "phone", mode: "receive", admission: "start_call", number: "+15550001000" });
-  await choose("Connection service", "Web");
+  fireEvent.click(screen.getByRole("radio", { name: "Web" }));
   expect(saved().participants.caller.connection).toEqual({ service: "web", mode: "receive", admission: "start_call" });
 });
 test("outgoing entry offers request or fixed number, never variable or web, and validates its ring timeout", async () => {
@@ -48,9 +52,7 @@ test("outgoing entry offers request or fixed number, never variable or web, and 
   await choose("Number source", "Outgoing request (to)");
   expect(saved().participants.caller.connection).not.toHaveProperty("number");
   expect(saved().participants.caller.connection).not.toHaveProperty("number_from_variable");
-  fireEvent.keyDown(screen.getByRole("combobox", { name: "Connection service" }), { key: "ArrowDown" });
-  expect(screen.queryByRole("option", { name: "Web" })).not.toBeInTheDocument();
-  fireEvent.click(await screen.findByRole("option", { name: "Reception phone" }));
+  expect(screen.getByRole("radio", { name: "Web" })).toBeDisabled();
   fireEvent.change(screen.getByRole("spinbutton", { name: "Ring timeout (ms)" }), { target: { value: "4999" } });
   expect(screen.getByRole("spinbutton", { name: "Ring timeout (ms)" })).toHaveAttribute("aria-invalid", "true");
   fireEvent.change(screen.getByRole("spinbutton", { name: "Ring timeout (ms)" }), { target: { value: "" } });
@@ -70,14 +72,18 @@ test("opening audio requires explicit speech selection and supports text, file a
 });
 test("human destinations switch between phone, string variable and web without stale routing fields", async () => {
   render(<Harness />);
-  await choose("Connection service", "Reception phone");
+  fireEvent.click(screen.getByRole("radio", { name: "Phone" }));
+  if (screen.queryByRole("button", { name: "Assign number" })) {
+    fireEvent.click(await screen.findByRole("radio", { name: /Reception/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign number" }));
+  } else fireEvent.click(screen.getByRole("button", { name: "Use service" }));
   await choose("Number source", "Call variable");
   await choose("Variable section", "appointment");
   await choose("Phone variable", "date");
   expect(saved().participants.specialist.connection).toEqual({ service: "phone", mode: "dial", admission: "transfer", number_from_variable: { section: "appointment", variable: "date" } });
   await choose("Number source", "Fixed number");
   expect(saved().participants.specialist.connection).not.toHaveProperty("number_from_variable");
-  await choose("Connection service", "Web");
+  fireEvent.click(screen.getByRole("radio", { name: "Web" }));
   expect(saved().participants.specialist.connection).toEqual({ service: "web", mode: "receive", admission: "transfer" });
 });
 test("human identity edits rewrite references, retain literal text and reject collisions", () => {
@@ -127,7 +133,7 @@ test("human Models show only speech recognition and edit only the selected parti
 test("read-only entry and destination inspectors preserve source and disable all edits", () => {
   const initial = { ...editorFixture, readOnly: true };
   const view = render(<Harness initial={initial} />);
-  for (const role of ["textbox", "combobox", "spinbutton"] as const) for (const control of screen.getAllByRole(role)) expect(control).toBeDisabled();
+  for (const role of ["textbox", "combobox", "spinbutton", "radio"] as const) for (const control of screen.queryAllByRole(role)) expect(control).toBeDisabled();
   expect(screen.getByRole("button", { name: "Delete participant" })).toBeDisabled();
   view.unmount(); render(<Harness entry initial={initial} />);
   expect(screen.getByRole("switch", { name: "Opening audio" })).toBeDisabled();

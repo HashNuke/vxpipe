@@ -72,3 +72,9 @@ test("provider failures identify the selection without leaking option values", (
   expect(result.location?.tab).toBe("defaults");
   expect(JSON.stringify(result)).not.toContain("never-show-this");
 });
+
+test("an occupied number blocks publishing with a useful message while drafts remain editable", () => {
+  expect(actionOutcome(source, "publish", { status: 409, error: { code: "phone_number_in_use" } })).toMatchObject({
+    tone: "error", message: "This phone number is already assigned to another published call spec. Choose a different number.",
+  });
+});

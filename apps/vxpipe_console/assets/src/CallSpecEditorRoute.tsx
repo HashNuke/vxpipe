@@ -71,10 +71,11 @@ export function CallSpecEditorRoute({ csrfToken, fetchImpl = defaultFetch }: { c
     return () => controller.abort();
   }, [api, tenantKey, callSpecId, revisionQuery, attempt]);
   const reload = useCallback((signal: AbortSignal) => api.read(created.current ?? callSpecId, signal), [api, callSpecId]);
+  const phoneNumbers = useCallback((service: string, search: string, page: string | null, signal: AbortSignal) => api.phoneNumbers(service, search, page, signal, created.current ?? callSpecId), [api, callSpecId]);
   return <EditorTheme>
     {page.status === "new" ? <NewCallSpec key={page.key} catalog={page.catalog} services={page.lookups.telephonyServices} servicesHref={`${base}/services`}
       onCancel={() => approvedNavigate(backHref)} onCreate={(document) => setPage({ ...page, status: "ready", snapshot: { document } })} /> : page.status === "ready" ? <>
-      <CallSpecEditor noticeAction={revisionQuery !== null ? <Link className="underline" to={`${backHref}/${encodeURIComponent(callSpecId)}`}>Continue editing latest revision</Link> : undefined} key={page.key} snapshot={page.snapshot} catalog={page.catalog} lookups={page.lookups} execute={api.execute}
+      <CallSpecEditor noticeAction={revisionQuery !== null ? <Link className="underline" to={`${backHref}/${encodeURIComponent(callSpecId)}`}>Continue editing latest revision</Link> : undefined} key={page.key} snapshot={page.snapshot} catalog={page.catalog} lookups={{ ...page.lookups, phoneNumbers }} execute={api.execute}
         backHref={backHref} servicesHref={`${base}/services`} onNavigate={approvedNavigate} onReload={reload} onGuardChange={onGuardChange} onSaved={onSaved} />
     </> : page.status === "error" && page.expired ? <main className="min-h-dvh bg-background p-6"><h1>Your session expired</h1><a className="underline" href="/auth/login">Sign in to open the editor</a></main> :
       <EditorPageState status={page.status} resource={page.status === "error" ? page.resource : undefined} backHref={backHref} onRetry={() => setAttempt((value) => value + 1)} />}

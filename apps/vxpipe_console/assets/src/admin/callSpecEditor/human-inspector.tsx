@@ -27,7 +27,7 @@ export function HumanInspector({ catalog, lookups, participantKey, onRenamed, on
       actions={participantKey !== entry && <Button variant="outline" size="icon-sm" aria-label="Delete participant" disabled={document.readOnly} onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4" /></Button>}>
     <HumanInspectorTabs document={document} issues={issues} focusRequest={props.focusRequest} nodeId={participantKey === entry ? "$entry" : participantKey} tab={tab} onTabChange={onTabChange} connection={<div className="space-y-5">
       <RenameField key={participantKey} name={participantKey} label="Participant key" path={path} disabled={document.readOnly} onRename={(key) => { onChange(renameParticipant(document, participantKey, key)); onRenamed?.(key); }} />
-      <ConnectionFields {...props} participantKey={participantKey} services={lookups.telephonyServices} />
+      <ConnectionFields {...props} participantKey={participantKey} services={lookups.telephonyServices} loadNumbers={lookups.phoneNumbers} />
       <TextField label="Private briefing" path={[...path, "transfer_notice"]} issues={issues} disabled={document.readOnly} multiline value={target.transfer_notice ?? ""} hint="Spoken privately to this person before they join the caller."
         onChange={(notice) => onChange(editSource(document, (source) => { const human = participant(source, participantKey); if (human.type === "human") { if (notice === "") delete human.transfer_notice; else human.transfer_notice = notice; } }))} />
       <section className="space-y-3 rounded-md border border-border bg-muted/30 p-3" aria-label="Transfer timing">

@@ -21,6 +21,17 @@ defmodule Vxpipe.Providers.Telnyx.Adapter do
     WebhookVerifier
   }
 
+  @doc "Lists existing account voice numbers through the provider's inventory adapter."
+  def list_phone_numbers(connection, credentials, search, page, options \\ []) do
+    Vxpipe.Providers.Telnyx.PhoneNumberCatalog.list(
+      connection,
+      credentials,
+      search,
+      page,
+      options
+    )
+  end
+
   @impl true
   def dial(options, %Dial{} = request) do
     with {:ok, _api_key} <- required_option(options, :api_key),

@@ -6,8 +6,12 @@ export type InspectorProps = {
   issues?: SourceIssue[];
   focusRequest?: IssueRequest;
 };
-export type NamedService = { key: string; name: string };
+export type NamedService = { key: string; name: string; provider?: "twilio" | "telnyx" };
+export type PhoneNumber = { id: string; number: string; name: string; available: boolean; assignedTo: string[] };
+export type PhoneNumberPage = { numbers: PhoneNumber[]; nextPage: string | null };
+export type PhoneNumberLoader = (service: string, search: string, page: string | null, signal: AbortSignal) => Promise<PhoneNumberPage>;
 export type EditorLookups = {
+  phoneNumbers?: PhoneNumberLoader;
   telephonyServices: NamedService[];
   credentialNames: Record<string, string[]>;
   mcpIntegrations: string[];

@@ -5,12 +5,14 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
   alias Vxpipe.Calls.{
     EffectiveServiceBindings,
     InstallationOperator,
+    OperatorAdministration,
     OperatorTelephonyApplications
   }
 
   def list(%InstallationOperator{grant: :installation_operator} = authority, tenant, options) do
     with {:ok, bindings} <- EffectiveServiceBindings.list(tenant, options),
-         {:ok, telephony} <- OperatorTelephonyApplications.list(authority, tenant, options),
+         {:ok, telephony} <- OperatorAdministration.list_services(authority, tenant, options),
+         {:ok, applications} <- OperatorTelephonyApplications.list(authority, tenant, options),
          {:ok, integrations} <- ConfiguredNames.list(tenant) do
       names =
         bindings.bindings
@@ -21,9 +23,13 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
        %{
          tenant: bindings.tenant,
          credential_names: names,
-         telephony_services: Enum.map(telephony.applications, &%{key: &1.name, name: &1.name}),
+         telephony_services:
+           (Enum.map(telephony.telephony_services, &%{key: &1.name, name: &1.name, provider: &1.provider}) ++
+              Enum.map(applications.applications, &%{key: &1.name, name: &1.name, provider: "telnyx"}))
+           |> Enum.uniq_by(& &1.key)
+           |> Enum.sort_by(& &1.name),
          mcp_integrations: integrations,
-         truncated: telephony.truncated
+         truncated: telephony.truncated or applications.truncated
        }}
     end
   end

@@ -31,6 +31,13 @@ and the **Arrange nodes** icon on the left, with **Call settings** on the right.
 Hover or focus these icons to see their names; Call settings retains its
 validation issue badge.
 
+Human and Entry inspectors use compact **Connection** cards: **Web** shows WebRTC,
+and **Phone** shows its provider and number. Phone opens a provider modal; incoming
+Entry also searches existing account numbers and disables numbers assigned to
+another published spec. Outgoing and transfer connections retain destination
+fields. Switching to Web clears phone details. See [phone connection selection](phone-connection-picker.md)
+for provider adapters, pagination and publish conflict rules.
+
 Model and voice choices
 come from the installed provider catalog. Choosing a provider selects its
 recommended model and voice without adding recommendation badges to their names.

@@ -5,6 +5,10 @@ defmodule Vxpipe.Calls.CallSpecRepository do
 
   @type context :: term()
 
+  @callback list_number_assignments(context(), String.t(), [String.t()]) ::
+              {:ok, [map()]} | {:error, term()}
+  @optional_callbacks list_number_assignments: 3
+
   @callback next_revision(context(), String.t(), String.t()) ::
               {:ok, pos_integer()} | {:error, term()}
   @callback insert_revision(

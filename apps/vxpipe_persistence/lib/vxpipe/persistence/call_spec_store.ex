@@ -13,6 +13,28 @@ defmodule Vxpipe.Persistence.CallSpecStore do
   alias Vxpipe.Persistence.Schema.TelephonyRoute, as: StoredTelephonyRoute
 
   @impl true
+  def list_number_assignments(repo, tenant_key, numbers) do
+    rows =
+      repo.all(
+        from(r in StoredTelephonyRoute,
+          join: t in assoc(r, :tenant),
+          join: v in assoc(r, :call_spec_revision),
+          join: s in assoc(v, :call_spec),
+          where:
+            t.key == ^tenant_key and r.number in ^numbers and not is_nil(r.published_at) and
+              s.published_revision_id == v.id,
+          select: %{
+            number: r.number,
+            call_spec_id: s.public_id,
+            name: fragment("?->>'name'", v.source)
+          }
+        )
+      )
+
+    {:ok, rows}
+  end
+
+  @impl true
   def next_revision(repo, tenant_key, call_spec_id) do
     query =
       from(revision in StoredRevision,
@@ -129,8 +151,37 @@ defmodule Vxpipe.Persistence.CallSpecStore do
   def publish_revision(repo, tenant_key, call_spec_id, revision_number, published_at) do
     multi =
       Multi.new()
+      |> Multi.run(:tenant_publish_lock, fn repo, _changes ->
+        case repo.one(from(t in Tenant, where: t.key == ^tenant_key, lock: "FOR NO KEY UPDATE")) do
+          nil -> {:error, :tenant_not_found}
+          tenant -> {:ok, tenant.id}
+        end
+      end)
       |> Multi.run(:selection, fn repo, _changes ->
         fetch_stored_revision(repo, tenant_key, call_spec_id, revision_number)
+      end)
+      |> Multi.run(:number_assignments, fn repo, %{selection: {call_spec, revision}} ->
+        numbers =
+          repo.all(
+            from(r in StoredTelephonyRoute,
+              where: r.call_spec_revision_id == ^revision.id,
+              select: r.number
+            )
+          )
+
+        conflict? =
+          repo.exists?(
+            from(r in StoredTelephonyRoute,
+              join: v in assoc(r, :call_spec_revision),
+              join: s in assoc(v, :call_spec),
+              where:
+                r.tenant_id == ^call_spec.tenant_id and r.number in ^numbers and
+                  s.id != ^call_spec.id and not is_nil(r.published_at) and
+                  s.published_revision_id == v.id
+            )
+          )
+
+        if conflict?, do: {:error, :phone_number_in_use}, else: {:ok, :available}
       end)
       |> Multi.run(:disable_old_routes, fn repo, %{selection: {call_spec, _revision}} ->
         route_query = routes_for_call_spec(call_spec.id)

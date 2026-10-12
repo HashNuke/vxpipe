@@ -356,12 +356,78 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       data = json_response(response, 200)
       assert data["tenant"]["key"] == tenant.key
       assert data["credential_names"]["google"] == ["primary", "shared"]
-      assert data["telephony_services"] == [%{"key" => "office", "name" => "office"}]
+
+      assert data["telephony_services"] == [
+               %{"key" => "office", "name" => "office", "provider" => "telnyx"}
+             ]
+
       assert data["mcp_integrations"] == []
       assert data["truncated"] == false
       refute response.resp_body =~ "private-lookup-sentinel"
       refute response.resp_body =~ "api_key"
       refute response.resp_body =~ "application-one"
+
+      previous = Application.get_env(:vxpipe_console, :phone_number_request_options)
+
+      on_exit(fn ->
+        if previous,
+          do: Application.put_env(:vxpipe_console, :phone_number_request_options, previous),
+          else: Application.delete_env(:vxpipe_console, :phone_number_request_options)
+      end)
+
+      Req.Test.stub(__MODULE__, fn request ->
+        assert request.query_params["filter"]["connection_id"] == "application-one"
+
+        Req.Test.json(request, %{
+          "data" => [
+            %{
+              "id" => "number-one",
+              "phone_number" => "+15550001000",
+              "connection_id" => "application-one",
+              "status" => "active"
+            }
+          ],
+          "meta" => %{"page_number" => 1, "total_pages" => 1}
+        })
+      end)
+
+      Application.put_env(:vxpipe_console, :phone_number_request_options,
+        plug: {Req.Test, __MODULE__}
+      )
+
+      source =
+        put_in(editor_source(), ["participants", "caller", "connection"], %{
+          "service" => "office",
+          "mode" => "receive",
+          "admission" => "start_call",
+          "number" => "+15550001000"
+        })
+
+      assert {:ok, stored} = Vxpipe.Calls.save_authorized_call_spec(authority, tenant.key, source)
+
+      assert {:ok, _} =
+               Vxpipe.Calls.publish_authorized_call_spec(
+                 authority,
+                 tenant.key,
+                 stored.call_spec_id,
+                 stored.revision
+               )
+
+      path = "/admin/api/tenants/#{tenant.key}/telephony-services/office/numbers"
+      page = auth |> recycle() |> https_get(path) |> json_response(200)
+      assert [%{"available" => false, "number" => "+15550001000"}] = page["numbers"]
+
+      page =
+        auth
+        |> recycle()
+        |> https_get(path <> "?call_spec_id=#{stored.call_spec_id}")
+        |> json_response(200)
+
+      assert [%{"available" => true}] = page["numbers"]
+      refute inspect(page) =~ "synthetic-carrier-key"
+      refute inspect(page) =~ "application-one"
+      anonymous = https_get(path)
+      assert json_response(anonymous, 401)["error"]["code"] == "operator_session_required"
       refute response.resp_body =~ "foreign"
       anonymous = https_get("/admin/api/tenants/#{tenant.key}/call-spec-editor-lookups")
       assert json_response(anonymous, 401)["error"]["code"] == "operator_session_required"
