@@ -9,20 +9,6 @@ export function AdvancedPanel({ document, onChange, issues }: InspectorProps) {
     <p className="text-xs text-muted-foreground">Schema {source.schema_version}</p>
     <ChoiceField label="Default tool visibility" path={["tool_visibility"]} issues={issues} disabled={readOnly} value={source.tool_visibility ?? "hidden"} choices={levels}
       onChange={(value) => onChange(editSource(document, (next) => { if (value === "hidden") delete next.tool_visibility; else next.tool_visibility = value as Visibility; }))} />
-    {Object.entries(source.participants).filter(([, participant]) => participant.type === "agent").map(([key, participant]) => {
-      if (participant.type !== "agent") return null;
-      const overrides = source.tool_visibility_overrides;
-      const ownOverrides = overrides && Object.hasOwn(overrides, key) ? overrides[key] : undefined;
-      const tools = [...new Set([...Object.keys(participant.tools ?? {}), ...(participant.transfers?.length ? ["transfer"] : []), ...Object.keys(ownOverrides ?? {})])];
-      return tools.length > 0 && <section key={key} className="space-y-3 border-t pt-4"><h3 className="text-sm font-semibold">{key} tools</h3>{tools.map((tool) => <ChoiceField key={tool} label={`${key} / ${tool} visibility`} path={["tool_visibility_overrides", key, tool]} issues={issues} disabled={readOnly}
-        value={ownOverrides && Object.hasOwn(ownOverrides, tool) ? ownOverrides[tool]! : source.tool_visibility ?? "hidden"} choices={levels} onChange={(value) => onChange(editSource(document, (next) => {
-          const overrides = next.tool_visibility_overrides ?? {};
-          const byTool = { ...(Object.hasOwn(overrides, key) ? overrides[key] : {}) };
-          const inherit = value === (next.tool_visibility ?? "hidden");
-          if (inherit) delete byTool[tool];
-          next.tool_visibility_overrides = { ...overrides, [key]: inherit ? byTool : { ...byTool, [tool]: value as Visibility } };
-        }))} />)}</section>;
-    })}
     <NumberField label="Maximum call duration (ms)" path={["limits", "max_duration_ms"]} issues={issues} disabled={readOnly} hint="Leave blank to use the runtime default." value={source.limits?.max_duration_ms}
       onChange={(value) => onChange(editSource(document, (next) => { next.limits ??= {}; if (value === undefined) delete next.limits.max_duration_ms; else next.limits.max_duration_ms = value; }))} />
     <NumberField label="Transfer attempt timeout (ms)" path={["transfer_policy", "attempt_timeout_ms"]} issues={issues} disabled={readOnly} hint="1,000–120,000 ms. Leave blank to use the runtime default." value={source.transfer_policy?.attempt_timeout_ms}

@@ -64,12 +64,21 @@ Audio and transcript routing are configured in each participant’s **Media** ta
 **Call settings → Media** contains only recording and transcript-saving permissions.
 Existing call-wide routing values are preserved in JSON.
 
+**Advanced** exposes one call-wide tool visibility setting. Per-agent and per-tool
+visibility controls are not shown; existing overrides remain in the saved JSON.
+
 Dropdowns show concrete runtime choices instead of a separate **Default** item:
 call-wide permissions start at **Allow**, transfer history at **Fresh**, tool
 visibility at **Hidden**, and tools at **Blocking**.
 Wait sounds show **Phone ring** for call setup and human transfers, and
 **Cafe bossa** for agent transfers and joining. Opening these panels leaves
 omitted settings unchanged in the JSON.
+
+Each wait-sound row keeps its label, sound selector, and preview control aligned.
+Choose **Audio URL** to enter a link in a modal; **Use audio** applies the link,
+while Cancel or Close keeps the previous selection. The pencil edits a saved URL.
+Preview built-in or custom audio with Play; Silence has no playback. Only one
+preview plays at a time, and leaving the panel stops it.
 
 Participant model selectors show their inherited provider and model directly.
 Selecting the call-wide provider or its model restores inheritance. If no model

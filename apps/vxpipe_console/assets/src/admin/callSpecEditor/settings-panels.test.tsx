@@ -50,7 +50,8 @@ test("wait sounds distinguish default, explicit silence and an audio URL", async
   await choose("Call setup", "Silence");
   expect(saved().wait_sounds.call_setup).toBeNull();
   await choose("Transfer to human", "Audio URL");
-  fireEvent.change(screen.getByRole("textbox", { name: "Transfer to human URL" }), { target: { value: "https://example.test/wait.wav" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Audio URL" }), { target: { value: "https://example.test/wait.wav" } });
+  fireEvent.click(screen.getByRole("button", { name: "Use audio" }));
   expect(saved().wait_sounds.transfer_to_human).toBe("https://example.test/wait.wav");
   await choose("Call setup", "Phone ring");
   expect(saved().wait_sounds).not.toHaveProperty("call_setup");
@@ -100,15 +101,19 @@ test("prototype-shaped participant identifiers remain ordinary route keys", asyn
   expect(saved().participants.intake.while_present.audio_routes.constructor).toEqual(["caller"]);
 });
 
-test("prototype-shaped tool keys retain an explicit visibility override", async () => {
+test("Advanced exposes only call-wide visibility and preserves saved tool overrides", async () => {
   const source = structuredClone(editorFixture.source);
   const intake = source.participants.intake;
   if (intake?.type !== "agent") throw new Error("Expected fixture agent");
   intake.tools = JSON.parse('{"__proto__":{"type":"host","tool":"lookup"}}');
+  source.tool_visibility_overrides = { intake: JSON.parse('{"__proto__":"metadata","transfer":"full"}') };
   render(<Harness panel="advanced" initial={{ ...editorFixture, source }} />);
-  await choose("intake / __proto__ visibility", "Metadata");
-  expect(Object.hasOwn(saved().tool_visibility_overrides.intake, "__proto__")).toBe(true);
-  expect(saved().tool_visibility_overrides.intake.__proto__).toBe("metadata");
+  expect(screen.getAllByRole("combobox").map((control) => control.textContent)).toEqual(["Hidden"]);
+  expect(screen.queryByRole("heading", { name: "intake tools" })).not.toBeInTheDocument();
+  expect(saved()).toEqual(source);
+  await choose("Default tool visibility", "Full");
+  expect(saved().tool_visibility).toBe("full");
+  expect(saved().tool_visibility_overrides).toEqual(source.tool_visibility_overrides);
 });
 
 test("omitted settings display the concrete runtime choices without changing source", async () => {
@@ -132,9 +137,9 @@ test("omitted wait sounds show their slot-specific audio choices", () => {
 test("omitted tool visibility displays Hidden and can restore the call-wide level", async () => {
   render(<Harness panel="advanced" />);
   expect(screen.getByRole("combobox", { name: "Default tool visibility" })).toHaveTextContent("Hidden");
-  await choose("intake / transfer visibility", "Full");
-  await choose("intake / transfer visibility", "Hidden");
-  expect(saved().tool_visibility_overrides.intake).not.toHaveProperty("transfer");
+  await choose("Default tool visibility", "Full");
+  await choose("Default tool visibility", "Hidden");
+  expect(saved()).not.toHaveProperty("tool_visibility");
 });
 
 test.each(["intake", "specialist"])("both routing controls edit only participant %s", async (participantKey) => {
@@ -154,4 +159,32 @@ test.each(["intake", "specialist"])("both routing controls edit only participant
   expect(saved().media_policy).toEqual(initial.source.media_policy);
   const otherKey = participantKey === "intake" ? "specialist" : "intake";
   expect(saved().participants[otherKey]).toEqual(initial.source.participants[otherKey]);
+});
+
+
+test("wait sound URL edits are validated and only applied on confirmation", async () => {
+  render(<Harness panel="wait" />);
+  await choose("Transfer to agent", "Audio URL");
+  expect(saved()).toEqual(editorFixture.source);
+  fireEvent.change(screen.getByRole("textbox", { name: "Audio URL" }), { target: { value: "file:///wait.wav" } });
+  fireEvent.click(screen.getByRole("button", { name: "Use audio" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("HTTP(S)");
+  expect(saved()).toEqual(editorFixture.source);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await choose("Transfer to agent", "Audio URL");
+  fireEvent.change(screen.getByRole("textbox", { name: "Audio URL" }), { target: { value: "  https://example.test/music.wav  " } });
+  fireEvent.click(screen.getByRole("button", { name: "Use audio" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  expect(saved().wait_sounds.transfer_to_agent).toBe("https://example.test/music.wav");
+  fireEvent.click(screen.getByRole("button", { name: "Edit Transfer to agent audio URL" }));
+  expect(screen.getByRole("textbox", { name: "Audio URL" })).toHaveValue("https://example.test/music.wav");
+  fireEvent.change(screen.getByRole("textbox", { name: "Audio URL" }), { target: { value: "https://example.test/changed.wav" } });
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(saved().wait_sounds.transfer_to_agent).toBe("https://example.test/music.wav");
+});
+
+test("historical wait sound choices cannot be edited", () => {
+  render(<Harness panel="wait" initial={{ ...editorFixture, readOnly: true }} />);
+  for (const control of screen.getAllByRole("combobox")) expect(control).toBeDisabled();
 });
