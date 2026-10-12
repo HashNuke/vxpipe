@@ -29,6 +29,10 @@ export function TextField({ value, onChange, multiline, rows, ...props }: FieldP
 export function NumberField({ value, onChange, ...props }: FieldProps & { value?: number; onChange: (value: number | undefined) => void }) {
   return <Field {...props}>{(control) => <Input {...control} type="number" value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? undefined : Number(event.target.value))} />}</Field>;
 }
+/** Present seconds while keeping the call-spec contract in integer milliseconds. */
+export function DurationField({ value, onChange, ...props }: FieldProps & { value?: number; onChange: (milliseconds: number | undefined) => void }) {
+  return <Field {...props}>{(control) => <Input {...control} type="number" step="0.001" value={value === undefined ? "" : value / 1000} onChange={(event) => onChange(event.target.value === "" ? undefined : Math.round(Number(event.target.value) * 1000))} />}</Field>;
+}
 /** Unlike bounded timing controls, arbitrary source values must retain integer precision. */
 export function SourceNumberField({ value, onChange, ...props }: FieldProps & { value?: number | bigint; onChange: (value: number | bigint | undefined) => void }) {
   return <Field {...props}>{(control) => <Input {...control} type="number" aria-valuetext={value === undefined ? undefined : String(value)} value={value === undefined ? "" : String(value)} onChange={(event) => onChange(event.target.value === "" ? undefined : parseSourceNumber(event.target.value))} />}</Field>;

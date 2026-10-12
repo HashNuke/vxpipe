@@ -5,7 +5,7 @@ import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import type { ModelCatalog } from "../modelCatalog";
 import { ConnectionFields } from "./connection-fields";
-import { NumberField, TextField } from "./editor-fields";
+import { DurationField, TextField } from "./editor-fields";
 import { editSource } from "./editSource";
 import { participant } from "./edits";
 import { HumanInspectorTabs, type HumanInspectorTab } from "./human-inspector-tabs";
@@ -31,7 +31,7 @@ export function HumanInspector({ catalog, lookups, participantKey, onRenamed, on
       <TextField label="Private briefing" path={[...path, "transfer_notice"]} issues={issues} disabled={document.readOnly} multiline value={target.transfer_notice ?? ""} hint="Spoken privately to this person before they join the caller."
         onChange={(notice) => onChange(editSource(document, (source) => { const human = participant(source, participantKey); if (human.type === "human") { if (notice === "") delete human.transfer_notice; else human.transfer_notice = notice; } }))} />
       <section className="space-y-3 rounded-md border border-border bg-muted/30 p-3" aria-label="Transfer timing">
-        <NumberField label="Transfer attempt timeout (ms)" path={["transfer_policy", "attempt_timeout_ms"]} issues={issues} disabled={document.readOnly} value={document.source.transfer_policy?.attempt_timeout_ms} hint="Applies to all transfers in this call. 1,000–120,000 ms; leave blank for the runtime default."
+        <DurationField label="Transfer attempt timeout (seconds)" path={["transfer_policy", "attempt_timeout_ms"]} issues={issues} disabled={document.readOnly} value={document.source.transfer_policy?.attempt_timeout_ms} hint="Applies to all transfers in this call. 1–120 seconds; leave blank for the runtime default."
           onChange={(value) => onChange(editSource(document, (source) => { source.transfer_policy ??= {}; if (value === undefined) delete source.transfer_policy.attempt_timeout_ms; else source.transfer_policy.attempt_timeout_ms = value; }))} />
       </section>
     </div>} voice={<ParticipantCapabilities {...props} participantKey={participantKey} catalog={catalog} />} presence={<MediaPolicyFields {...props} participantKey={participantKey} />} />

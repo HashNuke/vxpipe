@@ -215,3 +215,14 @@ include `latest_revision` and `published_revision`. Error responses use
 and safe reason are available. Another tenant's spec ID is not found. Lookups
 never return credential values or perform remote MCP tool discovery; MCP tool
 names remain explicit text fields.
+
+## Timing inputs and Entry identity
+
+Call duration, transfer attempt timeout, and outgoing ring timeout use seconds in
+form controls, including fractional values such as `25.6`. Saved call-spec JSON
+and API requests keep integer milliseconds (`25600`); input is rounded to the
+nearest millisecond. Blank optional inputs use the existing runtime defaults.
+
+New UI-created incoming and outgoing specs use `caller` as the Entry participant
+key. Entry settings do not expose a key editor. Existing/imported keys are
+preserved; the full JSON editor remains available for source-level edits.

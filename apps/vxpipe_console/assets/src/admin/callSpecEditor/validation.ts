@@ -19,11 +19,11 @@ export function validateSource(value: unknown): SourceIssue[] {
   validateVariables(fields, source, participants);
   if (source.transfer_policy !== undefined && source.transfer_policy !== null) {
     const policy = fields.object(source.transfer_policy, ["transfer_policy"], ["attempt_timeout_ms"]);
-    if (Object.hasOwn(policy, "attempt_timeout_ms")) fields.integer(policy.attempt_timeout_ms, ["transfer_policy", "attempt_timeout_ms"], 1000, 120000);
+    if (Object.hasOwn(policy, "attempt_timeout_ms")) fields.integer(policy.attempt_timeout_ms, ["transfer_policy", "attempt_timeout_ms"], 1000, 120000, "must be between 1 and 120 seconds");
   }
   if (source.limits !== undefined) {
     const limits = fields.object(source.limits, ["limits"], ["max_duration_ms"]);
-    if (Object.hasOwn(limits, "max_duration_ms")) fields.integer(limits.max_duration_ms, ["limits", "max_duration_ms"], 1000, 86400000);
+    if (Object.hasOwn(limits, "max_duration_ms")) fields.integer(limits.max_duration_ms, ["limits", "max_duration_ms"], 1000, 86400000, "must be between 1 and 86400 seconds");
   }
   return fields.issues;
 }
@@ -58,5 +58,5 @@ function direction(fields: Fields, source: ObjectValue, participants: ObjectValu
       : connection.mode === "receive" && connection.admission === "start_call";
     if (!valid) fields.issue(entryPath, "must have the direction's initial connection intent");
   }
-  if (outgoing && Object.hasOwn(spec, "ring_timeout_ms")) fields.integer(spec.ring_timeout_ms, [block, "ring_timeout_ms"], 5000, 60000);
+  if (outgoing && Object.hasOwn(spec, "ring_timeout_ms")) fields.integer(spec.ring_timeout_ms, [block, "ring_timeout_ms"], 5000, 60000, "must be between 5 and 60 seconds");
 }

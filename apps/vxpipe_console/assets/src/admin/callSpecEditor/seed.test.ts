@@ -7,8 +7,8 @@ import type { ModelCatalog } from "../modelCatalog";
 test("outgoing seeds dial the selected service and use the outgoing first-message default", () => {
   const document = newCallSpec(modelCatalogFixture, { direction: "outgoing", service: "office" });
   expect(document.source.incoming_call).toBeUndefined();
-  expect(document.source.outgoing_call).toEqual({ callee: "callee", handled_by: "assistant" });
-  expect(document.source.participants.callee).toMatchObject({ type: "human", connection: { service: "office", mode: "dial", admission: "start_call" } });
+  expect(document.source.outgoing_call).toEqual({ callee: "caller", handled_by: "assistant" });
+  expect(document.source.participants.caller).toMatchObject({ type: "human", connection: { service: "office", mode: "dial", admission: "start_call" } });
   expect(document.source.participants.assistant).not.toHaveProperty("first_message");
   expect(document.source.participants.assistant).toHaveProperty("prompt", "");
   expect(validateSource(document.source).map((issue) => issue.path)).toEqual([["participants", "assistant", "prompt"]]);

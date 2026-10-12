@@ -6,13 +6,14 @@ import { MediaPolicyFields } from "./media-policy-fields";
 import { WaitSoundsPanel } from "./wait-sounds-panel";
 import { AdvancedPanel } from "./advanced-panel";
 import { editorFixture } from "./editorFixtures";
+import { validateSource } from "./validation";
 import { pageSnapshot } from "./page-fixtures";
 import type { SourceDocument } from "./types";
 
 afterEach(cleanup);
 function Harness({ panel, initial = editorFixture, participantKey = null }: { panel: "direction" | "media" | "wait" | "advanced"; initial?: SourceDocument; participantKey?: string | null }) {
   const [document, onChange] = useState(initial);
-  const props = { document, onChange };
+  const props = { document, onChange, issues: validateSource(document.source) };
   return <>{panel === "direction" ? <EntryHandlerField {...props} />
     : panel === "media" ? <MediaPolicyFields {...props} participantKey={participantKey} />
     : panel === "wait" ? <WaitSoundsPanel {...props} /> : <AdvancedPanel {...props} />}
@@ -59,17 +60,32 @@ test("wait sounds distinguish default, explicit silence and an audio URL", async
 
 test("advanced settings retain invalid numeric edits for validation and can clear optional limits", () => {
   render(<Harness panel="advanced" />);
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Transfer attempt timeout (ms)" }), { target: { value: "900" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Transfer attempt timeout (seconds)" }), { target: { value: "0.9" } });
   expect(saved().transfer_policy.attempt_timeout_ms).toBe(900);
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Max call duration (ms)" }), { target: { value: "600000" } });
-  expect(saved().limits.max_duration_ms).toBe(600000);
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Max call duration (ms)" }), { target: { value: "" } });
+  expect(screen.getByText("must be between 1 and 120 seconds")).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Max call duration (seconds)" }), { target: { value: "25.6" } });
+  expect(saved().limits.max_duration_ms).toBe(25600);
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Max call duration (seconds)" }), { target: { value: "" } });
   expect(saved().limits).not.toHaveProperty("max_duration_ms");
+});
+
+test("stored millisecond limits display fractional seconds without changing the source", () => {
+  const initial = structuredClone(editorFixture);
+  initial.source.limits = { max_duration_ms: 25600 };
+  initial.source.transfer_policy = { attempt_timeout_ms: 1001 };
+  render(<Harness panel="advanced" initial={initial} />);
+  expect(screen.getByRole("spinbutton", { name: "Max call duration (seconds)" })).toHaveValue(25.6);
+  const timeout = screen.getByRole("spinbutton", { name: "Transfer attempt timeout (seconds)" });
+  expect(timeout).toHaveValue(1.001);
+  expect(timeout).toHaveAttribute("step", "0.001");
+  expect(saved()).toEqual(initial.source);
+  fireEvent.change(timeout, { target: { value: "1.001" } });
+  expect(saved().transfer_policy.attempt_timeout_ms).toBe(1001);
 });
 
 test("read-only policy fields cannot mutate a historical source", () => {
   render(<Harness panel="advanced" initial={{ ...editorFixture, readOnly: true }} />);
-  expect(screen.getByRole("spinbutton", { name: "Max call duration (ms)" })).toBeDisabled();
+  expect(screen.getByRole("spinbutton", { name: "Max call duration (seconds)" })).toBeDisabled();
   expect(screen.getByRole("combobox", { name: "Default tool visibility" })).toBeDisabled();
 });
 

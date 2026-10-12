@@ -33,6 +33,7 @@ function outgoing(): SourceDocument {
 test("entry connection edits preserve incoming admission and remove phone fields when returning to web", async () => {
   render(<Harness entry />);
   expect(saved()).toEqual(editorFixture.source);
+  expect(screen.queryByRole("textbox", { name: "Participant key" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Delete participant" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("radio", { name: "Phone" }));
   if (screen.queryByRole("button", { name: "Assign number" })) {
@@ -46,6 +47,9 @@ test("entry connection edits preserve incoming admission and remove phone fields
 test("outgoing entry offers request or fixed number, never variable or web, and validates its ring timeout", async () => {
   render(<Harness entry initial={outgoing()} />);
   expect(saved()).toEqual(outgoing().source);
+  expect(screen.queryByRole("textbox", { name: "Participant key" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Ring timeout (seconds)" }), { target: { value: "25.6" } });
+  expect(saved().outgoing_call.ring_timeout_ms).toBe(25600);
   expect(screen.getByRole("combobox", { name: "Number source" })).toHaveTextContent("Outgoing request (to)");
   await choose("Number source", "Fixed number");
   fireEvent.change(screen.getByRole("textbox", { name: "Phone number" }), { target: { value: "+15550001000" } });
@@ -53,9 +57,9 @@ test("outgoing entry offers request or fixed number, never variable or web, and 
   expect(saved().participants.caller.connection).not.toHaveProperty("number");
   expect(saved().participants.caller.connection).not.toHaveProperty("number_from_variable");
   expect(screen.getByRole("radio", { name: "Web" })).toBeDisabled();
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Ring timeout (ms)" }), { target: { value: "4999" } });
-  expect(screen.getByRole("spinbutton", { name: "Ring timeout (ms)" })).toHaveAttribute("aria-invalid", "true");
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Ring timeout (ms)" }), { target: { value: "" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Ring timeout (seconds)" }), { target: { value: "4.999" } });
+  expect(screen.getByRole("spinbutton", { name: "Ring timeout (seconds)" })).toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Ring timeout (seconds)" }), { target: { value: "" } });
   expect(saved().outgoing_call).not.toHaveProperty("ring_timeout_ms");
 });
 test("opening audio requires explicit speech selection and supports text, file and removal", async () => {
@@ -96,9 +100,9 @@ test("human identity edits rewrite references, retain literal text and reject co
   expect(saved().participants.support.transfer_notice).toBe(editorFixture.source.participants.specialist!.type === "human" ? editorFixture.source.participants.specialist.transfer_notice : undefined);
   expect(screen.queryByRole("textbox", { name: "Description" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("textbox", { name: "Private briefing" }), { target: { value: "A caller needs your help." } });
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Transfer attempt timeout (ms)" }), { target: { value: "45000" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Transfer attempt timeout (seconds)" }), { target: { value: "25.6" } });
   expect(saved().participants.support).toMatchObject({ description: editorFixture.source.participants.specialist!.description, transfer_notice: "A caller needs your help." });
-  expect(saved().transfer_policy).toEqual({ attempt_timeout_ms: 45000 });
+  expect(saved().transfer_policy).toEqual({ attempt_timeout_ms: 25600 });
 });
 test("deleting a human destination confirms removal and cleans transfer references", async () => {
   render(<Harness />);

@@ -28,8 +28,8 @@ export class Fields {
   enumeration(value: unknown, path: string[], values: readonly string[]): void {
     if (typeof value !== "string" || !values.includes(value)) this.issue(path, value === undefined ? "is required" : "must be a supported value");
   }
-  integer(value: unknown, path: string[], minimum: number, maximum: number): void {
-    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum || value > maximum) this.issue(path, `must be between ${minimum} and ${maximum}`);
+  integer(value: unknown, path: string[], minimum: number, maximum: number, reason = `must be between ${minimum} and ${maximum}`): void {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum || value > maximum) this.issue(path, reason);
   }
   phone(value: unknown, path: string[]): void {
     if (typeof value !== "string" || !/^\+[1-9][0-9]{1,14}$/.test(value)) this.issue(path, "must be an E.164 telephone number");

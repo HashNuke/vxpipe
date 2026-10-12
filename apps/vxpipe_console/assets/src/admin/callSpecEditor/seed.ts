@@ -32,7 +32,7 @@ export function newCallSpec(catalog: ModelCatalog, choice: NewCallDirection): So
     if (!choice.service || choice.service === "web") throw new Error("Choose a phone service for outgoing calls.");
     requireIdentifier(choice.service);
   }
-  const entry = choice.direction === "outgoing" ? "callee" : "caller";
+  const entry = "caller";
   return {
     readOnly: false,
     source: {

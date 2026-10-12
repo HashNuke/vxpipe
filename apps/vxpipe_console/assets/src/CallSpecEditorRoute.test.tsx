@@ -203,8 +203,8 @@ test("outgoing creation requires a phone service and saves the chosen direction"
   const submitted = fetch.mock.calls.find(([, init]) => init?.method === "POST");
   const saved = JSON.parse(String(submitted?.[1]?.body)).source;
   expect(saved.incoming_call).toBeUndefined();
-  expect(saved.outgoing_call).toEqual({ callee: "callee", handled_by: "assistant" });
-  expect(saved.participants.callee.connection).toEqual({ service: "office", mode: "dial", admission: "start_call" });
+  expect(saved.outgoing_call).toEqual({ callee: "caller", handled_by: "assistant" });
+  expect(saved.participants.caller.connection).toEqual({ service: "office", mode: "dial", admission: "start_call" });
 });
 
 test("outgoing creation explains missing phone services and can be cancelled", async () => {
