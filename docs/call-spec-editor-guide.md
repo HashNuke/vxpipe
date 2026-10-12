@@ -60,11 +60,13 @@ speech model; **LLM + Text-to-Speech** shows a language model and a voice model.
 Changing type removes incompatible selections and supplies missing selections
 from the installed catalog's recommendations. Other agents keep their effective
 models. Human participants' **Models** tab contains only **Speech to text**.
-Participant media policies live in **Media**.
+Audio and transcript routing are configured in each participant’s **Media** tab.
+**Call settings → Media** contains only recording and transcript-saving permissions.
+Existing call-wide routing values are preserved in JSON.
 
 Dropdowns show concrete runtime choices instead of a separate **Default** item:
-call-wide permissions start at **Allow**, routing at **Unrestricted**, transfer
-history at **Fresh**, tool visibility at **Hidden**, and tools at **Blocking**.
+call-wide permissions start at **Allow**, transfer history at **Fresh**, tool
+visibility at **Hidden**, and tools at **Blocking**.
 Wait sounds show **Phone ring** for call setup and human transfers, and
 **Cafe bossa** for agent transfers and joining. Opening these panels leaves
 omitted settings unchanged in the JSON.
