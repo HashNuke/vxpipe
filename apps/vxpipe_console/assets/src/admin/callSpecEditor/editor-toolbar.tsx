@@ -1,35 +1,40 @@
-import { Bot, UserRound, Workflow } from "lucide-react"
+import { Plus, Settings, Workflow } from "lucide-react"
 
 import { Button } from "../components/ui/button"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip"
+import { IssueCount } from "./issue-count"
 
-export function FlowEditorToolbar({ onAddNode, onArrangeNodes, readOnly = false }: {
+export function FlowEditorToolbar({ onAddNode, onArrangeNodes, onOpenCallSettings, settingsIssues = 0, readOnly = false }: {
   onAddNode: (kind: "agent" | "human") => void;
   onArrangeNodes: () => void;
+  onOpenCallSettings: () => void;
+  settingsIssues?: number;
   readOnly?: boolean;
 }) {
   return (
-    <div
+    <TooltipProvider><div
       data-flow-editor-toolbar
       role="toolbar"
-      aria-label={"Add participants"}
+      aria-label={"Call spec tools"}
       aria-orientation="horizontal"
-      className="absolute bottom-4 left-1/2 z-10 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-nowrap items-center justify-start gap-1.5 overflow-x-auto rounded-md border border-border bg-background p-2 shadow-lg  lg:right-[calc(34rem+0.75rem)] lg:left-[calc((100%-34rem)/2)] lg:max-w-[calc(100vw-35rem)]"
+      className="flex min-w-0 items-stretch rounded-b-md border-t border-border bg-foreground text-background"
     >
-      <div role="group" aria-label={"Add participants"} className="flex shrink-0 items-center gap-1 rounded-sm bg-muted p-1">
-        <span className="px-1.5 text-xs font-medium text-muted-foreground">{"Add"}</span>
-        <Button variant="secondary" size="sm" className="h-8 justify-center px-3" disabled={readOnly} onClick={() => onAddNode("agent")} aria-label={"Add agent"}>
-          <Bot className="h-4 w-4" />
-          Agent
+        <Button variant="ghost" size="sm" className="h-10 rounded-none rounded-bl-md px-2 text-background hover:bg-background/10 hover:text-background dark:hover:bg-background/10 focus-visible:ring-inset" disabled={readOnly} onClick={() => onAddNode("agent")} aria-label={"Add agent"}>
+          <Plus className="h-4 w-4" />
+          Add AI Agent
         </Button>
-        <Button variant="secondary" size="sm" className="h-8 justify-center px-3" disabled={readOnly} onClick={() => onAddNode("human")} aria-label={"Add human"}>
-          <UserRound className="h-4 w-4" />
-          Human
+        <Button variant="ghost" size="sm" className="h-10 rounded-none px-2 text-background hover:bg-background/10 hover:text-background dark:hover:bg-background/10 focus-visible:ring-inset" disabled={readOnly} onClick={() => onAddNode("human")} aria-label={"Add human"}>
+          <Plus className="h-4 w-4" />
+          Add Human
         </Button>
-      </div>
-      <Button variant="secondary" size="sm" className="h-8 justify-center px-3" onClick={onArrangeNodes} aria-label={"Arrange nodes"}>
-        <Workflow className="h-4 w-4" />
-        Arrange
-      </Button>
-    </div>
+      <Tooltip><TooltipTrigger asChild>
+        <Button variant="ghost" size="icon" className="size-10 rounded-none text-background hover:bg-background/10 hover:text-background dark:hover:bg-background/10 focus-visible:ring-inset" onClick={onArrangeNodes} aria-label="Arrange nodes"><Workflow className="h-4 w-4" /></Button>
+      </TooltipTrigger><TooltipContent side="top" sideOffset={8}>Arrange nodes</TooltipContent></Tooltip>
+      <Tooltip><TooltipTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative ml-auto size-10 rounded-none rounded-br-md text-background hover:bg-background/10 hover:text-background dark:hover:bg-background/10 focus-visible:ring-inset" onClick={onOpenCallSettings} aria-label="Call settings" aria-description={settingsIssues ? `${settingsIssues} ${settingsIssues === 1 ? "issue" : "issues"}` : undefined}>
+          <Settings className="h-4 w-4" /><span className="pointer-events-none absolute right-0.5 top-0.5"><IssueCount count={settingsIssues} /></span>
+        </Button>
+      </TooltipTrigger><TooltipContent side="top" sideOffset={8}>Call settings</TooltipContent></Tooltip>
+    </div></TooltipProvider>
   )
 }

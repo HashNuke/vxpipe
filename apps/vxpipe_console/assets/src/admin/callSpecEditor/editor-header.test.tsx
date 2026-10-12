@@ -53,25 +53,37 @@ test("name dialog edits and submits the name with an accessible label", () => {
   expect(submit).toHaveBeenCalledOnce();
 });
 
-test("toolbar offers only supported participant types and arranging", () => {
+test("toolbar adds participants and exposes icon actions for arranging and Call settings", () => {
   const add = vi.fn();
   const arrange = vi.fn();
-  const { rerender } = render(<FlowEditorToolbar onAddNode={add} onArrangeNodes={arrange} />);
+  const settings = vi.fn();
+  const { rerender } = render(<FlowEditorToolbar onAddNode={add} onArrangeNodes={arrange} onOpenCallSettings={settings} />);
   fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
   fireEvent.click(screen.getByRole("button", { name: "Add human" }));
   fireEvent.click(screen.getByRole("button", { name: "Arrange nodes" }));
+  fireEvent.click(screen.getByRole("button", { name: "Call settings" }));
+  expect(screen.getByRole("button", { name: "Arrange nodes" })).not.toHaveTextContent("Arrange");
+  expect(screen.getByRole("button", { name: "Call settings" })).not.toHaveTextContent("Call settings");
   expect(add.mock.calls).toEqual([["agent"], ["human"]]);
   expect(arrange).toHaveBeenCalledOnce();
-  rerender(<FlowEditorToolbar onAddNode={add} onArrangeNodes={arrange} readOnly />);
+  expect(settings).toHaveBeenCalledOnce();
+  rerender(<FlowEditorToolbar onAddNode={add} onArrangeNodes={arrange} onOpenCallSettings={settings} readOnly />);
   expect(screen.getByRole("button", { name: "Add agent" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Add human" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Arrange nodes" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Call settings" })).toBeEnabled();
 });
 
-test("source inspection remains available for read-only specs", () => {
+test.each([{}, { readOnly: true }, { saveDisabled: true }, { authoringDisabled: true }])("JSON editor opens from the menu even when saving is unavailable: %j", (state: { readOnly?: boolean; saveDisabled?: boolean; authoringDisabled?: boolean }) => {
   const source = vi.fn();
-  render(<FlowEditorHeader backHref="/specs" readOnly onShowSource={source} {...callbacks()} />);
-  fireEvent.click(screen.getByRole("button", { name: "JSON" }));
+  render(<FlowEditorHeader backHref="/specs" {...state} onShowSource={source} {...callbacks()} />);
+  expect(screen.queryByRole("button", { name: "JSON" })).not.toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "ArrowDown" });
+  const menu = within(screen.getByRole("menu"));
+  if (state.readOnly || state.saveDisabled || state.authoringDisabled) {
+    expect(menu.getByRole("menuitem", { name: "Save as draft" })).toHaveAttribute("aria-disabled", "true");
+  }
+  fireEvent.click(menu.getByRole("menuitem", { name: "JSON editor" }));
   expect(source).toHaveBeenCalledOnce();
 });
 test.each([{ revision: undefined }, { revision: 3, dirty: true }, { revision: 3, issueCount: 1 }])("publish requires a saved unchanged revision with no client issues: %j", (state) => {

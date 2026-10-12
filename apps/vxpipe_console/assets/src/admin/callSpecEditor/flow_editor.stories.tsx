@@ -105,7 +105,8 @@ export const DrawTransfer: Story = { play: async ({ canvasElement }) => {
   const close = body.queryByRole("button", { name: "Close" });
   if (close) { await userEvent.click(close); await waitFor(() => expect(body.queryByRole("dialog")).not.toBeInTheDocument()); }
   await userEvent.click(body.getByLabelText("Transfer from intake")); await userEvent.click(body.getByLabelText("Transfer to agent"));
-  await userEvent.click(body.getByRole("button", { name: "JSON" }));
+  await userEvent.click(body.getByRole("button", { name: "More actions" }));
+  await userEvent.click(body.getByRole("menuitem", { name: "JSON editor" }));
   await waitFor(() => {
     const source = JSON.parse((body.getByRole("textbox", { name: "Call spec JSON" }) as HTMLTextAreaElement).value);
     expect(source.participants.intake.transfers).toContain("agent");

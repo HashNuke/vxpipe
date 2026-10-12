@@ -20,7 +20,18 @@ cards show their name, tool count and the number of variables they can write. Va
 top-level properties in writable sections; nested objects count as one variable.
 Prompts stay in the agent inspector. Select a participant to
 edit its fields; **Call settings** opens model defaults, variables and call
-policies. On a phone, these controls open in a side sheet. Model and voice choices
+policies. On a phone, these controls open in a side sheet.
+
+The header uses adjoining **Publish** and ellipsis cells separated by vertical
+dividers, with hover backgrounds filling the toolbar height without inset padding
+or gaps. **JSON editor** is available inside the ellipsis menu. Issue controls use the same treatment.
+
+A contrasting second row in the top toolbar places **Add AI Agent**, **Add Human**,
+and the **Arrange nodes** icon on the left, with **Call settings** on the right.
+Hover or focus these icons to see their names; Call settings retains its
+validation issue badge.
+
+Model and voice choices
 come from the installed provider catalog. Choosing a provider selects its
 recommended model and voice without adding recommendation badges to their names.
 Provider and Model share a row. Credential selection is managed outside this editor.
@@ -110,7 +121,8 @@ failures link to the tenant's Services page. A failed request keeps the current
 source; **Retry** uses the current draft. A conflict offers to reload the latest
 saved revision after confirming that unsaved changes can be discarded.
 
-**JSON** in the header opens the entire call spec for viewing, editing, copying or downloading.
+**JSON editor** in the header ellipsis menu opens the entire call spec for viewing,
+editing, copying or downloading.
 The **JSON** toggle in each participant sidebar header edits just that participant.
 Use these editors for advanced model `options` and `provider_options`; the model
 forms contain provider, model and voice controls.

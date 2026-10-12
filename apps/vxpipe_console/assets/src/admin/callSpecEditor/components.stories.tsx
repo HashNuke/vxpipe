@@ -68,10 +68,10 @@ export const NameDialog: Story = {
   },
 };
 export const Toolbar: Story = {
-  render: () => <StoryProviders><FlowEditorToolbar onAddNode={() => {}} onArrangeNodes={() => {}} /></StoryProviders>,
+  render: () => <StoryProviders><FlowEditorToolbar onAddNode={() => {}} onArrangeNodes={() => {}} onOpenCallSettings={() => {}} /></StoryProviders>,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("toolbar", { name: "Add participants" })).toBeVisible();
+    await expect(canvas.getByRole("toolbar", { name: "Call spec tools" })).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Add agent" })).toBeEnabled();
   },
 };

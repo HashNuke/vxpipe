@@ -24,6 +24,15 @@ const saveDraft = () => {
   fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "ArrowDown" });
   fireEvent.click(screen.getByRole("menuitem", { name: "Save as draft" }));
 };
+const openJsonEditor = () => {
+  fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "ArrowDown" });
+  fireEvent.click(screen.getByRole("menuitem", { name: "JSON editor" }));
+};
+const expectDraftDisabled = () => {
+  fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "ArrowDown" });
+  expect(screen.getByRole("menuitem", { name: "Save as draft" })).toHaveAttribute("aria-disabled", "true");
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+};
 const fill = (name: string, value: string) => fireEvent.change(screen.getByRole("textbox", { name }), { target: { value } });
 const rename = (value: string) => {
   click("Edit call spec name");
@@ -168,7 +177,7 @@ test("add, connect, rename and remove a transfer keep the portable source in syn
   render(<CallSpecEditor {...properties()} />); click("Add agent");
   expect(screen.getByRole("textbox", { name: "Participant key" })).toHaveValue("agent");
   click("Connect intake to agent"); click("Select agent"); fill("Participant key", "helper"); fireEvent.blur(screen.getByRole("textbox", { name: "Participant key" }));
-  click("Select transfer:intake:helper"); click("Remove transfer to helper"); click("JSON");
+  click("Select transfer:intake:helper"); click("Remove transfer to helper"); openJsonEditor();
   const source = JSON.parse((screen.getByRole("textbox", { name: "Call spec JSON" }) as HTMLTextAreaElement).value);
   expect(source.participants.helper.type).toBe("agent");
   expect(source.participants.intake.transfers).toEqual(["specialist"]);
@@ -263,10 +272,10 @@ test("an old recovery action cannot reload while a new save is pending", async (
 
 test("call spec JSON applies to the draft and saves through the existing revision flow", async () => {
   const props = properties(); render(<CallSpecEditor {...props} />);
-  click("JSON");
+  openJsonEditor();
   const next = { ...snapshot.document.source, name: "Edited in JSON" };
   fill("Call spec JSON", JSON.stringify(next));
-  expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
   click("Apply JSON");
   expect(screen.getByRole("heading", { name: "Edited in JSON" })).toBeInTheDocument();
   click("Close"); saveDraft();
@@ -279,7 +288,7 @@ test("unapplied participant JSON survives switching participants and guards depa
   fill("Participant JSON", '{');
   click("Select specialist"); click("Select intake");
   expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue('{');
-  expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
+  expectDraftDisabled();
   fireEvent.click(screen.getByRole("link", { name: "Back to call specs" }));
   expect(props.onNavigate).not.toHaveBeenCalled(); click("Keep editing");
   click("Discard JSON changes");
@@ -296,7 +305,7 @@ test("Review JSON edits reopens a hidden participant draft", () => {
 
 test("a removed participant's JSON draft remains reviewable and discardable", () => {
   render(<CallSpecEditor {...properties()} />); click("Select specialist"); click("Participant JSON");
-  fill("Participant JSON", '{'); click("JSON");
+  fill("Participant JSON", '{'); openJsonEditor();
   const next = structuredClone(snapshot.document.source);
   delete next.participants.specialist;
   if (next.participants.intake.type === "agent") delete next.participants.intake.transfers;

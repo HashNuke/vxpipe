@@ -73,7 +73,9 @@ test("session expiry keeps the source and disables writes without navigating awa
   await screen.findByText(/Your session expired/);
   expect(expired).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Keep this draft");
-  expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "ArrowDown" });
+  expect(screen.getByRole("menuitem", { name: "Save as draft" })).toHaveAttribute("aria-disabled", "true");
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
 });
 
 test("browser back and editor Back use a single discard confirmation", async () => {
@@ -94,7 +96,9 @@ test("explicit revisions are read-only and can open the latest editable revision
   window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf?revision=1");
   render(<App csrfToken="csrf" fetchImpl={transport()} />);
   await screen.findByText(/Viewing revision/);
-  expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
+  fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "ArrowDown" });
+  expect(screen.getByRole("menuitem", { name: "Save as draft" })).toHaveAttribute("aria-disabled", "true");
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
   fireEvent.click(screen.getByRole("link", { name: "Continue editing latest revision" }));
   await waitFor(() => expect(screen.getByRole("button", { name: "More actions" })).toBeEnabled());
   expect(window.location.search).toBe("");
