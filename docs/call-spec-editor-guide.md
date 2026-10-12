@@ -26,7 +26,7 @@ The header uses adjoining **Publish** and ellipsis cells separated by vertical
 dividers, with hover backgrounds filling the toolbar height without inset padding
 or gaps. **JSON editor** is available inside the ellipsis menu. Issue controls use the same treatment.
 
-A contrasting second row in the top toolbar places **Add AI Agent**, **Add Human**,
+A subtly shaded second row in the top toolbar places **Add AI Agent**, **Add Human**,
 and the **Arrange nodes** icon on the left, with **Call settings** on the right.
 Hover or focus these icons to see their names; Call settings retains its
 validation issue badge.
