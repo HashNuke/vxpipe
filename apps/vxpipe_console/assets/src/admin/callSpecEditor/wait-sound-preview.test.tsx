@@ -9,6 +9,8 @@ function Harness() {
     <button onClick={() => preview.toggle("two", "https://example.test/two.wav")}>Two</button>
     <button onClick={preview.stop}>Stop</button>
     <output>{preview.active}</output>
+    <span data-testid="state">{preview.state}</span>
+    <span data-testid="progress">{preview.progress}</span>
     {preview.error && <p role="alert">{preview.error.message}</p>}
   </>;
 }
@@ -26,11 +28,12 @@ test("previews never overlap, can stop, and release playback on unmount", async 
   expect(pause).toHaveBeenCalledTimes(1);
   expect(played[0]!.getAttribute("src")).toBeNull();
   fireEvent.click(screen.getByText("Two"));
-  expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  expect(screen.getByRole("status")).toHaveTextContent("two");
+  expect(screen.getByTestId("state")).toHaveTextContent("paused");
   expect(pause).toHaveBeenCalledTimes(2);
   fireEvent.click(screen.getByText("One"));
   unmount();
-  expect(pause).toHaveBeenCalledTimes(3);
+  expect(pause).toHaveBeenCalledTimes(4);
 });
 
 test("failed playback is recoverable and stale failures cannot replace the active preview", async () => {
@@ -53,4 +56,54 @@ test("failed playback is recoverable and stale failures cannot replace the activ
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("two"));
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(play).toHaveBeenCalledTimes(3);
+});
+
+
+test("pause preserves progress and resume reuses the player until the audio ends", async () => {
+  const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
+  render(<Harness />);
+  fireEvent.click(screen.getByText("One"));
+  await waitFor(() => expect(screen.getByTestId("state")).toHaveTextContent("playing"));
+  const player = play.mock.contexts[0];
+  if (!(player instanceof HTMLMediaElement)) throw new Error("Expected audio player");
+  Object.defineProperty(player, "duration", { value: 10, configurable: true });
+  player.currentTime = 4;
+  fireEvent.timeUpdate(player);
+  expect(screen.getByTestId("progress")).toHaveTextContent("0.4");
+  fireEvent.click(screen.getByText("One"));
+  expect(screen.getByTestId("state")).toHaveTextContent("paused");
+  expect(player.currentTime).toBe(4);
+  fireEvent.click(screen.getByText("One"));
+  await waitFor(() => expect(screen.getByTestId("state")).toHaveTextContent("playing"));
+  expect(play.mock.instances[1]).toBe(player);
+  expect(player.currentTime).toBe(4);
+  fireEvent.ended(player);
+  expect(screen.getByTestId("state")).toHaveTextContent("idle");
+  expect(screen.getByTestId("progress")).toHaveTextContent("0");
+});
+
+test("loading, buffering, and unknown duration do not invent progress", async () => {
+  let resolvePlay!: () => void;
+  const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => {
+    return new Promise((resolve) => { resolvePlay = resolve; });
+  });
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
+  render(<Harness />);
+  fireEvent.click(screen.getByText("One"));
+  expect(screen.getByTestId("state")).toHaveTextContent("loading");
+  const player = play.mock.contexts[0];
+  if (!(player instanceof HTMLMediaElement)) throw new Error("Expected audio player");
+  Object.defineProperty(player, "duration", { value: Infinity });
+  player.currentTime = 4;
+  fireEvent.timeUpdate(player);
+  expect(screen.getByTestId("progress")).toHaveTextContent("0");
+  await act(async () => resolvePlay());
+  expect(screen.getByTestId("state")).toHaveTextContent("playing");
+  fireEvent.waiting(player);
+  expect(screen.getByTestId("state")).toHaveTextContent("loading");
+  fireEvent.playing(player);
+  expect(screen.getByTestId("state")).toHaveTextContent("playing");
 });

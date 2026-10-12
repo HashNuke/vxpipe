@@ -78,7 +78,10 @@ Each wait-sound row keeps its label, sound selector, and preview control aligned
 Choose **Audio URL** to enter a link in a modal; **Use audio** applies the link,
 while Cancel or Close keeps the previous selection. The pencil edits a saved URL.
 Preview built-in or custom audio with Play; Silence has no playback. Only one
-preview plays at a time, and leaving the panel stops it.
+preview plays at a time, and leaving the panel stops it. Pause keeps your place;
+Resume continues from there. The blue playback control has a shrinking ring that
+shows the remaining audio without a time label. Loading uses a separate indicator,
+and reduced-motion preferences disable the spinner and ring interpolation.
 
 Participant model selectors show their inherited provider and model directly.
 Selecting the call-wide provider or its model restores inheritance. If no model

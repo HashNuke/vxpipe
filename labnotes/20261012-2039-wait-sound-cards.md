@@ -17,5 +17,6 @@
 - Browser inspection: desktop and 390px mobile rows/modal, invalid URL rejection,
   custom URL confirmation, edit/cancel, real built-in and custom playback.
   Widened the shared label column after observing one wrapped label.
-- Full umbrella completion checks are running. No speech state changes; Lean
-  does not apply.
+- Full umbrella completion checks passed after the checkpoint commit: format,
+  warnings-as-errors compile, strict Credo, 3,572 tests with zero failures, and
+  unused dependencies. No speech state changes; Lean does not apply.
