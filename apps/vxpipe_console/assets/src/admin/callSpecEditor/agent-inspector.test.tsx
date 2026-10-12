@@ -178,7 +178,7 @@ test("transfer history preserves saved null until edited and clears turn count w
   expect(saved().participants.intake.transfer_history).toEqual({ mode: "last_n_spoken", turns: 3 });
   await choose("Transfer history", "Selected history");
   expect(saved().participants.intake.transfer_history).toEqual({ mode: "selected" });
-  await choose("Transfer history", "Default (fresh)");
+  await choose("Transfer history", "Fresh");
   expect(saved().participants.intake).not.toHaveProperty("transfer_history");
 });
 test("the source-tool-options flow adds an MCP tool and cancellation leaves source untouched", async () => {

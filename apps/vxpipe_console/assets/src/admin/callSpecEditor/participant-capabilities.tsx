@@ -11,7 +11,7 @@ export function ParticipantCapabilities({ document, onChange, issues, participan
     return <section key={kind} aria-label={labels[kind]} className="space-y-3 border-t pt-4">
       <h3 className="text-sm font-semibold">{labels[kind]}</h3>
       <CapabilityFields kind={kind} path={["participants", participantKey, "capabilities", kind]} value={target.capabilities?.[kind] ?? inherited} catalog={catalog} issues={issues} disabled={document.readOnly}
-        defaultLabel={required && !inherited ? "Choose provider" : "Use default"} defaultDisabled={required && !inherited}
+        inherited={inherited} defaultLabel={required && !inherited ? "Choose provider" : "Not configured"} defaultDisabled={required && !inherited}
         onChange={(selection) => onChange(setCapability(document, participantKey, kind, selection))} />
     </section>;
   })}</div>;

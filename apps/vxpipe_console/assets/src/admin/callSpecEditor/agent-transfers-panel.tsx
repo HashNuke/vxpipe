@@ -46,10 +46,10 @@ export function AgentTransfersPanel({ document, onChange, issues, participantKey
       })}
       {!transfers.length && <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">Add a destination to let this agent transfer the call.</p>}
     </section>
-    <ChoiceField label="Transfer history" path={[...path, "transfer_history", "mode"]} issues={issues} disabled={document.readOnly} value={target.transfer_history?.mode ?? ""}
-      choices={[{ value: "", label: "Default (fresh)" }, { value: "fresh", label: "Fresh" }, { value: "all_spoken", label: "All spoken history" }, { value: "last_n_spoken", label: "Last spoken turns" }, { value: "selected", label: "Selected history" }]}
+    <ChoiceField label="Transfer history" path={[...path, "transfer_history", "mode"]} issues={issues} disabled={document.readOnly} value={target.transfer_history?.mode ?? "fresh"}
+      choices={[{ value: "fresh", label: "Fresh" }, { value: "all_spoken", label: "All spoken history" }, { value: "last_n_spoken", label: "Last spoken turns" }, { value: "selected", label: "Selected history" }]}
       hint="Choose the history this agent receives when a call transfers to it."
-      onChange={(mode) => history(mode === "last_n_spoken" ? { mode, turns: 1 } : mode === "fresh" || mode === "all_spoken" || mode === "selected" ? { mode } : undefined)} />
+      onChange={(mode) => history(mode === "last_n_spoken" ? { mode, turns: 1 } : mode === "all_spoken" || mode === "selected" ? { mode } : undefined)} />
     {target.transfer_history?.mode === "last_n_spoken" && <NumberField label="Spoken turns" path={[...path, "transfer_history", "turns"]} issues={issues} disabled={document.readOnly} value={target.transfer_history.turns} hint="At least one spoken turn." onChange={(turns) => history({ mode: "last_n_spoken", turns: turns ?? 0 })} />}
   </div>;
 }

@@ -66,7 +66,7 @@ test("legacy combined model IDs stay visible without migration and can be explic
   expect(screen.getByRole("combobox", { name: "Model" })).toHaveTextContent("flux-haley-en (saved)");
   await choose("Model", "Flux");
   expect(saved()).toEqual({ provider: "deepgram", model: "flux", options: { voice: "hannah" } });
-  await choose("Provider", "Use default");
+  await choose("Provider", "Not configured");
   expect(saved()).toBeNull();
 });
 test("historical selections disable every mutation control", () => {

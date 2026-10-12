@@ -37,12 +37,15 @@ test.each(["default", "outgoing"] as const)("entry handler field leaves particip
 test("media controls preserve omitted defaults, explicit denials and other routes", async () => {
   render(<Harness panel="media" initial={{ ...editorFixture, source: { ...editorFixture.source, media_policy: { audio_routes: { intake: ["caller"] }, save_transcripts: false } } }} />);
   await choose("Record audio", "Allow");
+  expect(saved().media_policy).not.toHaveProperty("record_audio");
+  await choose("Record audio", "Deny");
+  await choose("Record audio", "Allow");
   expect(saved().media_policy).toEqual({ audio_routes: { intake: ["caller"] }, save_transcripts: false, record_audio: true });
   await choose("Audio from intake", "Nobody");
   expect(saved().media_policy.audio_routes.intake).toEqual([]);
   await choose("Audio from specialist", "All other participants");
   expect(saved().media_policy.audio_routes.specialist).toEqual(["caller", "intake"]);
-  await choose("Audio routing", "Default");
+  await choose("Audio routing", "Unrestricted");
   expect(saved().media_policy).not.toHaveProperty("audio_routes");
 });
 
@@ -53,7 +56,7 @@ test("wait sounds distinguish default, explicit silence and an audio URL", async
   await choose("Transfer to human", "Audio URL");
   fireEvent.change(screen.getByRole("textbox", { name: "Transfer to human URL" }), { target: { value: "https://example.test/wait.wav" } });
   expect(saved().wait_sounds.transfer_to_human).toBe("https://example.test/wait.wav");
-  await choose("Call setup", "Built-in default");
+  await choose("Call setup", "Phone ring");
   expect(saved().wait_sounds).not.toHaveProperty("call_setup");
 });
 
@@ -85,7 +88,7 @@ test("an explicit empty route map means nobody, and remains explicit after anoth
 test("whole-policy silence is displayed and preserved for unedited wait slots", async () => {
   render(<Harness panel="wait" initial={{ ...editorFixture, source: { ...editorFixture.source, wait_sounds: null } }} />);
   expect(screen.getByRole("combobox", { name: "Call setup" })).toHaveTextContent("Silence");
-  await choose("Call setup", "Built-in default");
+  await choose("Call setup", "Phone ring");
   expect(saved().wait_sounds).toEqual({ transfer_to_agent: null, transfer_to_human: null, transfer_joining: null });
 });
 
@@ -108,4 +111,29 @@ test("prototype-shaped tool keys retain an explicit visibility override", async 
   await choose("intake / __proto__ visibility", "Metadata");
   expect(Object.hasOwn(saved().tool_visibility_overrides.intake, "__proto__")).toBe(true);
   expect(saved().tool_visibility_overrides.intake.__proto__).toBe("metadata");
+});
+
+test("omitted settings display the concrete runtime choices without changing source", async () => {
+  render(<Harness panel="media" />);
+  expect(screen.getByRole("combobox", { name: "Record audio" })).toHaveTextContent("Allow");
+  expect(screen.getByRole("combobox", { name: "Save transcripts" })).toHaveTextContent("Allow");
+  expect(screen.getByRole("combobox", { name: "Audio routing" })).toHaveTextContent("Unrestricted");
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Record audio" }), { key: "ArrowDown" });
+  expect((await screen.findAllByRole("option")).map(item => item.textContent)).toEqual(["Allow", "Deny"]);
+  expect(saved()).toEqual(editorFixture.source);
+});
+test("omitted wait sounds show their slot-specific audio choices", () => {
+  render(<Harness panel="wait" />);
+  expect(screen.getByRole("combobox", { name: "Call setup" })).toHaveTextContent("Phone ring");
+  expect(screen.getByRole("combobox", { name: "Transfer to human" })).toHaveTextContent("Phone ring");
+  expect(screen.getByRole("combobox", { name: "Transfer to agent" })).toHaveTextContent("Cafe bossa");
+  expect(screen.getByRole("combobox", { name: "Transfer joining" })).toHaveTextContent("Cafe bossa");
+  expect(saved()).toEqual(editorFixture.source);
+});
+test("omitted tool visibility displays Hidden and can restore the call-wide level", async () => {
+  render(<Harness panel="advanced" />);
+  expect(screen.getByRole("combobox", { name: "Default tool visibility" })).toHaveTextContent("Hidden");
+  await choose("intake / transfer visibility", "Full");
+  await choose("intake / transfer visibility", "Hidden");
+  expect(saved().tool_visibility_overrides.intake).not.toHaveProperty("transfer");
 });

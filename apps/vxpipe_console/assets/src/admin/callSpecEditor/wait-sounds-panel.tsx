@@ -15,7 +15,7 @@ export function WaitSoundsPanel({ document, onChange, issues }: InspectorProps) 
       const value = document.source.wait_sounds === null ? null : document.source.wait_sounds?.[slot];
       return <div key={slot} className="space-y-3 rounded-md border p-3">
         <ChoiceField label={label} path={typeof value === "string" ? ["wait_sounds", slot, "mode"] : ["wait_sounds", slot]} issues={issues} disabled={document.readOnly} value={value === undefined ? "default" : value === null ? "silence" : "url"}
-          choices={[{ value: "default", label: "Built-in default" }, { value: "silence", label: "Silence" }, { value: "url", label: "Audio URL" }]}
+          choices={[{ value: "default", label: slot === "call_setup" || slot === "transfer_to_human" ? "Phone ring" : "Cafe bossa" }, { value: "silence", label: "Silence" }, { value: "url", label: "Audio URL" }]}
           onChange={(mode) => change(slot, mode === "default" ? undefined : mode === "silence" ? null : typeof value === "string" ? value : "")} />
         {typeof value === "string" && <TextField label={`${label} URL`} path={["wait_sounds", slot]} issues={issues} disabled={document.readOnly} value={value} onChange={(url) => change(slot, url)} hint="An HTTP(S) audio-file URL." />}
       </div>;

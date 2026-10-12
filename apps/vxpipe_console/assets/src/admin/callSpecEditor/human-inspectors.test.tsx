@@ -123,7 +123,7 @@ test("human Models show only speech recognition and edit only the selected parti
   expect(saved().defaults).toEqual(initial.source.defaults);
   expect(screen.queryByText("Participant override")).not.toBeInTheDocument();
   fireEvent.keyDown(stt.getByRole("combobox", { name: "Provider" }), { key: "ArrowDown" });
-  fireEvent.click(await screen.findByRole("option", { name: "Use default" }));
+  fireEvent.click(await screen.findByRole("option", { name: "deepgram" }));
   expect(saved().participants.specialist).not.toHaveProperty("capabilities");
   expect(stt.getByRole("combobox", { name: "Provider" })).toHaveTextContent("deepgram");
   fireEvent.mouseDown(screen.getByRole("tab", { name: "Media" }), { button: 0 });

@@ -62,6 +62,20 @@ from the installed catalog's recommendations. Other agents keep their effective
 models. Human participants' **Models** tab contains only **Speech to text**.
 Participant media policies live in **Media**.
 
+Dropdowns show concrete runtime choices instead of a separate **Default** item:
+call-wide permissions start at **Allow**, routing at **Unrestricted**, transfer
+history at **Fresh**, tool visibility at **Hidden**, and tools at **Blocking**.
+Wait sounds show **Phone ring** for call setup and human transfers, and
+**Cafe bossa** for agent transfers and joining. Opening these panels leaves
+omitted settings unchanged in the JSON.
+
+Participant model selectors show their inherited provider and model directly.
+Selecting the call-wide provider or its model restores inheritance. If no model
+is configured, optional capabilities show **Not configured**; required ones
+prompt for a provider. Participant media policies retain **Inherit** because
+these policies combine with call-wide restrictions while the participant is
+present.
+
 Human STT starts a turn when its first nonempty transcript arrives. API users can
 set `speech_to_text.vad: true` for earlier local speech detection; omission means
 false. There is no VAD control in Console. Existing values remain intact when

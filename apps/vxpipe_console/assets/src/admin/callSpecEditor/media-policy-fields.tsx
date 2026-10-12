@@ -9,22 +9,22 @@ export function MediaPolicyFields({ document, onChange, issues, participantKey }
   const policy = participantKey === null ? document.source.media_policy : document.source.participants[participantKey]?.while_present;
   const path = participantKey === null ? ["media_policy"] : ["participants", participantKey, "while_present"];
   const keys = Object.keys(document.source.participants);
-  const defaultLabel = participantKey === null ? "Default" : "Inherit";
+  const inheritance = participantKey === null ? [] : [{ value: "", label: "Inherit" }];
   function change(edit: (next: MediaPolicy) => void) {
     const next = structuredClone(policy ?? {}); edit(next);
     onChange(setMediaPolicy(document, participantKey, Object.keys(next).length ? next : undefined));
   }
   return <fieldset disabled={document.readOnly} className="space-y-5">
-    <p className="text-xs text-muted-foreground">{participantKey === null ? "Choose call-wide permissions. Default keeps the runtime's policy." : "These overrides apply while this participant is present. Inherit keeps the call-wide policy."}</p>
+    <p className="text-xs text-muted-foreground">{participantKey === null ? "Choose call-wide permissions." : "These overrides apply while this participant is present. Inherit keeps the call-wide policy."}</p>
     {(["record_audio", "save_transcripts"] as const).map((key) => <ChoiceField key={key} label={key === "record_audio" ? "Record audio" : "Save transcripts"} path={[...path, key]} issues={issues} disabled={document.readOnly}
-      value={policy?.[key] === undefined ? "" : policy[key] ? "allow" : "deny"} choices={[{ value: "", label: defaultLabel }, { value: "allow", label: "Allow" }, { value: "deny", label: "Deny" }]}
+      value={policy?.[key] === undefined ? participantKey === null ? "allow" : "" : policy[key] ? "allow" : "deny"} choices={[...inheritance, { value: "allow", label: "Allow" }, { value: "deny", label: "Deny" }]}
       onChange={(value) => change((next) => { if (!value) delete next[key]; else next[key] = value === "allow"; })} />)}
     {(["audio_routes", "transcript_routes"] as const).map((kind) => {
       const routes = policy?.[kind];
       const label = kind === "audio_routes" ? "Audio" : "Transcripts";
       return <section key={kind} className="space-y-4 border-t pt-4">
         <ChoiceField label={`${label === "Audio" ? "Audio" : "Transcript"} routing`} path={[...path, kind]} issues={issues} disabled={document.readOnly}
-          value={routes === undefined ? "" : "restricted"} choices={[{ value: "", label: defaultLabel }, { value: "restricted", label: "Restricted" }]}
+          value={routes === undefined ? "" : "restricted"} choices={[{ value: "", label: participantKey === null ? "Unrestricted" : "Inherit" }, { value: "restricted", label: "Restricted" }]}
           onChange={(mode) => change((next) => { if (!mode) delete next[kind]; else next[kind] = {}; })}
           hint="Restricted routing permits only the selected pairs. An empty selection sends nothing." />
         {routes !== undefined && [...new Set([...keys, ...Object.keys(routes)])].map((from) => {

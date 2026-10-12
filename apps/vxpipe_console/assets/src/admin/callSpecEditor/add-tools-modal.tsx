@@ -51,7 +51,7 @@ export function AddToolsModal({ document, onChange, issues, participantKey, prev
       </fieldset> : <fieldset disabled={document.readOnly} className="space-y-4">
         <p className="wrap-anywhere text-sm text-muted-foreground">{type}{type === "mcp" ? ` · ${integration}` : ""} · {tool}</p>
         <TextField label="Local tool key" path={path} issues={issues} disabled={document.readOnly || type === "host"} value={type === "host" ? tool : name} onChange={setName} hint={type === "host" ? "Host tools keep their registered name." : "The name this agent uses to call the tool. It must be unique for this agent."} />
-        <ChoiceField label="Conversation mode" path={[...path, "conversation_mode"]} issues={issues} disabled={document.readOnly} value={mode} choices={[{ value: "", label: "Default (blocking)" }, { value: "blocking", label: "Blocking" }, { value: "non_blocking", label: "Non-blocking" }]} onChange={setMode}
+        <ChoiceField label="Conversation mode" path={[...path, "conversation_mode"]} issues={issues} disabled={document.readOnly} value={mode || "blocking"} choices={[{ value: "blocking", label: "Blocking" }, { value: "non_blocking", label: "Non-blocking" }]} onChange={(value) => setMode(value === "blocking" ? "" : value)}
           hint="Blocking waits for the result before continuing. Non-blocking lets the conversation continue while the tool runs." />
       </fieldset>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

@@ -16,10 +16,11 @@ type Props = {
   issues?: SourceIssue[];
   defaultLabel?: string;
   defaultDisabled?: boolean;
+  inherited?: CapabilitySelection;
 };
 
 /** Public model and voice remain separate; adapters own their wire-format mapping. */
-export function CapabilityFields({ kind, path, value, onChange, catalog, disabled, issues, defaultLabel = "Use default", defaultDisabled = false }: Props) {
+export function CapabilityFields({ kind, path, value, onChange, catalog, disabled, issues, defaultLabel = "Not configured", defaultDisabled = false, inherited }: Props) {
   const voiceCatalog = useContext(VoiceCatalogContext);
   const providers = catalog[kind] ?? {};
   const models = value && Object.hasOwn(providers, value.provider) ? providers[value.provider]! : [];
@@ -29,8 +30,9 @@ export function CapabilityFields({ kind, path, value, onChange, catalog, disable
   return <fieldset disabled={disabled} className="grid min-w-0 gap-4 [&_[data-field-path]]:space-y-1.5 [&_[data-slot=label]]:text-xs [&_[data-slot=label]]:text-muted-foreground">
     <div className="grid grid-cols-2 items-start gap-3">
       <ChoiceField label="Provider" path={[...path, "provider"]} issues={issues} disabled={disabled}
-        value={value?.provider ?? ""} choices={[{ value: "", label: defaultLabel, disabled: defaultDisabled }, ...Object.keys(providers).sort().map((provider) => ({ value: provider, label: provider }))]}
+        value={value?.provider ?? ""} choices={[...(inherited ? [] : [{ value: "", label: defaultLabel, disabled: defaultDisabled }]), ...Object.keys(providers).sort().map((provider) => ({ value: provider, label: provider }))]}
         onChange={(provider) => {
+          if (provider === inherited?.provider) { onChange(undefined); return; }
           const selected = provider ? recommendedSelection(catalog, kind, provider) : undefined;
           onChange(selected && kind === "speech_to_text" && typeof value?.vad === "boolean"
             ? { ...selected, vad: value.vad } : selected);
@@ -40,6 +42,7 @@ export function CapabilityFields({ kind, path, value, onChange, catalog, disable
         onChange={(id) => {
           const selected = models.find((model) => model.id === id);
           if (selected && value) {
+            if (value.provider === inherited?.provider && id === inherited.model) { onChange(undefined); return; }
             const next = { ...value };
             delete next.options;
             onChange({ ...next, ...selectionForModel(value.provider, selected) });
