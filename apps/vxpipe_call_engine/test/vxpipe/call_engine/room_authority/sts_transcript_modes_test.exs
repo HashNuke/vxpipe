@@ -813,7 +813,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
 
   for mode <- ["external", "hybrid"] do
     test "#{mode} ignores a queued old STT onset after activity demand disappears" do
-      context = room(true, false, %{}, :morse, unquote(mode), :deny_audio)
+      clock = manual_stt_clock()
+
+      context =
+        room(true, false, %{}, :morse, unquote(mode), :deny_audio)
+        |> Map.put(:stt_clock, clock)
+
       state = :sys.get_state(context.authority)
       connection = Map.fetch!(state.connections, context.command.connection_id)
       stt = connection.speech_to_text.capability
