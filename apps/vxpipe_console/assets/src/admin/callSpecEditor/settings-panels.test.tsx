@@ -61,15 +61,15 @@ test("advanced settings retain invalid numeric edits for validation and can clea
   render(<Harness panel="advanced" />);
   fireEvent.change(screen.getByRole("spinbutton", { name: "Transfer attempt timeout (ms)" }), { target: { value: "900" } });
   expect(saved().transfer_policy.attempt_timeout_ms).toBe(900);
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Maximum call duration (ms)" }), { target: { value: "600000" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Max call duration (ms)" }), { target: { value: "600000" } });
   expect(saved().limits.max_duration_ms).toBe(600000);
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Maximum call duration (ms)" }), { target: { value: "" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Max call duration (ms)" }), { target: { value: "" } });
   expect(saved().limits).not.toHaveProperty("max_duration_ms");
 });
 
 test("read-only policy fields cannot mutate a historical source", () => {
   render(<Harness panel="advanced" initial={{ ...editorFixture, readOnly: true }} />);
-  expect(screen.getByRole("spinbutton", { name: "Maximum call duration (ms)" })).toBeDisabled();
+  expect(screen.getByRole("spinbutton", { name: "Max call duration (ms)" })).toBeDisabled();
   expect(screen.getByRole("combobox", { name: "Default tool visibility" })).toBeDisabled();
 });
 
