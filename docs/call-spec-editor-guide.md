@@ -28,6 +28,10 @@ Existing saved selections are preserved. A public
 speech model such as `flux` and its `options.voice` remain separate in the source;
 the provider adapter composes its concrete model ID.
 
+New agents, including the initial agent in a new spec, start with an empty system
+prompt. Enter instructions in the agent's **Prompt** tab before saving. Empty or
+whitespace-only prompts block saving the call spec.
+
 Participant forms have no Description field. Put transfer instructions in the
 agent's prompt, referring to destination participant keys. Existing optional
 `description` values remain in the saved JSON and can be edited there; the runtime
@@ -54,11 +58,26 @@ provider/model overrides stay intact. Each agent can subsequently choose its own
 type in its **Models** tab. The human group's **Speech to text** is unchanged.
 
 In **Call settings → Variables**, each section is a card with variable rows.
+Each section holds one object. Enumeration is supported only on individual
+variables, including nested fields and array items. A section schema cannot have
+an `enum`; the editor and backend reject it. Remove any existing section-level
+`enum` through the full JSON editor before saving or using that spec. A variable
+inside the section can have the array type, including an array of objects.
+Each section has a shaded header with a list icon and a compact name. Variable
+rows are compact and indented beneath it, with type and required status beside
+the field name. Configured constraints appear as `key: value` tags alongside the
+section name, wrapping when needed. The header’s plus button and bottom **Add
+variable** button both open the variable modal. **Add section** and the section’s
+edit button open the same modal for its name. Changes apply only with **Add
+section** or **Save section**; **Cancel** discards the draft. Renaming preserves
+agent permissions and phone-routing references to that section.
+
 **Add variable** and a row's edit button open the same modal for its name, type,
 required status, enum values and constraints, including nested schemas. Changes
 apply only with **Add variable** or **Save variable**; **Cancel** discards the modal
-edits. Section-level schema rules remain under **Section constraints**. Access is
-configured exclusively in each agent's **Variables** tab.
+edits. New sections and newly selected object types default to declared fields
+only; there is no Additional properties control. Access is configured exclusively
+in each agent's **Variables** tab.
 
 **Speech to text** transcribes incoming participant audio. The editor does not show
 an **Output speech to text** control. Existing source values remain intact when

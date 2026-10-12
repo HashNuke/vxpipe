@@ -40,23 +40,20 @@ export function VariableSchemaFields({ value, onChange, label, path, disabled, i
       onChange({ ...value, properties, ...(value.required ? { required: value.required.filter((name) => name !== key) } : {}) });
     }
   }
-  return <div className="min-w-0 space-y-4">
+  return <div className="min-w-0 space-y-4 empty:hidden">
     {!root && <div className="flex flex-wrap items-end gap-3"><div className="min-w-0 flex-1"><ChoiceField {...common} label={`${label} type`} displayLabel="Type" path={[...path, "type"]} value={base ?? ""}
       choices={[{ value: "", label: "Any type" }, ...types.map((type) => ({ value: type, label: type }))]}
-      onChange={(type) => { if (!type) remove("type"); else patch({ type: nullable && type !== "null" ? [type as VariableType, "null"] : type as VariableType }); }} /></div>
+      onChange={(type) => { if (!type) remove("type"); else patch({ type: nullable && type !== "null" ? [type as VariableType, "null"] : type as VariableType, ...(type === "object" && base !== "object" && value.additionalProperties === undefined ? { additionalProperties: false } : {}) }); }} /></div>
       <Label className="pb-2 text-xs"><Checkbox disabled={disabled || !base || base === "null"} checked={nullable} aria-label={`${label} nullable`} onCheckedChange={(checked) => patch({ type: checked ? [base!, "null"] : base })} />Nullable</Label>
     </div>}
-    {(base === "object" || value.properties !== undefined || root) && <div className="space-y-3">
-      <ChoiceField {...common} label={`${label} additional properties`} displayLabel="Additional properties" path={[...path, "additionalProperties"]} value={value.additionalProperties === undefined ? "" : String(value.additionalProperties)}
-        choices={[{ value: "", label: "Schema default" }, { value: "false", label: "Declared fields only" }]}
-        onChange={(next) => { if (!next) remove("additionalProperties"); else patch({ additionalProperties: false }); }} />
-      {!hideProperties && Object.entries(value.properties ?? {}).map(([key, schema]) => <div key={key} className="space-y-3 rounded-md border border-border/70 bg-card p-3">
+    {!hideProperties && (base === "object" || value.properties !== undefined || root) && <div className="space-y-3">
+      {Object.entries(value.properties ?? {}).map(([key, schema]) => <div key={key} className="space-y-3 rounded-md border border-border/70 bg-card p-3">
         <div className="flex items-end gap-2"><div className="min-w-0 flex-1"><RenameField name={key} label={`${label} / ${key} name`} displayLabel="Variable name" path={[...path, "properties", key, "$name"]} disabled={disabled} onRename={(next) => renameProperty(key, next)} /></div>
           <Button variant="ghost" size="icon" disabled={disabled} aria-label={`Remove ${label} / ${key}`} onClick={() => removeProperty(key)}><Trash2 /></Button></div>
         <VariableSchemaFields {...common} label={`${label} / ${key}`} path={[...path, "properties", key]} value={schema} onChange={(next) => patch({ properties: { ...value.properties, [key]: next } })} />
         <Label className="text-xs"><Checkbox disabled={disabled} checked={value.required?.includes(key) ?? false} aria-label={`${label} / ${key} required`} onCheckedChange={(checked) => patch({ required: checked ? [...(value.required ?? []).filter((name) => name !== key), key] : (value.required ?? []).filter((name) => name !== key) })} />Required</Label>
       </div>)}
-      {!hideProperties && <Button variant="outline" size="sm" disabled={disabled} aria-label={`Add ${label} field`} onClick={() => { let index = 1; while (Object.hasOwn(value.properties ?? {}, `field_${index}`)) index++; patch({ properties: { ...value.properties, [`field_${index}`]: { type: "string" } } }); }}><Plus />Add field</Button>}
+      <Button variant="outline" size="sm" disabled={disabled} aria-label={`Add ${label} field`} onClick={() => { let index = 1; while (Object.hasOwn(value.properties ?? {}, `field_${index}`)) index++; patch({ properties: { ...value.properties, [`field_${index}`]: { type: "string" } } }); }}><Plus />Add field</Button>
     </div>}
     {(value.required ?? []).filter((key) => !Object.hasOwn(value.properties ?? {}, key)).map((key, index) => <div key={index} className="flex items-end gap-2">
       <TextField {...common} label={`${label} undeclared required field ${index + 1}`} path={[...path, "required"]} value={key} onChange={(next) => patch({ required: value.required!.map((name) => name === key ? next : name) })} />
@@ -66,8 +63,10 @@ export function VariableSchemaFields({ value, onChange, label, path, disabled, i
       <Button variant="ghost" size="sm" disabled={disabled} onClick={() => value.items === undefined ? patch({ items: {} }) : remove("items")}>{value.items === undefined ? "Define items" : "Clear items"}</Button></div>
       {value.items && <VariableSchemaFields {...common} label={`${label} / items`} path={[...path, "items"]} value={value.items} onChange={(items) => patch({ items })} />}
     </section>}
-    <ChoiceField {...common} label={`${label} allowed values`} displayLabel="Allowed values" path={[...path, "enum"]} value={value.enum === undefined ? "" : "enum"} choices={[{ value: "", label: "Any value" }, { value: "enum", label: "Enumeration" }]} onChange={(mode) => mode ? patch({ enum: [""] }) : remove("enum")} />
-    {value.enum !== undefined && <ArrayFields {...common} compact label={`${label} enum`} path={[...path, "enum"]} value={value.enum} onChange={(values) => patch({ enum: values })} />}
+    {!root && <>
+      <ChoiceField {...common} label={`${label} allowed values`} displayLabel="Allowed values" path={[...path, "enum"]} value={value.enum === undefined ? "" : "enum"} choices={[{ value: "", label: "Any value" }, { value: "enum", label: "Enumeration" }]} onChange={(mode) => mode ? patch({ enum: [""] }) : remove("enum")} />
+      {value.enum !== undefined && <ArrayFields {...common} compact label={`${label} enum`} path={[...path, "enum"]} value={value.enum} onChange={(values) => patch({ enum: values })} />}
+    </>}
     {visibleConstraints.length > 0 && <Collapsible open={expanded || !!reveal} onOpenChange={(open) => { setExpanded(open); if (!open) setDismissedRequest(request?.id); }} className="space-y-3">
       <CollapsibleTrigger asChild><Button variant="ghost" size="sm" aria-label={`Constraints for ${label}`}>Constraints<ChevronDown /></Button></CollapsibleTrigger>
       <CollapsibleContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">{visibleConstraints.map((key) => <SourceNumberField {...common} key={key} label={`${label} ${key}`} displayLabel={constraintLabels[key]} path={[...path, key]} value={value[key]} onChange={(next) => next === undefined ? remove(key) : patch({ [key]: next })} />)}</CollapsibleContent>

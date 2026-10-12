@@ -31,6 +31,23 @@ const rename = (value: string) => {
   click("Save name");
 };
 
+test("new agents require a user-written prompt before saving", async () => {
+  const props = properties();
+  render(<CallSpecEditor {...props} />);
+  click("Add agent");
+  expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveValue("");
+  saveDraft();
+  expect(props.execute).not.toHaveBeenCalled();
+  expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveAttribute("aria-invalid", "true");
+  fill("Prompt", "   "); saveDraft();
+  expect(props.execute).not.toHaveBeenCalled();
+  fill("Prompt", "Help customers change their appointment."); saveDraft();
+  await waitFor(() => expect(props.execute).toHaveBeenCalledOnce());
+  expect(props.execute).toHaveBeenCalledWith(expect.objectContaining({ source: expect.objectContaining({
+    participants: expect.objectContaining({ agent: expect.objectContaining({ prompt: "Help customers change their appointment." }) }),
+  }) }), expect.any(AbortSignal));
+});
+
 test("source edits save exactly, update revision badges and publish the saved revision", async () => {
   const props = properties(); render(<CallSpecEditor {...props} />);
   rename("Renamed call");

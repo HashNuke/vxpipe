@@ -10,7 +10,8 @@ test("outgoing seeds dial the selected service and use the outgoing first-messag
   expect(document.source.outgoing_call).toEqual({ callee: "callee", handled_by: "assistant" });
   expect(document.source.participants.callee).toMatchObject({ type: "human", connection: { service: "office", mode: "dial", admission: "start_call" } });
   expect(document.source.participants.assistant).not.toHaveProperty("first_message");
-  expect(validateSource(document.source)).toEqual([]);
+  expect(document.source.participants.assistant).toHaveProperty("prompt", "");
+  expect(validateSource(document.source).map((issue) => issue.path)).toEqual([["participants", "assistant", "prompt"]]);
   expect(() => newCallSpec(modelCatalogFixture, { direction: "outgoing", service: "web" })).toThrow("phone service");
 });
 
@@ -25,7 +26,8 @@ test("a new spec starts with an incoming web caller and agent using the catalog 
   expect(doc.source.participants.caller).toMatchObject({ type: "human", connection: { service: "web", mode: "receive", admission: "start_call" } });
   expect(doc.source.participants.assistant).toMatchObject({ type: "agent", first_message: { mode: "wait_for_input" }, transfers: [], tools: {} });
   expect(doc.source.defaults?.capabilities).toEqual({ model_inference: { provider: "custom", model: "new-model" } });
-  expect(validateSource(doc.source)).toEqual([]);
+  expect(doc.source.participants.assistant).toHaveProperty("prompt", "");
+  expect(validateSource(doc.source).map((issue) => issue.path)).toEqual([["participants", "assistant", "prompt"]]);
   doc.source.participants.assistant!.description = "Changed";
   expect(newCallSpec(catalog, { direction: "incoming" }).source.participants.assistant?.description).toBeUndefined();
 });

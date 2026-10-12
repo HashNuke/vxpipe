@@ -58,6 +58,13 @@ defmodule Vxpipe.CallEngine.CallSpec.VariableSchema do
 
   defp validate_json(_value, path), do: invalid(path, "must contain only JSON values")
 
+  defp validate_root(%{"type" => "object", "enum" => _enum}, path),
+    do:
+      invalid(
+        path ++ ["enum"],
+        "is not supported at section level; use enum on individual variables"
+      )
+
   defp validate_root(%{"type" => "object"}, _path), do: :ok
   defp validate_root(_schema, path), do: invalid(path ++ ["type"], "must be object")
 

@@ -6,7 +6,7 @@ export function addParticipant(document: SourceDocument, key: string, type: Part
     requireIdentifier(key);
     if (Object.hasOwn(source.participants, key)) throw new Error("That participant key already exists.");
     const participant: Participant = type === "agent"
-      ? { type, prompt: "Help the caller.", tools: {}, transfers: [] }
+      ? { type, prompt: "", tools: {}, transfers: [] }
       : { type, connection: { service: "web", mode: "receive", admission: "transfer" } };
     source.participants = { ...source.participants, [key]: participant };
   });

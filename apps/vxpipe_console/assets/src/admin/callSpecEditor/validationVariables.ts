@@ -14,6 +14,7 @@ export function validateVariables(fields: Fields, source: ObjectValue, participa
     fields.identifier(key, path);
     const section = fields.object(value, path, ["schema"]);
     if (!record(section.schema) || section.schema.type !== "object") fields.issue([...path, "schema", "type"], "must be object");
+    if (record(section.schema) && Object.hasOwn(section.schema, "enum")) fields.issue([...path, "schema", "enum"], "is not supported at section level; use enum on individual variables");
     schema(fields, section.schema, [...path, "schema"]);
   }
   for (const [key, value] of Object.entries(participants)) {

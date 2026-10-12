@@ -81,6 +81,13 @@ grants so the operator can clear a reference to a missing section; it cannot gra
 new access to a missing section. Section and top-level field renames still use the
 source functions that rewrite permissions and dial references atomically.
 
+Section schemas must have an object root without `enum`. Both client validation
+and the Engine's `CallSpec` validation reject section-level enumeration at
+`call_variables.sections.<name>.schema.enum`. Field schemas, including nested
+object fields and array items, still support enumeration. Existing section enums
+are not silently dropped: remove them in the full JSON editor before saving or
+compiling the spec. The section modal has no Allowed values control.
+
 Entry and human inspectors edit the same participant records. Changing connection
 service applies the selected role's admission rules and removes phone-only fields
 when switching to web. An outgoing callee uses a fixed number or the outgoing

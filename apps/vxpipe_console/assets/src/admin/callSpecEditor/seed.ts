@@ -23,7 +23,7 @@ export function selectionForModel(provider: string, model: ModelDescriptor): Cap
   return selection;
 }
 
-/** Matches the text-capable development example; voice capabilities are explicit later edits. */
+/** Start a text-capable draft; the author must supply its agent's prompt. */
 export function newCallSpec(catalog: ModelCatalog, choice: NewCallDirection): SourceDocument {
   const providers = Object.keys(catalog.model_inference ?? {}).sort();
   const provider = providers.includes("google") ? "google" : providers[0];
@@ -43,7 +43,7 @@ export function newCallSpec(catalog: ModelCatalog, choice: NewCallDirection): So
         [entry]: { type: "human", connection: choice.direction === "outgoing"
           ? { service: choice.service, mode: "dial", admission: "start_call" }
           : { service: "web", mode: "receive", admission: "start_call" } },
-        assistant: { type: "agent", prompt: "Help the caller concisely.", ...(choice.direction === "incoming" ? { first_message: { mode: "wait_for_input" as const } } : {}), tools: {}, transfers: [] },
+        assistant: { type: "agent", prompt: "", ...(choice.direction === "incoming" ? { first_message: { mode: "wait_for_input" as const } } : {}), tools: {}, transfers: [] },
       },
     },
   };

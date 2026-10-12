@@ -21,13 +21,11 @@ async function choose(label: string, value: string) {
   fireEvent.keyDown(screen.getByRole("combobox", { name: label }), { key: "ArrowDown" });
   fireEvent.click(await screen.findByRole("option", { name: value }));
 }
-function rename(label: string, next: string) {
-  const field = screen.getByRole("textbox", { name: label });
-  fireEvent.change(field, { target: { value: next } }); fireEvent.blur(field);
-}
 test("section and field renames update permissions, required membership and dial references", () => {
   render(<Harness />);
-  rename("Section contact name", "customer");
+  fireEvent.click(screen.getByRole("button", { name: "Edit section contact" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Section name" }), { target: { value: "customer" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save section" }));
   fireEvent.click(screen.getByRole("button", { name: "Edit customer / phone" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Variable name" }), { target: { value: "telephone" } });
   fireEvent.click(screen.getByRole("button", { name: "Save variable" }));
@@ -56,9 +54,16 @@ test("call variables leaves section permissions in agent settings", () => {
 test("add and remove sections and fields preserve unrelated data and reject name collisions", () => {
   render(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "Add section" }));
-  expect(saved().call_variables.sections.section_1.schema.type).toBe("object");
-  rename("Section section_1 name", "contact");
+  const dialog = within(screen.getByRole("dialog", { name: "Add section" }));
+  expect(saved()).toEqual(initial.source);
+  fireEvent.click(dialog.getByRole("button", { name: "Add section" }));
+  expect(dialog.getByRole("alert")).toHaveTextContent("Enter a section name");
+  fireEvent.change(dialog.getByRole("textbox", { name: "Section name" }), { target: { value: "contact" } });
+  fireEvent.click(dialog.getByRole("button", { name: "Add section" }));
   expect(screen.getByRole("alert")).toHaveTextContent("already exists");
+  fireEvent.change(dialog.getByRole("textbox", { name: "Section name" }), { target: { value: "preferences" } });
+  fireEvent.click(dialog.getByRole("button", { name: "Add section" }));
+  expect(saved().call_variables.sections.preferences.schema).toEqual({ type: "object", properties: {}, additionalProperties: false });
   fireEvent.click(screen.getByRole("button", { name: "Add variable to contact" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Variable name" }), { target: { value: "field_1" } });
   fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add variable" }));
@@ -68,7 +73,56 @@ test("add and remove sections and fields preserve unrelated data and reject name
   expect(saved().participants.support.connection.number_from_variable.variable).toBe("");
   fireEvent.click(screen.getByRole("button", { name: "Remove section contact" }));
   expect(saved().participants.intake.variable_permissions).toEqual({});
-  expect(saved().call_variables.sections.section_1).toBeDefined();
+  expect(saved().call_variables.sections.preferences).toBeDefined();
+});
+
+test("section names and constraint tags replace inline fields, and cancelled edits leave source intact", () => {
+  render(<Harness />);
+  const section = within(screen.getByRole("region", { name: "Section contact" }));
+  expect(section.getByRole("heading", { name: "contact" })).toBeVisible();
+  expect(section.getByText('required: ["phone"]')).toHaveAttribute("data-slot", "badge");
+  expect(section.queryByRole("textbox")).not.toBeInTheDocument();
+  expect(section.queryByRole("combobox")).not.toBeInTheDocument();
+  expect(screen.queryByText("Section constraints")).not.toBeInTheDocument();
+  fireEvent.click(section.getByRole("button", { name: "Edit section contact" }));
+  expect(screen.queryByRole("combobox", { name: /additional properties/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("combobox", { name: "contact allowed values" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Constraints" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "Section name" }), { target: { value: "changed" } });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(saved()).toEqual(initial.source);
+  fireEvent.click(section.getByRole("button", { name: "Edit section contact" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save section" }));
+  expect(saved()).toEqual(initial.source);
+});
+
+test("cancelling a new section leaves source intact", () => {
+  render(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "Add section" }));
+  expect(screen.queryByRole("combobox", { name: "New section allowed values" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "Section name" }), { target: { value: "unused" } });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(saved()).toEqual(initial.source);
+});
+
+test("historical section schemas open for inspection without editing", () => {
+  render(<Harness readOnly />);
+  fireEvent.click(screen.getByRole("button", { name: "View section contact" }));
+  expect(screen.getByRole("dialog", { name: "View section" })).toBeVisible();
+  expect(screen.getByRole("textbox", { name: "Section name" })).toBeDisabled();
+  expect(screen.queryByRole("combobox", { name: "contact allowed values" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Save section" })).not.toBeInTheDocument();
+  expect(saved()).toEqual(initial.source);
+});
+
+test("new object variables use declared fields only without an additional properties control", async () => {
+  render(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "Add variable to contact" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Variable name" }), { target: { value: "address" } });
+  await choose("contact / new variable type", "object");
+  expect(screen.queryByRole("combobox", { name: /additional properties/i })).not.toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add variable" }));
+  expect(saved().call_variables.sections.contact.schema.properties.address).toEqual({ type: "object", additionalProperties: false });
 });
 test("historical variables can be inspected but not edited", () => {
   render(<Harness readOnly />);
@@ -88,10 +142,10 @@ test("constraint controls follow the field type while retaining unusual stored c
   expect(screen.getByRole("spinbutton", { name: "contact / nested / items minLength" })).toHaveValue(5);
 });
 
-test("variable modal stages additions, rejects duplicate names and discards cancelled edits", () => {
+test.each(["Add variable to contact", "Add variable to section contact"])("variable modal stages additions, rejects duplicate names and discards cancelled edits from %s", (action) => {
   render(<Harness />);
   expect(screen.queryByRole("textbox", { name: "Variable name" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Add variable to contact" }));
+  fireEvent.click(screen.getByRole("button", { name: action }));
   const dialog = within(screen.getByRole("dialog", { name: "Add variable" }));
   fireEvent.change(dialog.getByRole("textbox", { name: "Variable name" }), { target: { value: "phone" } });
   fireEvent.click(dialog.getByRole("button", { name: "Add variable" }));

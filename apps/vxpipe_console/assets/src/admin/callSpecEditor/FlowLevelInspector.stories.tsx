@@ -33,7 +33,10 @@ export const Default: Story = {};
 export const Variables: Story = { args: { initialTab: "variables" }, play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   await userEvent.click(canvas.getByRole("button", { name: "Add section" }));
-  await expect(canvas.getByRole("textbox", { name: "Section section_1 name" })).toHaveValue("section_1");
+  const dialog = within(within(canvasElement.ownerDocument.body).getByRole("dialog", { name: "Add section" }));
+  await userEvent.type(dialog.getByRole("textbox", { name: "Section name" }), "contact");
+  await userEvent.click(dialog.getByRole("button", { name: "Add section" }));
+  await expect(canvas.getByRole("heading", { name: "contact" })).toBeVisible();
 } };
 export const NestedVariables: Story = { args: { initial: variables, initialTab: "variables" } };
 export const ReadOnlyVariables: Story = { args: { initial: { ...variables, readOnly: true, source: { ...variables.source, schema_version: "20260915.01" } }, initialTab: "variables" } };

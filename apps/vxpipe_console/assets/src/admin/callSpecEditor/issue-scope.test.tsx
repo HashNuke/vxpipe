@@ -79,16 +79,17 @@ test("removing an already focused field does not replay its old Show request", (
   expect(screen.getByRole("textbox", { name: "Other" })).toHaveFocus();
 });
 
-test("Show reveals section constraints when variables are already open", async () => {
+test("Show opens the section modal and focuses its constraint when variables are already open", async () => {
   const { FlowLevelInspector } = await import("./flow-level-inspector");
   const { editorFixture } = await import("./editorFixtures");
   const { modelCatalogFixture } = await import("../modelCatalogFixtures");
   const document = structuredClone(editorFixture);
-  document.source.call_variables = { sections: { contact: { schema: { type: "object", additionalProperties: false } } } };
-  const problem = { ...issue, path: ["call_variables", "sections", "contact", "schema", "additionalProperties"], reason: "Check section properties" };
+  document.source.call_variables = { sections: { contact: { schema: { type: "object", additionalProperties: false, required: ["missing"] } } } };
+  const problem = { ...issue, path: ["call_variables", "sections", "contact", "schema", "required"], reason: "Check required fields" };
   const props = { document, onChange: vi.fn(), tab: "variables" as const, catalog: modelCatalogFixture, issues: [problem] };
   const view = render(<FlowLevelInspector {...props} />);
-  expect(screen.queryByRole("combobox", { name: "contact additional properties" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "contact undeclared required field 1" })).not.toBeInTheDocument();
   view.rerender(<FlowLevelInspector {...props} focusRequest={{ id: 1, path: problem.path }} />);
-  expect(await screen.findByRole("combobox", { name: "contact additional properties" })).toHaveFocus();
+  expect(await screen.findByRole("dialog", { name: "Edit section" })).toBeVisible();
+  expect(screen.getByRole("textbox", { name: "contact undeclared required field 1" })).toHaveFocus();
 });

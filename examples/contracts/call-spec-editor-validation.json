@@ -1453,6 +1453,108 @@
       ]
     },
     {
+      "name": "section enumeration is unsupported",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "call_variables"
+          ],
+          "value": {
+            "sections": {
+              "student_info": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "age": {
+                      "type": "integer"
+                    }
+                  },
+                  "enum": [
+                    {
+                      "name": "Anya",
+                      "age": 18
+                    },
+                    {
+                      "name": "Ravi",
+                      "age": 20
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": [
+        "call_variables",
+        "sections",
+        "student_info",
+        "schema",
+        "enum"
+      ]
+    },
+    {
+      "name": "variable enumeration remains supported",
+      "base": "incoming",
+      "changes": [
+        {
+          "path": [
+            "call_variables"
+          ],
+          "value": {
+            "sections": {
+              "student_info": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "grade": {
+                      "type": "string",
+                      "enum": [
+                        "A",
+                        "B",
+                        "C"
+                      ]
+                    },
+                    "placement": {
+                      "type": "object",
+                      "properties": {
+                        "class": {
+                          "type": "string"
+                        }
+                      },
+                      "enum": [
+                        {
+                          "class": "science"
+                        },
+                        {
+                          "class": "arts"
+                        }
+                      ]
+                    },
+                    "subjects": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "math",
+                          "history"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "expected_path": null
+    },
+    {
       "name": "variable enum duplicate",
       "base": "incoming",
       "changes": [

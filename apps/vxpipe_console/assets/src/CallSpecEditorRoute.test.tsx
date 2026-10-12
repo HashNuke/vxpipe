@@ -4,10 +4,12 @@ import { App } from "./App";
 import { modelCatalogFixture } from "./admin/modelCatalogFixtures";
 import type { CatalogCapability } from "./admin/modelCatalog";
 import { newCallSpec } from "./admin/callSpecEditor/seed";
+import type { FlowCanvasProps } from "./admin/callSpecEditor/flow-canvas";
 
-vi.mock("./admin/callSpecEditor/flow-canvas", () => ({ FlowCanvas: () => <div>Flow canvas</div> }));
+vi.mock("./admin/callSpecEditor/flow-canvas", () => ({ FlowCanvas: ({ onSelectNode }: FlowCanvasProps) => <div>Flow canvas<button onClick={() => onSelectNode("assistant")}>Select assistant</button></div> }));
 afterEach(() => { cleanup(); window.history.replaceState({}, "", "/admin"); });
 const source = { ...newCallSpec(modelCatalogFixture, { direction: "incoming" }).source, name: "Original" };
+if (source.participants.assistant?.type === "agent") source.participants.assistant.prompt = "Handle appointment requests.";
 const stored = { call_spec_id: "1c94f0f7-05d5-4919-a7d5-01d7250e4caf", revision: 2, latest_revision: 2, published_revision: 1, source };
 const reply = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
 function transport() {
@@ -37,6 +39,10 @@ const rename = (value: string) => {
   fireEvent.change(screen.getByRole("textbox", { name: "Call spec name" }), { target: { value } });
   fireEvent.click(screen.getByRole("button", { name: "Save name" }));
 };
+const writeInitialPrompt = () => {
+  fireEvent.click(screen.getByRole("button", { name: "Select assistant" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), { target: { value: "Handle appointment requests." } });
+};
 
 test("new route creates a spec, replaces its URL without losing edits, and publishes saved identity", async () => {
   window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
@@ -44,6 +50,9 @@ test("new route creates a spec, replaces its URL without losing edits, and publi
   await createIncoming();
   await screen.findByRole("button", { name: "Edit call spec name" }); rename("New draft");
   expect(screen.queryByLabelText(/public.?id|call spec id/i)).not.toBeInTheDocument();
+  saveDraft();
+  expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  writeInitialPrompt();
   saveDraft();
   await screen.findByText("Saved as revision 2");
   const submitted = fetch.mock.calls.find(([, init]) => init?.method === "POST");
@@ -128,7 +137,9 @@ test("URL replacement after creation preserves changes made during the request",
   render(<App csrfToken="csrf" fetchImpl={fetch} />);
   await createIncoming();
   await screen.findByRole("button", { name: "Edit call spec name" }); rename("Sent draft");
+  writeInitialPrompt();
   fireEvent.click(screen.getByRole("button", { name: "Add agent" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), { target: { value: "Review appointment requests." } });
   saveDraft();
   fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), { target: { value: "Newer prompt" } });
   await act(async () => complete(await reply({ call_spec: stored }, 201)));
@@ -183,7 +194,7 @@ test("outgoing creation requires a phone service and saves the chosen direction"
   fireEvent.keyDown(screen.getByRole("combobox", { name: "Phone service" }), { key: "ArrowDown" });
   fireEvent.click(await screen.findByRole("option", { name: "Office phone" }));
   fireEvent.click(screen.getByRole("button", { name: "Create call spec" }));
-  await screen.findByRole("button", { name: "More actions" }); saveDraft();
+  await screen.findByRole("button", { name: "More actions" }); writeInitialPrompt(); saveDraft();
   await screen.findByText("Saved as revision 2");
   const submitted = fetch.mock.calls.find(([, init]) => init?.method === "POST");
   const saved = JSON.parse(String(submitted?.[1]?.body)).source;
