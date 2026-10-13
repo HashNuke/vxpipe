@@ -262,3 +262,20 @@ Storybook builds. Final gate resolution is recorded below.
 - Checkpoints committed as `61b463ec` and `35d16368`; the final acceptance commit
   carries the corrected API assertion and documentation. User review remains
   distinct from these engineering checks.
+
+
+### Tenant presentation follow-up — 2026-10-14
+
+Approved UI simplification supersedes the row identity/Setup presentation above:
+
+- [x] Remove tenant keys and Setup actions from Tenants and My tenants rows;
+  show name and created age, with consistent alignment.
+- [x] Show only tenant name in the context heading above Dashboard/resource pages.
+- [x] Remove horizontal padding from recent-call rows to align with the heading.
+- [x] Use “Give your tenant a name” as the creation field label; remove subheading.
+- [x] Complete required checks and record the follow-up checkpoint. All five
+  umbrella gates passed; frontend 719 tests, focused follow-up 33 tests,
+  TypeScript, ESLint, and desktop/mobile browser inspection passed.
+
+The backend permission/search contracts remain unchanged. The current UI reaches
+Services through the sidebar. Evidence: [follow-up labnotes](../20261014-0516-simplify-tenant-rows.md).

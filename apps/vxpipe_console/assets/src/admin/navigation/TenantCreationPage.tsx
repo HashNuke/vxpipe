@@ -8,14 +8,14 @@ export function TenantCreationForm({ onCreate, onCancel }: { onCreate: (name: st
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
-  return <main><div className="navigation-heading"><div><h1>New tenant</h1><p>Give your tenant a name.</p></div></div>
+  return <main><div className="navigation-heading"><div><h1>New tenant</h1></div></div>
     <form className="setup-create-form max-w-lg" onSubmit={async event => {
       event.preventDefault();
       if (busy || !name.trim()) return;
       setBusy(true); setError(false);
       try { await onCreate(name.trim()); } catch { setError(true); } finally { setBusy(false); }
     }}>
-      <label>Name<input autoComplete="off" required maxLength={256} disabled={busy} value={name} onChange={event => setName(event.target.value)} /></label>
+      <label>Give your tenant a name<input autoComplete="off" required maxLength={256} disabled={busy} value={name} onChange={event => setName(event.target.value)} /></label>
       {error ? <p role="alert" className="setup-error">Could not create the tenant. Please try again.</p> : null}
       <div className="setup-create-actions"><Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>Cancel</Button><Button type="submit" disabled={busy || !name.trim()}>{busy ? "Creating…" : "Create tenant"}</Button></div>
     </form>

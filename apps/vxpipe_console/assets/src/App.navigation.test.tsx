@@ -41,6 +41,7 @@ test("canonical dashboard uses the shared rail, server capabilities and real lin
   expect(within(rail).getByRole("link", { name: "My account" })).toHaveAttribute("href", "/account");
   expect(screen.queryByRole("navigation", { name: "Platform" })).not.toBeInTheDocument();
   expect(screen.getByText("No calls yet")).toBeVisible();
+  expect(screen.queryByText(key)).not.toBeInTheDocument();
 });
 
 test("remote tenant search switches from a resource page to the chosen dashboard", async () => {
@@ -214,7 +215,7 @@ test("tenant creators can create a tenant and land on its dashboard", async () =
   });
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
   fireEvent.click(await screen.findByRole("link", { name: "New tenant" }));
-  fireEvent.change(await screen.findByRole("textbox", { name: "Name" }), { target: { value: "Beta" } });
+  fireEvent.change(await screen.findByRole("textbox", { name: "Give your tenant a name" }), { target: { value: "Beta" } });
   fireEvent.click(screen.getByRole("button", { name: "Create tenant" }));
   await waitFor(() => expect(window.location.pathname).toBe(`/t/${other}/dashboard`));
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/tenants", expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Beta" }), headers: expect.objectContaining({ "x-csrf-token": "csrf" }) }));
@@ -224,7 +225,7 @@ test("readers cannot open the tenant creation form", async () => {
   window.history.replaceState({}, "", "/tenants/new");
   render(<App csrfToken="csrf" fetchImpl={fetcher()} />);
   expect(await screen.findByRole("heading", { name: "Access unavailable" })).toBeVisible();
-  expect(screen.queryByRole("textbox", { name: "Name" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "Give your tenant a name" })).not.toBeInTheDocument();
 });
 
 test("tenant directory searches remotely and shows creation dates", async () => {

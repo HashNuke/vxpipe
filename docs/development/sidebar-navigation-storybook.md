@@ -120,5 +120,5 @@ The October tenant review consolidates Directory and My tenants on the productio
 list component. Setup overview / Demo nudge and the duplicate All Tenant Login
 story are removed. **Tenants / Create** has normal, denied, creation-error, pending
 and metadata-only role fixtures. Submit the form in error/pending fixtures to
-exercise that state. Creation lands on Dashboard; Setup in a tenant row opens
-Services when permitted. Dates are fixture timestamps, not production records.
+exercise that state. Creation lands on Dashboard. Rows show name and created age; Services is accessed
+through the sidebar when permitted. Dates are fixture timestamps, not production records.

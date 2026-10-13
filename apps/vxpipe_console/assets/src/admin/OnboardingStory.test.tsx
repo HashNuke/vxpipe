@@ -266,12 +266,12 @@ test("the supported default model reaches the chosen recipe", () => {
 
 test("the directory resumes setup without a redundant demo card", () => {
   const view = render(<OnboardingStory scenario="demo-nudge" theme="dark" />);
-  fireEvent.click(screen.getByRole("link", { name: "Setup Demo" }));
+  fireEvent.click(screen.getByRole("link", { name: "Open Demo" }));
   expect(screen.getByText("Tenant created: Demo")).toBeVisible();
   view.unmount();
 
   render(<OnboardingStory scenario="multiple-tenants" theme="dark" />);
-  fireEvent.click(screen.getByRole("link", { name: "Setup Acme Support" }));
+  fireEvent.click(screen.getByRole("link", { name: "Open Acme Support" }));
   expect(screen.getByText("Tenant created: Acme Support")).toBeVisible();
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 });
@@ -286,7 +286,7 @@ test("returning through the tenant directory preserves completed service setup",
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
-  fireEvent.click(screen.getByRole("link", { name: "Setup Demo" }));
+  fireEvent.click(screen.getByRole("link", { name: "Open Demo" }));
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 });
 
@@ -310,10 +310,11 @@ test("updating a speech service preserves the sample model provider", () => {
   expect(screen.getByText("gemini-2.5-flash")).toBeVisible();
 });
 
-test("the tenant directory resumes a services-ready tenant at API keys", () => {
+test("the tenant directory opens a services-ready tenant before continuing to API keys", () => {
   render(<OnboardingStory scenario="ready-for-samples" theme="dark" />);
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
-  fireEvent.click(screen.getByRole("link", { name: "Setup Demo" }));
+  fireEvent.click(screen.getByRole("link", { name: "Open Demo" }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   expect(
     screen.getByRole("heading", { name: "Create API Keys" }),
   ).toBeVisible();
@@ -344,10 +345,10 @@ test("creating a tenant asks only for a name and opens its own empty service set
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
-  fireEvent.click(screen.getByRole("link", { name: "Setup Customer Care" }));
+  fireEvent.click(screen.getByRole("link", { name: "Open Customer Care" }));
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
-  fireEvent.click(screen.getByRole("link", { name: "Setup Demo" }));
+  fireEvent.click(screen.getByRole("link", { name: "Open Demo" }));
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 });
 

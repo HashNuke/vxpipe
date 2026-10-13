@@ -10,6 +10,7 @@ test("single-tenant entry shows dashboard with only permitted links", () => {
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   expect(screen.queryByRole("navigation", { name: "Platform" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "My account" })).toBeVisible();
+  expect(screen.queryByText("acme_demo_000001")).not.toBeInTheDocument();
 });
 test("multi-tenant directory and search show only allowed tenants, selection opens dashboard", async () => {
   render(<NavigationJourney persona="multiple" />);
@@ -102,8 +103,9 @@ test("tenant selection needs no review hint", () => {
   expect(screen.queryByText("Select a tenant to open its workspace.")).not.toBeInTheDocument();
 });
 
-test("directory shows dated rows and hides unauthorized Setup links", () => {
-  render(<NavigationJourney persona="member" initialPath="/my-tenants" />);
+test("directory rows show dates without tenant keys or Setup links, even for administrators", () => {
+  render(<NavigationJourney initialPath="/tenants" />);
+  expect(screen.queryByText("acme_demo_000001")).not.toBeInTheDocument();
   expect(screen.getAllByText(/^Created /).length).toBeGreaterThan(0);
   expect(screen.queryByRole("link", { name: /^Setup / })).not.toBeInTheDocument();
 });

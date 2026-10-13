@@ -19,7 +19,6 @@
 .navigation-heading p, .navigation-description { color: var(--admin-muted); margin: 8px 0 0; font-size: 13px; line-height: 1.6; }
 .navigation-context { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; color: var(--admin-muted); font-size: 13px; }
 .navigation-context a { color: inherit; text-underline-offset: 3px; }
-.navigation-context code { font-size: 11px; }
 .navigation-content .access-page { max-width: none; margin: 0; padding: 0; }
 .navigation-content .tenant-setup { max-width: none; margin: 0; padding: 0; }
 .navigation-picker-menu { z-index: 80; width: 304px; max-width: calc(100vw - 32px); padding: 4px; color: var(--admin-ink); background: var(--admin-panel); border: 1px solid var(--admin-line); border-radius: 6px; box-shadow: 0 10px 24px #0003; }
@@ -43,12 +42,7 @@
 .navigation-directory svg { flex-shrink: 0; }
 .navigation-tenant-identity { min-width: 0; }
 .navigation-directory strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
-.navigation-tenant-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; color: var(--admin-muted); font-size: 12px; }
-.navigation-tenant-meta code { font-size: 11px; overflow-wrap: anywhere; }
-.navigation-tenant-setup { padding: 12px; font-size: 12px; }
-.navigation-tenant-setup a { color: var(--admin-ink); text-underline-offset: 3px; }
-.navigation-directory strong { font-size: 14px; }
-.navigation-directory code { font-size: 11px; color: var(--admin-muted); margin-top: 6px; overflow-wrap: anywhere; }
+.navigation-tenant-meta { display: block; margin-top: 6px; color: var(--admin-muted); font-size: 12px; }
 .navigation-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 36px; }
 .navigation-shortcuts a { display: inline-flex; align-items: center; gap: 12px; border: 1px solid var(--admin-line); border-radius: 6px; padding: 12px 16px; color: var(--admin-ink); text-decoration: none; font-size: 13px; }
 .navigation-shortcuts a:hover { background: var(--admin-soft); }
@@ -81,7 +75,7 @@
 @media (prefers-reduced-motion: no-preference) { .navigation-drawer { animation: navigation-enter 160ms ease-out; } @keyframes navigation-enter { from { transform: translateX(-20px); opacity: .8; } to { transform: translateX(0); opacity: 1; } } }
 .navigation-recent-calls { list-style: none; padding: 0; margin: 0; }
 .navigation-recent-calls li { border-top: 1px solid var(--admin-line); }
-.navigation-recent-calls a { display: grid; grid-template-columns: minmax(0,1fr) 108px 200px 16px; align-items: center; gap: 16px; padding: 20px 12px; text-decoration: none; color: var(--admin-ink); }
+.navigation-recent-calls a { display: grid; grid-template-columns: minmax(0,1fr) 108px 200px 16px; align-items: center; gap: 16px; padding: 20px 0; text-decoration: none; color: var(--admin-ink); }
 .navigation-recent-calls a:hover { background: var(--admin-soft); }
 .navigation-recent-identity { min-width: 0; }
 .navigation-recent-identity strong { display: block; font-size: 14px; font-weight: 600; }

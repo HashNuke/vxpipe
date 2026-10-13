@@ -96,5 +96,5 @@ function ServerTenantPicker({ api, data, onNavigate, onFailure }: {
     onMore={search.hasMore ? search.more : undefined} />;
 }
 export function TenantContextLine({ tenant }: { tenant: NavigationTenant }) {
-  return <div className="navigation-context"><Link to={tenant.dashboardPath}>{tenant.name}</Link><code>{tenant.key}</code></div>;
+  return <div className="navigation-context"><Link to={tenant.dashboardPath}>{tenant.name}</Link></div>;
 }

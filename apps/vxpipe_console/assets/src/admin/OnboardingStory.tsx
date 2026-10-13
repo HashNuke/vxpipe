@@ -553,7 +553,6 @@ export function OnboardingStory({
             })}
             onOpen={selectTenant}
             onCreate={() => setCreationStatus("idle")}
-            onSetup={(next) => selectTenant(next, true)}
           />
         ) : null}
       </main>

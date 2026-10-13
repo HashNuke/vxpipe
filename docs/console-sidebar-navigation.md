@@ -19,7 +19,7 @@ assigned users, without adding an extra top-level item to the requested menu.
 
 Content has one clear page title and its local actions. Remove global headers,
 account bars and sibling navigation from ordinary pages. Tenant resource pages
-retain a compact linked tenant name/key context above their page title.
+retain a compact linked tenant name context above their page title.
 Keep local form back links, filters, setup steps and modal headings. Tenant
 services is titled **Services**; platform services is **Platform Services**.
 A phone uses a compact Menu trigger and a modal navigation drawer with the same
@@ -220,9 +220,10 @@ acceptance, or provider-live acceptance.
 
 ## Tenant directory and creation review — October 2026
 
-Tenants and My tenants use the same list presentation: name, key, relative created
-age (full timestamp on hover), dashboard link, and a Setup link only with effective
-service-write permission. Search and pagination call the scoped directory API;
+Tenants and My tenants use the same list presentation: name and relative created
+age (full timestamp on hover), with the row linking to the dashboard. The October
+14 review removes tenant keys and Setup links from rows; tenant context headings
+also show only the name. Services remains available through permitted sidebar links. Search and pagination call the scoped directory API;
 Storybook alone filters synthetic fixtures locally. The sidebar uses the same
 backend search API, with client filtering disabled. Lists and dashboard activity
 have skeleton loaders. The old setup overview/nudge and duplicate dashboard
