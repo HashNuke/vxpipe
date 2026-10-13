@@ -13,7 +13,7 @@ const expire = () => window.location.assign("/auth/login");
 export function ConsoleNavigation({ csrfToken, fetchImpl, onSessionExpired = expire, children, external = false, crossDocument = external }: {
   csrfToken: string; fetchImpl?: NavigationFetch; onSessionExpired?: () => void; children?: ReactNode; external?: boolean; crossDocument?: boolean;
 }) {
-  const api = useMemo(() => new NavigationApi(fetchImpl), [fetchImpl]);
+  const api = useMemo(() => new NavigationApi(fetchImpl, csrfToken), [fetchImpl, csrfToken]);
   const auth = useMemo(() => new AuthenticationApi(csrfToken, fetchImpl), [csrfToken, fetchImpl]);
   const location = useLocation();
   const navigate = useNavigate();

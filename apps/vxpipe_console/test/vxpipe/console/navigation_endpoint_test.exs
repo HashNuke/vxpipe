@@ -30,6 +30,55 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     :ok
   end
 
+  test "tenant creation checks page and API permissions and returns a dashboard destination" do
+    member(["tenants.read"], %{})
+    conn = login()
+    assert conn |> recycle() |> get("/tenants/new") |> response(403)
+
+    assert conn
+           |> recycle()
+           |> post("/admin/api/tenants", %{"name" => "Support"})
+           |> json_response(403)
+
+    refute_received {:created_tenant, _}
+
+    member(["tenants.read", "tenants.write"], %{})
+    assert conn |> recycle() |> get("/tenants/new") |> html_response(200) =~ "/assets/admin.js"
+
+    created =
+      conn
+      |> recycle()
+      |> post("/admin/api/tenants", %{"name" => " Support "})
+      |> json_response(201)
+
+    assert created["tenant"]["name"] == "Support"
+    assert created["tenant"]["dashboard_path"] == "/t/#{created["tenant"]["key"]}/dashboard"
+    refute Map.has_key?(created, "api_key")
+    assert_received {:created_tenant, tenant}
+    configure([tenant])
+
+    dashboard =
+      conn |> recycle() |> get(created["tenant"]["dashboard_path"]) |> html_response(200)
+
+    assert dashboard =~ "/assets/admin.js"
+
+    overview =
+      conn |> recycle() |> get("/admin/api/tenants/#{tenant.key}/dashboard") |> json_response(200)
+
+    refute Map.has_key?(overview, "recent_calls")
+
+    assert Enum.all?(overview["tenant"]["capabilities"], fn {_resource, access} ->
+             access == %{"read" => false, "write" => false}
+           end)
+
+    assert conn |> recycle() |> post("/admin/api/tenants", %{"name" => " "}) |> json_response(422) ==
+             %{"error" => %{"code" => "invalid_tenant_name"}}
+
+    assert build_conn()
+           |> post("https://localhost/admin/api/tenants", %{"name" => "Support"})
+           |> json_response(401)
+  end
+
   test "login preserves a protected deep link and ignores external return parameters" do
     member(["calls.read"])
     anonymous = build_conn() |> get("https://localhost/t/#{@key}/calls?page=2")
@@ -327,7 +376,9 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     Application.put_env(
       :vxpipe_calls,
       Vxpipe.Calls,
-      Keyword.put(settings, :admin_repository, {NavigationRepository, {self(), tenants, calls}})
+      settings
+      |> Keyword.put(:admin_repository, {NavigationRepository, {self(), tenants, calls}})
+      |> Keyword.put(:credential_repository, {NavigationRepository, self()})
     )
   end
 end

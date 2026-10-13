@@ -91,6 +91,7 @@ defmodule Vxpipe.Console.Router do
   scope "/" do
     pipe_through [:browser, :operator_pages, :user_pages]
     get "/tenants", Vxpipe.Console.CanonicalPageController, :index
+    get "/tenants/new", Vxpipe.Console.CanonicalPageController, :index
     get "/getting-started", Vxpipe.Console.CanonicalPageController, :index
     get "/my-tenants", Vxpipe.Console.CanonicalPageController, :index
     get "/account", Vxpipe.Console.CanonicalPageController, :index
@@ -163,6 +164,7 @@ defmodule Vxpipe.Console.Router do
          :install_samples
 
     get "/tenants", Vxpipe.Console.AdminTenantsController, :index
+    post "/tenants", Vxpipe.Console.AdminTenantsController, :create
     get "/tenants/:tenant_key/dashboard", Vxpipe.Console.TenantDashboardController, :show
     get "/tenants/:tenant_key/providers", Vxpipe.Console.AdminProviderCatalogController, :index
 

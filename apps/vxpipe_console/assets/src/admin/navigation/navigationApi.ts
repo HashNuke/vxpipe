@@ -31,7 +31,19 @@ export class NavigationError extends Error {
 const defaultFetch: NavigationFetch = (input, init) => window.fetch(input, init);
 
 export class NavigationApi {
-  constructor(private readonly fetchImpl: NavigationFetch = defaultFetch) {}
+  constructor(private readonly fetchImpl: NavigationFetch = defaultFetch, private readonly csrfToken = "") {}
+
+  async createTenant(name: string): Promise<string> {
+    const response = await this.fetchImpl("/admin/api/tenants", {
+      method: "POST", credentials: "same-origin", cache: "no-store",
+      headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": this.csrfToken },
+      body: JSON.stringify({ name }),
+    });
+    if (!response.ok) throw new NavigationError(response.status);
+    const tenant = record(record(await response.json()).tenant);
+    if (typeof tenant.key !== "string" || !/^[A-Za-z0-9_-]{16}$/.test(tenant.key)) throw invalid();
+    return tenant.key;
+  }
 
   async navigation(tenantKey?: string, signal?: AbortSignal): Promise<NavigationData> {
     const query = tenantKey ? `?${new URLSearchParams({ tenant: tenantKey })}` : "";

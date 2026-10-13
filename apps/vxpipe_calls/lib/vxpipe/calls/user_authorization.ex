@@ -48,6 +48,9 @@ defmodule Vxpipe.Calls.UserAuthorization do
       Map.get(principal, :account_kind) in [:superadmin, :admin] ->
         :all
 
+      authorize_installation(principal, "tenants.write") == :ok ->
+        :all
+
       has_all_tenant_grant?(principal) ->
         :all
 
@@ -180,6 +183,7 @@ defmodule Vxpipe.Calls.UserAuthorization do
     grants = Map.get(principal, :grants) || MapSet.new()
 
     if authorize_installation(principal, "tenants.read") == :ok or
+         authorize_installation(principal, "tenants.write") == :ok or
          Enum.any?(@tenant_actions, &MapSet.member?(grants, &1)),
       do: :ok,
       else: {:error, :forbidden}

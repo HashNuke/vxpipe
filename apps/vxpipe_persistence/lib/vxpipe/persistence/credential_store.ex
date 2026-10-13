@@ -9,6 +9,16 @@ defmodule Vxpipe.Persistence.CredentialStore do
   alias Vxpipe.Persistence.Schema.{ApiKey, Tenant}
 
   @impl true
+  def create_tenant(repo, %DomainTenant{} = tenant) do
+    case insert_tenant(repo, tenant) do
+      {:ok, stored} -> {:ok, to_domain_tenant(stored)}
+      error -> error
+    end
+  rescue
+    _ -> {:error, :tenant_creation_unavailable}
+  end
+
+  @impl true
   def bootstrap_tenant(repo, %DomainTenant{} = tenant, api_key) do
     repo.transaction(fn ->
       with {:ok, stored_tenant} <- insert_tenant(repo, tenant),
@@ -45,10 +55,11 @@ defmodule Vxpipe.Persistence.CredentialStore do
   @impl true
   def fetch_api_key(repo, tenant_key, digest) do
     query =
-      from key in ApiKey,
+      from(key in ApiKey,
         join: tenant in assoc(key, :tenant),
         where: tenant.key == ^tenant_key and key.digest == ^digest,
         select: {key, tenant.key}
+      )
 
     case repo.one(query) do
       nil -> {:error, :not_found}
@@ -59,10 +70,11 @@ defmodule Vxpipe.Persistence.CredentialStore do
   @impl true
   def revoke_api_key(repo, tenant_key, api_key_id, revoked_at) do
     query =
-      from key in ApiKey,
+      from(key in ApiKey,
         join: tenant in assoc(key, :tenant),
         where: tenant.key == ^tenant_key and key.public_id == ^api_key_id,
         select: {key, tenant.key}
+      )
 
     case repo.one(query) do
       nil ->

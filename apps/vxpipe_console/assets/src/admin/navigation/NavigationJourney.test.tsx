@@ -57,7 +57,8 @@ test("call inspector and editor remain outside the navigation shell", () => {
 test("tenant creation is retained for an authorized platform operator", () => {
   render(<NavigationJourney initialPath="/tenants" />);
   fireEvent.click(screen.getByRole("button", { name: "New tenant" }));
-  expect(screen.getByRole("dialog", { name: "New tenant" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "New tenant" })).toBeVisible();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
 test("API-key-only Services does not expose provider inventory or write controls", () => {
   render(<NavigationJourney persona="keys-only" initialPath="/t/acme_demo_000001/services" />);

@@ -34,6 +34,7 @@ defmodule Vxpipe.Console.RoutePermission do
   def for_request("POST", ["admin", "api", "roles"]), do: :authenticated
   def for_request("PATCH", ["admin", "api", "roles", _id]), do: :authenticated
   def for_request("DELETE", ["admin", "api", "roles", _id]), do: :authenticated
+  def for_request("POST", ["admin", "api", "tenants"]), do: {:installation, "tenants.write"}
   def for_request("GET", ["admin", "api", "tenants"]), do: {:directory, "tenants.read"}
 
   def for_request("POST", ["admin", "api", "onboarding", "demo-tenant"]),

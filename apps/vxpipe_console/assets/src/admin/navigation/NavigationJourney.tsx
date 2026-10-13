@@ -6,7 +6,7 @@ import { AuthPage } from "../authentication/AuthPage";
 import { tenants } from "../authentication/fixtures";
 import type { Theme, Tenant, Role, User } from "../authentication/types";
 import { AdminShell } from "../AdminShell";
-import { CreateTenantModal } from "../CreateTenantModal";
+import { TenantCreationForm } from "./TenantCreationPage";
 import { canCreateTenants } from "../authentication/access";
 import { Button } from "../Button";
 import { CallList } from "../CallList";
@@ -29,7 +29,6 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   identity?: { role: Role; user: User }; initialTenants?: Tenant[]; persona?: Persona; initialPath?: string; theme?: Theme; state?: NavigationState; pickerState?: "ready" | "loading" | "unavailable";
 }) {
   const [directoryTenants, setDirectoryTenants] = useState(initialTenants);
-  const [creatingTenant, setCreatingTenant] = useState(false);
   const { user, role } = identity ?? navigationFixture(persona);
   const visible = visibleTenants(role, user, directoryTenants);
   const landing = landingPath(role, user, directoryTenants);
@@ -73,15 +72,18 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
     : <>{empty("Disconnected", path === "/samples/transfer" ? "In the caller console, ask the agent for human support. Then connect this desk to hear the private briefing before you accept." : "Choose a call spec and configure its services before starting a voice call.")}<div className="navigation-shortcuts">{link("/getting-started", "Prepare a sample call")}{link(path === "/samples/voice" ? "/samples/transfer" : "/samples/voice", path === "/samples/voice" ? "Human transfer desk" : "Voice console")}</div></>}
   </main>);
   if (path === "/getting-started") return shell(<NavigationAuxiliary page="getting-started" tenant={tenant ?? tenants[0]} onNavigate={navigate} />);
+  if (path === "/tenants/new") return shell(canCreateTenants(role) ? <TenantCreationForm onCancel={() => navigate("/tenants")} onCreate={async name => {
+    const next = { id: `example-${directoryTenants.length}`, key: `example_tenant_${directoryTenants.length}`, name };
+    setDirectoryTenants(current => [...current, next]); navigate(`/t/${next.key}/dashboard`);
+  }} /> : <main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow tenant creation.")}</main>);
   if (path === "/tenants" || path === "/my-tenants") {
     const title = path === "/tenants" ? "Tenants" : "My tenants";
     const matching = visible.filter(item => `${item.name} ${item.key}`.toLowerCase().includes(query.toLowerCase()));
-    return shell(<main>{heading(title, path === "/tenants" ? "Choose a tenant to open its workspace." : "Your assigned workspaces. Choose one to get started.", canCreateTenants(role) ? <Button onClick={() => setCreatingTenant(true)}>New tenant</Button> : undefined)}
+    return shell(<main>{heading(title, path === "/tenants" ? "Choose a tenant to open its workspace." : "Your assigned workspaces. Choose one to get started.", canCreateTenants(role) ? <Button onClick={() => navigate("/tenants/new")}>New tenant</Button> : undefined)}
       {phase === "loading" ? <p role="status">Loading tenants…</p> : phase === "unavailable" ? <div role="alert">{empty("Tenants unavailable", "We could not load your tenants. Try again.")}<Button onClick={() => setPhase("ready")}>Try again</Button></div> : <>
         {visible.length ? <label className="navigation-filter"><Search size={16} aria-hidden /><input aria-label="Find a tenant" placeholder="Search by name or tenant key" value={query} onChange={event => setQuery(event.target.value)} /></label> : null}
         {!visible.length || phase === "empty" ? empty("No tenants available", "You do not have access to a tenant yet. Contact an administrator to request access.") : !matching.length ? empty("No matching tenants", "Try a different name or tenant key.") : <ul className="navigation-directory">{matching.map(item => <li key={item.key}>{link(`/t/${item.key}/dashboard`, <><span><strong>{item.name}</strong><code>{item.key}</code></span><ArrowRight size={18} aria-hidden /></>)}</li>)}</ul>}
       </>}
-      {creatingTenant ? <CreateTenantModal status="idle" onClose={() => setCreatingTenant(false)} onSubmit={name => { const next = { id: `example-${directoryTenants.length}`, key: `example_tenant_${directoryTenants.length}`, name }; setDirectoryTenants(current => [...current, next]); setCreatingTenant(false); navigate(`/t/${next.key}/dashboard`); }} /> : null}
     </main>);
   }
   if (!tenant) return shell(<main>{heading("Workspace unavailable")}{empty("Tenant access unavailable", "This tenant may no longer be available to you. Choose another tenant to continue.")}</main>);

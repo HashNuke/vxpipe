@@ -1,3 +1,4 @@
+import { TenantCreationPage } from "./admin/navigation/TenantCreationPage";
 import { NavigationError } from "./admin/navigation/navigationApi";
 import { NavigationContext } from "./admin/navigation/navigationContext";
 import { ConsoleNavigation } from "./admin/navigation/ConsoleNavigation";
@@ -158,6 +159,7 @@ export function App(props: AppProps) {
         <Route path="/platform/services" element={<ConfiguredRoute render={(props) => <ScopedServicesRoute {...props} platform />} />} />
         <Route path="/" element={<WorkspaceDirectory />} />
         <Route path="/tenants" element={<WorkspaceDirectory />} />
+        <Route path="/tenants/new" element={<TenantCreationPage />} />
         <Route path="/my-tenants" element={<WorkspaceDirectory />} />
         <Route path="/t/:tenantKey/dashboard" element={<WorkspaceDashboard />} />
         <Route path="/t/:tenantKey/call-specs" element={<ConfiguredRoute render={props => <CallSpecsRoute {...props} />} />} />

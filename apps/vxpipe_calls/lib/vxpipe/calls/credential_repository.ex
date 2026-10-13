@@ -14,6 +14,9 @@ defmodule Vxpipe.Calls.CredentialRepository do
           inserted_at: DateTime.t()
         }
 
+  @callback create_tenant(context(), Tenant.t()) :: {:ok, Tenant.t()} | {:error, term()}
+  @optional_callbacks create_tenant: 2
+
   @callback bootstrap_tenant(context(), Tenant.t(), api_key_record()) ::
               {:ok, {Tenant.t(), api_key_record()}} | {:error, term()}
   @callback fetch_tenant(context(), String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}

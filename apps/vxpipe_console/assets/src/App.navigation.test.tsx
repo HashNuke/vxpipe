@@ -203,3 +203,26 @@ test("session expiry clears private navigation and account identity", async () =
   expect(screen.queryByText("operator@example.test")).not.toBeInTheDocument();
   expect(screen.queryByRole("navigation", { name: "Tenant" })).not.toBeInTheDocument();
 });
+
+test("tenant creators can create a tenant and land on its dashboard", async () => {
+  window.history.replaceState({}, "", "/my-tenants");
+  const base = fetcher();
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === "/admin/api/session") return response({ user, role: { ...role, grants: [...role.grants, { permission: "tenants.write", scope: "installation" }] } });
+    if (String(input) === "/admin/api/tenants" && init?.method === "POST") return response({ tenant: { key: other, name: "Beta", created_at: "2026-10-13T00:00:00Z", dashboard_path: `/t/${other}/dashboard` } }, 201);
+    return base(input);
+  });
+  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  fireEvent.click(await screen.findByRole("link", { name: "New tenant" }));
+  fireEvent.change(await screen.findByRole("textbox", { name: "Name" }), { target: { value: "Beta" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create tenant" }));
+  await waitFor(() => expect(window.location.pathname).toBe(`/t/${other}/dashboard`));
+  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/tenants", expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Beta" }), headers: expect.objectContaining({ "x-csrf-token": "csrf" }) }));
+});
+
+test("readers cannot open the tenant creation form", async () => {
+  window.history.replaceState({}, "", "/tenants/new");
+  render(<App csrfToken="csrf" fetchImpl={fetcher()} />);
+  expect(await screen.findByRole("heading", { name: "Access unavailable" })).toBeVisible();
+  expect(screen.queryByRole("textbox", { name: "Name" })).not.toBeInTheDocument();
+});

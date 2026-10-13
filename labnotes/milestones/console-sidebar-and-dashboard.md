@@ -200,7 +200,7 @@ search-empty and unavailable states inside that one surface. Existing backend
 scoped tenant search serves the directory and sidebar picker; verify its request
 and storage contracts rather than replacing it with local filtering.
 
-Creation uses the existing authorized tenant-create API through a dedicated
+Creation adds an authorized tenant-create API and a dedicated
 `/tenants/new` form. Hide links without `tenants.write`, guard direct route access,
 and retain backend enforcement. The explicit post-create request takes precedence
 over the later reference to service setup: redirect to the tenant dashboard.
@@ -220,9 +220,12 @@ statistics from incomplete or unauthorized data.
 - [ ] Checkpoint J: rendered desktop/mobile/theme/permission checks; focused
   and full frontend/backend gates; docs/index synchronized; final clean commit.
 
-Review: dependencies exist for authentication, scoped search, tenant creation,
+Review: dependencies exist for authentication and scoped search; tenant creation adds a new API,
 and canonical dashboard routing. Creation-only custom roles require explicit
 consideration so a successful create does not redirect to an inaccessible tenant.
+Approved clarification: creation-only roles see tenant identity, with no resource
+links or data. Installation tenant-write grants directory/dashboard metadata
+visibility without granting Calls, Call Specs, Services or API Keys access.
 List Setup links must use effective service-write capability, not directory
 visibility. Relative dates use real created timestamps; full dates remain
 available. Stories simulate APIs, while production must issue server queries.

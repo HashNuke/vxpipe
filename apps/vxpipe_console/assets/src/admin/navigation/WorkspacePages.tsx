@@ -14,7 +14,7 @@ export function WorkspaceDirectory() {
   const { data, session } = useConsoleNavigation();
   const search = useTenantDirectory();
   const tenants = search.result?.tenants ?? [];
-  return <main><div className="navigation-heading"><div><h1>{data.scope === "all" ? "Tenants" : "My tenants"}</h1><p>Choose a tenant to open its workspace.</p></div>{session && canCreateTenants(session.role) ? <Link to="/getting-started">Getting started</Link> : null}</div>
+  return <main><div className="navigation-heading"><div><h1>{data.scope === "all" ? "Tenants" : "My tenants"}</h1><p>Choose a tenant to open its workspace.</p></div>{session && canCreateTenants(session.role) ? <Link to="/tenants/new">New tenant</Link> : null}</div>
     {!data.directoryAccess ? <Empty title="No tenant access">You do not have access to a tenant yet. Contact an administrator to request access.</Empty> : <>
       <label className="navigation-filter"><Search size={16} aria-hidden /><input aria-label="Find a tenant" placeholder="Search by name or tenant key" value={search.query} onChange={event => search.setQuery(event.target.value)} maxLength={120} /></label>
       {search.state === "loading" ? <p role="status">Loading tenants…</p> : search.state === "unavailable" ? <div role="alert"><Empty title="Tenants unavailable">Your tenants could not be loaded.</Empty><Button onClick={search.retry}>Try again</Button></div> : <>

@@ -9,6 +9,21 @@ defmodule Vxpipe.Persistence.CredentialStoreTest do
   @first_key_id "11111111-1111-4111-8111-111111111111"
   @second_key_id "22222222-2222-4222-8222-222222222222"
 
+  test "creates a standalone tenant without bootstrap credentials" do
+    tenant = %Vxpipe.Calls.Tenant{
+      key: @tenant_key,
+      name: "Support",
+      inserted_at: DateTime.utc_now()
+    }
+
+    key_count = Repo.aggregate(ApiKey, :count)
+    assert {:ok, stored} = CredentialStore.create_tenant(Repo, tenant)
+    assert stored.key == @tenant_key
+    assert stored.name == "Support"
+    assert Repo.aggregate(ApiKey, :count) == key_count
+    assert {:error, :tenant_key_conflict} = CredentialStore.create_tenant(Repo, tenant)
+  end
+
   test "stores only a key digest and enforces tenant-scoped authentication" do
     options = options(@tenant_key, @first_key_id, "vxp_first-secret-value")
 
@@ -29,7 +44,12 @@ defmodule Vxpipe.Persistence.CredentialStoreTest do
              Administration.authenticate("BBBBBBBBBBBBBBBB", issued.secret, :admin, options)
 
     assert {:error, :invalid_api_key} =
-             Administration.authenticate(tenant.key, Base.encode64(stored.digest), :admin, options)
+             Administration.authenticate(
+               tenant.key,
+               Base.encode64(stored.digest),
+               :admin,
+               options
+             )
   end
 
   test "revokes one key without affecting another" do

@@ -5,6 +5,22 @@ defmodule Vxpipe.Console.AdminTenantsController do
 
   alias Vxpipe.Console.AdminPageParameter
 
+  def create(conn, params) do
+    case Vxpipe.Calls.TenantCreation.create(conn.assigns.user_principal, Map.get(params, "name")) do
+      {:ok, tenant} ->
+        conn |> put_status(201) |> json(%{tenant: tenant_json(tenant)})
+
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: %{code: "forbidden"}})
+
+      {:error, :invalid_tenant_name} ->
+        conn |> put_status(422) |> json(%{error: %{code: "invalid_tenant_name"}})
+
+      {:error, _} ->
+        conn |> put_status(503) |> json(%{error: %{code: "tenant_creation_unavailable"}})
+    end
+  end
+
   def index(conn, params) do
     with {:ok, page} <- AdminPageParameter.parse(params),
          {:ok, page_size} <- page_size(params),

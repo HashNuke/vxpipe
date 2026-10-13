@@ -1,6 +1,11 @@
 defmodule Vxpipe.Console.Test.NavigationRepository do
   @moduledoc false
 
+  def create_tenant(owner, tenant) do
+    send(owner, {:created_tenant, tenant})
+    {:ok, tenant}
+  end
+
   def tenant_candidates({owner, tenants, _calls}, scope, limit) do
     send(owner, {:candidates, scope, limit})
 

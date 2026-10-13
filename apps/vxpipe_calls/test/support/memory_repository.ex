@@ -25,6 +25,14 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
   def call_spec_repository(agent), do: {__MODULE__, agent}
   def call_repository(agent), do: {__MODULE__, agent}
 
+  def create_tenant(agent, tenant) do
+    Agent.get_and_update(agent, fn state ->
+      if Map.has_key?(state.tenants, tenant.key),
+        do: {{:error, :tenant_key_conflict}, state},
+        else: {{:ok, tenant}, %{state | tenants: Map.put(state.tenants, tenant.key, tenant)}}
+    end)
+  end
+
   def bootstrap_tenant(agent, tenant, api_key) do
     Agent.get_and_update(agent, fn state ->
       if Map.has_key?(state.tenants, tenant.key) do
