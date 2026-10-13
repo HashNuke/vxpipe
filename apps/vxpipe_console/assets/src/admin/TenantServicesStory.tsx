@@ -9,8 +9,10 @@ import { TenantServicesPage } from "./TenantServicesPage";
 
 export function TenantServicesStory({
   scenario,
+  onNavigate,
   theme,
 }: {
+  onNavigate?: (path: string) => void;
   scenario: ServiceFixtureScenario;
   theme: "dark" | "light";
 }) {
@@ -23,15 +25,15 @@ export function TenantServicesStory({
       }}
       onTestCredential={async () => ({ status: "valid" })}
       onSelectTenant={() =>
-        window.history.pushState(
+        onNavigate ? onNavigate(`/t/${state.tenant.key}/dashboard`) : window.history.pushState(
           {},
           "",
           `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/call-specs`,
         )
       }
-      onSelectTenants={() => window.history.pushState({}, "", "#/admin")}
+      onSelectTenants={() => onNavigate ? onNavigate("/tenants") : window.history.pushState({}, "", "#/admin")}
       onSelectWorkspace={(destination) =>
-        window.history.pushState(
+        onNavigate ? onNavigate(`/t/${state.tenant.key}/${destination}`) : window.history.pushState(
           { destination },
           "",
           `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/${destination}`,

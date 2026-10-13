@@ -4,7 +4,7 @@ import { AuthenticationJourney } from "../authentication/AuthenticationJourney";
 import { AccountPage } from "../authentication/AccountPage";
 import { AuthPage } from "../authentication/AuthPage";
 import { tenants } from "../authentication/fixtures";
-import type { Theme } from "../authentication/types";
+import type { Theme, Tenant, Role, User } from "../authentication/types";
 import { AdminShell } from "../AdminShell";
 import { CreateTenantModal } from "../CreateTenantModal";
 import { canCreateTenants } from "../authentication/access";
@@ -25,19 +25,19 @@ import { landingPath, navigationItems, tenantAccess, visibleTenants } from "./na
 import "./navigation.css";
 
 export type NavigationState = "ready" | "loading" | "unavailable" | "empty";
-export function NavigationJourney({ persona = "all", initialPath = "/", theme = "dark", state = "ready", pickerState = "ready" }: {
-  persona?: Persona; initialPath?: string; theme?: Theme; state?: NavigationState; pickerState?: "ready" | "loading" | "unavailable";
+export function NavigationJourney({ persona = "all", initialPath = "/", theme = "dark", state = "ready", pickerState = "ready", initialTenants = tenants, identity }: {
+  identity?: { role: Role; user: User }; initialTenants?: Tenant[]; persona?: Persona; initialPath?: string; theme?: Theme; state?: NavigationState; pickerState?: "ready" | "loading" | "unavailable";
 }) {
-  const [directoryTenants, setDirectoryTenants] = useState(tenants);
+  const [directoryTenants, setDirectoryTenants] = useState(initialTenants);
   const [creatingTenant, setCreatingTenant] = useState(false);
-  const { user, role } = navigationFixture(persona);
+  const { user, role } = identity ?? navigationFixture(persona);
   const visible = visibleTenants(role, user, directoryTenants);
   const landing = landingPath(role, user, directoryTenants);
-  const [path, setPath] = useState(initialPath === "/" ? landing : initialPath);
+  const [path, setPath] = useState(initialPath === "/" ? landing : initialPath.split("?")[0]);
   const [selection, setSelection] = useState<string>();
   const [signedOut, setSignedOut] = useState(false);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<string | null>(null);
+  const [filter, setFilter] = useState<string | null>(new URLSearchParams(initialPath.split("?")[1]).get("call_spec_id"));
   const [phase, setPhase] = useState(state);
   const [pickerPhase, setPickerPhase] = useState(pickerState);
   const key = path.startsWith("/t/") ? decodeURIComponent(path.split("/")[2]) : selection;
@@ -50,7 +50,7 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   function navigate(next: string) {
     if (tenant) setSelection(tenant.key);
     const resolved = next === "/" ? landing : next;
-    setPath(resolved); setQuery(""); setFilter(null);
+    setPath(resolved.split("?")[0]); setQuery(""); setFilter(new URLSearchParams(resolved.split("?")[1]).get("call_spec_id"));
     window.history.pushState({}, "", `#${resolved}`);
     window.scrollTo({ top: 0, behavior: "instant" });
   }
@@ -60,7 +60,7 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   const context = tenant ? <div className="navigation-context"><Building2 size={15} aria-hidden />{link(`/t/${tenant.key}/dashboard`, <span aria-label={`${tenant.name} dashboard`}>{tenant.name}</span>)}<code>{tenant.key}</code></div> : null;
   const empty = (title: string, detail: string) => <div className="navigation-empty"><h2>{title}</h2><p>{detail}</p></div>;
   if (signedOut || path.startsWith("/auth/")) return <AdminShell theme={theme} showHeader={false}><div className="access-ui"><AuthPage mode={path === "/auth/setup" ? "setup" : path === "/auth/recover" ? "recover" : "login"} onSubmit={async () => { setSignedOut(false); navigate("/"); return {}; }} /></div></AdminShell>;
-  if (/^\/(users|roles)(\/|$)/.test(path)) return <AuthenticationJourney key={`${persona}-${path}`} actor={persona === "all" ? "superadmin" : "member"} initialPath={path} theme={theme} followLocation={false} renderFrame={(content, authPath) => shell(content, authPath.replace(/^\/admin/, ""))} />;
+  if (/^\/(users|roles)(\/|$)/.test(path)) return <AuthenticationJourney key={`${persona}-${path}`} actor={role.kind === "superadmin" ? "superadmin" : role.kind === "admin" ? "admin" : "member"} initialPath={path} theme={theme} followLocation={false} renderFrame={(content, authPath) => shell(content, authPath.replace(/^\/admin/, ""))} />;
   if (path === "/account") return shell(<div className="access-ui"><AccountPage user={user} role={role} onSave={async () => ({})} /></div>);
   if (path.endsWith("/editor") && tenant && tenantAccess(role, user, tenant, "call_specs") !== "none") return <NavigationEditor readOnly={tenantAccess(role, user, tenant, "call_specs") !== "write"} theme={theme} backPath={`/t/${tenant.key}/call-specs`} onNavigate={navigate} />;
   if (/\/calls\/[^/]+$/.test(path)) return <CallDetailsStory scenario={tenant && tenantAccess(role, user, tenant, "calls") !== "none" ? "ended" : "unavailable"} theme={theme} />;
@@ -89,7 +89,7 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   const nav = navigationItems(role, user, tenant).tenant;
   const canCalls = tenantAccess(role, user, tenant, "calls") !== "none";
   const list = callsForTenant().filter(call => !filter || call.callSpecId === filter);
-  const callHref = (id: string) => `?id=vxpipe-console-navigation-pages--call-history&viewMode=story#/t/${tenant.key}/calls/${id}`;
+  const callHref = (id: string) => `?id=vxpipe-console-calls-history--ended&viewMode=story#/t/${tenant.key}/calls/${id}`;
   const calls = leaf === "dashboard" ? <RecentCalls calls={list.slice(0, 5)} callHref={callHref} /> : <CallList calls={list} tenant={tenant} callHref={callHref} />;
   if (leaf !== "dashboard" && !["api-keys", "samples", "legacy-services"].includes(leaf) && !nav.some(item => item.href === path)) return shell(<main>{context}{heading("Access unavailable")}{empty("Permission required", "Your role does not allow this action for this tenant.")}</main>);
   if (leaf === "services" && tenantAccess(role, user, tenant, "tenant_services") === "none") return shell(<main>{context}{heading("Services")}<h2>API keys</h2><p className="navigation-description">No API keys have been created for this tenant.</p>{tenantAccess(role, user, tenant, "tenant_api_keys") === "write" ? <Button onClick={() => navigate(`/t/${tenant.key}/api-keys`)}>Manage API keys</Button> : <p className="navigation-description">Your access is read only.</p>}</main>);
@@ -97,7 +97,7 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   if ((leaf === "legacy-services" && tenantAccess(role, user, tenant, "tenant_services") === "none") || (leaf === "api-keys" && tenantAccess(role, user, tenant, "tenant_api_keys") === "none") || (leaf === "samples" && (!canCreateTenants(role) || tenantAccess(role, user, tenant, "call_specs") !== "write"))) return shell(<main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow this action.")}</main>);
   if (["api-keys", "samples", "legacy-services"].includes(leaf)) return shell(<>{context}<NavigationAuxiliary canReadKeys={tenantAccess(role, user, tenant, "tenant_api_keys") !== "none"} readOnly={tenantAccess(role, user, tenant, "tenant_api_keys") !== "write"} key={`${tenant.key}-${leaf}`} page={leaf} tenant={tenant} onNavigate={navigate} /></>);
   const title = leaf === "dashboard" ? "Dashboard" : leaf === "calls" ? "Calls" : "Call Specs";
-  return shell(<main>{context}{heading(title, leaf === "dashboard" ? `Work in ${tenant.name}. Open a workspace or review recent calls.` : undefined,
+  return shell(<main>{context}{heading(title, undefined,
     leaf === "call-specs" && tenantAccess(role, user, tenant, "call_specs") === "write" ? <Button onClick={() => window.open("?id=vxpipe-console-call-spec-editor-page--new-spec&viewMode=story", "_blank", "noopener")}>New call spec</Button> : undefined)}
     {leaf === "dashboard" ? <div className="navigation-shortcuts">{nav.map(item => <span key={item.href}>{link(item.href, <>{item.label}<ArrowRight size={16} aria-hidden /></>)}</span>)}</div> : null}
     {leaf === "calls" ? <div className="mb-6 max-w-80"><label className="mb-2 block text-xs" id="navigation-call-filter">Call spec</label><CallSpecCombobox options={callSpecs} selectedId={filter} unknownSelection={false} onSelect={setFilter} /></div> : null}

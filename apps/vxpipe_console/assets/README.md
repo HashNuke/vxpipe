@@ -142,7 +142,9 @@ npm run storybook
 Open `http://127.0.0.1:6006/`. Individual page stories expose their important states through
 Storybook Controls. Under **Vxpipe**, **@vxpipe/react** contains the reusable package's
 Workbench, and **Console** contains the application pages and call spec editor.
-Use **Console / Full journey** for the linked review flow.
+Console stories are grouped by site section. Start at **Console / Tenants / Directory**
+or **Console / Tenants / Dashboard**. Reusable controls live under **Console / shared**,
+section-specific controls under **components**, and the call spec editor stays separate.
 
 Use `Vxpipe/React/...` and `Vxpipe/Console/...` for story titles. The Storybook manager
 renders the React folder as `@vxpipe/react`, preserving the package name without treating

@@ -144,7 +144,7 @@ test("the individual story return links load working admin previews", () => {
     const link = screen.getByRole("link", { name });
     const url = new URL(link.getAttribute("href")!, window.location.origin);
     expect(url.pathname).toBe("/iframe.html");
-    expect(url.searchParams.get("id")).toBe("vxpipe-console-full-journey--review-flow");
+    expect(url.searchParams.get("id")).toMatch(/^vxpipe-console-(tenants-directory|call-specs-call-specs|calls-calls)--populated$/);
     expect(url.hash).toBe(`#${path}`);
   }
 });

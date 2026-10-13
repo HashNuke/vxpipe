@@ -8,8 +8,10 @@ import { TenantCallSpecsPage } from "./TenantCallSpecsPage";
 
 export function TenantCallSpecsStory({
   scenario,
+  onNavigate,
   theme,
 }: {
+  onNavigate?: (path: string) => void;
   scenario: CallSpecFixtureScenario;
   theme: "dark" | "light";
 }) {
@@ -35,9 +37,12 @@ export function TenantCallSpecsStory({
 
   return (
     <TenantCallSpecsPage
+      onNewCallSpec={onNavigate ? () => onNavigate(`/t/${state.tenant.key}/editor`) : undefined}
+      onEditCallSpec={onNavigate ? () => onNavigate(`/t/${state.tenant.key}/editor`) : undefined}
       onNextPage={() => setPage((current) => Math.min(3, current + 1))}
       onPreviousPage={() => setPage((current) => Math.max(1, current - 1))}
       onSelectCallSpec={(callSpecId) => {
+        if (onNavigate) { onNavigate(`/t/${state.tenant.key}/calls?call_spec_id=${encodeURIComponent(callSpecId)}`); return; }
         window.history.pushState(
           { callSpecId },
           "",
@@ -45,9 +50,11 @@ export function TenantCallSpecsStory({
         );
       }}
       onSelectTenants={() => {
+        if (onNavigate) { onNavigate("/tenants"); return; }
         window.history.pushState({}, "", "#/admin");
       }}
       onSelectWorkspace={(destination) => {
+        if (onNavigate) { onNavigate(`/t/${state.tenant.key}/${destination}`); return; }
         window.history.pushState(
           { destination },
           "",

@@ -7,6 +7,7 @@ import {
 } from "./callFixtures";
 import { CallSpecCallsPage } from "./CallSpecCallsPage";
 import { callDetailsStoryHref } from "./adminStoryHref";
+import { adminStoryRoute } from "./adminStoryRoute";
 
 function shiftTimestamp(value: string, days: number): string;
 function shiftTimestamp(value: string | null, days: number): string | null;
@@ -20,15 +21,20 @@ function shiftTimestamp(value: string | null, days: number): string | null {
 
 export function CallSpecCallsStory({
   scenario,
+  onNavigate,
   theme,
 }: {
+  onNavigate?: (path: string) => void;
   scenario: CallFixtureScenario;
   theme: "dark" | "light";
 }) {
   const [page, setPage] = useState(1);
   const [selectedOverride, setSelectedOverride] = useState<
     string | null | undefined
-  >(undefined);
+  >(() => {
+    const route = adminStoryRoute(window.location.hash);
+    return route.page === "calls" ? route.callSpecId : undefined;
+  });
   const baseState = callFixture(scenario);
   const pagedScenario = scenario === "paginated" || scenario === "populated";
   const pagedState =
@@ -97,15 +103,16 @@ export function CallSpecCallsStory({
         callDetailsStoryHref(state.tenant.key, callId, theme)
       }
       onSelectTenant={() => {
+        if (onNavigate) { onNavigate(`/t/${state.tenant.key}/dashboard`); return; }
         window.history.pushState(
           { tenantKey: state.tenant.key },
           "",
           `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/call-specs`,
         );
       }}
-      onSelectTenants={() => window.history.pushState({}, "", "#/admin")}
+      onSelectTenants={() => onNavigate ? onNavigate("/tenants") : window.history.pushState({}, "", "#/admin")}
       onSelectWorkspace={(destination) =>
-        window.history.pushState(
+        onNavigate ? onNavigate(`/t/${state.tenant.key}/${destination}`) : window.history.pushState(
           { destination },
           "",
           `#/admin/tenants/${encodeURIComponent(state.tenant.key)}/${destination}`,

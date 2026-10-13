@@ -1,10 +1,11 @@
+import { NavigationJourney } from "./navigation/NavigationJourney";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
-import { TenantsStory } from "./TenantsStory";
+import { TenantDirectoryStory } from "./stories/ResourceStories";
 
 const meta = {
-  title: "Vxpipe/Console/Tenants",
-  component: TenantsStory,
+  title: "Vxpipe/Console/Tenants/Directory",
+  component: TenantDirectoryStory,
   parameters: {
     layout: "fullscreen",
     docs: {
@@ -32,8 +33,8 @@ const meta = {
     },
     theme: { control: "select", options: ["dark", "light"] },
   },
-  render: (args) => <TenantsStory key={`${args.theme}-${args.scenario}`} {...args} />,
-} satisfies Meta<typeof TenantsStory>;
+  render: (args) => <TenantDirectoryStory key={`${args.theme}-${args.scenario}`} {...args} />,
+} satisfies Meta<typeof TenantDirectoryStory>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -50,3 +51,5 @@ export const Narrow: Story = {
     viewport: { value: "390px-844px", isRotated: false },
   },
 };
+
+export const AllTenantLogin: Story = { render: args => <NavigationJourney initialPath="/" theme={args.theme} /> };

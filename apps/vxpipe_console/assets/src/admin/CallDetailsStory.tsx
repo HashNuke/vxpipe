@@ -1,3 +1,5 @@
+import { AdminJourneyStory } from "./AdminJourneyStory";
+import { adminStoryRoute } from "./adminStoryRoute";
 import { useMemo } from "react";
 
 import { CallDetailsPage } from "./CallDetailsPage";
@@ -15,6 +17,7 @@ export function CallDetailsStory({
   theme: "dark" | "light";
 }) {
   const state = useMemo(() => callDetailsFixture(scenario), [scenario]);
+  if (adminStoryRoute(window.location.hash).page === "call-details") return <AdminJourneyStory theme={theme} />;
   return (
     <CallDetailsPage
       contextHref={(path) => adminStoryHref(path, theme)}

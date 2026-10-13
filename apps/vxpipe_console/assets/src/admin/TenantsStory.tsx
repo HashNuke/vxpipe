@@ -5,8 +5,10 @@ import { TenantsPage } from "./TenantsPage";
 
 export function TenantsStory({
   scenario,
+  onNavigate,
   theme,
 }: {
+  onNavigate?: (path: string) => void;
   scenario: TenantFixtureScenario;
   theme: "dark" | "light";
 }) {
@@ -35,6 +37,7 @@ export function TenantsStory({
       onNextPage={() => setPage((current) => Math.min(3, current + 1))}
       onPreviousPage={() => setPage((current) => Math.max(1, current - 1))}
       onSelectTenant={(tenantKey) => {
+        if (onNavigate) { onNavigate(`/t/${tenantKey}/dashboard`); return; }
         window.history.pushState(
           { tenantKey },
           "",

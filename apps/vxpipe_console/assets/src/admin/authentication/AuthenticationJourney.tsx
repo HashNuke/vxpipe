@@ -29,7 +29,7 @@ export function AuthenticationJourney({
   state?: PageState;
   saveBehavior?: "success" | "failure" | "pending";
   followLocation?: boolean;
-  renderFrame?: (children: ReactNode, path: string) => ReactNode;
+  renderFrame?: (children: ReactNode, path: string, session: { user?: User; role?: Role; navigate: (path: string) => void; logout: () => void }) => ReactNode;
 }) {
   const [roles, setRoles] = useState<Role[]>(structuredClone(seedRoles));
   const [users, setUsers] = useState<User[]>(
@@ -349,7 +349,7 @@ export function AuthenticationJourney({
         />
       );
   } else page = denied;
-  if (renderFrame) return renderFrame(<div className="access-ui">{notice ? <div className="access-notice"><FormMessage>{notice}</FormMessage></div> : null}{page}</div>, path);
+  if (renderFrame) return renderFrame(<div className="access-ui">{notice ? <div className="access-notice"><FormMessage>{notice}</FormMessage></div> : null}{page}</div>, path, { user: currentUser, role: currentRole, navigate, logout: () => { setActorId(null); navigate("/auth/login"); } });
   return (
     <AccessFrame
       theme={theme}

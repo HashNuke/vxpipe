@@ -7,33 +7,49 @@ Production routing and scoped backend integration are described in the
 completion; implementation does not imply recorded UI acceptance.
 
 Run `bin/storybook`; use `bin/worktree-port storybook` to find this checkout's port.
-Open **Vxpipe → Console → Navigation → Pages**. Start with **Dashboard**
-(`vxpipe-console-navigation-pages--dashboard`). All stories expose light/dark themes.
+Open **Vxpipe → Console → Tenants → Directory** or **Tenants → Dashboard**.
+All page stories use the shared sidebar except public authentication, the call
+spec editor and call history. Theme controls expose the existing light/dark styles.
+
+## Organization
+
+| Group | Contents |
+| --- | --- |
+| shared | Sidebar, tenant picker, password fields and role badges |
+| Tenants | Directory, My tenants, Dashboard, creation, Getting started and setup overview |
+| Calls | Calls with filter/pagination states; standalone History |
+| Call Specs | Call spec directory and sample setup |
+| Services | Tenant services, Platform services, tenant inventory and API keys |
+| Users | User pages/forms, management journey; components for role selection and tenant access |
+| Roles | Role pages/forms; components for permission editing |
+| My account | Account page |
+| Authentication | Public setup, login and recovery |
+| Diagnostics, Samples | Auxiliary page previews |
+| Call spec editor | Standalone editor page; inspectors, controls and state demonstrations under components |
+
+The Navigation gallery and duplicate older full journey have been retired.
+Each page's existing loading, empty, error, pagination, validation and permission
+states live with its owning section. Shared fixture harnesses compose the same
+navigation shell as production and suppress the old page headers.
 
 ## Review paths
 
-- **All Tenant Login**, **Single Tenant Login**, **Multiple Tenant Login**, and
-  **No Tenant Access** model the four landing outcomes from `/`.
-- Open the tenant picker directly below Vxpipe, search by name/key, use arrows and
-  Enter to choose a tenant. It opens that tenant's dashboard. Its footer returns
-  to Tenants or My tenants. Switch tenant again from a resource page.
-- Follow Calls, Call Specs, both Services links, Users, Roles and My account.
-  Open user/role creation, details and password reset; local back links and forms
-  remain in the new shell. New tenant opens the existing creation dialog.
-- **Mixed Permissions**, **Read Only Member**, **Api Key Only Services**,
-  **Read Only Api Keys**, **Read Only Platform Services**, **Read Only Tenant Services**
-  and **Read Only Legacy Services** demonstrate resource-specific visibility.
-- Review **Getting Started**, **Api Keys**, **Sample Call Specs**, **Legacy Services**,
-  **Diagnostics**, **Voice Sample**, and **Transfer Sample** for auxiliary header
-  treatment. Diagnostics and voice/transfer show synthetic offline/pre-call layouts;
-  they do not reproduce a running LiveView collector or live media session.
-- **Call Spec Editor** and **Call History** remain standalone. The call-spec list
-  opens the editor; call records open the existing inspector fixture in another tab.
-- At phone width, Menu opens the same navigation in a modal drawer. Escape closes
-  it; the tenant picker remains searchable inside the drawer.
-- Loading, unavailable, retry, empty dashboard and tenant directory stories cover
-  failures without replacing them with invented metrics. Picker controls expose
-  loading/unavailable states; unmatched search shows No matching tenants.
+- **Tenants / Directory / All Tenant Login**, **Tenants / Dashboard / Single Tenant
+  Login**, and **Tenants / My tenants** cover landing and scope states.
+- Search/select below Vxpipe; selection opens the tenant dashboard. No reviewer
+  instructions are rendered in the rail. Context for a fixture belongs in docs.
+- **Calls / Calls** retains the call spec filter, pagination and new-tab inspector
+  links; **Call Specs / Call specs** retains row and editor actions.
+- Follow user and role forms in **Users / Management journey**. Error, pending,
+  protected-account and denied states also have direct page stories.
+- Service setup, inventory and API-key states include their dialogs, permission
+  variations and clear Services/Platform Services titles.
+- At phone width, Menu opens the modal drawer. Search and Escape work within it.
+- Call history and the call spec editor remain standalone, with working return links.
+
+Example IDs: `vxpipe-console-tenants-directory--all-tenant-login`,
+`vxpipe-console-tenants-dashboard--dashboard`, `vxpipe-console-calls-calls--filtered`,
+`vxpipe-console-services-platform-services--platform-configured`.
 
 ## Mock boundary
 

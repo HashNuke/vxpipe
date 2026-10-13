@@ -1,10 +1,11 @@
+import { NavigationJourney } from "./navigation/NavigationJourney";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
-import { TenantServicesStory } from "./TenantServicesStory";
+import { ServiceInventoryStory } from "./stories/ResourceStories";
 
 const meta = {
-  title: "Vxpipe/Console/Services",
-  component: TenantServicesStory,
+  title: "Vxpipe/Console/Services/Tenant inventory",
+  component: ServiceInventoryStory,
   parameters: {
     layout: "fullscreen",
     docs: {
@@ -35,9 +36,9 @@ const meta = {
     theme: { control: "select", options: ["dark", "light"] },
   },
   render: (args) => (
-    <TenantServicesStory key={`${args.theme}-${args.scenario}`} {...args} />
+    <ServiceInventoryStory key={`${args.theme}-${args.scenario}`} {...args} />
   ),
-} satisfies Meta<typeof TenantServicesStory>;
+} satisfies Meta<typeof ServiceInventoryStory>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -57,3 +58,5 @@ export const Light: Story = { args: { theme: "light" } };
 export const Narrow: Story = {
   globals: { viewport: { value: "390px-844px", isRotated: false } },
 };
+
+export const ReadOnly: Story = { render: args => <NavigationJourney theme={args.theme} persona="service-reader" initialPath="/t/acme_demo_000001/legacy-services" /> };

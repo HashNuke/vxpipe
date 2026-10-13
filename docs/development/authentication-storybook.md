@@ -10,19 +10,21 @@ The user authorized backend implementation while reserving UI review for later.
 ## Open the stories
 
 Run `bin/storybook` from the checkout. Use the URL it prints; `bin/worktree-port storybook`
-reports the isolated port. In the sidebar, open **Vxpipe → Console → Authentication**:
+reports the isolated port. Under **Vxpipe → Console**:
 
-- **Full journey → Superadmin**: the connected user/role workflow.
-- **Full journey → Admin**: the same flow with protected privileged accounts.
-- **Full journey → First installation**: create the first Superadmin and enter Account.
-- **Components**: password/confirmation, role badges/selection, tenant assignment and
-  permission editors, including mixed/all/empty/read-only states.
-- **Pages**: all eleven planned routes, including local recovery, and their error, loading, read-only and pending states.
+- **Authentication / Sign in** contains setup, login and recovery.
+- **My account / Account**, **Users / Users** and **Roles / Roles** contain the
+  corresponding pages, forms and state variants with the shared sidebar.
+- **Users / Management journey** retains the connected user/role workflow,
+  Admin restrictions and first-installation flow.
+- **shared** contains password fields and role badges; **Users / components**
+  contains role selection and tenant access; **Roles / components** contains
+  permission editing. These controls are isolated from page navigation.
 
-The full journey story ID is `vxpipe-console-authentication-full-journey--superadmin`.
-Page IDs begin `vxpipe-console-authentication-pages--`; examples include `setup`,
-`create-user`, `user-details`, `reset-password`, `create-role` and `role-details`.
-Component IDs begin `vxpipe-console-authentication-components--`.
+The management journey ID is `vxpipe-console-users-management-journey--superadmin`.
+Examples: `vxpipe-console-users-users--create-user`,
+`vxpipe-console-roles-roles--role-details`, and
+`vxpipe-console-authentication-sign-in--recovery`.
 
 ## Try the workflow
 
@@ -49,7 +51,7 @@ Entered passwords are not retained by the mock store, sent, logged or persisted.
 Creation/reset validation runs in the UI; the Console independently validates and authenticates against the backend. Self-service requires a current-password field but does not verify it.
 
 Changes are held only in React memory and reset on reload or story-control changes.
-Storybook uses `#/admin/...` links to model the proposed Console routes. It does not
+Storybook uses hash links to model Console destinations. It does not
 install production routes or use cookies/local storage. Query strings inside the hash
 retain user search/role filters through browser history. Unknown or unauthorized
 resources display an unavailable state. The prototype has no live provider calls.

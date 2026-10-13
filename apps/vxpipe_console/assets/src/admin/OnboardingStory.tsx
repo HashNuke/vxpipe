@@ -1,6 +1,6 @@
 import { modelCatalogFixture } from "./modelCatalogFixtures";
 import { ArrowUpRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { AdminShell } from "./AdminShell";
 import { ApiKeysSetupPage } from "./ApiKeysSetupPage";
@@ -214,8 +214,10 @@ function initialModal(scenario: OnboardingScenario): ServiceModalState | null {
 export function OnboardingStory({
   scenario,
   theme,
+  renderFrame,
   publicOrigin = "http://localhost:4000",
 }: {
+  renderFrame?: (content: ReactNode, page: SetupPage, tenant: SetupTenant) => ReactNode;
   publicOrigin?: string;
   scenario: OnboardingScenario;
   theme: "dark" | "light";
@@ -436,7 +438,7 @@ export function OnboardingStory({
 
   const overlayOpen =
     modal !== null || selectedRecipe !== null || creationStatus !== null;
-  return (
+  const content = (
     <AdminShell
       breadcrumbs={
         page === "platform"
@@ -469,7 +471,7 @@ export function OnboardingStory({
         className="tenant-setup"
         inert={overlayOpen ? true : undefined}
       >
-        {page !== "tenants" && !platformPage ? (
+        {!renderFrame && page !== "tenants" && !platformPage ? (
           <nav aria-label="Tenant setup" className="setup-steps">
             {steps.map((step, index) => (
               <button
@@ -486,6 +488,7 @@ export function OnboardingStory({
         ) : null}
         {page === "services" || platformPage ? (
           <TenantSetupPage
+            presentation={renderFrame ? "workspace" : "setup"}
             connections={platformPage ? platformConnections : connections}
             platform={platformPage}
             platformConnections={platformConnections}
@@ -650,4 +653,5 @@ export function OnboardingStory({
       ) : null}
     </AdminShell>
   );
+  return renderFrame ? renderFrame(content, page, tenant) : content;
 }

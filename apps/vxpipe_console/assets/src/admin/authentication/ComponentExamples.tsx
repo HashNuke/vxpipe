@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AccessFrame } from "./AccessFrame";
+import { AdminShell } from "../AdminShell";
 import { PasswordFields } from "./PasswordFields";
 import { RoleBadge } from "./RoleBadge";
 import { RoleSelect } from "./RoleSelect";
@@ -40,7 +40,7 @@ export function ComponentExamples({
     variant === "empty" ? [] : variant === "mixed-scopes" ? mixedScopeGrants : roles[2].grants,
   );
   return (
-    <AccessFrame theme={theme}>
+    <AdminShell theme={theme} showHeader={false}><div className="access-ui">
       <main className="access-component">
         {component === "passwords" ? (
           <PasswordFields
@@ -87,6 +87,6 @@ export function ComponentExamples({
           />
         )}
       </main>
-    </AccessFrame>
+    </div></AdminShell>
   );
 }

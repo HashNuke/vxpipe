@@ -312,7 +312,7 @@ test("call story links to a standalone journey tab while preserving the director
   window.history.replaceState(
     {},
     "",
-    "/iframe.html?id=vxpipe-console-calls--populated",
+    "/iframe.html?id=vxpipe-console-calls-calls--populated",
   );
   render(<CallSpecCallsStory scenario="populated" theme="dark" />);
 
@@ -324,7 +324,7 @@ test("call story links to a standalone journey tab while preserving the director
   );
   expect(destination.pathname).toBe("/iframe.html");
   expect(destination.searchParams.get("id")).toBe(
-    "vxpipe-console-full-journey--review-flow",
+    "vxpipe-console-calls-history--ongoing",
   );
   expect(destination.hash).toBe(
     "#/admin/tenants/tn_demo_01/calls/018f27cb-6f87-7d1c-a61f-8873cb667342",
