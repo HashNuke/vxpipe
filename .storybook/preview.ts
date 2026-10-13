@@ -20,6 +20,8 @@ const preview: Preview = {
             "Console",
             [
               "Full journey",
+              "Authentication",
+              ["Full journey", "Components", "Pages"],
               "Tenants",
               "Tenant call specs",
               "Calls",

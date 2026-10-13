@@ -1,6 +1,10 @@
 # Operator login and admin dashboard
 
 Status: complete; all seven checkpoints and acceptance gates pass.
+Planned successor (2026-10-13): [Console authentication and user management](console-authentication-and-user-management.md)
+replaces the browser-only installation grant with named users, email/password login
+and role/tenant authorization. It is not implemented; the completion evidence below
+describes the existing challenge-based milestone.
 Requested, split and independently reviewed 2026-09-17.
 Prerequisites: completed and user-approved
 [Operator admin Storybook](operator-admin-storybook.md),
