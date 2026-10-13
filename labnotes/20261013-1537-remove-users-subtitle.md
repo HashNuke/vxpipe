@@ -14,3 +14,17 @@
 - User fetched the missing dependency. Retry passed formatting, compilation, and
   Credo; interrupted its test run at the user's request to commit, pull, then
   verify the updated checkout.
+
+## Pull and verification
+
+- Committed the subtitle removal, then pulled origin/main. Resolved the one
+  UsersPage conflict by retaining the remote Users heading and canonical /users
+  navigation while omitting the removed subtitle. Completed the merge.
+- Four newly pulled application tests used the subtitle as their page-ready
+  assertion. They failed as expected; updated them to use the Users level-one
+  heading. Full frontend suite then passed all 703 tests.
+- Post-pull gates passed: format, warnings-as-errors compile, strict Credo,
+  3,777 umbrella tests with zero failures, unused dependency check, TypeScript,
+  ESLint, and Console esbuild. Argon2 dependency now builds successfully.
+- Rechecked the merged Users loading story visually. Restarted Storybook on
+  port 6006 and confirmed HTTP 200.

@@ -84,7 +84,7 @@ test("the production users route renders server-filtered rows and role filters",
   });
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
-  expect(await screen.findByText(/Manage who can access/)).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Users", level: 1 })).toBeVisible();
   expect(screen.getByRole("table", { name: "Users" }).tagName).toBe("TABLE");
   fireEvent.change(screen.getByRole("combobox", { name: "Filter by role" }), { target: { value: "superadmin" } });
   await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(

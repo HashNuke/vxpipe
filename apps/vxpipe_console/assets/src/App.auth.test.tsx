@@ -468,7 +468,7 @@ test("sign out posts to the logout endpoint with CSRF before leaving", async () 
   try {
     render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
-    expect(await screen.findByText(/Manage who can access/)).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Users", level: 1 })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Logout" }));
     await waitFor(() =>
       expect(fetchImpl).toHaveBeenCalledWith(
@@ -501,7 +501,7 @@ test("failed sign-out keeps the user on the page and explains the failure", asyn
   });
   try {
     render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
-    expect(await screen.findByText(/Manage who can access/)).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Users", level: 1 })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Logout" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/Logout failed/);
     expect(assign).not.toHaveBeenCalled();
@@ -537,7 +537,7 @@ test("users.read-only viewers keep directory filters through the role-options en
   });
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByText(/Manage who can access/)).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Users", level: 1 })).toBeVisible();
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/role-options", expect.any(Object));
   expect(await screen.findByRole("option", { name: "Superadmin" })).toBeVisible();
   expect(await screen.findByRole("table", { name: "Users" })).toBeVisible();
