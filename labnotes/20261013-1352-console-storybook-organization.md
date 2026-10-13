@@ -71,6 +71,15 @@
 - Verified searchable tenant selection, mobile Menu/Escape, history/filtered-call
   round trip, user tenant-selection dialog/Escape/cancel, and read-only inventory.
 - Root formatting, warnings-as-errors compilation, strict Credo and unused-lock
-  checks passed. The rerun of the full umbrella suite is still in progress.
+  checks passed. All umbrella applications passed: 3,777 tests, zero failures
+  (132 excluded integration/live tests), across the completed runs.
+- Two root `mix test` executions received SIGTERM near five minutes, after the
+  Identity, MCP, Providers, Agent Runtime, Call Engine and Calls suites passed
+  (2,582 tests). Ran the remaining Gateway, Artifacts, Persistence and Console
+  test directories from the umbrella root in one detached runner to avoid that
+  command lifetime. It exited successfully: 602 + 20 + 275 + 298 tests passed.
+  Gateway took 472.5 seconds. No test processes remain running.
+- Final staged diff and working tree checks are clean. No dependency or speech
+  state-machine changes were made; Lean verification was not required.
 - Review was performed directly; no teammate processes, agents or tmux sessions
   were created for this task. Existing preview port 6006 serves the reorganized tree.
