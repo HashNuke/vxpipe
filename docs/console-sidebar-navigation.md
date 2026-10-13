@@ -25,7 +25,7 @@ services is titled **Services**; platform services is **Platform Services**.
 A phone uses a compact Menu trigger and a modal navigation drawer with the same
 order; Escape, selection and dismissal close it and restore focus.
 
-The tenant dashboard shows tenant identity, permitted destinations and recent
+The tenant dashboard shows tenant identity and recent
 calls if calls.read is allowed. It does not invent aggregate counts, billing,
 provider health or cross-tenant statistics. Hide inaccessible sections rather
 than rendering unauthorized data. Empty, loading, unavailable and no-access
@@ -49,7 +49,8 @@ count. A zero-tenant user can still use account and permitted platform resources
 there is no tenant-directory grant at all, navigation returns directory_access=false
 and the My tenants page renders the authoritative empty state without a directory
 request. Preserve the existing directory authorization boundary.
-A directory database failure is unavailable with Retry, never zero access.
+A directory database failure is unavailable, never zero access. Page errors have no
+retry button; the user can refresh. The picker retains its local retry action.
 
 Roles is visible only to built-in Admin/Superadmin under the current role API.
 Users requires users.read. Platform Services requires platform_services.read.
@@ -70,7 +71,7 @@ small projection/query modules rather than expanding App.tsx or controllers.
 | --- | --- |
 | `GET /` | Browser pipeline: setup/login gate when anonymous; 302 to computed landing when authenticated. `Cache-Control: private, no-store`; never cache user-specific redirects. |
 | `GET /admin/api/navigation?tenant=:key` | Authenticated shell bootstrap. Returns `landing_path`, `directory_path`, `tenant_scope` (`all`/`assigned`), actor public fields, `directory_access` boolean, platform destinations, optional selected tenant `{key,name,dashboard_path}` and per-resource read/write capabilities. No credentials, session tokens or unauthorized tenant metadata. Optional tenant independently checked; unknown/foreign uses identical 404. No bulk tenant list. |
-| `GET /admin/api/tenants?q=&page=1&page_size=25` | Existing directory extended for the picker and full directory. Trim q, max 120 Unicode characters; literal case-insensitive name/key search; validate positive page and page_size 1–50. Stable name/key ordering; filter permission scope before search, count and pagination in the persistence query. Return `tenants:[{key,name,dashboard_path}]`, `pagination:{page,page_size,total,total_pages,has_next}`. Empty authorized scope returns 200 empty; a principal with no directory grant retains 403; backend failure 503, invalid query 422. Page beyond last returns 422, UI resets to first after query/access change. |
+| `GET /admin/api/tenants?q=&page=1&page_size=25` | Existing directory extended for the picker and full directory. Trim q, max 120 Unicode characters; literal case-insensitive name/key search; validate positive page and page_size 1–50. Stable name/key ordering; filter permission scope before search, count and pagination in the persistence query. Return `tenants:[{key,name,dashboard_path,created_at,can_setup}]`, `pagination:{page,page_size,total,total_pages,has_next}`. Empty authorized scope returns 200 empty; a principal with no directory grant retains 403; backend failure 503, invalid query 422. Page beyond last returns 422, UI resets to first after query/access change. |
 | `GET /admin/api/tenants/:key/dashboard` | Authorize tenant identity before response. Return `{tenant:{key,name,dashboard_path,capabilities},recent_calls}`. `recent_calls` is omitted without calls.read; otherwise `{status:"ready",calls:[...]}`, bounded to 5, newest first with stable ID tie-break. Reuse Calls directory projection, not a new global aggregate. A failed section is `{status:"unavailable"}`, never fabricated zero. No spec-directory/service reads are performed. |
 
 The navigation projection and browser redirect share one Calls query contract:
@@ -115,7 +116,7 @@ read access; a false subsection capability must omit that subsection entirely.
 No full role assignment or tenant directory is embedded in this response.
 
 Directory results retain `created_at` for existing consumers and add
-`dashboard_path`; pagination adds `has_next` while retaining existing fields.
+`dashboard_path` and `can_setup` (effective service-write permission); pagination adds `has_next` while retaining existing fields.
 Installation-operator domain listing keeps its older contract and ordering;
 browser directory and picker use the scoped alphabetical search query. New optional
 repository callbacks are `search_tenants/5`, `tenant_candidates/3` and `recent_calls/3`.
@@ -124,7 +125,7 @@ falling back to unscoped reads. The PostgreSQL adapter implements all three.
 
 ## Browser routes and compatibility
 
-Canonical pages: `/tenants`, `/my-tenants`, `/t/:tenant/dashboard`,
+Canonical pages: `/tenants`, `/tenants/new`, `/my-tenants`, `/t/:tenant/dashboard`,
 `/t/:tenant/calls`, `/t/:tenant/call-specs`, `/t/:tenant/services`, `/roles`,
 `/roles/new`, `/roles/:id`, `/users`, `/users/new`, `/users/:id`,
 `/users/:id/reset-password`, `/account`, `/platform/services`, `/getting-started`.
@@ -147,7 +148,7 @@ TenantWorkspaceNavigation and all TSX header uses (including Storybook-only page
 
 | Surface / source | Implemented treatment |
 | --- | --- |
-| `/admin`; TenantsPage, TenantSetupOverview | Shared sidebar; Tenants or My tenants; rows open dashboard. Authorized operators reach tenant creation through Getting started. |
+| `/admin`; TenantsPage, TenantSetupOverview | Shared sidebar; Tenants or My tenants; rows open dashboard. Authorized operators reach the dedicated New tenant form. |
 | TenantCallSpecsPage | Sidebar + Call Specs title; retain New, row editing and call filters. |
 | CallSpecCallsPage (all calls and spec-filtered) | Sidebar + Calls title; keep spec filter, reset, pagination and standalone inspector links. |
 | ScopedServicesApp + TenantSetupPage, tenant | Sidebar + Services; remove repeated Tenant created banner on steady-state service view. Keep inherited/overridden bindings and dialogs. |
@@ -157,7 +158,7 @@ TenantWorkspaceNavigation and all TSX header uses (including Storybook-only page
 | UsersPage, UserEditorPage (new/detail), ResetPasswordPage | Sidebar with Users active; keep local back links, role/tenant dialogs, restrictions and form notices. |
 | RolesPage, RoleEditorPage (new/detail/built-in) | Sidebar with Roles active; keep read-only built-ins, permission editing and deletion constraints. |
 | AuthenticationJourney/AccessFrame | Authenticated pages use shared shell; setup/login/recovery remain public standalone with brand, no private picker/menu. |
-| OnboardingPage `/admin/onboarding` | Redirect to `/getting-started`, with shared shell and permission-gated setup content; the directory exposes its contextual link. |
+| OnboardingPage `/admin/onboarding` | Redirect to `/getting-started`, with shared shell and permission-gated setup content; sample setup remains separate from tenant creation. |
 | OnboardingStory: services, platform, tenants | Apply same shell/title treatment; preserve modal and pending/error states. |
 | ApiKeysSetupPage, SampleRecipesPage | Storybook-only setup presentations retain the shell and local titles. No new production API-key-setup or recipe route is introduced; production Services retains its existing credential workflow. |
 | CreateTenantModal, ServiceSetupModal, SetupDialog | Modal titles retained; background sidebar inert while modal is open. |
@@ -198,7 +199,7 @@ logout. It refreshes authority on window focus; selected-tenant loss clears the
 selection and reloads the server-selected landing. Directory and picker use
 separate query hooks over the same scoped API, with request cancellation and
 late-result guards. Dashboard data is checked against the current tenant before
-rendering. A failed call section is retryable without presenting a fabricated zero.
+rendering. A failed call section shows an error without presenting a fabricated zero.
 
 Diagnostics uses an independent `navigationMain.tsx` React island instead of
 reparenting LiveView nodes or duplicating permission logic in a server-rendered
@@ -216,3 +217,42 @@ and endpoint/frontend/persistence tests exercise the integrated path. The task
 labnotes and milestone record actual results and unresolved gates. This decision
 describes implemented behavior; it does not claim pending tests passed, user UI
 acceptance, or provider-live acceptance.
+
+## Tenant directory and creation review — October 2026
+
+Tenants and My tenants use the same list presentation: name, key, relative created
+age (full timestamp on hover), dashboard link, and a Setup link only with effective
+service-write permission. Search and pagination call the scoped directory API;
+Storybook alone filters synthetic fixtures locally. The sidebar uses the same
+backend search API, with client filtering disabled. Lists and dashboard activity
+have skeleton loaders. The old setup overview/nudge and duplicate dashboard
+resource shortcuts are retired; the sidebar owns resource navigation. No stats
+are inferred from a partial call list.
+
+`POST /admin/api/tenants` accepts `{name}` through the authenticated, CSRF-protected
+boundary. Both page and API require installation `tenants.write`. Names are trimmed,
+1–256 characters, valid UTF-8 without NUL. Success is 201 with tenant key, name,
+created_at and dashboard_path; invalid names return 422, denied writes 403,
+and unavailable persistence 503. Persistence creates only a tenant, without a
+bootstrap API key. Generated-key collisions are retried up to four times.
+
+The form lives at `/tenants/new`; links are omitted for unauthorized users and
+its direct route is independently guarded. Successful creation goes to the
+dashboard, not Services. The approved creation-only custom-role behavior is
+metadata visibility: installation `tenants.write` allows directory/dashboard
+identity while resource grants stay unchanged. Such a dashboard has no Calls,
+Call Specs, Services, keys, or resource data unless separately authorized.
+`tenants.read` alone retains its existing scope behavior.
+
+Rejected alternatives: reusing bootstrap creation would issue unwanted credentials;
+automatically assigning resource permissions would exceed the creator's grants;
+a Services redirect could expose an unauthorized destination. The explicit
+dashboard request takes precedence over the review's later Services assumption.
+The role's installation-wide write authority makes metadata visible without a
+new creator-ownership relation or silently adding memberships.
+
+Verification covers denied page/API access, name validation, no credential side
+effects, metadata-only dashboards, scoped Setup capability, CSRF submission,
+dashboard redirect, remote directory and picker queries, stale-query cancellation,
+and responsive Storybook rendering. Exact gate results are recorded in the
+[review labnote](../labnotes/20261013-2152-tenant-directory-review.md).

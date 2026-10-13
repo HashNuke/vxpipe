@@ -37,9 +37,16 @@
 .navigation-filter input { min-width: 0; flex: 1; height: 40px; background: transparent; border: 0; color: var(--admin-ink); font-size: 13px; outline: none; }
 .navigation-filter:focus-within { outline: 2px solid var(--admin-blue); outline-offset: 2px; }
 .navigation-directory { padding: 0; margin: 0; list-style: none; }
-.navigation-directory a { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--admin-line); min-height: 80px; padding: 16px 12px; color: var(--admin-ink); text-decoration: none; }
-.navigation-directory a:hover { background: var(--admin-soft); }
-.navigation-directory strong, .navigation-directory code { display: block; }
+.navigation-directory li { display: flex; align-items: center; border-bottom: 1px solid var(--admin-line); }
+.navigation-directory li > a { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 80px; padding: 16px 12px; color: var(--admin-ink); text-decoration: none; }
+.navigation-directory li > a:hover { background: var(--admin-soft); }
+.navigation-directory svg { flex-shrink: 0; }
+.navigation-tenant-identity { min-width: 0; }
+.navigation-directory strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.navigation-tenant-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; color: var(--admin-muted); font-size: 12px; }
+.navigation-tenant-meta code { font-size: 11px; overflow-wrap: anywhere; }
+.navigation-tenant-setup { padding: 12px; font-size: 12px; }
+.navigation-tenant-setup a { color: var(--admin-ink); text-underline-offset: 3px; }
 .navigation-directory strong { font-size: 14px; }
 .navigation-directory code { font-size: 11px; color: var(--admin-muted); margin-top: 6px; overflow-wrap: anywhere; }
 .navigation-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 36px; }
@@ -95,3 +102,7 @@
 .navigation-external .navigation-content:empty { display: none; }
 .navigation-external-content { margin-left: 232px; outline: none; }
 @media (max-width: 760px) { .navigation-external-content { margin-left: 0; } }
+
+.navigation-create { flex-shrink: 0; }
+.navigation-create a { display: inline-flex; align-items: center; min-height: 36px; padding: 8px 12px; border-radius: 6px; background: var(--primary); color: var(--primary-foreground); font-size: 13px; font-weight: 600; text-decoration: none; }
+.navigation-create a:hover { opacity: .9; }

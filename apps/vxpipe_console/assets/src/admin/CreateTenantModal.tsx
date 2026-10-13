@@ -21,7 +21,7 @@ export function CreateTenantModal({
   return (
     <SetupDialog busy={busy} onClose={onClose} title="New tenant">
       <p className="setup-create-description" id={descriptionId}>
-        Give your tenant a name. Next, you’ll connect its services.
+        Give your tenant a name.
       </p>
       <form
         className="setup-create-form"
@@ -44,7 +44,7 @@ export function CreateTenantModal({
         </label>
         {status === "error" ? (
           <p className="setup-error" role="alert">
-            The tenant could not be created. Your name is kept here; try again.
+            Could not create the tenant. Please try again.
           </p>
         ) : null}
         <div className="setup-create-actions">

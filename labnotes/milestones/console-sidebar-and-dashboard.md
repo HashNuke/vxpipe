@@ -208,12 +208,12 @@ Use one permission-aware Setup link to Services; remove redundant setup cards an
 legacy overview stories. Dashboard shortcut buttons are removed; do not invent
 statistics from incomplete or unauthorized data.
 
-- [ ] Checkpoint G: authorized creation page, direct-route/API permission tests,
+- [x] Checkpoint G: authorized creation page, direct-route/API permission tests,
   dashboard redirect, normal creation/error/empty copy.
-- [ ] Checkpoint H: one tenant list design for Tenants/My tenants/legacy entry
+- [x] Checkpoint H: one tenant list design for Tenants/My tenants/legacy entry
   points; relative created date beside key; permission-aware Setup link; backend
   search and pagination in both lists and the picker verified.
-- [ ] Checkpoint I: consolidate empty/error states and Storybook variants; remove
+- [x] Checkpoint I: consolidate empty/error states and Storybook variants; remove
   obsolete setup overview/card and duplicate shortcuts; skeletons for tenants
   and dashboard/calls; correct picker chevron spacing; remove retry buttons from
   requested page errors.
@@ -229,3 +229,16 @@ visibility without granting Calls, Call Specs, Services or API Keys access.
 List Setup links must use effective service-write capability, not directory
 visibility. Relative dates use real created timestamps; full dates remain
 available. Stories simulate APIs, while production must issue server queries.
+
+Implementation evidence for G–I: the dedicated creation route and API are committed
+in `61b463ec`. Shared tenant rows now power the canonical directory, My tenants,
+and sample setup's compatibility presentation. Legacy browser entry points
+redirect to the canonical directory. Backend directory results project effective
+Setup capability; the directory and picker retain scoped server search. Retired
+Setup overview and duplicate All Tenant Login stories; creation lives under
+Tenants / Create. Skeletons replace plain list/dashboard loaders. The shared
+picker has symmetric 12px horizontal padding in the rendered directory.
+
+Focused endpoint tests pass (14), including creation-only identity and Setup
+membership caps. Frontend suite passes (719), TypeScript and ESLint pass, and
+Storybook builds. Final umbrella gate rerun remains in progress for checkpoint J.

@@ -630,7 +630,7 @@ test("zero-assignment members stay on the directory instead of forbidden onboard
   });
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByText("No tenants available")).toBeVisible();
+  expect(await screen.findByText("No tenants yet")).toBeVisible();
   expect(window.location.pathname).toBe("/my-tenants");
   cleanup();
 });

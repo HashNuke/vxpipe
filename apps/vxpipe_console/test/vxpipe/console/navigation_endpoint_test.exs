@@ -79,6 +79,16 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
            |> json_response(401)
   end
 
+  test "directory Setup capability follows effective service write permission" do
+    member(["tenant_services.read", "tenant_services.write"], %{@key => :read_write})
+    conn = login()
+    page = conn |> recycle() |> get("/admin/api/tenants") |> json_response(200)
+    assert Enum.all?(page["tenants"], &(&1["can_setup"] == true))
+    member(["tenant_services.read"])
+    page = conn |> recycle() |> get("/admin/api/tenants") |> json_response(200)
+    assert Enum.all?(page["tenants"], &(&1["can_setup"] == false))
+  end
+
   test "login preserves a protected deep link and ignores external return parameters" do
     member(["calls.read"])
     anonymous = build_conn() |> get("https://localhost/t/#{@key}/calls?page=2")

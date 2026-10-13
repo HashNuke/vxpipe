@@ -21,3 +21,20 @@
 - Browser: inspected creation at desktop and mobile; submitting the Storybook
   form navigates to its tenant dashboard. Full umbrella gates running; remaining
   directory/state consolidation is tracked in the milestone.
+
+- Consolidation checkpoint: one shared directory surface for production and
+  Storybook, created-age metadata, effective server Setup capability, skeletons,
+  normal empty/error copy, no dashboard shortcut duplication or retry buttons.
+  Retired the old setup-nudge and duplicate directory stories; sample setup's
+  compatibility directory reuses the shared presentation without its nudge card.
+- Red tests caught missing dates, old retry buttons, plain loaders and missing
+  Setup projection. Setup test initially used a read-only membership with a write
+  grant; corrected the positive case to read_write while preserving the denied
+  read-only case. The full umbrella run loaded the earlier fixture, so its single
+  failure is covered by the passing focused test and a final full rerun.
+- Green: 719 frontend tests, TypeScript, ESLint, 14 navigation endpoint tests;
+  Storybook static build succeeds. Desktop/mobile list captures, empty/loading
+  states and dashboard error inspected; full umbrella gates still running.
+- The shared picker now replaces the older dropdown in Directory stories; its
+  chevron has the same 12px horizontal inset as its text. No extra picker-only
+  padding workaround was necessary after consolidation.

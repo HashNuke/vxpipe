@@ -12,7 +12,7 @@ export type Role = {
   /** Server revision for optimistic role updates; absent on minimal option metadata. */
   revision?: number;
 };
-export type Tenant = { id: string; name: string; key: string };
+export type Tenant = { id: string; name: string; key: string; createdAt?: string };
 export type Membership = { tenantId: string; access: AccessLevel };
 export type User = {
   id: string;

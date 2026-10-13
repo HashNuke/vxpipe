@@ -2,6 +2,7 @@ export type TenantSummary = {
   key: string;
   name: string;
   createdAt: string;
+  canSetup?: boolean;
 };
 
 export type PaginationModel = {

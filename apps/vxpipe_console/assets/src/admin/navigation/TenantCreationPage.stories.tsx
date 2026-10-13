@@ -6,3 +6,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 export const NoPermission: Story = { args: { persona: "member" } };
+
+export const CreationError: Story = { args: { creationOutcome: "error" } };
+export const Submitting: Story = { args: { creationOutcome: "pending" } };
+export const MetadataOnly: Story = { args: { identity: {
+  role: { id: "creator", name: "Tenant creator", description: "", kind: null, grants: [{ permission: "tenants.write", scope: "installation" }] },
+  user: { id: "creator", email: "creator@example.test", enabled: true, roleId: "creator", memberships: [] },
+} } };

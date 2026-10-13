@@ -40,13 +40,13 @@ export const roles: Role[] = [
   },
 ];
 export const tenants: Tenant[] = [
-  { id: id(101), name: "Acme", key: "acme_demo_000001" },
-  { id: id(102), name: "Northwind", key: "northwind_000001" },
-  { id: id(103), name: "Demo workspace", key: "demo_tenant_0001" },
-  { id: id(104), name: "Contoso Support", key: "contoso_00000001" },
-  { id: id(105), name: "Fabrikam Europe", key: "fabrikam_0000001" },
-  { id: id(106), name: "Woodgrove", key: "woodgrove_000001" },
-  { id: id(107), name: "Adventure Works", key: "adventure_000001" },
+  { id: id(101), name: "Acme", createdAt: "2026-08-15T10:00:00Z", key: "acme_demo_000001" },
+  { id: id(102), name: "Northwind", createdAt: "2026-08-15T10:00:00Z", key: "northwind_000001" },
+  { id: id(103), name: "Demo workspace", createdAt: "2026-08-15T10:00:00Z", key: "demo_tenant_0001" },
+  { id: id(104), name: "Contoso Support", createdAt: "2026-08-15T10:00:00Z", key: "contoso_00000001" },
+  { id: id(105), name: "Fabrikam Europe", createdAt: "2026-08-15T10:00:00Z", key: "fabrikam_0000001" },
+  { id: id(106), name: "Woodgrove", createdAt: "2026-08-15T10:00:00Z", key: "woodgrove_000001" },
+  { id: id(107), name: "Adventure Works", createdAt: "2026-08-15T10:00:00Z", key: "adventure_000001" },
 ];
 export const users: User[] = [
   {

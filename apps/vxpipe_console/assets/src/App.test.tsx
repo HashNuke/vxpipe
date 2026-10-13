@@ -282,9 +282,12 @@ test("an empty installation opens onboarding only when explicitly selected", asy
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByText("No tenants available")).toBeVisible();
+  expect(await screen.findByText("No tenants yet")).toBeVisible();
   expect(window.location.pathname).toBe("/tenants");
-  fireEvent.click(screen.getByRole("link", { name: "Getting started" }));
+  expect(screen.getByRole("link", { name: "New tenant" })).toHaveAttribute("href", "/tenants/new");
+  cleanup();
+  window.history.replaceState({}, "", "/getting-started");
+  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
   expect(
     await screen.findByRole("heading", { name: "Demo tenant is ready" }),
   ).toBeVisible();

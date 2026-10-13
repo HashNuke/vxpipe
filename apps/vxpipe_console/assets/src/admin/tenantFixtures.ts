@@ -40,7 +40,7 @@ export function tenantFixture(scenario: TenantFixtureScenario): TenantsPageState
     case "unavailable":
       return {
         status: "unavailable",
-        message: "Tenant data could not be loaded. Try again after storage is available.",
+        message: "We could not load your tenants.",
       };
     case "long-content":
       return {

@@ -48,7 +48,7 @@ export function TenantsPage({
           {state.status === "ready" && state.tenants.length === 0 ? (
             <PageNotice
               kind="empty"
-              message="Create a tenant through the trusted administration workflow, then return here."
+              message="You do not have access to any tenants. Contact an administrator to request access."
               title="No tenants yet"
             />
           ) : null}

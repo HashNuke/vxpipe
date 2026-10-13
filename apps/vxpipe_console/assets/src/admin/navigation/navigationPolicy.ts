@@ -1,11 +1,11 @@
-import { effectiveAccess } from "../authentication/access";
+import { canCreateTenants, effectiveAccess } from "../authentication/access";
 import type { Role, Tenant, User } from "../authentication/types";
 
 // Storybook presentation model only. Production consumes the server navigation projection.
 const tenantResources = ["calls", "call_specs", "tenant_services", "tenant_api_keys"];
 export type NavigationItem = { label: string; href: string };
 export function allTenants(role: Role): boolean {
-  return !!role.kind || role.grants.some(grant => grant.scope === "all_tenants" && tenantResources.some(resource => grant.permission === `${resource}.read`));
+  return canCreateTenants(role) || role.grants.some(grant => grant.scope === "all_tenants" && tenantResources.some(resource => grant.permission === `${resource}.read`));
 }
 export function tenantAccess(role: Role, user: User, tenant: Tenant, resource: string) {
   return effectiveAccess(role, resource, user.memberships.find(item => item.tenantId === tenant.id)?.access);

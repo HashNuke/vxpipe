@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, Building2, Search } from "lucide-react";
+import { Building2 } from "lucide-react";
 import { AuthenticationJourney } from "../authentication/AuthenticationJourney";
 import { AccountPage } from "../authentication/AccountPage";
 import { AuthPage } from "../authentication/AuthPage";
 import { tenants } from "../authentication/fixtures";
 import type { Theme, Tenant, Role, User } from "../authentication/types";
 import { AdminShell } from "../AdminShell";
+import { DirectorySkeleton, TenantDirectoryView } from "./TenantDirectoryView";
+import { Pagination } from "../Pagination";
 import { TenantCreationForm } from "./TenantCreationPage";
 import { canCreateTenants } from "../authentication/access";
 import { Button } from "../Button";
@@ -25,8 +27,8 @@ import { landingPath, navigationItems, tenantAccess, visibleTenants } from "./na
 import "./navigation.css";
 
 export type NavigationState = "ready" | "loading" | "unavailable" | "empty";
-export function NavigationJourney({ persona = "all", initialPath = "/", theme = "dark", state = "ready", pickerState = "ready", initialTenants = tenants, identity }: {
-  identity?: { role: Role; user: User }; initialTenants?: Tenant[]; persona?: Persona; initialPath?: string; theme?: Theme; state?: NavigationState; pickerState?: "ready" | "loading" | "unavailable";
+export function NavigationJourney({ persona = "all", initialPath = "/", theme = "dark", state = "ready", pickerState = "ready", initialTenants = tenants, directoryPageSize = 25, creationOutcome = "ready", identity }: {
+  creationOutcome?: "ready" | "error" | "pending"; directoryPageSize?: number; identity?: { role: Role; user: User }; initialTenants?: Tenant[]; persona?: Persona; initialPath?: string; theme?: Theme; state?: NavigationState; pickerState?: "ready" | "loading" | "unavailable";
 }) {
   const [directoryTenants, setDirectoryTenants] = useState(initialTenants);
   const { user, role } = identity ?? navigationFixture(persona);
@@ -36,8 +38,9 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   const [selection, setSelection] = useState<string>();
   const [signedOut, setSignedOut] = useState(false);
   const [query, setQuery] = useState("");
+  const [directoryPage, setDirectoryPage] = useState(1);
   const [filter, setFilter] = useState<string | null>(new URLSearchParams(initialPath.split("?")[1]).get("call_spec_id"));
-  const [phase, setPhase] = useState(state);
+  const [phase] = useState(state);
   const [pickerPhase, setPickerPhase] = useState(pickerState);
   const key = path.startsWith("/t/") ? decodeURIComponent(path.split("/")[2]) : selection;
   const tenant = visible.find(item => item.key === key);
@@ -73,18 +76,22 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   </main>);
   if (path === "/getting-started") return shell(<NavigationAuxiliary page="getting-started" tenant={tenant ?? tenants[0]} onNavigate={navigate} />);
   if (path === "/tenants/new") return shell(canCreateTenants(role) ? <TenantCreationForm onCancel={() => navigate("/tenants")} onCreate={async name => {
-    const next = { id: `example-${directoryTenants.length}`, key: `example_tenant_${directoryTenants.length}`, name };
+    if (creationOutcome === "error") throw new Error("Storybook creation unavailable");
+    if (creationOutcome === "pending") await new Promise<void>(() => {});
+    const next = { id: `example-${directoryTenants.length}`, key: `example_tenant_${directoryTenants.length}`, createdAt: new Date().toISOString(), name };
     setDirectoryTenants(current => [...current, next]); navigate(`/t/${next.key}/dashboard`);
   }} /> : <main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow tenant creation.")}</main>);
   if (path === "/tenants" || path === "/my-tenants") {
     const title = path === "/tenants" ? "Tenants" : "My tenants";
     const matching = visible.filter(item => `${item.name} ${item.key}`.toLowerCase().includes(query.toLowerCase()));
-    return shell(<main>{heading(title, path === "/tenants" ? "Choose a tenant to open its workspace." : "Your assigned workspaces. Choose one to get started.", canCreateTenants(role) ? <Button onClick={() => navigate("/tenants/new")}>New tenant</Button> : undefined)}
-      {phase === "loading" ? <p role="status">Loading tenants…</p> : phase === "unavailable" ? <div role="alert">{empty("Tenants unavailable", "We could not load your tenants. Try again.")}<Button onClick={() => setPhase("ready")}>Try again</Button></div> : <>
-        {visible.length ? <label className="navigation-filter"><Search size={16} aria-hidden /><input aria-label="Find a tenant" placeholder="Search by name or tenant key" value={query} onChange={event => setQuery(event.target.value)} /></label> : null}
-        {!visible.length || phase === "empty" ? empty("No tenants available", "You do not have access to a tenant yet. Contact an administrator to request access.") : !matching.length ? empty("No matching tenants", "Try a different name or tenant key.") : <ul className="navigation-directory">{matching.map(item => <li key={item.key}>{link(`/t/${item.key}/dashboard`, <><span><strong>{item.name}</strong><code>{item.key}</code></span><ArrowRight size={18} aria-hidden /></>)}</li>)}</ul>}
-      </>}
-    </main>);
+    const count = matching.length;
+    const pages = Math.ceil(count / directoryPageSize);
+    return shell(<TenantDirectoryView title={title} state={phase === "empty" ? "ready" : phase}
+      tenants={phase === "empty" ? [] : matching.slice((directoryPage - 1) * directoryPageSize, directoryPage * directoryPageSize).map(item => ({ ...item, canSetup: tenantAccess(role, user, item, "tenant_services") === "write" }))}
+      query={query} onQueryChange={value => { setQuery(value); setDirectoryPage(1); }} canCreate={canCreateTenants(role)}
+      link={(href, children, label) => <a href={`#${href}`} aria-label={label} onClick={event => { event.preventDefault(); navigate(href); }}>{children}</a>}
+      pagination={pages > 1 ? <Pagination ariaLabel="Tenant pages" pagination={{ label: `Page ${directoryPage} of ${pages}`, hasPrevious: directoryPage > 1, hasNext: directoryPage < pages }} onPrevious={() => setDirectoryPage(value => value - 1)} onNext={() => setDirectoryPage(value => value + 1)} /> : null}
+    />);
   }
   if (!tenant) return shell(<main>{heading("Workspace unavailable")}{empty("Tenant access unavailable", "This tenant may no longer be available to you. Choose another tenant to continue.")}</main>);
   const leaf = path.split("/")[3];
@@ -101,9 +108,8 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   const title = leaf === "dashboard" ? "Dashboard" : leaf === "calls" ? "Calls" : "Call Specs";
   return shell(<main>{context}{heading(title, undefined,
     leaf === "call-specs" && tenantAccess(role, user, tenant, "call_specs") === "write" ? <Button onClick={() => window.open("?id=vxpipe-console-call-spec-editor-page--new-spec&viewMode=story", "_blank", "noopener")}>New call spec</Button> : undefined)}
-    {leaf === "dashboard" ? <div className="navigation-shortcuts">{nav.map(item => <span key={item.href}>{link(item.href, <>{item.label}<ArrowRight size={16} aria-hidden /></>)}</span>)}</div> : null}
     {leaf === "calls" ? <div className="mb-6 max-w-80"><label className="mb-2 block text-xs" id="navigation-call-filter">Call spec</label><CallSpecCombobox options={callSpecs} selectedId={filter} unknownSelection={false} onSelect={setFilter} /></div> : null}
     {leaf === "dashboard" && canCalls ? <div className="navigation-section-title"><h2>Recent calls</h2>{link(`/t/${tenant.key}/calls`, "View all calls")}</div> : null}
-    {phase === "loading" ? <p role="status">Loading {leaf === "call-specs" ? "call specs" : "calls"}…</p> : phase === "unavailable" ? <div role="alert">{empty("Activity unavailable", "We could not load this workspace. Try again.")}<Button onClick={() => setPhase("ready")}>Try again</Button></div> : phase === "empty" ? empty("No activity yet", "Once this tenant has activity, it will appear here.") : leaf === "call-specs" ? <CallSpecList callSpecs={callSpecs} tenant={tenant} onSelectCallSpec={id => { navigate(`/t/${tenant.key}/calls`); setFilter(id); }} onEditCallSpec={() => navigate(`/t/${tenant.key}/editor`)} /> : canCalls ? calls : empty("Your workspace is ready", "Use the available links above to work with this tenant.")}
+    {phase === "loading" ? <DirectorySkeleton label={leaf === "dashboard" ? "Loading dashboard" : leaf === "call-specs" ? "Loading call specs" : "Loading calls"} /> : phase === "unavailable" ? <div role="alert">{empty("Activity unavailable", "We could not load this workspace.")}</div> : phase === "empty" ? empty("No activity yet", "Once this tenant has activity, it will appear here.") : leaf === "call-specs" ? <CallSpecList callSpecs={callSpecs} tenant={tenant} onSelectCallSpec={id => { navigate(`/t/${tenant.key}/calls`); setFilter(id); }} onEditCallSpec={() => navigate(`/t/${tenant.key}/editor`)} /> : canCalls ? calls : null}
   </main>);
 }

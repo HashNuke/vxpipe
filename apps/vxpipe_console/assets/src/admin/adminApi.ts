@@ -592,7 +592,7 @@ function parseTenant(value: unknown): TenantSummary {
     throw invalidResponse();
   }
 
-  return { key: value.key, name: value.name, createdAt: value.created_at };
+  return { key: value.key, name: value.name, createdAt: value.created_at, ...(typeof value.can_setup === "boolean" ? { canSetup: value.can_setup } : {}) };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

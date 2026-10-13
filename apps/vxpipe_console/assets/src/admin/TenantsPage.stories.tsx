@@ -1,4 +1,3 @@
-import { NavigationJourney } from "./navigation/NavigationJourney";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
 import { TenantDirectoryStory } from "./stories/ResourceStories";
@@ -51,5 +50,3 @@ export const Narrow: Story = {
     viewport: { value: "390px-844px", isRotated: false },
   },
 };
-
-export const AllTenantLogin: Story = { render: args => <NavigationJourney initialPath="/" theme={args.theme} /> };

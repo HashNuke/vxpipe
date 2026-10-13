@@ -122,7 +122,7 @@ test.each(["Create & Join Calls", "Full Access"])(
     expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
     expect(screen.getByText("My backend")).toBeVisible();
     fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
-    fireEvent.click(screen.getByRole("button", { name: "New tenant" }));
+    fireEvent.click(screen.getByRole("link", { name: "New tenant" }));
     fireEvent.change(screen.getByLabelText("Tenant name"), {
       target: { value: "Another tenant" },
     });
@@ -264,14 +264,14 @@ test("the supported default model reaches the chosen recipe", () => {
   ).toHaveTextContent("Google AI Studio");
 });
 
-test("the demo nudge resumes setup and another tenant retains its own name", () => {
+test("the directory resumes setup without a redundant demo card", () => {
   const view = render(<OnboardingStory scenario="demo-nudge" theme="dark" />);
-  fireEvent.click(screen.getByRole("button", { name: "Continue setup" }));
+  fireEvent.click(screen.getByRole("link", { name: "Setup Demo" }));
   expect(screen.getByText("Tenant created: Demo")).toBeVisible();
   view.unmount();
 
   render(<OnboardingStory scenario="multiple-tenants" theme="dark" />);
-  fireEvent.click(screen.getByRole("button", { name: "Set up Acme Support" }));
+  fireEvent.click(screen.getByRole("link", { name: "Setup Acme Support" }));
   expect(screen.getByText("Tenant created: Acme Support")).toBeVisible();
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 });
@@ -286,7 +286,7 @@ test("returning through the tenant directory preserves completed service setup",
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
-  fireEvent.click(screen.getByRole("button", { name: "Continue setup" }));
+  fireEvent.click(screen.getByRole("link", { name: "Setup Demo" }));
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 });
 
@@ -313,7 +313,7 @@ test("updating a speech service preserves the sample model provider", () => {
 test("the tenant directory resumes a services-ready tenant at API keys", () => {
   render(<OnboardingStory scenario="ready-for-samples" theme="dark" />);
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
-  fireEvent.click(screen.getByRole("button", { name: "Set up Demo" }));
+  fireEvent.click(screen.getByRole("link", { name: "Setup Demo" }));
   expect(
     screen.getByRole("heading", { name: "Create API Keys" }),
   ).toBeVisible();
@@ -322,7 +322,7 @@ test("the tenant directory resumes a services-ready tenant at API keys", () => {
 test("creating a tenant asks only for a name and opens its own empty service setup", () => {
   vi.useFakeTimers();
   render(<OnboardingStory scenario="multiple-tenants" theme="dark" />);
-  fireEvent.click(screen.getByRole("button", { name: "New tenant" }));
+  fireEvent.click(screen.getByRole("link", { name: "New tenant" }));
   const dialog = screen.getByRole("dialog", { name: "New tenant" });
   expect(within(dialog).getAllByRole("textbox")).toHaveLength(1);
   expect(within(dialog).getByLabelText("Tenant name")).toHaveFocus();
@@ -344,16 +344,16 @@ test("creating a tenant asks only for a name and opens its own empty service set
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
-  fireEvent.click(screen.getByRole("button", { name: "Set up Customer Care" }));
+  fireEvent.click(screen.getByRole("link", { name: "Setup Customer Care" }));
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
-  fireEvent.click(screen.getByRole("button", { name: "Set up Demo" }));
+  fireEvent.click(screen.getByRole("link", { name: "Setup Demo" }));
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 });
 
 test("a blank tenant name cannot create a workspace, and cancel preserves the directory", () => {
   render(<OnboardingStory scenario="demo-nudge" theme="light" />);
-  fireEvent.click(screen.getByRole("button", { name: "New tenant" }));
+  fireEvent.click(screen.getByRole("link", { name: "New tenant" }));
   expect(screen.getByRole("button", { name: "Create tenant" })).toBeDisabled();
   fireEvent.change(screen.getByLabelText("Tenant name"), {
     target: { value: "   " },
@@ -362,8 +362,8 @@ test("a blank tenant name cannot create a workspace, and cancel preserves the di
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(
-    screen.getByRole("region", { name: "Continue demo setup" }),
-  ).toBeVisible();
+    screen.queryByRole("region", { name: "Continue demo setup" }),
+  ).not.toBeInTheDocument();
 });
 
 test("the service picker clears drafts and keeps one connect action after saving", () => {

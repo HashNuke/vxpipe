@@ -16,7 +16,7 @@ spec editor and call history. Theme controls expose the existing light/dark styl
 | Group | Contents |
 | --- | --- |
 | shared | Sidebar, tenant picker, password fields and role badges |
-| Tenants | Directory, My tenants, Dashboard, creation, Getting started and setup overview |
+| Tenants | Directory, My tenants, Dashboard, Create and Getting started |
 | Calls | Calls with filter/pagination states; standalone History |
 | Call Specs | Call spec directory and sample setup |
 | Services | Tenant services, Platform services, tenant inventory and API keys |
@@ -34,7 +34,7 @@ navigation shell as production and suppress the old page headers.
 
 ## Review paths
 
-- **Tenants / Directory / All Tenant Login**, **Tenants / Dashboard / Single Tenant
+- **Tenants / Directory / Populated**, **Tenants / Dashboard / Single Tenant
   Login**, and **Tenants / My tenants** cover landing and scope states.
 - Search/select below Vxpipe; selection opens the tenant dashboard. No reviewer
   instructions are rendered in the rail. Context for a fixture belongs in docs.
@@ -47,7 +47,7 @@ navigation shell as production and suppress the old page headers.
 - At phone width, Menu opens the modal drawer. Search and Escape work within it.
 - Call history and the call spec editor remain standalone, with working return links.
 
-Example IDs: `vxpipe-console-tenants-directory--all-tenant-login`,
+Example IDs: `vxpipe-console-tenants-directory--populated`,
 `vxpipe-console-tenants-dashboard--dashboard`, `vxpipe-console-calls-calls--filtered`,
 `vxpipe-console-services-platform-services--platform-configured`.
 
@@ -114,3 +114,11 @@ are development evidence, not shipping image assets. The milestone and linked
 task labnotes own final test counts, rendered review findings and any remaining
 limitations; the earlier checkpoint totals above must not be presented as final
 production results.
+
+
+The October tenant review consolidates Directory and My tenants on the production
+list component. Setup overview / Demo nudge and the duplicate All Tenant Login
+story are removed. **Tenants / Create** has normal, denied, creation-error, pending
+and metadata-only role fixtures. Submit the form in error/pending fixtures to
+exercise that state. Creation lands on Dashboard; Setup in a tenant row opens
+Services when permitted. Dates are fixture timestamps, not production records.

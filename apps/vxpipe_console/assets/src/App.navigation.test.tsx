@@ -65,12 +65,12 @@ test("no-access directory renders its empty state without fetching tenants", asy
   expect(fetchImpl.mock.calls.some(([input]) => new URL(String(input), "http://localhost").pathname === "/admin/api/tenants")).toBe(false);
 });
 
-test("partial dashboard failure is retryable and does not look like an empty directory", async () => {
+test("partial dashboard failure stays distinct from empty without a retry button", async () => {
   window.history.replaceState({}, "", `/t/${key}/dashboard`);
   render(<App csrfToken="csrf" fetchImpl={fetcher({ callsError: true })} />);
   expect(await screen.findByText("Recent calls unavailable")).toBeVisible();
   expect(screen.queryByText("No calls yet")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
 });
 
 test("editor and history routes do not mount the private navigation", async () => {
@@ -225,4 +225,17 @@ test("readers cannot open the tenant creation form", async () => {
   render(<App csrfToken="csrf" fetchImpl={fetcher()} />);
   expect(await screen.findByRole("heading", { name: "Access unavailable" })).toBeVisible();
   expect(screen.queryByRole("textbox", { name: "Name" })).not.toBeInTheDocument();
+});
+
+test("tenant directory searches remotely and shows creation dates", async () => {
+  window.history.replaceState({}, "", "/my-tenants");
+  const fetchImpl = fetcher();
+  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  await screen.findByRole("link", { name: "Open Acme" });
+  expect(screen.getAllByText(/^Created /)).toHaveLength(2);
+  expect(screen.queryByRole("link", { name: "New tenant" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "Find a tenant" }), { target: { value: "Beta" } });
+  await waitFor(() => expect(screen.queryByRole("link", { name: "Open Acme" })).not.toBeInTheDocument());
+  expect(await screen.findByRole("link", { name: "Open Beta" })).toBeVisible();
+  expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("q=Beta"), expect.anything());
 });

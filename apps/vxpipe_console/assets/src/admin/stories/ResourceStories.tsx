@@ -1,3 +1,4 @@
+import { NavigationJourney } from "../navigation/NavigationJourney";
 import { tenantFixture } from "../tenantFixtures";
 import { StoryWorkspace } from "./StoryWorkspace";
 import { TenantsStory } from "../TenantsStory";
@@ -11,7 +12,8 @@ import type { ComponentProps } from "react";
 export function TenantDirectoryStory(props: ComponentProps<typeof TenantsStory>) {
   const state = tenantFixture(props.scenario);
   const tenants = state.status === "ready" ? state.tenants.map(item => ({ ...item, id: item.key })) : [];
-  return <StoryWorkspace path="/tenants" theme={props.theme} tenantOptions={tenants}>{navigate => <TenantsStory {...props} onNavigate={navigate} />}</StoryWorkspace>;
+  const options = props.scenario === "paginated" ? Array.from({ length: 3 }, (_, page) => tenants.map(item => ({ ...item, id: `${item.id}-${page}`, key: `${item.key}_${page}`, name: page ? `${item.name} ${page + 1}` : item.name }))).flat() : tenants;
+  return <NavigationJourney initialPath="/tenants" initialTenants={options} directoryPageSize={props.scenario === "paginated" ? 4 : 25} theme={props.theme} state={state.status} />;
 }
 export function CallSpecsPageStory(props: ComponentProps<typeof TenantCallSpecsStory>) {
   const tenant = callSpecFixture(props.scenario).tenant;

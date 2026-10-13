@@ -135,7 +135,7 @@ test("platform saves become available to a newly created tenant", () => {
   });
   saveKey();
   fireEvent.click(screen.getByRole("button", { name: "Tenants" }));
-  fireEvent.click(screen.getByRole("button", { name: "New tenant" }));
+  fireEvent.click(screen.getByRole("link", { name: "New tenant" }));
   fireEvent.change(screen.getByLabelText("Tenant name"), {
     target: { value: "New team" },
   });

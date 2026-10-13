@@ -56,7 +56,7 @@ test("call inspector and editor remain outside the navigation shell", () => {
 });
 test("tenant creation is retained for an authorized platform operator", () => {
   render(<NavigationJourney initialPath="/tenants" />);
-  fireEvent.click(screen.getByRole("button", { name: "New tenant" }));
+  fireEvent.click(screen.getByRole("link", { name: "New tenant" }));
   expect(screen.getByRole("heading", { name: "New tenant" })).toBeVisible();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
@@ -100,4 +100,22 @@ test("legacy service read permission does not disclose credential metadata", () 
 test("tenant selection needs no review hint", () => {
   render(<NavigationJourney initialPath="/" />);
   expect(screen.queryByText("Select a tenant to open its workspace.")).not.toBeInTheDocument();
+});
+
+test("directory shows dated rows and hides unauthorized Setup links", () => {
+  render(<NavigationJourney persona="member" initialPath="/my-tenants" />);
+  expect(screen.getAllByText(/^Created /).length).toBeGreaterThan(0);
+  expect(screen.queryByRole("link", { name: /^Setup / })).not.toBeInTheDocument();
+});
+test("directory and dashboard use skeleton loading states", () => {
+  const view = render(<NavigationJourney initialPath="/tenants" state="loading" />);
+  expect(screen.getByRole("status", { name: "Loading tenants" })).toBeVisible();
+  view.unmount();
+  render(<NavigationJourney persona="single" state="loading" />);
+  expect(screen.getByRole("status", { name: "Loading dashboard" })).toBeVisible();
+});
+test("dashboard has no duplicate resource buttons or retry action", () => {
+  render(<NavigationJourney persona="single" state="unavailable" />);
+  expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  expect(screen.getAllByRole("link", { name: "Calls" })).toHaveLength(1);
 });

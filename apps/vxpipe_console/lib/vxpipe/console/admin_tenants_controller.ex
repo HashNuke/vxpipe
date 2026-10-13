@@ -31,7 +31,17 @@ defmodule Vxpipe.Console.AdminTenantsController do
              query: Map.get(params, "q", "")
            ) do
       json(conn, %{
-        tenants: Enum.map(tenant_page.tenants, &tenant_json/1),
+        tenants:
+          Enum.map(tenant_page.tenants, fn tenant ->
+            Map.put(
+              tenant_json(tenant),
+              :can_setup,
+              Vxpipe.Calls.UserAuthorization.authorize_tenant_service_write(
+                conn.assigns.user_principal,
+                tenant.key
+              ) == :ok
+            )
+          end),
         pagination: %{
           page: tenant_page.page,
           page_size: tenant_page.page_size,
