@@ -38,3 +38,20 @@
 - The shared picker now replaces the older dropdown in Directory stories; its
   chevron has the same 12px horizontal inset as its text. No extra picker-only
   padding workaround was necessary after consolidation.
+- Rendered review completed in headless Chrome: creation form desktop/mobile,
+  directory desktop/mobile and light theme, long names/keys without page overflow,
+  empty state, tenant skeletons, dashboard unavailable state, denied creation,
+  and creation-only role landing on identity-only dashboard. Browser closed after
+  the bounded pass. Storybook remains on port 6006.
+- Implementation checkpoints: `61b463ec` creation; `35d16368` shared directory,
+  permissions, states and Storybook consolidation. Final gate evidence follows.
+
+- Final evidence: root format, compile with warnings-as-errors, strict Credo and
+  unused-dependency checks pass. Full umbrella run: 3,782 tests, 132 excluded;
+  all applications except Console passed initially. Console's sole failure was
+  an old exact-response expectation lacking the newly added can_setup field.
+  Corrected that test only; root mix test --failed passes (1 test) and the full
+  Console suite passes (300 tests, 16 excluded). No runtime edits followed the
+  full umbrella run. Frontend remains 719/719 with TypeScript/lint/build green.
+- Milestone continuation and index are complete. No live provider lane was needed
+  for this tenant directory work; screenshots stayed outside the repository.

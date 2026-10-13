@@ -1,7 +1,7 @@
 # Console sidebar and dashboard
 
-Status: original implementation complete; tenant UI review continuation in progress. Production implementation, browser acceptance, independent
-review fixes and all required verification gates pass. User explicitly
+Status: implementation and tenant UI review continuation complete. Production
+implementation, rendered browser checks and required verification gates pass. User explicitly
 authorized the entire milestone on 2026-10-13 and will review the completed UI.
 No intermediate UI approval or commit is required.
 
@@ -217,7 +217,7 @@ statistics from incomplete or unauthorized data.
   obsolete setup overview/card and duplicate shortcuts; skeletons for tenants
   and dashboard/calls; correct picker chevron spacing; remove retry buttons from
   requested page errors.
-- [ ] Checkpoint J: rendered desktop/mobile/theme/permission checks; focused
+- [x] Checkpoint J: rendered desktop/mobile/theme/permission checks; focused
   and full frontend/backend gates; docs/index synchronized; final clean commit.
 
 Review: dependencies exist for authentication and scoped search; tenant creation adds a new API,
@@ -241,4 +241,24 @@ picker has symmetric 12px horizontal padding in the rendered directory.
 
 Focused endpoint tests pass (14), including creation-only identity and Setup
 membership caps. Frontend suite passes (719), TypeScript and ESLint pass, and
-Storybook builds. Final umbrella gate rerun remains in progress for checkpoint J.
+Storybook builds. Final gate resolution is recorded below.
+
+### Continuation acceptance evidence
+
+- 719 frontend tests; TypeScript and ESLint pass. Storybook static build passes.
+- Required root format, compile-with-warnings-as-errors, strict Credo and unused
+  dependency checks pass. Full umbrella test run exercised 3,782 tests (132
+  excluded); its only remaining failure was an older exact-response assertion
+  missing `can_setup`. Updated that assertion; root `mix test --failed` passes,
+  followed by all 300 Console tests passing (16 excluded). No runtime change
+  followed the full run. Other umbrella applications passed in that run.
+- Headless Chrome checked desktop/mobile creation and directories, light/dark
+  themes, long content without horizontal overflow, empty/loading/error states,
+  and denied/creation-only roles. Creation-only dashboard shows identity without
+  resource links or data. Storybook stays on port 6006.
+- No live provider requests or provider credentials were used. Storybook data
+  remains synthetic; production search and permission boundaries are covered by
+  frontend request and backend endpoint/persistence tests.
+- Checkpoints committed as `61b463ec` and `35d16368`; the final acceptance commit
+  carries the corrected API assertion and documentation. User review remains
+  distinct from these engineering checks.

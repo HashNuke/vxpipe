@@ -43,12 +43,14 @@ defmodule Vxpipe.Console.AdminTenantsEndpointTest do
                  "key" => "BBBBBBBBBBBBBBBB",
                  "name" => "Second",
                  "dashboard_path" => "/t/BBBBBBBBBBBBBBBB/dashboard",
+                 "can_setup" => true,
                  "created_at" => "2026-09-17T02:00:00Z"
                },
                %{
                  "key" => "AAAAAAAAAAAAAAAA",
                  "name" => "First",
                  "dashboard_path" => "/t/AAAAAAAAAAAAAAAA/dashboard",
+                 "can_setup" => true,
                  "created_at" => "2026-09-17T01:00:00Z"
                }
              ],

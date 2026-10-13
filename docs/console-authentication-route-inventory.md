@@ -10,7 +10,8 @@ controller and owning Calls/Persistence operation enforce it.
 | `/admin`, `/admin/*` React shell | Console | Active user session; individual JSON calls check resource actions |
 | `/admin/api/session` | Console and Identity | Active user session |
 | `/admin/api/users*`, `/admin/api/roles*` | Console and Identity | `users.read` for the directory, exact target-category write for user mutations, built-in actor for role writes |
-| `/admin/api/tenants` | Calls/Persistence | Explicit `tenants.read` or registered tenant operational grants; filter effective scope before count and pagination; unassigned roles receive an empty page |
+| `GET /admin/api/tenants` | Calls/Persistence | Explicit `tenants.read`, `tenants.write` or registered tenant operational grants; filter effective scope before count and pagination; unassigned operational roles receive an empty page |
+| `/tenants/new`, `POST /admin/api/tenants` | Console and Calls/Persistence | Installation `tenants.write`; create tenant identity without credentials or resource grants; redirect to its permission-aware dashboard |
 | `/admin/api/tenants/:key/calls*` | Calls/Persistence | `calls.read` on the resolved tenant; call details, inspection, transcripts and recordings inherit it |
 | `/admin/api/tenants/:key/call-specs*` | Calls/Persistence | `call_specs.read` for listing/show, `call_specs.write` for save/publish; platform references require the authoring modifier |
 | Tenant providers, service bindings, service directory, telephony application reads, phone numbers | Calls/Persistence | `tenant_services.read` on the resolved tenant |
