@@ -1,6 +1,6 @@
 # Console sidebar and dashboard
 
-Status: complete. Production implementation, browser acceptance, independent
+Status: original implementation complete; tenant UI review continuation in progress. Production implementation, browser acceptance, independent
 review fixes and all required verification gates pass. User explicitly
 authorized the entire milestone on 2026-10-13 and will review the completed UI.
 No intermediate UI approval or commit is required.
@@ -139,3 +139,90 @@ See the backend/integration labnote for barriers, fixes and full gate outcomes.
 Final umbrella repeat: 3,777 tests, zero failures, 132 excluded. The independent
 production reviewer returned `ship` for all three recorded fixes after the full
 review; no material issues remain. User UI review remains deferred as requested.
+
+
+## Tenant UI review continuation — 2026-10-13
+
+### Original change requests (verbatim)
+
+> I got change requests for you to complete.
+>
+> "Create a tenant through the trusted administration workflow, then return here"
+>
+> In http://localhost:6006/?path=/story/vxpipe-console-tenants-directory--empty
+> * Lol if the user has permissions to create tenants, then just let them create tenants. Add a button here to do just that if there are no tenants.
+> * And please make the message proper normal english instead of making it sound like a govt process.
+>
+> I dont think we have a page to create tenants. So we'll have to add that. Please respect the permissions of the user when allowing/disallowing the user to create tenants. If the user cannot create tenants do not even show them a link to the page to create tenants. After tenant creation redirect users to the tenant dashboard.
+>
+> For http://localhost:6006/?path=/story/vxpipe-console-tenants-my-tenants--my-tenants
+> * Why do we have buttons here for Calls, Call Specs and Services. The sidebar already has that right. Are they are better off being stats cards?
+> * Why is the mytenants list different from the design for the tenants page. They can be the same design. I like the design for my tenants page. I think the same design can go on the tenants list page. But one thing. The my tenants page tenants list view needs the tenant created date. So I would add a relative date (time ago) like "Created 5y ago" on something like that next to the tenant key.
+> * B/w my tenants has a search box. The tenants page has no search box so I would add that one there. I hope the search is a backend search.
+> * Also hope the tenants dropdown search in the sidebar is a backend search and not a local search.
+>
+> We have few pages that have different variables of no-tenants scenario. Which one do we use? Consolidate?
+> * http://localhost:6006/?path=/story/vxpipe-console-tenants-directory--empty
+> * http://localhost:6006/?path=/story/vxpipe-console-tenants-my-tenants--no-tenant-access
+> * This is error scenario - required to mention that retry after storage s available? seems useless.  http://localhost:6006/?path=/story/vxpipe-console-tenants-directory--unavailable
+>
+> For http://localhost:6006/?path=/story/vxpipe-console-tenants-dashboard--unavailable-dashboard
+> * Why do we have a "try again button"? The user can refresh the page. Our app doesnt have to take on browser responsibilies.
+>
+> Having tenants pages is confusing because some of them have the setup or setup services links (I dont know why we have both) in the table rows. And then we also have some setup card being shown (which now I dont think it's required since we send the user to the services setup page after tenant creation AND also display a "Setup" link in the tenants page row for that tenant - if we consolidate the views).
+>
+> For http://localhost:6006/?path=/story/vxpipe-console-tenants-directory--empty
+> * Why is the dropdown arrow alligned weirdly on the right edge of the dropdown? while the left side of the dropdown and the top and bottom have sufficient padding for the content.
+> For http://localhost:6006/?path=/story/vxpipe-console-tenants-dashboard--loading-dashboard
+> * Loading calls again... use a skeleton loader please
+>
+> For http://localhost:6006/?path=/story/vxpipe-console-tenants-setup-overview--demo-nudge
+> * I'm confused about this page. Because we have the tenants directory - http://localhost:6006/?path=/story/vxpipe-console-tenants-directory--populated which lists tenants. I dont know how the other view http://localhost:6006/?path=/story/vxpipe-console-tenants-setup-overview--demo-nudge will be used and when.
+>
+> And these two views conflict too:
+> http://localhost:6006/?path=/story/vxpipe-console-tenants-directory--all-tenant-login
+> http://localhost:6006/?path=/story/vxpipe-console-tenants-directory--populated
+>
+> For "The tenant could not be created. Your name is kept here; try again." tenant creation error. WTF is that error. "Your name is kept here; try again" is such a bad error message. "your name is kept here" ROFL.
+>
+> The stuff here is going to be a lot of change requests. So please add these tasks to a recent milestone doc as is and then turn these into a checklist of tasks to complete. Then implement the changes. Git commit changes frequently as you make progress.
+>
+>
+> For http://localhost:6006/?path=/story/vxpipe-console-tenants-my-tenants--loading-tenants
+> * The loading tenants loader can be a skeleton loader please? It's too plain now.
+
+### Design review and execution order
+
+The original milestone used both a legacy table/overview and the new navigation
+workspace list in Storybook. Consolidate on the workspace list and reuse its
+presentation in production and stories. Preserve distinct no-access, empty,
+search-empty and unavailable states inside that one surface. Existing backend
+scoped tenant search serves the directory and sidebar picker; verify its request
+and storage contracts rather than replacing it with local filtering.
+
+Creation uses the existing authorized tenant-create API through a dedicated
+`/tenants/new` form. Hide links without `tenants.write`, guard direct route access,
+and retain backend enforcement. The explicit post-create request takes precedence
+over the later reference to service setup: redirect to the tenant dashboard.
+Use one permission-aware Setup link to Services; remove redundant setup cards and
+legacy overview stories. Dashboard shortcut buttons are removed; do not invent
+statistics from incomplete or unauthorized data.
+
+- [ ] Checkpoint G: authorized creation page, direct-route/API permission tests,
+  dashboard redirect, normal creation/error/empty copy.
+- [ ] Checkpoint H: one tenant list design for Tenants/My tenants/legacy entry
+  points; relative created date beside key; permission-aware Setup link; backend
+  search and pagination in both lists and the picker verified.
+- [ ] Checkpoint I: consolidate empty/error states and Storybook variants; remove
+  obsolete setup overview/card and duplicate shortcuts; skeletons for tenants
+  and dashboard/calls; correct picker chevron spacing; remove retry buttons from
+  requested page errors.
+- [ ] Checkpoint J: rendered desktop/mobile/theme/permission checks; focused
+  and full frontend/backend gates; docs/index synchronized; final clean commit.
+
+Review: dependencies exist for authentication, scoped search, tenant creation,
+and canonical dashboard routing. Creation-only custom roles require explicit
+consideration so a successful create does not redirect to an inaccessible tenant.
+List Setup links must use effective service-write capability, not directory
+visibility. Relative dates use real created timestamps; full dates remain
+available. Stories simulate APIs, while production must issue server queries.
