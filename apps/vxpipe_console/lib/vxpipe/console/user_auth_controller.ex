@@ -94,10 +94,13 @@ defmodule Vxpipe.Console.UserAuthController do
   end
 
   defp started(conn, token) do
+    return_path = get_session(conn, "vxpipe_return_path")
+
     conn
     |> clear_session()
     |> configure_session(renew: true)
     |> UserSession.put(token)
+    |> put_session("vxpipe_return_path", return_path)
     |> json(%{ok: true})
   end
 

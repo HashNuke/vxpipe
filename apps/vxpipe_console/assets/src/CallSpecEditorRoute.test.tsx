@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { App } from "./App";
+import { App } from "./test/ResourceApp";
 import { modelCatalogFixture } from "./admin/modelCatalogFixtures";
 import type { CatalogCapability } from "./admin/modelCatalog";
 import { newCallSpec } from "./admin/callSpecEditor/seed";
@@ -26,7 +26,7 @@ function transport() {
     }
     if (init?.method === "POST" || init?.method === "PUT") return reply({ call_spec: stored }, 201);
     if (url.pathname.endsWith("/1c94f0f7-05d5-4919-a7d5-01d7250e4caf")) return reply({ call_spec: stored });
-    if (url.pathname.endsWith("/call-specs")) return reply({ tenant: { key: "demo", name: "Demo" }, call_specs: [], pagination: { page: 1, page_size: 25, total: 0, total_pages: 0 } });
+    if (url.pathname.endsWith("/call-specs")) return reply({ tenant: { key: "AAAAAAAAAAAAAAAA", name: "Demo" }, call_specs: [], pagination: { page: 1, page_size: 25, total: 0, total_pages: 0 } });
     return reply({}, 404);
   });
 }
@@ -49,7 +49,7 @@ const writeInitialPrompt = () => {
 };
 
 test("new route creates a spec, replaces its URL without losing edits, and publishes saved identity", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/new");
   const fetch = transport(); render(<App csrfToken="csrf" fetchImpl={fetch} />);
   await createIncoming();
   await screen.findByRole("button", { name: "Edit call spec name" }); rename("New draft");
@@ -61,15 +61,15 @@ test("new route creates a spec, replaces its URL without losing edits, and publi
   await screen.findByText("Saved as revision 2");
   const submitted = fetch.mock.calls.find(([, init]) => init?.method === "POST");
   expect(Object.keys(JSON.parse(String(submitted?.[1]?.body)))).toEqual(["source"]);
-  await waitFor(() => expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf"));
+  await waitFor(() => expect(window.location.pathname).toBe("/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf"));
   expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("New draft");
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
   await screen.findByText("Published revision 2");
-  expect(fetch).toHaveBeenCalledWith("/admin/api/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf/revisions/2/publish", expect.objectContaining({ body: "{}" }));
+  expect(fetch).toHaveBeenCalledWith("/admin/api/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf/revisions/2/publish", expect.objectContaining({ body: "{}" }));
 });
 
 test("session expiry keeps the source and disables writes without navigating away", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   const fetch = transport(); const expired = vi.fn(); render(<App csrfToken="csrf" fetchImpl={fetch} onSessionExpired={expired} />);
   await screen.findByRole("button", { name: "Edit call spec name" }); rename("Keep this draft");
   fetch.mockImplementation(() => reply({}, 401));
@@ -83,8 +83,8 @@ test("session expiry keeps the source and disables writes without navigating awa
 });
 
 test("browser back and editor Back use a single discard confirmation", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs");
-  window.history.pushState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
+  window.history.replaceState({}, "", "/t/AAAAAAAAAAAAAAAA/call-specs");
+  window.history.pushState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   render(<App csrfToken="csrf" fetchImpl={transport()} />);
   await screen.findByRole("button", { name: "Edit call spec name" }); rename("Unsaved");
   fireEvent.click(screen.getByRole("link", { name: "Back to call specs" }));
@@ -97,7 +97,7 @@ test("browser back and editor Back use a single discard confirmation", async () 
 });
 
 test("explicit revisions are read-only and can open the latest editable revision", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf?revision=1");
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf?revision=1");
   render(<App csrfToken="csrf" fetchImpl={transport()} />);
   await screen.findByText(/Viewing revision/);
   fireEvent.keyDown(screen.getByRole("button", { name: "More actions" }), { key: "ArrowDown" });
@@ -109,7 +109,7 @@ test("explicit revisions are read-only and can open the latest editable revision
 });
 
 test("failed initial reads show Retry and unmount aborts requests", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   const fetch = transport(); const good = fetch.getMockImplementation()!;
   fetch.mockImplementation((input, init) => String(input).endsWith("/1c94f0f7-05d5-4919-a7d5-01d7250e4caf") ? reply({}, 503) : good(input, init));
   const view = render(<App csrfToken="csrf" fetchImpl={fetch} />);
@@ -121,7 +121,7 @@ test("failed initial reads show Retry and unmount aborts requests", async () => 
 });
 
 test("browser history back restores the editor until discard is confirmed", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs");
+  window.history.replaceState({}, "", "/t/AAAAAAAAAAAAAAAA/call-specs");
   render(<App csrfToken="csrf" fetchImpl={transport()} />);
   fireEvent.click(await screen.findByRole("link", { name: "New call spec" }));
   await createIncoming();
@@ -130,7 +130,7 @@ test("browser history back restores the editor until discard is confirmed", asyn
   await screen.findByRole("alertdialog");
   fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
   expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Unsaved history");
-  await waitFor(() => { expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(); expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/new"); });
+  await waitFor(() => { expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(); expect(window.location.pathname).toBe("/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/new"); });
   act(() => window.history.back());
   await screen.findByRole("alertdialog");
   fireEvent.click(screen.getByRole("button", { name: "Leave page" }));
@@ -138,7 +138,7 @@ test("browser history back restores the editor until discard is confirmed", asyn
 });
 
 test("URL replacement after creation preserves changes made during the request", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/new");
   const fetch = transport(); const good = fetch.getMockImplementation()!;
   let complete!: (response: Response) => void;
   fetch.mockImplementation((input, init) => init?.method === "POST" ? new Promise((resolve) => { complete = resolve; }) : good(input, init));
@@ -152,19 +152,19 @@ test("URL replacement after creation preserves changes made during the request",
   fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), { target: { value: "Newer prompt" } });
   await act(async () => complete(await reply({ call_spec: stored }, 201)));
   expect(await screen.findByText("Saved as revision 2")).toBeVisible();
-  expect(window.location.pathname).toBe("/admin/tenants/demo/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
+  expect(window.location.pathname).toBe("/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveValue("Newer prompt");
   expect(screen.getByText("Unsaved changes")).toBeVisible();
   expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
 });
 
 test("the list opens a saved spec by its server-generated public UUID", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs");
+  window.history.replaceState({}, "", "/t/AAAAAAAAAAAAAAAA/call-specs");
   const fetch = transport(); const good = fetch.getMockImplementation()!;
   fetch.mockImplementation((input, init) => {
     const path = new URL(String(input), "https://console.test").pathname;
     if (path.endsWith("/call-specs")) return reply({
-      tenant: { key: "demo", name: "Demo" },
+      tenant: { key: "AAAAAAAAAAAAAAAA", name: "Demo" },
       call_specs: [{ id: stored.call_spec_id, name: "Existing API-authored spec", latest_revision: 2,
         published_revision: 1, call_count: 0, updated_at: "2026-10-08T00:00:00Z" }],
       pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 },
@@ -180,7 +180,7 @@ test("the list opens a saved spec by its server-generated public UUID", async ()
 
 
 test("new specs ask for direction before showing the editor", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/new");
   const fetch = transport(); render(<App csrfToken="csrf" fetchImpl={fetch} />);
   expect(await screen.findByRole("heading", { name: "New call spec" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "More actions" })).not.toBeInTheDocument();
@@ -192,7 +192,7 @@ test("new specs ask for direction before showing the editor", async () => {
 });
 
 test("outgoing creation requires a phone service and saves the chosen direction", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/new");
   const fetch = transport(); const good = fetch.getMockImplementation()!;
   fetch.mockImplementation((input, init) => String(input).endsWith("/call-spec-editor-lookups")
     ? reply({ credential_names: {}, telephony_services: [{ key: "office", name: "Office phone" }], mcp_integrations: [] }) : good(input, init));
@@ -212,11 +212,11 @@ test("outgoing creation requires a phone service and saves the chosen direction"
 });
 
 test("outgoing creation explains missing phone services and can be cancelled", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/demo/call-specs/new");
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/new");
   render(<App csrfToken="csrf" fetchImpl={transport()} />);
   fireEvent.click(await screen.findByRole("radio", { name: /Outgoing call/ }));
   expect(screen.getByRole("button", { name: "Create call spec" })).toBeDisabled();
-  expect(screen.getByRole("link", { name: "Configure a phone service" })).toHaveAttribute("href", "/admin/tenants/demo/services");
+  expect(screen.getByRole("link", { name: "Configure a phone service" })).toHaveAttribute("href", "/admin/tenants/AAAAAAAAAAAAAAAA/services");
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(await screen.findByText("No call specs yet")).toBeVisible();
 });

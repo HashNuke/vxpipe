@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
-    "css:build": "tailwindcss -i src/admin/admin.css -o ../priv/static/assets/admin.css",
-    "css:watch": "tailwindcss -i src/admin/admin.css -o ../priv/static/assets/admin.css --watch",
+    "css:build": "tailwindcss -i src/admin/admin.css -o ../priv/static/assets/admin-ui.css",
+    "css:watch": "tailwindcss -i src/admin/admin.css -o ../priv/static/assets/admin-ui.css --watch",
     "lint": "eslint .",
     "test": "vitest run"
   },

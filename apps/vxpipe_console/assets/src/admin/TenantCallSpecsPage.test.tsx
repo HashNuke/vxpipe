@@ -56,7 +56,7 @@ test("keeps tenant context and real call spec links visible", () => {
     />,
   );
 
-  expect(screen.getByRole("heading", { name: "Call specs" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Call Specs" })).toBeVisible();
   expect(screen.getByRole("columnheader", { name: "Name" })).toBeVisible();
   expect(screen.getByRole("columnheader", { name: "Version" })).toBeVisible();
   expect(screen.getByRole("columnheader", { name: "Calls" })).toBeVisible();
@@ -67,7 +67,7 @@ test("keeps tenant context and real call spec links visible", () => {
     "/admin",
   );
   expect(screen.getByText("Demo workspace")).toBeVisible();
-  expect(screen.getByRole("link", { name: "Call specs" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "Call Specs" })).toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -81,7 +81,7 @@ test("keeps tenant context and real call spec links visible", () => {
   });
   expect(callSpecCalls).toHaveAttribute(
     "href",
-    "/admin/tenants/tn_demo_01/calls?call_spec_id=delivery-rescheduling",
+    "/t/tn_demo_01/calls?call_spec_id=delivery-rescheduling",
   );
 
   fireEvent.click(callSpecCalls);
@@ -201,5 +201,5 @@ test("offers new and edit links while preserving the separate calls link", () =>
   const edit = screen.getByRole("link", { name: "Delivery rescheduling" });
   expect(edit).toHaveAttribute("href", "/admin/tenants/tn_demo_01/call-specs/delivery-rescheduling");
   fireEvent.click(edit); expect(navigate).toHaveBeenCalledWith("delivery-rescheduling");
-  expect(screen.getByRole("link", { name: "View 5 calls for Delivery rescheduling" })).toHaveAttribute("href", "/admin/tenants/tn_demo_01/calls?call_spec_id=delivery-rescheduling");
+  expect(screen.getByRole("link", { name: "View 5 calls for Delivery rescheduling" })).toHaveAttribute("href", "/t/tn_demo_01/calls?call_spec_id=delivery-rescheduling");
 });

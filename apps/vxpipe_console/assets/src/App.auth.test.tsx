@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, test, vi, type Mock } from "vitest";
 
-import { App } from "./App";
+import { App } from "./test/ResourceApp";
 
 afterEach(() => {
   cleanup();
@@ -110,7 +110,7 @@ function sessionFetch(role = superadminRole, user = owner) {
 }
 
 test("account route saves email with current-password confirmation and CSRF", async () => {
-  window.history.replaceState({}, "", "/admin/account");
+  window.history.replaceState({}, "", "/account");
   const fetchImpl = sessionFetch();
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
@@ -145,7 +145,7 @@ test("account route saves email with current-password confirmation and CSRF", as
 });
 
 test("account password changes explain the revoked session and redirect to sign in", async () => {
-  window.history.replaceState({}, "", "/admin/account");
+  window.history.replaceState({}, "", "/account");
   const fetchImpl = sessionFetch();
   fetchImpl.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
@@ -186,7 +186,7 @@ test("account password changes explain the revoked session and redirect to sign 
 });
 
 test("stale access sessions expire to the login page", async () => {
-  window.history.replaceState({}, "", "/admin/account");
+  window.history.replaceState({}, "", "/account");
   const expired = vi.fn();
   render(
     <App
@@ -199,7 +199,7 @@ test("stale access sessions expire to the login page", async () => {
 });
 
 test("user creation sends password confirmation, role and tenant mapping", async () => {
-  window.history.replaceState({}, "", "/admin/users/new");
+  window.history.replaceState({}, "", "/users/new");
   const fetchImpl = sessionFetch();
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
@@ -242,12 +242,12 @@ test("user creation sends password confirmation, role and tenant mapping", async
   fireEvent.click(screen.getByRole("button", { name: "Create user" }));
 
   await waitFor(() =>
-    expect(window.location.pathname).toBe("/admin/users/user-9"),
+    expect(window.location.pathname).toBe("/users/user-9"),
   );
 });
 
 test("an Admin sees privileged user details read-only with a working back link", async () => {
-  window.history.replaceState({}, "", "/admin/users/user-1");
+  window.history.replaceState({}, "", "/users/user-1");
   const fetchImpl = sessionFetch(adminRole, {
     ...owner,
     id: "user-3",
@@ -274,12 +274,12 @@ test("an Admin sees privileged user details read-only with a working back link",
   expect(screen.queryByRole("link", { name: "Reset password" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Back to users" })).toHaveAttribute(
     "href",
-    "/admin/users",
+    "/users",
   );
 });
 
 test("superadmin edits save through PATCH and the reset route posts a replacement", async () => {
-  window.history.replaceState({}, "", "/admin/users/user-2");
+  window.history.replaceState({}, "", "/users/user-2");
   const fetchImpl = sessionFetch();
   fetchImpl.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
@@ -302,7 +302,7 @@ test("superadmin edits save through PATCH and the reset route posts a replacemen
   expect(await screen.findByRole("heading", { name: "User details" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Reset password" })).toHaveAttribute(
     "href",
-    "/admin/users/user-2/reset-password",
+    "/users/user-2/reset-password",
   );
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   await waitFor(() =>
@@ -314,7 +314,7 @@ test("superadmin edits save through PATCH and the reset route posts a replacemen
 
   view.unmount();
   cleanup();
-  window.history.replaceState({}, "", "/admin/users/user-2/reset-password");
+  window.history.replaceState({}, "", "/users/user-2/reset-password");
   const resetFetch = fetchImpl;
   render(<App csrfToken="csrf-token" fetchImpl={resetFetch} />);
   expect(await screen.findByRole("heading", { name: "Reset password" })).toBeVisible();
@@ -345,7 +345,7 @@ test("superadmin edits save through PATCH and the reset route posts a replacemen
   );
 });
 
-test("roles list links to details and creation navigates to the new role", async () => {  window.history.replaceState({}, "", "/admin/roles");
+test("roles list links to details and creation navigates to the new role", async () => {  window.history.replaceState({}, "", "/roles");
   const fetchImpl = sessionFetch();
   fetchImpl.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
@@ -373,20 +373,20 @@ test("roles list links to details and creation navigates to the new role", async
   expect(await screen.findByText(/Define what people can do/)).toBeVisible();
   expect(screen.getByRole("link", { name: /Tenant Member/ })).toHaveAttribute(
     "href",
-    "/admin/roles/role-member",
+    "/roles/role-member",
   );
   fireEvent.click(screen.getByRole("button", { name: "Create role" }));
   expect(await screen.findByRole("heading", { name: "Create role" })).toBeVisible();
   fireEvent.change(screen.getByLabelText("Role name"), { target: { value: "Support" } });
   fireEvent.click(screen.getByRole("button", { name: "Create role" }));
   await waitFor(() =>
-    expect(window.location.pathname).toBe("/admin/roles/role-new"),
+    expect(window.location.pathname).toBe("/roles/role-new"),
   );
   cleanup();
 });
 
 test("roles list shows authoritative affected-user counts without paging the directory", async () => {
-  window.history.replaceState({}, "", "/admin/roles");
+  window.history.replaceState({}, "", "/roles");
   const requestedUsers = vi.fn();
   const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
@@ -411,7 +411,7 @@ test("roles list shows authoritative affected-user counts without paging the dir
 });
 
 test("role updates send the server revision and stale edits ask for a reload", async () => {
-  window.history.replaceState({}, "", "/admin/roles/role-member");
+  window.history.replaceState({}, "", "/roles/role-member");
   const detailFetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role: superadminRole });
@@ -433,7 +433,7 @@ test("role updates send the server revision and stale edits ask for a reload", a
 });
 
 test("role deletion confirms before sending DELETE and returns to the list", async () => {
-  window.history.replaceState({}, "", "/admin/roles/role-member");
+  window.history.replaceState({}, "", "/roles/role-member");
   const detailFetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role: superadminRole });
@@ -453,11 +453,11 @@ test("role deletion confirms before sending DELETE and returns to the list", asy
       expect.objectContaining({ method: "DELETE" }),
     ),
   );
-  await waitFor(() => expect(window.location.pathname).toBe("/admin/roles"));
+  await waitFor(() => expect(window.location.pathname).toBe("/roles"));
 });
 
 test("sign out posts to the logout endpoint with CSRF before leaving", async () => {
-  window.history.replaceState({}, "", "/admin/users");
+  window.history.replaceState({}, "", "/users");
   const fetchImpl = sessionFetch();
   const originalLocation = window.location;
   const assign = vi.fn();
@@ -469,7 +469,7 @@ test("sign out posts to the logout endpoint with CSRF before leaving", async () 
     render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
     expect(await screen.findByText(/Manage who can access/)).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Logout" }));
     await waitFor(() =>
       expect(fetchImpl).toHaveBeenCalledWith(
         "/auth/logout",
@@ -486,7 +486,7 @@ test("sign out posts to the logout endpoint with CSRF before leaving", async () 
 });
 
 test("failed sign-out keeps the user on the page and explains the failure", async () => {
-  window.history.replaceState({}, "", "/admin/users");
+  window.history.replaceState({}, "", "/users");
   const ordinaryFetch = sessionFetch();
   const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
     String(input) === "/auth/logout"
@@ -502,8 +502,8 @@ test("failed sign-out keeps the user on the page and explains the failure", asyn
   try {
     render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
     expect(await screen.findByText(/Manage who can access/)).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/Sign-out could not finish/);
+    fireEvent.click(screen.getByRole("button", { name: "Logout" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Logout failed/);
     expect(assign).not.toHaveBeenCalled();
   } finally {
     Object.defineProperty(window, "location", { value: originalLocation, configurable: true });
@@ -511,7 +511,7 @@ test("failed sign-out keeps the user on the page and explains the failure", asyn
 });
 
 test("users.read-only viewers keep directory filters through the role-options endpoint", async () => {
-  window.history.replaceState({}, "", "/admin/users");
+  window.history.replaceState({}, "", "/users");
   const readerRole = {
     id: "role-reader",
     name: "Custom directory access",
@@ -543,16 +543,14 @@ test("users.read-only viewers keep directory filters through the role-options en
   expect(await screen.findByRole("table", { name: "Users" })).toBeVisible();
   expect(document.querySelector("a.access-user-link")).toHaveAttribute(
     "href",
-    "/admin/users/user-7",
+    "/users/user-7",
   );
-  expect(document.querySelector('a[href="/admin/account"]')).toHaveTextContent(
-    "reader@example.test",
-  );
+  expect(screen.getAllByText("reader@example.test")[0]).toBeVisible();
   expect(screen.queryByRole("button", { name: "Create user" })).not.toBeInTheDocument();
 });
 
 test("unknown role filters keep the URL and explain the empty directory", async () => {
-  window.history.replaceState({}, "", "/admin/users?role=no-such-role");
+  window.history.replaceState({}, "", "/users?role=no-such-role");
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role: superadminRole });
@@ -565,7 +563,7 @@ test("unknown role filters keep the URL and explain the empty directory", async 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
   expect(await screen.findByText("Unknown role filter")).toBeVisible();
-  expect(window.location.pathname + window.location.search).toBe("/admin/users?role=no-such-role");
+  expect(window.location.pathname + window.location.search).toBe("/users?role=no-such-role");
 });
 
 const readMemberRole = {
@@ -604,16 +602,16 @@ test("read-only members get a capability-derived workspace without creation cont
   expect(screen.queryByRole("link", { name: "New call spec" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Calls" })).toHaveAttribute(
     "href",
-    "/admin/tenants/acme_demo_000001/calls",
+    "/t/acme_demo_000001/calls",
   );
   expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Account" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "My account" })).toHaveAttribute(
     "href",
-    "/admin/account",
+    "/account",
   );
   expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Roles" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("link", { name: "Platform services" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
   cleanup();
 });
 
@@ -632,12 +630,12 @@ test("zero-assignment members stay on the directory instead of forbidden onboard
   });
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByText("No tenants yet")).toBeVisible();
-  expect(window.location.pathname).toBe("/admin");
+  expect(await screen.findByText("No tenants available")).toBeVisible();
+  expect(window.location.pathname).toBe("/my-tenants");
   cleanup();
 });
 
-test("operational header exposes account links matching authority", async () => {
+test("sidebar exposes account and platform links matching authority", async () => {
   window.history.replaceState({}, "", "/admin");
   const adminUser = { ...owner, id: "user-3", email: "admin@example.test", roleId: "role-admin" };
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
@@ -649,12 +647,12 @@ test("operational header exposes account links matching authority", async () => 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
   expect(await screen.findByRole("heading", { name: "Tenants" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "Account" })).toHaveAttribute("href", "/admin/account");
-  expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("href", "/admin/users");
-  expect(screen.getByRole("link", { name: "Roles" })).toHaveAttribute("href", "/admin/roles");
-  expect(screen.getByRole("link", { name: "Platform services" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "My account" })).toHaveAttribute("href", "/account");
+  expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("href", "/users");
+  expect(screen.getByRole("link", { name: "Roles" })).toHaveAttribute("href", "/roles");
+  expect(screen.getByRole("link", { name: "Services" })).toHaveAttribute(
     "href",
-    "/admin/platform/services",
+    "/platform/services",
   );
   cleanup();
 });

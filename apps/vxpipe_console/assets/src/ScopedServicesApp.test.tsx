@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { App } from "./App";
+import { App } from "./test/ResourceApp";
 
 afterEach(() => {
   cleanup();
@@ -97,7 +97,7 @@ test("Setup picker offers installed services with only working capability badges
     model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities,
   }));
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
-  await screen.findByRole("heading", { name: "Platform services" });
+  await screen.findByRole("heading", { name: "Platform Services" });
 
   fireEvent.click(screen.getAllByRole("button", { name: "Connect a service" })[0]);
   const picker = screen.getByRole("combobox", { name: "Service" });
@@ -150,7 +150,7 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
     },
   );
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
-  await screen.findByRole("heading", { name: "Platform services" });
+  await screen.findByRole("heading", { name: "Platform Services" });
   fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
   fireEvent.change(screen.getByLabelText("Service"), {
     target: { value: "telnyx" },
@@ -216,7 +216,7 @@ test("platform services test and save separately, then edit the exact persisted 
   );
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   expect(
-    await screen.findByRole("heading", { name: "Platform services" }),
+    await screen.findByRole("heading", { name: "Platform Services" }),
   ).toBeInTheDocument();
   fireEvent.click(
     screen.getAllByRole("button", { name: "Connect a service" })[0],
@@ -328,7 +328,7 @@ test("platform save failure appears in a page notification while the form stays 
   );
 
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
-  await screen.findByRole("heading", { name: "Platform services" });
+  await screen.findByRole("heading", { name: "Platform Services" });
   fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
   fireEvent.change(screen.getByLabelText("Service"), { target: { value: "rime" } });
   fireEvent.change(screen.getByLabelText("API key"), { target: { value: "synthetic-rime" } });
@@ -365,7 +365,7 @@ test("keeps Save usable when a platform credential cannot be tested", async () =
   );
 
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
-  await screen.findByRole("heading", { name: "Platform services" });
+  await screen.findByRole("heading", { name: "Platform Services" });
   fireEvent.click(
     screen.getAllByRole("button", { name: "Connect a service" })[0],
   );

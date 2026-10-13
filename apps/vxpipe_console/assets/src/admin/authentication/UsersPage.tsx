@@ -59,12 +59,12 @@ export function UsersPage({
   return (
     <main className="access-page">
       <div className="access-page-heading">
-        <p className="access-lead">Manage who can access your installation and its tenants.</p>
+        <div><h1>Users</h1><p className="access-lead">Manage who can access your installation and its tenants.</p></div>
         {actorRole.kind ? (
           <Button
             className="access-primary"
             type="button"
-            onClick={() => onNavigate("/admin/users/new")}
+            onClick={() => onNavigate("/users/new")}
           >
             <Plus size={16} aria-hidden />
             Create user
@@ -145,10 +145,10 @@ export function UsersPage({
                   <TableCell>
                     <a
                       className="access-user-link"
-                      href={`/admin/users/${user.id}`}
+                      href={`/users/${user.id}`}
                       onClick={(event) => {
                         event.preventDefault();
-                        onNavigate(`/admin/users/${user.id}`);
+                        onNavigate(`/users/${user.id}`);
                       }}
                     >
                       {user.email}

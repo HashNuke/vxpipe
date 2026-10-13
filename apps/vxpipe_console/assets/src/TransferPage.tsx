@@ -177,8 +177,8 @@ export default function TransferPage() {
     <main className="transfer-page">
       <div className="transfer-shell">
         <header className="transfer-header">
-          <a href="/admin/samples/pipecat-console" aria-label="Vxpipe caller sample">VX</a>
-          <p>Human transfer desk</p>
+          <h1>Human transfer desk</h1>
+          <a href="/admin/samples/pipecat-console">Voice console</a>
         </header>
 
         <section className={`transfer-status transfer-status--${interrupted ? "closed" : phase}`} aria-label="Transfer status">
@@ -194,7 +194,7 @@ export default function TransferPage() {
         <div className="transfer-workbench">
           <section className="transfer-panel" aria-labelledby="transfer-title">
             <div>
-              <h1 id="transfer-title">Take the handoff.</h1>
+              <h2 id="transfer-title">Take the handoff.</h2>
               <p>
                 In the caller console, ask the agent for human support. Then connect this desk to
                 hear the private briefing before you accept.

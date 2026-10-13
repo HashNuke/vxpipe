@@ -7,7 +7,7 @@ wrapper as its development watcher and uses LiveReload for browser refreshes;
 `mix assets.deploy` writes the minified release bundle to the Console application's
 ignored `priv/static/assets` directory. Phoenix serves the UI and mounted gateway
 from one listener. The caller playground is mounted at `/admin/samples/pipecat-console` and requires an
-installation-operator session.
+named-user session with sample setup access.
 
 The esbuild profile has independent named entries for the React sample, the shared LiveView client,
 call-inspection styles, and diagnostics styles. Operator assets are served by the same Phoenix
@@ -161,3 +161,12 @@ its esbuild watcher and is the only web server, listening with a Tailscale certi
 on HTTPS port 4000. It serves the assets and invokes the mounted gateway on that same
 origin. The machine FQDN and Tailscale address are discovered automatically.
 Run `bin/dev --http` to omit TLS for local troubleshooting.
+
+The Console shell uses one React navigation component for administrative pages and
+sample launchers. Diagnostics mounts the same component as an independent island;
+LiveView retains ownership of the live panel DOM. Navigation/search data is always
+loaded through the authenticated, scoped Console APIs.
+
+Tailwind writes `admin-ui.css`; esbuild owns `admin.css` and its other entry CSS.
+Keep these outputs separate: independent development watchers must never overwrite
+one another. Administrative documents load the Tailwind sheet after bundled styles.

@@ -151,6 +151,10 @@ export function parseCallSpecPage(value: unknown): CallSpecDirectoryPage {
   };
 }
 
+export function parseCallDirectoryItem(value: unknown): CallDirectoryItem {
+  return parseCall(value);
+}
+
 export function parseCallPage(value: unknown): CallDirectoryPage {
   if (
     !isRecord(value) ||

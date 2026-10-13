@@ -20,7 +20,7 @@ defmodule Vxpipe.Console.AdminCallsController do
         call_specs: Enum.map(call_page.call_specs, &call_spec_json/1),
         call_specs_truncated: call_page.call_specs_truncated,
         selected_call_spec_id: call_page.selected_call_spec_id,
-        calls: Enum.map(call_page.calls, &call_json/1),
+        calls: Enum.map(call_page.calls, &Vxpipe.Console.CallDirectoryPayload.call/1),
         pagination: %{
           page: call_page.page,
           page_size: call_page.page_size,
@@ -57,18 +57,4 @@ defmodule Vxpipe.Console.AdminCallsController do
   end
 
   defp call_spec_json(call_spec), do: %{id: call_spec.id, name: call_spec.name}
-
-  defp call_json(call) do
-    %{
-      id: call.id,
-      call_spec_id: call.call_spec_id,
-      call_spec_name: call.call_spec_name,
-      call_spec_revision: call.call_spec_revision,
-      state: directory_state(call.state),
-      created_at: DateTime.to_iso8601(call.created_at)
-    }
-  end
-
-  defp directory_state(state) when state in [:prepared, :admitting, :running], do: "ongoing"
-  defp directory_state(state) when state in [:ended, :failed], do: "ended"
 end

@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 45 milestone specifications: 34 complete and 11 incomplete. Milestone 17, Telnyx calls and
+Status: 46 milestone specifications: 35 complete and 11 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -174,8 +174,9 @@ progress without claiming the entire milestone is complete.
 41. [x] [Call spec editor](call-spec-editor.md) — Complete 2026-10-08. The operator Console creates, edits, saves and publishes portable call specs with participant/transfer canvas, field validation, provider/model/voice listings, safe tenant lookups, immutable revisions and unsaved-change recovery. Production desktop/phone acceptance and all three example digest round-trips pass; a published editor route starts a local call with a synthetic credential and no provider generation request. All five root gates pass (3,458 tests, zero failures, 120 excluded, seed 991936), as do 503 frontend tests, TypeScript, lint and the production asset build. The user explicitly deferred UI review and authorized completion. No live tests ran.
 42. [x] [Transcript start and optional VAD](transcript-start-and-optional-vad.md) — Default human STT speech start to the first nonempty transcript, with optional local VAD across STT models and automatic Scribe VAD commits. Common onset/API composition and bounded Scribe inferred endpoint implemented. API preparation, PCM/usage and interruption/replacement checks pass, as do root/Lean and live Scribe repeated/long-turn and bounded background-noise cases. WebRTC verifies interruption during actual agent playout in both onset modes. Fresh-VM restart compatibility passes. Complete under the user-clarified first-partial speech-start criterion. Configured-room recognition accuracy and human listening remain documented follow-ups. Telephony is outside this milestone’s acceptance scope.
 43. [x] [Console authentication and user management](console-authentication-and-user-management.md) — First-Superadmin setup, revocable sessions, protected Superadmin/Admin roles, configurable ordinary roles, tenant-scoped operations and user/role Console pages are implemented with independent review. Engineering acceptance passed, including migration/restart/cross-BEAM checks and real Console browser flows; user UI review remains deferred by request.
-44. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-45. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+44. [x] [Console sidebar and dashboard](console-sidebar-and-dashboard.md) — Shared permission-aware navigation, scoped tenant search, canonical landing and dashboard; production/browser review and all verification gates pass.
+45. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+46. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 The worktree setup milestone is an enabling developer-tooling slice after the
 existing live-runner fixes and before delivery. Its prerequisites are already

@@ -546,6 +546,35 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
              AdminStore.list_call_specs(Repo, "BBBBBBBBBBBBBBBB", 25, 0)
   end
 
+  test "recent calls are bounded and scoped with stable ties and no call-spec catalog" do
+    tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Dashboard")
+    other = insert_tenant("BBBBBBBBBBBBBBBB", "Hidden")
+    revision = tenant |> insert_call_spec("dashboard") |> insert_revision(1, "Dashboard call")
+    foreign = other |> insert_call_spec("foreign") |> insert_revision(1, "Hidden call")
+
+    calls =
+      for number <- 1..7 do
+        id = "00000000-0000-4000-8000-#{String.pad_leading(to_string(number), 12, "0")}"
+        insert_call(tenant, revision, id, :running, ~U[2026-10-13 00:00:00Z])
+      end
+
+    insert_call(
+      other,
+      foreign,
+      "11111111-1111-4111-8111-111111111111",
+      :running,
+      ~U[2026-10-14 00:00:00Z]
+    )
+
+    assert {:ok, recent} = AdminStore.recent_calls(Repo, tenant.key, 5)
+
+    assert Enum.map(recent, & &1.id) ==
+             calls |> Enum.map(& &1.public_id) |> Enum.reverse() |> Enum.take(5)
+
+    assert Enum.all?(recent, &(&1.call_spec_name == "Dashboard call"))
+    assert {:ok, []} = AdminStore.recent_calls(Repo, "CCCCCCCCCCCCCCCC", 5)
+  end
+
   test "lists tenant calls across immutable call spec revisions with exact filtering" do
     tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
     other_tenant = insert_tenant("BBBBBBBBBBBBBBBB", "Other tenant")

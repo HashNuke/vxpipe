@@ -19,7 +19,7 @@ export function CallSpecRow({
   linkCalls?: boolean;
 }) {
   const label = callSpec.name ?? callSpec.id;
-  const href = `/admin/tenants/${encodeURIComponent(tenant.key)}/calls?call_spec_id=${encodeURIComponent(callSpec.id)}`;
+  const href = `/t/${encodeURIComponent(tenant.key)}/calls?call_spec_id=${encodeURIComponent(callSpec.id)}`;
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     if (!onSelect || !shouldInterceptNavigation(event)) return;

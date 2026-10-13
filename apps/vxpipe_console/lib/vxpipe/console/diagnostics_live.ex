@@ -59,7 +59,7 @@ defmodule Vxpipe.Console.DiagnosticsLive do
     <main id="diagnostics-board" class="diagnostics-shell">
       <header class="topbar">
         <div class="brand-lockup">
-          <h1>Vxpipe <span>Diagnostics</span></h1>
+          <h1>Diagnostics</h1>
           <p>Live, bounded observations from the gateway and call engine.</p>
         </div>
         <nav class="topnav" aria-label="Diagnostics navigation">

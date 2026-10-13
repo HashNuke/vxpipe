@@ -88,10 +88,10 @@ export function UserEditorPage({
     <main className="access-page access-editor">
       <a
         className="access-back"
-        href="/admin/users"
+        href="/users"
         onClick={(event) => {
           event.preventDefault();
-          onNavigate("/admin/users");
+          onNavigate("/users");
         }}
       >
         <ArrowLeft size={16} aria-hidden />
@@ -183,7 +183,7 @@ export function UserEditorPage({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => onNavigate("/admin/users")}
+                onClick={() => onNavigate("/users")}
               >
                 Cancel
               </Button>
@@ -202,10 +202,10 @@ export function UserEditorPage({
           </div>
           <a
             className="access-link-button"
-            href={`/admin/users/${user.id}/reset-password`}
+            href={`/users/${user.id}/reset-password`}
             onClick={(event) => {
               event.preventDefault();
-              onNavigate(`/admin/users/${user.id}/reset-password`);
+              onNavigate(`/users/${user.id}/reset-password`);
             }}
           >
             <KeyRound size={16} aria-hidden />

@@ -30,6 +30,7 @@ const serviceDirectory = {
 };
 
 function pendingSessionFetch(path: string) {
+  if (path.startsWith("/admin/api/navigation")) return new Promise<Response>(() => undefined);
   if (path === "/admin/api/session") return new Promise<Response>(() => undefined);
   if (path.startsWith("/admin/api/tenants?")) return response(tenantDirectory);
   if (path.includes("/call-specs")) return response(callSpecPage);
@@ -45,8 +46,8 @@ test("loading principal hides Platform services until authority is known", async
   );
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByRole("heading", { name: "Tenants" })).toBeVisible();
-  expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
+  expect(await screen.findByText("Loading workspace…")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Logout" })).toBeVisible();
   expect(
     screen.queryByRole("link", { name: "Platform services" }),
   ).not.toBeInTheDocument();
@@ -60,7 +61,8 @@ test("loading principal hides call-spec creation and Services destination", asyn
   );
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByText("No call specs yet")).toBeVisible();
+  expect(await screen.findByText("Loading workspace…")).toBeVisible();
+  expect(screen.queryByText("No call specs yet")).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "New call spec" })).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
   expect(
@@ -75,7 +77,8 @@ test("loading principal hides service connection controls", async () => {
   );
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByText("No services yet")).toBeVisible();
+  expect(await screen.findByText("Loading workspace…")).toBeVisible();
+  expect(screen.queryByText("No services yet")).not.toBeInTheDocument();
   expect(
     screen.queryByRole("button", { name: "Connect a service" }),
   ).not.toBeInTheDocument();

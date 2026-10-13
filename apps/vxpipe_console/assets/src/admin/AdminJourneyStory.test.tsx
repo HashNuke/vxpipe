@@ -32,7 +32,7 @@ test("links the tenant directory to call specs and back", () => {
   fireEvent.click(screen.getByRole("link", { name: /open demo workspace/i }));
 
   expect(
-    screen.getByRole("heading", { name: "Call specs" }),
+    screen.getByRole("heading", { name: "Call Specs" }),
   ).toBeVisible();
   expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/call-specs");
 
@@ -58,7 +58,7 @@ test("links the tenant directory to call specs and back", () => {
 
   fireEvent.click(screen.getByRole("link", { name: "Demo workspace" }));
   expect(
-    screen.getByRole("heading", { name: "Call specs" }),
+    screen.getByRole("heading", { name: "Call Specs" }),
   ).toBeVisible();
 
   fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
@@ -137,7 +137,7 @@ test("moves between sibling call specs and all tenant calls", () => {
     screen.getAllByRole("link", { name: /^open call/i }).length,
   ).toBeGreaterThan(5);
 
-  fireEvent.click(screen.getByRole("link", { name: "Call specs" }));
+  fireEvent.click(screen.getByRole("link", { name: "Call Specs" }));
   expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/call-specs");
 });
 

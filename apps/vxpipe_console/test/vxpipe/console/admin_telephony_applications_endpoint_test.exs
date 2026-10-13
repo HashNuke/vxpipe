@@ -182,7 +182,7 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsEndpointTest do
       "password" => FakeUserIdentity.password()
     })
     |> recycle()
-    |> get("https://localhost/admin")
+    |> get("https://localhost/account")
   end
 
   defp csrf(authenticated) do

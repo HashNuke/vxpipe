@@ -70,7 +70,7 @@ test("shows tenant navigation and opens call links in separate tabs", () => {
     "/admin/tenants/tn_demo_01",
   );
   expect(
-    screen.getByRole("link", { name: "Call specs" }),
+    screen.getByRole("link", { name: "Call Specs" }),
   ).toHaveAttribute("href", "/admin/tenants/tn_demo_01/call-specs");
   expect(screen.getByRole("link", { name: "Calls" })).toHaveAttribute(
     "aria-current",
@@ -142,7 +142,7 @@ test("discloses when the call spec filter contains only the bounded first page",
   );
 
   expect(screen.getByText(/first 100 call specs/i)).toBeVisible();
-  expect(screen.getByRole("link", { name: "Call specs" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Call Specs" })).toBeVisible();
 });
 
 test("keeps valid empty filters distinct from unknown filters", () => {

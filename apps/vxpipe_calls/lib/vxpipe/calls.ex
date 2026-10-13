@@ -82,6 +82,18 @@ defmodule Vxpipe.Calls do
   def list_operator_tenants(authority, options \\ []),
     do: OperatorAdministration.list_tenants(authority, options)
 
+  def search_operator_tenants(principal, options \\ []),
+    do: Vxpipe.Calls.TenantDirectory.search(principal, options)
+
+  def tenant_navigation(principal, options \\ []),
+    do: Vxpipe.Calls.TenantDirectory.navigation(principal, options)
+
+  def fetch_visible_tenant(principal, key, options \\ []),
+    do: Vxpipe.Calls.TenantDirectory.fetch(principal, key, options)
+
+  def fetch_tenant_dashboard(principal, key, options \\ []),
+    do: Vxpipe.Calls.TenantDashboard.fetch(principal, key, options)
+
   def list_operator_call_specs(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_call_specs(authority, tenant_key, options)
 

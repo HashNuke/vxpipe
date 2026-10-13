@@ -58,10 +58,10 @@ export function ResetPasswordPage({
     <main className="access-page access-narrow">
       <a
         className="access-back"
-        href={`/admin/users/${user.id}`}
+        href={`/users/${user.id}`}
         onClick={(event) => {
           event.preventDefault();
-          onNavigate(`/admin/users/${user.id}`);
+          onNavigate(`/users/${user.id}`);
         }}
       >
         <ArrowLeft size={16} aria-hidden />
@@ -96,7 +96,7 @@ export function ResetPasswordPage({
           <Button
             type="button"
             variant="ghost"
-            onClick={() => onNavigate(`/admin/users/${user.id}`)}
+            onClick={() => onNavigate(`/users/${user.id}`)}
           >
             Cancel
           </Button>

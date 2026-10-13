@@ -1,5 +1,6 @@
+import { AdminLayoutContext } from "./AdminLayoutContext";
 import { Plus, X } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { AdminShell } from "./AdminShell";
 import { Button } from "./Button";
@@ -31,6 +32,7 @@ export function TenantServicesPage({
   headerActions,
   workspaceDestinations,
   canConnect = true,
+  canReadCredentials = true,
 }: {
   state: TenantServicesPageState;
   theme?: "dark" | "light";
@@ -49,7 +51,9 @@ export function TenantServicesPage({
    * the backend still enforces direct requests.
    */
   canConnect?: boolean;
+  canReadCredentials?: boolean;
 }) {
+  const embedded = useContext(AdminLayoutContext);
   const [open, setOpen] = useState(state.setup.open);
   const [freshAttempt, setFreshAttempt] = useState(false);
   const [editingService, setEditingService] = useState<ServiceInventoryItem | null>(null);
@@ -126,7 +130,7 @@ export function TenantServicesPage({
     >
       <main aria-busy={state.status === "loading" ? "true" : undefined} className="mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-6">
         <div aria-hidden={open ? "true" : undefined} inert={open ? true : undefined} ref={contentRef}>
-        <h1 className="sr-only">Services</h1>
+        <h1 className={embedded ? "mb-5" : "sr-only"}>Services</h1>
         <TenantWorkspaceNavigation
           active="services"
           actions={
@@ -147,7 +151,7 @@ export function TenantServicesPage({
           {state.status === "loading" ? <div className="min-h-56 animate-pulse bg-[var(--admin-soft)] motion-reduce:animate-none" /> : null}
           {state.status === "unavailable" ? <PageNotice kind="unavailable" message={state.message} title="Services unavailable" /> : null}
           {state.status === "ready" && state.services.length === 0 ? <PageNotice kind="empty" message="Configured provider services will appear here." title="No services yet" /> : null}
-          {state.status === "ready" && state.services.length > 0 ? <ServiceInventory onEdit={canConnect ? (service) => { setEditingService(service); setFreshAttempt(true); setOpen(true); } : undefined} services={state.services} /> : null}
+          {state.status === "ready" && state.services.length > 0 ? <ServiceInventory showCredentials={canReadCredentials} onEdit={canConnect ? (service) => { setEditingService(service); setFreshAttempt(true); setOpen(true); } : undefined} services={state.services} /> : null}
         </section>
         </div>
         {open ? (

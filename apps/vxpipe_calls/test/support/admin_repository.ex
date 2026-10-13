@@ -5,6 +5,16 @@ defmodule Vxpipe.Calls.TestAdminRepository do
 
   def admin_repository(agent), do: {__MODULE__, agent}
 
+  def search_tenants(agent, scope, query, limit, offset) do
+    send(self(), {:tenant_search, scope, query, limit, offset})
+    Agent.get(agent, & &1)
+  end
+
+  def tenant_candidates(agent, scope, limit) do
+    send(self(), {:tenant_candidates, scope, limit})
+    Agent.get(agent, & &1)
+  end
+
   def list_tenants(agent, limit, offset) do
     send(self(), {:admin_repository_list_tenants, limit, offset})
     Agent.get(agent, & &1)

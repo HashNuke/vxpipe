@@ -15,11 +15,14 @@ defmodule Vxpipe.Console.DiagnosticsLayout do
         <meta name="csrf-token" content={@csrf_token} />
         <link rel="icon" href="data:," />
         <title>Vxpipe diagnostics</title>
+        <link rel="stylesheet" href="/assets/admin-ui.css" />
         <link rel="stylesheet" href="/assets/diagnostics.css" />
+        <script type="module" src="/assets/navigation.js"></script>
         <script type="module" src="/assets/live.js"></script>
       </head>
       <body>
-        {@inner_content}
+        <div id="console-navigation"></div>
+        <div id="navigation-content" class="navigation-external-content" tabindex="-1">{@inner_content}</div>
       </body>
     </html>
     """

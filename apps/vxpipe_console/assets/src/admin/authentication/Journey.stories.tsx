@@ -6,7 +6,7 @@ const meta = {
   args: {
     actor: "superadmin",
     theme: "dark",
-    initialPath: "/admin/users",
+    initialPath: "/users",
     followLocation: true,
     saveBehavior: "success",
   },

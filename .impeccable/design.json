@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-10T14:23:18Z",
+  "generatedAt": "2026-10-13T12:34:02.103024Z",
   "title": "Design System: Vxpipe Operator's Bench",
   "extensions": {
     "colorMeta": {
@@ -108,6 +108,14 @@
       }
     },
     "typographyMeta": {
+      "navigation-control": {
+        "displayName": "Navigation Control",
+        "purpose": "Sidebar links, tenant search and supporting copy."
+      },
+      "navigation-title": {
+        "displayName": "Navigation Title",
+        "purpose": "Page headings in the shared administration shell; 22px on phones."
+      },
       "title": {"displayName": "Title", "purpose": "Compact workspace and product titles."},
       "detail-title": {"displayName": "Detail Title", "purpose": "Selected operational objects inside a workbench."},
       "body": {"displayName": "Body", "purpose": "Instructions, empty states, and general interface copy."},
@@ -116,6 +124,11 @@
       "telemetry": {"displayName": "Telemetry", "purpose": "Timestamps, identifiers, transport values, and event data."}
     },
     "shadows": [
+      {
+        "name": "tenant-picker",
+        "value": "0 10px 24px #0003",
+        "purpose": "Temporary tenant picker overlay."
+      },
       {
         "name": "overlay-xshort-light",
         "value": "0px 7px 3px rgb(0 0 0 / 0.01), 0px 4px 2px rgb(0 0 0 / 0.03), 0px 2px 2px rgb(0 0 0 / 0.04), 0px 0px 1px rgb(0 0 0 / 0.05)",
@@ -129,6 +142,11 @@
     ],
     "motion": [
       {
+        "name": "navigation-drawer",
+        "value": "160ms ease-out",
+        "purpose": "Drawer entry from translateX(-20px), opacity .8; enabled only with prefers-reduced-motion: no-preference."
+      },
+      {
         "name": "state-standard",
         "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)",
         "purpose": "Default hover, focus, and state transition."
@@ -140,6 +158,14 @@
     ]
   },
   "components": [
+    {
+      "name": "Administration Navigation",
+      "kind": "nav",
+      "refersTo": "navigation-link",
+      "description": "Permission-filtered tenant destinations use a quiet neutral current-page state. The full shell also contains platform and account regions.",
+      "html": "<nav class=\"ds-admin-nav\" aria-label=\"Tenant\"><h2>Tenant</h2><a href=\"#calls\" aria-current=\"page\">Calls</a><a href=\"#call-specs\">Call Specs</a><a href=\"#services\">Services</a></nav>",
+      "css": ".ds-admin-nav { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: var(--admin-ink, oklch(0.21 0.006 285.885)); background: var(--admin-panel, oklch(1 0 0)); padding: 12px; width: 232px; } .ds-admin-nav h2 { margin: 0 0 8px; padding: 0 12px; font-size: 12px; font-weight: 600; color: var(--admin-muted, oklch(0.48 0.014 285.938)); } .ds-admin-nav a { display: flex; align-items: center; min-height: 40px; padding: 8px 12px; margin: 2px 0; border-radius: 4px; color: var(--admin-muted, oklch(0.48 0.014 285.938)); font-size: 13px; text-decoration: none; } .ds-admin-nav a:hover, .ds-admin-nav a[aria-current] { background: var(--admin-soft, oklch(0.967 0.001 286.375)); color: var(--admin-ink, oklch(0.21 0.006 285.885)); } .ds-admin-nav a[aria-current] { font-weight: 600; } .ds-admin-nav a:focus-visible { outline: 2px solid var(--admin-blue, oklch(0.55 0.19 259.815)); outline-offset: 2px; }"
+    },
     {
       "name": "Active Connect Button",
       "kind": "button",

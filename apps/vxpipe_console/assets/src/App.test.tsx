@@ -6,11 +6,12 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { App } from "./App";
+import { App } from "./test/ResourceApp";
 
 vi.mock("@vxpipe/react", () => ({
   CallConsole: ({
@@ -29,7 +30,7 @@ vi.mock("@vxpipe/react", () => ({
 
 afterEach(() => {
   cleanup();
-  window.history.replaceState({}, "", "/admin");
+  window.history.replaceState({}, "", "/tenants");
 });
 
 const response = (body: unknown, status = 200) =>
@@ -70,7 +71,7 @@ test("first-run setup submits credentials and opens the Console", async () => {
 });
 
 test("the production users route renders server-filtered rows and role filters", async () => {
-  window.history.replaceState({}, "", "/admin/users");
+  window.history.replaceState({}, "", "/users");
   const owner = { id: "owner", email: "owner@example.test", roleId: "superadmin", enabled: true, memberships: [] };
   const role = { id: "superadmin", name: "Superadmin", description: "", kind: "superadmin", grants: [] };
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
@@ -93,7 +94,7 @@ test("the production users route renders server-filtered rows and role filters",
 
 const tenantPage = (page: number, name = "Example tenant") => ({
   tenants: Array.from({ length: page === 1 ? 25 : 5 }, (_, index) => ({
-    key: `tenant-${page}-${index}`,
+    key: `tenant${page}${index}`.padEnd(16, "0"),
     name: index === 0 ? name : `Tenant ${page}-${index}`,
     created_at: "2026-09-17T01:00:00Z",
   })),
@@ -194,7 +195,7 @@ test("retires tenant setup services in favor of the service inventory", async ()
 
   expect(await screen.findByText("No services yet")).toBeVisible();
   expect(window.location.pathname).toBe(
-    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
+    "/t/AAAAAAAAAAAAAAAA/services",
   );
   expect(fetchImpl).toHaveBeenCalledWith(
     "/admin/api/tenants/AAAAAAAAAAAAAAAA/services",
@@ -232,33 +233,28 @@ const callDetailsResponse = (state: "running" | "ended" = "running") => ({
   },
 });
 
-test("loads the approved tenant page with a CSRF-protected sign-out action", async () => {
+test("loads the scoped tenant page with sidebar account actions", async () => {
   const fetchImpl = vi.fn((input: RequestInfo | URL) =>
     String(input) === "/admin/api/session"
       ? response(operationalSession)
       : response(tenantPage(1)),
   );
-  const view = render(
+  render(
     <App csrfToken="csrf-test-token" fetchImpl={fetchImpl} />,
   );
 
-  expect(screen.getByRole("heading", { name: "Tenants" })).toBeVisible();
-  expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Tenants" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Logout" })).toBeVisible();
   expect(await screen.findByText("Example tenant")).toBeVisible();
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/session", expect.any(Object));
-  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/tenants?page=1", {
+  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/tenants?q=&page=1&page_size=25", expect.objectContaining({
     headers: { accept: "application/json" },
     signal: expect.any(AbortSignal),
-  });
-  expect(
-    view.container.querySelector('form[action="/auth/logout"]'),
-  ).toHaveAttribute("method", "post");
-  expect(view.container.querySelector('input[name="_csrf_token"]')).toHaveValue(
-    "csrf-test-token",
-  );
+  }));
+
 });
 
-test("starts the Demo onboarding flow when the installation has no tenants", async () => {
+test("an empty installation opens onboarding only when explicitly selected", async () => {
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url === "/admin/api/session") return response(operationalSession);
@@ -286,13 +282,16 @@ test("starts the Demo onboarding flow when the installation has no tenants", asy
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
+  expect(await screen.findByText("No tenants available")).toBeVisible();
+  expect(window.location.pathname).toBe("/tenants");
+  fireEvent.click(screen.getByRole("link", { name: "Getting started" }));
   expect(
     await screen.findByRole("heading", { name: "Demo tenant is ready" }),
   ).toBeVisible();
   expect(
     screen.getByRole("heading", { name: "Connect your services" }),
   ).toBeVisible();
-  expect(window.location.pathname).toBe("/admin/onboarding");
+  expect(window.location.pathname).toBe("/getting-started");
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/onboarding/demo-tenant", {
     method: "POST",
     headers: {
@@ -314,7 +313,7 @@ test("shows unavailable and expired-session outcomes truthfully", async () => {
   );
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Tenant data could not be loaded",
+    "Your workspace could not be loaded",
   );
 
   rerender(
@@ -350,7 +349,8 @@ test("restores page navigation from browser history and ignores a stale response
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
-  window.history.pushState({}, "", "/admin?page=2");
+  await waitFor(() => expect(operationalCalls).toBe(1));
+  window.history.pushState({}, "", "/tenants?page=2");
   window.dispatchEvent(new PopStateEvent("popstate"));
 
   expect(await screen.findByText("Second page tenant")).toBeVisible();
@@ -361,7 +361,7 @@ test("restores page navigation from browser history and ignores a stale response
   );
 
   fireEvent.click(screen.getByRole("button", { name: "Previous page" }));
-  expect(window.location.pathname + window.location.search).toBe("/admin");
+  expect(window.location.pathname + window.location.search).toBe("/tenants");
 });
 
 test("ignores an expired-session response from an obsolete request", async () => {
@@ -387,7 +387,8 @@ test("ignores an expired-session response from an obsolete request", async () =>
     />,
   );
 
-  window.history.pushState({}, "", "/admin?page=2");
+  await waitFor(() => expect(operationalCalls).toBe(1));
+  window.history.pushState({}, "", "/tenants?page=2");
   window.dispatchEvent(new PopStateEvent("popstate"));
   expect(await screen.findByText("Current tenant")).toBeVisible();
 
@@ -400,7 +401,7 @@ test("ignores an expired-session response from an obsolete request", async () =>
 });
 
 test("recovers an out-of-range page to the first tenant page", async () => {
-  window.history.replaceState({}, "", "/admin?page=999");
+  window.history.replaceState({}, "", "/tenants?page=999");
   let operationalCalls = 0;
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     if (String(input) === "/admin/api/session") return response(operationalSession);
@@ -412,7 +413,7 @@ test("recovers an out-of-range page to the first tenant page", async () => {
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
   expect(await screen.findByText("Example tenant")).toBeVisible();
-  expect(window.location.pathname + window.location.search).toBe("/admin");
+  expect(window.location.pathname + window.location.search).toBe("/tenants");
   expect(fetchImpl).toHaveBeenNthCalledWith(
     1,
     "/admin/api/session",
@@ -420,12 +421,12 @@ test("recovers an out-of-range page to the first tenant page", async () => {
   );
   expect(fetchImpl).toHaveBeenNthCalledWith(
     2,
-    "/admin/api/tenants?page=999",
+    "/admin/api/tenants?q=&page=999&page_size=25",
     expect.any(Object),
   );
   expect(fetchImpl).toHaveBeenNthCalledWith(
     3,
-    "/admin/api/tenants?page=1",
+    "/admin/api/tenants?q=&page=1&page_size=25",
     expect.any(Object),
   );
 });
@@ -435,11 +436,12 @@ test("opens a tenant's approved call specs page and canonicalizes the workspace 
     const url = String(input);
     if (url === "/admin/api/session") return response(operationalSession);
     if (url.startsWith("/admin/api/tenants?")) return response(tenantPage(1));
+    if (url.endsWith("/dashboard")) return response(dashboard("tenant1000000000"));
     if (url.includes("/calls?")) {
-      return response(callPage("tenant-1-0", "delivery-rescheduling"));
+      return response(callPage("tenant1000000000", "delivery-rescheduling"));
     }
     return response(
-      callSpecPage("tenant-1-0", "Example tenant", "Delivery rescheduling"),
+      callSpecPage("tenant1000000000", "Example tenant", "Delivery rescheduling"),
     );
   });
 
@@ -448,23 +450,25 @@ test("opens a tenant's approved call specs page and canonicalizes the workspace 
   fireEvent.click(
     await screen.findByRole("link", { name: "Open Example tenant" }),
   );
+  await screen.findByText("No calls yet");
+  fireEvent.click(within(screen.getByRole("complementary")).getByRole("link", { name: "Call Specs" }));
 
   expect(
-    await screen.findByRole("heading", { name: "Call specs" }),
+    await screen.findByRole("heading", { name: "Call Specs" }),
   ).toBeVisible();
   expect(screen.getByText("Delivery rescheduling")).toBeVisible();
   expect(window.location.pathname).toBe(
-    "/admin/tenants/tenant-1-0/call-specs",
+    "/t/tenant1000000000/call-specs",
   );
   expect(screen.getByRole("link", { name: "Calls" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "Services" })).toBeVisible();
+  expect(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Services" })).toBeVisible();
   expect(
     screen.getByRole("link", {
       name: "View 5 calls for Delivery rescheduling",
     }),
   ).toHaveAttribute(
     "href",
-    "/admin/tenants/tenant-1-0/calls?call_spec_id=delivery-rescheduling",
+    "/t/tenant1000000000/calls?call_spec_id=delivery-rescheduling",
   );
 
   fireEvent.click(
@@ -474,7 +478,7 @@ test("opens a tenant's approved call specs page and canonicalizes the workspace 
   );
   expect(await screen.findByRole("heading", { name: "Calls" })).toBeVisible();
   expect(window.location.pathname + window.location.search).toBe(
-    "/admin/tenants/tenant-1-0/calls?call_spec_id=delivery-rescheduling",
+    "/t/tenant1000000000/calls?call_spec_id=delivery-rescheduling",
   );
 });
 
@@ -482,7 +486,7 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?call_spec_id=delivery-rescheduling&page=2",
+    "/t/AAAAAAAAAAAAAAAA/calls?call_spec_id=delivery-rescheduling&page=2",
   );
 
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
@@ -501,8 +505,8 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
   expect(
     await screen.findByText("018f27cb-6f87-7d1c-a61f-8873cb667342"),
   ).toBeVisible();
-  expect(screen.getByRole("link", { name: "Call specs" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "Services" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Call Specs" })).toBeVisible();
+  expect(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Services" })).toBeVisible();
   expect(
     screen.getByRole("link", { name: /open call 018f27cb/i }),
   ).toBeVisible();
@@ -519,7 +523,7 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
 
   expect(await screen.findByText("No matching calls")).toBeVisible();
   expect(window.location.pathname + window.location.search).toBe(
-    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?call_spec_id=appointment-reminders",
+    "/t/AAAAAAAAAAAAAAAA/calls?call_spec_id=appointment-reminders",
   );
 });
 
@@ -549,7 +553,7 @@ test("loads an approved call details route into the reusable console", async () 
 });
 
 test("opens call details in a new tab without replacing the call directory", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/calls");
+  window.history.replaceState({}, "", "/t/AAAAAAAAAAAAAAAA/calls");
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url === "/admin/api/session") return response(operationalSession);
@@ -578,7 +582,7 @@ test("opens call details in a new tab without replacing the call directory", asy
   fireEvent.click(call);
   expect(screen.queryByTestId("call-console")).not.toBeInTheDocument();
   expect(window.location.pathname).toBe(
-    "/admin/tenants/AAAAAAAAAAAAAAAA/calls",
+    "/t/AAAAAAAAAAAAAAAA/calls",
   );
   expect(fetchImpl).toHaveBeenCalledTimes(2);
   expect(fetchImpl).toHaveBeenNthCalledWith(1, "/admin/api/session", expect.any(Object));
@@ -676,7 +680,7 @@ test("ignores an expired-session response from an obsolete call-details request"
     />,
   );
 
-  window.history.pushState({}, "", "/admin");
+  window.history.pushState({}, "", "/tenants");
   window.dispatchEvent(new PopStateEvent("popstate"));
   expect(await screen.findByText("Current tenant")).toBeVisible();
 
@@ -692,7 +696,7 @@ test("ignores an obsolete call response after the call spec filter changes", asy
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?call_spec_id=delivery-rescheduling",
+    "/t/AAAAAAAAAAAAAAAA/calls?call_spec_id=delivery-rescheduling",
   );
   let resolveFirst: ((value: Response) => void) | undefined;
   const first = new Promise<Response>((resolve) => {
@@ -711,7 +715,7 @@ test("ignores an obsolete call response after the call spec filter changes", asy
   window.history.pushState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?call_spec_id=appointment-reminders",
+    "/t/AAAAAAAAAAAAAAAA/calls?call_spec_id=appointment-reminders",
   );
   window.dispatchEvent(new PopStateEvent("popstate"));
   expect(await screen.findByText("No matching calls")).toBeVisible();
@@ -735,7 +739,7 @@ test("recovers an out-of-range call page without losing its call spec filter", a
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?page=999&call_spec_id=delivery-rescheduling",
+    "/t/AAAAAAAAAAAAAAAA/calls?page=999&call_spec_id=delivery-rescheduling",
   );
   let operationalCalls = 0;
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
@@ -752,7 +756,7 @@ test("recovers an out-of-range call page without losing its call spec filter", a
     await screen.findByText("018f27cb-6f87-7d1c-a61f-8873cb667342"),
   ).toBeVisible();
   expect(window.location.pathname + window.location.search).toBe(
-    "/admin/tenants/AAAAAAAAAAAAAAAA/calls?call_spec_id=delivery-rescheduling",
+    "/t/AAAAAAAAAAAAAAAA/calls?call_spec_id=delivery-rescheduling",
   );
   expect(fetchImpl).toHaveBeenNthCalledWith(
     1,
@@ -772,7 +776,7 @@ test("recovers an out-of-range call page without losing its call spec filter", a
 });
 
 test("keeps missing and unavailable call directories distinct", async () => {
-  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/calls");
+  window.history.replaceState({}, "", "/t/AAAAAAAAAAAAAAAA/calls");
   const { rerender } = render(
     <App
       csrfToken="csrf"
@@ -791,7 +795,7 @@ test("keeps missing and unavailable call directories distinct", async () => {
   rerender(
     <App
       csrfToken="csrf"
-      fetchImpl={() => Promise.reject(new Error("offline"))}
+      fetchImpl={input => String(input) === "/admin/api/session" ? response(operationalSession) : Promise.reject(new Error("offline"))}
     />,
   );
   window.dispatchEvent(new PopStateEvent("popstate"));
@@ -803,21 +807,21 @@ test("keeps missing and unavailable call directories distinct", async () => {
   );
 });
 
-test("redirects a tenant workspace root to call specs on direct load", async () => {
+test("redirects a tenant workspace root to the dashboard on direct load", async () => {
   window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA");
   const fetchImpl = vi.fn((input: RequestInfo | URL) =>
     String(input) === "/admin/api/session"
       ? response(operationalSession)
       : response(
-          callSpecPage("AAAAAAAAAAAAAAAA", "Example tenant", "Direct call spec"),
+          dashboard("AAAAAAAAAAAAAAAA"),
         ),
   );
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByText("Direct call spec")).toBeVisible();
+  expect(await screen.findByText("No calls yet")).toBeVisible();
   expect(window.location.pathname).toBe(
-    "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs",
+    "/t/AAAAAAAAAAAAAAAA/dashboard",
   );
 });
 
@@ -836,14 +840,14 @@ test("canonicalizes unknown admin routes to the tenant directory", async () => {
   );
 
   expect(await screen.findByText("Example tenant")).toBeVisible();
-  expect(window.location.pathname).toBe("/admin");
+  expect(window.location.pathname).toBe("/tenants");
 });
 
 test("ignores an obsolete call spec response after switching tenants", async () => {
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs",
+    "/t/AAAAAAAAAAAAAAAA/call-specs",
   );
   let resolveFirst: ((value: Response) => void) | undefined;
   const first = new Promise<Response>((resolve) => {
@@ -864,7 +868,7 @@ test("ignores an obsolete call spec response after switching tenants", async () 
   window.history.pushState(
     {},
     "",
-    "/admin/tenants/BBBBBBBBBBBBBBBB/call-specs",
+    "/t/BBBBBBBBBBBBBBBB/call-specs",
   );
   window.dispatchEvent(new PopStateEvent("popstate"));
   expect(await screen.findByText("Current call spec")).toBeVisible();
@@ -885,7 +889,7 @@ test("keeps empty, missing, and unavailable call spec states distinct", async ()
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs",
+    "/t/AAAAAAAAAAAAAAAA/call-specs",
   );
   const empty = {
     tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },
@@ -922,7 +926,7 @@ test("keeps empty, missing, and unavailable call spec states distinct", async ()
   rerender(
     <App
       csrfToken="csrf"
-      fetchImpl={() => Promise.reject(new Error("offline"))}
+      fetchImpl={input => String(input) === "/admin/api/session" ? response(operationalSession) : Promise.reject(new Error("offline"))}
     />,
   );
   await waitFor(() =>
@@ -936,7 +940,7 @@ test("loads the approved services page directly and exposes all tenant destinati
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
+    "/t/AAAAAAAAAAAAAAAA/services",
   );
   const fetchImpl = vi.fn((input: RequestInfo | URL) =>
     String(input) === "/admin/api/session"
@@ -949,10 +953,10 @@ test("loads the approved services page directly and exposes all tenant destinati
   expect(
     await screen.findByRole("heading", { name: "Services" }),
   ).toBeVisible();
-  expect(screen.getAllByText("Google AI Studio")).not.toHaveLength(0);
-  expect(screen.getByRole("link", { name: "Call specs" })).toBeVisible();
+  expect(await screen.findAllByText("Google AI Studio")).not.toHaveLength(0);
+  expect(screen.getByRole("link", { name: "Call Specs" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Calls" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "Services" })).toHaveAttribute(
+  expect(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Services" })).toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -967,7 +971,7 @@ test("submits write-only credential values with CSRF and updates metadata after 
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
+    "/t/AAAAAAAAAAAAAAAA/services",
   );
   const fetchImpl = vi.fn(
     (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1013,6 +1017,7 @@ test("submits write-only credential values with CSRF and updates metadata after 
   expect(await screen.findByText("No services yet")).toBeVisible();
 
   fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
+  expect(screen.getByRole("complementary", { hidden: true })).toHaveAttribute("inert");
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "private-value" },
   });
@@ -1022,7 +1027,7 @@ test("submits write-only credential values with CSRF and updates metadata after 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
   expect(screen.getByRole("status", { name: "Notification" })).toHaveTextContent("Service saved.");
-  expect(screen.getAllByText("Google AI Studio")).not.toHaveLength(0);
+  expect(await screen.findAllByText("Google AI Studio")).not.toHaveLength(0);
   expect(screen.queryByDisplayValue("private-value")).not.toBeInTheDocument();
 });
 
@@ -1030,7 +1035,7 @@ test("replaces credentials from the edit dialog and refreshes their safe preview
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
+    "/t/AAAAAAAAAAAAAAAA/services",
   );
   const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -1082,7 +1087,7 @@ test("ignores a stale credential submission after leaving the tenant services pa
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
+    "/t/AAAAAAAAAAAAAAAA/services",
   );
   const expired = vi.fn();
   let resolveCreate: ((value: Response) => void) | undefined;
@@ -1122,7 +1127,7 @@ test("ignores a stale credential submission after leaving the tenant services pa
   window.history.pushState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs",
+    "/t/AAAAAAAAAAAAAAAA/call-specs",
   );
   window.dispatchEvent(new PopStateEvent("popstate"));
   expect(await screen.findByText("Current call spec")).toBeVisible();
@@ -1142,7 +1147,7 @@ test("ignores a credential response after its dialog is closed and reopened", as
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
+    "/t/AAAAAAAAAAAAAAAA/services",
   );
   let resolveCreate: ((value: Response) => void) | undefined;
   const pendingCreate = new Promise<Response>((resolve) => {
@@ -1202,7 +1207,7 @@ test("presents service load, duplicate, and expired-session outcomes truthfully"
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
+    "/t/AAAAAAAAAAAAAAAA/services",
   );
   const expired = vi.fn();
   const unavailableView = render(
@@ -1214,7 +1219,7 @@ test("presents service load, duplicate, and expired-session outcomes truthfully"
   );
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Services could not be loaded",
+    "Your workspace could not be loaded",
   );
   unavailableView.unmount();
 
@@ -1261,7 +1266,7 @@ test("rejects a service directory for a different tenant", async () => {
   window.history.replaceState(
     {},
     "",
-    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
+    "/t/AAAAAAAAAAAAAAAA/services",
   );
 
   render(
@@ -1280,3 +1285,8 @@ test("rejects a service directory for a different tenant", async () => {
   );
   expect(screen.queryByText("Credential stored")).not.toBeInTheDocument();
 });
+
+function dashboard(key: string) {
+  const capability = { read: true, write: true };
+  return { tenant: { key, name: "Example tenant", dashboard_path: `/t/${key}/dashboard`, capabilities: { calls: capability, call_specs: capability, services: capability, api_keys: capability } }, recent_calls: { status: "ready", calls: [] } };
+}

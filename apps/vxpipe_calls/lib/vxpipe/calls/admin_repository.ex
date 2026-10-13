@@ -30,6 +30,27 @@ defmodule Vxpipe.Calls.AdminRepository do
 
   @optional_callbacks list_tenants_scoped: 4
 
+  @doc "Literal name/key search; scope is applied before count and pagination, ordered by name/key."
+  @callback search_tenants(
+              context(),
+              :all | {:keys, [String.t()]},
+              String.t(),
+              pos_integer(),
+              non_neg_integer()
+            ) ::
+              {:ok, {[Tenant.t()], non_neg_integer()}} | {:error, term()}
+
+  @doc "At most limit extant scoped tenants, without a full-directory count."
+  @callback tenant_candidates(context(), :all | {:keys, [String.t()]}, pos_integer()) ::
+              {:ok, [Tenant.t()]} | {:error, term()}
+
+  @optional_callbacks search_tenants: 5, tenant_candidates: 3
+
+  @doc "Recent tenant calls only, newest first with ID tie-break; no count or spec-directory query."
+  @callback recent_calls(context(), String.t(), pos_integer()) ::
+              {:ok, [CallDirectorySummary.t()]} | {:error, term()}
+  @optional_callbacks recent_calls: 3
+
   @callback list_call_specs(context(), String.t(), pos_integer(), non_neg_integer()) ::
               {:ok, {Tenant.t(), [CallSpecSummary.t()], non_neg_integer()}} | {:error, term()}
 

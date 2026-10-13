@@ -38,6 +38,13 @@ defmodule Vxpipe.Console.RequireUserAPI do
     Authorization.authorize(principal.grants, permission, {:tenant, tenant}, principal)
   end
 
+  defp authorize(principal, {:tenant_any, permissions, tenant}) do
+    if Enum.any?(
+         permissions,
+         &(Authorization.authorize(principal.grants, &1, {:tenant, tenant}, principal) == :ok)
+       ), do: :ok, else: {:error, :forbidden}
+  end
+
   defp authorize(principal, {:directory, "tenants.read"}) do
     Vxpipe.Calls.UserAuthorization.authorize_tenant_directory(principal)
   end
