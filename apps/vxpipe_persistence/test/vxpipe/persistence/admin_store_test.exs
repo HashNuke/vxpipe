@@ -68,6 +68,21 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     assert {:ok, {[], ^total}} = AdminStore.list_tenants(Repo, 2, total + 1)
   end
 
+  test "scoped tenant pages count and paginate only assigned tenants" do
+    insert_tenant("ZZZZZZZZZZZZZZZA", "Assigned A")
+    insert_tenant("ZZZZZZZZZZZZZZZB", "Hidden")
+    insert_tenant("ZZZZZZZZZZZZZZZC", "Assigned C")
+
+    scope = {:keys, ["ZZZZZZZZZZZZZZZA", "ZZZZZZZZZZZZZZZC"]}
+    assert {:ok, {first, 2}} = AdminStore.list_tenants_scoped(Repo, scope, 1, 0)
+    assert length(first) == 1
+    assert hd(first).name in ["Assigned A", "Assigned C"]
+    assert {:ok, {second, 2}} = AdminStore.list_tenants_scoped(Repo, scope, 1, 1)
+    assert length(second) == 1
+    refute hd(first).key == hd(second).key
+    assert {:ok, {[], 0}} = AdminStore.list_tenants_scoped(Repo, {:keys, []}, 1, 0)
+  end
+
   test "translates an unavailable repository into the port error contract" do
     assert {:error, :repository_unavailable} =
              AdminStore.list_tenants(TestUnavailableAdminRepo, 25, 0)
@@ -169,6 +184,158 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
              AdminStore.list_services(Repo, "CCCCCCCCCCCCCCCC")
   end
 
+  test "lists scoped platform service names with ownership and no secrets" do
+    tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
+    {:ok, keyring} = CredentialKeyring.new("v1", %{"v1" => :crypto.strong_rand_bytes(32)})
+    context = [repo: Repo, keyring: keyring]
+
+    options = [
+      provider_credential_repository: {ProviderCredentialStore, context},
+      telephony_service_repository: {TelephonyServiceStore, context}
+    ]
+
+    platform_public = Base.encode64(:crypto.strong_rand_bytes(32))
+
+    assert {:ok, _platform} =
+             ProviderCredentials.provision(
+               :platform,
+               "telnyx",
+               "telnyx",
+               "api_key",
+               %{"api_key" => "platform-private-value", "public_key" => platform_public},
+               options
+             )
+
+    assert {:ok, service} =
+             TelephonyServices.register(
+               tenant.key,
+               %{
+                 "name" => "support",
+                 "ingress_key" => "support-ingress",
+                 "provider" => "telnyx",
+                 "provider_connection_id" => "application-support",
+                 "credential_name" => "telnyx"
+               },
+               options
+             )
+
+    assert {:ok, {listed, credentials, services, false}} =
+             AdminStore.list_services(Repo, tenant.key)
+
+    assert listed.key == tenant.key
+    assert credentials == []
+
+    assert Enum.any?(services, fn entry ->
+             entry.name == "support" and entry.credential_owner == :platform and
+               entry.credential_name == "telnyx" and entry.tenant_key == tenant.key
+           end)
+
+    assert List.first(Enum.filter(services, &(&1.name == "support"))).id == service.id
+
+    rendered = inspect({credentials, services})
+    refute rendered =~ "platform-private-value"
+    refute rendered =~ platform_public
+
+    tenant_public = Base.encode64(:crypto.strong_rand_bytes(32))
+
+    assert {:ok, _own} =
+             ProviderCredentials.provision(
+               tenant.key,
+               "telnyx",
+               "telnyx",
+               "api_key",
+               %{"api_key" => "tenant-private-value", "public_key" => tenant_public},
+               options
+             )
+
+    assert {:ok, {_listed2, _credentials2, services2, false}} =
+             AdminStore.list_services(Repo, tenant.key)
+
+    assert Enum.any?(services2, fn entry ->
+             entry.name == "support" and entry.credential_owner == {:tenant, tenant.key}
+           end)
+
+    rendered2 = inspect(services2)
+    refute rendered2 =~ "tenant-private-value"
+    refute rendered2 =~ tenant_public
+  end
+
+  test "lists scoped platform applications with ownership and no secrets" do
+    tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
+    {:ok, keyring} = CredentialKeyring.new("v1", %{"v1" => :crypto.strong_rand_bytes(32)})
+    context = [repo: Repo, keyring: keyring]
+
+    options = [
+      provider_credential_repository: {ProviderCredentialStore, context},
+      telephony_service_repository: {TelephonyServiceStore, context}
+    ]
+
+    platform_public = Base.encode64(:crypto.strong_rand_bytes(32))
+
+    assert {:ok, _platform} =
+             ProviderCredentials.provision(
+               :platform,
+               "telnyx",
+               "telnyx",
+               "api_key",
+               %{"api_key" => "platform-private-value", "public_key" => platform_public},
+               options
+             )
+
+    assert {:ok, service} =
+             TelephonyServices.register(
+               tenant.key,
+               %{
+                 "name" => "support-app",
+                 "ingress_key" => "support-app-ingress",
+                 "provider" => "telnyx",
+                 "provider_connection_id" => "application-support-app",
+                 "credential_name" => "telnyx"
+               },
+               options
+             )
+
+    assert {:ok, {listed, applications, [], false}} =
+             AdminStore.list_telephony_applications(Repo, tenant.key)
+
+    assert listed.key == tenant.key
+
+    assert Enum.any?(applications, fn entry ->
+             entry.name == "support-app" and entry.credential_owner == :platform and
+               entry.credential_name == "telnyx" and entry.tenant_key == tenant.key
+           end)
+
+    assert List.first(Enum.filter(applications, &(&1.name == "support-app"))).id == service.id
+
+    rendered = inspect(applications)
+    refute rendered =~ "platform-private-value"
+    refute rendered =~ platform_public
+    refute rendered =~ "support-app-ingress"
+
+    tenant_public = Base.encode64(:crypto.strong_rand_bytes(32))
+
+    assert {:ok, _own} =
+             ProviderCredentials.provision(
+               tenant.key,
+               "telnyx",
+               "telnyx",
+               "api_key",
+               %{"api_key" => "tenant-private-value", "public_key" => tenant_public},
+               options
+             )
+
+    assert {:ok, {_listed2, applications2, [], false}} =
+             AdminStore.list_telephony_applications(Repo, tenant.key)
+
+    assert Enum.any?(applications2, fn entry ->
+             entry.name == "support-app" and entry.credential_owner == {:tenant, tenant.key}
+           end)
+
+    rendered2 = inspect(applications2)
+    refute rendered2 =~ "tenant-private-value"
+    refute rendered2 =~ tenant_public
+  end
+
   test "returns a bounded and explicitly partial service inventory" do
     tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
     {:ok, keyring} = CredentialKeyring.new("v1", %{"v1" => :crypto.strong_rand_bytes(32)})
@@ -198,6 +365,110 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     assert length(credentials) == 100
     assert List.first(credentials).name == "credential-001"
     assert List.last(credentials).name == "credential-100"
+  end
+
+  test "truncated service inventory stays coherent when a legacy credential falls beyond the page" do
+    tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
+    {:ok, keyring} = CredentialKeyring.new("v1", %{"v1" => :crypto.strong_rand_bytes(32)})
+    context = [repo: Repo, keyring: keyring]
+
+    options = [
+      provider_credential_repository: {ProviderCredentialStore, context},
+      telephony_service_repository: {TelephonyServiceStore, context}
+    ]
+
+    assert {:ok, _platform} =
+             ProviderCredentials.provision(
+               :platform,
+               "telnyx",
+               "telnyx",
+               "api_key",
+               %{
+                 "api_key" => "platform-private-value",
+                 "public_key" => Base.encode64(:crypto.strong_rand_bytes(32))
+               },
+               options
+             )
+
+    for number <- 1..100 do
+      name = "credential-#{String.pad_leading(Integer.to_string(number), 3, "0")}"
+
+      assert {:ok, _metadata} =
+               ProviderCredentials.provision(
+                 tenant.key,
+                 "google",
+                 name,
+                 "api_key",
+                 %{"api_key" => "private-value"},
+                 options
+               )
+    end
+
+    assert {:ok, hidden_credential} =
+             ProviderCredentials.provision(
+               tenant.key,
+               "telnyx",
+               "voice",
+               "api_key",
+               %{"api_key" => "telnyx-private-value"},
+               options
+             )
+
+    assert {:ok, _scoped} =
+             TelephonyServices.register(
+               tenant.key,
+               %{
+                 "name" => "support",
+                 "ingress_key" => "support-ingress",
+                 "provider" => "telnyx",
+                 "provider_connection_id" => "application-support",
+                 "credential_name" => "telnyx"
+               },
+               options
+             )
+
+    assert {:ok, _legacy} =
+             TelephonyServices.register(
+               tenant.key,
+               %{
+                 "name" => "legacy-voice",
+                 "ingress_key" => "legacy-ingress",
+                 "provider" => "telnyx",
+                 "provider_connection_id" => "connection-legacy",
+                 "credential_id" => hidden_credential.id,
+                 "public_key" => Base.encode64(:crypto.strong_rand_bytes(32)),
+                 "outbound_number" => "+14155550100"
+               },
+               options
+             )
+
+    assert {:ok, {listed_tenant, credentials, services, true}} =
+             AdminStore.list_services(Repo, tenant.key)
+
+    assert listed_tenant.key == tenant.key
+    assert length(credentials) == 100
+
+    credential_ids = MapSet.new(credentials, & &1.id)
+
+    assert Enum.any?(services, &(&1.name == "support"))
+    refute Enum.any?(services, &(&1.name == "legacy-voice"))
+
+    assert Enum.all?(services, fn
+             %{credential_id: nil} -> true
+             %{credential_owner: :platform} -> true
+             %{credential_id: id} -> MapSet.member?(credential_ids, id)
+           end)
+
+    assert {:ok, directory} =
+             Vxpipe.Calls.list_operator_services(
+               InstallationOperator.authority(),
+               tenant.key,
+               admin_repository: {AdminStore, Repo}
+             )
+
+    assert directory.truncated == true
+    assert Enum.any?(directory.telephony_services, &(&1.name == "support"))
+    refute Enum.any?(directory.telephony_services, &(&1.name == "legacy-voice"))
   end
 
   test "lists one tenant's call_specs with latest and published versions and call totals" do

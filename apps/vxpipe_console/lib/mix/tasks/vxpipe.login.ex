@@ -1,23 +1,29 @@
 defmodule Mix.Tasks.Vxpipe.Login do
   use Mix.Task
 
-  alias Vxpipe.Console.OperatorLoginConfiguration
-
-  @shortdoc "Issues a short-lived installation-operator login challenge"
+  @shortdoc "Issues a local one-time proof for upgraded Console setup"
   @requirements ["app.config"]
 
   @impl true
   def run([]) do
-    configuration = configuration!()
     ensure_persistence_started!()
 
-    case Vxpipe.Calls.issue_operator_login_challenge(configuration.verifier_secret) do
-      {:ok, issued} ->
-        Mix.shell().info("Operator login URL: #{login_url(configuration.origin, issued.token)}")
-        Mix.shell().info("Operator login code: #{issued.code}")
+    with {:ok, :pending_operator_proof} <- backend().status(),
+         {:ok, %{proof: proof}} <- backend().issue_setup_proof() do
+      Mix.shell().info("Setup proof: #{proof}")
+
+      Mix.shell().info(
+        "Open /auth/setup and enter the proof with the new Superadmin credentials."
+      )
+    else
+      {:ok, :pending_first_run} ->
+        Mix.raise("fresh installations can set up at /auth/setup without a local proof")
+
+      {:ok, :complete} ->
+        Mix.raise("Console authentication is already set up")
 
       {:error, _reason} ->
-        Mix.raise("could not persist an operator login challenge; check database configuration")
+        Mix.raise("could not issue a setup proof; check database configuration")
     end
   end
 
@@ -30,18 +36,6 @@ defmodule Mix.Tasks.Vxpipe.Login do
     end
   end
 
-  defp configuration! do
-    case OperatorLoginConfiguration.load() do
-      {:ok, configuration} ->
-        configuration
-
-      {:error, :invalid_operator_login_origin} ->
-        Mix.raise("configure an explicit HTTPS endpoint URL, or HTTP on a loopback host")
-
-      {:error, :invalid_operator_login_secret} ->
-        Mix.raise("configure SECRET_KEY_BASE with at least 64 bytes")
-    end
-  end
-
-  defp login_url(origin, token), do: origin <> "/auth/login-token/" <> token
+  defp backend,
+    do: Application.get_env(:vxpipe_console, :user_identity_backend, Vxpipe.Console.UserIdentity)
 end

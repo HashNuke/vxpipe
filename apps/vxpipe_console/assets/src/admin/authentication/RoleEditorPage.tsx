@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "../Button";
 import { PageHeader } from "../PageHeader";
 import { FormField, FormMessage } from "./FormField";
@@ -64,12 +65,13 @@ export function RoleEditorPage({
     <main className="access-page access-editor">
       <a
         className="access-back"
-        href="#/admin/roles"
+        href="/admin/roles"
         onClick={(event) => {
           event.preventDefault();
           onNavigate("/admin/roles");
         }}
       >
+        <ArrowLeft size={16} aria-hidden />
         Back to roles
       </a>
       <PageHeader

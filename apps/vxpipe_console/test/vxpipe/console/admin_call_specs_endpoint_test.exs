@@ -4,23 +4,24 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
   import Phoenix.ConnTest
 
   alias Vxpipe.Calls.{CallSpecSummary, Tenant}
+  alias Vxpipe.Console.Test.FakeUserIdentity
 
   @endpoint Vxpipe.Console.Endpoint
-  @secret String.duplicate("operator-admin-call-specs-secret-", 3)
-  @token "operator-admin-call-specs-token"
   @tenant_key "AAAAAAAAAAAAAAAA"
 
   setup do
     original_calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
-    original_secret = Application.fetch_env!(:vxpipe_console, :operator_login_secret)
+    original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
 
     on_exit(fn ->
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, original_calls)
-      Application.put_env(:vxpipe_console, :operator_login_secret, original_secret)
+
+      if original_backend,
+        do: Application.put_env(:vxpipe_console, :user_identity_backend, original_backend),
+        else: Application.delete_env(:vxpipe_console, :user_identity_backend)
     end)
 
-    Application.put_env(:vxpipe_console, :operator_login_secret, @secret)
-    configure_login_repository()
+    Application.put_env(:vxpipe_console, :user_identity_backend, FakeUserIdentity)
     :ok
   end
 
@@ -74,9 +75,12 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
 
   test "distinguishes missing tenant, unavailable storage, invalid pages, and anonymous access" do
     configure_admin_repository({:error, :tenant_not_found})
-    missing = authenticate() |> recycle() |> https_get("/admin/api/tenants/missing/call-specs")
+
+    missing =
+      authenticate() |> recycle() |> https_get("/admin/api/tenants/BBBBBBBBBBBBBBBB/call-specs")
+
     assert json_response(missing, 404) == %{"error" => %{"code" => "tenant_not_found"}}
-    assert_received {:operator_call_specs_requested, "missing", 25, 0}
+    assert_received {:operator_call_specs_requested, "BBBBBBBBBBBBBBBB", 25, 0}
 
     configure_admin_repository({:error, :database_unavailable})
 
@@ -103,7 +107,7 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
     refute_received {:operator_call_specs_requested, _, _, _}
 
     anonymous = https_get("/admin/api/tenants/#{@tenant_key}/call-specs")
-    assert json_response(anonymous, 401) == %{"error" => %{"code" => "operator_session_required"}}
+    assert json_response(anonymous, 401) == %{"error" => %{"code" => "session_required"}}
   end
 
   describe "editor authoring" do
@@ -427,10 +431,10 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       refute inspect(page) =~ "synthetic-carrier-key"
       refute inspect(page) =~ "application-one"
       anonymous = https_get(path)
-      assert json_response(anonymous, 401)["error"]["code"] == "operator_session_required"
+      assert json_response(anonymous, 401)["error"]["code"] == "session_required"
       refute response.resp_body =~ "foreign"
       anonymous = https_get("/admin/api/tenants/#{tenant.key}/call-spec-editor-lookups")
-      assert json_response(anonymous, 401)["error"]["code"] == "operator_session_required"
+      assert json_response(anonymous, 401)["error"]["code"] == "session_required"
     end
 
     test "publish projects the stored compiler error and storage faults remain value-free", %{
@@ -499,7 +503,7 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
     } do
       path = "/admin/api/tenants/#{tenant.key}/call-specs"
       anonymous = post(build_conn(), "https://localhost" <> path, %{"source" => editor_source()})
-      assert json_response(anonymous, 401)["error"]["code"] == "operator_session_required"
+      assert json_response(anonymous, 401)["error"]["code"] == "session_required"
 
       assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
         auth
@@ -546,27 +550,10 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
   end
 
   defp authenticate do
-    form = https_get("/auth/login-token/#{@token}")
-
-    form
-    |> recycle()
-    |> post("https://localhost/auth/login-token", %{
-      "_csrf_token" => csrf_token(form.resp_body),
-      "operator" => %{"token" => @token, "code" => "01234567"}
+    post(build_conn(), "https://localhost/auth/api/login", %{
+      "email" => FakeUserIdentity.email(),
+      "password" => FakeUserIdentity.password()
     })
-  end
-
-  defp configure_login_repository do
-    settings = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
-
-    Application.put_env(
-      :vxpipe_calls,
-      Vxpipe.Calls,
-      Keyword.put(settings, :operator_login_challenge_repository, {
-        Vxpipe.Console.Test.OperatorLoginChallengeRepository,
-        {self(), :ok}
-      })
-    )
   end
 
   defp configure_admin_repository(result) do
@@ -580,11 +567,6 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
         {self(), result}
       })
     )
-  end
-
-  defp csrf_token(body) do
-    [_, token] = Regex.run(~r/name="_csrf_token" value="([^"]+)"/, body)
-    token
   end
 
   defp https_get(conn \\ build_conn(), path), do: get(conn, "https://localhost#{path}")

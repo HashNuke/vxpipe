@@ -3,6 +3,7 @@ import {
   useContext,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -16,6 +17,7 @@ import {
   RouterProvider,
   Navigate,
   Route,
+  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -36,6 +38,7 @@ import {
   parseServiceDirectory,
   parseTenantPage,
 } from "./admin/adminApi";
+import { shouldInterceptNavigation } from "./admin/shouldInterceptNavigation";
 import { CallSpecCallsPage } from "./admin/CallSpecCallsPage";
 import { OnboardingPage } from "./admin/OnboardingPage";
 import {
@@ -66,6 +69,28 @@ import { TenantsPage } from "./admin/TenantsPage";
 import { CallSpecEditorRoute } from "./CallSpecEditorRoute";
 import { ScopedServicesApp } from "./ScopedServicesApp";
 import { parseBindingDirectory } from "./admin/serviceBindingsApi";
+import { AccessFrame } from "./admin/authentication/AccessFrame";
+import { AccountPage } from "./admin/authentication/AccountPage";
+import { AuthPage } from "./admin/authentication/AuthPage";
+import { AuthenticationApi, AuthenticationError, isForbidden, isSessionExpired } from "./admin/authentication/authenticationApi";
+import { ResetPasswordPage } from "./admin/authentication/ResetPasswordPage";
+import { RoleEditorPage } from "./admin/authentication/RoleEditorPage";
+import { RolesPage } from "./admin/authentication/RolesPage";
+import { UserEditorPage } from "./admin/authentication/UserEditorPage";
+import { UsersPage } from "./admin/authentication/UsersPage";
+import type { Role as AccessRole, Tenant as AccessTenant, User as AccessUser } from "./admin/authentication/types";
+import {
+  canCreateCallSpecs,
+  canCreateTenants,
+  canReadPlatformServices,
+  canWritePlatformServices,
+  canReadUsers,
+  canWriteTenantCredentials,
+  membershipAccess,
+  workspaceDestinationsFor,
+} from "./admin/authentication/access";
+import { FormMessage } from "./admin/authentication/FormField";
+import { PageNotice } from "./admin/PageNotice";
 import type { PaginationModel, TenantsPageState } from "./admin/tenantTypes";
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -82,6 +107,7 @@ type AppProps = {
   csrfToken: string;
   fetchImpl?: Fetch;
   onSessionExpired?: () => void;
+  onAuthenticated?: () => void;
 };
 
 const defaultFetch: Fetch = (input, init) => window.fetch(input, init);
@@ -96,6 +122,17 @@ function ConfiguredRoute({ render }: { render: (props: AppProps) => ReactNode })
 export function App(props: AppProps) {
   const [router] = useState(() => createBrowserRouter(createRoutesFromElements(
       <>
+        <Route path="/auth/setup" element={<ConfiguredRoute render={(props) => <AuthenticationRoute {...props} mode="setup" />} />} />
+        <Route path="/auth/login" element={<ConfiguredRoute render={(props) => <AuthenticationRoute {...props} mode="login" />} />} />
+        <Route path="/auth/recover" element={<ConfiguredRoute render={(props) => <AuthenticationRoute {...props} mode="recover" />} />} />
+        <Route path="/admin/account" element={<ConfiguredRoute render={(props) => <AccountRoute {...props} />} />} />
+        <Route path="/admin/users/new" element={<ConfiguredRoute render={(props) => <UserNewRoute {...props} />} />} />
+        <Route path="/admin/users/:id/reset-password" element={<ConfiguredRoute render={(props) => <ResetPasswordRoute {...props} />} />} />
+        <Route path="/admin/users/:id" element={<ConfiguredRoute render={(props) => <UserDetailRoute {...props} />} />} />
+        <Route path="/admin/users" element={<ConfiguredRoute render={(props) => <UsersRoute {...props} />} />} />
+        <Route path="/admin/roles/new" element={<ConfiguredRoute render={(props) => <RoleNewRoute {...props} />} />} />
+        <Route path="/admin/roles/:id" element={<ConfiguredRoute render={(props) => <RoleDetailRoute {...props} />} />} />
+        <Route path="/admin/roles" element={<ConfiguredRoute render={(props) => <RolesRoute {...props} />} />} />
         <Route path="/admin/platform/services" element={<ConfiguredRoute render={(props) => <ScopedServicesRoute {...props} platform />} />} />
         <Route path="/admin/tenants/:tenantKey/setup-services" element={<RetiredSetupServicesRedirect />} />
         <Route path="/admin/onboarding" element={<ConfiguredRoute render={(props) => <RoutedApp {...props} route={{ kind: "onboarding" }} />} />} />
@@ -113,16 +150,939 @@ export function App(props: AppProps) {
   return <AppConfiguration value={props}><RouterProvider router={router} /></AppConfiguration>;
 }
 
+function AuthenticationRoute(props: AppProps & { mode: "setup" | "login" | "recover" }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const notice =
+    typeof location.state === "object" && location.state !== null && "notice" in location.state
+      ? String((location.state as { notice: unknown }).notice)
+      : undefined;
+  const api = useAuthenticationApi(props);
+  const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+  const [completed, setCompleted] = useState(false);
+  const [proofRequired, setProofRequired] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    api.status().then(({ status: setupStatus }) => {
+      if (!active) return;
+      setCompleted(setupStatus === "complete");
+      setProofRequired(setupStatus === "pending_operator_proof");
+      if (setupStatus !== "complete" && props.mode !== "setup")
+        navigate("/auth/setup", { replace: true });
+      else if (setupStatus === "complete" && props.mode === "setup")
+        navigate("/auth/login", { replace: true });
+      setStatus("ready");
+    }).catch(() => {
+      if (active) setStatus("unavailable");
+    });
+    return () => { active = false; };
+  }, [api, navigate, props.mode]);
+
+  return (
+    <AccessFrame>
+      {status === "loading" ? <main className="access-auth" role="status">Loading…</main> :
+        <>
+          {notice ? (
+            <div className="access-notice">
+              <FormMessage>{notice}</FormMessage>
+            </div>
+          ) : null}
+          <AuthPage
+          mode={props.mode}
+          completed={completed && props.mode === "setup"}
+          proofRequired={proofRequired}
+          unavailable={status === "unavailable"}
+          onSubmit={async (email, password, proof) => {
+            try {
+              if (props.mode === "setup") await api.setup(email, password, password, proof);
+              else if (props.mode === "recover") await api.recover(proof ?? "", email, password, password);
+              else await api.login(email, password);
+              // Session renewal replaces CSRF state; load a fresh document before writes.
+              (props.onAuthenticated ?? (() => window.location.assign("/admin")))();
+              return {};
+            } catch (error) {
+              return { error: error instanceof Error ? error.message : "Unable to sign in." };
+            }
+          }}
+          />
+        </>}
+    </AccessFrame>
+  );
+}
+
+function UsersRoute(props: AppProps) {
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const navigate = useNavigate();
+  const [query, setQuery] = useSearchParams();
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const { roles, rolesLimited, rolesState } = useAccessRoles(api, sessionState === "ready", onSessionExpired);
+  const [users, setUsers] = useState<AccessUser[]>([]);
+  const [pagination, setPagination] = useState<{ page: number; page_size: number; total: number; total_pages: number }>();
+  const [directoryState, setDirectoryState] = useState<AccessLoadState>("loading");
+
+  useEffect(() => {
+    if (sessionState !== "ready" || rolesState !== "ready") return;
+    let active = true;
+    api.users(query).then((page) => {
+      if (!active) return;
+      setUsers(page.users);
+      setPagination(page.pagination);
+      setDirectoryState("ready");
+    }).catch((error: unknown) => {
+      if (!active) return;
+      if (isSessionExpired(error)) {
+        onSessionExpired();
+        return;
+      }
+      if (error instanceof AuthenticationError && error.status === 422) {
+        const page = Number(query.get("page"));
+        if (query.get("page") !== null && Number.isInteger(page) && page > 1) {
+          const next = new URLSearchParams(query);
+          next.delete("page");
+          setQuery(next, { replace: true });
+          return;
+        }
+        // Invalid filters (for example an unknown role) keep their URL and
+        // render the directory empty so the page can explain the filter.
+        setUsers([]);
+        setPagination(undefined);
+        setDirectoryState("ready");
+        return;
+      }
+      setDirectoryState("unavailable");
+    });
+    return () => { active = false; };
+  }, [api, query, sessionState, rolesState, onSessionExpired, setQuery]);
+
+  return (
+    <AccessShell
+      api={api}
+      session={session}
+      sessionState={sessionState}
+      path="/admin/users"
+      statusLabel="Loading users…"
+      unavailableTitle="Users unavailable"
+      unavailableMessage="Your session could not be loaded. Try again shortly."
+    >
+      {({ role }) => {
+        if (rolesState === "unavailable" || directoryState === "unavailable") {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="Users unavailable"
+                message="The directory could not be loaded. Try again shortly."
+              />
+            </main>
+          );
+        }
+        // The directory heading renders together with its rows so links,
+        // filters and pagination share one consistent server result.
+        if (rolesState !== "ready" || directoryState !== "ready") {
+          return <main className="access-page" role="status">Loading users…</main>;
+        }
+        return (
+          <UsersPage
+            users={users}
+            roles={roles}
+            rolesLimited={rolesLimited}
+            actorRole={role}
+            query={query}
+            onQuery={setQuery}
+            onNavigate={navigate}
+            state="ready"
+            pagination={pagination}
+          />
+        );
+      }}
+    </AccessShell>
+  );
+}
+
+function AccountRoute(props: AppProps) {
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const navigate = useNavigate();
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+
+  return (
+    <AccessShell
+      api={api}
+      session={session}
+      sessionState={sessionState}
+      path="/admin/account"
+      statusLabel="Loading account…"
+      unavailableTitle="Account unavailable"
+      unavailableMessage="Your account could not be loaded. Try again shortly."
+    >
+      {({ user, role }) => (
+        <AccountPage
+          key={user.id}
+          user={user}
+          role={role}
+          onSave={async (email, currentPassword, newPassword, confirmation) => {
+            try {
+              await api.updateAccount(email, currentPassword, newPassword, confirmation);
+              if (newPassword) {
+                // Changing the password revokes every session, including
+                // this one. Explain the sign-out and redirect to sign-in
+                // instead of leaving a dead session on the account page.
+                navigate("/auth/login", {
+                  state: {
+                    notice:
+                      "Password changed. Your sessions were signed out. Sign in again with your new password.",
+                  },
+                });
+              }
+              return {};
+            } catch (error: unknown) {
+              if (isSessionExpired(error)) onSessionExpired();
+              return { error: accessError(error) };
+            }
+          }}
+        />
+      )}
+    </AccessShell>
+  );
+}
+
+function UserNewRoute(props: AppProps) {
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const navigate = useNavigate();
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const { roles, rolesState } = useAccessRoles(api, sessionState === "ready", onSessionExpired);
+  const tenants = useTenantOptions(api, sessionState === "ready", onSessionExpired);
+
+  return (
+    <AccessShell
+      api={api}
+      session={session}
+      sessionState={sessionState}
+      path="/admin/users"
+      statusLabel="Loading…"
+      unavailableTitle="Users unavailable"
+      unavailableMessage="Your session could not be loaded. Try again shortly."
+    >
+      {(current) => {
+        if (!current.role.kind) {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="Access unavailable"
+                message="Your role does not allow this action."
+              />
+            </main>
+          );
+        }
+        if (rolesState !== "ready") {
+          return rolesState === "unavailable" ? (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="Users unavailable"
+                message="The directory could not be loaded. Try again shortly."
+              />
+            </main>
+          ) : (
+            <main className="access-page" role="status">Loading…</main>
+          );
+        }
+        return (
+          <UserEditorPage
+            actorRole={current.role}
+            roles={roles}
+            tenants={tenants}
+            onNavigate={navigate}
+            onSave={async (draft, password) => {
+              try {
+                const { user } = await api.createUser({
+                  email: draft.email,
+                  password: password ?? "",
+                  passwordConfirmation: password ?? "",
+                  roleId: draft.roleId,
+                  memberships: draft.memberships,
+                });
+                navigate(`/admin/users/${user.id}`);
+                return {};
+              } catch (error: unknown) {
+                if (isSessionExpired(error)) onSessionExpired();
+                return { error: accessError(error) };
+              }
+            }}
+          />
+        );
+      }}
+    </AccessShell>
+  );
+}
+
+function UserDetailRoute(props: AppProps) {
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const navigate = useNavigate();
+  const { id = "" } = useParams();
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const { roles, rolesLimited, rolesState } = useAccessRoles(api, sessionState === "ready", onSessionExpired);
+  const tenants = useTenantOptions(api, sessionState === "ready", onSessionExpired);
+  const [target, setTarget] = useState<AccessUser | null>(null);
+  const [detail, setDetail] = useState<AccessLoadState | "missing" | "denied">("loading");
+
+  useEffect(() => {
+    if (sessionState !== "ready") return;
+    let active = true;
+    setDetail("loading");
+    api.user(id).then(({ user }) => {
+      if (!active) return;
+      setTarget(user);
+      setDetail("ready");
+    }).catch((error: unknown) => {
+      if (!active) return;
+      if (isSessionExpired(error)) {
+        onSessionExpired();
+        return;
+      }
+      if (error instanceof AuthenticationError && error.status === 404) setDetail("missing");
+      else if (isForbidden(error)) setDetail("denied");
+      else setDetail("unavailable");
+    });
+    return () => { active = false; };
+  }, [api, id, sessionState, onSessionExpired]);
+
+  return (
+    <AccessShell
+      api={api}
+      session={session}
+      sessionState={sessionState}
+      path="/admin/users"
+      statusLabel="Loading user…"
+      unavailableTitle="Users unavailable"
+      unavailableMessage="Your session could not be loaded. Try again shortly."
+    >
+      {(current) => {
+        if (detail === "loading" || rolesState === "loading") {
+          return <main className="access-page" role="status">Loading user…</main>;
+        }
+        if (detail === "missing") {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="User not found"
+                message="This account could not be found."
+              />
+            </main>
+          );
+        }
+        if (detail === "denied") {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="Access unavailable"
+                message="Your role does not allow this action."
+              />
+            </main>
+          );
+        }
+        if (detail === "unavailable" || rolesState === "unavailable" || !target) {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="User unavailable"
+                message="This account could not be loaded. Try again shortly."
+              />
+            </main>
+          );
+        }
+        return (
+          <UserEditorPage
+            key={target.id}
+            actorRole={current.role}
+            roles={roles}
+            tenants={tenants}
+            user={target}
+            onNavigate={navigate}
+            onSave={async (draft) => {
+              try {
+                const { user: updated } = await api.updateUser(target.id, {
+                  email: draft.email,
+                  roleId: draft.roleId,
+                  enabled: draft.enabled,
+                  memberships: rolesLimited ? target.memberships : draft.memberships,
+                });
+                setTarget(updated);
+                return {};
+              } catch (error: unknown) {
+                if (isSessionExpired(error)) onSessionExpired();
+                return { error: accessError(error) };
+              }
+            }}
+          />
+        );
+      }}
+    </AccessShell>
+  );
+}
+
+function ResetPasswordRoute(props: AppProps) {
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const navigate = useNavigate();
+  const { id = "" } = useParams();
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const { roles, rolesState } = useAccessRoles(api, sessionState === "ready", onSessionExpired);
+  const [target, setTarget] = useState<AccessUser | null>(null);
+  const [detail, setDetail] = useState<AccessLoadState | "missing" | "denied">("loading");
+
+  useEffect(() => {
+    if (sessionState !== "ready") return;
+    let active = true;
+    setDetail("loading");
+    api.user(id).then(({ user }) => {
+      if (!active) return;
+      setTarget(user);
+      setDetail("ready");
+    }).catch((error: unknown) => {
+      if (!active) return;
+      if (isSessionExpired(error)) {
+        onSessionExpired();
+        return;
+      }
+      if (error instanceof AuthenticationError && error.status === 404) setDetail("missing");
+      else if (isForbidden(error)) setDetail("denied");
+      else setDetail("unavailable");
+    });
+    return () => { active = false; };
+  }, [api, id, sessionState, onSessionExpired]);
+
+  return (
+    <AccessShell
+      api={api}
+      session={session}
+      sessionState={sessionState}
+      path="/admin/users"
+      statusLabel="Loading user…"
+      unavailableTitle="Users unavailable"
+      unavailableMessage="Your session could not be loaded. Try again shortly."
+    >
+      {(current) => {
+        if (detail === "loading" || rolesState === "loading") {
+          return <main className="access-page" role="status">Loading user…</main>;
+        }
+        const targetRole = roles.find((role) => role.id === target?.roleId);
+        if (detail !== "ready" || !target || !targetRole) {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title={detail === "denied" ? "Access unavailable" : "User unavailable"}
+                message={
+                  detail === "denied"
+                    ? "Your role does not allow this action."
+                    : "This account could not be loaded. Try again shortly."
+                }
+              />
+            </main>
+          );
+        }
+        return (
+          <ResetPasswordPage
+            key={target.id}
+            actorRole={current.role}
+            targetRole={targetRole}
+            user={target}
+            onNavigate={navigate}
+            onReset={async (password) => {
+              try {
+                // The page only calls back after its confirmation matches,
+                // so the confirmed value doubles as the server confirmation.
+                await api.resetPassword(target.id, password, password);
+                return {};
+              } catch (error: unknown) {
+                if (isSessionExpired(error)) onSessionExpired();
+                return { error: accessError(error) };
+              }
+            }}
+          />
+        );
+      }}
+    </AccessShell>
+  );
+}
+
+function RolesRoute(props: AppProps) {
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const navigate = useNavigate();
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const [roles, setRoles] = useState<AccessRole[]>([]);
+  const [affectedUsers, setAffectedUsers] = useState<Record<string, number>>({});
+  const [directoryState, setDirectoryState] = useState<AccessLoadState | "denied">("loading");
+
+  useEffect(() => {
+    if (sessionState !== "ready") return;
+    let active = true;
+    setDirectoryState("loading");
+    (async () => {
+      const { roles: directory } = await api.roles();
+      if (!active) return;
+      setRoles(directory);
+      // Counts come from the authoritative per-role endpoint; a bounded
+      // user-directory scan would present partial counts as authoritative.
+      const counts: Record<string, number> = {};
+      for (const entry of directory) {
+        if (!active) return;
+        const detail = await api.role(entry.id).catch((error: unknown) => {
+          if (isSessionExpired(error) || isForbidden(error)) throw error;
+          return null;
+        });
+        if (detail) counts[entry.id] = detail.affected_users;
+      }
+      if (active) setAffectedUsers(counts);
+    })().then(
+      () => { if (active) setDirectoryState("ready"); },
+      (error: unknown) => {
+        if (!active) return;
+        if (isSessionExpired(error)) {
+          onSessionExpired();
+          return;
+        }
+        setDirectoryState(isForbidden(error) ? "denied" : "unavailable");
+      },
+    );
+    return () => { active = false; };
+  }, [api, sessionState, onSessionExpired]);
+
+  return (
+    <AccessShell
+      api={api}
+      session={session}
+      sessionState={sessionState}
+      path="/admin/roles"
+      statusLabel="Loading roles…"
+      unavailableTitle="Roles unavailable"
+      unavailableMessage="Your session could not be loaded. Try again shortly."
+    >
+      {(current) => {
+        if (directoryState === "loading") {
+          return <main className="access-page" role="status">Loading roles…</main>;
+        }
+        if (directoryState === "denied" || !current.role.kind) {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="Access unavailable"
+                message="Your role does not allow this action."
+              />
+            </main>
+          );
+        }
+        if (directoryState === "unavailable") {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="Roles unavailable"
+                message="Roles could not be loaded. Try again shortly."
+              />
+            </main>
+          );
+        }
+        return <RolesPage roles={roles} affectedUsers={affectedUsers} onNavigate={navigate} />;
+      }}
+    </AccessShell>
+  );
+}
+
+function RoleNewRoute(props: AppProps) {
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const navigate = useNavigate();
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+
+  return (
+    <AccessShell
+      api={api}
+      session={session}
+      sessionState={sessionState}
+      path="/admin/roles"
+      statusLabel="Loading…"
+      unavailableTitle="Roles unavailable"
+      unavailableMessage="Your session could not be loaded. Try again shortly."
+    >
+      {(current) => {
+        if (!current.role.kind) {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="Access unavailable"
+                message="Your role does not allow this action."
+              />
+            </main>
+          );
+        }
+        return (
+          <RoleEditorPage
+            onNavigate={navigate}
+            onSave={async (draft) => {
+              try {
+                const { role } = await api.createRole(draft);
+                navigate(`/admin/roles/${role.id}`);
+                return {};
+              } catch (error: unknown) {
+                if (isSessionExpired(error)) onSessionExpired();
+                return { error: accessError(error) };
+              }
+            }}
+          />
+        );
+      }}
+    </AccessShell>
+  );
+}
+
+function RoleDetailRoute(props: AppProps) {
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const navigate = useNavigate();
+  const { id = "" } = useParams();
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const [entry, setEntry] = useState<{ role: AccessRole; affectedUsers: number } | null>(null);
+  const [detail, setDetail] = useState<AccessLoadState | "missing" | "denied">("loading");
+
+  useEffect(() => {
+    if (sessionState !== "ready") return;
+    let active = true;
+    setDetail("loading");
+    api.role(id).then(({ role, affected_users }) => {
+      if (!active) return;
+      setEntry({ role, affectedUsers: affected_users });
+      setDetail("ready");
+    }).catch((error: unknown) => {
+      if (!active) return;
+      if (isSessionExpired(error)) {
+        onSessionExpired();
+        return;
+      }
+      if (error instanceof AuthenticationError && error.status === 404) setDetail("missing");
+      else if (isForbidden(error)) setDetail("denied");
+      else setDetail("unavailable");
+    });
+    return () => { active = false; };
+  }, [api, id, sessionState, onSessionExpired]);
+
+  return (
+    <AccessShell
+      api={api}
+      session={session}
+      sessionState={sessionState}
+      path="/admin/roles"
+      statusLabel="Loading role…"
+      unavailableTitle="Roles unavailable"
+      unavailableMessage="Your session could not be loaded. Try again shortly."
+    >
+      {(current) => {
+        if (detail === "loading") {
+          return <main className="access-page" role="status">Loading role…</main>;
+        }
+        if (detail === "missing") {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="Role not found"
+                message="This role could not be found."
+              />
+            </main>
+          );
+        }
+        if (detail === "denied" || !current.role.kind) {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="Access unavailable"
+                message="Your role does not allow this action."
+              />
+            </main>
+          );
+        }
+        if (detail === "unavailable" || !entry) {
+          return (
+            <main className="access-page">
+              <PageNotice
+                kind="unavailable"
+                title="Role unavailable"
+                message="This role could not be loaded. Try again shortly."
+              />
+            </main>
+          );
+        }
+        return (
+          <RoleEditorPage
+            key={entry.role.id}
+            role={entry.role}
+            affectedUsers={entry.affectedUsers}
+            onNavigate={navigate}
+            onSave={async (draft) => {
+              try {
+                const { role } = await api.updateRole(entry.role.id, draft, entry.role.revision);
+                setEntry((currentEntry) =>
+                  currentEntry ? { ...currentEntry, role } : currentEntry,
+                );
+                return {};
+              } catch (error: unknown) {
+                if (isSessionExpired(error)) onSessionExpired();
+                return { error: accessError(error) };
+              }
+            }}
+            onDelete={async () => {
+              try {
+                await api.deleteRole(entry.role.id);
+                navigate("/admin/roles");
+                return {};
+              } catch (error: unknown) {
+                if (isSessionExpired(error)) onSessionExpired();
+                return { error: accessError(error) };
+              }
+            }}
+          />
+        );
+      }}
+    </AccessShell>
+  );
+}
+
+type AccessSession = { user: AccessUser; role: AccessRole };
+type AccessLoadState = "loading" | "ready" | "unavailable";
+
+function useAuthenticationApi(props: AppProps) {
+  return useMemo(
+    () => new AuthenticationApi(props.csrfToken, props.fetchImpl ?? defaultFetch),
+    [props.csrfToken, props.fetchImpl],
+  );
+}
+
+function useAccessSession(api: AuthenticationApi, onSessionExpired: () => void) {
+  const [session, setSession] = useState<AccessSession | null>(null);
+  const [sessionState, setSessionState] = useState<AccessLoadState>("loading");
+
+  useEffect(() => {
+    let active = true;
+    api.session().then((current) => {
+      if (!active) return;
+      setSession(current);
+      setSessionState("ready");
+    }).catch((error: unknown) => {
+      if (!active) return;
+      if (isSessionExpired(error)) onSessionExpired();
+      else setSessionState("unavailable");
+    });
+    return () => { active = false; };
+  }, [api, onSessionExpired]);
+
+  return { session, sessionState };
+}
+
+function useAccessRoles(
+  api: AuthenticationApi,
+  ready: boolean,
+  onSessionExpired: () => void,
+) {
+  const [roles, setRoles] = useState<AccessRole[]>([]);
+  const [rolesLimited, setRolesLimited] = useState(false);
+  const [rolesState, setRolesState] = useState<AccessLoadState>("loading");
+
+  useEffect(() => {
+    if (!ready) return;
+    let active = true;
+    api.roles().then(({ roles: directory }) => {
+      if (!active) return;
+      setRoles(directory);
+      setRolesLimited(false);
+      setRolesState("ready");
+    }).catch((error: unknown) => {
+      if (!active) return;
+      if (isSessionExpired(error)) {
+        onSessionExpired();
+        return;
+      }
+      if (!isForbidden(error)) {
+        setRolesState("unavailable");
+        return;
+      }
+      // `users.read` viewers cannot list full roles; minimal option
+      // metadata still drives filters, badges and read-only display.
+      api.roleOptions().then(({ roles: directory }) => {
+        if (!active) return;
+        setRoles(directory);
+        setRolesLimited(true);
+        setRolesState("ready");
+      }).catch((fallback: unknown) => {
+        if (!active) return;
+        if (isSessionExpired(fallback)) onSessionExpired();
+        else setRolesState("unavailable");
+      });
+    });
+    return () => { active = false; };
+  }, [api, ready, onSessionExpired]);
+
+  return { roles, rolesLimited, rolesState };
+}
+
+function useTenantOptions(
+  api: AuthenticationApi,
+  ready: boolean,
+  onSessionExpired: () => void,
+) {
+  const [tenants, setTenants] = useState<AccessTenant[]>([]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let active = true;
+    api.tenantOptions().then(({ tenants: options }) => {
+      if (active) setTenants(options);
+    }).catch((error: unknown) => {
+      if (active && isSessionExpired(error)) onSessionExpired();
+    });
+    return () => { active = false; };
+  }, [api, ready, onSessionExpired]);
+
+  return tenants;
+}
+
+function AccessShell({
+  api,
+  session,
+  sessionState,
+  path,
+  statusLabel,
+  unavailableTitle,
+  unavailableMessage,
+  children,
+}: {
+  api: AuthenticationApi;
+  session: AccessSession | null;
+  sessionState: AccessLoadState;
+  path: string;
+  statusLabel: string;
+  unavailableTitle: string;
+  unavailableMessage: string;
+  children: (session: AccessSession) => ReactNode;
+}) {
+  const navigate = useNavigate();
+  const [logoutError, setLogoutError] = useState<string>();
+  const handleLogout = useCallback(async () => {
+    setLogoutError(undefined);
+    try {
+      await api.logout();
+      window.location.assign("/auth/login");
+    } catch (error) {
+      setLogoutError(accessError(error));
+    }
+  }, [api]);
+
+  return (
+    <AccessFrame
+      actor={session?.user}
+      role={session?.role}
+      path={path}
+      onNavigate={navigate}
+      onLogout={handleLogout}
+    >
+      {logoutError ? <div className="access-page"><FormMessage error>{logoutError}</FormMessage></div> : null}
+      {session && sessionState === "ready" ? (
+        children(session)
+      ) : sessionState === "unavailable" ? (
+        <main className="access-page">
+          <PageNotice kind="unavailable" title={unavailableTitle} message={unavailableMessage} />
+        </main>
+      ) : (
+        <main className="access-page" role="status">{statusLabel}</main>
+      )}
+    </AccessFrame>
+  );
+}
+
+function accessError(error: unknown): string {
+  return error instanceof Error ? error.message : "The request could not be completed. Try again.";
+}
+
+/**
+ * Narrows the session payload to a usable principal. Malformed payloads
+ * (for example an unrelated JSON document) fall back to legacy ungated UI
+ * instead of hiding navigation from every operational page.
+ */
+function toOperationalSession(value: AccessSession | null): AccessSession | null {
+  if (!value || typeof value !== "object") return null;
+  const { user, role } = value;
+  if (!user || typeof user.email !== "string" || !Array.isArray(user.memberships)) return null;
+  if (!role || typeof role.id !== "string" || !Array.isArray(role.grants)) return null;
+  return value;
+}
+
+function OperationalAccountLinks({ session }: { session: AccessSession | null }) {
+  const navigate = useNavigate();
+  if (!session) return null;
+  const { role } = session;
+  const link = (path: string, label: string) => (
+    <a
+      key={path}
+      className="text-sm"
+      href={path}
+      onClick={(event) => {
+        if (shouldInterceptNavigation(event)) {
+          event.preventDefault();
+          navigate(path);
+        }
+      }}
+    >
+      {label}
+    </a>
+  );
+  return (
+    <>
+      {link("/admin/account", "Account")}
+      {canReadUsers(role) ? link("/admin/users", "Users") : null}
+      {role.kind ? link("/admin/roles", "Roles") : null}
+    </>
+  );
+}
+
 function ScopedServicesRoute({ platform = false, ...props }: AppProps & { platform?: boolean }) {
   const { tenantKey = "" } = useParams();
   const navigate = useNavigate();
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const principal = sessionState === "ready" ? toOperationalSession(session) : null;
   return (
     <ScopedServicesApp
       key={platform ? "platform" : tenantKey}
       {...props}
       scope={platform ? { kind: "platform" } : { kind: "tenant", tenantKey, tenantName: "Tenant" }}
       onNavigate={navigate}
-      headerActions={<SignOut csrfToken={props.csrfToken} />}
+      accessDenied={platform && !!principal && !canReadPlatformServices(principal.role)}
+      canEdit={!!principal && (platform
+        ? canWritePlatformServices(principal.role)
+        : canWriteTenantCredentials(principal.role, membershipAccess(principal.user, tenantKey)))}
+      headerActions={
+        principal ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <OperationalAccountLinks session={principal} />
+            <SignOut csrfToken={props.csrfToken} />
+          </div>
+        ) : (
+          <SignOut csrfToken={props.csrfToken} />
+        )
+      }
     />
   );
 }
@@ -191,6 +1151,15 @@ function RoutedApp({
   route,
 }: AppProps & { route: AdminRoute }) {
   const routerNavigate = useNavigate();
+  const api = useAuthenticationApi({ csrfToken, fetchImpl, onSessionExpired });
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const principal = sessionState === "ready" ? toOperationalSession(session) : null;
+  const tenantKey = "tenantKey" in route ? route.tenantKey : null;
+  const tenantAccess =
+    principal && tenantKey ? membershipAccess(principal.user, tenantKey) : undefined;
+  const gatedDestinations = principal
+    ? workspaceDestinationsFor(principal.role, tenantAccess)
+    : undefined;
   const [tenants, setTenants] = useState<TenantsPageState>({ status: "loading" });
   const [onboarding, setOnboarding] = useState<OnboardingPageState>({
     tenant: { status: "creating", name: "Demo" },
@@ -262,6 +1231,17 @@ function RoutedApp({
   }, [route]);
 
   useEffect(() => {
+    if (route.kind !== "tenants") return;
+    if (tenants.status !== "ready" || tenants.tenants.length !== 0) return;
+    if (sessionState === "loading") return;
+    // An empty directory opens onboarding only for principals that may
+    // create tenants. Members without assignments would otherwise land on a
+    // forbidden onboarding flow; they stay on the empty directory.
+    if (principal && !canCreateTenants(principal.role)) return;
+    navigate({ kind: "onboarding" }, true);
+  }, [route.kind, tenants, principal, sessionState, navigate]);
+
+  useEffect(() => {
     const controller = new AbortController();
     let current = true;
     const isCurrent = () => current;
@@ -305,10 +1285,6 @@ function RoutedApp({
         .then((state) => {
           if (current && state) {
             setTenants(state);
-            if (state.status === "ready" && state.tenants.length === 0) {
-              const next = { kind: "onboarding" } as const;
-              navigate(next, true);
-            }
           }
         })
         .catch((error: unknown) => {
@@ -465,14 +1441,23 @@ function RoutedApp({
     onboardingReload,
   ]);
 
-  const headerActions = (
+  const headerActions = principal ? (
     <div className="flex flex-wrap items-center gap-2">
-      <a className="text-sm" href="/admin/platform/services">Platform services</a>
+      <OperationalAccountLinks session={principal} />
+      {canReadPlatformServices(principal.role) ? (
+        <a className="text-sm" href="/admin/platform/services">Platform services</a>
+      ) : null}
+      <SignOut csrfToken={csrfToken} />
+    </div>
+  ) : (
+    <div className="flex flex-wrap items-center gap-2">
       <SignOut csrfToken={csrfToken} />
     </div>
   );
-  const workspaceDestinations = ["call-specs", "calls", "services"] as const;
-
+  // Privileged destinations stay hidden until the server principal arrives;
+  // falling back to the full list would flash Services to read-only members.
+  // Privileged destinations stay hidden until the server principal arrives;
+  // falling back to the full list would flash Services to read-only members.
   if (route.kind === "onboarding") {
     return (
       <OnboardingPage
@@ -510,9 +1495,10 @@ function RoutedApp({
   }
 
   if (route.kind === "call-specs") {
+    const canCreate = !!principal && canCreateCallSpecs(principal.role, tenantAccess);
     return (
       <TenantCallSpecsPage
-        onNewCallSpec={() => routerNavigate(`/admin/tenants/${encodeURIComponent(route.tenantKey)}/call-specs/new`)}
+        onNewCallSpec={canCreate ? () => routerNavigate(`/admin/tenants/${encodeURIComponent(route.tenantKey)}/call-specs/new`) : undefined}
         onEditCallSpec={(id) => routerNavigate(`/admin/tenants/${encodeURIComponent(route.tenantKey)}/call-specs/${encodeURIComponent(id)}`)}
         headerActions={headerActions}
         linkCalls
@@ -530,7 +1516,7 @@ function RoutedApp({
           }
         }}
         state={callSpecs}
-        workspaceDestinations={[...workspaceDestinations]}
+        workspaceDestinations={gatedDestinations ?? []}
       />
     );
   }
@@ -557,7 +1543,7 @@ function RoutedApp({
           }
         }}
         state={calls}
-        workspaceDestinations={[...workspaceDestinations]}
+        workspaceDestinations={gatedDestinations ?? []}
       />
     );
   }
@@ -566,6 +1552,7 @@ function RoutedApp({
     return (
       <TenantServicesPage
         headerActions={headerActions}
+        canConnect={principal ? canWriteTenantCredentials(principal.role, tenantAccess) : false}
         onCreateCredential={(draft) =>
           saveCredential(
             route.tenantKey,
@@ -628,7 +1615,7 @@ function RoutedApp({
           }
         }}
         state={services}
-        workspaceDestinations={[...workspaceDestinations]}
+        workspaceDestinations={gatedDestinations ?? []}
       />
     );
   }

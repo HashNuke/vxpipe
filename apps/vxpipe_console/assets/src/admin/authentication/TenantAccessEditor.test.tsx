@@ -10,7 +10,7 @@ function Editor() {
   const [value, setValue] = useState<Membership[]>([]);
   return (
     <TenantAccessEditor
-      role={roles[4]}
+      role={roles[2]}
       tenants={tenants}
       value={value}
       onChange={setValue}
@@ -29,7 +29,7 @@ test("adds a searched tenant read-only, changes its access and removes it", () =
   expect(access).toHaveValue("read");
   fireEvent.change(access, { target: { value: "read_write" } });
   expect(
-    screen.getByText("Calls: read & write · Call specs: read & write"),
+    screen.getByText("Calls: read & write · Call specs: read & write · Services: read & write · API keys: read & write"),
   ).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Remove Northwind" }));
   expect(screen.getByText("No tenants assigned")).toBeVisible();
@@ -51,7 +51,7 @@ test("shows inherited all-tenant access with no membership picker", () => {
 test("read-only viewers cannot edit assigned access", () => {
   render(
     <TenantAccessEditor
-      role={roles[4]}
+      role={roles[3]}
       tenants={tenants}
       value={[{ tenantId: tenants[0].id, access: "read" }]}
       readOnly
@@ -60,4 +60,29 @@ test("read-only viewers cannot edit assigned access", () => {
   expect(screen.getByText(tenants[0].name)).toBeVisible();
   expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
+});
+test("all-tenant write does not enable assignment write without an assigned grant", () => {
+  const mixedWriteRole = {
+    ...roles[2],
+    grants: [
+      { permission: "calls.read", scope: "assigned_tenants" as const },
+      { permission: "calls.write", scope: "all_tenants" as const },
+      { permission: "call_specs.read", scope: "assigned_tenants" as const },
+    ],
+  };
+  render(
+    <TenantAccessEditor
+      role={mixedWriteRole}
+      tenants={tenants}
+      value={[{ tenantId: tenants[1].id, access: "read_write" }]}
+      onChange={() => undefined}
+    />,
+  );
+  expect(
+    screen.getByText("Calls: read & write · Call specs: read · Services: none · API keys: none"),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("combobox", { name: "Access for Northwind" }),
+  ).toHaveValue("read");
+  expect(screen.queryByRole("option", { name: "Read & write" })).not.toBeInTheDocument();
 });

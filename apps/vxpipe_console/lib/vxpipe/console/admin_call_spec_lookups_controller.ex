@@ -1,10 +1,9 @@
 defmodule Vxpipe.Console.AdminCallSpecLookupsController do
   @moduledoc false
   use Phoenix.Controller, formats: [:json]
-  alias Vxpipe.Calls.InstallationOperator
 
   def index(conn, %{"tenant_key" => tenant}) do
-    case Vxpipe.Calls.list_call_spec_editor_lookups(InstallationOperator.authority(), tenant) do
+    case Vxpipe.Calls.list_call_spec_editor_lookups(conn.assigns.user_principal, tenant) do
       {:ok, lookups} ->
         json(conn, lookups)
 

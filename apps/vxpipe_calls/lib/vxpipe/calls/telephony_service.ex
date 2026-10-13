@@ -78,14 +78,15 @@ defmodule Vxpipe.Calls.TelephonyService do
   defp credential_binding?(%{credential_name: nil} = service),
     do: uuid?(service.credential_id) and is_nil(service.credential_owner)
 
-  defp credential_binding?(%{
-         provider: "telnyx",
-         credential_name: "telnyx",
-         credential_id: nil,
-         public_key: nil,
-         credential_owner: nil
-       }),
-       do: true
+  defp credential_binding?(
+         %{
+           provider: "telnyx",
+           credential_name: "telnyx",
+           credential_id: nil,
+           public_key: nil
+         } = service
+       ),
+       do: service.credential_owner in [nil, :platform, {:tenant, service.tenant_key}]
 
   defp credential_binding?(%{provider: "telnyx", credential_name: "telnyx"} = service),
     do:
@@ -100,7 +101,9 @@ defmodule Vxpipe.Calls.TelephonyService do
         %__MODULE__{provider: "telnyx", credential_name: "telnyx", public_key: key},
         payload
       ),
-      do: Vxpipe.Providers.Telnyx.Credential.public_key?(key) and Map.get(payload, "public_key") == key
+      do:
+        Vxpipe.Providers.Telnyx.Credential.public_key?(key) and
+          Map.get(payload, "public_key") == key
 
   def credential_matches?(%__MODULE__{provider: "telnyx"}, _payload), do: true
 

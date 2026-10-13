@@ -1,6 +1,31 @@
 defmodule Vxpipe.Calls.OperatorServiceBindingsTest do
   use ExUnit.Case, async: true
   alias Vxpipe.Calls.{InstallationOperator, Principal, TestOperatorCredentialRepository}
+  alias Vxpipe.Identity.Principal, as: UserPrincipal
+
+  test "service-only reader cannot see credential identifiers in bindings" do
+    tenant = "AAAAAAAAAAAAAAAA"
+    binding = %{
+      provider: "deepgram", name: "deepgram", source: :tenant, status: :connected,
+      credential_id: "credential-id", platform_available: false,
+      saved_fields: ["api_key"], last_validated_at: nil
+    }
+    options = [provider_credential_repository:
+      TestOperatorCredentialRepository.repository(self(), {:ok, %{tenant: %{key: tenant, name: "Example"}, bindings: [binding]}})]
+    principal = %UserPrincipal{
+      user_public_id: "11111111-1111-4111-8111-111111111111",
+      session_public_id: "22222222-2222-4222-8222-222222222222",
+      account_kind: :member,
+      grants: MapSet.new(["tenant_services.read"]),
+      assigned_tenants: %{tenant => :read},
+      all_tenant_actions: MapSet.new()
+    }
+
+    assert {:ok, %{bindings: [visible]}} =
+             Vxpipe.Calls.list_operator_service_bindings(principal, tenant, options)
+    assert visible.credential_id == nil
+    assert visible.saved_fields == []
+  end
 
   test "operator inventory includes public models before a tenant exists" do
     options = [

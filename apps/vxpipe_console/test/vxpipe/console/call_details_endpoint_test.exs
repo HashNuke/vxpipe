@@ -5,23 +5,25 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
   import Plug.Conn, only: [get_resp_header: 2]
 
   alias Vxpipe.Calls.{CallDetailsDocument, CallDetailsRevision, CallDetailsRevisionPage}
+  alias Vxpipe.Console.Test.FakeUserIdentity
   alias Vxpipe.Console.TestCallDetailsBackend
 
   @endpoint Vxpipe.Console.Endpoint
-  @secret String.duplicate("operator-call-details-download-secret-", 3)
-  @token "operator-call-details-download-token"
   @tenant_key "tenantkey1234567"
   @call_id "call-public-id"
   @publication_id "publication-public-id"
 
   setup do
     original_calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
-    original_secret = Application.fetch_env!(:vxpipe_console, :operator_login_secret)
+    original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
     original_details = Application.get_env(:vxpipe_console, :call_details_backend)
 
     on_exit(fn ->
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, original_calls)
-      Application.put_env(:vxpipe_console, :operator_login_secret, original_secret)
+
+      if original_backend,
+        do: Application.put_env(:vxpipe_console, :user_identity_backend, original_backend),
+        else: Application.delete_env(:vxpipe_console, :user_identity_backend)
 
       case original_details do
         nil -> Application.delete_env(:vxpipe_console, :call_details_backend)
@@ -29,8 +31,7 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
       end
     end)
 
-    Application.put_env(:vxpipe_console, :operator_login_secret, @secret)
-    configure_login_repository()
+    Application.put_env(:vxpipe_console, :user_identity_backend, FakeUserIdentity)
     :ok
   end
 
@@ -74,35 +75,13 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
     do: "/tenants/#{@tenant_key}/calls/#{@call_id}/details/#{@publication_id}"
 
   defp authenticate do
-    form = https_get("/auth/login-token/#{@token}")
-
-    form
-    |> recycle()
-    |> post("https://localhost/auth/login-token", %{
-      "_csrf_token" => csrf_token(form.resp_body),
-      "operator" => %{"token" => @token, "code" => "01234567"}
+    post(build_conn(), "https://localhost/auth/api/login", %{
+      "email" => FakeUserIdentity.email(),
+      "password" => FakeUserIdentity.password()
     })
   end
 
   defp https_get(conn \\ build_conn(), path), do: get(conn, "https://localhost#{path}")
-
-  defp csrf_token(body) do
-    [_, token] = Regex.run(~r/name="_csrf_token" value="([^"]+)"/, body)
-    token
-  end
-
-  defp configure_login_repository do
-    settings = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
-
-    Application.put_env(
-      :vxpipe_calls,
-      Vxpipe.Calls,
-      Keyword.put(settings, :operator_login_challenge_repository, {
-        Vxpipe.Console.Test.OperatorLoginChallengeRepository,
-        {self(), :ok}
-      })
-    )
-  end
 
   defp configure_details(responses) do
     Application.put_env(

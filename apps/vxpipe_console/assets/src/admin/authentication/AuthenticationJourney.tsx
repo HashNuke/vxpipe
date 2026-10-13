@@ -12,8 +12,8 @@ import { canManageUser, canReadUsers, hasAssignedGrants } from "./access";
 import { roles as seedRoles, tenants, users as seedUsers } from "./fixtures";
 import type { PageState, Role, Theme, User } from "./types";
 
-export type Actor = "superadmin" | "admin" | "member" | "reader";
-const actorIndex = { superadmin: 0, admin: 1, member: 4, reader: 6 };
+export type Actor = "superadmin" | "admin" | "member";
+const actorIndex = { superadmin: 0, admin: 1, member: 4 };
 export function AuthenticationJourney({
   actor = "superadmin",
   initialPath = "/admin/users",
@@ -84,14 +84,16 @@ export function AuthenticationJourney({
   if (
     path === "/auth/setup" ||
     path === "/auth/login" ||
+    path === "/auth/recover" ||
     !currentUser ||
     !currentRole
   ) {
     const setup = path === "/auth/setup";
+    const recover = path === "/auth/recover";
     page = (
       <AuthPage
-        key={setup ? "setup" : "login"}
-        mode={setup ? "setup" : "login"}
+        key={setup ? "setup" : recover ? "recover" : "login"}
+        mode={setup ? "setup" : recover ? "recover" : "login"}
         completed={setup && users.length > 0}
         unavailable={state === "unavailable"}
         onSubmit={async (email, password) => {
@@ -112,7 +114,7 @@ export function AuthenticationJourney({
             const user = users.find(
               (item) =>
                 item.email.toLowerCase() === email.toLowerCase() &&
-                item.enabled,
+                (recover ? roles.find((role) => role.id === item.roleId)?.kind === "superadmin" : item.enabled),
             );
             if (!user) return { error: "Email or password is incorrect." };
             setActorId(user.id);
@@ -262,7 +264,16 @@ export function AuthenticationJourney({
       );
   } else if (path === "/admin/roles")
     page = currentRole.kind ? (
-      <RolesPage roles={roles} users={users} onNavigate={navigate} />
+      <RolesPage
+        roles={roles}
+        affectedUsers={Object.fromEntries(
+          roles.map((role) => [
+            role.id,
+            users.filter((user) => user.roleId === role.id).length,
+          ]),
+        )}
+        onNavigate={navigate}
+      />
     ) : (
       denied
     );

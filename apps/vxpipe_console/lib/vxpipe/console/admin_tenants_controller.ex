@@ -3,13 +3,12 @@ defmodule Vxpipe.Console.AdminTenantsController do
 
   use Phoenix.Controller, formats: [:json]
 
-  alias Vxpipe.Calls.InstallationOperator
   alias Vxpipe.Console.AdminPageParameter
 
   def index(conn, params) do
     with {:ok, page} <- AdminPageParameter.parse(params),
          {:ok, tenant_page} <-
-           Vxpipe.Calls.list_operator_tenants(InstallationOperator.authority(), page: page) do
+           Vxpipe.Calls.list_operator_tenants(conn.assigns.user_principal, page: page) do
       json(conn, %{
         tenants: Enum.map(tenant_page.tenants, &tenant_json/1),
         pagination: %{
@@ -22,6 +21,9 @@ defmodule Vxpipe.Console.AdminTenantsController do
     else
       {:error, reason} when reason in [:invalid_page, :tenant_page_out_of_range] ->
         conn |> put_status(422) |> json(%{error: %{code: "invalid_page"}})
+
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: %{code: "forbidden"}})
 
       {:error, _reason} ->
         conn

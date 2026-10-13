@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminShell } from "./admin/AdminShell";
 import { Button } from "./admin/Button";
+import { PageNotice } from "./admin/PageNotice";
 import { PageToast } from "./admin/PageToast";
 import {
   ServiceSetupModal,
@@ -42,6 +43,8 @@ export function ScopedServicesApp({
   onSessionExpired = sessionExpired,
   onNavigate,
   headerActions,
+  accessDenied = false,
+  canEdit = true,
 }: {
   scope: SetupServiceScope;
   csrfToken: string;
@@ -49,6 +52,13 @@ export function ScopedServicesApp({
   onSessionExpired?: () => void;
   onNavigate: (path: string) => void;
   headerActions?: ReactNode;
+  /**
+   * Derived from the server principal (platform_services.read). Hides the
+   * directory and its mutations when the viewer cannot read it; the backend
+   * still enforces direct requests.
+   */
+  accessDenied?: boolean;
+  canEdit?: boolean;
 }) {
   const [directory, setDirectory] = useState<BindingDirectory | null>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "unavailable">(
@@ -102,7 +112,7 @@ export function ScopedServicesApp({
   }, [directoryUrl, tenantKey, fetchImpl, onSessionExpired, retry]);
 
   function open(next: Modal) {
-    if (saving.current) return;
+    if (!canEdit || saving.current) return;
     trigger.current = document.activeElement as HTMLElement;
     setModal(next);
     setNotice(null);
@@ -114,7 +124,7 @@ export function ScopedServicesApp({
   }
 
   async function save(draft: CredentialDraft) {
-    if (!modal || saving.current || !directory) return;
+    if (!canEdit || !modal || saving.current || !directory) return;
     const name = modal.bindingName ?? draft.provider;
     const existing = directory.bindings.find(
       (binding) => binding.provider === draft.provider && binding.name === name,
@@ -358,7 +368,13 @@ export function ScopedServicesApp({
         aria-hidden={modal !== null ? true : undefined}
         aria-busy={phase === "loading"}
       >
-        {phase === "loading" ? (
+        {accessDenied ? (
+          <PageNotice
+            kind="unavailable"
+            title="Access unavailable"
+            message="Your role does not allow this action."
+          />
+        ) : phase === "loading" ? (
           <p role="status">Loading services…</p>
         ) : (
           <TenantSetupPage
@@ -366,6 +382,7 @@ export function ScopedServicesApp({
             connections={primary}
             providers={providers}
             platform={tenantKey === null}
+            readOnly={!canEdit}
             platformConnections={platformConnections.filter(
               (binding) => binding.name === binding.provider,
             )}
@@ -381,7 +398,7 @@ export function ScopedServicesApp({
             }
           />
         )}
-        {phase === "ready" && named.length > 0 ? (
+        {canEdit && phase === "ready" && named.length > 0 ? (
           <section className="setup-service-group" aria-label="Named bindings">
             <h2>Named bindings</h2>
             <div className="flex flex-wrap gap-2">

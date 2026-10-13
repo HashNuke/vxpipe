@@ -17,6 +17,7 @@ export function SetupServiceCard({
   overridesPlatform = false,
   busy = false,
   removing = false,
+  readOnly = false,
 }: {
   provider: SetupProvider;
   connection?: SetupConnection;
@@ -26,6 +27,7 @@ export function SetupServiceCard({
   overridesPlatform?: boolean;
   busy?: boolean;
   removing?: boolean;
+  readOnly?: boolean;
 }) {
   const connected = connection?.status === "connected";
   const needsPublicKey =
@@ -53,7 +55,7 @@ export function SetupServiceCard({
               <span className="sr-only">Connected</span>
             </span>
           ) : null}
-          <div
+          {!readOnly ? <div
             aria-label={`${provider.name} actions`}
             className="setup-service-card-button-group"
             role="group"
@@ -103,7 +105,7 @@ export function SetupServiceCard({
                 </Popover.Content>
               </Popover.Root>
             ) : null}
-          </div>
+          </div> : null}
         </div>
       </div>
       {source ? <p className="setup-service-source">{source}</p> : null}

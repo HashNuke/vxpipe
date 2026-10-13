@@ -1,11 +1,11 @@
 defmodule Vxpipe.Console.AdminProviderCatalogController do
   @moduledoc false
   use Phoenix.Controller, formats: [:json]
-  alias Vxpipe.Calls.{InstallationOperator, ProviderCatalogErrors}
+  alias Vxpipe.Calls.{ProviderCatalogErrors}
 
   def index(conn, %{"tenant_key" => tenant} = params) do
     Vxpipe.Calls.list_providers(
-      InstallationOperator.authority(),
+      conn.assigns.user_principal,
       tenant,
       Map.get(params, "capability")
     )
@@ -14,7 +14,7 @@ defmodule Vxpipe.Console.AdminProviderCatalogController do
 
   def models(conn, %{"tenant_key" => tenant, "provider" => provider} = params) do
     Vxpipe.Calls.list_provider_models(
-      InstallationOperator.authority(),
+      conn.assigns.user_principal,
       tenant,
       provider,
       Map.get(params, "capability")

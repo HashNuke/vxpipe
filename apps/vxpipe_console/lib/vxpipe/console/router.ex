@@ -17,15 +17,19 @@ defmodule Vxpipe.Console.Router do
     plug Vxpipe.Console.PrivateNoStore
   end
 
-  pipeline :installation_operator do
-    plug Vxpipe.Console.RequireInstallationOperator
+  pipeline :user_pages do
+    plug Vxpipe.Console.RequireUser
   end
 
-  pipeline :installation_operator_call do
-    plug Vxpipe.Console.AssignInstallationCallAccess
+  pipeline :user_call_access do
+    plug Vxpipe.Console.AssignUserCallAccess
   end
 
-  pipeline :installation_operator_api do
+  pipeline :diagnostics do
+    plug Vxpipe.Console.DiagnosticsEnabled
+  end
+
+  pipeline :user_auth_api do
     plug :accepts, ["json"]
 
     plug Plug.Parsers,
@@ -37,11 +41,11 @@ defmodule Vxpipe.Console.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug Vxpipe.Console.PrivateNoStore
-    plug Vxpipe.Console.RequireInstallationOperatorAPI
   end
 
-  pipeline :diagnostics do
-    plug Vxpipe.Console.DiagnosticsEnabled
+  pipeline :user_api do
+    plug :user_auth_api
+    plug Vxpipe.Console.RequireUserAPI
   end
 
   pipeline :operator do
@@ -58,14 +62,14 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/admin/samples" do
-    pipe_through [:browser, :operator_pages, :installation_operator]
+    pipe_through [:browser, :operator_pages, :user_pages]
 
     get "/pipecat-console", Vxpipe.Console.PageController, :index
     get "/transfer", Vxpipe.Console.PageController, :index
   end
 
   scope "/admin/samples" do
-    pipe_through :installation_operator_api
+    pipe_through :user_api
 
     post "/calls", Vxpipe.Console.SampleCallController, :create
     post "/transfers", Vxpipe.Console.SampleTransferController, :create
@@ -82,16 +86,42 @@ defmodule Vxpipe.Console.Router do
   scope "/auth" do
     pipe_through [:browser, :operator_pages]
 
-    get "/login", Vxpipe.Console.OperatorLoginController, :guidance
-    get "/login-token/:token", Vxpipe.Console.OperatorLoginController, :new
-    post "/login-token", Vxpipe.Console.OperatorLoginController, :create
-    post "/logout", Vxpipe.Console.OperatorLoginController, :delete
+    get "/setup", Vxpipe.Console.AdminPageController, :index
+    get "/login", Vxpipe.Console.AdminPageController, :index
+    get "/recover", Vxpipe.Console.AdminPageController, :index
+    post "/logout", Vxpipe.Console.UserAuthController, :logout
+  end
+
+  scope "/auth/api" do
+    pipe_through :user_auth_api
+
+    get "/status", Vxpipe.Console.UserAuthController, :status
+    post "/setup", Vxpipe.Console.UserAuthController, :setup
+    post "/login", Vxpipe.Console.UserAuthController, :login
+    post "/recover", Vxpipe.Console.UserAuthController, :recover
   end
 
   scope "/admin/api" do
-    pipe_through :installation_operator_api
+    pipe_through :user_api
 
-    get "/session", Vxpipe.Console.AdminSessionController, :show
+    get "/session", Vxpipe.Console.UserSessionController, :show
+    get "/role-options", Vxpipe.Console.RoleManagementController, :options
+    patch "/account", Vxpipe.Console.AccountController, :update
+    get "/users", Vxpipe.Console.UserManagementController, :index
+    get "/users/:id", Vxpipe.Console.UserManagementController, :show
+    post "/users", Vxpipe.Console.UserManagementController, :create
+    patch "/users/:id", Vxpipe.Console.UserManagementController, :update
+    post "/users/:id/reset-password", Vxpipe.Console.UserManagementController, :reset_password
+    get "/roles", Vxpipe.Console.RoleManagementController, :index
+    get "/roles/:id", Vxpipe.Console.RoleManagementController, :show
+    post "/roles", Vxpipe.Console.RoleManagementController, :create
+    patch "/roles/:id", Vxpipe.Console.RoleManagementController, :update
+    delete "/roles/:id", Vxpipe.Console.RoleManagementController, :delete
+  end
+
+  scope "/admin/api" do
+    pipe_through :user_api
+
     post "/platform/credentials/test", Vxpipe.Console.AdminServicesController, :validate_platform
     post "/platform/credentials", Vxpipe.Console.AdminServicesController, :create_platform
     get "/platform/services", Vxpipe.Console.AdminServicesController, :platform_index
@@ -159,6 +189,10 @@ defmodule Vxpipe.Console.Router do
         Vxpipe.Console.AdminServicesController,
         :tenant_bindings
 
+    get "/tenants/:tenant_key/credentials",
+        Vxpipe.Console.AdminServicesController,
+        :index_credentials
+
     post "/tenants/:tenant_key/credentials/test",
          Vxpipe.Console.AdminServicesController,
          :validate
@@ -179,7 +213,7 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/tenants/:tenant_key/calls" do
-    pipe_through [:browser, :operator_pages, :installation_operator]
+    pipe_through [:browser, :operator_pages, :user_pages]
 
     get "/", Vxpipe.Console.LegacyCallRouteController, :index
     get "/:call_id", Vxpipe.Console.LegacyCallRouteController, :show
@@ -190,8 +224,8 @@ defmodule Vxpipe.Console.Router do
     pipe_through [
       :browser,
       :operator_pages,
-      :installation_operator,
-      :installation_operator_call
+      :user_pages,
+      :user_call_access
     ]
 
     get "/:call_id/details/:publication_id", Vxpipe.Console.CallDetailsController, :show
@@ -199,13 +233,13 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/tenants/:tenant_key/calls" do
-    pipe_through [:installation_operator_api, :installation_operator_call]
+    pipe_through [:user_api, :user_call_access]
 
     get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show
   end
 
   scope "/admin/diagnostics" do
-    pipe_through [:diagnostics, :browser, :operator_pages, :installation_operator]
+    pipe_through [:diagnostics, :browser, :operator_pages, :user_pages]
 
     live_session :vxpipe_diagnostics,
       on_mount: Vxpipe.Console.DiagnosticsAuth,
@@ -219,7 +253,7 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/admin" do
-    pipe_through [:browser, :operator_pages, :installation_operator]
+    pipe_through [:browser, :operator_pages, :user_pages]
 
     get "/", Vxpipe.Console.AdminPageController, :index
     get "/*path", Vxpipe.Console.AdminPageController, :index

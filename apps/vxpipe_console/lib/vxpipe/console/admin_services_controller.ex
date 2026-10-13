@@ -3,7 +3,6 @@ defmodule Vxpipe.Console.AdminServicesController do
 
   use Phoenix.Controller, formats: [:json]
 
-  alias Vxpipe.Calls.InstallationOperator
   alias Vxpipe.Providers.Registry
   alias Vxpipe.Providers.Telnyx.PublicEndpoint
 
@@ -16,7 +15,7 @@ defmodule Vxpipe.Console.AdminServicesController do
   def delete_platform(conn, %{"credential_id" => id}), do: delete_credential(conn, :platform, id)
 
   defp delete_credential(conn, owner, id) do
-    case Vxpipe.Calls.delete_operator_credential(InstallationOperator.authority(), owner, id) do
+    case Vxpipe.Calls.delete_operator_credential(conn.assigns.user_principal, owner, id) do
       :ok ->
         send_resp(conn, 204, "")
 
@@ -35,7 +34,7 @@ defmodule Vxpipe.Console.AdminServicesController do
   end
 
   defp bindings(conn, scope) do
-    case Vxpipe.Calls.list_operator_service_bindings(InstallationOperator.authority(), scope) do
+    case Vxpipe.Calls.list_operator_service_bindings(conn.assigns.user_principal, scope) do
       {:ok, directory} ->
         origin = Application.fetch_env!(:vxpipe_console, :service_public_origin)
 
@@ -61,7 +60,7 @@ defmodule Vxpipe.Console.AdminServicesController do
   end
 
   def index(conn, %{"tenant_key" => tenant_key}) do
-    case Vxpipe.Calls.list_operator_services(InstallationOperator.authority(), tenant_key) do
+    case Vxpipe.Calls.list_operator_services(conn.assigns.user_principal, tenant_key) do
       {:ok, directory} ->
         json(conn, %{
           tenant: %{key: directory.tenant.key, name: directory.tenant.name},
@@ -77,6 +76,23 @@ defmodule Vxpipe.Console.AdminServicesController do
         conn
         |> put_status(503)
         |> json(%{error: %{code: "service_directory_unavailable"}})
+    end
+  end
+
+  def index_credentials(conn, %{"tenant_key" => tenant_key}) do
+    case Vxpipe.Calls.list_operator_services(conn.assigns.user_principal, tenant_key) do
+      {:ok, directory} ->
+        json(conn, %{
+          tenant: %{key: directory.tenant.key, name: directory.tenant.name},
+          credentials: Enum.map(directory.credentials, &credential_json/1),
+          truncated: directory.truncated
+        })
+
+      {:error, :tenant_not_found} ->
+        conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})
+
+      {:error, _reason} ->
+        conn |> put_status(503) |> json(%{error: %{code: "service_directory_unavailable"}})
     end
   end
 
@@ -116,7 +132,7 @@ defmodule Vxpipe.Console.AdminServicesController do
     with {:ok, provider, auth_kind, payload} <- credential_input(params),
          :ok <-
            Vxpipe.Calls.validate_operator_credential(
-             InstallationOperator.authority(),
+             conn.assigns.user_principal,
              owner,
              provider,
              name,
@@ -148,7 +164,7 @@ defmodule Vxpipe.Console.AdminServicesController do
     with {:ok, provider, auth_kind, payload} <- credential_input(params),
          {:ok, credential} <-
            Vxpipe.Calls.create_operator_credential(
-             InstallationOperator.authority(),
+             conn.assigns.user_principal,
              owner,
              provider,
              name,
@@ -187,7 +203,7 @@ defmodule Vxpipe.Console.AdminServicesController do
     with {:ok, provider, auth_kind, payload} <- credential_input(params),
          {:ok, credential} <-
            Vxpipe.Calls.update_operator_credential(
-             InstallationOperator.authority(),
+             conn.assigns.user_principal,
              owner,
              credential_id,
              provider,

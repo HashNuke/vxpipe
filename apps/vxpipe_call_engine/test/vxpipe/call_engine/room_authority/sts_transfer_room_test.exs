@@ -69,6 +69,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTransferRoomTest do
     task = transfer(context)
 
     assert {:error, :unavailable} = Task.await(task, 5_000)
+    _ = :sys.get_state(context.authority)
     assert Session.provider(:sys.get_state(context.capability).session) == context.provider
     refute_received {:DOWN, ^provider_monitor, :process, _, _}
     refute :sys.get_state(context.provider).held?

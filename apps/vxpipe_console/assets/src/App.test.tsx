@@ -35,6 +35,62 @@ afterEach(() => {
 const response = (body: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(body), { status }));
 
+const operationalUser = {
+  id: "owner",
+  email: "owner@example.test",
+  roleId: "superadmin",
+  enabled: true,
+  memberships: [],
+};
+const operationalRole = {
+  id: "superadmin",
+  name: "Superadmin",
+  description: "",
+  kind: "superadmin",
+  grants: [],
+};
+const operationalSession = { user: operationalUser, role: operationalRole };
+
+test("first-run setup submits credentials and opens the Console", async () => {
+  window.history.replaceState({}, "", "/auth/setup");
+  const fetchImpl = vi.fn((input: RequestInfo | URL) =>
+    response(String(input).includes("/auth/api/status") ? { status: "pending_first_run" } : { ok: true }),
+  );
+  const authenticated = vi.fn();
+  render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} onAuthenticated={authenticated} />);
+
+  expect(await screen.findByRole("heading", { name: "Set up your installation" })).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.test" } });
+  fireEvent.change(screen.getByLabelText("Password"), { target: { value: "an example passphrase" } });
+  fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "an example passphrase" } });
+  fireEvent.click(screen.getByRole("button", { name: /Create Superadmin account/ }));
+
+  await waitFor(() => expect(authenticated).toHaveBeenCalledOnce());
+  expect(fetchImpl).toHaveBeenCalledWith("/auth/api/setup", expect.objectContaining({ method: "POST" }));
+});
+
+test("the production users route renders server-filtered rows and role filters", async () => {
+  window.history.replaceState({}, "", "/admin/users");
+  const owner = { id: "owner", email: "owner@example.test", roleId: "superadmin", enabled: true, memberships: [] };
+  const role = { id: "superadmin", name: "Superadmin", description: "", kind: "superadmin", grants: [] };
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    const path = String(input);
+    if (path === "/admin/api/session") return response({ user: owner, role });
+    if (path === "/admin/api/roles") return response({ roles: [role] });
+    if (path.startsWith("/admin/api/users"))
+      return response({ users: [owner], pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 } });
+    return response({});
+  });
+
+  render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
+  expect(await screen.findByText(/Manage who can access/)).toBeVisible();
+  expect(screen.getByRole("table", { name: "Users" }).tagName).toBe("TABLE");
+  fireEvent.change(screen.getByRole("combobox", { name: "Filter by role" }), { target: { value: "superadmin" } });
+  await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(
+    expect.stringContaining("/admin/api/users?role=superadmin"), expect.any(Object)
+  ));
+});
+
 const tenantPage = (page: number, name = "Example tenant") => ({
   tenants: Array.from({ length: page === 1 ? 25 : 5 }, (_, index) => ({
     key: `tenant-${page}-${index}`,
@@ -128,8 +184,10 @@ test("retires tenant setup services in favor of the service inventory", async ()
     "",
     "/admin/tenants/AAAAAAAAAAAAAAAA/setup-services",
   );
-  const fetchImpl = vi.fn(() =>
-    response(serviceDirectory("AAAAAAAAAAAAAAAA", false)),
+  const fetchImpl = vi.fn((input: RequestInfo | URL) =>
+    String(input) === "/admin/api/session"
+      ? response(operationalSession)
+      : response(serviceDirectory("AAAAAAAAAAAAAAAA", false)),
   );
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
@@ -175,7 +233,11 @@ const callDetailsResponse = (state: "running" | "ended" = "running") => ({
 });
 
 test("loads the approved tenant page with a CSRF-protected sign-out action", async () => {
-  const fetchImpl = vi.fn(() => response(tenantPage(1)));
+  const fetchImpl = vi.fn((input: RequestInfo | URL) =>
+    String(input) === "/admin/api/session"
+      ? response(operationalSession)
+      : response(tenantPage(1)),
+  );
   const view = render(
     <App csrfToken="csrf-test-token" fetchImpl={fetchImpl} />,
   );
@@ -183,6 +245,7 @@ test("loads the approved tenant page with a CSRF-protected sign-out action", asy
   expect(screen.getByRole("heading", { name: "Tenants" })).toBeVisible();
   expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
   expect(await screen.findByText("Example tenant")).toBeVisible();
+  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/session", expect.any(Object));
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/tenants?page=1", {
     headers: { accept: "application/json" },
     signal: expect.any(AbortSignal),
@@ -198,6 +261,7 @@ test("loads the approved tenant page with a CSRF-protected sign-out action", asy
 test("starts the Demo onboarding flow when the installation has no tenants", async () => {
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
+    if (url === "/admin/api/session") return response(operationalSession);
     if (url.startsWith("/admin/api/tenants?")) {
       return response({
         tenants: [],
@@ -256,7 +320,11 @@ test("shows unavailable and expired-session outcomes truthfully", async () => {
   rerender(
     <App
       csrfToken="csrf"
-      fetchImpl={() => response({}, 401)}
+      fetchImpl={(input: RequestInfo | URL) =>
+        String(input) === "/admin/api/session"
+          ? response(operationalSession)
+          : response({}, 401)
+      }
       onSessionExpired={expired}
     />,
   );
@@ -271,12 +339,14 @@ test("restores page navigation from browser history and ignores a stale response
     resolveFirst = resolve;
   });
 
-  const fetchImpl = vi
-    .fn(() => response(tenantPage(1)))
-    .mockImplementationOnce(() => first)
-    .mockImplementationOnce(() =>
-      response(tenantPage(2, "Second page tenant")),
-    );
+  let operationalCalls = 0;
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    if (String(input) === "/admin/api/session") return response(operationalSession);
+    operationalCalls += 1;
+    if (operationalCalls === 1) return first;
+    if (operationalCalls === 2) return response(tenantPage(2, "Second page tenant"));
+    return response(tenantPage(1));
+  });
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
@@ -300,10 +370,14 @@ test("ignores an expired-session response from an obsolete request", async () =>
     resolveFirst = resolve;
   });
   const expired = vi.fn();
-  const fetchImpl = vi
-    .fn(() => response(tenantPage(1)))
-    .mockImplementationOnce(() => first)
-    .mockImplementationOnce(() => response(tenantPage(2, "Current tenant")));
+  let operationalCalls = 0;
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    if (String(input) === "/admin/api/session") return response(operationalSession);
+    operationalCalls += 1;
+    if (operationalCalls === 1) return first;
+    if (operationalCalls === 2) return response(tenantPage(2, "Current tenant"));
+    return response(tenantPage(1));
+  });
 
   render(
     <App
@@ -327,11 +401,13 @@ test("ignores an expired-session response from an obsolete request", async () =>
 
 test("recovers an out-of-range page to the first tenant page", async () => {
   window.history.replaceState({}, "", "/admin?page=999");
-  const fetchImpl = vi
-    .fn(() => response(tenantPage(1)))
-    .mockImplementationOnce(() =>
-      response({ error: { code: "invalid_page" } }, 422),
-    );
+  let operationalCalls = 0;
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    if (String(input) === "/admin/api/session") return response(operationalSession);
+    operationalCalls += 1;
+    if (operationalCalls === 1) return response({ error: { code: "invalid_page" } }, 422);
+    return response(tenantPage(1));
+  });
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
@@ -339,11 +415,16 @@ test("recovers an out-of-range page to the first tenant page", async () => {
   expect(window.location.pathname + window.location.search).toBe("/admin");
   expect(fetchImpl).toHaveBeenNthCalledWith(
     1,
-    "/admin/api/tenants?page=999",
+    "/admin/api/session",
     expect.any(Object),
   );
   expect(fetchImpl).toHaveBeenNthCalledWith(
     2,
+    "/admin/api/tenants?page=999",
+    expect.any(Object),
+  );
+  expect(fetchImpl).toHaveBeenNthCalledWith(
+    3,
     "/admin/api/tenants?page=1",
     expect.any(Object),
   );
@@ -352,6 +433,7 @@ test("recovers an out-of-range page to the first tenant page", async () => {
 test("opens a tenant's approved call specs page and canonicalizes the workspace URL", async () => {
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
+    if (url === "/admin/api/session") return response(operationalSession);
     if (url.startsWith("/admin/api/tenants?")) return response(tenantPage(1));
     if (url.includes("/calls?")) {
       return response(callPage("tenant-1-0", "delivery-rescheduling"));
@@ -405,6 +487,7 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
 
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
+    if (url === "/admin/api/session") return response(operationalSession);
     const selected = url.includes("appointment-reminders")
       ? "appointment-reminders"
       : "delivery-rescheduling";
@@ -427,6 +510,7 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
     "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=2&call_spec_id=delivery-rescheduling",
     expect.any(Object),
   );
+  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/session", expect.any(Object));
 
   fireEvent.click(screen.getByRole("combobox", { name: "Call spec" }));
   fireEvent.click(
@@ -445,7 +529,11 @@ test("loads an approved call details route into the reusable console", async () 
     "",
     "/admin/tenants/AAAAAAAAAAAAAAAA/calls/call-public-id",
   );
-  const fetchImpl = vi.fn(() => response(callDetailsResponse()));
+  const fetchImpl = vi.fn((input: RequestInfo | URL) =>
+    String(input) === "/admin/api/session"
+      ? response(operationalSession)
+      : response(callDetailsResponse()),
+  );
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
@@ -453,6 +541,7 @@ test("loads an approved call details route into the reusable console", async () 
     await screen.findByRole("heading", { name: "Call details" }),
   ).toBeInTheDocument();
   expect(screen.getByText("call-public-id")).toBeVisible();
+  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/session", expect.any(Object));
   expect(fetchImpl).toHaveBeenCalledWith(
     "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls/call-public-id",
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -461,8 +550,10 @@ test("loads an approved call details route into the reusable console", async () 
 
 test("opens call details in a new tab without replacing the call directory", async () => {
   window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/calls");
-  const fetchImpl = vi.fn((input: RequestInfo | URL) =>
-    String(input).endsWith("/calls?page=1")
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/admin/api/session") return response(operationalSession);
+    return url.endsWith("/calls?page=1")
       ? response(callPage("AAAAAAAAAAAAAAAA", null))
       : response({
           ...callDetailsResponse(),
@@ -473,8 +564,8 @@ test("opens call details in a new tab without replacing the call directory", asy
               id: "018f27cb-6f87-7d1c-a61f-8873cb667342",
             },
           },
-        }),
-  );
+        });
+  });
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
   const call = await screen.findByRole("link", { name: /open call 018f27cb/i });
@@ -489,7 +580,12 @@ test("opens call details in a new tab without replacing the call directory", asy
   expect(window.location.pathname).toBe(
     "/admin/tenants/AAAAAAAAAAAAAAAA/calls",
   );
-  expect(fetchImpl).toHaveBeenCalledTimes(1);
+  expect(fetchImpl).toHaveBeenCalledTimes(2);
+  expect(fetchImpl).toHaveBeenNthCalledWith(1, "/admin/api/session", expect.any(Object));
+  expect(fetchImpl).toHaveBeenCalledWith(
+    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=1",
+    expect.any(Object),
+  );
 });
 
 test("keeps missing, malformed, unavailable, and expired call details distinct", async () => {
@@ -502,7 +598,11 @@ test("keeps missing, malformed, unavailable, and expired call details distinct",
   const view = render(
     <App
       csrfToken="csrf"
-      fetchImpl={() => response({}, 404)}
+      fetchImpl={(input: RequestInfo | URL) =>
+        String(input) === "/admin/api/session"
+          ? response(operationalSession)
+          : response({}, 404)
+      }
       onSessionExpired={expired}
     />,
   );
@@ -514,7 +614,11 @@ test("keeps missing, malformed, unavailable, and expired call details distinct",
   view.rerender(
     <App
       csrfToken="csrf"
-      fetchImpl={() => response({ tenant: "invalid" })}
+      fetchImpl={(input: RequestInfo | URL) =>
+        String(input) === "/admin/api/session"
+          ? response(operationalSession)
+          : response({ tenant: "invalid" })
+      }
       onSessionExpired={expired}
     />,
   );
@@ -534,7 +638,11 @@ test("keeps missing, malformed, unavailable, and expired call details distinct",
   view.rerender(
     <App
       csrfToken="csrf"
-      fetchImpl={() => response({}, 401)}
+      fetchImpl={(input: RequestInfo | URL) =>
+        String(input) === "/admin/api/session"
+          ? response(operationalSession)
+          : response({}, 401)
+      }
       onSessionExpired={expired}
     />,
   );
@@ -552,9 +660,13 @@ test("ignores an expired-session response from an obsolete call-details request"
     resolveDetails = resolve;
   });
   const expired = vi.fn();
-  const fetchImpl = vi
-    .fn(() => response(tenantPage(1, "Current tenant")))
-    .mockImplementationOnce(() => pendingDetails);
+  let operationalCalls = 0;
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    if (String(input) === "/admin/api/session") return response(operationalSession);
+    operationalCalls += 1;
+    if (operationalCalls === 1) return pendingDetails;
+    return response(tenantPage(1, "Current tenant"));
+  });
 
   render(
     <App
@@ -586,9 +698,13 @@ test("ignores an obsolete call response after the call spec filter changes", asy
   const first = new Promise<Response>((resolve) => {
     resolveFirst = resolve;
   });
-  const fetchImpl = vi
-    .fn(() => response(callPage("AAAAAAAAAAAAAAAA", "appointment-reminders")))
-    .mockImplementationOnce(() => first);
+  let operationalCalls = 0;
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    if (String(input) === "/admin/api/session") return response(operationalSession);
+    operationalCalls += 1;
+    if (operationalCalls === 1) return first;
+    return response(callPage("AAAAAAAAAAAAAAAA", "appointment-reminders"));
+  });
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
@@ -621,11 +737,14 @@ test("recovers an out-of-range call page without losing its call spec filter", a
     "",
     "/admin/tenants/AAAAAAAAAAAAAAAA/calls?page=999&call_spec_id=delivery-rescheduling",
   );
-  const fetchImpl = vi
-    .fn(() => response(callPage("AAAAAAAAAAAAAAAA", "delivery-rescheduling")))
-    .mockImplementationOnce(() =>
-      response({ error: { code: "invalid_page" } }, 422),
-    );
+  let operationalCalls = 0;
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    if (String(input) === "/admin/api/session") return response(operationalSession);
+    operationalCalls += 1;
+    if (operationalCalls === 1)
+      return response({ error: { code: "invalid_page" } }, 422);
+    return response(callPage("AAAAAAAAAAAAAAAA", "delivery-rescheduling"));
+  });
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
@@ -637,11 +756,16 @@ test("recovers an out-of-range call page without losing its call spec filter", a
   );
   expect(fetchImpl).toHaveBeenNthCalledWith(
     1,
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=999&call_spec_id=delivery-rescheduling",
+    "/admin/api/session",
     expect.any(Object),
   );
   expect(fetchImpl).toHaveBeenNthCalledWith(
     2,
+    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=999&call_spec_id=delivery-rescheduling",
+    expect.any(Object),
+  );
+  expect(fetchImpl).toHaveBeenNthCalledWith(
+    3,
     "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=1&call_spec_id=delivery-rescheduling",
     expect.any(Object),
   );
@@ -650,7 +774,14 @@ test("recovers an out-of-range call page without losing its call spec filter", a
 test("keeps missing and unavailable call directories distinct", async () => {
   window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/calls");
   const { rerender } = render(
-    <App csrfToken="csrf" fetchImpl={() => response({}, 404)} />,
+    <App
+      csrfToken="csrf"
+      fetchImpl={(input: RequestInfo | URL) =>
+        String(input) === "/admin/api/session"
+          ? response(operationalSession)
+          : response({}, 404)
+      }
+    />,
   );
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -674,10 +805,12 @@ test("keeps missing and unavailable call directories distinct", async () => {
 
 test("redirects a tenant workspace root to call specs on direct load", async () => {
   window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA");
-  const fetchImpl = vi.fn(() =>
-    response(
-      callSpecPage("AAAAAAAAAAAAAAAA", "Example tenant", "Direct call spec"),
-    ),
+  const fetchImpl = vi.fn((input: RequestInfo | URL) =>
+    String(input) === "/admin/api/session"
+      ? response(operationalSession)
+      : response(
+          callSpecPage("AAAAAAAAAAAAAAAA", "Example tenant", "Direct call spec"),
+        ),
   );
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
@@ -694,7 +827,11 @@ test("canonicalizes unknown admin routes to the tenant directory", async () => {
   render(
     <App
       csrfToken="csrf"
-      fetchImpl={() => response(tenantPage(1))}
+      fetchImpl={(input: RequestInfo | URL) =>
+        String(input) === "/admin/api/session"
+          ? response(operationalSession)
+          : response(tenantPage(1))
+      }
     />,
   );
 
@@ -712,13 +849,15 @@ test("ignores an obsolete call spec response after switching tenants", async () 
   const first = new Promise<Response>((resolve) => {
     resolveFirst = resolve;
   });
-  const fetchImpl = vi
-    .fn(() =>
-      response(
-        callSpecPage("BBBBBBBBBBBBBBBB", "Tenant B", "Current call spec"),
-      ),
-    )
-    .mockImplementationOnce(() => first);
+  let operationalCalls = 0;
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    if (String(input) === "/admin/api/session") return response(operationalSession);
+    operationalCalls += 1;
+    if (operationalCalls === 1) return first;
+    return response(
+      callSpecPage("BBBBBBBBBBBBBBBB", "Tenant B", "Current call spec"),
+    );
+  });
 
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
 
@@ -754,7 +893,14 @@ test("keeps empty, missing, and unavailable call spec states distinct", async ()
     pagination: { page: 1, page_size: 25, total: 0, total_pages: 0 },
   };
   const { rerender } = render(
-    <App csrfToken="csrf" fetchImpl={() => response(empty)} />,
+    <App
+      csrfToken="csrf"
+      fetchImpl={(input: RequestInfo | URL) =>
+        String(input) === "/admin/api/session"
+          ? response(operationalSession)
+          : response(empty)
+      }
+    />,
   );
 
   expect(await screen.findByText("No call specs yet")).toBeVisible();
@@ -762,7 +908,11 @@ test("keeps empty, missing, and unavailable call spec states distinct", async ()
   rerender(
     <App
       csrfToken="csrf"
-      fetchImpl={() => response({ error: { code: "tenant_not_found" } }, 404)}
+      fetchImpl={(input: RequestInfo | URL) =>
+        String(input) === "/admin/api/session"
+          ? response(operationalSession)
+          : response({ error: { code: "tenant_not_found" } }, 404)
+      }
     />,
   );
   expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -788,7 +938,11 @@ test("loads the approved services page directly and exposes all tenant destinati
     "",
     "/admin/tenants/AAAAAAAAAAAAAAAA/services",
   );
-  const fetchImpl = vi.fn(() => response(serviceDirectory("AAAAAAAAAAAAAAAA")));
+  const fetchImpl = vi.fn((input: RequestInfo | URL) =>
+    String(input) === "/admin/api/session"
+      ? response(operationalSession)
+      : response(serviceDirectory("AAAAAAAAAAAAAAAA")),
+  );
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
@@ -802,6 +956,7 @@ test("loads the approved services page directly and exposes all tenant destinati
     "aria-current",
     "page",
   );
+  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/session", expect.any(Object));
   expect(fetchImpl).toHaveBeenCalledWith(
     "/admin/api/tenants/AAAAAAAAAAAAAAAA/services",
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -814,15 +969,11 @@ test("submits write-only credential values with CSRF and updates metadata after 
     "",
     "/admin/tenants/AAAAAAAAAAAAAAAA/services",
   );
-  const fetchImpl = vi
-    .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
-      () => response(serviceDirectory("AAAAAAAAAAAAAAAA", false)),
-    )
-    .mockImplementationOnce(() =>
-      response(serviceDirectory("AAAAAAAAAAAAAAAA", false)),
-    )
-    .mockImplementationOnce(
-      (_input?: RequestInfo | URL, init?: RequestInit) => {
+  const fetchImpl = vi.fn(
+    (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/admin/api/session") return response(operationalSession);
+      if (init?.method === "POST") {
         expect(init).toMatchObject({
           method: "POST",
           headers: {
@@ -853,8 +1004,10 @@ test("submits write-only credential values with CSRF and updates metadata after 
           },
           201,
         );
-      },
-    );
+      }
+      return response(serviceDirectory("AAAAAAAAAAAAAAAA", false));
+    },
+  );
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
   expect(await screen.findByText("No services yet")).toBeVisible();
@@ -879,12 +1032,10 @@ test("replaces credentials from the edit dialog and refreshes their safe preview
     "",
     "/admin/tenants/AAAAAAAAAAAAAAAA/services",
   );
-  const fetchImpl = vi
-    .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
-    .mockImplementationOnce(() =>
-      response(serviceDirectory("AAAAAAAAAAAAAAAA")),
-    )
-    .mockImplementationOnce((input, init) => {
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "/admin/api/session") return response(operationalSession);
+    if (init?.method === "PATCH") {
       expect(String(input)).toBe(
         "/admin/api/tenants/AAAAAAAAAAAAAAAA/credentials/credential-google",
       );
@@ -908,7 +1059,9 @@ test("replaces credentials from the edit dialog and refreshes their safe preview
           updated_at: "2026-09-18T02:00:00Z",
         },
       });
-    });
+    }
+    return response(serviceDirectory("AAAAAAAAAAAAAAAA"));
+  });
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
   expect(await screen.findByText("****8c4a")).toBeVisible();
@@ -937,8 +1090,9 @@ test("ignores a stale credential submission after leaving the tenant services pa
     resolveCreate = resolve;
   });
   const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    if (init?.method === "POST") return pendingCreate;
     const url = String(input);
+    if (url === "/admin/api/session") return response(operationalSession);
+    if (init?.method === "POST") return pendingCreate;
     if (url.includes("/call-specs")) {
       return response(
         callSpecPage(
@@ -994,11 +1148,13 @@ test("ignores a credential response after its dialog is closed and reopened", as
   const pendingCreate = new Promise<Response>((resolve) => {
     resolveCreate = resolve;
   });
-  const fetchImpl = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
-    init?.method === "POST"
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "/admin/api/session") return response(operationalSession);
+    return init?.method === "POST"
       ? pendingCreate
-      : response(serviceDirectory("AAAAAAAAAAAAAAAA", false)),
-  );
+      : response(serviceDirectory("AAAAAAAAAAAAAAAA", false));
+  });
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
   expect(await screen.findByText("No services yet")).toBeVisible();
@@ -1063,6 +1219,8 @@ test("presents service load, duplicate, and expired-session outcomes truthfully"
   unavailableView.unmount();
 
   const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "/admin/api/session") return response(operationalSession);
     if (init?.method === "POST") {
       return response({ error: { code: "credential_already_exists" } }, 409);
     }
@@ -1088,7 +1246,11 @@ test("presents service load, duplicate, and expired-session outcomes truthfully"
   render(
     <App
       csrfToken="csrf-token"
-      fetchImpl={() => response({}, 401)}
+      fetchImpl={(input: RequestInfo | URL) =>
+        String(input) === "/admin/api/session"
+          ? response(operationalSession)
+          : response({}, 401)
+      }
       onSessionExpired={expired}
     />,
   );
@@ -1105,7 +1267,11 @@ test("rejects a service directory for a different tenant", async () => {
   render(
     <App
       csrfToken="csrf-token"
-      fetchImpl={() => response(serviceDirectory("BBBBBBBBBBBBBBBB"))}
+      fetchImpl={(input: RequestInfo | URL) =>
+        String(input) === "/admin/api/session"
+          ? response(operationalSession)
+          : response(serviceDirectory("BBBBBBBBBBBBBBBB"))
+      }
     />,
   );
 

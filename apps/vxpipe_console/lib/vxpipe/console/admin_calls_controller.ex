@@ -3,7 +3,6 @@ defmodule Vxpipe.Console.AdminCallsController do
 
   use Phoenix.Controller, formats: [:json]
 
-  alias Vxpipe.Calls.InstallationOperator
   alias Vxpipe.Console.AdminPageParameter
 
   def index(conn, %{"tenant_key" => tenant_key} = params) do
@@ -11,7 +10,7 @@ defmodule Vxpipe.Console.AdminCallsController do
          {:ok, call_spec_id} <- call_spec_filter(params),
          {:ok, call_page} <-
            Vxpipe.Calls.list_operator_calls(
-             InstallationOperator.authority(),
+             conn.assigns.user_principal,
              tenant_key,
              page: page,
              call_spec_id: call_spec_id

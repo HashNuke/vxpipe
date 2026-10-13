@@ -3,9 +3,11 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
 
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
+  import ExUnit.CaptureLog, only: [capture_log: 2]
 
-  alias Vxpipe.Console.InstallationOperatorSession
   alias Vxpipe.Console.TelemetryReporter
+  alias Vxpipe.Console.Test.FakeUserIdentity
+  alias Vxpipe.Console.Test.RevocableDiagnosticsIdentity
   alias Vxpipe.CallEngine.Diagnostics.ModelFixture
   alias Vxpipe.Gateway.HTTP.Mount
 
@@ -35,6 +37,7 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
 
   setup do
     original = Application.fetch_env!(:vxpipe_console, :diagnostics)
+    original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
 
     Application.put_env(
       :vxpipe_console,
@@ -44,7 +47,16 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
       |> Keyword.put(:reporter, TelemetryReporter)
     )
 
-    on_exit(fn -> Application.put_env(:vxpipe_console, :diagnostics, original) end)
+    on_exit(fn ->
+      Application.put_env(:vxpipe_console, :diagnostics, original)
+
+      if original_backend,
+        do: Application.put_env(:vxpipe_console, :user_identity_backend, original_backend),
+        else: Application.delete_env(:vxpipe_console, :user_identity_backend)
+    end)
+
+    Application.put_env(:vxpipe_console, :user_identity_backend, FakeUserIdentity)
+    :ok
   end
 
   test "loads diagnostics through compiled static assets" do
@@ -54,6 +66,26 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     assert html =~ ~s(type="module" src="/assets/live.js")
     refute html =~ "/admin/diagnostics/assets/"
     refute html =~ "<style>"
+  end
+
+  test "live mount logs retain view metadata without exposing the session token" do
+    log =
+      capture_log([level: :debug], fn ->
+        {:ok, _view, _html} = live(authenticated_conn(), "/admin/diagnostics")
+      end)
+
+    assert log =~ "MOUNT Vxpipe.Console.DiagnosticsLive"
+    assert log =~ "Parameters:"
+    refute log =~ FakeUserIdentity.token()
+
+    dashboard_log =
+      capture_log([level: :debug], fn ->
+        {:ok, _view, _html} = live(authenticated_conn(), "/admin/diagnostics/system/home")
+      end)
+
+    assert dashboard_log =~ "MOUNT Phoenix.LiveDashboard.PageLive"
+    assert dashboard_log =~ "Parameters:"
+    refute dashboard_log =~ FakeUserIdentity.token()
   end
 
   test "renders live bounded call-path measurements" do
@@ -367,6 +399,61 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     assert %{next_scenario: :failure} = ModelFixture.status(fixture)
   end
 
+  test "an open diagnostics stream stops refreshing after its session is revoked" do
+    start_supervised!(RevocableDiagnosticsIdentity)
+    Application.put_env(:vxpipe_console, :user_identity_backend, RevocableDiagnosticsIdentity)
+    {_child_id, reporter} = start_reporter({__MODULE__, make_ref()}, 4)
+    configure_reporter(reporter)
+
+    {:ok, view, _html} = live(authenticated_conn(), "/admin/diagnostics")
+    assert has_element?(view, "#diagnostics-board")
+
+    RevocableDiagnosticsIdentity.revoke()
+    send(view.pid, :refresh)
+
+    assert_redirect(view, "/auth/login")
+  end
+
+  test "a revoked open diagnostics stream cannot arm the model fixture" do
+    start_supervised!(RevocableDiagnosticsIdentity)
+    Application.put_env(:vxpipe_console, :user_identity_backend, RevocableDiagnosticsIdentity)
+
+    fixture =
+      start_supervised!(
+        {ModelFixture,
+         name: nil, default_scenario: :success, delay_ms: 0, response: "Local fixture response."}
+      )
+
+    diagnostics = Application.fetch_env!(:vxpipe_console, :diagnostics)
+
+    Application.put_env(
+      :vxpipe_console,
+      :diagnostics,
+      Keyword.put(diagnostics, :model_fixture, fixture)
+    )
+
+    {:ok, view, _html} = live(authenticated_conn(), "/admin/diagnostics")
+    RevocableDiagnosticsIdentity.revoke()
+
+    view |> element(~s(button[phx-value-scenario="failure"])) |> render_click()
+
+    assert_redirect(view, "/auth/login")
+    assert %{next_scenario: :success} = ModelFixture.status(fixture)
+  end
+
+  test "an open diagnostics stream fails closed when session storage is unavailable" do
+    start_supervised!(RevocableDiagnosticsIdentity)
+    Application.put_env(:vxpipe_console, :user_identity_backend, RevocableDiagnosticsIdentity)
+    {_child_id, reporter} = start_reporter({__MODULE__, make_ref()}, 4)
+    configure_reporter(reporter)
+
+    {:ok, view, _html} = live(authenticated_conn(), "/admin/diagnostics")
+    RevocableDiagnosticsIdentity.unavailable()
+    send(view.pid, :refresh)
+
+    assert_redirect(view, "/auth/login")
+  end
+
   defp emit_runtime(active_rooms) do
     :telemetry.execute(
       @runtime_sample,
@@ -444,7 +531,6 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     conn = %{conn | host: "localhost", scheme: :https}
 
     conn
-    |> Plug.Test.init_test_session(%{})
-    |> InstallationOperatorSession.put()
+    |> Plug.Test.init_test_session(%{"vxpipe_user_session" => FakeUserIdentity.token()})
   end
 end

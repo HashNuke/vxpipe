@@ -2,10 +2,10 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsController do
   @moduledoc false
   use Phoenix.Controller, formats: [:json]
 
-  alias Vxpipe.Calls.{InstallationOperator, OperatorTelephonyApplications}
+  alias Vxpipe.Calls.{OperatorTelephonyApplications}
 
   def index(conn, %{"tenant_key" => tenant}) do
-    case OperatorTelephonyApplications.list(InstallationOperator.authority(), tenant) do
+    case OperatorTelephonyApplications.list(conn.assigns.user_principal, tenant) do
       {:ok, directory} -> json(conn, directory)
       {:error, reason} -> failure(conn, reason)
     end
@@ -13,7 +13,7 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsController do
 
   def create(conn, %{"tenant_key" => tenant}) do
     case OperatorTelephonyApplications.create(
-           InstallationOperator.authority(),
+           conn.assigns.user_principal,
            tenant,
            conn.body_params
          ) do
@@ -24,7 +24,7 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsController do
 
   def update(conn, %{"tenant_key" => tenant, "service_id" => id}) do
     case OperatorTelephonyApplications.update(
-           InstallationOperator.authority(),
+           conn.assigns.user_principal,
            tenant,
            id,
            conn.body_params

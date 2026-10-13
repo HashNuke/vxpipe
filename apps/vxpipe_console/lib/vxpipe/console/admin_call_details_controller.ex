@@ -3,14 +3,13 @@ defmodule Vxpipe.Console.AdminCallDetailsController do
 
   use Phoenix.Controller, formats: [:json]
 
-  alias Vxpipe.Calls.InstallationOperator
   alias Vxpipe.Console.{CallInspectionPresenter, CallInspectionQuery}
 
   def show(conn, %{"tenant_key" => tenant_key, "call_id" => call_id}) do
-    authority = InstallationOperator.authority()
+    authority = conn.assigns.user_principal
 
     with {:ok, context} <- Vxpipe.Calls.fetch_operator_call(authority, tenant_key, call_id),
-         {:ok, access} <- Vxpipe.Calls.operator_call_access(authority, tenant_key),
+         {:ok, access} <- Vxpipe.Calls.user_call_access(authority, tenant_key),
          {:ok, result} <- CallInspectionQuery.run(access, call_id),
          true <- context.call.call_spec_id == result.call.call_spec_id,
          true <- context.call.call_spec_revision == result.call.call_spec_revision do

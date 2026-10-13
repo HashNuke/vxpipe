@@ -4,6 +4,7 @@ defmodule Vxpipe.Console.Application do
   use Application
 
   alias Vxpipe.Console.Endpoint
+  alias Vxpipe.Console.LiveMountLog
   alias Vxpipe.Console.RecordingConfiguration
   alias Vxpipe.Console.SampleCall
   alias Vxpipe.Console.TelemetryReporter
@@ -12,6 +13,7 @@ defmodule Vxpipe.Console.Application do
 
   @impl true
   def start(_type, _args) do
+    :ok = LiveMountLog.install()
     diagnostics = Application.fetch_env!(:vxpipe_console, :diagnostics)
     sample_call = Application.fetch_env!(:vxpipe_console, :sample_call)
 

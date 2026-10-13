@@ -1,9 +1,8 @@
 # Console authentication and authorization
 
-Status: proposed design, 2026-10-13; implementation is tracked in the
+Status: implemented contract, 2026-10-13; acceptance is tracked in the
 [authentication milestone](../labnotes/milestones/console-authentication-and-user-management.md).
-This supersedes the historical Console-only installation-operator browser grant when
-implemented. Existing API-key contracts remain independent.
+This supersedes the historical Console-only installation-operator browser grant. Existing API-key contracts remain independent.
 
 ## Roles and resource permissions
 
@@ -17,13 +16,12 @@ able to create Admins immediately.
 | --- | --- | --- | --- |
 | Superadmin (built-in) | ReadWrite | ReadWrite, all tenants | Superadmins, Admins and ordinary users |
 | Admin (built-in) | ReadWrite | ReadWrite, all tenants | Ordinary users only |
-| Platform Manager (editable template) | ReadWrite | ReadWrite, all tenants | None |
-| Tenant Manager (editable template) | Read | ReadWrite, all tenants | None |
-| Tenant Member (editable template) | None | Calls and call specs in assigned tenants, Read or ReadWrite per assignment | None |
+| Tenant Manager (editable template) | None | ReadWrite calls, call specs, tenant services, API keys and telephony applications in assigned tenants | None |
+| Tenant Member (editable template) | None | Read calls and call specs in assigned tenants | None |
 
-The initial ordinary templates preserve the original operational permissions. The
-latest clarification removes all user creation from Platform Managers and every
-other ordinary role. One role per user remains sufficient initially; multiple-role
+The two initial ordinary templates keep authority inside assigned tenants. Tenant
+creation and platform service configuration remain built-in operations. Ordinary
+roles cannot create or manage users. One role per user remains sufficient initially; multiple-role
 unions and direct per-user permission overrides are deferred. Template names do not
 control authorization; registered grants and resource scopes do.
 
@@ -45,8 +43,8 @@ read/write operations for calls and call specs:
 | `users.admins.write` | Installation, Superadmin only | Create/manage Admin accounts. |
 | `users.superadmins.write` | Installation, Superadmin only | Create/manage Superadmin accounts, retaining one enabled Superadmin. |
 
-`members` means every account assigned an ordinary/custom role, including Platform
-Manager, Tenant Manager and Tenant Member. It is an account category, not a tenant
+`members` means every account assigned an ordinary/custom role, including Tenant
+Manager and Tenant Member. It is an account category, not a tenant
 membership check or a match against the Tenant Member role name. There is no generic
 user-write alias; use the three explicit category permissions above.
 
@@ -76,12 +74,13 @@ there are no separate `users.admins.read` or `users.superadmins.read` prerequisi
 Built-ins cover new registered operational actions, while privileged account rules
 remain explicit. Unknown actions deny for everyone.
 
-The route inventory also needs `tenant_services.read/write`, `tenant_api_keys.read/write`,
+The route inventory also needs `tenant_services.read/write` and `tenant_api_keys.read/write`
+with tenant scopes (`all_tenants` or `assigned_tenants`), plus installation-scoped
 `tenants.read/write`, `diagnostics.read` and the existing platform-service authoring
 modifier described below; the ten rows above are not an implicit grant to other
-surfaces. Map resource actions explicitly. The first two ordinary templates include
-tenant lifecycle/services/key management; Tenant Members do not. Diagnostics remain
-built-in-only initially. Granting `users.read` to a custom role is a proposed optional
+surfaces. Map resource actions explicitly. Tenant Manager includes assigned-tenant
+service/key and telephony application management; Tenant Member does not. Diagnostics remain
+built-in-only initially. Granting `users.read` to a custom role is an optional
 read-only directory capability, not permission to create/edit users. Seed no ordinary
 role with it by default; the projection excludes credentials, hashes and session data.
 Self-service profile/password changes use their own authenticated workflow and do not
@@ -141,7 +140,7 @@ grants. Labels cannot impersonate system identity: protected kinds are seeded an
 cannot be set by custom-role requests. An ordinary role with every delegable operational
 permission remains ordinary and cannot manage accounts or roles.
 
-Proposed defaults: Superadmins may create other Superadmins; protect the last enabled
+Account lifecycle: Superadmins may create other Superadmins; protect the last enabled
 Superadmin under concurrent demotion/disable; accounts are disabled rather than
 hard-deleted. A separate last-Admin invariant is unnecessary because Superadmin can
 create an Admin. These defaults and applying the creation hierarchy to all account
@@ -176,6 +175,7 @@ permission checks described above.
 | --- | --- | --- |
 | `/auth/setup` | First Superadmin: email, password, confirm password. | Pending installation only; upgrades additionally need trusted setup proof. |
 | `/auth/login` | Sign in: email and password. | Unauthenticated visitors; redirects to setup only when safely pending. |
+| `/auth/recover` | Enter a locally issued one-time recovery proof, existing Superadmin email, new password and confirmation. | Anyone holding the short-lived proof; no email delivery. |
 | `/admin/account` | Own account: email; change password with current password, new password and confirmation. | Any signed-in user; current-password confirmation for account changes. |
 | `/admin/users` | User directory: search, role filters and pagination. | `users.read`. |
 | `/admin/users/new` | Create account: email, password, confirm password, permitted role and applicable tenant assignments. | Write permission for the selected account category. |
@@ -193,17 +193,18 @@ tenant state; there is no permission-free fallback to another tenant.
 
 ### Tenant access on the user form
 
-Proposed presentation: one inline **Tenant access** section immediately after Role on
-`/admin/users/new` and `/admin/users/:user_id`. Reuse the Console's searchable combobox
-and compact tenant rows; no separate page or nested permission wizard is needed.
+Present one **Tenant access** section immediately after Role on
+`/admin/users/new` and `/admin/users/:user_id`. Keep assigned tenants as compact rows
+on the form. **Add tenants** opens a searchable modal dialog so a scrollable tenant
+picker does not expand the page; no separate page or nested permission wizard is needed.
 
-- For assigned-tenant grants, show **Add tenants** with search by tenant name/key and
-  checkbox selection. Selected tenants appear below as rows with tenant name, public
+- For assigned-tenant grants, show **Add tenants** opening a dialog with search by
+  tenant name/key and checkbox selection. Selected tenants appear on the form as rows with tenant name, public
   key, **Read only / Read & write** selector and **Remove**. New selections default to
   Read only. Preserve selections across search/result pages; exclude duplicate rows.
 - Explain **The role defines available actions. Tenant access limits where those actions
   apply.** Summarize actual Calls/Call Specs access per selected tenant from the role
-  and assignment together. Hide the Read & write choice when no assigned-scope write
+  and assignment together, including tenant services and API keys. Hide the Read & write choice when no assigned-scope write
   is available; a read-only role must never appear to acquire a write from this control.
 - For all-tenant-only roles, replace the picker with **All tenants — granted by role**
   and **Includes tenants created later**. No user-level toggle expands an assigned-
@@ -258,18 +259,16 @@ All existing category checks apply to reset and creation; no public password res
 ### Service references in call specs
 
 Keep the existing distinction between executing a published spec and authoring it.
-Both built-ins and both initial Manager templates may author specs using platform or
-tenant services:
+Both built-ins and Tenant Manager may author specs using platform or tenant services:
 Tenant Managers can select/read a platform service without modifying its configuration.
-Seed `call_specs.use_platform_services` for both Manager roles, independently of
+Seed `call_specs.use_platform_services` for Tenant Manager, independently of
 platform configuration writes. Custom roles must hold it as well as scoped
-`call_specs.write` to author platform-backed specs. Tenant Members with ReadWrite
-lack that permission and can author only tenant-owned service references, matching
-the existing tenant API-key restriction. Validate the entire resulting spec on save
-and publish, including unchanged references. A member can read and run an already
-published platform-backed spec, but cannot save/publish it while it retains disallowed
-references. Explain this in the editor. Changing this historical restriction requires
-an explicit product decision; membership must not accidentally bypass it.
+`call_specs.write` to author platform-backed specs. Tenant Members are read-only;
+custom authoring roles without that modifier can author only tenant-owned service
+references. Validate the entire resulting spec on save and publish, including
+unchanged references. A member can read and run an already published
+platform-backed spec. Changing this historical restriction requires an explicit
+product decision; membership must not accidentally bypass it.
 
 ## Database organization
 
@@ -338,9 +337,11 @@ Setup uses CSRF protection, the configured allowed origin and HTTPS outside loop
 For upgrades, reuse the trusted local challenge mechanism only as a short-lived,
 single-use **setup proof**, consumed with the creation transaction; it cannot issue
 the old installation-wide session. Existing anonymous browser grants are invalidated
-at cutover. A local recovery command can restore an existing Superadmin's access through
-the same audited domain workflow, with protected secret input/output, session
-revocation and no resetting of the setup marker. No permanent HTTP recovery bypass.
+at cutover. Run `mix vxpipe.recover` locally to issue a short-lived, single-use proof,
+then enter it on `/auth/recover` with an existing Superadmin email and replacement
+password. Recovery changes that account's password and revokes its prior sessions in
+the same audited transaction; it does not reset the setup marker or create a new user.
+The recovery endpoint accepts only a valid locally issued proof.
 
 ## Login, provisioning and session lifetime
 
@@ -464,3 +465,5 @@ The no-email clarification fixes the browser route inventory and replaces the ea
 temporary-password/forced-change proposal with directly entered passwords and
 confirmation for creation/reset. Reviewed reset rollback, target-session revocation,
 self-reset behavior and read-only privileged accounts. No mail-backed recovery is implied.
+
+Operational instructions: [setup, upgrades and local recovery](development/console-authentication-operations.md).

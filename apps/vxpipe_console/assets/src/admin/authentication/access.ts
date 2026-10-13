@@ -1,4 +1,5 @@
-import type { AccessLevel, Grant, Role } from "./types";
+import type { AccessLevel, Grant, Role, User } from "./types";
+import type { TenantDestination } from "../TenantWorkspaceNavigation";
 
 // Presentation policy for the isolated prototype. Backend authorization must recheck it.
 export function canManageUser(
@@ -26,8 +27,7 @@ export function effectiveAccess(
       (grant) =>
         grant.permission === `${resource}.${action}` &&
         (grant.scope === "all_tenants" ||
-          grant.scope === "installation" ||
-          (membership !== undefined &&
+          (grant.scope === "assigned_tenants" && membership !== undefined &&
             (action === "read" || membership === "read_write"))),
     );
   return allows("write") ? "write" : allows("read") ? "read" : "none";
@@ -77,7 +77,7 @@ export const permissionGroups = [
     resource: "tenants",
     label: "Tenants",
     detail: "View tenant details; manage tenant settings.",
-    tenant: true,
+    tenant: false,
   },
   {
     resource: "platform_services",
@@ -109,4 +109,58 @@ export function operationalGrants(
       { permission: `${group.resource}.read`, scope },
       { permission: `${group.resource}.write`, scope },
     ]);
+}
+
+/**
+ * Operational visibility derived from the server principal. Installation
+ * resources authorize on the exact permission key (scope is validated at
+ * role-write time), so link visibility checks the key, never client claims.
+ */
+export function canCreateTenants(role: Role): boolean {
+  return !!role.kind || role.grants.some((grant) => grant.permission === "tenants.write");
+}
+
+export function canReadPlatformServices(role: Role): boolean {
+  return (
+    !!role.kind ||
+    role.grants.some(
+      (grant) =>
+        grant.permission === "platform_services.read" ||
+        grant.permission === "platform_services.write",
+    )
+  );
+}
+
+export function canWritePlatformServices(role: Role): boolean {
+  return !!role.kind || role.grants.some(
+    (grant) => grant.permission === "platform_services.write" && grant.scope === "installation",
+  );
+}
+
+export function membershipAccess(user: User, tenantKey: string): AccessLevel | undefined {
+  return user.memberships.find((item) => item.tenantId === tenantKey)?.access;
+}
+
+export function hasTenantServiceRead(role: Role, access?: AccessLevel): boolean {
+  return effectiveAccess(role, "tenant_services", access) !== "none";
+}
+
+export function canWriteTenantCredentials(role: Role, access?: AccessLevel): boolean {
+  return effectiveAccess(role, "tenant_api_keys", access) === "write";
+}
+
+export function workspaceDestinationsFor(
+  role: Role,
+  access?: AccessLevel,
+): TenantDestination[] {
+  const destinations: TenantDestination[] = [];
+  if (effectiveAccess(role, "call_specs", access) !== "none")
+    destinations.push("call-specs");
+  if (effectiveAccess(role, "calls", access) !== "none") destinations.push("calls");
+  if (hasTenantServiceRead(role, access)) destinations.push("services");
+  return destinations;
+}
+
+export function canCreateCallSpecs(role: Role, access?: AccessLevel): boolean {
+  return effectiveAccess(role, "call_specs", access) === "write";
 }

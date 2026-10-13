@@ -15,6 +15,21 @@ defmodule Vxpipe.Calls.AdminRepository do
   @callback list_tenants(context(), pos_integer(), non_neg_integer()) ::
               {:ok, {[Tenant.t()], non_neg_integer()}} | {:error, term()}
 
+  @doc """
+  Scoped tenant listing for user principals. `scope` is `:all` or
+  `{:keys, allowed_keys}`. Implementations must filter and count in storage
+  before applying limit/offset.
+  """
+  @callback list_tenants_scoped(
+              context(),
+              :all | {:keys, [String.t()]},
+              pos_integer(),
+              non_neg_integer()
+            ) ::
+              {:ok, {[Tenant.t()], non_neg_integer()}} | {:error, term()}
+
+  @optional_callbacks list_tenants_scoped: 4
+
   @callback list_call_specs(context(), String.t(), pos_integer(), non_neg_integer()) ::
               {:ok, {Tenant.t(), [CallSpecSummary.t()], non_neg_integer()}} | {:error, term()}
 

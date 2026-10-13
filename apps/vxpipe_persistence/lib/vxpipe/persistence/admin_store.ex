@@ -55,6 +55,41 @@ defmodule Vxpipe.Persistence.AdminStore do
   end
 
   @impl true
+  def list_tenants_scoped(repo, :all, limit, offset), do: list_tenants(repo, limit, offset)
+  def list_tenants_scoped(_repo, {:keys, []}, _limit, _offset), do: {:ok, {[], 0}}
+
+  def list_tenants_scoped(repo, {:keys, keys}, limit, offset) when is_list(keys) do
+    page_query =
+      from(tenant in Tenant,
+        where: tenant.key in ^keys,
+        order_by: [desc: tenant.inserted_at, desc: tenant.key],
+        limit: ^limit,
+        offset: ^offset,
+        select: %{
+          key: tenant.key,
+          name: tenant.name,
+          inserted_at: tenant.inserted_at
+        }
+      )
+
+    total_query =
+      from(tenant in Tenant,
+        where: tenant.key in ^keys,
+        select: %{value: count(tenant.id)}
+      )
+
+    query =
+      from(total in subquery(total_query),
+        left_join: tenant in subquery(page_query),
+        on: true,
+        order_by: [desc: tenant.inserted_at, desc: tenant.key],
+        select: {tenant.key, tenant.name, tenant.inserted_at, total.value}
+      )
+
+    repository_result(fn -> query |> repo.all() |> tenant_page() end)
+  end
+
+  @impl true
   def list_call_specs(repo, tenant_key, limit, offset) do
     latest_numbers =
       from(revision in CallSpecRevision,
@@ -203,6 +238,8 @@ defmodule Vxpipe.Persistence.AdminStore do
         {visible, extra} = Enum.split(services, 100)
         names = Enum.map(visible, & &1.name)
 
+        {tenant_override?, platform_available?} = scoped_telnyx_ownership(repo, tenant_id)
+
         routes =
           repo.all(
             from(r in Vxpipe.Persistence.Schema.TelephonyRoute,
@@ -234,8 +271,11 @@ defmodule Vxpipe.Persistence.AdminStore do
         {visible_routes, extra_routes} = Enum.split(routes, 500)
 
         {:ok,
-         {tenant, Enum.map(visible, &telephony_metadata(&1, tenant.key)), visible_routes,
-          extra != [] or extra_routes != []}}
+         {tenant,
+          Enum.map(
+            visible,
+            &telephony_metadata(&1, tenant.key, tenant_override?, platform_available?)
+          ), visible_routes, extra != [] or extra_routes != []}}
       end
     end)
   end
@@ -274,12 +314,16 @@ defmodule Vxpipe.Persistence.AdminStore do
 
         visible_credential_ids = Enum.map(visible_credentials, & &1.id)
 
+        {tenant_override?, platform_available?} =
+          scoped_telnyx_ownership(repo, tenant_id)
+
         services =
           TelephonyService
           |> where(
             [service],
             service.tenant_id == ^tenant_id and
-              service.credential_id in ^visible_credential_ids
+              (service.credential_id in ^visible_credential_ids or
+                 is_nil(service.credential_id))
           )
           |> order_by([service], asc: service.provider, asc: service.name)
           |> limit(^(@service_inventory_limit + 1))
@@ -292,6 +336,7 @@ defmodule Vxpipe.Persistence.AdminStore do
               :provider,
               :provider_connection_id,
               :credential_id,
+              :credential_name,
               :public_key,
               :outbound_number,
               :answering_machine_detection,
@@ -302,7 +347,7 @@ defmodule Vxpipe.Persistence.AdminStore do
             ])
           )
           |> repo.all()
-          |> Enum.map(&telephony_metadata(&1, tenant.key))
+          |> Enum.map(&telephony_metadata(&1, tenant.key, tenant_override?, platform_available?))
 
         {visible_services, remaining_services} = Enum.split(services, @service_inventory_limit)
 
@@ -593,7 +638,16 @@ defmodule Vxpipe.Persistence.AdminStore do
     }
   end
 
-  defp telephony_metadata(stored, tenant_key) do
+  # Safe platform service names/ownership for privileged editor lookups.
+  #
+  # Tenant credentials stay metadata-only (no encrypted payloads, no platform
+  # credential rows), so assigned members never receive credentials/secrets.
+  # Scoped `telnyx/telnyx` bindings (credential_id nil) resolve their effective
+  # owner from storage: tenant override wins, otherwise platform. Legacy
+  # credential_id bindings keep `nil` ownership to preserve existing validation.
+  # Callers project only `{key, name, provider}` for editor output, stripping
+  # ingress keys, credential ids and public keys.
+  defp telephony_metadata(stored, tenant_key, tenant_override?, platform_available?) do
     %DomainTelephonyService{
       id: stored.public_id,
       tenant_key: tenant_key,
@@ -603,6 +657,13 @@ defmodule Vxpipe.Persistence.AdminStore do
       provider_connection_id: stored.provider_connection_id,
       credential_id: stored.credential_id,
       credential_name: stored.credential_name,
+      credential_owner:
+        scoped_service_owner(
+          stored,
+          tenant_key,
+          tenant_override?,
+          platform_available?
+        ),
       public_key: stored.public_key,
       outbound_number: stored.outbound_number,
       answering_machine_detection: detection(stored.answering_machine_detection),
@@ -611,6 +672,41 @@ defmodule Vxpipe.Persistence.AdminStore do
       inserted_at: stored.inserted_at,
       updated_at: stored.updated_at
     }
+  end
+
+  defp scoped_service_owner(stored, tenant_key, tenant_override?, platform_available?) do
+    if stored.provider == "telnyx" and stored.credential_name == "telnyx" and
+         is_nil(stored.credential_id) and is_nil(stored.public_key) do
+      cond do
+        tenant_override? -> {:tenant, tenant_key}
+        platform_available? -> :platform
+        true -> nil
+      end
+    else
+      nil
+    end
+  end
+
+  defp scoped_telnyx_ownership(repo, tenant_id) do
+    tenant_override? =
+      repo.exists?(
+        from(c in ProviderCredential,
+          where:
+            c.scope == "tenant" and c.tenant_id == ^tenant_id and c.provider == "telnyx" and
+              c.name == "telnyx"
+        )
+      )
+
+    platform_available? =
+      repo.exists?(
+        from(c in ProviderCredential,
+          where:
+            c.scope == "platform" and is_nil(c.tenant_id) and c.provider == "telnyx" and
+              c.name == "telnyx"
+        )
+      )
+
+    {tenant_override?, platform_available?}
   end
 
   defp credential_status("active"), do: :active

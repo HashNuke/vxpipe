@@ -1,14 +1,15 @@
 defmodule Vxpipe.Calls.CallReadAccess do
-  @moduledoc "Tenant-scoped call-read authority derived from an installation operator grant."
+  @moduledoc "Tenant-scoped call-read authority derived from an operator grant or user principal."
 
-  alias Vxpipe.Calls.{InstallationOperator, Principal}
+  alias Vxpipe.Calls.{InstallationOperator, Principal, ProviderAuth, UserAuthorization}
+  alias Vxpipe.Identity.Principal, as: UserPrincipal
 
   @enforce_keys [:tenant_key, :grant]
   defstruct @enforce_keys
 
   @opaque t :: %__MODULE__{
             tenant_key: String.t(),
-            grant: :installation_operator
+            grant: :installation_operator | :user_principal
           }
 
   @type authority :: Principal.t() | t()
@@ -31,13 +32,27 @@ defmodule Vxpipe.Calls.CallReadAccess do
 
   def for_operator(_authority, _tenant_key), do: {:error, :installation_operator_required}
 
+  @spec for_user(UserPrincipal.t(), String.t()) ::
+          {:ok, t()} | {:error, :forbidden | :invalid_tenant_key}
+  def for_user(%UserPrincipal{} = principal, tenant_key)
+      when is_binary(tenant_key) and byte_size(tenant_key) > 0 do
+    with :ok <- ProviderAuth.tenant_key(tenant_key),
+         :ok <- UserAuthorization.authorize_tenant(principal, "calls.read", tenant_key) do
+      {:ok, %__MODULE__{tenant_key: tenant_key, grant: :user_principal}}
+    end
+  end
+
+  def for_user(%UserPrincipal{}, _tenant_key), do: {:error, :invalid_tenant_key}
+  def for_user(_authority, _tenant_key), do: {:error, :forbidden}
+
   @spec tenant_key(authority()) :: {:ok, String.t()} | {:error, :insufficient_scope}
   def tenant_key(%Principal{tenant_key: tenant_key, scopes: scopes}) do
     if MapSet.member?(scopes, :calls), do: {:ok, tenant_key}, else: {:error, :insufficient_scope}
   end
 
-  def tenant_key(%__MODULE__{tenant_key: tenant_key, grant: :installation_operator}),
-    do: {:ok, tenant_key}
+  def tenant_key(%__MODULE__{tenant_key: tenant_key, grant: grant})
+      when grant in [:installation_operator, :user_principal],
+      do: {:ok, tenant_key}
 
   def tenant_key(_authority), do: {:error, :invalid_call_read_access}
 

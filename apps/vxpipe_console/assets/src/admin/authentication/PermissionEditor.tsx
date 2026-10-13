@@ -52,6 +52,19 @@ export function PermissionEditor({
             read?.scope ??
             write?.scope ??
             (group.tenant ? "assigned_tenants" : "installation");
+          // Read and write grants carry independent scopes (for example
+          // all-tenant read with assigned-tenant write). A single selector
+          // must not collapse them into one scope.
+          const independentScopes =
+            group.tenant && !!read && !!write;
+          const updateScope = (permission: string, next: Scope) =>
+            onChange?.(
+              value.map((grant) => {
+                if (grant.permission === permission)
+                  return { ...grant, scope: next };
+                return grant;
+              }),
+            );
           return (
             <div className="access-permission-row" key={group.resource}>
               <div>
@@ -99,6 +112,38 @@ export function PermissionEditor({
                 )}
               </div>
               {group.tenant ? (
+                independentScopes ? (
+                  <>
+                    <select
+                      aria-label={`Read scope for ${group.label}`}
+                      value={read.scope}
+                      disabled={readOnly}
+                      onChange={(event) =>
+                        updateScope(
+                          `${group.resource}.read`,
+                          event.target.value as Scope,
+                        )
+                      }
+                    >
+                      <option value="assigned_tenants">Read: Assigned tenants</option>
+                      <option value="all_tenants">Read: All tenants</option>
+                    </select>
+                    <select
+                      aria-label={`Write scope for ${group.label}`}
+                      value={write.scope}
+                      disabled={readOnly}
+                      onChange={(event) =>
+                        updateScope(
+                          `${group.resource}.write`,
+                          event.target.value as Scope,
+                        )
+                      }
+                    >
+                      <option value="assigned_tenants">Write: Assigned tenants</option>
+                      <option value="all_tenants">Write: All tenants</option>
+                    </select>
+                  </>
+                ) : (
                 <select
                   aria-label={`Scope for ${group.label}`}
                   value={scope}
@@ -106,7 +151,8 @@ export function PermissionEditor({
                   onChange={(event) =>
                     onChange?.(
                       value.map((grant) =>
-                        grant.permission.startsWith(`${group.resource}.`)
+                        grant.permission === `${group.resource}.read` ||
+                        grant.permission === `${group.resource}.write`
                           ? { ...grant, scope: event.target.value as Scope }
                           : grant,
                       ),
@@ -116,6 +162,7 @@ export function PermissionEditor({
                   <option value="assigned_tenants">Assigned tenants</option>
                   <option value="all_tenants">All tenants</option>
                 </select>
+                )
               ) : (
                 <span className="access-muted">Installation</span>
               )}
@@ -143,9 +190,7 @@ export function PermissionEditor({
                 ? [
                     {
                       permission: "call_specs.use_platform_services",
-                      scope: value.find(
-                        (grant) => grant.permission === "call_specs.write",
-                      )!.scope,
+                      scope: "installation" as const,
                     },
                   ]
                 : []),
@@ -154,10 +199,6 @@ export function PermissionEditor({
         />
         Allow platform services in call specs
       </label>
-      <p className="access-muted">
-        Account management is reserved for Admin and Superadmin. Custom roles
-        cannot grant it.
-      </p>
     </section>
   );
 }

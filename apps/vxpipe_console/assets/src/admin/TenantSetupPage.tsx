@@ -24,6 +24,7 @@ export function TenantSetupPage({
   onRetry,
   platform = false,
   platformConnections = [],
+  readOnly = false,
 }: {
   tenant: SetupTenant;
   connections: SetupConnection[];
@@ -38,6 +39,7 @@ export function TenantSetupPage({
   onRetry: () => void;
   platform?: boolean;
   platformConnections?: SetupConnection[];
+  readOnly?: boolean;
 }) {
   const ready = voiceSetupReady(connections, providers);
   const connected = providers.filter((provider) =>
@@ -57,6 +59,7 @@ export function TenantSetupPage({
         overridesPlatform={overridesPlatform}
         busy={removingProvider !== null}
         removing={removingProvider === provider.id}
+        readOnly={readOnly}
         onSelect={() => onConnect(provider.id)}
         onRemoveCredentials={
           onRemoveCredentials &&
@@ -111,10 +114,10 @@ export function TenantSetupPage({
           <h1 id="setup-services-title">
             {platform ? "Platform services" : "Setup services"}
           </h1>
-          <Button onClick={onBrowse}>
+          {!readOnly ? <Button onClick={onBrowse}>
             <Plus aria-hidden="true" size={16} />
             Connect a service
-          </Button>
+          </Button> : null}
         </div>
         {platform ? (
           <p className="setup-platform-description">

@@ -173,7 +173,7 @@ progress without claiming the entire milestone is complete.
 40. [x] [Worktree setup and concurrent development](worktree-setup.md) — Complete 2026-10-08; all six checkpoints pass. Repeatable `bin/setup` isolates databases, builds, temporary files, development ports and browser sessions. Shared branch ownership persists until explicit release. Two complete default umbrella suites pass with 10m23s overlap; rendered checks and synthetic ownership acceptance pass without real live tests.
 41. [x] [Call spec editor](call-spec-editor.md) — Complete 2026-10-08. The operator Console creates, edits, saves and publishes portable call specs with participant/transfer canvas, field validation, provider/model/voice listings, safe tenant lookups, immutable revisions and unsaved-change recovery. Production desktop/phone acceptance and all three example digest round-trips pass; a published editor route starts a local call with a synthetic credential and no provider generation request. All five root gates pass (3,458 tests, zero failures, 120 excluded, seed 991936), as do 503 frontend tests, TypeScript, lint and the production asset build. The user explicitly deferred UI review and authorized completion. No live tests ran.
 42. [x] [Transcript start and optional VAD](transcript-start-and-optional-vad.md) — Default human STT speech start to the first nonempty transcript, with optional local VAD across STT models and automatic Scribe VAD commits. Common onset/API composition and bounded Scribe inferred endpoint implemented. API preparation, PCM/usage and interruption/replacement checks pass, as do root/Lean and live Scribe repeated/long-turn and bounded background-noise cases. WebRTC verifies interruption during actual agent playout in both onset modes. Fresh-VM restart compatibility passes. Complete under the user-clarified first-partial speech-start criterion. Configured-room recognition accuracy and human listening remain documented follow-ups. Telephony is outside this milestone’s acceptance scope.
-43. [ ] [Console authentication and user management](console-authentication-and-user-management.md) — Component/page Storybooks and an interactive mock journey are implemented and verified. The user deferred UI review and authorized backend work. The full slice adds first-Superadmin setup, revocable sessions, protected Superadmin/Admin roles, configurable ordinary roles and tenant-scoped access; backend implementation remains open.
+43. [x] [Console authentication and user management](console-authentication-and-user-management.md) — First-Superadmin setup, revocable sessions, protected Superadmin/Admin roles, configurable ordinary roles, tenant-scoped operations and user/role Console pages are implemented with independent review. Engineering acceptance passed, including migration/restart/cross-BEAM checks and real Console browser flows; user UI review remains deferred by request.
 44. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 45. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -193,11 +193,10 @@ The 2026-10-13 [authentication plan](console-authentication-and-user-management.
 adds named Console users before delivery. It builds on completed operator login,
 tenant administration, scoped services and the call spec editor. A typed authentication
 singleton is independent of demo setup; the unfinished bootstrap/onboarding milestones
-do not block it. Local design/dependency review is recorded separately from the open
-implementation checklist. Same-day clarifications define protected Superadmin/Admin roles,
+do not block it. Local design/dependency review is recorded separately from implementation and
+independent code-review evidence. Same-day clarifications define protected Superadmin/Admin roles,
 configurable ordinary permission bundles and fixed privileged-account rules. Calls/specs
-are tenant-scoped; platform services and users are installation-scoped. Initial template
-names and unspecified permission defaults are proposed
+are tenant-scoped; platform services and users are installation-scoped. The approved Tenant Manager and Tenant Member templates are documented
 in the [decision document](../../docs/console-authentication-and-authorization.md).
 
 ## Pre-delivery review hold

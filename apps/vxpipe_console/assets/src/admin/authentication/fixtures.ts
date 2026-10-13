@@ -1,4 +1,3 @@
-import { operationalGrants } from "./access";
 import type { Role, Tenant, User } from "./types";
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -18,57 +17,26 @@ export const roles: Role[] = [
     grants: [],
   },
   {
-    id: id(3),
-    name: "Platform Manager",
-    description: "Manages services, calls and call specs across all tenants.",
-    kind: null,
-    grants: [
-      ...operationalGrants("all_tenants"),
-      { permission: "platform_services.read", scope: "installation" },
-      { permission: "platform_services.write", scope: "installation" },
-      { permission: "call_specs.use_platform_services", scope: "all_tenants" },
-    ],
-  },
-  {
     id: id(4),
     name: "Tenant Manager",
-    description: "Manages all tenants and reads platform service metadata.",
+    description: "Manages tenant operations in assigned tenants.",
     kind: null,
     grants: [
-      ...operationalGrants("all_tenants"),
-      { permission: "platform_services.read", scope: "installation" },
-      { permission: "call_specs.use_platform_services", scope: "all_tenants" },
+      ...["calls.read", "calls.write", "call_specs.read", "call_specs.write", "tenant_services.read", "tenant_services.write", "tenant_api_keys.read", "tenant_api_keys.write"].map(
+        (permission) => ({ permission, scope: "assigned_tenants" as const }),
+      ),
+      { permission: "call_specs.use_platform_services", scope: "installation" },
     ],
   },
   {
     id: id(5),
     name: "Tenant Member",
-    description: "Calls and call specs in assigned tenants only.",
+    description: "Reads calls and call specs in assigned tenants.",
     kind: null,
-    grants: [
-      "calls.read",
-      "calls.write",
-      "call_specs.read",
-      "call_specs.write",
-    ].map((permission) => ({ permission, scope: "assigned_tenants" })),
-  },
-  {
-    id: id(6),
-    name: "Call Reviewer",
-    description:
-      "Reads calls across all tenants and specs in assigned tenants.",
-    kind: null,
-    grants: [
-      { permission: "calls.read", scope: "all_tenants" },
-      { permission: "call_specs.read", scope: "assigned_tenants" },
-    ],
-  },
-  {
-    id: id(7),
-    name: "Directory Reader",
-    description: "Reads the user directory without managing accounts.",
-    kind: null,
-    grants: [{ permission: "users.read", scope: "installation" }],
+    grants: ["calls.read", "call_specs.read"].map((permission) => ({
+      permission,
+      scope: "assigned_tenants",
+    })),
   },
 ];
 export const tenants: Tenant[] = [
@@ -97,22 +65,35 @@ export const users: User[] = [
   },
   {
     id: id(203),
-    email: "platform@example.test",
+    email: "tenant.manager@example.test",
     roleId: roles[2].id,
     enabled: true,
-    memberships: [],
+    memberships: [
+      { tenantId: tenants[0].id, access: "read_write" },
+      { tenantId: tenants[1].id, access: "read_write" },
+    ],
   },
   {
     id: id(204),
     email: "operations@example.test",
-    roleId: roles[3].id,
+    roleId: roles[2].id,
     enabled: true,
-    memberships: [],
+    memberships: [{ tenantId: tenants[2].id, access: "read_write" }],
   },
   {
     id: id(205),
     email: "member@example.test",
-    roleId: roles[4].id,
+    roleId: roles[3].id,
+    enabled: true,
+    memberships: [
+      { tenantId: tenants[0].id, access: "read" },
+      { tenantId: tenants[1].id, access: "read" },
+    ],
+  },
+  {
+    id: id(206),
+    email: "support.manager@example.test",
+    roleId: roles[2].id,
     enabled: true,
     memberships: [
       { tenantId: tenants[0].id, access: "read" },
@@ -120,30 +101,23 @@ export const users: User[] = [
     ],
   },
   {
-    id: id(206),
-    email: "reviewer@example.test",
-    roleId: roles[5].id,
-    enabled: true,
-    memberships: [{ tenantId: tenants[0].id, access: "read" }],
-  },
-  {
     id: id(207),
-    email: "directory@example.test",
-    roleId: roles[6].id,
+    email: "west.member@example.test",
+    roleId: roles[3].id,
     enabled: true,
-    memberships: [],
+    memberships: [{ tenantId: tenants[3].id, access: "read" }],
   },
   {
     id: id(208),
     email: "new.member@example.test",
-    roleId: roles[4].id,
+    roleId: roles[3].id,
     enabled: true,
     memberships: [],
   },
   {
     id: id(209),
     email: "former.member@example.test",
-    roleId: roles[4].id,
+    roleId: roles[3].id,
     enabled: false,
     memberships: [{ tenantId: tenants[0].id, access: "read" }],
   },

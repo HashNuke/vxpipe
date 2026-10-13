@@ -3,13 +3,13 @@ defmodule Vxpipe.Console.AdminCallSpecAuthoringController do
   use Phoenix.Controller, formats: [:json]
 
   alias Vxpipe.Calls
-  alias Vxpipe.Calls.{CallSpecErrors, InstallationOperator}
+  alias Vxpipe.Calls.{CallSpecErrors}
   alias Vxpipe.Console.CallSpecRevisionJSON
 
   def show(conn, %{"tenant_key" => tenant, "id" => id} = params) do
     respond(conn, 200, fn ->
       with {:ok, revision} <- revision(Map.get(params, "revision")),
-           {:ok, result} <- read(tenant, id, revision) do
+           {:ok, result} <- read(conn.assigns.user_principal, tenant, id, revision) do
         {:ok,
          Map.merge(
            CallSpecRevisionJSON.render(result.call_spec),
@@ -23,7 +23,7 @@ defmodule Vxpipe.Console.AdminCallSpecAuthoringController do
     respond(conn, 201, fn ->
       with {:ok, source} <- source(conn.body_params),
            {:ok, stored} <-
-             Calls.save_authorized_call_spec(InstallationOperator.authority(), tenant, source) do
+             Calls.save_authorized_call_spec(conn.assigns.user_principal, tenant, source) do
         {:ok, CallSpecRevisionJSON.render(stored)}
       end
     end)
@@ -32,9 +32,9 @@ defmodule Vxpipe.Console.AdminCallSpecAuthoringController do
   def update(conn, %{"tenant_key" => tenant, "id" => id}) do
     respond(conn, 201, fn ->
       with {:ok, source} <- source(conn.body_params),
-           {:ok, _existing} <- read(tenant, id, nil),
+           {:ok, _existing} <- read(conn.assigns.user_principal, tenant, id, nil),
            {:ok, stored} <-
-             Calls.save_authorized_call_spec(InstallationOperator.authority(), tenant, source,
+             Calls.save_authorized_call_spec(conn.assigns.user_principal, tenant, source,
                call_spec_id: id
              ) do
         {:ok, CallSpecRevisionJSON.render(stored)}
@@ -46,10 +46,10 @@ defmodule Vxpipe.Console.AdminCallSpecAuthoringController do
     respond(conn, 200, fn ->
       with true <- conn.body_params == %{},
            {:ok, revision} when not is_nil(revision) <- revision(input),
-           {:ok, _existing} <- read(tenant, id, revision),
+           {:ok, _existing} <- read(conn.assigns.user_principal, tenant, id, revision),
            {:ok, stored} <-
              Calls.publish_authorized_call_spec(
-               InstallationOperator.authority(),
+               conn.assigns.user_principal,
                tenant,
                id,
                revision
@@ -62,11 +62,8 @@ defmodule Vxpipe.Console.AdminCallSpecAuthoringController do
     end)
   end
 
-  defp read(tenant, id, revision),
-    do:
-      Calls.fetch_operator_call_spec(InstallationOperator.authority(), tenant, id,
-        revision: revision
-      )
+  defp read(authority, tenant, id, revision),
+    do: Calls.fetch_operator_call_spec(authority, tenant, id, revision: revision)
 
   defp source(%{"source" => source} = body) when is_map(source) and map_size(body) == 1,
     do: {:ok, source}

@@ -24,6 +24,10 @@ defmodule Vxpipe.Calls.MixProject do
   defp elixirc_paths(_env), do: ["lib"]
 
   defp deps do
-    [{:vxpipe_call_engine, in_umbrella: true}, {:vxpipe_providers, in_umbrella: true}]
+    [
+      {:vxpipe_call_engine, in_umbrella: true},
+      {:vxpipe_providers, in_umbrella: true},
+      {:vxpipe_identity, in_umbrella: true}
+    ]
   end
 end

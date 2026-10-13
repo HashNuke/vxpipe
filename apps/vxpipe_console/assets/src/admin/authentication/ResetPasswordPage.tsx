@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "../Button";
 import { PageHeader } from "../PageHeader";
 import { canManageUser, validatePassword } from "./access";
@@ -57,12 +58,13 @@ export function ResetPasswordPage({
     <main className="access-page access-narrow">
       <a
         className="access-back"
-        href={`#/admin/users/${user.id}`}
+        href={`/admin/users/${user.id}`}
         onClick={(event) => {
           event.preventDefault();
           onNavigate(`/admin/users/${user.id}`);
         }}
       >
+        <ArrowLeft size={16} aria-hidden />
         Back to user
       </a>
       <PageHeader

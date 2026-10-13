@@ -270,6 +270,9 @@ defmodule Vxpipe.Calls do
   def operator_call_access(authority, tenant_key),
     do: CallReadAccess.for_operator(authority, tenant_key)
 
+  def user_call_access(principal, tenant_key),
+    do: CallReadAccess.for_user(principal, tenant_key)
+
   def enrich_usage_billing(principal, call_id, options \\ []),
     do: BillingEnrichments.enrich(principal, call_id, options)
 

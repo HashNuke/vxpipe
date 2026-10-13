@@ -4,7 +4,6 @@ import { AdminShell } from "../AdminShell";
 import { Button } from "../Button";
 import { canReadUsers } from "./access";
 import type { Navigate, Role, Theme, User } from "./types";
-import "./authentication.css";
 export function AccessFrame({
   children,
   actor,
@@ -38,7 +37,7 @@ export function AccessFrame({
         actor ? (
           <div className="access-session">
             <a
-              href="#/admin/account"
+              href="/admin/account"
               onClick={(event) => {
                 event.preventDefault();
                 onNavigate?.("/admin/account");
@@ -63,7 +62,7 @@ export function AccessFrame({
           {links.map((link) => (
             <a
               key={link.path}
-              href={`#${link.path}`}
+              href={link.path}
               aria-current={path?.startsWith(link.path) ? "page" : undefined}
               onClick={(event) => {
                 event.preventDefault();

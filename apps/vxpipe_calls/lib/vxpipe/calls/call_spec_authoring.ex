@@ -1,6 +1,7 @@
 defmodule Vxpipe.Calls.CallSpecAuthoring do
   @moduledoc "Principal-aware spec writes; platform runtime inheritance is not a tenant authoring grant."
-  alias Vxpipe.Calls.{CallSpecs, InstallationOperator, Principal, ProviderAuth}
+  alias Vxpipe.Calls.{CallSpecs, InstallationOperator, Principal, ProviderAuth, UserAuthorization}
+  alias Vxpipe.Identity.Principal, as: UserPrincipal
 
   def save(authority, tenant_key, source, options) do
     with {:ok, options} <- authorize(authority, tenant_key, options),
@@ -30,6 +31,17 @@ defmodule Vxpipe.Calls.CallSpecAuthoring do
   defp authorize(%InstallationOperator{grant: :installation_operator}, tenant_key, options) do
     with :ok <- ProviderAuth.tenant_key(tenant_key) do
       {:ok, Keyword.delete(options, :service_authoring_owner)}
+    end
+  end
+
+  defp authorize(%UserPrincipal{} = principal, tenant_key, options) when is_binary(tenant_key) do
+    with :ok <- ProviderAuth.tenant_key(tenant_key),
+         :ok <- UserAuthorization.authorize_tenant(principal, "call_specs.write", tenant_key) do
+      if UserAuthorization.platform_authoring_allowed?(principal) do
+        {:ok, Keyword.delete(options, :service_authoring_owner)}
+      else
+        {:ok, Keyword.put(options, :service_authoring_owner, {:tenant, tenant_key})}
+      end
     end
   end
 

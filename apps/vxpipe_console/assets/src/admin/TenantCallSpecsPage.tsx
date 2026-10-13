@@ -56,7 +56,9 @@ export function TenantCallSpecsPage({
           onSelect={onSelectWorkspace}
           tenant={state.tenant}
         />
+        {onNewCallSpec ? (
         <div className="flex justify-end py-4"><a className="rounded-md bg-[var(--admin-blue)] px-4 py-2 text-sm font-semibold text-white" href={`/admin/tenants/${encodeURIComponent(state.tenant.key)}/call-specs/new`} onClick={(event) => { if (onNewCallSpec && shouldInterceptNavigation(event)) { event.preventDefault(); onNewCallSpec(); } }}>New call spec</a></div>
+        ) : null}
         <section
           aria-label="Call spec directory"
           className="overflow-hidden"

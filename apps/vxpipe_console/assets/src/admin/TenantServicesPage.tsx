@@ -30,6 +30,7 @@ export function TenantServicesPage({
   onDismissCredential,
   headerActions,
   workspaceDestinations,
+  canConnect = true,
 }: {
   state: TenantServicesPageState;
   theme?: "dark" | "light";
@@ -42,6 +43,12 @@ export function TenantServicesPage({
   onDismissCredential?: () => void;
   headerActions?: ReactNode;
   workspaceDestinations?: TenantDestination[];
+  /**
+   * Derived from the server principal (tenant_api_keys.write). Hides
+   * credential creation and editing when the viewer cannot write them;
+   * the backend still enforces direct requests.
+   */
+  canConnect?: boolean;
 }) {
   const [open, setOpen] = useState(state.setup.open);
   const [freshAttempt, setFreshAttempt] = useState(false);
@@ -123,7 +130,9 @@ export function TenantServicesPage({
         <TenantWorkspaceNavigation
           active="services"
           actions={
+            canConnect ? (
             <Button disabled={state.status !== "ready"} onClick={() => { setEditingService(null); setFreshAttempt(true); setOpen(true); }} ref={triggerRef} type="button"><Plus aria-hidden="true" className="size-4" />Connect a service</Button>
+            ) : undefined
           }
           destinations={workspaceDestinations}
           onSelect={onSelectWorkspace}
@@ -138,7 +147,7 @@ export function TenantServicesPage({
           {state.status === "loading" ? <div className="min-h-56 animate-pulse bg-[var(--admin-soft)] motion-reduce:animate-none" /> : null}
           {state.status === "unavailable" ? <PageNotice kind="unavailable" message={state.message} title="Services unavailable" /> : null}
           {state.status === "ready" && state.services.length === 0 ? <PageNotice kind="empty" message="Configured provider services will appear here." title="No services yet" /> : null}
-          {state.status === "ready" && state.services.length > 0 ? <ServiceInventory onEdit={(service) => { setEditingService(service); setFreshAttempt(true); setOpen(true); }} services={state.services} /> : null}
+          {state.status === "ready" && state.services.length > 0 ? <ServiceInventory onEdit={canConnect ? (service) => { setEditingService(service); setFreshAttempt(true); setOpen(true); } : undefined} services={state.services} /> : null}
         </section>
         </div>
         {open ? (

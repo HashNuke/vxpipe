@@ -15,14 +15,25 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     ServiceDirectory,
     TelephonyService,
     Tenant,
-    TenantPage
+    TenantPage,
+    UserAuthorization
   }
+
+  alias Vxpipe.Identity.Principal, as: UserPrincipal
 
   @default_page_size 25
   @maximum_page_size 100
 
-  @spec list_tenants(InstallationOperator.t(), keyword()) ::
+  @spec list_tenants(InstallationOperator.t() | UserPrincipal.t(), keyword()) ::
           {:ok, TenantPage.t()} | {:error, term()}
+  def list_tenants(%UserPrincipal{} = principal, options) when is_list(options) do
+    with :ok <- UserAuthorization.authorize_tenant_directory(principal),
+         {:ok, page} <- positive_integer(options, :page, 1),
+         {:ok, limit} <- page_size(options) do
+      list_tenants_with_read(principal, page, limit, options)
+    end
+  end
+
   def list_tenants(%InstallationOperator{grant: :installation_operator}, options)
       when is_list(options) do
     with {:ok, page} <- positive_integer(options, :page, 1),
@@ -48,8 +59,68 @@ defmodule Vxpipe.Calls.OperatorAdministration do
 
   def list_tenants(_authority, _options), do: {:error, :installation_operator_required}
 
-  @spec list_call_specs(InstallationOperator.t(), String.t(), keyword()) ::
+  defp list_tenants_with_read(principal, page, limit, options) do
+    case UserAuthorization.visible_tenant_scope(principal) do
+      {:assigned, []} ->
+        with {:ok, total_pages} <- page_range(page, 0, limit) do
+          {:ok,
+           %TenantPage{
+             tenants: [],
+             page: page,
+             page_size: limit,
+             total: 0,
+             total_pages: total_pages
+           }}
+        end
+
+      _scope ->
+        with {:ok, repository} <- Repositories.fetch(options, :admin_repository),
+             offset = (page - 1) * limit,
+             {:ok, {tenants, total}} <-
+               UserAuthorization.scoped_tenant_list(repository, principal, limit, offset),
+             :ok <- UserAuthorization.validate_listed_tenants(tenants, principal),
+             {:ok, total_pages} <- page_range(page, total, limit) do
+          {:ok,
+           %TenantPage{
+             tenants: tenants,
+             page: page,
+             page_size: limit,
+             total: total,
+             total_pages: total_pages
+           }}
+        end
+    end
+  end
+
+  @spec list_call_specs(InstallationOperator.t() | UserPrincipal.t(), String.t(), keyword()) ::
           {:ok, CallSpecPage.t()} | {:error, term()}
+  def list_call_specs(%UserPrincipal{} = principal, tenant_key, options)
+      when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
+    with :ok <- ProviderAuth.tenant_key(tenant_key),
+         :ok <- UserAuthorization.authorize_tenant(principal, "call_specs.read", tenant_key),
+         {:ok, page} <- positive_integer(options, :page, 1),
+         {:ok, limit} <- page_size(options),
+         {:ok, repository} <- Repositories.fetch(options, :admin_repository),
+         offset = (page - 1) * limit,
+         {:ok, {%Tenant{key: ^tenant_key} = tenant, call_specs, total}} <-
+           Repositories.call(repository, :list_call_specs, [tenant_key, limit, offset]),
+         {:ok, total_pages} <- page_range(page, total, limit, :call_spec_page_out_of_range) do
+      {:ok,
+       %CallSpecPage{
+         tenant: tenant,
+         call_specs: call_specs,
+         page: page,
+         page_size: limit,
+         total: total,
+         total_pages: total_pages
+       }}
+    else
+      {:ok, _invalid} -> {:error, :call_spec_page_unavailable}
+      {:error, :invalid_tenant_key} = error -> error
+      error -> error
+    end
+  end
+
   def list_call_specs(
         %InstallationOperator{grant: :installation_operator},
         tenant_key,
@@ -81,8 +152,45 @@ defmodule Vxpipe.Calls.OperatorAdministration do
   def list_call_specs(_authority, _tenant_key, _options),
     do: {:error, :installation_operator_required}
 
-  @spec list_calls(InstallationOperator.t(), String.t(), keyword()) ::
+  @spec list_calls(InstallationOperator.t() | UserPrincipal.t(), String.t(), keyword()) ::
           {:ok, CallDirectoryPage.t()} | {:error, term()}
+  def list_calls(%UserPrincipal{} = principal, tenant_key, options)
+      when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
+    with :ok <- ProviderAuth.tenant_key(tenant_key),
+         :ok <- UserAuthorization.authorize_tenant(principal, "calls.read", tenant_key),
+         {:ok, call_spec_id} <- call_spec_filter(options),
+         {:ok, page} <- positive_integer(options, :page, 1),
+         {:ok, limit} <- page_size(options),
+         {:ok, repository} <- Repositories.fetch(options, :admin_repository),
+         offset = (page - 1) * limit,
+         {:ok,
+          {%Tenant{key: ^tenant_key} = tenant, call_specs, call_specs_truncated, calls, total}} <-
+           Repositories.call(repository, :list_calls, [
+             tenant_key,
+             call_spec_id,
+             limit,
+             offset
+           ]),
+         {:ok, total_pages} <- page_range(page, total, limit, :call_page_out_of_range) do
+      {:ok,
+       %CallDirectoryPage{
+         tenant: tenant,
+         call_specs: call_specs,
+         call_specs_truncated: call_specs_truncated,
+         selected_call_spec_id: call_spec_id,
+         calls: calls,
+         page: page,
+         page_size: limit,
+         total: total,
+         total_pages: total_pages
+       }}
+    else
+      {:ok, _invalid} -> {:error, :call_directory_unavailable}
+      {:error, :invalid_tenant_key} = error -> error
+      error -> error
+    end
+  end
+
   def list_calls(
         %InstallationOperator{grant: :installation_operator},
         tenant_key,
@@ -123,8 +231,29 @@ defmodule Vxpipe.Calls.OperatorAdministration do
   def list_calls(_authority, _tenant_key, _options),
     do: {:error, :installation_operator_required}
 
-  @spec fetch_call_context(InstallationOperator.t(), String.t(), String.t(), keyword()) ::
+  @spec fetch_call_context(
+          InstallationOperator.t() | UserPrincipal.t(),
+          String.t(),
+          String.t(),
+          keyword()
+        ) ::
           {:ok, OperatorCallContext.t()} | {:error, term()}
+  def fetch_call_context(%UserPrincipal{} = principal, tenant_key, call_id, options)
+      when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_binary(call_id) and
+             byte_size(call_id) > 0 and byte_size(call_id) <= 256 and is_list(options) do
+    with :ok <- ProviderAuth.tenant_key(tenant_key),
+         :ok <- UserAuthorization.authorize_tenant(principal, "calls.read", tenant_key),
+         {:ok, repository} <- Repositories.fetch(options, :admin_repository),
+         {:ok, {%Tenant{key: ^tenant_key} = tenant, %CallDirectorySummary{id: ^call_id} = call}} <-
+           Repositories.call(repository, :fetch_call_context, [tenant_key, call_id]) do
+      {:ok, %OperatorCallContext{tenant: tenant, call: call}}
+    else
+      {:ok, _invalid} -> {:error, :call_directory_unavailable}
+      {:error, :invalid_tenant_key} = error -> error
+      error -> error
+    end
+  end
+
   def fetch_call_context(
         %InstallationOperator{grant: :installation_operator},
         tenant_key,
@@ -149,8 +278,32 @@ defmodule Vxpipe.Calls.OperatorAdministration do
   def fetch_call_context(_authority, _tenant_key, _call_id, _options),
     do: {:error, :installation_operator_required}
 
-  @spec list_services(InstallationOperator.t(), String.t(), keyword()) ::
+  @spec list_services(InstallationOperator.t() | UserPrincipal.t(), String.t(), keyword()) ::
           {:ok, ServiceDirectory.t()} | {:error, term()}
+  def list_services(%UserPrincipal{} = principal, tenant_key, options)
+      when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
+    with :ok <- ProviderAuth.tenant_key(tenant_key),
+         {:ok, {service_read?, key_read?}} <-
+           UserAuthorization.service_directory_access(principal, tenant_key),
+         {:ok, repository} <- Repositories.fetch(options, :admin_repository),
+         {:ok, {tenant, credentials, telephony_services, truncated}} <-
+           Repositories.call(repository, :list_services, [tenant_key]),
+         true <- is_boolean(truncated),
+         :ok <- validate_service_directory(tenant_key, tenant, credentials, telephony_services) do
+      {:ok,
+       %ServiceDirectory{
+         tenant: tenant,
+         credentials: if(key_read?, do: credentials, else: []),
+         telephony_services: if(service_read?, do: telephony_services, else: []),
+         truncated: truncated
+       }}
+    else
+      false -> {:error, :service_directory_unavailable}
+      {:error, :invalid_tenant_key} = error -> error
+      error -> error
+    end
+  end
+
   def list_services(
         %InstallationOperator{grant: :installation_operator},
         tenant_key,
@@ -184,11 +337,18 @@ defmodule Vxpipe.Calls.OperatorAdministration do
   def delete_credential(%InstallationOperator{grant: :installation_operator}, owner, id, options),
     do: Vxpipe.Calls.ProviderCredentials.delete(owner, id, options)
 
+  def delete_credential(%UserPrincipal{} = principal, owner, id, options) when is_list(options) do
+    with :ok <- UserAuthorization.authorize_credential_write(principal, owner),
+         :ok <- ProviderAuth.owner(owner) do
+      Vxpipe.Calls.ProviderCredentials.delete(owner, id, options)
+    end
+  end
+
   def delete_credential(_authority, _owner, _id, _options),
     do: {:error, :installation_operator_required}
 
   @spec validate_credential(
-          InstallationOperator.t(),
+          InstallationOperator.t() | UserPrincipal.t(),
           ProviderCredential.owner(),
           String.t(),
           String.t(),
@@ -196,6 +356,24 @@ defmodule Vxpipe.Calls.OperatorAdministration do
           map(),
           keyword()
         ) :: :ok | {:error, term()}
+  def validate_credential(
+        %UserPrincipal{} = principal,
+        owner,
+        provider,
+        name,
+        auth_kind,
+        payload,
+        options
+      )
+      when is_list(options) do
+    with :ok <- UserAuthorization.authorize_credential_read(principal, owner),
+         :ok <- ProviderAuth.binding(owner, provider, name),
+         :ok <- ProviderAuth.validate(provider, auth_kind, payload),
+         {:ok, validator} <- Repositories.fetch(options, :provider_credential_validator) do
+      Repositories.call(validator, :validate, [provider, auth_kind, payload])
+    end
+  end
+
   def validate_credential(
         %InstallationOperator{grant: :installation_operator},
         owner,
@@ -228,14 +406,45 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     do: {:error, :installation_operator_required}
 
   @spec create_credential(
-          InstallationOperator.t(),
-          String.t(),
+          InstallationOperator.t() | UserPrincipal.t(),
+          String.t() | :platform | {:tenant, String.t()},
           String.t(),
           String.t(),
           String.t(),
           map(),
           keyword()
         ) :: {:ok, ProviderCredential.t()} | {:error, term()}
+  def create_credential(
+        %UserPrincipal{} = principal,
+        owner,
+        provider,
+        name,
+        auth_kind,
+        payload,
+        options
+      )
+      when is_list(options) do
+    with :ok <- UserAuthorization.authorize_credential_write(principal, owner),
+         :ok <- ProviderAuth.binding(owner, provider, name),
+         :ok <- ProviderAuth.validate(provider, auth_kind, payload),
+         {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
+      credential = %ProviderCredential{
+        id: generate_uuid(options),
+        tenant_key: ProviderCredential.owner_key(owner),
+        owner: ProviderCredential.owner_tag(owner),
+        provider: provider,
+        name: name,
+        auth_kind: auth_kind,
+        secret_hints: ProviderCredentialHints.from_payload(provider, payload),
+        last_validated_at: nil
+      }
+
+      repository
+      |> Repositories.call(:provision, [credential, payload])
+      |> validate_created_credential(credential)
+    end
+  end
+
   def create_credential(
         %InstallationOperator{grant: :installation_operator} = authority,
         tenant_key,
@@ -273,14 +482,42 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     do: {:error, :installation_operator_required}
 
   @spec update_credential(
-          InstallationOperator.t(),
-          String.t(),
+          InstallationOperator.t() | UserPrincipal.t(),
+          String.t() | :platform | {:tenant, String.t()},
           String.t(),
           String.t(),
           String.t(),
           map(),
           keyword()
         ) :: {:ok, ProviderCredential.t()} | {:error, term()}
+  def update_credential(
+        %UserPrincipal{} = principal,
+        owner,
+        credential_id,
+        provider,
+        auth_kind,
+        payload,
+        options
+      )
+      when is_binary(credential_id) and byte_size(credential_id) in 1..128 and is_list(options) do
+    with :ok <- UserAuthorization.authorize_credential_write(principal, owner),
+         :ok <- ProviderAuth.binding(owner, provider, provider),
+         :ok <- ProviderAuth.validate(provider, auth_kind, payload),
+         {:ok, repository} <- Repositories.fetch(options, :provider_credential_repository) do
+      repository
+      |> Repositories.call(:replace, [
+        owner,
+        credential_id,
+        provider,
+        auth_kind,
+        payload,
+        ProviderCredentialHints.from_payload(provider, payload),
+        nil
+      ])
+      |> validate_updated_credential(owner, credential_id, provider, auth_kind)
+    end
+  end
+
   def update_credential(
         %InstallationOperator{grant: :installation_operator} = authority,
         tenant_key,
@@ -389,6 +626,19 @@ defmodule Vxpipe.Calls.OperatorAdministration do
 
     services_valid? =
       Enum.all?(telephony_services, fn
+        %TelephonyService{tenant_key: ^tenant_key, credential_owner: :platform} = service ->
+          service.provider in ["telnyx", "twilio"] and
+            TelephonyService.validate(service) == :ok
+
+        %TelephonyService{
+          tenant_key: ^tenant_key,
+          provider: "telnyx",
+          credential_name: "telnyx",
+          credential_id: nil,
+          public_key: nil
+        } = service ->
+          TelephonyService.validate(service) == :ok
+
         %TelephonyService{tenant_key: ^tenant_key, provider: provider, credential_id: id}
         when provider in ["telnyx", "twilio"] ->
           MapSet.member?(credential_ids, id)

@@ -5,22 +5,23 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
   import Plug.Conn, only: [put_req_header: 3]
 
   alias Vxpipe.Calls.Tenant
+  alias Vxpipe.Console.Test.FakeUserIdentity
 
   @endpoint Vxpipe.Console.Endpoint
-  @secret String.duplicate("operator-onboarding-secret-", 3)
-  @token "operator-onboarding-token"
 
   setup do
     original_calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
-    original_secret = Application.fetch_env!(:vxpipe_console, :operator_login_secret)
+    original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
 
     on_exit(fn ->
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, original_calls)
-      Application.put_env(:vxpipe_console, :operator_login_secret, original_secret)
+
+      if original_backend,
+        do: Application.put_env(:vxpipe_console, :user_identity_backend, original_backend),
+        else: Application.delete_env(:vxpipe_console, :user_identity_backend)
     end)
 
-    Application.put_env(:vxpipe_console, :operator_login_secret, @secret)
-    configure_login_repository()
+    Application.put_env(:vxpipe_console, :user_identity_backend, FakeUserIdentity)
     :ok
   end
 
@@ -56,7 +57,7 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
     configure_demo_repository({:error, :repository_unavailable})
 
     anonymous = post(build_conn(), "https://localhost/admin/api/onboarding/demo-tenant")
-    assert json_response(anonymous, 401)["error"]["code"] == "operator_session_required"
+    assert json_response(anonymous, 401)["error"]["code"] == "session_required"
 
     authenticated = authenticate()
 
@@ -113,13 +114,9 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
   end
 
   defp authenticate do
-    form = https_get("/auth/login-token/#{@token}")
-
-    form
-    |> recycle()
-    |> post("https://localhost/auth/login-token", %{
-      "_csrf_token" => csrf_token(form.resp_body),
-      "operator" => %{"token" => @token, "code" => "01234567"}
+    post(build_conn(), "https://localhost/auth/api/login", %{
+      "email" => FakeUserIdentity.email(),
+      "password" => FakeUserIdentity.password()
     })
   end
 
@@ -127,13 +124,6 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
     page = authenticated |> recycle() |> https_get("/admin")
     [_, token] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, page.resp_body)
     token
-  end
-
-  defp configure_login_repository do
-    put_calls_repository(
-      :operator_login_challenge_repository,
-      {Vxpipe.Console.Test.OperatorLoginChallengeRepository, {self(), :ok}}
-    )
   end
 
   defp configure_demo_repository(result) do
@@ -146,11 +136,6 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
   defp put_calls_repository(key, repository) do
     settings = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
     Application.put_env(:vxpipe_calls, Vxpipe.Calls, Keyword.put(settings, key, repository))
-  end
-
-  defp csrf_token(body) do
-    [_, token] = Regex.run(~r/name="_csrf_token" value="([^"]+)"/, body)
-    token
   end
 
   defp https_get(conn \\ build_conn(), path), do: get(conn, "https://localhost#{path}")

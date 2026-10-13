@@ -17,6 +17,7 @@ export function AccountPage({
     email: string,
     currentPassword: string,
     password?: string,
+    confirmation?: string,
   ) => Promise<SaveResult>;
 }) {
   const [email, setEmail] = useState(user.email);
@@ -43,6 +44,7 @@ export function AccountPage({
         email.trim(),
         current,
         changePassword ? password : undefined,
+        changePassword ? confirmation : undefined,
       );
       setError(result.error);
       setSaved(!result.error);

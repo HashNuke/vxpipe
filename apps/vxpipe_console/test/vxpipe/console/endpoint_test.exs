@@ -6,10 +6,24 @@ defmodule Vxpipe.Console.EndpointTest do
   require Phoenix.ChannelTest
 
   alias Vxpipe.Console.{DiagnosticsSocket, LiveReloadSocket}
-  alias Vxpipe.Console.{InstallationOperatorSession, SampleCall, TestSampleCallBackend}
+  alias Vxpipe.Console.{SampleCall, TestSampleCallBackend}
+  alias Vxpipe.Console.Test.FakeUserIdentity
   alias Vxpipe.Gateway.HTTP
 
   @endpoint Vxpipe.Console.Endpoint
+
+  setup do
+    original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
+
+    on_exit(fn ->
+      if original_backend,
+        do: Application.put_env(:vxpipe_console, :user_identity_backend, original_backend),
+        else: Application.delete_env(:vxpipe_console, :user_identity_backend)
+    end)
+
+    Application.put_env(:vxpipe_console, :user_identity_backend, FakeUserIdentity)
+    :ok
+  end
 
   test "serves the configured sample index and mounted gateway routes through one endpoint" do
     configure_sample_index(Path.expand("../../../priv/static/index.html", __DIR__))
@@ -274,8 +288,7 @@ defmodule Vxpipe.Console.EndpointTest do
     %Plug.Conn{} = conn = %{conn | host: "localhost", scheme: :https}
 
     conn
-    |> Plug.Test.init_test_session(%{})
-    |> InstallationOperatorSession.put()
+    |> Plug.Test.init_test_session(%{"vxpipe_user_session" => FakeUserIdentity.token()})
   end
 
   defp configure_sample_assets(index_path, required_paths) do

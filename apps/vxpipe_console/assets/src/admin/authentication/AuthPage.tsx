@@ -10,21 +10,26 @@ export function AuthPage({
   onSubmit,
   unavailable = false,
   completed = false,
+  proofRequired = false,
 }: {
-  mode: "setup" | "login";
-  onSubmit: (email: string, password: string) => Promise<SaveResult>;
+  mode: "setup" | "login" | "recover";
+  onSubmit: (email: string, password: string, proof?: string) => Promise<SaveResult>;
   unavailable?: boolean;
   completed?: boolean;
+  proofRequired?: boolean;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [proof, setProof] = useState("");
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
   const setup = mode === "setup";
+  const recover = mode === "recover";
+  const newPassword = setup || recover;
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const problem = setup
+    const problem = newPassword
       ? validatePassword(password, confirmation)
       : undefined;
     if (problem) {
@@ -33,7 +38,7 @@ export function AuthPage({
     }
     setPending(true);
     try {
-      const result = await onSubmit(email.trim(), password);
+      const result = await onSubmit(email.trim(), password, proofRequired || recover ? proof.trim() : undefined);
       setError(result.error);
     } catch {
       setError("Unable to connect. Your account has not changed. Try again.");
@@ -41,6 +46,7 @@ export function AuthPage({
       setPending(false);
       setPassword("");
       setConfirmation("");
+      setProof("");
     }
   }
   return (
@@ -48,11 +54,13 @@ export function AuthPage({
       <div className="access-auth-mark">
         <ShieldCheck size={26} aria-hidden />
       </div>
-      <h1>{setup ? "Set up your installation" : "Sign in to Vxpipe"}</h1>
+      <h1>{setup ? "Set up your installation" : recover ? "Recover Superadmin access" : "Sign in to Vxpipe"}</h1>
       <p className="access-lead">
         {setup
           ? "Create the first Superadmin account to manage your platform, tenants and users."
-          : "Use your account to open the Console."}
+          : recover
+            ? "Use a one-time proof from the installation's local recovery command to set a new Superadmin password."
+            : "Use your account to open the Console."}
       </p>
       {completed ? (
         <FormMessage>
@@ -69,14 +77,28 @@ export function AuthPage({
             onChange={(event) => setEmail(event.target.value)}
             disabled={pending}
           />
-          {setup ? (
-            <PasswordFields
-              password={password}
-              confirmation={confirmation}
-              onPassword={setPassword}
-              onConfirmation={setConfirmation}
-              disabled={pending}
-            />
+          {newPassword ? (
+            <>
+              <PasswordFields
+                password={password}
+                confirmation={confirmation}
+                onPassword={setPassword}
+                onConfirmation={setConfirmation}
+                disabled={pending}
+              />
+              {proofRequired || recover ? (
+                <FormField
+                  label={recover ? "Local recovery proof" : "Local setup proof"}
+                  type="password"
+                  autoComplete="off"
+                  required
+                  value={proof}
+                  onChange={(event) => setProof(event.target.value)}
+                  disabled={pending}
+                  hint="Get this one-time proof from the installation operator."
+                />
+              ) : null}
+            </>
           ) : (
             <FormField
               label="Password"
@@ -103,7 +125,9 @@ export function AuthPage({
               ? "Please wait…"
               : setup
                 ? "Create Superadmin account"
-                : "Sign in"}
+                : recover
+                  ? "Recover access"
+                  : "Sign in"}
             <ArrowRight size={16} aria-hidden />
           </Button>
         </form>
@@ -111,7 +135,9 @@ export function AuthPage({
       <p className="access-footnote">
         {setup
           ? "Your email is your sign-in name. No verification email will be sent."
-          : "Forgot your password? Contact an administrator to set a new one."}
+          : recover
+            ? "Only an existing Superadmin can be recovered. Proofs expire after 15 minutes."
+            : <>Forgot your password? Contact an administrator to set a new one. If no Superadmin can sign in, <a href="/auth/recover">use local recovery</a>.</>}
       </p>
     </main>
   );

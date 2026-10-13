@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { AuthenticationJourney } from "./AuthenticationJourney";
+import { AuthPage } from "./AuthPage";
 import { ResetPasswordPage } from "./ResetPasswordPage";
 import { roles, users } from "./fixtures";
 
@@ -27,6 +28,31 @@ test("page navigation returns to the top while directory filters retain scroll",
   expect(window.scrollTo).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("link", { name: "owner@example.test" }));
   expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "instant" });
+});
+
+test("an upgraded installation asks for its local setup proof", async () => {
+  const submit = vi.fn().mockResolvedValue({});
+  render(<AuthPage mode="setup" proofRequired onSubmit={submit} />);
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.test" } });
+  fireEvent.change(screen.getByLabelText("Password"), { target: { value: "an example passphrase" } });
+  fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "an example passphrase" } });
+  fireEvent.change(screen.getByLabelText("Local setup proof"), { target: { value: "local-proof" } });
+  fireEvent.click(screen.getByRole("button", { name: /Create Superadmin account/ }));
+  await waitFor(() => expect(submit).toHaveBeenCalledWith("owner@example.test", "an example passphrase", "local-proof"));
+});
+
+test("local recovery asks for proof and confirmed replacement password", async () => {
+  const submit = vi.fn().mockResolvedValue({});
+  render(<AuthPage mode="recover" onSubmit={submit} />);
+
+  expect(screen.getByRole("heading", { name: "Recover Superadmin access" })).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.test" } });
+  fireEvent.change(screen.getByLabelText("Password"), { target: { value: "an example passphrase" } });
+  fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "an example passphrase" } });
+  fireEvent.change(screen.getByLabelText("Local recovery proof"), { target: { value: "local-proof" } });
+  fireEvent.click(screen.getByRole("button", { name: /Recover access/ }));
+
+  await waitFor(() => expect(submit).toHaveBeenCalledWith("owner@example.test", "an example passphrase", "local-proof"));
 });
 test("an Admin filters for Superadmins and can only view them", () => {
   render(<AuthenticationJourney actor="admin" />);

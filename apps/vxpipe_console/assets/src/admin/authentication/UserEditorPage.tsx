@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { KeyRound } from "lucide-react";
+import { ArrowLeft, KeyRound } from "lucide-react";
 import { Button } from "../Button";
 import { PageHeader } from "../PageHeader";
 import { canManageUser, hasAssignedGrants, validatePassword } from "./access";
@@ -44,13 +44,13 @@ export function UserEditorPage({
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [pending, setPending] = useState(false);
-  const role = roles.find((item) => item.id === roleId)!;
+  const role = roles.find((item) => item.id === roleId);
   const original = roles.find((item) => item.id === user?.roleId) ?? role;
-  const editable = canManageUser(actorRole, original, role);
+  const editable = !!role && !!original && canManageUser(actorRole, original, role);
   async function submit(event: FormEvent) {
     event.preventDefault();
     setNotice(undefined);
-    if (!editable) return;
+    if (!editable || !role) return;
     const problem = !user
       ? validatePassword(password, confirmation)
       : undefined;
@@ -88,12 +88,13 @@ export function UserEditorPage({
     <main className="access-page access-editor">
       <a
         className="access-back"
-        href="#/admin/users"
+        href="/admin/users"
         onClick={(event) => {
           event.preventDefault();
           onNavigate("/admin/users");
         }}
       >
+        <ArrowLeft size={16} aria-hidden />
         Back to users
       </a>
       <PageHeader
@@ -102,9 +103,13 @@ export function UserEditorPage({
           user ? user.email : "Set up an account and choose where it can work."
         }
       />
-      {!editable ? (
+      {!role ? (
+        <FormMessage error>This account's role is unavailable. Reload and try again.</FormMessage>
+      ) : null}
+      {!editable && role ? (
         <FormMessage>This account is read-only for your role.</FormMessage>
       ) : null}
+      {role ? (
       <form onSubmit={submit} className="access-form">
         <fieldset disabled={pending} className="access-fieldset">
           <section className="access-section access-identity">
@@ -186,6 +191,7 @@ export function UserEditorPage({
           ) : null}
         </fieldset>
       </form>
+      ) : null}
       {user && editable ? (
         <section className="access-section access-security">
           <div>
@@ -196,7 +202,7 @@ export function UserEditorPage({
           </div>
           <a
             className="access-link-button"
-            href={`#/admin/users/${user.id}/reset-password`}
+            href={`/admin/users/${user.id}/reset-password`}
             onClick={(event) => {
               event.preventDefault();
               onNavigate(`/admin/users/${user.id}/reset-password`);

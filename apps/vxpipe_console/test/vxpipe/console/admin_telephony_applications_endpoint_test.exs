@@ -4,6 +4,7 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsEndpointTest do
   import Plug.Conn, only: [put_req_header: 3]
 
   alias Vxpipe.Calls.{Administration, ProviderCredentials, TelephonyServices}
+  alias Vxpipe.Console.Test.FakeUserIdentity
 
   alias Vxpipe.Persistence.{
     AdminStore,
@@ -15,18 +16,20 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsEndpointTest do
   }
 
   @endpoint Vxpipe.Console.Endpoint
-  @token "phone-application-operator"
 
   setup do
     if is_nil(Process.whereis(Repo)), do: start_supervised!(Repo)
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     original = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
-    original_secret = Application.fetch_env!(:vxpipe_console, :operator_login_secret)
+    original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
 
     on_exit(fn ->
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, original)
-      Application.put_env(:vxpipe_console, :operator_login_secret, original_secret)
+
+      if original_backend,
+        do: Application.put_env(:vxpipe_console, :user_identity_backend, original_backend),
+        else: Application.delete_env(:vxpipe_console, :user_identity_backend)
     end)
 
     {:ok, keyring} = CredentialKeyring.new("api", %{"api" => :crypto.strong_rand_bytes(32)})
@@ -36,18 +39,11 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsEndpointTest do
       credential_repository: {CredentialStore, Repo},
       provider_credential_repository: {ProviderCredentialStore, context},
       telephony_service_repository: {TelephonyServiceStore, context},
-      admin_repository: {AdminStore, Repo},
-      operator_login_challenge_repository:
-        {Vxpipe.Console.Test.OperatorLoginChallengeRepository, {self(), :ok}}
+      admin_repository: {AdminStore, Repo}
     ]
 
     Application.put_env(:vxpipe_calls, Vxpipe.Calls, Keyword.merge(original, options))
-
-    Application.put_env(
-      :vxpipe_console,
-      :operator_login_secret,
-      String.duplicate("synthetic-phone-login-", 4)
-    )
+    Application.put_env(:vxpipe_console, :user_identity_backend, FakeUserIdentity)
 
     {:ok, tenant, issued} = Administration.bootstrap_tenant("API phone tenant", [:admin], options)
     {:ok, other, _} = Administration.bootstrap_tenant("Other API tenant", [:admin], options)
@@ -181,14 +177,9 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsEndpointTest do
   end
 
   defp authenticate do
-    form = get(build_conn(), "https://localhost/auth/login-token/#{@token}")
-    [_, token] = Regex.run(~r/name="_csrf_token" value="([^"]+)"/, form.resp_body)
-
-    form
-    |> recycle()
-    |> post("https://localhost/auth/login-token", %{
-      "_csrf_token" => token,
-      "operator" => %{"token" => @token, "code" => "01234567"}
+    post(build_conn(), "https://localhost/auth/api/login", %{
+      "email" => FakeUserIdentity.email(),
+      "password" => FakeUserIdentity.password()
     })
     |> recycle()
     |> get("https://localhost/admin")

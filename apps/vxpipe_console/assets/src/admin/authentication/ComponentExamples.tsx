@@ -16,16 +16,28 @@ export function ComponentExamples({
     "passwords" | "badges" | "role-select" | "tenant-access" | "permissions";
   theme?: Theme;
   variant?:
-    "default" | "empty" | "all-tenants" | "mixed" | "read-only" | "admin";
+    | "default"
+    | "empty"
+    | "all-tenants"
+    | "mixed"
+    | "mixed-scopes"
+    | "read-only"
+    | "admin";
 }) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [roleId, setRoleId] = useState(roles[4].id);
+  const [roleId, setRoleId] = useState(roles[2].id);
   const [assignments, setAssignments] = useState<Membership[]>(
-    variant === "empty" ? [] : users[4].memberships,
+    variant === "empty" ? [] : users[5].memberships,
   );
+  const mixedScopeGrants: Grant[] = [
+    { permission: "calls.read", scope: "all_tenants" },
+    { permission: "calls.write", scope: "assigned_tenants" },
+    { permission: "call_specs.read", scope: "assigned_tenants" },
+    { permission: "call_specs.write", scope: "assigned_tenants" },
+  ];
   const [grants, setGrants] = useState<Grant[]>(
-    variant === "empty" ? [] : roles[4].grants,
+    variant === "empty" ? [] : variant === "mixed-scopes" ? mixedScopeGrants : roles[2].grants,
   );
   return (
     <AccessFrame theme={theme}>
@@ -57,8 +69,10 @@ export function ComponentExamples({
               variant === "all-tenants"
                 ? roles[1]
                 : variant === "mixed"
-                  ? roles[5]
-                  : roles[4]
+                  ? { ...roles[2], grants: mixedScopeGrants }
+                  : variant === "read-only"
+                    ? roles[3]
+                    : roles[2]
             }
             tenants={tenants}
             value={assignments}

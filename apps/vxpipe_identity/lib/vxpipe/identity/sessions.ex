@@ -1,0 +1,219 @@
+defmodule Vxpipe.Identity.Sessions do
+  @moduledoc "Database-backed opaque sessions with 12-hour absolute expiry."
+
+  alias Vxpipe.Identity.{Email, Permission, RateLimit, Tokens}
+
+  @spec login(map(), String.t(), String.t(), String.t()) ::
+          {:ok, %{token: String.t(), session: map(), user: map()}} | {:error, term()}
+  def login(deps, email, password, client_address) do
+    users = Map.fetch!(deps, :users)
+    session_store = Map.fetch!(deps, :sessions)
+    attempts = Map.get(deps, :attempts)
+    hasher = Map.fetch!(deps, :hasher)
+    tokens = Map.get(deps, :tokens, Tokens)
+    clock = Map.get(deps, :clock, Vxpipe.Identity.Clock)
+    audit = Map.get(deps, :audit, Vxpipe.Identity.Accounts.NoopAudit)
+    uuid = Map.get(deps, :uuid, Vxpipe.Identity.Uuid)
+
+    now = clock.utc_now()
+
+    with {:ok, normalized} <- Email.normalize(email),
+         :ok <- check_rate(deps, attempts, normalized, client_address, now),
+         {:ok, user} <- fetch_user(users, normalized),
+         :ok <- check_enabled(user),
+         true <- hasher.verify(password, user.password_hash) || {:error, :invalid_credentials},
+         {:ok, %{token: token, digest: digest}} <- tokens.generate(),
+         {:ok, session} <-
+           session_store.create(%{
+             public_id: uuid.generate(),
+             user_public_id: user.public_id,
+             digest: digest,
+             expires_at: Tokens.expiry(now)
+           }),
+         :ok <- append_login_audit(audit, session_store, digest, user, now) do
+      {:ok,
+       %{
+         token: token,
+         session: Map.drop(session, [:digest]),
+         user: Map.drop(user, [:password_hash])
+       }}
+    else
+      {:error, :invalid_credentials} = error ->
+        _ = record_attempt(attempts, safe_account(email), client_address, now)
+        error
+
+      {:error, :not_found} ->
+        _ = record_attempt(attempts, safe_account(email), client_address, now)
+        {:error, :invalid_credentials}
+
+      error ->
+        error
+    end
+  end
+
+  @spec logout(map(), String.t()) :: :ok | {:error, term()}
+  def logout(deps, token) do
+    session_store = Map.fetch!(deps, :sessions)
+    clock = Map.get(deps, :clock, Vxpipe.Identity.Clock)
+    audit = Map.get(deps, :audit, Vxpipe.Identity.Accounts.NoopAudit)
+
+    digest = Tokens.digest(token)
+
+    case session_store.fetch_valid(digest, clock.utc_now()) do
+      {:ok, session} ->
+        with :ok <- session_store.revoke_one(digest, clock.utc_now()),
+             :ok <-
+               audit.append(%{
+                 action: "logout",
+                 actor_user_public_id: session.user_public_id,
+                 summary: %{}
+               }) do
+          :ok
+        end
+
+      {:error, :not_found} ->
+        :ok
+
+      {:error, :expired} ->
+        :ok
+
+      {:error, :revoked} ->
+        :ok
+
+      {:error, :disabled} ->
+        case session_store.revoke_one(digest, clock.utc_now()) do
+          :ok -> :ok
+          error -> error
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @spec authenticate(map(), String.t()) :: {:ok, map()} | {:error, term()}
+  def authenticate(deps, token) do
+    session_store = Map.fetch!(deps, :sessions)
+    users = Map.fetch!(deps, :users)
+    roles = Map.fetch!(deps, :roles)
+    clock = Map.get(deps, :clock, Vxpipe.Identity.Clock)
+
+    digest = Tokens.digest(token)
+
+    with {:ok, session} <- session_store.fetch_valid(digest, clock.utc_now()),
+         {:ok, user} <- users.fetch_by_public_id(session.user_public_id),
+         :ok <- check_enabled(user),
+         {:ok, role} <- roles.fetch(user.role_public_id),
+         {:ok, principal} <- Vxpipe.Identity.Principal.new(principal_attrs(user, role, session)) do
+      {:ok, principal}
+    end
+  end
+
+  defp fetch_user(users, normalized) do
+    case users.fetch_by_email(normalized) do
+      {:ok, user} -> {:ok, user}
+      {:error, :not_found} -> {:error, :not_found}
+      error -> error
+    end
+  end
+
+  defp check_enabled(%{disabled_at: nil}), do: :ok
+  defp check_enabled(%{"disabled_at" => nil}), do: :ok
+  defp check_enabled(_), do: {:error, :disabled}
+
+  defp check_rate(_deps, nil, _account, _address, _now), do: :ok
+
+  defp check_rate(_deps, attempts, account, address, now) do
+    case attempts.recent(account, address, now, RateLimit.window_seconds()) do
+      {:ok, %{account: a, address: b}} -> RateLimit.allowed?(a, b, now)
+      {:error, :unavailable} -> {:error, :unavailable}
+    end
+  end
+
+  defp record_attempt(nil, _account, _address, _now), do: :ok
+
+  defp record_attempt(attempts, account, address, now) do
+    _ = attempts.record(account, address, now)
+    :ok
+  end
+
+  defp append_login_audit(audit, session_store, digest, user, now) do
+    case audit.append(%{action: "login", actor_user_public_id: user.public_id, summary: %{}}) do
+      :ok ->
+        :ok
+
+      error ->
+        _ = session_store.revoke_one(digest, now)
+        error
+    end
+  end
+
+  defp safe_account(email) when is_binary(email) do
+    case Email.normalize(email) do
+      {:ok, normalized} -> normalized
+      _ -> "invalid"
+    end
+  end
+
+  defp principal_attrs(user, role, session) do
+    %{
+      user_public_id: user.public_id,
+      session_public_id: session.public_id,
+      account_kind: role_kind(role),
+      grants: grants_for(role),
+      assigned_tenants: Map.get(user, :memberships, %{}),
+      all_tenant_actions: all_tenant_actions(role)
+    }
+  end
+
+  defp role_kind(%{kind: kind}) when kind in [:member, :admin, :superadmin], do: kind
+  defp role_kind(_), do: :member
+
+  defp grants_for(%{kind: kind}) when kind in [:superadmin, :admin] do
+    Permission.builtin_grants(kind)
+  end
+
+  defp grants_for(%{grants: grants}) when is_list(grants) do
+    grants
+    |> Enum.map(&grant_permission/1)
+    |> Enum.reject(&is_nil/1)
+    |> MapSet.new()
+  end
+
+  defp grants_for(_), do: MapSet.new()
+
+  defp grant_permission(%{permission: permission}) when is_binary(permission), do: permission
+  defp grant_permission(%{"permission" => permission}) when is_binary(permission), do: permission
+  defp grant_permission(_), do: nil
+
+  defp operational_all_tenant do
+    [
+      "calls.read",
+      "calls.write",
+      "call_specs.read",
+      "call_specs.write",
+      "tenant_services.read",
+      "tenant_services.write",
+      "tenant_api_keys.read",
+      "tenant_api_keys.write"
+    ]
+  end
+
+  defp all_tenant_actions(%{kind: kind}) when kind in [:superadmin, :admin] do
+    MapSet.new(operational_all_tenant())
+  end
+
+  defp all_tenant_actions(%{grants: grants}) when is_list(grants) do
+    grants
+    |> Enum.filter(&all_tenant_grant?/1)
+    |> Enum.map(&grant_permission/1)
+    |> Enum.reject(&is_nil/1)
+    |> MapSet.new()
+  end
+
+  defp all_tenant_actions(_), do: MapSet.new()
+
+  defp all_tenant_grant?(%{scope: :all_tenants}), do: true
+  defp all_tenant_grant?(%{"scope" => "all_tenants"}), do: true
+  defp all_tenant_grant?(_), do: false
+end

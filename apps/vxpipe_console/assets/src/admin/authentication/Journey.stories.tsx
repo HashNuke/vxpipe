@@ -13,7 +13,7 @@ const meta = {
   argTypes: {
     actor: {
       control: "select",
-      options: ["superadmin", "admin", "member", "reader"],
+      options: ["superadmin", "admin", "member"],
     },
     theme: { control: "select", options: ["dark", "light"] },
     saveBehavior: {
@@ -43,5 +43,4 @@ export const Admin: Story = { args: { actor: "admin" } };
 export const FirstInstallation: Story = {
   args: { initialPath: "/auth/setup", followLocation: false },
 };
-export const DirectoryReader: Story = { args: { actor: "reader" } };
 export const Light: Story = { args: { theme: "light" } };

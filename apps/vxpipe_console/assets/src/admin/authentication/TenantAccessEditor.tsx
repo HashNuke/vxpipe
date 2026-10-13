@@ -1,10 +1,23 @@
 import { useState } from "react";
 import { Plus, Search, X, Globe2 } from "lucide-react";
 import { Button } from "../Button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../components/ui/dialog";
 import { effectiveAccess, hasAssignedGrants } from "./access";
 import type { Membership, Role, Tenant } from "./types";
 const label = (access: string) =>
-  access === "write" ? "read & write" : access === "read" ? "read" : "none";
+  access === "write" || access === "read_write"
+    ? "read & write"
+    : access === "read"
+      ? "read"
+      : "none";
 export function TenantAccessEditor({
   role,
   tenants,
@@ -20,20 +33,28 @@ export function TenantAccessEditor({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const assigned = hasAssignedGrants(role);
+  // Minimal option metadata carries no grants. Read-only viewers still need
+  // to see the stored assignments; show the assignment level instead of a
+  // grant-derived summary the client cannot compute.
+  const unknownGrants = !role.kind && role.grants.length === 0;
   const all =
     role.kind || role.grants.some((grant) => grant.scope === "all_tenants");
-  const write = role.grants.some(
-    (grant) =>
-      grant.scope === "assigned_tenants" && grant.permission.endsWith(".write"),
-  );
+  const write =
+    role.grants.some(
+      (grant) =>
+        grant.scope === "assigned_tenants" &&
+        grant.permission.endsWith(".write"),
+    );
   const matches = tenants.filter((tenant) =>
     `${tenant.name} ${tenant.key}`.toLowerCase().includes(search.toLowerCase()),
   );
   const summary = (access?: Membership["access"]) =>
-    `Calls: ${label(effectiveAccess(role, "calls", access))} · Call specs: ${label(effectiveAccess(role, "call_specs", access))}`;
+    `Calls: ${label(effectiveAccess(role, "calls", access))} · Call specs: ${label(effectiveAccess(role, "call_specs", access))} · Services: ${label(effectiveAccess(role, "tenant_services", access))} · API keys: ${label(effectiveAccess(role, "tenant_api_keys", access))}`;
   return (
-    <section className="access-section" aria-label="Tenant access">
+    <Dialog open={open} onOpenChange={setOpen}>
+    <section className="access-section" aria-label="Tenant access" ref={setPortalContainer}>
       <div className="access-section-heading">
         <div>
           <h2>Tenant access</h2>
@@ -43,14 +64,12 @@ export function TenantAccessEditor({
           </p>
         </div>
         {assigned && !readOnly ? (
-          <Button
-            type="button"
-            onClick={() => setOpen(!open)}
-            aria-expanded={open}
-          >
-            <Plus size={15} aria-hidden />
-            Add tenants
-          </Button>
+          <DialogTrigger asChild>
+            <Button type="button">
+              <Plus size={15} aria-hidden />
+              Add tenants
+            </Button>
+          </DialogTrigger>
         ) : null}
       </div>
       {all ? (
@@ -67,66 +86,17 @@ export function TenantAccessEditor({
       {!assigned && !all ? (
         <p className="access-empty">This role has no tenant access.</p>
       ) : null}
-      {assigned && open && !readOnly ? (
-        <div className="access-picker">
-          <label className="access-search">
-            <Search size={16} aria-hidden />
-            <input
-              type="search"
-              aria-label="Search tenants"
-              placeholder="Search tenants by name or key…"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
-          <div className="access-picker-options">
-            {matches.map((tenant) => {
-              const selected = value.some(
-                (item) => item.tenantId === tenant.id,
-              );
-              return (
-                <label key={tenant.id} className="access-pick-row">
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() =>
-                      onChange?.(
-                        selected
-                          ? value.filter((item) => item.tenantId !== tenant.id)
-                          : [...value, { tenantId: tenant.id, access: "read" }],
-                      )
-                    }
-                  />
-                  <span>
-                    {tenant.name}
-                    <small>{tenant.key}</small>
-                  </span>
-                </label>
-              );
-            })}
-            {matches.length === 0 ? (
-              <p className="access-empty">No tenants match your search.</p>
-            ) : null}
-          </div>
-          <div className="access-picker-footer">
-            <span className="access-muted">{value.length} selected</span>
-            <Button type="button" onClick={() => setOpen(false)}>
-              Done
-            </Button>
-          </div>
-        </div>
-      ) : null}
       {assigned && value.length === 0 ? (
         <div className="access-empty">
           <strong>No tenants assigned</strong>
           <p className="access-muted">
             {all
               ? "Only the all-tenant permissions above apply."
-              : "Add tenants to give this user access to calls and call specs."}
+              : "Add tenants to give this user access to tenant operations."}
           </p>
         </div>
       ) : null}
-      {assigned &&
+      {(assigned || readOnly) &&
         value.map((membership) => {
           const tenant = tenants.find(
             (item) => item.id === membership.tenantId,
@@ -138,7 +108,13 @@ export function TenantAccessEditor({
                 <small className="access-key">
                   {tenant?.key ?? membership.tenantId}
                 </small>
-                <p className="access-muted">{summary(membership.access)}</p>
+                <p className="access-muted">
+                  {readOnly && unknownGrants
+                    ? membership.access === "read"
+                      ? "Read only assignment"
+                      : "Read & write assignment"
+                    : summary(membership.access)}
+                </p>
               </div>
               <div className="access-tenant-actions">
                 {readOnly ? (
@@ -192,5 +168,50 @@ export function TenantAccessEditor({
           );
         })}
     </section>
+    {assigned && !readOnly ? (
+      <DialogContent container={portalContainer ?? undefined} className="access-tenant-dialog">
+        <DialogHeader>
+          <DialogTitle>Add tenants</DialogTitle>
+          <DialogDescription>Choose the tenants this user can access. You can change each assignment on the form.</DialogDescription>
+        </DialogHeader>
+        <label className="access-search">
+          <Search size={16} aria-hidden />
+          <input
+            type="search"
+            aria-label="Search tenants"
+            placeholder="Search tenants by name or key…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <div className="access-picker-options">
+          {matches.map((tenant) => {
+            const selected = value.some((item) => item.tenantId === tenant.id);
+            return (
+              <label key={tenant.id} className="access-pick-row">
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() =>
+                    onChange?.(
+                      selected
+                        ? value.filter((item) => item.tenantId !== tenant.id)
+                        : [...value, { tenantId: tenant.id, access: "read" }],
+                    )
+                  }
+                />
+                <span>{tenant.name}<small>{tenant.key}</small></span>
+              </label>
+            );
+          })}
+          {matches.length === 0 ? <p className="access-empty">No tenants match your search.</p> : null}
+        </div>
+        <DialogFooter className="access-picker-footer">
+          <span className="access-muted">{value.length} selected</span>
+          <Button type="button" onClick={() => setOpen(false)}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    ) : null}
+    </Dialog>
   );
 }

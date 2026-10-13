@@ -16,6 +16,14 @@ afterEach(() => {
 });
 const response = (body: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(body), { status }));
+const withAdminSession = (fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) =>
+  (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input) === "/admin/api/session"
+      ? response({
+          user: { id: "owner", email: "owner@example.test", roleId: "admin", enabled: true, memberships: [] },
+          role: { id: "admin", name: "Admin", description: "", kind: "admin", grants: [] },
+        })
+      : fetchImpl(input, init);
 const binding = (provider: string, source = "platform", name = provider) => ({
   provider,
   name,
@@ -49,7 +57,7 @@ test("platform displays existing Telnyx and Deepgram once without writing creden
         });
   });
 
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   expect(await screen.findByRole("article", { name: "Telnyx" })).toBeVisible();
   expect(screen.getAllByRole("article", { name: "Telnyx" })).toHaveLength(1);
   expect(screen.getAllByRole("article", { name: "Deepgram" })).toHaveLength(1);
@@ -59,6 +67,28 @@ test("platform displays existing Telnyx and Deepgram once without writing creden
   expect(fetchImpl.mock.calls.every(([, options]) => !options?.method || options.method === "GET")).toBe(true);
 });
 
+test("platform service reader sees connections without mutation controls", async () => {
+  window.history.replaceState({}, "", "/admin/platform/services");
+  const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+    if (String(input) === "/admin/api/session") return response({
+      user: { id: "reader", email: "reader@example.test", roleId: "reader", enabled: true, memberships: [] },
+      role: { id: "reader", name: "Platform reader", description: "", kind: null,
+        grants: [{ permission: "platform_services.read", scope: "installation" }] },
+    });
+    return response({
+      tenant: null,
+      bindings: [binding("deepgram")],
+      model_catalog: modelCatalogFixture,
+      provider_capabilities: providerCapabilities,
+    });
+  });
+
+  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  expect(await screen.findByRole("article", { name: "Deepgram" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Manage Deepgram|More actions for Deepgram/ })).not.toBeInTheDocument();
+});
+
 test("Setup picker offers installed services with only working capability badges", async () => {
   window.history.replaceState({}, "", "/admin/platform/services");
   const fetchImpl = vi.fn(async () => response({
@@ -66,7 +96,7 @@ test("Setup picker offers installed services with only working capability badges
     bindings: [],
     model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities,
   }));
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   await screen.findByRole("heading", { name: "Platform services" });
 
   fireEvent.click(screen.getAllByRole("button", { name: "Connect a service" })[0]);
@@ -119,7 +149,7 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
       );
     },
   );
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   await screen.findByRole("heading", { name: "Platform services" });
   fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
   fireEvent.change(screen.getByLabelText("Service"), {
@@ -184,7 +214,7 @@ test("platform services test and save separately, then edit the exact persisted 
       return new Response(JSON.stringify({ tenant: null, bindings, model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities }));
     },
   );
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   expect(
     await screen.findByRole("heading", { name: "Platform services" }),
   ).toBeInTheDocument();
@@ -278,7 +308,7 @@ test("failed card removal keeps the credentials visible and reports the error", 
         }),
   );
 
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   const card = await screen.findByRole("article", { name: "Deepgram" });
   fireEvent.click(within(card).getByRole("button", { name: "More actions for Deepgram" }));
   fireEvent.click(screen.getByRole("button", { name: "Remove credentials" }));
@@ -297,7 +327,7 @@ test("platform save failure appears in a page notification while the form stays 
       : response({ tenant: null, bindings: [], model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities }),
   );
 
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   await screen.findByRole("heading", { name: "Platform services" });
   fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
   fireEvent.change(screen.getByLabelText("Service"), { target: { value: "rime" } });
@@ -334,7 +364,7 @@ test("keeps Save usable when a platform credential cannot be tested", async () =
     },
   );
 
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   await screen.findByRole("heading", { name: "Platform services" });
   fireEvent.click(
     screen.getAllByRole("button", { name: "Connect a service" })[0],
@@ -381,7 +411,7 @@ test("directory outage is retryable and an expired session never looks like empt
   render(
     <App
       csrfToken="csrf-example"
-      fetchImpl={fetchImpl}
+      fetchImpl={withAdminSession(fetchImpl)}
       onSessionExpired={expired}
     />,
   );

@@ -15,6 +15,10 @@ const reply = (body: unknown, status = 200) => Promise.resolve(new Response(JSON
 function transport() {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input), "https://console.test");
+    if (url.pathname === "/admin/api/session") return reply({
+      user: { id: "owner", email: "owner@example.test", roleId: "admin", enabled: true, memberships: [] },
+      role: { id: "admin", name: "Admin", description: "", kind: "admin", grants: [] },
+    });
     if (url.pathname.endsWith("/call-spec-editor-lookups")) return reply({ credential_names: {}, telephony_services: [], mcp_integrations: [] });
     if (url.pathname.includes("/providers")) {
       const models = modelCatalogFixture[url.searchParams.get("capability") as CatalogCapability] ?? {};

@@ -15,7 +15,7 @@ const meta = {
   argTypes: {
     actor: {
       control: "select",
-      options: ["superadmin", "admin", "member", "reader"],
+      options: ["superadmin", "admin", "member"],
     },
     theme: { control: "select", options: ["dark", "light"] },
     state: { control: "select", options: ["ready", "loading", "unavailable"] },
@@ -43,6 +43,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 export const Setup: Story = { args: { initialPath: "/auth/setup" } };
 export const Login: Story = { args: { initialPath: "/auth/login" } };
+export const Recovery: Story = { args: { initialPath: "/auth/recover" } };
 export const Account: Story = { args: { initialPath: "/admin/account" } };
 export const Users: Story = {};
 export const CreateUser: Story = { args: { initialPath: "/admin/users/new" } };
@@ -55,20 +56,19 @@ export const ResetPassword: Story = {
 export const Roles: Story = { args: { initialPath: "/admin/roles" } };
 export const CreateRole: Story = { args: { initialPath: "/admin/roles/new" } };
 export const RoleDetails: Story = {
-  args: { initialPath: `/admin/roles/${roles[4].id}` },
+  args: { initialPath: `/admin/roles/${roles[2].id}` },
 };
 export const AdminViewsSuperadmin: Story = {
   args: { actor: "admin", initialPath: `/admin/users/${users[0].id}` },
 };
 export const MemberDenied: Story = { args: { actor: "member" } };
-export const ReadOnlyDirectory: Story = { args: { actor: "reader" } };
 export const ProtectedRole: Story = {
   args: { initialPath: `/admin/roles/${roles[0].id}` },
 };
 export const LastSuperadmin: Story = {
   args: { initialPath: `/admin/users/${users[0].id}` },
 };
-export const MixedTenantAccess: Story = {
+export const AssignedTenantAccess: Story = {
   args: { initialPath: `/admin/users/${users[5].id}` },
 };
 export const UnassignedUser: Story = {

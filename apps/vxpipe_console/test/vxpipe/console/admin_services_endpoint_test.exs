@@ -6,23 +6,24 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
   import Plug.Conn, only: [put_req_header: 3]
 
   alias Vxpipe.Calls.{ProviderCredential, TelephonyService, Tenant}
+  alias Vxpipe.Console.Test.FakeUserIdentity
 
   @endpoint Vxpipe.Console.Endpoint
-  @secret String.duplicate("operator-admin-services-secret-", 3)
-  @token "operator-admin-services-token"
   @tenant_key "AAAAAAAAAAAAAAAA"
 
   setup do
     original_calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
-    original_secret = Application.fetch_env!(:vxpipe_console, :operator_login_secret)
+    original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
 
     on_exit(fn ->
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, original_calls)
-      Application.put_env(:vxpipe_console, :operator_login_secret, original_secret)
+
+      if original_backend,
+        do: Application.put_env(:vxpipe_console, :user_identity_backend, original_backend),
+        else: Application.delete_env(:vxpipe_console, :user_identity_backend)
     end)
 
-    Application.put_env(:vxpipe_console, :operator_login_secret, @secret)
-    configure_login_repository()
+    Application.put_env(:vxpipe_console, :user_identity_backend, FakeUserIdentity)
     configure_credential_validator(:ok)
     :ok
   end
@@ -302,7 +303,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     anonymous = https_get("/admin/api/tenants/#{@tenant_key}/services")
 
     assert json_response(anonymous, 401) == %{
-             "error" => %{"code" => "operator_session_required"}
+             "error" => %{"code" => "session_required"}
            }
   end
 
@@ -672,13 +673,9 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
   end
 
   defp authenticate do
-    form = https_get("/auth/login-token/#{@token}")
-
-    form
-    |> recycle()
-    |> post("https://localhost/auth/login-token", %{
-      "_csrf_token" => csrf_token(form.resp_body),
-      "operator" => %{"token" => @token, "code" => "01234567"}
+    post(build_conn(), "https://localhost/auth/api/login", %{
+      "email" => FakeUserIdentity.email(),
+      "password" => FakeUserIdentity.password()
     })
   end
 
@@ -689,18 +686,6 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
   end
 
   defp https_get(conn \\ build_conn(), path), do: get(conn, "https://localhost#{path}")
-
-  defp csrf_token(body) do
-    [_, token] = Regex.run(~r/name="_csrf_token" value="([^"]+)"/, body)
-    token
-  end
-
-  defp configure_login_repository do
-    update_calls(:operator_login_challenge_repository, {
-      Vxpipe.Console.Test.OperatorLoginChallengeRepository,
-      {self(), :ok}
-    })
-  end
 
   defp configure_admin_repository(result) do
     update_calls(:admin_repository, {Vxpipe.Console.Test.AdminRepository, {self(), result}})

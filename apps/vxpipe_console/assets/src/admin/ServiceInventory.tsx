@@ -71,6 +71,7 @@ export function ServiceInventory({
               >
                 {formatAdminRelativeTime(service.updatedAt)}
               </time>
+              {onEdit ? (
               <button
                 aria-label={`Edit ${service.name} credentials`}
                 className="col-start-2 row-start-1 inline-flex size-9 items-center justify-center rounded-sm text-[var(--admin-muted)] hover:bg-[var(--admin-soft)] hover:text-[var(--admin-ink)] sm:col-auto sm:row-auto"
@@ -79,6 +80,7 @@ export function ServiceInventory({
               >
                 <Pencil aria-hidden="true" className="size-4" />
               </button>
+              ) : null}
             </li>
           ))}
         </ul>

@@ -20,6 +20,7 @@ end
 config :phoenix, :filter_parameters, [
   "source",
   "password",
+  "proof",
   "secret",
   "token",
   "code",

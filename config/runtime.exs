@@ -111,6 +111,16 @@ database_enabled? = not is_nil(database_url) or (config_env() == :dev and not is
 if database_enabled? do
   config :vxpipe_persistence, :enabled, true
 
+  config :vxpipe_console, :identity_dependencies, %{
+    users: Vxpipe.Persistence.IdentityUserStore,
+    roles: Vxpipe.Persistence.IdentityRoleStore,
+    sessions: Vxpipe.Persistence.IdentitySessionStore,
+    installations: Vxpipe.Persistence.IdentityInstallationStore,
+    attempts: Vxpipe.Persistence.IdentityAttemptStore,
+    audit: Vxpipe.Persistence.IdentityAuditStore,
+    hasher: Vxpipe.Identity.Argon2Hasher
+  }
+
   development_repo =
     if database_url do
       defaults =

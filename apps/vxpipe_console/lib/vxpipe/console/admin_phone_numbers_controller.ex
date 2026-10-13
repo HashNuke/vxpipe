@@ -1,7 +1,7 @@
 defmodule Vxpipe.Console.AdminPhoneNumbersController do
   @moduledoc false
   use Phoenix.Controller, formats: [:json]
-  alias Vxpipe.Calls.{CallSpecErrors, InstallationOperator, OperatorPhoneNumbers}
+  alias Vxpipe.Calls.{CallSpecErrors, OperatorPhoneNumbers}
 
   def index(conn, %{"tenant_key" => tenant, "service" => service} = params) do
     query = %{
@@ -25,7 +25,7 @@ defmodule Vxpipe.Console.AdminPhoneNumbersController do
       )
     end
 
-    case OperatorPhoneNumbers.list(InstallationOperator.authority(), tenant, service, query,
+    case OperatorPhoneNumbers.list(conn.assigns.user_principal, tenant, service, query,
            number_reader: reader
          ) do
       {:ok, page} ->

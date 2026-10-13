@@ -23,6 +23,7 @@ const meta = {
         "empty",
         "all-tenants",
         "mixed",
+        "mixed-scopes",
         "read-only",
         "admin",
       ],
@@ -66,6 +67,9 @@ export const ReadOnlyTenantAccess: Story = {
 };
 export const PermissionSelection: Story = {
   args: { component: "permissions" },
+};
+export const MixedPermissionScopes: Story = {
+  args: { component: "permissions", variant: "mixed-scopes" },
 };
 export const EmptyPermissions: Story = {
   args: { component: "permissions", variant: "empty" },

@@ -1,6 +1,38 @@
 defmodule Vxpipe.Calls.OperatorCallSpecs do
-  @moduledoc "Installation-authorized source reads with current revision and publication metadata."
-  alias Vxpipe.Calls.{CallSpecs, InstallationOperator, ProviderAuth, Repositories}
+  @moduledoc "Installation- or user-authorized source reads with current revision and publication metadata."
+  alias Vxpipe.Calls.{
+    CallSpecs,
+    InstallationOperator,
+    ProviderAuth,
+    Repositories,
+    UserAuthorization
+  }
+
+  alias Vxpipe.Identity.Principal, as: UserPrincipal
+
+  def fetch(%UserPrincipal{} = principal, tenant, id, options) when is_list(options) do
+    requested = Keyword.get(options, :revision)
+
+    with :ok <- ProviderAuth.tenant_key(tenant),
+         :ok <- UserAuthorization.authorize_tenant(principal, "call_specs.read", tenant),
+         true <- valid_id?(id) and valid_revision?(requested),
+         {:ok, repository} <- Repositories.fetch(options, :call_spec_repository),
+         {:ok, next} <- Repositories.call(repository, :next_revision, [tenant, id]),
+         true <- is_integer(next) and next > 1,
+         {:ok, stored} <- CallSpecs.fetch(tenant, id, requested || next - 1, options),
+         true <- stored.tenant_key == tenant and stored.call_spec_id == id,
+         {:ok, published} <- published_revision(repository, tenant, id) do
+      {:ok, %{call_spec: stored, latest_revision: next - 1, published_revision: published}}
+    else
+      false ->
+        if valid_id?(id) and valid_revision?(requested),
+          do: {:error, :not_found},
+          else: {:error, :invalid_request}
+
+      error ->
+        error
+    end
+  end
 
   def fetch(%InstallationOperator{grant: :installation_operator}, tenant, id, options) do
     requested = Keyword.get(options, :revision)

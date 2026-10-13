@@ -1,174 +1,99 @@
 defmodule Vxpipe.Console.OperatorLoginTaskTest do
+  @moduledoc """
+  `mix vxpipe.login` no longer issues operator login challenges.
+
+  It issues a local one-time setup proof for upgraded installations via the
+  configured `:user_identity_backend`. Legacy challenge repositories are never
+  consulted. See `SetupProofTaskTest` for the primary pending-proof case.
+  """
+
   use ExUnit.Case, async: false
 
-  alias Vxpipe.Console.Endpoint
+  defmodule PendingProofBackend do
+    def status, do: {:ok, :pending_operator_proof}
+    def issue_setup_proof, do: {:ok, %{proof: String.duplicate("p", 43)}}
+  end
+
+  defmodule FirstRunBackend do
+    def status, do: {:ok, :pending_first_run}
+    def issue_setup_proof, do: {:error, :unexpected}
+  end
+
+  defmodule CompleteBackend do
+    def status, do: {:ok, :complete}
+    def issue_setup_proof, do: {:error, :unexpected}
+  end
+
+  defmodule UnavailableBackend do
+    def status, do: {:ok, :pending_operator_proof}
+    def issue_setup_proof, do: {:error, :database_unavailable}
+  end
 
   setup do
     previous_shell = Mix.shell()
+    previous_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
     previous_calls = Application.get_env(:vxpipe_calls, Vxpipe.Calls)
-    previous_endpoint = Application.fetch_env!(:vxpipe_console, Endpoint)
-    previous_operator_secret = Application.get_env(:vxpipe_console, :operator_login_secret)
-
-    previous_development_secret =
-      Application.get_env(:vxpipe_console, :development_operator_login_secret)
 
     Mix.shell(Mix.Shell.Process)
 
-    Application.put_env(:vxpipe_calls, Vxpipe.Calls,
-      operator_login_challenge_repository:
-        {Vxpipe.Console.Test.OperatorLoginChallengeRepository, self()}
-    )
-
-    Application.put_env(
-      :vxpipe_console,
-      Endpoint,
-      Keyword.merge(previous_endpoint,
-        url: [scheme: "http", host: "127.0.0.1", port: 4000],
-        secret_key_base: String.duplicate("task-test-secret-", 4)
-      )
-    )
-
-    Application.put_env(
-      :vxpipe_console,
-      :operator_login_secret,
-      String.duplicate("task-test-secret-", 4)
-    )
-
     on_exit(fn ->
       Mix.shell(previous_shell)
+
+      if previous_backend,
+        do: Application.put_env(:vxpipe_console, :user_identity_backend, previous_backend),
+        else: Application.delete_env(:vxpipe_console, :user_identity_backend)
+
       restore(:vxpipe_calls, Vxpipe.Calls, previous_calls)
-      Application.put_env(:vxpipe_console, Endpoint, previous_endpoint)
-      restore(:vxpipe_console, :operator_login_secret, previous_operator_secret)
-
-      restore(
-        :vxpipe_console,
-        :development_operator_login_secret,
-        previous_development_secret
-      )
-
       Mix.Task.reenable("vxpipe.login")
     end)
 
     :ok
   end
 
-  test "prints one token URL and the eight-digit code separately" do
-    Mix.Tasks.Vxpipe.Login.run([])
-
-    assert_receive {:mix_shell, :info, ["Operator login URL: " <> url]}
-    assert_receive {:mix_shell, :info, ["Operator login code: " <> code]}
-    assert Regex.match?(~r/\A[0-9]{8}\z/, code)
-
-    uri = URI.parse(url)
-    assert uri.scheme == "http"
-    assert uri.host == "127.0.0.1"
-    assert uri.port == 4000
-    assert ["auth", "login-token", token] = String.split(uri.path, "/", trim: true)
-    assert is_nil(uri.fragment)
-    assert {:ok, token_bytes} = Base.url_decode64(token, padding: false)
-    assert byte_size(token_bytes) == 32
-
-    assert_receive {:operator_login_challenge_inserted, stored}
-    refute inspect(stored) =~ token
-    refute inspect(stored) =~ code
-  end
-
-  test "starts the Persistence application before issuing" do
-    assert :ok = Application.stop(:vxpipe_persistence)
-
-    refute Enum.any?(Application.started_applications(), fn {app, _description, _version} ->
-             app == :vxpipe_persistence
-           end)
+  test "issues only a local setup proof and never an operator challenge URL" do
+    Application.put_env(:vxpipe_console, :user_identity_backend, PendingProofBackend)
+    configure_legacy_challenge_repository(self())
 
     Mix.Tasks.Vxpipe.Login.run([])
 
-    assert Enum.any?(Application.started_applications(), fn {app, _description, _version} ->
-             app == :vxpipe_persistence
-           end)
+    assert_receive {:mix_shell, :info, ["Setup proof: " <> proof]}
+    assert proof == String.duplicate("p", 43)
 
-    assert_receive {:operator_login_challenge_inserted, _stored}
-    assert_receive {:mix_shell, :info, ["Operator login URL: " <> _url]}
-    assert_receive {:mix_shell, :info, ["Operator login code: " <> _code]}
+    assert_receive {:mix_shell, :info, ["Open /auth/setup and enter the proof" <> _]}
+    refute_receive {:mix_shell, :info, ["Operator login URL: " <> _]}
+    refute_receive {:mix_shell, :info, ["Operator login code: " <> _]}
+    refute_received {:operator_login_challenge_inserted, _}
   end
 
-  test "rejects an insecure origin before issuing or printing a challenge" do
-    update_endpoint(url: [scheme: "http", host: "console.example.com", port: 4000])
+  test "fresh installations set up without a local proof" do
+    Application.put_env(:vxpipe_console, :user_identity_backend, FirstRunBackend)
 
     error = assert_raise Mix.Error, fn -> Mix.Tasks.Vxpipe.Login.run([]) end
-    assert Exception.message(error) =~ "explicit HTTPS endpoint URL"
-    refute_received {:operator_login_challenge_inserted, _challenge}
-    refute_received {:mix_shell, :info, _message}
+    assert Exception.message(error) =~ "without a local proof"
+    refute_received {:mix_shell, :info, _}
   end
 
-  test "uses the development secret for a loopback login when no explicit secret is set" do
-    Application.delete_env(:vxpipe_console, :operator_login_secret)
-
-    Application.put_env(
-      :vxpipe_console,
-      :development_operator_login_secret,
-      String.duplicate("development-only-", 4)
-    )
-
-    Mix.Tasks.Vxpipe.Login.run([])
-
-    assert_receive {:operator_login_challenge_inserted, _challenge}
-    assert_receive {:mix_shell, :info, ["Operator login URL: http://127.0.0.1:4000/" <> _path]}
-    assert_receive {:mix_shell, :info, ["Operator login code: " <> _code]}
-  end
-
-  test "does not use the development secret for a non-loopback login" do
-    Application.delete_env(:vxpipe_console, :operator_login_secret)
-
-    Application.put_env(
-      :vxpipe_console,
-      :development_operator_login_secret,
-      String.duplicate("development-only-", 4)
-    )
-
-    update_endpoint(url: [scheme: "https", host: "console.example.com", port: 443])
+  test "completed installations do not issue another proof" do
+    Application.put_env(:vxpipe_console, :user_identity_backend, CompleteBackend)
 
     error = assert_raise Mix.Error, fn -> Mix.Tasks.Vxpipe.Login.run([]) end
-    assert Exception.message(error) =~ "at least 64 bytes"
-    refute_received {:operator_login_challenge_inserted, _challenge}
-    refute_received {:mix_shell, :info, _message}
+    assert Exception.message(error) =~ "already set up"
+    refute_received {:mix_shell, :info, _}
   end
 
-  test "does not use the development secret when a loopback URL listens remotely" do
-    Application.delete_env(:vxpipe_console, :operator_login_secret)
-
-    Application.put_env(
-      :vxpipe_console,
-      :development_operator_login_secret,
-      String.duplicate("development-only-", 4)
-    )
-
-    update_endpoint(
-      url: [scheme: "https", host: "localhost", port: 4000],
-      http: false,
-      https: [ip: {100, 64, 0, 1}, port: 4000]
-    )
-
-    error = assert_raise Mix.Error, fn -> Mix.Tasks.Vxpipe.Login.run([]) end
-    assert Exception.message(error) =~ "at least 64 bytes"
-    refute_received {:operator_login_challenge_inserted, _challenge}
-    refute_received {:mix_shell, :info, _message}
-  end
-
-  test "persistence failure prints neither token nor code" do
-    Application.put_env(:vxpipe_calls, Vxpipe.Calls,
-      operator_login_challenge_repository:
-        {Vxpipe.Console.Test.OperatorLoginChallengeRepository, {self(), :unavailable}}
-    )
+  test "persistence failure prints no proof" do
+    Application.put_env(:vxpipe_console, :user_identity_backend, UnavailableBackend)
 
     error = assert_raise Mix.Error, fn -> Mix.Tasks.Vxpipe.Login.run([]) end
     assert Exception.message(error) =~ "check database configuration"
-    assert_receive {:operator_login_challenge_inserted, _challenge}
-    refute_received {:mix_shell, :info, _message}
+    refute_received {:mix_shell, :info, _}
   end
 
-  defp update_endpoint(overrides) do
-    endpoint = Application.fetch_env!(:vxpipe_console, Endpoint)
-    Application.put_env(:vxpipe_console, Endpoint, Keyword.merge(endpoint, overrides))
+  defp configure_legacy_challenge_repository(observer) do
+    Application.put_env(:vxpipe_calls, Vxpipe.Calls,
+      operator_login_challenge_repository:
+        {Vxpipe.Console.Test.OperatorLoginChallengeRepository, {observer, :ok}}
+    )
   end
 
   defp restore(application, key, nil), do: Application.delete_env(application, key)

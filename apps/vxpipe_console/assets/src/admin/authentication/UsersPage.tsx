@@ -1,8 +1,8 @@
 import { Plus, Search } from "lucide-react";
 import { Button } from "../Button";
-import { PageHeader } from "../PageHeader";
 import { Pagination } from "../Pagination";
 import { PageNotice } from "../PageNotice";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { RoleBadge } from "./RoleBadge";
 import type { Navigate, PageState, Role, User } from "./types";
 export function UsersPage({
@@ -13,6 +13,8 @@ export function UsersPage({
   onQuery,
   onNavigate,
   state = "ready",
+  pagination,
+  rolesLimited = false,
 }: {
   users: User[];
   roles: Role[];
@@ -21,22 +23,32 @@ export function UsersPage({
   onQuery: (query: URLSearchParams) => void;
   onNavigate: Navigate;
   state?: PageState;
+  pagination?: { page: number; page_size: number; total: number; total_pages: number };
+  /**
+   * True when roles came from minimal option metadata (no grants). Tenant
+   * summaries then fall back to assignment counts instead of grant analysis.
+   */
+  rolesLimited?: boolean;
 }) {
   const search = query.get("q") ?? "";
   const roleId = query.get("role") ?? "";
-  const filtered = users.filter(
-    (user) =>
-      (!roleId || user.roleId === roleId) &&
-      user.email.toLowerCase().includes(search.toLowerCase()),
-  );
-  const page = Math.max(
+  const filtered = pagination
+    ? users
+    : users.filter(
+        (user) =>
+          (!roleId || user.roleId === roleId) &&
+          user.email.toLowerCase().includes(search.toLowerCase()),
+      );
+  const pageSize = pagination?.page_size ?? 6;
+  const total = pagination?.total ?? filtered.length;
+  const page = pagination?.page ?? Math.max(
     1,
     Math.min(
       Number(query.get("page")) || 1,
-      Math.max(1, Math.ceil(filtered.length / 6)),
+      Math.max(1, Math.ceil(filtered.length / pageSize)),
     ),
   );
-  const shown = filtered.slice((page - 1) * 6, page * 6);
+  const shown = pagination ? filtered : filtered.slice((page - 1) * pageSize, page * pageSize);
   function filter(key: string, value: string) {
     const next = new URLSearchParams(query);
     if (value) next.set(key, value);
@@ -47,10 +59,7 @@ export function UsersPage({
   return (
     <main className="access-page">
       <div className="access-page-heading">
-        <PageHeader
-          title="Users"
-          description="Manage who can access your installation and its tenants."
-        />
+        <p className="access-lead">Manage who can access your installation and its tenants.</p>
         {actorRole.kind ? (
           <Button
             className="access-primary"
@@ -113,27 +122,30 @@ export function UsersPage({
         />
       ) : (
         <>
-          <div className="access-directory" role="table" aria-label="Users">
-            <div className="access-user-row access-table-head" role="row">
-              <span role="columnheader">Email</span>
-              <span role="columnheader">Role</span>
-              <span role="columnheader">Tenant access</span>
-              <span role="columnheader">Status</span>
-            </div>
+          <Table className="access-directory" aria-label="Users">
+            <TableHeader className="access-table-head">
+              <TableRow className="access-user-row">
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Tenant access</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
             {shown.map((user) => {
-              const role = roles.find((item) => item.id === user.roleId)!;
-              const all =
-                role.kind ||
-                role.grants.some((grant) => grant.scope === "all_tenants");
-              const assigned = role.grants.some(
-                (grant) => grant.scope === "assigned_tenants",
-              );
+              const role = roles.find((item) => item.id === user.roleId) ?? {
+                id: user.roleId,
+                name: "Unknown role",
+                description: "",
+                kind: null,
+                grants: [],
+              } as Role;
               return (
-                <div className="access-user-row" role="row" key={user.id}>
-                  <span role="cell">
+                <TableRow className="access-user-row" key={user.id}>
+                  <TableCell>
                     <a
                       className="access-user-link"
-                      href={`#/admin/users/${user.id}`}
+                      href={`/admin/users/${user.id}`}
                       onClick={(event) => {
                         event.preventDefault();
                         onNavigate(`/admin/users/${user.id}`);
@@ -141,35 +153,27 @@ export function UsersPage({
                     >
                       {user.email}
                     </a>
-                  </span>
-                  <span role="cell">
+                  </TableCell>
+                  <TableCell>
                     <RoleBadge role={role} />
-                  </span>
-                  <span role="cell" className="access-muted">
-                    {all
-                      ? assigned
-                        ? `All + ${user.memberships.length} assigned`
-                        : "All tenants"
-                      : assigned
-                        ? `${user.memberships.length} assigned`
-                        : "No tenant access"}
-                  </span>
-                  <span
-                    role="cell"
-                    className={user.enabled ? "access-status" : "access-muted"}
-                  >
+                  </TableCell>
+                  <TableCell className="access-muted">
+                    {tenantSummary(role, user, rolesLimited)}
+                  </TableCell>
+                  <TableCell className={user.enabled ? "access-status" : "access-muted"}>
                     {user.enabled ? "Active" : "Disabled"}
-                  </span>
-                </div>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </div>
+            </TableBody>
+          </Table>
           <Pagination
             ariaLabel="User pages"
             pagination={{
-              label: `${(page - 1) * 6 + 1}–${Math.min(page * 6, filtered.length)} of ${filtered.length} users`,
+              label: `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total} users`,
               hasPrevious: page > 1,
-              hasNext: page * 6 < filtered.length,
+              hasNext: page * pageSize < total,
             }}
             onPrevious={() => {
               const next = new URLSearchParams(query);
@@ -186,4 +190,24 @@ export function UsersPage({
       )}
     </main>
   );
+}
+
+function tenantSummary(role: Role, user: User, rolesLimited: boolean) {
+  if (rolesLimited && !role.kind) {
+    return user.memberships.length > 0
+      ? `${user.memberships.length} assigned`
+      : "No tenant access";
+  }
+  const all =
+    role.kind || role.grants.some((grant) => grant.scope === "all_tenants");
+  const assigned = role.grants.some(
+    (grant) => grant.scope === "assigned_tenants",
+  );
+  return all
+    ? assigned
+      ? `All + ${user.memberships.length} assigned`
+      : "All tenants"
+    : assigned
+      ? `${user.memberships.length} assigned`
+      : "No tenant access";
 }

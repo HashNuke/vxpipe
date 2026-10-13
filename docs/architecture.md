@@ -3377,16 +3377,15 @@ Existing source-interval privacy and credential exclusions apply, and debugging 
 starts STT, recording or audio monitoring implicitly. Silent listening remains in the
 live-mixing milestone. Later slices extend these views with their implemented facts.
 
-The Console implements that inspection boundary at `/operator/sign-in`,
-`/tenants/:tenant_key/calls`, and `/tenants/:tenant_key/calls/:call_id`. It exchanges an existing
-tenant key plus `:calls`-scoped API key for a
-non-secret signed browser session, filters the submitted secret from request logs, and
-keeps sample and platform-diagnostics routes outside this tenant guard. Calls supplies
-cursor-bounded persisted pages; the engine supplies only its bounded live projection.
-URL-backed event selection is local to the loaded evidence, while connected running-call
-pages refresh only the live projection. Ended calls require no room process. Console and
-Gateway gain neither Repo access nor unrestricted process inspection through this flow.
-
+The Console implements inspection at `/admin/tenants/:tenant_key/calls` and its
+call-detail routes. Named email/password users carry database-backed sessions; Calls
+checks `calls.read` on the resolved tenant for every inspection request. Legacy tenant
+URLs redirect through the same account boundary, and historical API-key browser-login
+routes no longer authenticate. Calls supplies cursor-bounded persisted pages; the engine
+supplies only its bounded live projection. Connected running-call pages refresh the live
+projection through authorized requests. Ended calls require no room process.
+See [Console authentication](console-authentication-and-authorization.md) and
+[account operations](development/console-authentication-operations.md).
 A persisted `admitting` or `running` state is historical evidence, not proof that its room
 incarnation is live. When the bounded live projection is unavailable, inspection labels the
 row as a running record and the detail as runtime unavailable; a started record without a
@@ -3403,14 +3402,10 @@ routes rather than additions to the reusable gateway protocol surface.
 Phoenix LiveDashboard is selected for platform VM/runtime inspection; a separate
 Vxpipe diagnostics page owns bounded call-path measurements. Diagnostics are disabled
 by default and explicitly enabled through Console application settings. When enabled,
-this slice adds no page authentication; deployment exposure is an application concern.
-API keys authenticate call-management endpoints and caller join tokens authorize call
-admission. Tenant call inspection additionally permits an existing `:calls`-scoped API
-key to establish a Console-only, signed browser session. Authentication consumes the key
-server-side over TLS; the session stores only the tenant/API-key identifiers, closed scopes,
-and a bounded expiry, never the key secret. That session authorizes only call-inspection
-routes and is not a caller token, sample credential, diagnostics login, or LiveDashboard
-login. Repository development serves the diagnostics namespace from the shared Console
+diagnostics requires a named user with `diagnostics.read` at HTTP, socket and LiveView
+boundaries. Live callbacks recheck the session before refreshing or acting. API keys
+remain separate machine credentials, and caller join tokens authorize call admission;
+neither establishes a Console user session. Repository development serves the diagnostics namespace from the shared Console
 endpoint. The Console
 shell and LiveDashboard route are
 implemented. The Vxpipe LiveView measurement page reads the bounded reporter with a short
@@ -3423,8 +3418,7 @@ stylesheets are served by the endpoint's existing `Plug.Static`, alongside the R
 rather than being embedded into Elixir modules or exposed through custom asset controllers. The
 diagnostics enablement decision is shared by the HTTP pipeline and socket
 connect callback: disabled HTTP requests return 404 and disabled socket connections are
-refused. No hosted browser asset or additional Console or LiveDashboard authentication is
-introduced.
+refused. Console and LiveDashboard share the named-user diagnostics guard.
 
 ## Configuration and container boundary
 
