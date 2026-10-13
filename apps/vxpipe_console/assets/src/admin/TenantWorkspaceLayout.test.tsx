@@ -15,7 +15,7 @@ type SharedProps = Pick<ComponentProps<typeof TenantServicesPage>, "headerAction
 
 test.each([
   {
-    title: "Call specs",
+    title: "Call Specs",
     renderPage: (props: SharedProps) => <TenantCallSpecsPage {...props} state={callSpecFixture("populated")} />,
   },
   {

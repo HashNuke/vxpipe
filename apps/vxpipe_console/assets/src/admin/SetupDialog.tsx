@@ -1,11 +1,13 @@
 import { X } from "lucide-react";
 import {
+  useContext,
   useEffect,
   useId,
   useRef,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { AdminOverlayContext } from "./AdminLayoutContext";
 import { Button } from "./Button";
 
 export function SetupDialog({
@@ -23,6 +25,8 @@ export function SetupDialog({
   busy?: boolean;
   anchorTop?: boolean;
 }) {
+  const setOverlay = useContext(AdminOverlayContext);
+  useEffect(() => { setOverlay(true); return () => setOverlay(false); }, [setOverlay]);
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {

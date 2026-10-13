@@ -25,6 +25,21 @@ defmodule Vxpipe.Console.OperatorTraffic do
   end
 
   defp operator_path?(["auth" | _rest]), do: true
+  defp operator_path?([]), do: true
+
+  defp operator_path?([prefix | _rest])
+       when prefix in [
+              "t",
+              "tenants",
+              "my-tenants",
+              "getting-started",
+              "account",
+              "users",
+              "roles",
+              "platform"
+            ],
+       do: true
+
   defp operator_path?(["admin" | _rest]), do: true
   defp operator_path?(["tenants", _tenant_key, "calls" | _rest]), do: true
   defp operator_path?(_path), do: false

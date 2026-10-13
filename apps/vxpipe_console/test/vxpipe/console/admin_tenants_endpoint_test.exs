@@ -42,11 +42,13 @@ defmodule Vxpipe.Console.AdminTenantsEndpointTest do
                %{
                  "key" => "BBBBBBBBBBBBBBBB",
                  "name" => "Second",
+                 "dashboard_path" => "/t/BBBBBBBBBBBBBBBB/dashboard",
                  "created_at" => "2026-09-17T02:00:00Z"
                },
                %{
                  "key" => "AAAAAAAAAAAAAAAA",
                  "name" => "First",
+                 "dashboard_path" => "/t/AAAAAAAAAAAAAAAA/dashboard",
                  "created_at" => "2026-09-17T01:00:00Z"
                }
              ],
@@ -54,7 +56,8 @@ defmodule Vxpipe.Console.AdminTenantsEndpointTest do
                "page" => 2,
                "page_size" => 25,
                "total" => 57,
-               "total_pages" => 3
+               "total_pages" => 3,
+               "has_next" => true
              }
            }
 

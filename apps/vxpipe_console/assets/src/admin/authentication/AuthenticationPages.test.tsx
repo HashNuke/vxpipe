@@ -110,7 +110,7 @@ test("a member cannot bypass account reset by loading the route directly", () =>
   render(
     <AuthenticationJourney
       actor="member"
-      initialPath={`/admin/users/${users[1].id}/reset-password`}
+      initialPath={`/users/${users[1].id}/reset-password`}
     />,
   );
   expect(
@@ -119,7 +119,7 @@ test("a member cannot bypass account reset by loading the route directly", () =>
   expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
 });
 test("creates an account and assigns one tenant without changing the current actor", async () => {
-  render(<AuthenticationJourney initialPath="/admin/users/new" />);
+  render(<AuthenticationJourney initialPath="/users/new" />);
   fireEvent.change(screen.getByLabelText("Email"), {
     target: { value: "new.user@example.test" },
   });

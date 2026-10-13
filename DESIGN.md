@@ -26,6 +26,15 @@ typography:
     fontSize: "16px"
     fontWeight: 700
     lineHeight: 1.5
+  navigation-title:
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "24px"
+    fontWeight: 650
+    lineHeight: 1.3
+    letterSpacing: "-0.025em"
+  navigation-control:
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "13px"
   detail-title:
     fontFamily: "Geist Mono, SFMono-Regular, Consolas, Liberation Mono, monospace"
     fontSize: "20px"
@@ -98,6 +107,14 @@ components:
     rounded: "{rounded.sm}"
     padding: "4px 8px"
     height: "33px"
+  navigation-link:
+    typography: "{typography.navigation-control}"
+    rounded: "{rounded.sm}"
+    padding: "8px 12px"
+  tenant-picker:
+    typography: "{typography.navigation-control}"
+    rounded: "{rounded.md}"
+    padding: "9px 12px"
   input:
     typography: "{typography.control}"
     rounded: "{rounded.md}"
@@ -204,6 +221,10 @@ cadence without turning all content into terminal cosplay.
 ### Hierarchy
 
 - **Title** (700, 16px, 1.5): Compact workspace and product titles.
+- **Navigation Title**: Sans-serif page headings in the shared administration
+  shell; reduce to 22px at the 760px phone breakpoint.
+- **Navigation Control**: Sidebar links, tenant search and supporting copy.
+  Group labels are 12px semibold sentence case rather than workbench mono tabs.
 - **Detail Title** (700, 20px, 1.2, -0.02em): The selected operational object
   inside a workbench.
 - **Body** (400, 16px, 1.5): Empty states, instructions, and general interface
@@ -233,7 +254,16 @@ is active at a time and a fixed 48px bottom tab bar switches among media,
 conversation, information, and events. The mobile header compresses to the logo
 and essential controls, and horizontal scrolling is not permitted.
 
-Data-dense operator pages use a bounded shell up to 1600px with 12px to 16px
+Ordinary administration pages use a 232px sticky, viewport-height navigation
+rail and a flexible workspace bounded at 1600px. Content padding is 36px by 32px;
+at 760px and below it becomes 24px by 16px and a compact Menu bar replaces the
+rail. The modal drawer is at most 300px or 88vw wide. The rail scrolls independently
+when its content exceeds the viewport. Diagnostics uses the same navigation in
+an independent island with a fixed desktop rail; its external content receives
+the matching 232px offset, removed on phones. The island host has no viewport
+minimum height, so it does not push the external content below the fold.
+
+Other data-dense operator pages use a bounded shell up to 1600px with 12px to 16px
 gutters. Their multi-column work areas reflow by 760px: low-priority summary
 columns may disappear, dense rows may become two-column records, and adjacent
 evidence regions stack. Long identifiers truncate inside their own cells and raw
@@ -300,29 +330,50 @@ must be legible through more than decoration alone.
 
 ### Navigation
 
-Tenant administration uses two compact rows: a 48px app header with the brand,
-`Tenants › tenant name` breadcrumb and account actions, followed by sibling
-navigation for Call Specs, Calls and Services. The active destination is
-the only visible page label; retain a visually hidden level-one heading. Page
-actions sit to the right of the navigation on desktop and in a short row below
-it under 640px. Content follows with a 16px gap. Do not add a terminal page
-breadcrumb, a second visible page heading or an inert Admin navigation item.
-Long tenant names truncate within the header without displacing account actions.
-Every breadcrumb label, linked or current, is capped at 24ch with an ellipsis and
-can shrink further on narrow screens. Keep the full label in the DOM and `title`
-so assistive technology and hover inspection retain the complete name.
-The app header uses its background, not a bottom rule, to separate it from the
-workspace. Sibling navigation has only the active-tab underline, never a
-full-width divider directly above the ledger.
+Ordinary administration uses the shared sidebar. Vxpipe sits above the searchable
+tenant picker. Tenant links remain Calls, Call Specs, Services; Platform links
+remain Tenants, Roles, Users, Services. Omit unavailable destinations and empty
+groups. My account and Logout occupy the bottom region. The selected tenant
+stays visible when moving to platform pages within the same application; platform
+scope is explicit in the page title. Switching tenants opens its dashboard.
+
+Sidebar links are neutral at rest; hover and current-page states use the soft
+neutral surface, with stronger text and weight for the current page. Preserve
+`aria-current`, real link destinations and modifier-click behavior. Sidebar
+links have a 40px minimum height; the picker has a 42px minimum height. The
+searchable picker uses names and keys, a selected check, independent loading and
+error states, and a footer leading to the appropriate tenant directory. Production
+search is scoped and paginated by the server; the picker offers Load more tenants.
+
+Keep one visible page title with local actions, plus a compact linked tenant
+name/key context on tenant pages. Do not repeat the former app header, account
+bar or sibling workspace tabs inside the sidebar shell. Retain local form back
+links, filters and modal titles. Dashboard shortcuts precede a bounded recent-call
+list; on phones each record puts identity above state and timestamp. Call IDs
+wrap within the record, and new-tab inspector links announce their behavior.
+
+At the phone breakpoint, Menu opens the same order in a modal drawer. Provide a
+named close button, keyboard dismissal, visible focus and a skip-to-content
+link. Navigation controls use a two-pixel semantic focus outline with a two-pixel
+offset. Drawer entry lasts 160ms with ease-out only when reduced motion is not
+requested. Picker depth is temporary (`0 10px 24px #0003`); core surfaces remain
+flat. Application modals make the background navigation inert.
+
+The call-spec editor and call inspector remain standalone. Public authentication
+pages expose no private picker or menu. Voice and transfer samples share the
+sidebar while retaining local media controls. Diagnostics keeps its LiveView
+content independent of the React navigation island; its system dashboard retains
+its own dependency-owned interface.
 
 Call details opens in a new tab as a standalone inspector. Its console-injected
-top bar uses the same Vxpipe brand and `Tenants › tenant › call spec` breadcrumb
-pattern as the admin workspace. Each breadcrumb is a working return link; do not
+top bar retains the Vxpipe brand and `Tenants › tenant › call spec` breadcrumb
+context. Each breadcrumb is a working return link; do not
 add sibling workspace tabs or a redundant Call details label. Keep call ID, version,
 partial-history warning and live controls in the console's existing toolbar.
 Retain this context on mobile and in loading/error states. The injected bar has
 no bottom rule; keep the workbench boundary and active-view underline without
-a full-width tab divider.
+a full-width tab divider. Breadcrumb labels are capped at 24ch and can shrink
+further on narrow screens; preserve the full label in the DOM and `title`.
 
 - **Call workbench desktop:** Uppercase 12px mono tabs sit in a muted segmented track; the
   active tab returns to the base surface.

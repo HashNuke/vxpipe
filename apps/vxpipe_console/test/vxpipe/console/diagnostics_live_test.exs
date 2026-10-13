@@ -62,6 +62,9 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
   test "loads diagnostics through compiled static assets" do
     html = html_response(get(authenticated_conn(), "/admin/diagnostics"), 200)
 
+    assert html =~ ~s(id="console-navigation")
+    assert html =~ ~s(src="/assets/navigation.js")
+    assert html =~ ~s(id="navigation-content")
     assert html =~ ~s(href="/assets/diagnostics.css")
     assert html =~ ~s(type="module" src="/assets/live.js")
     refute html =~ "/admin/diagnostics/assets/"

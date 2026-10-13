@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AccessFrame } from "./AccessFrame";
 import { AccountPage } from "./AccountPage";
 import { AuthPage } from "./AuthPage";
@@ -16,11 +16,12 @@ export type Actor = "superadmin" | "admin" | "member";
 const actorIndex = { superadmin: 0, admin: 1, member: 4 };
 export function AuthenticationJourney({
   actor = "superadmin",
-  initialPath = "/admin/users",
+  initialPath = "/users",
   theme = "dark",
   state = "ready",
   saveBehavior = "success",
   followLocation = true,
+  renderFrame,
 }: {
   actor?: Actor;
   initialPath?: string;
@@ -28,6 +29,7 @@ export function AuthenticationJourney({
   state?: PageState;
   saveBehavior?: "success" | "failure" | "pending";
   followLocation?: boolean;
+  renderFrame?: (children: ReactNode, path: string) => ReactNode;
 }) {
   const [roles, setRoles] = useState<Role[]>(structuredClone(seedRoles));
   const [users, setUsers] = useState<User[]>(
@@ -37,7 +39,7 @@ export function AuthenticationJourney({
     initialPath.startsWith("/auth/") ? null : seedUsers[actorIndex[actor]].id,
   );
   const [location, setLocation] = useState(() =>
-    followLocation && window.location.hash.startsWith("#/admin/")
+    followLocation && /^#\/(users|roles|account)(\/|$)/.test(window.location.hash)
       ? window.location.hash.slice(1)
       : initialPath,
   );
@@ -119,12 +121,12 @@ export function AuthenticationJourney({
             if (!user) return { error: "Email or password is incorrect." };
             setActorId(user.id);
           }
-          navigate("/admin/account");
+          navigate("/account");
           return {};
         }}
       />
     );
-  } else if (path === "/admin/account") {
+  } else if (path === "/account") {
     page = (
       <AccountPage
         key={currentUser.id}
@@ -153,7 +155,7 @@ export function AuthenticationJourney({
         }}
       />
     );
-  } else if (path === "/admin/users") {
+  } else if (path === "/users") {
     page = canReadUsers(currentRole) ? (
       <UsersPage
         users={users}
@@ -161,7 +163,7 @@ export function AuthenticationJourney({
         actorRole={currentRole}
         query={route.searchParams}
         onQuery={(query) =>
-          navigate(`/admin/users${query.size ? `?${query}` : ""}`)
+          navigate(`/users${query.size ? `?${query}` : ""}`)
         }
         onNavigate={navigate}
         state={state}
@@ -169,8 +171,8 @@ export function AuthenticationJourney({
     ) : (
       denied
     );
-  } else if (path.startsWith("/admin/users/")) {
-    const targetId = path.split("/")[3];
+  } else if (path.startsWith("/users/")) {
+    const targetId = path.split("/")[2];
     const creating = targetId === "new";
     const target = users.find((user) => user.id === targetId);
     const targetRole = roles.find((role) => role.id === target?.roleId);
@@ -196,7 +198,7 @@ export function AuthenticationJourney({
             if (target.id === currentUser.id) {
               setActorId(null);
               navigate("/auth/login");
-            } else navigate(`/admin/users/${target.id}`);
+            } else navigate(`/users/${target.id}`);
             setNotice("Password updated. Existing sessions were signed out.");
             return {};
           }}
@@ -253,7 +255,7 @@ export function AuthenticationJourney({
               setActorId(null);
               navigate("/auth/login");
             } else if (creating) {
-              navigate(`/admin/users/${updated.id}`);
+              navigate(`/users/${updated.id}`);
               setNotice(
                 "User created. Share their chosen password outside the Console.",
               );
@@ -262,7 +264,7 @@ export function AuthenticationJourney({
           }}
         />
       );
-  } else if (path === "/admin/roles")
+  } else if (path === "/roles")
     page = currentRole.kind ? (
       <RolesPage
         roles={roles}
@@ -277,8 +279,8 @@ export function AuthenticationJourney({
     ) : (
       denied
     );
-  else if (path.startsWith("/admin/roles/")) {
-    const id = path.split("/")[3];
+  else if (path.startsWith("/roles/")) {
+    const id = path.split("/")[2];
     const role = roles.find((item) => item.id === id);
     page =
       !currentRole.kind || (id !== "new" && !role) ? (
@@ -329,7 +331,7 @@ export function AuthenticationJourney({
                 ),
               );
             if (!role) {
-              navigate(`/admin/roles/${updated.id}`);
+              navigate(`/roles/${updated.id}`);
               setNotice("Role created. It is ready to assign to users.");
             }
             return {};
@@ -340,13 +342,14 @@ export function AuthenticationJourney({
             const error = await result();
             if (error) return { error };
             setRoles(roles.filter((item) => item.id !== id));
-            navigate("/admin/roles");
+            navigate("/roles");
             setNotice("Role deleted.");
             return {};
           }}
         />
       );
   } else page = denied;
+  if (renderFrame) return renderFrame(<div className="access-ui">{notice ? <div className="access-notice"><FormMessage>{notice}</FormMessage></div> : null}{page}</div>, path);
   return (
     <AccessFrame
       theme={theme}

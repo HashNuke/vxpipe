@@ -1,3 +1,7 @@
+import { NavigationError } from "./admin/navigation/navigationApi";
+import { NavigationContext } from "./admin/navigation/navigationContext";
+import { ConsoleNavigation } from "./admin/navigation/ConsoleNavigation";
+import { WorkspaceDashboard, WorkspaceDirectory } from "./admin/navigation/WorkspacePages";
 import {
   createContext,
   useContext,
@@ -116,7 +120,24 @@ const redirectExpiredSession = () => window.location.assign("/auth/login");
 const AppConfiguration = createContext<AppProps>({ csrfToken: "" });
 
 function ConfiguredRoute({ render }: { render: (props: AppProps) => ReactNode }) {
-  return render(useContext(AppConfiguration));
+  const props = useContext(AppConfiguration);
+  const navigation = useContext(NavigationContext);
+  const fail = navigation?.fail;
+  const refresh = navigation?.refresh;
+  const fetchImpl = useMemo(() => {
+    if (!fail || !refresh) return props.fetchImpl;
+    const fetch = props.fetchImpl ?? defaultFetch;
+    return async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await fetch(input, init);
+      if (!init?.signal?.aborted) {
+        if (response.status === 401) fail(new NavigationError(401));
+        else if (response.status === 403) refresh();
+      }
+      return response;
+    };
+  }, [props.fetchImpl, fail, refresh]);
+  const onSessionExpired = useCallback(() => fail?.(new NavigationError(401)), [fail]);
+  return render({ ...props, fetchImpl, onSessionExpired: fail ? onSessionExpired : props.onSessionExpired });
 }
 
 export function App(props: AppProps) {
@@ -125,25 +146,29 @@ export function App(props: AppProps) {
         <Route path="/auth/setup" element={<ConfiguredRoute render={(props) => <AuthenticationRoute {...props} mode="setup" />} />} />
         <Route path="/auth/login" element={<ConfiguredRoute render={(props) => <AuthenticationRoute {...props} mode="login" />} />} />
         <Route path="/auth/recover" element={<ConfiguredRoute render={(props) => <AuthenticationRoute {...props} mode="recover" />} />} />
-        <Route path="/admin/account" element={<ConfiguredRoute render={(props) => <AccountRoute {...props} />} />} />
-        <Route path="/admin/users/new" element={<ConfiguredRoute render={(props) => <UserNewRoute {...props} />} />} />
-        <Route path="/admin/users/:id/reset-password" element={<ConfiguredRoute render={(props) => <ResetPasswordRoute {...props} />} />} />
-        <Route path="/admin/users/:id" element={<ConfiguredRoute render={(props) => <UserDetailRoute {...props} />} />} />
-        <Route path="/admin/users" element={<ConfiguredRoute render={(props) => <UsersRoute {...props} />} />} />
-        <Route path="/admin/roles/new" element={<ConfiguredRoute render={(props) => <RoleNewRoute {...props} />} />} />
-        <Route path="/admin/roles/:id" element={<ConfiguredRoute render={(props) => <RoleDetailRoute {...props} />} />} />
-        <Route path="/admin/roles" element={<ConfiguredRoute render={(props) => <RolesRoute {...props} />} />} />
-        <Route path="/admin/platform/services" element={<ConfiguredRoute render={(props) => <ScopedServicesRoute {...props} platform />} />} />
-        <Route path="/admin/tenants/:tenantKey/setup-services" element={<RetiredSetupServicesRedirect />} />
-        <Route path="/admin/onboarding" element={<ConfiguredRoute render={(props) => <RoutedApp {...props} route={{ kind: "onboarding" }} />} />} />
-        <Route path="/admin" element={<ConfiguredRoute render={(props) => <TenantDirectoryRoute {...props} />} />} />
-        <Route path="/admin/tenants/:tenantKey" element={<TenantWorkspaceRedirect />} />
+        <Route element={<ConfiguredRoute render={props => <ConsoleNavigation {...props} />} />}>
+        <Route path="/account" element={<ConfiguredRoute render={(props) => <AccountRoute {...props} />} />} />
+        <Route path="/users/new" element={<ConfiguredRoute render={(props) => <UserNewRoute {...props} />} />} />
+        <Route path="/users/:id/reset-password" element={<ConfiguredRoute render={(props) => <ResetPasswordRoute {...props} />} />} />
+        <Route path="/users/:id" element={<ConfiguredRoute render={(props) => <UserDetailRoute {...props} />} />} />
+        <Route path="/users" element={<ConfiguredRoute render={(props) => <UsersRoute {...props} />} />} />
+        <Route path="/roles/new" element={<ConfiguredRoute render={(props) => <RoleNewRoute {...props} />} />} />
+        <Route path="/roles/:id" element={<ConfiguredRoute render={(props) => <RoleDetailRoute {...props} />} />} />
+        <Route path="/roles" element={<ConfiguredRoute render={(props) => <RolesRoute {...props} />} />} />
+        <Route path="/platform/services" element={<ConfiguredRoute render={(props) => <ScopedServicesRoute {...props} platform />} />} />
+        <Route path="/" element={<WorkspaceDirectory />} />
+        <Route path="/tenants" element={<WorkspaceDirectory />} />
+        <Route path="/my-tenants" element={<WorkspaceDirectory />} />
+        <Route path="/t/:tenantKey/dashboard" element={<WorkspaceDashboard />} />
+        <Route path="/t/:tenantKey/call-specs" element={<ConfiguredRoute render={props => <CallSpecsRoute {...props} />} />} />
+        <Route path="/t/:tenantKey/calls" element={<ConfiguredRoute render={props => <CallsRoute {...props} />} />} />
+        <Route path="/t/:tenantKey/services" element={<ConfiguredRoute render={props => <ServicesRoute {...props} />} />} />
+        <Route path="/getting-started" element={<ConfiguredRoute render={props => <RoutedApp {...props} route={{ kind: "onboarding" }} />} />} />
+        </Route>
         <Route path="/admin/tenants/:tenantKey/call-specs/:callSpecId" element={<ConfiguredRoute render={(props) => <CallSpecEditorRoute {...props} />} />} />
-        <Route path="/admin/tenants/:tenantKey/call-specs" element={<ConfiguredRoute render={(props) => <CallSpecsRoute {...props} />} />} />
-        <Route path="/admin/tenants/:tenantKey/calls" element={<ConfiguredRoute render={(props) => <CallsRoute {...props} />} />} />
         <Route path="/admin/tenants/:tenantKey/calls/:callId" element={<ConfiguredRoute render={(props) => <CallDetailsRoute {...props} />} />} />
-        <Route path="/admin/tenants/:tenantKey/services" element={<ConfiguredRoute render={(props) => <ServicesRoute {...props} />} />} />
-        <Route path="*" element={<Navigate replace to="/admin" />} />
+        <Route path="/admin/*" element={<LegacyPageRedirect />} />
+        <Route path="*" element={<Navigate replace to="/" />} />
       </>
   )));
   useEffect(() => () => router.dispose(), [router]);
@@ -199,7 +224,7 @@ function AuthenticationRoute(props: AppProps & { mode: "setup" | "login" | "reco
               else if (props.mode === "recover") await api.recover(proof ?? "", email, password, password);
               else await api.login(email, password);
               // Session renewal replaces CSRF state; load a fresh document before writes.
-              (props.onAuthenticated ?? (() => window.location.assign("/admin")))();
+              (props.onAuthenticated ?? (() => window.location.assign("/")))();
               return {};
             } catch (error) {
               return { error: error instanceof Error ? error.message : "Unable to sign in." };
@@ -261,7 +286,7 @@ function UsersRoute(props: AppProps) {
       api={api}
       session={session}
       sessionState={sessionState}
-      path="/admin/users"
+      path="/users"
       statusLabel="Loading users…"
       unavailableTitle="Users unavailable"
       unavailableMessage="Your session could not be loaded. Try again shortly."
@@ -312,7 +337,7 @@ function AccountRoute(props: AppProps) {
       api={api}
       session={session}
       sessionState={sessionState}
-      path="/admin/account"
+      path="/account"
       statusLabel="Loading account…"
       unavailableTitle="Account unavailable"
       unavailableMessage="Your account could not be loaded. Try again shortly."
@@ -361,7 +386,7 @@ function UserNewRoute(props: AppProps) {
       api={api}
       session={session}
       sessionState={sessionState}
-      path="/admin/users"
+      path="/users"
       statusLabel="Loading…"
       unavailableTitle="Users unavailable"
       unavailableMessage="Your session could not be loaded. Try again shortly."
@@ -406,7 +431,7 @@ function UserNewRoute(props: AppProps) {
                   roleId: draft.roleId,
                   memberships: draft.memberships,
                 });
-                navigate(`/admin/users/${user.id}`);
+                navigate(`/users/${user.id}`);
                 return {};
               } catch (error: unknown) {
                 if (isSessionExpired(error)) onSessionExpired();
@@ -457,7 +482,7 @@ function UserDetailRoute(props: AppProps) {
       api={api}
       session={session}
       sessionState={sessionState}
-      path="/admin/users"
+      path="/users"
       statusLabel="Loading user…"
       unavailableTitle="Users unavailable"
       unavailableMessage="Your session could not be loaded. Try again shortly."
@@ -565,7 +590,7 @@ function ResetPasswordRoute(props: AppProps) {
       api={api}
       session={session}
       sessionState={sessionState}
-      path="/admin/users"
+      path="/users"
       statusLabel="Loading user…"
       unavailableTitle="Users unavailable"
       unavailableMessage="Your session could not be loaded. Try again shortly."
@@ -663,7 +688,7 @@ function RolesRoute(props: AppProps) {
       api={api}
       session={session}
       sessionState={sessionState}
-      path="/admin/roles"
+      path="/roles"
       statusLabel="Loading roles…"
       unavailableTitle="Roles unavailable"
       unavailableMessage="Your session could not be loaded. Try again shortly."
@@ -711,7 +736,7 @@ function RoleNewRoute(props: AppProps) {
       api={api}
       session={session}
       sessionState={sessionState}
-      path="/admin/roles"
+      path="/roles"
       statusLabel="Loading…"
       unavailableTitle="Roles unavailable"
       unavailableMessage="Your session could not be loaded. Try again shortly."
@@ -734,7 +759,7 @@ function RoleNewRoute(props: AppProps) {
             onSave={async (draft) => {
               try {
                 const { role } = await api.createRole(draft);
-                navigate(`/admin/roles/${role.id}`);
+                navigate(`/roles/${role.id}`);
                 return {};
               } catch (error: unknown) {
                 if (isSessionExpired(error)) onSessionExpired();
@@ -783,7 +808,7 @@ function RoleDetailRoute(props: AppProps) {
       api={api}
       session={session}
       sessionState={sessionState}
-      path="/admin/roles"
+      path="/roles"
       statusLabel="Loading role…"
       unavailableTitle="Roles unavailable"
       unavailableMessage="Your session could not be loaded. Try again shortly."
@@ -846,7 +871,7 @@ function RoleDetailRoute(props: AppProps) {
             onDelete={async () => {
               try {
                 await api.deleteRole(entry.role.id);
-                navigate("/admin/roles");
+                navigate("/roles");
                 return {};
               } catch (error: unknown) {
                 if (isSessionExpired(error)) onSessionExpired();
@@ -871,10 +896,12 @@ function useAuthenticationApi(props: AppProps) {
 }
 
 function useAccessSession(api: AuthenticationApi, onSessionExpired: () => void) {
+  const navigation = useContext(NavigationContext);
   const [session, setSession] = useState<AccessSession | null>(null);
   const [sessionState, setSessionState] = useState<AccessLoadState>("loading");
 
   useEffect(() => {
+    if (navigation) return;
     let active = true;
     api.session().then((current) => {
       if (!active) return;
@@ -886,8 +913,9 @@ function useAccessSession(api: AuthenticationApi, onSessionExpired: () => void) 
       else setSessionState("unavailable");
     });
     return () => { active = false; };
-  }, [api, onSessionExpired]);
+  }, [api, onSessionExpired, navigation]);
 
+  if (navigation) return { session: navigation.session ?? null, sessionState: navigation.sessionUnavailable ? "unavailable" as const : navigation.session ? "ready" as const : "loading" as const };
   return { session, sessionState };
 }
 
@@ -1049,9 +1077,9 @@ function OperationalAccountLinks({ session }: { session: AccessSession | null })
   );
   return (
     <>
-      {link("/admin/account", "Account")}
-      {canReadUsers(role) ? link("/admin/users", "Users") : null}
-      {role.kind ? link("/admin/roles", "Roles") : null}
+      {link("/account", "Account")}
+      {canReadUsers(role) ? link("/users", "Users") : null}
+      {role.kind ? link("/roles", "Roles") : null}
     </>
   );
 }
@@ -1085,21 +1113,6 @@ function ScopedServicesRoute({ platform = false, ...props }: AppProps & { platfo
       }
     />
   );
-}
-
-function RetiredSetupServicesRedirect() {
-  const { tenantKey = "" } = useParams();
-  return (
-    <Navigate
-      replace
-      to={`/admin/tenants/${encodeURIComponent(tenantKey)}/services`}
-    />
-  );
-}
-
-function TenantDirectoryRoute(props: AppProps) {
-  const [searchParams] = useSearchParams();
-  return <RoutedApp {...props} route={{ kind: "tenants", page: readPage(searchParams) }} />;
 }
 
 function CallSpecsRoute(props: AppProps) {
@@ -1139,9 +1152,13 @@ function ServicesRoute(props: AppProps) {
   return <RoutedApp {...props} route={{ kind: "services", tenantKey }} />;
 }
 
-function TenantWorkspaceRedirect() {
-  const { tenantKey = "" } = useParams();
-  return <Navigate replace to={`/admin/tenants/${encodeURIComponent(tenantKey)}/call-specs`} />;
+function LegacyPageRedirect() {
+  const { pathname, search } = useLocation();
+  let path = pathname.replace(/^\/admin(?=\/|$)/, "") || "/";
+  path = path.replace(/^\/tenants\/([^/]+)(.*)$/, (_match, key: string, rest: string) => `/t/${key}${rest || "/dashboard"}`);
+  if (path.endsWith("/setup-services")) path = path.replace(/\/setup-services$/, "/services");
+  if (path === "/onboarding") path = "/getting-started";
+  return <Navigate replace to={`${path}${search}`} />;
 }
 
 function RoutedApp({
@@ -1150,6 +1167,7 @@ function RoutedApp({
   onSessionExpired = redirectExpiredSession,
   route,
 }: AppProps & { route: AdminRoute }) {
+  const navigation = useContext(NavigationContext);
   const routerNavigate = useNavigate();
   const api = useAuthenticationApi({ csrfToken, fetchImpl, onSessionExpired });
   const { session, sessionState } = useAccessSession(api, onSessionExpired);
@@ -1157,9 +1175,12 @@ function RoutedApp({
   const tenantKey = "tenantKey" in route ? route.tenantKey : null;
   const tenantAccess =
     principal && tenantKey ? membershipAccess(principal.user, tenantKey) : undefined;
-  const gatedDestinations = principal
-    ? workspaceDestinationsFor(principal.role, tenantAccess)
-    : undefined;
+  const capabilities = navigation?.data.tenant?.capabilities;
+  const gatedDestinations = capabilities ? [
+    ...(capabilities.calls.read ? ["calls" as const] : []),
+    ...(capabilities.call_specs.read ? ["call-specs" as const] : []),
+    ...(capabilities.services.read || capabilities.api_keys.read ? ["services" as const] : []),
+  ] : principal ? workspaceDestinationsFor(principal.role, tenantAccess) : undefined;
   const [tenants, setTenants] = useState<TenantsPageState>({ status: "loading" });
   const [onboarding, setOnboarding] = useState<OnboardingPageState>({
     tenant: { status: "creating", name: "Demo" },
@@ -1495,7 +1516,7 @@ function RoutedApp({
   }
 
   if (route.kind === "call-specs") {
-    const canCreate = !!principal && canCreateCallSpecs(principal.role, tenantAccess);
+    const canCreate = capabilities ? capabilities.call_specs.write : !!principal && canCreateCallSpecs(principal.role, tenantAccess);
     return (
       <TenantCallSpecsPage
         onNewCallSpec={canCreate ? () => routerNavigate(`/admin/tenants/${encodeURIComponent(route.tenantKey)}/call-specs/new`) : undefined}
@@ -1552,7 +1573,8 @@ function RoutedApp({
     return (
       <TenantServicesPage
         headerActions={headerActions}
-        canConnect={principal ? canWriteTenantCredentials(principal.role, tenantAccess) : false}
+        canReadCredentials={navigation?.data.tenant?.capabilities.api_keys.read ?? false}
+        canConnect={capabilities ? capabilities.api_keys.write : principal ? canWriteTenantCredentials(principal.role, tenantAccess) : false}
         onCreateCredential={(draft) =>
           saveCredential(
             route.tenantKey,
@@ -2249,13 +2271,13 @@ function routeUrl(route: AdminRoute) {
   }
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
 
-  if (route.kind === "onboarding") return "/admin/onboarding";
-  if (route.kind === "tenants") return `/admin${suffix}`;
+  if (route.kind === "onboarding") return "/getting-started";
+  if (route.kind === "tenants") return `/tenants${suffix}`;
   const tenant = encodeURIComponent(route.tenantKey);
   if (route.kind === "call-details") {
     return `/admin/tenants/${tenant}/calls/${encodeURIComponent(route.callId)}`;
   }
-  return `/admin/tenants/${tenant}/${route.kind}${suffix}`;
+  return `/t/${tenant}/${route.kind}${suffix}`;
 }
 
 function readPage(searchParams: URLSearchParams) {

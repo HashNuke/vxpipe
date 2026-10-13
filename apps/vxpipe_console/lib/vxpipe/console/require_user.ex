@@ -26,11 +26,49 @@ defmodule Vxpipe.Console.RequireUser do
         end
 
       {:error, _} ->
-        conn |> UserSession.clear() |> redirect(to: "/auth/login") |> Conn.halt()
+        conn
+        |> UserSession.clear()
+        |> Conn.put_session("vxpipe_return_path", conn.request_path <> query_suffix(conn))
+        |> redirect(to: "/auth/login")
+        |> Conn.halt()
     end
   end
 
+  def allowed_path?(principal, path) when is_binary(path) do
+    uri = URI.parse(path)
+
+    is_nil(uri.scheme) and is_nil(uri.host) and String.starts_with?(path, "/") and
+      not String.starts_with?(path, "//") and not String.contains?(path, ["\\", "\r", "\n"]) and
+      permitted?(principal, String.split(uri.path || "", "/", trim: true))
+  end
+
+  def allowed_path?(_principal, _path), do: false
+
+  defp query_suffix(conn) do
+    conn = Conn.fetch_query_params(conn)
+
+    query =
+      conn.query_params
+      |> Map.take(["page", "q", "role", "call_spec_id"])
+      |> Enum.filter(fn {_key, value} -> is_binary(value) end)
+      |> URI.encode_query()
+
+    if query == "", do: "", else: "?" <> query
+  end
+
+  defp permitted?(principal, ["getting-started"]), do: installed?(principal, "tenants.write")
   defp permitted?(_principal, ["admin"]), do: true
+  defp permitted?(_principal, [directory]) when directory in ["tenants", "my-tenants"], do: true
+  defp permitted?(_principal, ["t", _tenant, "dashboard"]), do: true
+
+  defp permitted?(principal, [section | rest])
+       when section in ["account", "users", "roles", "platform"],
+       do: permitted?(principal, ["admin", section | rest])
+
+  defp permitted?(principal, ["t", tenant, resource])
+       when resource in ["calls", "call-specs", "services"],
+       do: permitted?(principal, ["admin", "tenants", tenant, resource])
+
   defp permitted?(_principal, ["admin", "account"]), do: true
 
   defp permitted?(principal, ["admin", "users" | _]),
@@ -58,7 +96,12 @@ defmodule Vxpipe.Console.RequireUser do
     do: tenant?(principal, "calls.read", tenant)
 
   defp permitted?(principal, ["admin", "tenants", tenant, "services" | _]),
-    do: tenant?(principal, "tenant_services.read", tenant)
+    do:
+      tenant?(principal, "tenant_services.read", tenant) or
+        tenant?(principal, "tenant_api_keys.read", tenant)
+
+  defp permitted?(principal, ["admin", "tenants", tenant, "setup-services"]),
+    do: permitted?(principal, ["admin", "tenants", tenant, "services"])
 
   defp permitted?(_principal, ["admin", "tenants", _tenant]), do: true
 

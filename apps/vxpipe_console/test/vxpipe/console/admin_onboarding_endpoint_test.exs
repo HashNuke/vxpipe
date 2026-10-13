@@ -121,7 +121,7 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
   end
 
   defp admin_csrf(authenticated) do
-    page = authenticated |> recycle() |> https_get("/admin")
+    page = authenticated |> recycle() |> https_get("/account")
     [_, token] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, page.resp_body)
     token
   end

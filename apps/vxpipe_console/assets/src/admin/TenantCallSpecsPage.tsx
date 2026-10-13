@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { AdminLayoutContext } from "./AdminLayoutContext";
+import { useContext, type ReactNode } from "react";
 
 import { shouldInterceptNavigation } from "./shouldInterceptNavigation";
 import { AdminShell } from "./AdminShell";
@@ -36,6 +37,7 @@ export function TenantCallSpecsPage({
   workspaceDestinations?: TenantDestination[];
   linkCalls?: boolean;
 }) {
+  const embedded = useContext(AdminLayoutContext);
   return (
     <AdminShell
       breadcrumbs={[
@@ -49,7 +51,7 @@ export function TenantCallSpecsPage({
         aria-busy={state.status === "loading" ? "true" : undefined}
         className="mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-6"
       >
-        <h1 className="sr-only">Call specs</h1>
+        <h1 className={embedded ? "mb-5" : "sr-only"}>Call Specs</h1>
         <TenantWorkspaceNavigation
           active="call-specs"
           destinations={workspaceDestinations}

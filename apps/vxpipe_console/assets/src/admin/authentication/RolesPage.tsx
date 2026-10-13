@@ -19,10 +19,10 @@ export function RolesPage({
   return (
     <main className="access-page">
       <div className="access-page-heading">
-        <p className="access-lead">Define what people can do. Assign tenants on each user's account.</p>
+        <div><h1>Roles</h1><p className="access-lead">Define what people can do. Assign tenants on each user's account.</p></div>
         <Button
           className="access-primary"
-          onClick={() => onNavigate("/admin/roles/new")}
+          onClick={() => onNavigate("/roles/new")}
         >
           <Plus size={16} aria-hidden />
           Create role
@@ -34,10 +34,10 @@ export function RolesPage({
           return (
           <a
             key={role.id}
-            href={`/admin/roles/${role.id}`}
+            href={`/roles/${role.id}`}
             onClick={(event) => {
               event.preventDefault();
-              onNavigate(`/admin/roles/${role.id}`);
+              onNavigate(`/roles/${role.id}`);
             }}
           >
             <div>

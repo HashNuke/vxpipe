@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { AdminLayoutContext } from "./AdminLayoutContext";
+import { useContext, type ReactNode } from "react";
 
 import { AdminShell } from "./AdminShell";
 import { CallList } from "./CallList";
@@ -39,6 +40,7 @@ export function CallSpecCallsPage({
   workspaceDestinations?: TenantDestination[];
   linkCallDetails?: boolean;
 }) {
+  const embedded = useContext(AdminLayoutContext);
   const selectedCallSpec = state.selectedCallSpecId
     ? state.callSpecs.find(({ id }) => id === state.selectedCallSpecId)
     : null;
@@ -63,7 +65,7 @@ export function CallSpecCallsPage({
         aria-busy={state.status === "loading" ? "true" : undefined}
         className="mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-6"
       >
-        <h1 className="sr-only">Calls</h1>
+        <h1 className={embedded ? "mb-5" : "sr-only"}>Calls</h1>
         <TenantWorkspaceNavigation
           active="calls"
           destinations={workspaceDestinations}

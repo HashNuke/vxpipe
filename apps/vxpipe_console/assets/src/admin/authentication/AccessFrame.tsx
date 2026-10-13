@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
 import { LogOut, UserRound, Users, ShieldCheck } from "lucide-react";
+import { AdminLayoutContext } from "../AdminLayoutContext";
 import { AdminShell } from "../AdminShell";
 import { Button } from "../Button";
 import { canReadUsers } from "./access";
@@ -21,14 +22,15 @@ export function AccessFrame({
   onLogout?: () => void;
   theme?: Theme;
 }) {
+  const embedded = useContext(AdminLayoutContext);
   const links = [
     ...(role && canReadUsers(role)
-      ? [{ path: "/admin/users", label: "Users", icon: Users }]
+      ? [{ path: "/users", label: "Users", icon: Users }]
       : []),
     ...(role?.kind
-      ? [{ path: "/admin/roles", label: "Roles", icon: ShieldCheck }]
+      ? [{ path: "/roles", label: "Roles", icon: ShieldCheck }]
       : []),
-    { path: "/admin/account", label: "Account", icon: UserRound },
+    { path: "/account", label: "Account", icon: UserRound },
   ];
   return (
     <AdminShell
@@ -37,10 +39,10 @@ export function AccessFrame({
         actor ? (
           <div className="access-session">
             <a
-              href="/admin/account"
+              href="/account"
               onClick={(event) => {
                 event.preventDefault();
-                onNavigate?.("/admin/account");
+                onNavigate?.("/account");
               }}
             >
               {actor.email}
@@ -57,7 +59,7 @@ export function AccessFrame({
         ) : undefined
       }
     >
-      {actor ? (
+      {actor && !embedded ? (
         <nav className="access-nav" aria-label="Account administration">
           {links.map((link) => (
             <a

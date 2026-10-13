@@ -78,7 +78,9 @@ defmodule Vxpipe.Console.OperatorLoginFlowTest do
   test "named user sessions reach HTML and JSON admin routes" do
     authenticated = authenticate()
 
-    admin = authenticated |> recycle() |> https_get("/admin")
+    legacy = authenticated |> recycle() |> https_get("/admin")
+    assert redirected_to(legacy) == "/"
+    admin = authenticated |> recycle() |> https_get("/account")
     assert html_response(admin, 200) =~ ~s(id="admin-root")
     assert private_auth_response?(admin)
 

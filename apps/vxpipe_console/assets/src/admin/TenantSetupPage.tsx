@@ -25,6 +25,7 @@ export function TenantSetupPage({
   platform = false,
   platformConnections = [],
   readOnly = false,
+  presentation = "setup",
 }: {
   tenant: SetupTenant;
   connections: SetupConnection[];
@@ -40,6 +41,7 @@ export function TenantSetupPage({
   platform?: boolean;
   platformConnections?: SetupConnection[];
   readOnly?: boolean;
+  presentation?: "setup" | "workspace";
 }) {
   const ready = voiceSetupReady(connections, providers);
   const connected = providers.filter((provider) =>
@@ -96,7 +98,7 @@ export function TenantSetupPage({
 
   return (
     <>
-      {!platform ? (
+      {!platform && presentation === "setup" ? (
         <header className="setup-page-heading setup-services-heading">
           <div className="setup-ready-title" role="status">
             <CircleCheck aria-hidden="true" size={18} />
@@ -112,7 +114,7 @@ export function TenantSetupPage({
       <section aria-labelledby="setup-services-title">
         <div className="setup-section-heading">
           <h1 id="setup-services-title">
-            {platform ? "Platform services" : "Setup services"}
+            {presentation === "workspace" ? (platform ? "Platform Services" : "Services") : (platform ? "Platform services" : "Setup services")}
           </h1>
           {!readOnly ? <Button onClick={onBrowse}>
             <Plus aria-hidden="true" size={16} />
@@ -138,10 +140,10 @@ export function TenantSetupPage({
         <footer className="setup-footer setup-services-footer">
           <Button
             className="setup-primary"
-            disabled={!ready}
+            disabled={presentation === "setup" && !ready}
             onClick={onApiKeys}
           >
-            Continue
+            {presentation === "workspace" ? "API keys" : "Continue"}
             <ArrowRight aria-hidden="true" size={16} />
           </Button>
         </footer>

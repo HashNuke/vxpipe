@@ -18,6 +18,7 @@ defmodule Vxpipe.Console.AdminPageController do
           <meta name="csrf-token" content="#{csrf_token}" />
           <link rel="icon" href="data:," />
           <link rel="stylesheet" href="/assets/admin.css" />
+          <link rel="stylesheet" href="/assets/admin-ui.css" />
           <title>Admin · Vxpipe</title>
         </head>
         <body><div id="admin-root"></div><script type="module" src="/assets/admin.js"></script></body>

@@ -10,6 +10,7 @@ defmodule Vxpipe.Console.RoutePermission do
 
   @spec for_request(String.t(), [String.t()]) :: requirement()
   def for_request("GET", ["admin", "api", "session"]), do: :authenticated
+  def for_request("GET", ["admin", "api", "navigation"]), do: :authenticated
 
   def for_request("GET", ["admin", "api", "role-options"]),
     do: {:installation, "users.read"}
@@ -72,6 +73,9 @@ defmodule Vxpipe.Console.RoutePermission do
 
   def for_request(_method, _segments), do: :unknown
 
+  # Dashboard admits any visible tenant; the Calls boundary conceals foreign identities.
+  defp tenant_requirement("GET", _tenant, ["dashboard"]), do: :authenticated
+
   defp tenant_requirement("GET", tenant, ["providers"]),
     do: {:tenant, "call_specs.read", tenant}
 
@@ -106,7 +110,7 @@ defmodule Vxpipe.Console.RoutePermission do
     do: {:tenant, "calls.read", tenant}
 
   defp tenant_requirement("GET", tenant, ["services"]),
-    do: {:tenant, "tenant_services.read", tenant}
+    do: {:tenant_any, ["tenant_services.read", "tenant_api_keys.read"], tenant}
 
   defp tenant_requirement("GET", tenant, ["service-bindings"]),
     do: {:tenant, "tenant_services.read", tenant}

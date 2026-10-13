@@ -539,7 +539,7 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
   end
 
   defp write(auth, method, path, body) do
-    page = auth |> recycle() |> https_get("/admin")
+    page = auth |> recycle() |> https_get("/account")
     [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, page.resp_body)
     conn = auth |> recycle() |> Plug.Conn.put_req_header("x-csrf-token", csrf)
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ConsoleTemplate } from "@pipecat-ai/voice-ui-kit";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 
@@ -11,14 +11,14 @@ function offerUrl(sessionEndpoint: string): string {
   return sessionEndpoint || DEFAULT_OFFER_URL;
 }
 
-export default function PlaygroundApp() {
+export default function PlaygroundApp({ frame = children => children }: { frame?: (children: ReactNode) => ReactNode }) {
   return (
-    <BrowserRouter basename="/admin/samples">
-      <Routes>
-        <Route path="/pipecat-console" element={<PlaygroundSession />} />
-        <Route path="/transfer" element={<TransferPage />} />
-        <Route path="*" element={<Navigate replace to="/pipecat-console" />} />
-      </Routes>
+    <BrowserRouter>
+      {frame(<Routes>
+        <Route path="/admin/samples/pipecat-console" element={<PlaygroundSession />} />
+        <Route path="/admin/samples/transfer" element={<TransferPage />} />
+        <Route path="*" element={<Navigate replace to="/admin/samples/pipecat-console" />} />
+      </Routes>)}
     </BrowserRouter>
   );
 }

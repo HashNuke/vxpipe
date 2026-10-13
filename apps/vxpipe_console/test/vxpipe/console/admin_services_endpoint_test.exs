@@ -440,7 +440,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     assert anonymous.status in [401, 403]
     refute_received {:operator_credential_created, _, _}
 
-    authenticated = authenticate() |> recycle() |> https_get("/admin")
+    authenticated = authenticate() |> recycle() |> https_get("/account")
     [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, authenticated.resp_body)
 
     assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
@@ -566,7 +566,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     }
 
     configure_credential_repository({:ok, credential})
-    authenticated = authenticate() |> recycle() |> https_get("/admin")
+    authenticated = authenticate() |> recycle() |> https_get("/account")
     [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, authenticated.resp_body)
 
     conn =
@@ -603,7 +603,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       assert json_response(delete(build_conn(), path), 401)
       refute_received {:operator_credential_deleted, _, _}
 
-      authenticated = authenticate() |> recycle() |> https_get("/admin")
+      authenticated = authenticate() |> recycle() |> https_get("/account")
 
       [_, csrf] =
         Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, authenticated.resp_body)
@@ -680,7 +680,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
   end
 
   defp admin_csrf(authenticated) do
-    page = authenticated |> recycle() |> https_get("/admin")
+    page = authenticated |> recycle() |> https_get("/account")
     [_, token] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, page.resp_body)
     token
   end

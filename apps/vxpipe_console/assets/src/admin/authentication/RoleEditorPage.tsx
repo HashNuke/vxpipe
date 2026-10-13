@@ -65,10 +65,10 @@ export function RoleEditorPage({
     <main className="access-page access-editor">
       <a
         className="access-back"
-        href="/admin/roles"
+        href="/roles"
         onClick={(event) => {
           event.preventDefault();
-          onNavigate("/admin/roles");
+          onNavigate("/roles");
         }}
       >
         <ArrowLeft size={16} aria-hidden />
@@ -135,7 +135,7 @@ export function RoleEditorPage({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => onNavigate("/admin/roles")}
+                onClick={() => onNavigate("/roles")}
               >
                 Cancel
               </Button>

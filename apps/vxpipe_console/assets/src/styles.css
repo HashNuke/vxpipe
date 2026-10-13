@@ -314,7 +314,7 @@ body {
   padding: clamp(1.5rem, 4vw, 3rem);
 }
 
-.transfer-panel h1 {
+.transfer-panel h2#transfer-title {
   max-width: 18ch;
   margin: 0 0 0.75rem;
   font-family: "Geist Mono", SFMono-Regular, Consolas, "Liberation Mono", monospace;

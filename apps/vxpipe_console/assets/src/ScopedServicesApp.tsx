@@ -378,6 +378,7 @@ export function ScopedServicesApp({
           <p role="status">Loading services…</p>
         ) : (
           <TenantSetupPage
+            presentation="workspace"
             tenant={tenant}
             connections={primary}
             providers={providers}

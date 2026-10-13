@@ -17,6 +17,17 @@ defmodule Vxpipe.Console.RequireUserAPITest do
        }}
     end
 
+    def authenticate("keys" <> _) do
+      {:ok,
+       %{
+         user_public_id: "keys",
+         account_kind: :member,
+         grants: MapSet.new(["tenant_api_keys.read"]),
+         assigned_tenants: %{"north" => :read},
+         all_tenant_actions: MapSet.new()
+       }}
+    end
+
     def authenticate(_token) do
       {:ok,
        %{
@@ -57,6 +68,21 @@ defmodule Vxpipe.Console.RequireUserAPITest do
 
     assert denied.status == 403
     assert denied.halted
+  end
+
+  test "credential-only readers can open services, but not bindings or foreign tenants" do
+    for {path, allowed?} <- [
+          {"/admin/api/tenants/north/services", true},
+          {"/admin/api/tenants/north/service-bindings", false},
+          {"/admin/api/tenants/south/services", false}
+        ] do
+      result =
+        conn(:get, path)
+        |> init_test_session(%{"vxpipe_user_session" => "keys" <> String.duplicate("x", 39)})
+        |> RequireUserAPI.call(backend: Backend)
+
+      assert result.halted == not allowed?
+    end
   end
 
   test "an unknown action and missing session fail closed" do

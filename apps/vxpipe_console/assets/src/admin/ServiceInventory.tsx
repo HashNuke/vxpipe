@@ -9,26 +9,28 @@ import { capabilityLabels, setupProviders } from "./setupCatalog";
 export function ServiceInventory({
   onEdit,
   services,
+  showCredentials = true,
 }: {
   onEdit?: (service: ServiceInventoryItem) => void;
   services: ServiceInventoryItem[];
+  showCredentials?: boolean;
 }) {
   return (
     <div aria-label="Services">
       <div>
         <div
           aria-hidden="true"
-          className="hidden grid-cols-[minmax(190px,1.2fr)_minmax(180px,1fr)_150px_36px] gap-4 border-b border-[var(--admin-line)] px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.05em] text-[var(--admin-muted)] sm:grid"
+          className={`hidden gap-4 border-b border-[var(--admin-line)] px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.05em] text-[var(--admin-muted)] sm:grid ${showCredentials ? "grid-cols-[minmax(190px,1.2fr)_minmax(180px,1fr)_150px_36px]" : "grid-cols-[minmax(190px,1fr)_150px_36px]"}`}
         >
           <span>Service</span>
-          <span>Credentials</span>
+          {showCredentials ? <span>Credentials</span> : null}
           <span>Added / Updated</span>
           <span />
         </div>
         <ul className="m-0 list-none divide-y divide-[var(--admin-row-line)] p-0">
           {services.map((service) => (
             <li
-              className="grid grid-cols-[minmax(0,1fr)_36px] items-start gap-x-3 gap-y-2 border-b border-[var(--admin-row-line)] px-4 py-4 sm:grid-cols-[minmax(190px,1.2fr)_minmax(180px,1fr)_150px_36px] sm:items-center sm:gap-4 sm:border-b-0"
+              className={`grid grid-cols-[minmax(0,1fr)_36px] items-start gap-x-3 gap-y-2 border-b border-[var(--admin-row-line)] px-4 py-4 sm:items-center sm:gap-4 sm:border-b-0 ${showCredentials ? "sm:grid-cols-[minmax(190px,1.2fr)_minmax(180px,1fr)_150px_36px]" : "sm:grid-cols-[minmax(190px,1fr)_150px_36px]"}`}
               key={service.id}
             >
               <div className="flex min-w-0 items-start gap-3">
@@ -44,7 +46,7 @@ export function ServiceInventory({
                   </div>
                 </div>
               </div>
-              <div className="col-start-1 min-w-0 text-sm sm:col-auto">
+              {showCredentials ? <div className="col-start-1 min-w-0 text-sm sm:col-auto">
                 {service.credentialPreview?.map((preview) => (
                   <div
                     className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-2 font-mono text-xs text-[var(--admin-muted)]"
@@ -63,7 +65,7 @@ export function ServiceInventory({
                     </code>
                   </div>
                 ))}
-              </div>
+              </div> : null}
               <time
                 className="col-start-1 text-xs text-[var(--admin-muted)] sm:col-auto sm:text-sm"
                 dateTime={service.updatedAt}

@@ -7,7 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { App } from "./App";
+import { App } from "./test/ResourceApp";
 
 const tenant = {
   key: "AAAAAAAAAAAAAAAA",
@@ -53,7 +53,7 @@ test("an unavailable optional service does not block sample readiness or progres
           ],
         }),
   );
-  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf" fetchImpl={withSession(fetchImpl)} />);
   expect(
     await screen.findByRole("button", { name: "Load sample call specs" }),
   ).toBeEnabled();
@@ -74,7 +74,7 @@ test("retries a failed effective directory read without treating it as empty set
       ? response({ tenant, bindings: [binding("google"), binding("deepgram")], model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities })
       : response({}, 503);
   });
-  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf" fetchImpl={withSession(fetchImpl)} />);
   expect(await screen.findByRole("alert")).toBeVisible();
   expect(
     screen.queryByRole("button", { name: "Load sample call specs" }),
@@ -107,7 +107,7 @@ test("onboarding counts inherited services and opens the tenant service inventor
       });
     return response({}, 404);
   });
-  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf" fetchImpl={withSession(fetchImpl)} />);
   expect(
     await screen.findByRole("button", { name: "Load sample call specs" }),
   ).toBeEnabled();
@@ -123,7 +123,7 @@ test("onboarding counts inherited services and opens the tenant service inventor
   fireEvent.click(screen.getByRole("button", { name: "Manage services" }));
   expect(await screen.findByText("No services yet")).toBeVisible();
   expect(window.location.pathname).toBe(
-    "/admin/tenants/AAAAAAAAAAAAAAAA/services",
+    "/t/AAAAAAAAAAAAAAAA/services",
   );
 });
 
@@ -142,10 +142,16 @@ test("unavailable and alternate named bindings cannot make onboarding samples re
           ],
         }),
   );
-  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf" fetchImpl={withSession(fetchImpl)} />);
   await screen.findByRole("button", { name: "Manage services" });
   expect(
     screen.queryByRole("button", { name: "Load sample call specs" }),
   ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Manage services" })).toBeEnabled();
 });
+
+function withSession(fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
+  return (input: RequestInfo | URL, init?: RequestInit) => String(input) === "/admin/api/session"
+    ? response({ user: { id: "owner", email: "owner@example.test", enabled: true, roleId: "super", memberships: [] }, role: { id: "super", name: "Superadmin", kind: "superadmin", grants: [], description: "" } })
+    : fetchImpl(input, init);
+}

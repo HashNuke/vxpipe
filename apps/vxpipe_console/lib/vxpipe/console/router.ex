@@ -83,6 +83,31 @@ defmodule Vxpipe.Console.Router do
     post "/operator/sign-out", Vxpipe.Console.LegacyOperatorSessionController, :reject
   end
 
+  scope "/" do
+    pipe_through [:browser, :operator_pages]
+    get "/", Vxpipe.Console.ConsoleLandingController, :index
+  end
+
+  scope "/" do
+    pipe_through [:browser, :operator_pages, :user_pages]
+    get "/tenants", Vxpipe.Console.CanonicalPageController, :index
+    get "/getting-started", Vxpipe.Console.CanonicalPageController, :index
+    get "/my-tenants", Vxpipe.Console.CanonicalPageController, :index
+    get "/account", Vxpipe.Console.CanonicalPageController, :index
+    get "/users", Vxpipe.Console.CanonicalPageController, :index
+    get "/users/new", Vxpipe.Console.CanonicalPageController, :index
+    get "/users/:id", Vxpipe.Console.CanonicalPageController, :index
+    get "/users/:id/reset-password", Vxpipe.Console.CanonicalPageController, :index
+    get "/roles", Vxpipe.Console.CanonicalPageController, :index
+    get "/roles/new", Vxpipe.Console.CanonicalPageController, :index
+    get "/roles/:id", Vxpipe.Console.CanonicalPageController, :index
+    get "/platform/services", Vxpipe.Console.CanonicalPageController, :index
+    get "/t/:tenant_key/dashboard", Vxpipe.Console.CanonicalPageController, :index
+    get "/t/:tenant_key/calls", Vxpipe.Console.CanonicalPageController, :index
+    get "/t/:tenant_key/call-specs", Vxpipe.Console.CanonicalPageController, :index
+    get "/t/:tenant_key/services", Vxpipe.Console.CanonicalPageController, :index
+  end
+
   scope "/auth" do
     pipe_through [:browser, :operator_pages]
 
@@ -105,6 +130,7 @@ defmodule Vxpipe.Console.Router do
     pipe_through :user_api
 
     get "/session", Vxpipe.Console.UserSessionController, :show
+    get "/navigation", Vxpipe.Console.NavigationController, :show
     get "/role-options", Vxpipe.Console.RoleManagementController, :options
     patch "/account", Vxpipe.Console.AccountController, :update
     get "/users", Vxpipe.Console.UserManagementController, :index
@@ -137,6 +163,7 @@ defmodule Vxpipe.Console.Router do
          :install_samples
 
     get "/tenants", Vxpipe.Console.AdminTenantsController, :index
+    get "/tenants/:tenant_key/dashboard", Vxpipe.Console.TenantDashboardController, :show
     get "/tenants/:tenant_key/providers", Vxpipe.Console.AdminProviderCatalogController, :index
 
     get "/tenants/:tenant_key/providers/:provider/models",
@@ -255,7 +282,7 @@ defmodule Vxpipe.Console.Router do
   scope "/admin" do
     pipe_through [:browser, :operator_pages, :user_pages]
 
-    get "/", Vxpipe.Console.AdminPageController, :index
-    get "/*path", Vxpipe.Console.AdminPageController, :index
+    get "/", Vxpipe.Console.CanonicalPageController, :legacy
+    get "/*path", Vxpipe.Console.CanonicalPageController, :legacy
   end
 end

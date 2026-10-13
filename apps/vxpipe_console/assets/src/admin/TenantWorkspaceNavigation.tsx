@@ -1,4 +1,5 @@
-import type { MouseEvent, ReactNode } from "react";
+import { useContext, type MouseEvent, type ReactNode } from "react";
+import { AdminLayoutContext } from "./AdminLayoutContext";
 
 import type { TenantContext } from "./callSpecTypes";
 import { shouldInterceptNavigation } from "./shouldInterceptNavigation";
@@ -18,12 +19,14 @@ export function TenantWorkspaceNavigation({
   onSelect?: (destination: TenantDestination) => void;
   destinations?: TenantDestination[];
 }) {
+  const embedded = useContext(AdminLayoutContext);
+  if (embedded) return actions ? <div className="mb-5 flex justify-end">{actions}</div> : null;
   return (
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <nav aria-label="Tenant workspace" className="min-w-0 sm:flex-1">
         <div className="flex gap-6">
           {destinations.map((destination) => {
-            const label = destination === "call-specs" ? "Call specs" : destination === "calls" ? "Calls" : "Services";
+            const label = destination === "call-specs" ? "Call Specs" : destination === "calls" ? "Calls" : "Services";
             const href = `/admin/tenants/${encodeURIComponent(tenant.key)}/${destination}`;
 
             return (

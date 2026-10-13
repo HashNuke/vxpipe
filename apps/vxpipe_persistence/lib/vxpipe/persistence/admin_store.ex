@@ -24,6 +24,16 @@ defmodule Vxpipe.Persistence.AdminStore do
   @service_inventory_limit 100
 
   @impl true
+  defdelegate search_tenants(repo, scope, query, limit, offset),
+    to: Vxpipe.Persistence.TenantDirectoryStore,
+    as: :search
+
+  @impl true
+  defdelegate tenant_candidates(repo, scope, limit),
+    to: Vxpipe.Persistence.TenantDirectoryStore,
+    as: :candidates
+
+  @impl true
   def list_tenants(repo, limit, offset) do
     page_query =
       from(tenant in Tenant,
@@ -183,6 +193,30 @@ defmodule Vxpipe.Persistence.AdminStore do
         {:ok, {tenant, call_specs, call_specs_truncated, calls, total}}
       end
     end)
+  end
+
+  @impl true
+  def recent_calls(repo, tenant_key, limit) do
+    query =
+      from(call in Call,
+        join: tenant in Tenant,
+        on: tenant.id == call.tenant_id,
+        join: revision in CallSpecRevision,
+        on: revision.id == call.call_spec_revision_id,
+        join: call_spec in CallSpec,
+        on: call_spec.id == revision.call_spec_id,
+        left_join: publication in CallDetailsPublication,
+        on: publication.id == call.latest_details_publication_id,
+        where: tenant.key == ^tenant_key,
+        order_by: [desc: call.created_at, desc: call.public_id],
+        limit: ^limit,
+        select:
+          {call.public_id, call_spec.public_id, fragment("?->>'name'", revision.source),
+           revision.revision, call.state, call.created_at, call.started_at, call.ended_at,
+           call.terminal_reason, publication.completeness}
+      )
+
+    repository_result(fn -> {:ok, Enum.map(repo.all(query), &call_summary/1)} end)
   end
 
   @impl true

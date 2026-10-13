@@ -3,6 +3,7 @@
 @import "@xyflow/react/dist/style.css" layer(components);
 @import "@vxpipe/react/styles.css";
 @import "./tenantSetup.css";
+@import "./navigation/navigation.css";
 @import "./authentication/authentication.css";
 @source "./**/*.{ts,tsx}";
 
