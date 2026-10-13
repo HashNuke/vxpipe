@@ -59,10 +59,9 @@ export function UsersPage({
   return (
     <main className="access-page">
       <div className="access-page-heading">
-        <p className="access-lead">Manage who can access your installation and its tenants.</p>
         {actorRole.kind ? (
           <Button
-            className="access-primary"
+            className="access-primary ml-auto"
             type="button"
             onClick={() => onNavigate("/admin/users/new")}
           >
