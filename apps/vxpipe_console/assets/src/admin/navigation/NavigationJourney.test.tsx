@@ -95,3 +95,8 @@ test("legacy service read permission does not disclose credential metadata", () 
   expect(screen.queryByText("Credentials")).not.toBeInTheDocument();
   expect(screen.queryByText(/\*{4}/)).not.toBeInTheDocument();
 });
+
+test("tenant selection needs no review hint", () => {
+  render(<NavigationJourney initialPath="/" />);
+  expect(screen.queryByText("Select a tenant to open its workspace.")).not.toBeInTheDocument();
+});

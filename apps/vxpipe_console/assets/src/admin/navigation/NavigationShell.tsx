@@ -29,7 +29,7 @@ export function NavigationShell({ children, role, user, tenants, selected, path,
       {(["tenant", "platform"] as const).map(group => items[group].length ? <nav key={group} aria-label={group === "tenant" ? "Tenant" : "Platform"}>
         <h2>{group === "tenant" ? "Tenant" : "Platform"}</h2>
         {items[group].map(item => { const Icon = icons[item.label as keyof typeof icons]; return <a key={item.href} href={href(item.href)} aria-current={path === item.href || path.startsWith(`${item.href}/`) ? "page" : undefined} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); navigate(item.href); }}><Icon size={17} aria-hidden />{item.label}</a>; })}
-      </nav> : group === "tenant" && !selected ? <p key={group} className="navigation-prompt">Select a tenant to open its workspace.</p> : null)}
+      </nav> : null)}
     </div>
     <div className="navigation-account"><span title={email ?? user?.email}>{email ?? user?.email}</span>
       <a href={href("/account")} aria-current={path === "/account" ? "page" : undefined} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); navigate("/account"); }}><UserRound size={17} aria-hidden />My account</a>

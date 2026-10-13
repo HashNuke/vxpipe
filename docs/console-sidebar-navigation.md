@@ -12,8 +12,7 @@ remains authoritative. This extends the Operator's Bench visual system.
 A sticky, 232px-wide left rail holds Vxpipe, immediately followed by a searchable tenant
 picker. Tenant links are Calls, Call Specs, Services; Platform links are Tenants,
 Roles, Users, Services. My account and Logout stay at the bottom. Omit destinations
-without effective permission and omit empty groups. Before choosing a tenant,
-show a short selection prompt in the Tenant region. The selected tenant label
+without effective permission and omit empty groups. The selected tenant label
 links to its dashboard; the picker always switches to `/t/:tenant/dashboard`.
 The picker footer links to the appropriate directory, including My tenants for
 assigned users, without adding an extra top-level item to the requested menu.
