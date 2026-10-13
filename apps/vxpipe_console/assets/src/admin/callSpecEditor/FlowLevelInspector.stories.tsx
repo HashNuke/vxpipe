@@ -26,7 +26,7 @@ function CallSettingsStory({ theme, initial = editorFixture, initialTab = "defau
     <FlowLevelInspector document={document} onChange={onChange} issues={validateSource(document.source)} catalog={modelCatalogFixture} tab={tab} onTabChange={onTabChange} />
   </div></main></EditorTheme>;
 }
-const meta = { title: "Vxpipe/Console/Call spec editor/Call settings inspector", component: CallSettingsStory, parameters: { layout: "fullscreen" }, args: { theme: "dark" }, argTypes: { theme: { control: "select", options: ["dark", "light"] } } } satisfies Meta<typeof CallSettingsStory>;
+const meta = { title: "Vxpipe/Console/Call spec editor/components/Call settings inspector", component: CallSettingsStory, parameters: { layout: "fullscreen" }, args: { theme: "dark" }, argTypes: { theme: { control: "select", options: ["dark", "light"] } } } satisfies Meta<typeof CallSettingsStory>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};

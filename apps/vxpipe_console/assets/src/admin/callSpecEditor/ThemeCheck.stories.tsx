@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ThemeCheck } from "./ThemeCheck";
 import "../admin.css";
 const meta = {
-  title: "Vxpipe/Console/Call spec editor/Theme check",
+  title: "Vxpipe/Console/Call spec editor/components/Theme check",
   component: ThemeCheck,
   parameters: { layout: "fullscreen" },
   args: { theme: "dark" },

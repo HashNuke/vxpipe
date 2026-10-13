@@ -19,7 +19,7 @@ function VoicePickerStory({ provider, model, voice, theme, fail, loading }: Prop
   </main></EditorTheme>;
 }
 const meta = {
-  title: "Vxpipe/Console/Call spec editor/Voice picker", component: VoicePickerStory, parameters: { layout: "fullscreen" },
+  title: "Vxpipe/Console/Call spec editor/components/Voice picker", component: VoicePickerStory, parameters: { layout: "fullscreen" },
   args: { provider: "cartesia", model: "sonic-3.6", voice: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4", theme: "dark" },
 } satisfies Meta<typeof VoicePickerStory>;
 export default meta;

@@ -37,7 +37,7 @@ if (tools.source.participants.intake?.type === "agent") tools.source.participant
 const history = structuredClone(initial);
 if (history.source.participants.intake?.type === "agent") history.source.participants.intake.transfer_history = { mode: "last_n_spoken", turns: 3 };
 const meta = {
-  title: "Vxpipe/Console/Call spec editor/Agent inspector",
+  title: "Vxpipe/Console/Call spec editor/components/Agent inspector",
   component: AgentInspectorStory,
   parameters: { layout: "fullscreen" },
   args: { theme: "dark", initial, initialTab: "prompt" },

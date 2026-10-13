@@ -42,7 +42,7 @@ overrides.source.participants.specialist!.capabilities = { speech_to_text: { pro
 overrides.source.participants.specialist!.while_present = { record_audio: false, transcript_routes: { caller: ["specialist"] } };
 
 const meta = {
-  title: "Vxpipe/Console/Call spec editor/Human inspectors",
+  title: "Vxpipe/Console/Call spec editor/components/Human inspectors",
   component: HumanInspectorStory,
   parameters: { layout: "fullscreen" },
   args: { entry: false, theme: "dark", initial: phone },

@@ -59,7 +59,7 @@ function ErrorPresentationStory({ theme, initial, result, drawer = false, source
     }} />
   </div></main></EditorTheme>;
 }
-const meta = { title: "Vxpipe/Console/Call spec editor/Error presentation", component: ErrorPresentationStory, parameters: { layout: "fullscreen" }, args: { theme: "dark", initial } } satisfies Meta<typeof ErrorPresentationStory>;
+const meta = { title: "Vxpipe/Console/Call spec editor/components/Error presentation", component: ErrorPresentationStory, parameters: { layout: "fullscreen" }, args: { theme: "dark", initial } } satisfies Meta<typeof ErrorPresentationStory>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const FieldErrors: Story = { args: { initial: invalid } };

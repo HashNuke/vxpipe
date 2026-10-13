@@ -30,7 +30,7 @@ function SettingsPanelStory({ panel, theme, initial = editorFixture, catalog = m
   </div></main></EditorTheme>;
 }
 const meta = {
-  title: "Vxpipe/Console/Call spec editor/Call settings panels",
+  title: "Vxpipe/Console/Call spec editor/components/Call settings panels",
   component: SettingsPanelStory,
   parameters: { layout: "fullscreen" },
   args: { theme: "dark", panel: "direction" },

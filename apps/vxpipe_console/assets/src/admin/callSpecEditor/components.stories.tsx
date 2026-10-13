@@ -29,7 +29,7 @@ const header = {
   onShowIssues: () => {},
 };
 const meta = {
-  title: "Vxpipe/Console/Call spec editor/Components",
+  title: "Vxpipe/Console/Call spec editor/components/Canvas controls",
   parameters: { layout: "fullscreen" },
 } satisfies Meta;
 export default meta;
