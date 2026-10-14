@@ -127,14 +127,17 @@ describes domain/port routing; its [healthcheck documentation](https://docs.rail
 describes deployment readiness. Hosted tests must establish actual streaming,
 WS lifetime and restart behavior; configuration alone does not prove them.
 
-Prepare the Go project's `Dockerfile`, `.dockerignore`, `railway.toml`,
+Prepare the Go project's `Dockerfile`, `.dockerignore`, `.railway/railway.go`,
 `.env.example` and deployment runbook before handoff. Pin the nonroot runtime and
 codec dependencies, use one HTTP/WS listener, and close WS connections explicitly
 on shutdown. Test the image locally with an injected nondefault port, read-only
 filesystem, memory limits and SIGTERM. Railway's
-[config-as-code guide](https://docs.railway.com/config-as-code) documents repository
-configuration; user-managed service variables, domain/DNS and resource settings
-must be called out separately in the runbook.
+[IaC guide](https://docs.railway.com/infrastructure-as-code) now replaces legacy
+`railway.toml`/`railway.json` for new services; legacy support ends 2026-12-01.
+Pin the beta Go authoring SDK in an isolated deployment module and use a named
+partial for this service. Explain the user's CLI plan/apply workflow and equivalent
+UI settings: a repository push alone does not apply IaC. Domain/DNS and resource
+allocation remain separately documented user operations.
 
 Deployment is performed by the user. Local preparation is independently
 reviewable; hosted tests and Vxpipe endpoint cutover remain pending until their
@@ -159,12 +162,12 @@ Reviewed on 2026-10-14; refresh and pin exact schemas/SDK versions in checkpoint
 
 ## Verification evidence
 
-The Go server, authenticated discovery and explicit PCM synthesis/batch recognition
-are implemented. Pinned SDK discovery and PCM round trips pass, including response
-schema validation. Independent Morse fixtures and Go/Elixir codec interoperability
-pass; these establish the first two checkpoints, not full API compatibility.
-`bin/setup` completed successfully. Full format/stream/WS conformance, Vxpipe
-provider integration, benchmarks, browser checks and Railway deployment remain
+The Go server, authenticated discovery, HTTP synthesis formats/streaming and PCM
+batch recognition are implemented. Pinned SDK discovery, all four HTTP TTS routes
+and PCM round trips pass, including response-schema validation. Independent Morse
+fixtures and Go/Elixir codec interoperability pass; these establish A–C, not full
+API compatibility. `bin/setup` completed successfully. Full optional-field/WS
+conformance, Vxpipe provider integration, benchmarks, browser checks and Railway deployment remain
 unchecked implementation acceptance gates. The
 [planning labnote](../labnotes/20261014-1947-remote-morse-milestone.md) records the
 separate specification review and exact planning validation.

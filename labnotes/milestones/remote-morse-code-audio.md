@@ -1,11 +1,12 @@
 # Morse-code API service and providers
 
-Status: implementation started, 2026-10-14. **2 of 9
-implementation checkpoints complete (A and B).** The user requested planning first and
+Status: implementation started, 2026-10-14. **3 of 9
+implementation checkpoints complete (A–C).** The user requested planning first and
 clarified the scope as complete ElevenLabs **TTS/STT** compatibility, including
 HTTP, streaming, WebSockets, discovery and authentication. Other ElevenLabs
-product APIs are outside this milestone. The Go server/catalog and HTTP PCM speech slice are implemented;
-other API surfaces and Vxpipe provider integration remain pending.
+product APIs are outside this milestone. The Go server/catalog, HTTP TTS
+formats/streaming and PCM batch STT are implemented; other API surfaces and
+Vxpipe provider integration remain pending.
 
 ## Runnable outcome
 
@@ -290,17 +291,30 @@ the HTTP STT endpoint, and invalid/silent input never invents a transcript.
 
 Dependencies: B.
 
-- [ ] Add red tests for first-chunk delivery, timed response framing, client
+- [x] Add red tests for first-chunk delivery, timed response framing, client
   cancellation, output limits and slow readers before implementing streams.
-- [ ] Implement both binary and timestamped TTS variants. Preserve word gaps
+- [x] Implement both binary and timestamped TTS variants. Preserve word gaps
   and sample-derived character timing through text normalization/chunking.
-- [ ] Implement the pinned default MP3 response and complete the TTS output
+- [x] Implement the pinned default MP3 response and complete the TTS output
   format matrix. Prefer existing codec libraries; if a subprocess is necessary,
   use bounded pipes, cancellation and image-pinned codecs with no temp files.
-- [ ] Maintain bounded queues, write deadlines and per-request cancellation.
+- [x] Maintain bounded queues, write deadlines and per-request cancellation.
   Distinguish errors before headers from terminal failures after streaming starts.
-- [ ] Verify actual decodability, duration and MIME types with an independent
+- [x] Verify actual decodability, duration and MIME types with an independent
   decoder. Verify first bytes arrive before full synthesis completes.
+
+Evidence: all 28 nonstreaming and 21 streaming formats pass independent decode
+and packet-clock checks; MP3 is the default. Both timed routes preserve original
+and normalized characters with sample-derived timing. Official SDK 2.72.0 consumes
+all four routes and both timed schemas validate. An early-output check leaves over
+290 seconds of a 300-second input unrendered on cancellation. Real HTTP disconnect
+and repeated write-deadline failure tests release owned work; race/vet pass.
+FFmpeg uses bounded pipes only. The pinned nonroot image passes all 49 binary
+format cases and SDK checks on a read-only filesystem with an injected port and
+512 MiB limit; Railway configuration/handoff work has begun in I.
+Alignment uses the source PCM clock; MP3 decoders can expose codec priming/padding,
+documented in the Go ledger for H's final semantic review. Optional request fields,
+WebSockets, provider sessions and hosted behavior remain unchecked.
 
 Exit: HTTP clients consume every TTS response variant, including omitted
 `output_format`, and a disconnected slow reader releases all owned work.
@@ -437,12 +451,12 @@ Railway account, domain or hosted endpoint; record hosted acceptance separately.
 
 Preparation deliverables in the Go repository:
 
-- [ ] Add a pinned multistage `Dockerfile`, `.dockerignore`, `railway.toml`,
+- [x] Add a pinned multistage `Dockerfile`, `.dockerignore`, current Railway IaC,
   `.env.example` and `docs/railway-deployment.md`. The image builds independently
   of the Vxpipe checkout, runs as nonroot and includes required codec libraries
   and CA certificates. Use an exec-form entrypoint for signal delivery; Go reads
   `PORT` directly rather than expecting shell expansion in Docker arguments.
-- [ ] Configure Railway's Dockerfile build, `/readyz` deployment healthcheck,
+- [x] Configure Railway's Dockerfile build, `/readyz` deployment healthcheck,
   healthcheck timeout and bounded restart policy using its current config schema.
   Specify `HOST=0.0.0.0`; honor Railway's injected `PORT` and route public traffic
   to that listener. Document settings managed in the Railway UI rather than
@@ -488,6 +502,16 @@ ready for the user. Hosted exit: HTTPS/WSS at the deployed host pass the same
 contracts as localhost and Vxpipe switches through runtime configuration alone.
 If the user has not deployed yet, report preparation complete and hosted checks
 pending; leave I and the overall milestone unchecked.
+
+Deployment specification correction, 2026-10-14: current official Railway docs
+deprecate `railway.toml`/`railway.json`, exclude new services and specify a
+2026-12-01 cutoff for legacy files. Use `.railway/railway.go` with a separately
+pinned IaC SDK/module and a named service partial; keep the Go beta authoring
+dependency isolated from the application. Validate the generated configuration
+locally and document the user's plan/apply or equivalent UI workflow. Pushing
+the repository does not itself apply IaC. This corrects the deployment mechanism
+without changing the requested Railway destination or user-owned deployment.
+See [Railway IaC](https://docs.railway.com/infrastructure-as-code).
 
 ## Final acceptance gates
 

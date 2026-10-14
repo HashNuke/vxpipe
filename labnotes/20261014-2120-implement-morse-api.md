@@ -77,3 +77,47 @@
   drain and runbook are preparation requirements. Hosted acceptance stays open.
 - Updated the companion design's stale prototype statement to the actual A/B
   evidence. This specification review does not mark F/G/I as implemented.
+
+## Checkpoint C — HTTP formats, streams and timing
+
+- Initial format red: format/encoder APIs missing; HTTP default MP3 returned 422
+  and `/stream` returned 404. Timestamp routes separately failed 404 before code.
+- Implemented all 28 nonstreaming formats and 21 streaming formats, MP3 default,
+  bounded FFmpeg pipes, eight admitted synthesis requests and 30-second write/
+  processing deadlines. Disconnect and deadline-write errors release work.
+- Original/normalized alignment follows the source PCM clock. Packet framing
+  preserves streaming bytes and emits completed characters once. MP3 physical
+  decoded offsets can include codec priming/padding; documented for H review.
+- Timed streams exposed repeated EOF becoming a closed-file error after joining
+  the codec process. A dedicated regression failed before retaining EOF state.
+- Independent decoding checks pass for every format. An early-output/cancel test
+  leaves more than 290 seconds unrendered from a 300-second input. Official SDK
+  2.72.0 consumes all four routes and validates both timestamp response schemas.
+- Go formatting, vet and race checks pass. Committed HTTP implementation as
+  `1210135`; no Vxpipe runtime code changed after the earlier full root gates.
+
+## Early Railway preparation and specification correction
+
+- Current official Railway documentation supersedes the original `railway.toml`
+  proposal: new services use IaC; legacy config stops being read on 2026-12-01.
+  Updated design/milestone accordingly. The user still owns actual deployment.
+- Added `.railway/railway.go` using isolated pinned Go SDK v0.3.0. Its named
+  partial owns only the Morse service. Local compilation/vet and rendered graph
+  confirm Dockerfile build, `/readyz`, one replica, three failure retries and
+  ten-second drain. Railway CLI/account plan/apply has not been run.
+- Pinned Go/Debian image digests and codec packages; added a nonroot multistage
+  image, allowlisted build context and deployment/cutover/rollback runbook.
+- Codec startup red: availability-check function missing. Real synthetic encode
+  checks now succeed and a missing executable fails; the binary checks before
+  listening, so it cannot report readiness with unavailable codecs.
+- The actual image ran read-only, UID/GID 65532, with 512 MiB and two CPUs and an
+  injected container port different from the host port. All 49 binary format
+  cases independently decode; official SDK discovery, speech and timed TTS pass.
+- SIGTERM exited 0 without OOM, the read-only container diff was empty, and PCM
+  SDK speech passed again after restart. Removed the test container afterward.
+- Added a CI image lane for read-only injected-port SDK/format checks and clean
+  SIGTERM, plus isolated IaC module compilation. No hosted service was changed.
+- Go deployment preparation committed as `4a6bd80`; the HTTP format implementation
+  is `1210135`. Documentation links, workflow syntax and diff whitespace pass.
+- I remains incomplete: WS lifecycle/container checks, full compatibility/load
+  acceptance, user deployment and hosted Vxpipe cutover are still pending.
