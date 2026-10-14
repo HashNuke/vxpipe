@@ -1,11 +1,11 @@
 # Morse-code API service and providers
 
-Status: specification drafted and locally reviewed, 2026-10-14. **0 of 9
+Status: implementation started, 2026-10-14. **0 of 9
 implementation checkpoints complete.** The user requested planning first and
 clarified the scope as complete ElevenLabs **TTS/STT** compatibility, including
 HTTP, streaming, WebSockets, discovery and authentication. Other ElevenLabs
-product APIs are outside this milestone. No service or provider is implemented
-by this document.
+product APIs are outside this milestone. The Go server/catalog slice is implemented;
+speech endpoints and Vxpipe integration remain pending.
 
 ## Runnable outcome
 
@@ -211,22 +211,30 @@ together. Commit only when the user requests commits.
 
 Dependencies: prerequisites above; no Go project assumed to exist.
 
-- [ ] Inspect the sibling project's instructions/status before creating or editing
+- [x] Inspect the sibling project's instructions/status before creating or editing
   it. Initialize a standalone Go module, pinned toolchain, `cmd/morsecode-audio`,
   focused internal packages and CI; no Vxpipe runtime dependency.
 - [ ] Freeze the speech API ledger from official reference/schema and clients,
   including every format, auth location, default, error and retention conflict.
   Record accepted exceptions separately from implemented parity.
-- [ ] Write failing HTTP tests, then add `net/http` startup, `/healthz`, `/readyz`,
+- [x] Write failing HTTP tests, then add `net/http` startup, `/healthz`, `/readyz`,
   nonempty-key acceptance, missing-key rejection and static Morse discovery.
   Select a maintained WS library before D; avoid implementing RFC framing.
-- [ ] Bind loopback locally and `0.0.0.0:$PORT` on Railway; configure shutdown,
+- [x] Bind loopback locally and `0.0.0.0:$PORT` on Railway; configure shutdown,
   request limits and content-free diagnostics. Reserve 8787 only if available.
-- [ ] Document and validate Go `HOST` and `PORT` independently of Vxpipe's URL.
+- [x] Document and validate Go `HOST` and `PORT` independently of Vxpipe's URL.
   Provide a local environment example and run command; reject invalid ports,
   report bind conflicts clearly, and do not require Railway credentials locally.
-- [ ] Smoke with two different synthetic keys and no key. Catalog IDs must be
+- [x] Smoke with two different synthetic keys and no key. Catalog IDs must be
   usable by subsequent endpoints; health probes require no compatibility key.
+
+Evidence: the Go repository now has a runnable server, pinned Go 1.26.1, CI,
+HTTP schema snapshot and field inventory. Initial package tests failed before
+implementation; focused tests, vet and race checks now pass. The pinned ElevenLabs
+Python SDK 2.72.0 reads discovery and six responses validate against the captured
+schema. A real binary served a nondefault local port and shut down on SIGTERM.
+Complete WS contract fixtures and retention decisions remain open, so A stays
+in progress. See [implementation evidence](../20261014-2120-implement-morse-api.md).
 
 Exit: a clean checkout starts locally and official-client discovery plus auth
 fixtures pass. Missing scope decisions stay recorded; writing the ledger does
