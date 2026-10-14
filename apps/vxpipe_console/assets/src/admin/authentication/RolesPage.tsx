@@ -19,7 +19,7 @@ export function RolesPage({
   return (
     <main className="access-page">
       <div className="access-page-heading">
-        <div><h1>Roles</h1><p className="access-lead">Define what people can do. Assign tenants on each user's account.</p></div>
+        <div><h1>Roles</h1></div>
         <Button
           className="access-primary"
           onClick={() => onNavigate("/roles/new")}

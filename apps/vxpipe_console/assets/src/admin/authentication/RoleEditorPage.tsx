@@ -76,7 +76,7 @@ export function RoleEditorPage({
         title={role ? role.name : "Create role"}
         description={
           role?.kind
-            ? "This built-in role has a protected permission policy."
+            ? undefined
             : "Build a role from the actions your team needs."
         }
       />

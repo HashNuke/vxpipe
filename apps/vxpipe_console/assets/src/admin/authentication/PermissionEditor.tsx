@@ -131,7 +131,7 @@ export function PermissionEditor({
               </div>
               {group.tenant ? (
                 independentScopes ? (
-                  <>
+                  <div className="access-permission-scopes">
                     <select
                       aria-label={`Read scope for ${group.label}`}
                       value={read.scope}
@@ -160,23 +160,23 @@ export function PermissionEditor({
                       <option value="assigned_tenants">Write: Assigned tenants</option>
                       <option value="all_tenants">Write: All tenants</option>
                     </select>
-                  </>
+                  </div>
                 ) : (
-                <select
-                  aria-label={`Scope for ${group.label}`}
-                  value={scope}
-                  disabled={readOnly || (!read && !write)}
-                  onChange={(event) =>
-                    changeScope(group.resource, event.target.value as Scope)
-                  }
-                >
-                  <option value="assigned_tenants">Assigned tenants</option>
-                  <option value="all_tenants">All tenants</option>
-                </select>
+                  <div className="access-permission-scopes">
+                    <select
+                      aria-label={`Scope for ${group.label}`}
+                      value={scope}
+                      disabled={readOnly || (!read && !write)}
+                      onChange={(event) =>
+                        changeScope(group.resource, event.target.value as Scope)
+                      }
+                    >
+                      <option value="assigned_tenants">Assigned tenants</option>
+                      <option value="all_tenants">All tenants</option>
+                    </select>
+                  </div>
                 )
-              ) : (
-                <span className="access-muted">Installation</span>
-              )}
+              ) : null}
             </div>
           );
         })}

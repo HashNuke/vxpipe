@@ -155,7 +155,6 @@
 }
 .access-ui select {
   cursor: pointer;
-  padding-right: 24px;
 }
 .access-ui input[readonly] {
   background: transparent;
@@ -436,6 +435,7 @@
   align-items: center;
   gap: 20px;
   padding: 20px 12px;
+  margin-inline: -12px;
   border-bottom: 1px solid var(--admin-row-line);
 }
 .access-role-list > a:hover {
@@ -450,11 +450,20 @@
 }
 .access-permission-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px 185px;
+  grid-template-columns: minmax(0, 1fr) 150px;
   gap: 16px;
   align-items: center;
   padding: 16px 0;
   border-bottom: 1px solid var(--admin-row-line);
+}
+.access-permission-scopes {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 200px));
+  gap: 12px;
+}
+.access-permission-scopes select {
+  width: 100%;
 }
 .access-grants {
   display: grid;
@@ -562,7 +571,7 @@
   .access-role-list > a {
     grid-template-columns: minmax(0, 1fr) 16px;
     gap: 8px;
-    padding: 16px 0;
+    padding: 16px 12px;
   }
   .access-role-list > a > :nth-child(2) {
     grid-row: 2;
@@ -584,4 +593,8 @@
   .access-component {
     padding: 20px 16px;
   }
+}
+
+@media (max-width: 480px) {
+  .access-permission-scopes { grid-template-columns: minmax(0, 200px); }
 }

@@ -358,3 +358,26 @@ failures (133 excluded). Frontend 730 tests, typecheck, lint, final focused test
 desktop/mobile user and role views, and the grant-migration integration test passed.
 Tenant and Calls checkpoints are `52893cea` and `04990a6e`; the user/role checkpoint
 commits this checklist and its evidence with the implementation.
+
+### Built-in role copy follow-up
+
+- [x] Remove “This built-in role has a protected permission policy.” from the role editor.
+- [x] Verify the rendered built-in role view and completion checks.
+
+- [x] Give tenant, role and recent-call hover backgrounds side gutters while keeping text aligned with page headings.
+- [x] Inset permission dropdown arrows from the right edge.
+- [x] Inspect hover gutters and dropdown spacing on desktop/mobile.
+
+- [x] Apply native dropdown arrow inset consistently across Console forms; retain existing inset icons in custom dropdowns.
+- [x] Remove the Installation scope label and group paired Read/Write scope dropdowns on their own row.
+
+- [x] Keep Read/Write scope dropdowns compact (200px maximum each), on a separate row; stack on narrow screens.
+- [x] Explain platform-service administration versus permission to use shared services in call specs from backend enforcement.
+
+- [x] Put single scope dropdowns, including Tenant API keys, on their own compact row too.
+
+- [x] Remove “Define what people can do. Assign tenants on each user's account.” from the Roles page.
+
+UI follow-up acceptance: desktop/mobile browser checks, 730 frontend tests, final
+7 permission tests, typecheck/lint and all five root gates passed (3,788 tests;
+zero failures, 133 excluded).
