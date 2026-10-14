@@ -385,9 +385,12 @@ Dependencies: C, D.
 - [x] Support one continuous codec stream for open-ended text input. Verify all
   21 streaming formats emit audio before input ends, and cancel/join codecs even
   when their input producer is waiting for another fragment.
-- [ ] Write red single-context and multi-context transcript fixtures before
-  handlers; cover initialization, incremental text, flush/end-input, keepalive,
-  close-context/close-socket and terminal errors.
+- [x] Write red single-context fixtures and implement initialization, incremental
+  text, flush/end-input, keepalive, original/normalized alignment and final/error
+  messages. Verify bounded initialization, header/first-message/token auth,
+  browser CORS and cancellation while PCM/MP3 codecs await more input.
+- [ ] Write red multi-context transcript fixtures before its handler; cover
+  initialization, incremental text, flush, close-context/close-socket and errors.
 - [ ] Implement interleaved context generation with fair bounded output and
   exactly correlated audio/alignment/final messages. Closing one context must
   not close or contaminate another. Preserve Morse gaps across text fragments.
@@ -403,13 +406,21 @@ Partial evidence: all three token types issue through the pinned SDK/schema;
 batch and realtime STT consume tokens without keys. Clock-controlled tests cover
 15-minute expiry and capacity recovery; 16 concurrent consumers produce exactly
 one accepted transcript. Invalid explicit tokens never fall back to supplied keys.
-Cross-origin STT and HTTP preflight fixtures pass; rendered-browser acceptance,
-TTS token consumption, bearer and first-message authentication remain pending.
-The Go race suite/vet and official SDK token smoke pass. E remains incomplete.
+Single-context TTS consumes tokens and supports bearer/header/initial-message
+credentials. Native Chrome 154 passes cross-origin initial-key/token TTS and
+token STT against the read-only container. This is browser API evidence, not
+acceptance of every browser SDK. The Go race suite/vet pass. E remains incomplete.
 The incremental text planner also passes independent tone/space intervals and
 84 fragmentation comparisons across seven rates. Continuous codec output passes
-21 early-packet/independent-decode cases and starved-input cleanup. These primitives
-do not yet implement WS scheduling, protocol handlers or original-text alignment.
+21 early-packet/independent-decode cases and starved-input cleanup. Single-context
+PCM reproduces finite synthesis with original/normalized chunk-relative alignment;
+repeated flush keeps the connection usable and EOS emits one final then closes.
+Pinned Python SDK 2.72.0 passes PCM/default MP3 via a trusted local TLS fixture;
+disabling fixture session tickets resolved intermittent pre-upgrade stalls in ten
+consecutive Python 3.12/3.13 runs. Hosted TLS remains unverified. The production
+image passes active STT/PCM-TTS/MP3-TTS SIGTERM drain with exit 0, no OOM or file
+changes. Go commit `601f8cf` contains this slice. Multi-context scheduling, remaining
+auth surfaces and full optional-field/codec timing semantics remain E/H work.
 
 Exit: a browser-capable client generates Morse with both WS APIs and consumes
 a token once; idle or abandoned sockets release memory and execution workers.

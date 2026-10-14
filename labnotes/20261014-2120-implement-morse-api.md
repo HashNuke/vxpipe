@@ -227,3 +227,37 @@
 - The transport must still supply bounded queues and source Close semantics,
   implement single/multi-context messages and alignment, and prove context/socket
   ownership under cancellation. E remains incomplete.
+
+## Checkpoint E — single-context TTS WebSockets
+
+- Revalidated worktree/process state; the previous goal turn progressed the
+  deployment acceptance specification. Committed that documentation as `6b17d0af`.
+  The earlier Python smoke process had exited; the native server remained live.
+- Completed the pending handler work and committed Go `601f8cf`. Initial tests
+  had failed 404/401 before implementation. The handler preserves Morse gaps
+  across fragments, emits audio before future input, supports repeated flush and
+  emits one final plus close 1000 at EOS. Output codecs/queues have explicit bounds.
+- Header, bearer query/header, initialization key/bearer and single-use tokens
+  pass; invalid explicit tokens never fall back. Five-second initialization,
+  malformed frames/options, queue/capacity errors, disconnect and drain pass.
+  Full Go race suite and vet pass. No HTTP bearer or multi-context parity claim.
+- Python SDK 2.72.0 forces WSS for an HTTP base URL, so local acceptance uses
+  trusted TLS termination with unchanged byte forwarding. Intermittent stalls
+  occurred before any HTTP upgrade reached Go. Changing Python versions or
+  isolating the SDK in a subprocess did not eliminate them. Disabling session
+  tickets in the temporary fixture yielded ten consecutive successful PCM/MP3
+  runs across Python 3.12/3.13; the upstream OpenSSL ticket hazard is a plausible
+  explanation, not a proven root cause. Certificate verification remains enabled,
+  the SDK is unmodified, and hosted URLs bypass this fixture entirely.
+- Pin websockets 17.2 for repeatable protocol tests. The upstream final schema's
+  optional-only shape overlaps audio in oneOf; validate selected branches and
+  independently assert terminal ordering rather than silently editing the pin.
+- Built the exact production image; SDK discovery, HTTP TTS, batch/realtime STT,
+  token and TTS WS checks pass on an injected nondefault port. Chrome 154 from a
+  separate origin passes first-message/token TTS (48,000 bytes, one final, normal
+  close) and independent E token STT. No audible playback or browser SDK claim.
+- Extended CI and drain fixtures to active STT plus open-input PCM and MP3 TTS.
+  The read-only 512-MiB/two-CPU container exited 0 without OOM or filesystem diff;
+  removed that owned test container. Python syntax/document links and diff checks
+  pass. Sent start and checkpoint CLI notifications. E remains incomplete and
+  the milestone remains 4/9; multi-context TTS, Vxpipe integration and H/I remain.
