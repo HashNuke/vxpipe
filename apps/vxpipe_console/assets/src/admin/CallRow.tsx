@@ -3,10 +3,10 @@ import { ArrowUpRight } from "lucide-react";
 import { CallStateBadge } from "./CallStateBadge";
 import type { CallDirectoryItem } from "./callTypes";
 import type { TenantContext } from "./callSpecTypes";
-import { formatAdminRelativeTime } from "./formatAdminRelativeTime";
+import { formatCallDuration } from "./formatCallDuration";
 import {
   formatAdminLocalTimestamp,
-  formatAdminTimestamp,
+  formatCallTimestamp,
 } from "./formatAdminTimestamp";
 
 export function CallRow({
@@ -29,33 +29,24 @@ export function CallRow({
         >
           {call.id}
         </span>
-      </span>
-      <span className="min-w-0">
-        <span
-          className="block truncate text-sm"
-          title={call.callSpecName ?? call.callSpecId}
-        >
-          {call.callSpecName ?? call.callSpecId}
-        </span>
-        <span className="mt-1 inline-flex rounded-sm bg-[var(--admin-soft)] px-1.5 py-0.5 font-mono text-[0.68rem] font-semibold uppercase tracking-[0.04em] text-[var(--admin-muted)]">
-          Version {call.callSpecRevision}
+        <span className="mt-1 flex min-w-0 items-baseline gap-2 text-xs text-[var(--admin-muted)]">
+          <span className="truncate" title={call.callSpecName ?? call.callSpecId}>
+            {call.callSpecName ?? call.callSpecId}
+          </span>
+          <span className="shrink-0">v{call.callSpecRevision}</span>
         </span>
       </span>
       <span>
         <CallStateBadge state={call.state} />
       </span>
-      <time
-        className="min-w-0"
-        dateTime={call.createdAt}
-        title={formatAdminLocalTimestamp(call.createdAt)}
-      >
-        <span className="block truncate text-sm text-[var(--admin-ink)]">
-          {formatAdminTimestamp(call.createdAt)}
-        </span>
+      <span className="min-w-0 tabular-nums">
+        <time className="block whitespace-nowrap text-sm" dateTime={call.createdAt} title={formatAdminLocalTimestamp(call.createdAt)}>
+          {formatCallTimestamp(call.createdAt)}
+        </time>
         <span className="mt-1 block text-xs text-[var(--admin-muted)]">
-          {formatAdminRelativeTime(call.createdAt)}
+          {formatCallDuration(call.state === "ended" ? call.durationMs : null)}
         </span>
-      </time>
+      </span>
       {linkDetails ? (
         <ArrowUpRight
           aria-hidden="true"
@@ -67,7 +58,7 @@ export function CallRow({
     </>
   );
 
-  const rowClass = `grid min-w-0 grid-cols-[minmax(220px,1.35fr)_minmax(180px,1fr)_104px_190px_16px] items-center gap-4 px-4 py-4 text-inherit no-underline${linkDetails ? " group transition-colors hover:bg-[var(--admin-soft)]" : ""}`;
+  const rowClass = `grid min-w-0 grid-cols-[minmax(260px,1fr)_104px_210px_16px] items-center gap-4 px-4 py-4 text-inherit no-underline${linkDetails ? " group transition-colors hover:bg-[var(--admin-soft)]" : ""}`;
 
   return (
     <li>

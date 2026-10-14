@@ -18,6 +18,12 @@ defmodule Vxpipe.Console.Test.AdminRepository do
   end
 
   @impl true
+  def search_call_specs({owner, result}, tenant_key, query, limit, offset) do
+    send(owner, {:call_spec_search, tenant_key, query, limit, offset})
+    result
+  end
+
+  @impl true
   def list_calls({owner, result}, tenant_key, call_spec_id, limit, offset) do
     send(owner, {:operator_calls_requested, tenant_key, call_spec_id, limit, offset})
     result

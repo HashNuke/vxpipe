@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 
 import {
   parseCallPage,
+  parseCallDirectoryItem,
   parseCreatedCredential,
   parseCallSpecPage,
   parseDemoTenant,
@@ -488,3 +489,16 @@ test(`keeps saved ${name} credentials readable in the tenant service inventory`,
   ]);
 });
 }
+
+
+test("maps finalized call duration and rejects malformed duration values", () => {
+  const call = {
+    id: "call", call_spec_id: "spec", call_spec_name: "Intake", call_spec_revision: 14,
+    state: "ended", created_at: "2026-09-17T02:20:00Z",
+  };
+  expect(parseCallDirectoryItem({ ...call, duration_ms: 724000 }).durationMs).toBe(724000);
+  expect(parseCallDirectoryItem({ ...call, duration_ms: null }).durationMs).toBeNull();
+  for (const duration_ms of [-1, 1.5, "1000", Infinity]) {
+    expect(() => parseCallDirectoryItem({ ...call, duration_ms })).toThrow();
+  }
+});

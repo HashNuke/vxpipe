@@ -697,6 +697,34 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     assert Enum.any?(selected_call_specs, &(&1.id == "call-spec-099"))
   end
 
+  test "searches all tenant call specs by literal name or ID before paging" do
+    tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
+    foreign = insert_tenant("BBBBBBBBBBBBBBBB", "Other tenant")
+
+    for number <- 1..105 do
+      spec = insert_call_spec(tenant, "spec-#{number}")
+      insert_revision(spec, 1, "Intake #{number}")
+    end
+
+    spec = insert_call_spec(foreign, "foreign")
+    insert_revision(spec, 1, "Intake 105")
+
+    assert {:ok, {[%{id: "spec-105"}], false}} =
+             AdminStore.search_call_specs(Repo, tenant.key, "intake 105", 25, 0)
+
+    assert {:ok, {rows, true}} = AdminStore.search_call_specs(Repo, tenant.key, "intake", 25, 0)
+    assert length(rows) == 25
+
+    assert {:ok, {last, false}} =
+             AdminStore.search_call_specs(Repo, tenant.key, "intake", 25, 100)
+
+    assert length(last) == 5
+    assert {:ok, {[], false}} = AdminStore.search_call_specs(Repo, tenant.key, "%", 25, 0)
+
+    assert {:ok, {[%{id: "spec-105"}], false}} =
+             AdminStore.search_call_specs(Repo, tenant.key, "spec-105", 25, 0)
+  end
+
   defp sequence(values) do
     key = {__MODULE__, make_ref()}
     Process.put(key, values)

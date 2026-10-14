@@ -54,6 +54,11 @@ defmodule Vxpipe.Calls.AdminRepository do
   @callback list_call_specs(context(), String.t(), pos_integer(), non_neg_integer()) ::
               {:ok, {Tenant.t(), [CallSpecSummary.t()], non_neg_integer()}} | {:error, term()}
 
+  @doc "Literal tenant call-spec name/ID search, latest names, filtered before pagination."
+  @callback search_call_specs(context(), String.t(), String.t(), pos_integer(), non_neg_integer()) ::
+              {:ok, {[CallSpecFilter.t()], boolean()}} | {:error, term()}
+  @optional_callbacks search_call_specs: 5
+
   @callback list_calls(
               context(),
               String.t(),

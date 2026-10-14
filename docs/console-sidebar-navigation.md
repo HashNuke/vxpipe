@@ -257,3 +257,23 @@ effects, metadata-only dashboards, scoped Setup capability, CSRF submission,
 dashboard redirect, remote directory and picker queries, stale-query cancellation,
 and responsive Storybook rendering. Exact gate results are recorded in the
 [review labnote](../labnotes/20261013-2152-tenant-directory-review.md).
+
+### Calls directory presentation and filter
+
+The Calls list uses **Call info**, **State**, and **Time** columns. Call info
+contains the call ID above the recorded call-spec name and compact revision
+(`v14`). Time shows a local timestamp (`Sep 16, 2026, 07:50am`) above a compact
+finalized duration (`1h 12m 6s`, `12m 4s`, or `56s`). Ongoing calls and calls with
+no recorded start/end pair show a dash. Duration measures recorded start to end;
+preparation time is excluded. The directory payload supplies nullable
+`duration_ms`; the browser floors to whole seconds.
+
+`GET /admin/api/tenants/:key/calls/spec-options?q=...&page=...` searches the
+current tenant's latest call-spec names and IDs. It requires `calls.read`, not
+`call_specs.read`, and returns `{options:[{id,name}],has_more}`. Search is a
+case-insensitive literal substring, applied in storage before pagination. Pages
+contain at most 25 options, ordered by latest name then ID; input is bounded to
+256 bytes. The picker debounces queries, aborts obsolete requests, and offers
+Load more. Its selected label comes from the calls response, which resolves
+selected specs beyond the initial 100 choices. Searching does not change the
+selected filter until an option is chosen.

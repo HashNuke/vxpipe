@@ -279,3 +279,25 @@ Approved UI simplification supersedes the row identity/Setup presentation above:
 
 The backend permission/search contracts remain unchanged. The current UI reaches
 Services through the sidebar. Evidence: [follow-up labnotes](../20261014-0516-simplify-tenant-rows.md).
+
+## Calls list follow-up — 2026-10-14
+
+Approved review requests: searchable call-spec dropdown within the tenant;
+combine call ID and call-spec name/revision under “Call info”; replace relative
+creation age with finalized duration below the absolute local timestamp.
+
+Design review: keep the existing Calls permission for this lookup rather than
+requiring Call Specs access. Search storage before pagination to include specs
+outside the initial 100. Use recorded start/end times rather than elapsed age;
+missing or unfinished durations remain unknown. Keep filtering and call-list
+pagination independent. No prerequisite milestone change is needed.
+
+- [x] Add tenant-authorized, paginated backend call-spec choice search.
+- [x] Connect the searchable picker with loading, empty, error, and Load more states.
+- [x] Merge call identity and spec name/revision; display compact finalized duration.
+- [x] Inspect desktop/mobile Storybook, including themed popup and selection.
+- [x] Finish required gates and commit the coherent Calls checkpoint. Five umbrella
+  gates passed (3,785 tests); frontend 728 full-suite tests, final focused tests,
+  typecheck, lint and desktop/mobile browser verification passed.
+
+Evidence: [Calls follow-up labnotes](../20261014-0528-refine-call-directory.md).

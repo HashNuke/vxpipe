@@ -120,7 +120,7 @@ test("searches, selects, and resets a call spec filter through injected actions"
     screen.queryByRole("option", { name: "Delivery rescheduling" }),
   ).not.toBeInTheDocument();
   fireEvent.click(
-    screen.getByRole("option", { name: "Appointment reminders" }),
+    await screen.findByRole("option", { name: "Appointment reminders" }),
   );
   expect(selectCallSpec).toHaveBeenCalledWith("appointment-reminders");
 
@@ -178,18 +178,18 @@ test("keeps valid empty filters distinct from unknown filters", () => {
 test("shows the compact call directory columns and only public lifecycle states", () => {
   render(<CallSpecCallsPage state={populated} />);
 
-  expect(screen.getByText("ID")).toBeVisible();
-  expect(screen.getAllByText("Call spec")).toHaveLength(2);
+  expect(screen.getByText("Call info")).toBeVisible();
+  expect(screen.getAllByText("Call spec")).toHaveLength(1);
   expect(screen.getByText("State")).toBeVisible();
   expect(screen.getByText("Time")).toBeVisible();
   expect(screen.getByText("Ongoing")).toBeVisible();
   expect(screen.getAllByText("Ended")).toHaveLength(2);
   expect(screen.queryByText("Archive")).not.toBeInTheDocument();
   expect(screen.queryByText("Duration")).not.toBeInTheDocument();
-  expect(screen.getByText("Version 4")).toBeVisible();
+  expect(screen.getByText("v4")).toBeVisible();
 });
 
-test("shows local call time with relative time underneath", () => {
+test("shows local call time with a dash for an unfinished duration", () => {
   const createdAt = "2026-09-15T09:30:00.000Z";
   const { container } = render(
     <CallSpecCallsPage
@@ -211,7 +211,8 @@ test("shows local call time with relative time underneath", () => {
 
   const time = container.querySelector(`time[datetime="${createdAt}"]`);
   expect(time).not.toBeNull();
-  expect(time).toHaveTextContent(/ago/);
+  expect(time?.parentElement).toHaveTextContent("—");
+  expect(time).not.toHaveTextContent(/ago/);
   expect(time).toHaveAttribute("title");
 });
 
@@ -337,13 +338,13 @@ test("call story links to a standalone journey tab while preserving the director
   expect(window.location.hash).toBe("#/admin/tenants/tn_demo_01/call-specs");
 });
 
-test("call story keeps the selected call spec in its URL and visible results", () => {
+test("call story keeps the selected call spec in its URL and visible results", async () => {
   window.history.replaceState({}, "", "/iframe.html?id=admin-calls--populated");
   render(<CallSpecCallsStory scenario="populated" theme="dark" />);
 
   fireEvent.click(screen.getByRole("combobox", { name: "Call spec" }));
   fireEvent.click(
-    screen.getByRole("option", { name: "Appointment reminders" }),
+    await screen.findByRole("option", { name: "Appointment reminders" }),
   );
 
   expect(window.location.hash).toBe(
@@ -352,12 +353,12 @@ test("call story keeps the selected call spec in its URL and visible results", (
   expect(screen.getAllByRole("link", { name: /^open call/i })).toHaveLength(2);
 });
 
-test("call story clears stale pagination when its call spec filter changes", () => {
+test("call story clears stale pagination when its call spec filter changes", async () => {
   render(<CallSpecCallsStory scenario="paginated" theme="dark" />);
 
   fireEvent.click(screen.getByRole("combobox", { name: "Call spec" }));
   fireEvent.click(
-    screen.getByRole("option", { name: "Appointment reminders" }),
+    await screen.findByRole("option", { name: "Appointment reminders" }),
   );
 
   expect(screen.getAllByRole("link", { name: /^open call/i })).toHaveLength(2);
@@ -370,4 +371,11 @@ test("call story clears stale pagination when its call spec filter changes", () 
   expect(
     screen.queryByRole("button", { name: "Next page" }),
   ).not.toBeInTheDocument();
+});
+
+test("groups the spec version under call identity and finalized duration under time", () => {
+  render(<CallSpecCallsPage state={{ ...populated, calls: [{ ...populated.calls[1], durationMs: 4326000 }] }} />);
+  const row = screen.getByRole("link", { name: /open call 018f27a2/i });
+  expect(within(row).getByText("Delivery rescheduling").closest("span.min-w-0")?.parentElement).toHaveTextContent("v2");
+  expect(within(row).getByText("1h 12m 6s").parentElement?.querySelector("time")).not.toBeNull();
 });

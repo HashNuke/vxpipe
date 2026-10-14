@@ -84,7 +84,8 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
                  "call_spec_name" => "Delivery rescheduling",
                  "call_spec_revision" => 3,
                  "state" => "ongoing",
-                 "created_at" => "2026-09-17T02:20:00Z"
+                 "created_at" => "2026-09-17T02:20:00Z",
+                 "duration_ms" => nil
                },
                %{
                  "id" => "018f27a2-51d5-77c9-a44f-e5c648bf8495",
@@ -92,7 +93,8 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
                  "call_spec_name" => "Delivery rescheduling",
                  "call_spec_revision" => 2,
                  "state" => "ended",
-                 "created_at" => "2026-09-17T02:10:00Z"
+                 "created_at" => "2026-09-17T02:10:00Z",
+                 "duration_ms" => 1000
                }
              ],
              "pagination" => %{
@@ -141,6 +143,31 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
     assert json_response(anonymous, 401) == %{
              "error" => %{"code" => "session_required"}
            }
+  end
+
+  test "searches tenant call spec choices with a bounded page" do
+    configure_admin_repository({:ok, {[%CallSpecFilter{id: "intake", name: "Intake"}], true}})
+
+    conn =
+      authenticate()
+      |> recycle()
+      |> get("/admin/api/tenants/#{@tenant_key}/calls/spec-options?q=intake&page=2")
+
+    assert json_response(conn, 200) == %{
+             "options" => [%{"id" => "intake", "name" => "Intake"}],
+             "has_more" => true
+           }
+
+    assert_received {:call_spec_search, @tenant_key, "intake", 25, 25}
+
+    invalid =
+      authenticate()
+      |> recycle()
+      |> get("/admin/api/tenants/#{@tenant_key}/calls/spec-options?q[]=bad")
+
+    assert json_response(invalid, 422)["error"]["code"] == "invalid_search"
+    anonymous = https_get("/admin/api/tenants/#{@tenant_key}/calls/spec-options")
+    assert json_response(anonymous, 401)
   end
 
   defp authenticate do

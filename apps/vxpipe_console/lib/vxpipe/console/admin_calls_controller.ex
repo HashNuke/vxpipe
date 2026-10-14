@@ -43,6 +43,28 @@ defmodule Vxpipe.Console.AdminCallsController do
     end
   end
 
+  def spec_options(conn, %{"tenant_key" => tenant_key} = params) do
+    with {:ok, page} <- AdminPageParameter.parse(params),
+         {:ok, {options, has_more}} <-
+           Vxpipe.Calls.CallSpecSearch.search(
+             conn.assigns.user_principal,
+             tenant_key,
+             Map.get(params, "q", ""),
+             page
+           ) do
+      json(conn, %{options: Enum.map(options, &call_spec_json/1), has_more: has_more})
+    else
+      {:error, reason} when reason in [:invalid_search, :invalid_page] ->
+        conn |> put_status(422) |> json(%{error: %{code: "invalid_search"}})
+
+      {:error, reason} when reason in [:tenant_not_found, :forbidden, :invalid_tenant_key] ->
+        conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})
+
+      {:error, _reason} ->
+        conn |> put_status(503) |> json(%{error: %{code: "call_spec_search_unavailable"}})
+    end
+  end
+
   defp call_spec_filter(params) do
     case Map.get(params, "call_spec_id") do
       nil ->

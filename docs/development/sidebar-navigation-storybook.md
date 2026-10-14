@@ -122,3 +122,8 @@ story are removed. **Tenants / Create** has normal, denied, creation-error, pend
 and metadata-only role fixtures. Submit the form in error/pending fixtures to
 exercise that state. Creation lands on Dashboard. Rows show name and created age; Services is accessed
 through the sidebar when permitted. Dates are fixture timestamps, not production records.
+
+The populated Calls story also demonstrates the searchable call-spec picker,
+merged Call info column, local date/time and finalized durations. Storybook uses
+tenant fixture search with the production pagination contract; the application
+uses `/admin/api/tenants/:key/calls/spec-options` for storage-backed search.

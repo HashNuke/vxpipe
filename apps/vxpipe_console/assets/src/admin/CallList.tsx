@@ -15,13 +15,12 @@ export function CallList({
 }) {
   return (
     <div aria-label="Calls" className="overflow-x-auto">
-      <div className="min-w-[760px]">
+      <div className="min-w-[640px]">
         <div
           aria-hidden="true"
-          className="grid grid-cols-[minmax(220px,1.35fr)_minmax(180px,1fr)_104px_190px_16px] gap-4 border-b border-[var(--admin-line)] px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.05em] text-[var(--admin-muted)]"
+          className="grid grid-cols-[minmax(260px,1fr)_104px_210px_16px] gap-4 border-b border-[var(--admin-line)] px-4 py-3 font-mono text-xs font-bold uppercase tracking-[0.05em] text-[var(--admin-muted)]"
         >
-          <span>ID</span>
-          <span>Call spec</span>
+          <span>Call info</span>
           <span>State</span>
           <span>Time</span>
           <span className="sr-only">Open</span>

@@ -138,6 +138,7 @@ function directoryItem(call: CallSummary): CallDirectoryItem {
     state:
       call.state === "ended" || call.state === "failed" ? "ended" : "ongoing",
     createdAt: call.createdAt,
+    durationMs: call.startedAt && call.endedAt ? Math.max(0, Date.parse(call.endedAt) - Date.parse(call.startedAt)) : null,
   };
 }
 

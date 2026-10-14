@@ -9,6 +9,14 @@ import { CallSpecCallsPage } from "./CallSpecCallsPage";
 import { callDetailsStoryHref } from "./adminStoryHref";
 import { adminStoryRoute } from "./adminStoryRoute";
 
+// Storybook models the same paginated search contract with this tenant's fixtures.
+const searchCallSpecs: import("./callSpecSearch").CallSpecSearch = async (query, page) => {
+  const options = callFixture("populated").callSpecs.filter((option) =>
+    `${option.name ?? ""} ${option.id}`.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+  return { options: options.slice((page - 1) * 25, page * 25), hasMore: options.length > page * 25 };
+};
+
 function shiftTimestamp(value: string, days: number): string;
 function shiftTimestamp(value: string | null, days: number): string | null;
 function shiftTimestamp(value: string | null, days: number): string | null {
@@ -88,6 +96,7 @@ export function CallSpecCallsStory({
 
   return (
     <CallSpecCallsPage
+      searchCallSpecs={searchCallSpecs}
       onNextPage={() => setPage((current) => Math.min(3, current + 1))}
       onPreviousPage={() => setPage((current) => Math.max(1, current - 1))}
       onSelectCallSpec={(callSpecId) => {

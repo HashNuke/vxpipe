@@ -199,6 +199,11 @@ defmodule Vxpipe.Console.Router do
          :publish
 
     get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index
+
+    get "/tenants/:tenant_key/calls/spec-options",
+        Vxpipe.Console.AdminCallsController,
+        :spec_options
+
     get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
     get "/tenants/:tenant_key/services", Vxpipe.Console.AdminServicesController, :index
 

@@ -1,3 +1,4 @@
+import { callSpecSearch } from "./admin/callSpecSearch";
 import { TenantCreationPage } from "./admin/navigation/TenantCreationPage";
 import { NavigationError } from "./admin/navigation/navigationApi";
 import { NavigationContext } from "./admin/navigation/navigationContext";
@@ -1175,6 +1176,7 @@ function RoutedApp({
   const { session, sessionState } = useAccessSession(api, onSessionExpired);
   const principal = sessionState === "ready" ? toOperationalSession(session) : null;
   const tenantKey = "tenantKey" in route ? route.tenantKey : null;
+  const searchCallSpecs = useMemo(() => callSpecSearch(fetchImpl, tenantKey ?? "", onSessionExpired), [fetchImpl, tenantKey, onSessionExpired]);
   const tenantAccess =
     principal && tenantKey ? membershipAccess(principal.user, tenantKey) : undefined;
   const capabilities = navigation?.data.tenant?.capabilities;
@@ -1547,6 +1549,7 @@ function RoutedApp({
   if (route.kind === "calls") {
     return (
       <CallSpecCallsPage
+        searchCallSpecs={searchCallSpecs}
         headerActions={headerActions}
         linkCallDetails
         onNextPage={() => navigate({ ...route, page: route.page + 1 })}

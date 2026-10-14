@@ -1,3 +1,4 @@
+import type { CallSpecSearch } from "./callSpecSearch";
 import { AdminLayoutContext } from "./AdminLayoutContext";
 import { useContext, type ReactNode } from "react";
 
@@ -15,6 +16,7 @@ import {
 
 export function CallSpecCallsPage({
   state,
+  searchCallSpecs,
   theme = "dark",
   onSelectTenants,
   onSelectTenant,
@@ -28,6 +30,7 @@ export function CallSpecCallsPage({
   linkCallDetails,
 }: {
   state: CallSpecCallsPageState;
+  searchCallSpecs?: CallSpecSearch;
   theme?: "dark" | "light";
   onSelectTenants?: () => void;
   onSelectTenant?: () => void;
@@ -76,6 +79,8 @@ export function CallSpecCallsPage({
           <div className="grid w-full min-w-0 max-w-full gap-1.5 text-xs font-semibold text-[var(--admin-muted)] sm:w-80">
             <span>Call spec</span>
             <CallSpecCombobox
+                key={state.tenant.key}
+                search={searchCallSpecs}
               onSelect={onSelectCallSpec}
               options={state.callSpecs}
               selectedId={state.selectedCallSpecId}
@@ -90,7 +95,7 @@ export function CallSpecCallsPage({
           >
             Show all calls
           </button>
-          {state.callSpecsTruncated ? (
+          {state.callSpecsTruncated && !searchCallSpecs ? (
             <p className="basis-full text-xs text-[var(--admin-muted)]">
               Showing the first 100 call specs. Open Call specs to find
               another.

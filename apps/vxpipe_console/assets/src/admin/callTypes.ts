@@ -25,6 +25,7 @@ export type CallDirectoryItem = {
   callSpecName: string | null;
   callSpecRevision: number;
   state: CallDirectoryState;
+  durationMs?: number | null;
   createdAt: string;
 };
 

@@ -451,31 +451,57 @@ defmodule Vxpipe.Persistence.AdminStore do
     end
   end
 
-  defp filter_call_specs(repo, tenant_id, selected_id) do
-    latest_numbers = latest_revision_numbers()
+  @impl true
+  def search_call_specs(repo, tenant_key, query, limit, offset) do
+    repository_result(fn ->
+      with {:ok, {_tenant, tenant_id}} <- fetch_tenant(repo, tenant_key) do
+        rows =
+          call_spec_choices(tenant_id)
+          |> where(
+            [spec, _number, latest],
+            fragment(
+              "strpos(lower(coalesce(?->>'name', '')), lower(?)) > 0",
+              latest.source,
+              ^query
+            ) or
+              fragment("strpos(lower(?), lower(?)) > 0", spec.public_id, ^query)
+          )
+          |> limit(^(limit + 1))
+          |> offset(^offset)
+          |> repo.all()
 
-    rows =
-      CallSpec
-      |> join(:inner, [call_spec], latest_number in subquery(latest_numbers),
-        on: latest_number.call_spec_id == call_spec.id
-      )
-      |> join(:inner, [call_spec, latest_number], latest in CallSpecRevision,
-        on:
-          latest.call_spec_id == call_spec.id and
-            latest.revision == latest_number.revision
-      )
-      |> where([call_spec], call_spec.tenant_id == ^tenant_id)
-      |> order_by(
-        [call_spec, _latest_number, latest],
-        asc: fragment("lower(?->>'name')", latest.source),
-        asc: call_spec.public_id
-      )
-      |> limit(^(@call_spec_filter_limit + 1))
-      |> select(
-        [call_spec, _latest_number, latest],
-        {call_spec.public_id, fragment("?->>'name'", latest.source)}
-      )
-      |> repo.all()
+        {visible, rest} = Enum.split(rows, limit)
+
+        {:ok,
+         {Enum.map(visible, fn {id, name} -> %CallSpecFilter{id: id, name: name} end), rest != []}}
+      end
+    end)
+  end
+
+  defp call_spec_choices(tenant_id) do
+    CallSpec
+    |> join(:inner, [call_spec], latest_number in subquery(latest_revision_numbers()),
+      on: latest_number.call_spec_id == call_spec.id
+    )
+    |> join(:inner, [call_spec, latest_number], latest in CallSpecRevision,
+      on:
+        latest.call_spec_id == call_spec.id and
+          latest.revision == latest_number.revision
+    )
+    |> where([call_spec], call_spec.tenant_id == ^tenant_id)
+    |> order_by(
+      [call_spec, _latest_number, latest],
+      asc: fragment("lower(?->>'name')", latest.source),
+      asc: call_spec.public_id
+    )
+    |> select(
+      [call_spec, _latest_number, latest],
+      {call_spec.public_id, fragment("?->>'name'", latest.source)}
+    )
+  end
+
+  defp filter_call_specs(repo, tenant_id, selected_id) do
+    rows = call_spec_choices(tenant_id) |> limit(^(@call_spec_filter_limit + 1)) |> repo.all()
 
     {visible_rows, remaining_rows} = Enum.split(rows, @call_spec_filter_limit)
 

@@ -495,6 +495,7 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url === "/admin/api/session") return response(operationalSession);
+    if (url.includes("/calls/spec-options?")) return response({ options: [{ id: "appointment-reminders", name: "Appointment reminders" }], has_more: false });
     const selected = url.includes("appointment-reminders")
       ? "appointment-reminders"
       : "delivery-rescheduling";
@@ -521,9 +522,10 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
 
   fireEvent.click(screen.getByRole("combobox", { name: "Call spec" }));
   fireEvent.click(
-    screen.getByRole("option", { name: "Appointment reminders" }),
+    await screen.findByRole("option", { name: "Appointment reminders" }),
   );
 
+  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/tenants/AAAAAAAAAAAAAAAA/calls/spec-options?q=&page=1", expect.objectContaining({ signal: expect.any(AbortSignal) }));
   expect(await screen.findByText("No matching calls")).toBeVisible();
   expect(window.location.pathname + window.location.search).toBe(
     "/t/AAAAAAAAAAAAAAAA/calls?call_spec_id=appointment-reminders",

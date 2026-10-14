@@ -497,6 +497,7 @@ function parseCall(value: unknown): CallDirectoryItem {
       "call_spec_revision",
       "state",
       "created_at",
+      ...(Object.hasOwn(value, "duration_ms") ? ["duration_ms"] : []),
     ]) ||
     typeof value.id !== "string" ||
     value.id.length === 0 ||
@@ -509,6 +510,7 @@ function parseCall(value: unknown): CallDirectoryItem {
     ) ||
     !isPositiveInteger(value.call_spec_revision) ||
     !member(value.state, ["ongoing", "ended"]) ||
+    !(value.duration_ms == null || (typeof value.duration_ms === "number" && Number.isSafeInteger(value.duration_ms) && value.duration_ms >= 0)) ||
     !validTimestamp(value.created_at)
   ) {
     throw invalidCallResponse();
@@ -521,6 +523,7 @@ function parseCall(value: unknown): CallDirectoryItem {
     callSpecRevision: value.call_spec_revision,
     state: value.state,
     createdAt: value.created_at,
+    ...(Object.hasOwn(value, "duration_ms") ? { durationMs: value.duration_ms as number | null } : {}),
   };
 }
 
