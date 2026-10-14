@@ -211,6 +211,13 @@ to operational surfaces.
 
 **Title and Body Font:** Inter with the system sans-serif stack
 
+Console and Storybook share `apps/vxpipe_console/assets/src/fonts.css` for locally
+served Inter and Geist Mono fonts. Console owns the Fontsource dependencies; the
+asset build emits the font files alongside its CSS. `src/typography.css` defines
+`--font-sans` for both regular Console text and shadcn/Tailwind `font-sans` controls.
+Keep this font choice consistent across production and previews; a font's popularity
+is not a reason to change the product typography.
+
 **Label/Mono Font:** Geist Mono with SFMono-Regular, Consolas, Liberation Mono, and
 monospace fallbacks
 

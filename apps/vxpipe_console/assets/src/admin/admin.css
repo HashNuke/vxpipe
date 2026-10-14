@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "../typography.css";
 @import "@xyflow/react/dist/style.css" layer(components);
 @import "@vxpipe/react/styles.css";
 @import "./tenantSetup.css";
@@ -114,7 +115,7 @@ body[data-admin-editor-theme] {
   background: var(--admin-bg);
   color: var(--admin-ink);
   color-scheme: dark;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
 }
 
 .vx-admin[data-theme="light"],
@@ -161,7 +162,7 @@ body[data-admin-editor-theme="light"] {
   justify-content: center;
   border: 1px solid transparent;
   border-radius: 0.75rem;
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-family: inherit;
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: -0.08em;

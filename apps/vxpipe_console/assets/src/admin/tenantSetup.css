@@ -956,7 +956,7 @@
 }
 .recipe-node text {
   fill: var(--admin-muted);
-  font-family: Inter, sans-serif;
+  font-family: var(--font-sans);
   font-size: 12px;
   text-anchor: middle;
 }

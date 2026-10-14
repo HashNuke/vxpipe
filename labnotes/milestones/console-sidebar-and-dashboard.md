@@ -440,3 +440,15 @@ change user-facing wording without changing recovery authorization or expiry.
 Design review: explicit account-kind gate; a role grant cannot override this
 restriction. Preserve existing disabled-diagnostics, session-revocation and
 private-host checks.
+
+### Consistent Console font delivery
+
+- [x] Use Inter consistently for Console UI and shadcn sans-serif controls; retain existing monospace styles.
+- [x] Share locally bundled font imports between production and Storybook; add dependencies to Console assets.
+- [x] Verify desktop/mobile rendering and production font asset requests.
+- [x] Run frontend tests, typecheck, lint and asset build.
+- [x] Complete root gates and commit: static gates passed; one speech deadline timeout in the full run passed with all 14 deadline tests on isolated rerun.
+
+Design review: preserve the established Inter/Geist Mono pairing and component
+styles. Correct production font delivery and unify sans-serif tokens; avoid a
+typography redesign prompted solely by a stylistic hook warning.

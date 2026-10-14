@@ -1,9 +1,5 @@
 import type { Preview } from "@storybook/react-vite";
-import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
-import "@fontsource/inter/700.css";
-import "@fontsource/geist-mono/400.css";
+import "../apps/vxpipe_console/assets/src/fonts.css";
 import "../packages/react/src/styles.css";
 import "../packages/react/stories/prototype.css";
 import "../apps/vxpipe_console/assets/src/admin/admin.css";
