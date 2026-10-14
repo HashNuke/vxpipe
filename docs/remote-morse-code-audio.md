@@ -162,11 +162,12 @@ Reviewed on 2026-10-14; refresh and pin exact schemas/SDK versions in checkpoint
 
 ## Verification evidence
 
-The Go server, authenticated discovery, HTTP synthesis formats/streaming and PCM
-batch recognition are implemented. Pinned SDK discovery, all four HTTP TTS routes
-and PCM round trips pass, including response-schema validation. Independent Morse
-fixtures and Go/Elixir codec interoperability pass; these establish A–C, not full
-API compatibility. `bin/setup` completed successfully. Full optional-field/WS
+The Go server, authenticated discovery, HTTP synthesis formats/streaming, PCM
+batch recognition and realtime STT are implemented. Pinned SDK discovery, all
+four HTTP TTS routes, PCM round trips and repeated realtime STT turns pass,
+including HTTP/AsyncAPI schema validation. Independent Morse fixtures and
+Go/Elixir codec interoperability pass; these establish A–D, not full API
+compatibility. `bin/setup` completed successfully. Full optional-field/TTS WS
 conformance, Vxpipe provider integration, benchmarks, browser checks and Railway deployment remain
 unchecked implementation acceptance gates. The
 [planning labnote](../labnotes/20261014-1947-remote-morse-milestone.md) records the

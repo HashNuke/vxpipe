@@ -1,11 +1,11 @@
 # Morse-code API service and providers
 
-Status: implementation started, 2026-10-14. **3 of 9
-implementation checkpoints complete (A–C).** The user requested planning first and
+Status: implementation started, 2026-10-14. **4 of 9
+implementation checkpoints complete (A–D).** The user requested planning first and
 clarified the scope as complete ElevenLabs **TTS/STT** compatibility, including
 HTTP, streaming, WebSockets, discovery and authentication. Other ElevenLabs
 product APIs are outside this milestone. The Go server/catalog, HTTP TTS
-formats/streaming and PCM batch STT are implemented; other API surfaces and
+formats/streaming, PCM batch STT and realtime STT are implemented; other API surfaces and
 Vxpipe provider integration remain pending.
 
 ## Runnable outcome
@@ -195,6 +195,20 @@ settings. If Vxpipe runs in a container, its loopback is not the host Go server:
 document a reachable host/container DNS name and matching Go bind address.
 Do not replace a developer's selected free port with the example port implicitly.
 
+Configuration handoff:
+
+| Setting | Application that reads it | Local development | Railway / hosted cutover |
+| --- | --- | --- | --- |
+| `HOST` | Go API | `127.0.0.1` for native development | `0.0.0.0` |
+| `PORT` | Go API | `8787`, or another selected free port | Read Railway's injected value |
+| `MORSE_CODE_API_BASE_URL` | Vxpipe | `http://127.0.0.1:8787`, matching the chosen listener | Verified `https://morse-audio.definerun.com` or generated Railway HTTPS origin |
+| Compatibility API key | Vxpipe credential configuration; sent to Go API | Any nonempty synthetic value | The same value can remain in use; no Go-side key registration |
+
+The deployment runbook must distinguish the Go service's Railway variables from
+Vxpipe's runtime variables. Setting `MORSE_CODE_API_BASE_URL` only on the Go
+service does not configure Vxpipe. Include a readiness request and authenticated
+discovery request against the selected origin before enabling speech services.
+
 Keep the override through local testing, user deployment and hosted verification.
 Any later removal of the development override or adoption of a hosted default
 is a separate recorded follow-up after successful cutover, not part of this
@@ -323,17 +337,29 @@ Exit: HTTP clients consume every TTS response variant, including omitted
 
 Dependencies: B; A's auth and schema contracts.
 
-- [ ] Write protocol fixture tests before WS handlers: authenticated upgrade,
+- [x] Write protocol fixture tests before WS handlers: authenticated upgrade,
   `session_started`, `input_audio_chunk`, `partial_transcript`,
   `committed_transcript`, optional timed results and protocol errors.
-- [ ] Implement supported PCM rates and mu-law input, manual commit, silence
+- [x] Implement supported PCM rates and mu-law input, manual commit, silence
   auto-commit, empty-audio controls and keepalive without fabricated text.
-- [ ] Verify repeated commits, no-audio commits, split symbols, long segments,
+- [x] Verify repeated commits, no-audio commits, split symbols, long segments,
   idle timeout, oversized messages, malformed base64 and disconnect cleanup.
-- [ ] Define partial stability and timestamp origin across successive commits.
+- [x] Define partial stability and timestamp origin across successive commits.
   Preserve isolated decoder state and bounded unread input for each socket.
-- [ ] Use a raw Scribe-compatible client and Vxpipe's protocol fixture shape to
+- [x] Use a raw Scribe-compatible client and Vxpipe's protocol fixture shape to
   decode independent Morse chunks, then start a second turn on the same socket.
+
+Evidence: the first protocol tests failed 404. Independent square-wave E/T
+fixtures pass all seven realtime input formats, repeated manual/VAD commits,
+split samples, word gaps, empty commits, timed ordering and cumulative sample
+offsets. A 500-character segment, separate sockets, malformed/oversized input,
+silence keepalives, capacity release, idle/lifetime expiry and drain pass under
+the race detector. The 22.05-kHz exact-tail test exposed and verified a fix for
+one-window commit quantization. Pinned official SDK 2.72.0 consumes two turns and
+every response validates against the captured AsyncAPI. The input/acknowledgement
+shape matches Vxpipe's Scribe wire module; provider integration remains F/G.
+The read-only container passes realtime/HTTP SDK checks and exits 0 after SIGTERM
+with an active STT socket. Optional semantic fields and browser tokens remain H/E.
 
 Exit: an authenticated session recognizes two distinct phrases with exactly one
 final publication per committed segment and no state leakage after close.
@@ -461,11 +487,11 @@ Preparation deliverables in the Go repository:
   Specify `HOST=0.0.0.0`; honor Railway's injected `PORT` and route public traffic
   to that listener. Document settings managed in the Railway UI rather than
   implying repository config creates domains, DNS or runtime variables.
-- [ ] Serve HTTP and WS upgrades on the same port. `/healthz` reports process
+- [x] Serve HTTP and WS upgrades on the same port. `/healthz` reports process
   health; `/readyz` returns 200 only when codecs/catalog/server are usable and
   becomes unready during drain. Neither probe requires an API key or performs
   an external request. Configure any host filtering to accept Railway probes.
-- [ ] Handle SIGTERM with bounded HTTP drain and explicit WS closure/worker
+- [x] Handle SIGTERM with bounded HTTP drain and explicit WS closure/worker
   cancellation; Go HTTP shutdown alone does not drain hijacked WS connections.
   Align the shutdown deadline with Railway's configured termination grace period.
   Keep logs on stdout/stderr without bodies, keys or token query strings.

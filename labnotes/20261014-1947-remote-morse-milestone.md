@@ -101,3 +101,12 @@ Revision validation passed: 175 relative links across the changed planning/desig
 documents and index, whitespace checks, nine unchanged unchecked checkpoints,
 and checks removing the old hosted-default/agent-provisioning wording.
 `git diff --check` passed. Runtime/container tests remain implementation tasks.
+
+### Configuration handoff review
+
+Made the milestone's environment ownership explicit with a local/hosted settings
+table: Go reads `HOST`/`PORT`; Vxpipe reads `MORSE_CODE_API_BASE_URL` and owns its
+compatibility credential. The runbook must validate readiness and authenticated
+discovery before speech enablement. This documentation clarification leaves
+existing implementation progress and staged work intact; it does not deploy or
+change runtime configuration.

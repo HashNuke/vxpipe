@@ -121,3 +121,38 @@
   is `1210135`. Documentation links, workflow syntax and diff whitespace pass.
 - I remains incomplete: WS lifecycle/container checks, full compatibility/load
   acceptance, user deployment and hosted Vxpipe cutover are still pending.
+
+## Checkpoint D — realtime STT
+
+- Revalidated both clean worktrees and A–C commits before continuing. The prior
+  turn made implementation/verification progress; no process wait was assumed.
+- Pinned coder/websocket v1.8.15 after checking its current module metadata and
+  framed transport API. Added focused protocol tests first; they failed 404.
+- Added header-authenticated realtime recognition, six PCM rates plus mu-law,
+  manual/Morse-silence commits, cumulative timestamps and audio-driven keepalive.
+  Empty commits never create text; timing is a separate message after each final.
+- The independent 22.05-kHz automatic-commit fixture timed out at an exact
+  fourteen-unit tail. The fix accounts for one analysis window of boundary
+  quantization; all rates still keep seven-unit word gaps within one segment.
+- Added bounded admission for 64 upgrading/active sockets, a 512-KiB message
+  ceiling, 256-KiB audio chunk limit, idle/write/lifetime limits and explicit
+  cancellation/joining separate from HTTP shutdown. Disconnect releases capacity.
+- Tests cover repeated turns, odd sample boundaries, a 500-character segment,
+  separate sockets, malformed/oversized input, silent/current-partial keepalive,
+  configurable silence, idle/lifetime expiry, admission and drain under race checks.
+- Official SDK 2.72.0 recognizes two independently generated turns; every response
+  validates against the pinned AsyncAPI and timings match cumulative audio offsets.
+  The wire fields match the existing Vxpipe Scribe input/acknowledgement contract;
+  no configured Vxpipe provider/session integration is claimed before F/G.
+- The pinned read-only image passes realtime and HTTP SDK regressions. A dedicated
+  drain script opens STT, stops the named test container and confirms socket close
+  plus exit 0. The container was removed. CI now repeats these checks.
+- Go vet, race suite, formatting, documentation links and workflow syntax pass.
+  Existing CallEngine codec interop passes two tests, seed 736677. Vxpipe runtime
+  and orchestration state machines did not change; this checkpoint updates docs
+  only in the umbrella, with the earlier full root gates still applicable.
+- Explicit limitations remain in the ledger: header-only auth until E, Morse
+  commit defaults and unsupported semantic query fields until H. The earlier
+  owner question about no-retention exceptions remains unresolved.
+- After green checks, moved mu-law expansion into the transport-free audio
+  package and reran focused race/vet checks. Go checkpoint committed as `7329afb`.
