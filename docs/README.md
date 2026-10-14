@@ -24,3 +24,4 @@
 ## Speech
 
 - [STT speech-start detection](stt-speech-start-detection.md) — transcript-based start and API-only optional local VAD.
+- [Morse-code API](remote-morse-code-audio.md) — planned Go speech service, ElevenLabs compatibility and Vxpipe provider integration.
