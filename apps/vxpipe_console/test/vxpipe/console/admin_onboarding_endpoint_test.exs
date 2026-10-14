@@ -5,7 +5,7 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
   import Plug.Conn, only: [put_req_header: 3]
 
   alias Vxpipe.Calls.Tenant
-  alias Vxpipe.Console.Test.FakeUserIdentity
+  alias Vxpipe.Console.Test.{FakeUserIdentity, NavigationIdentity}
 
   @endpoint Vxpipe.Console.Endpoint
 
@@ -15,6 +15,7 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
 
     on_exit(fn ->
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, original_calls)
+      Application.delete_env(:vxpipe_console, :navigation_test_principal)
 
       if original_backend,
         do: Application.put_env(:vxpipe_console, :user_identity_backend, original_backend),
@@ -111,6 +112,55 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
     assert json_response(response, 422) == %{
              "error" => %{"code" => "sample_prerequisites_missing"}
            }
+  end
+
+  test "sample installation requires call-spec write access to the demo tenant" do
+    tenant = %Tenant{
+      key: "DEMOabcdefgh1234",
+      name: "DemoTenant",
+      inserted_at: ~U[2026-09-18 05:00:00Z]
+    }
+
+    put_calls_repository(
+      :provider_credential_repository,
+      {Vxpipe.Console.Test.OperatorCredentialRepository,
+       {self(), {:ok, %{tenant: %{key: tenant.key, name: tenant.name}, bindings: []}}}}
+    )
+
+    configure_demo_repository({:ok, tenant})
+    Application.put_env(:vxpipe_console, :user_identity_backend, NavigationIdentity)
+
+    put_member(["tenants.write"], %{})
+    assert json_response(install_samples(), 403) == %{"error" => %{"code" => "forbidden"}}
+
+    put_member(["tenants.write", "call_specs.read", "call_specs.write"], %{
+      tenant.key => :read_write
+    })
+
+    assert json_response(install_samples(), 422) == %{
+             "error" => %{"code" => "sample_prerequisites_missing"}
+           }
+  end
+
+  defp put_member(grants, assignments) do
+    principal = %{
+      FakeUserIdentity.principal()
+      | account_kind: :member,
+        grants: MapSet.new(grants),
+        assigned_tenants: assignments,
+        all_tenant_actions: MapSet.new()
+    }
+
+    Application.put_env(:vxpipe_console, :navigation_test_principal, {:ok, principal})
+  end
+
+  defp install_samples do
+    authenticated = authenticate()
+
+    authenticated
+    |> recycle()
+    |> put_req_header("x-csrf-token", admin_csrf(authenticated))
+    |> post("https://localhost/admin/api/onboarding/demo-tenant/samples")
   end
 
   defp authenticate do

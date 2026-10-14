@@ -3,7 +3,7 @@ defmodule Vxpipe.Console.AdminOnboardingController do
 
   use Phoenix.Controller, formats: [:json]
 
-  alias Vxpipe.Calls.InstallationOperator
+  alias Vxpipe.Calls.{InstallationOperator, UserAuthorization}
 
   def ensure_demo_tenant(conn, _params) do
     case Vxpipe.Calls.ensure_demo_tenant(InstallationOperator.authority()) do
@@ -23,17 +23,30 @@ defmodule Vxpipe.Console.AdminOnboardingController do
     end
   end
 
+  # Samples are published with installation authority, so the user must also be allowed
+  # to write call specs in the demo tenant; `tenants.write` alone does not imply that.
   def install_samples(conn, _params) do
     authority = InstallationOperator.authority()
 
     result =
-      with {:ok, tenant} <- Vxpipe.Calls.ensure_demo_tenant(authority) do
+      with {:ok, tenant} <- Vxpipe.Calls.ensure_demo_tenant(authority),
+           :ok <-
+             UserAuthorization.authorize_tenant(
+               conn.assigns.user_principal,
+               "call_specs.write",
+               tenant.key
+             ) do
         Vxpipe.Console.DemoSamples.install(authority, tenant.key)
       end
 
     case result do
       {:ok, results} ->
         json(conn, %{samples: Enum.map(results, &sample_json/1)})
+
+      {:error, :forbidden} ->
+        conn
+        |> put_status(403)
+        |> json(%{error: %{code: "forbidden"}})
 
       {:error, :sample_prerequisites_missing} ->
         conn
