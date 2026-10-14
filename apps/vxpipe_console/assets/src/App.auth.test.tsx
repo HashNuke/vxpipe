@@ -34,7 +34,7 @@ test("local Superadmin recovery signs in after a valid proof", async () => {
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.test" } });
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: "replacement passphrase" } });
   fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "replacement passphrase" } });
-  fireEvent.change(screen.getByLabelText("Local recovery proof"), { target: { value: "local-proof" } });
+  fireEvent.change(screen.getByLabelText("Recovery token"), { target: { value: "local-proof" } });
   fireEvent.click(screen.getByRole("button", { name: /Recover access/ }));
 
   await waitFor(() => expect(authenticated).toHaveBeenCalledOnce());

@@ -102,8 +102,8 @@
 }
 .access-auth {
   width: min(100%, 440px);
-  margin: clamp(32px, 9vh, 100px) auto;
-  padding: 0 24px 32px;
+  margin: 0 auto;
+  padding: clamp(32px, 9vh, 100px) 24px 32px;
 }
 .access-auth-mark {
   color: var(--admin-blue);

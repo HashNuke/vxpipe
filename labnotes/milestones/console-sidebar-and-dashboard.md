@@ -418,3 +418,14 @@ test also passes. Evidence: [platform-read labnotes](../20261014-0702-merge-plat
 
 Design review: presentation-only refinement; preserve existing authorization and
 confirmation behavior. Use larger heading typography and responsive action alignment.
+
+### Authentication background and recovery instructions
+
+- [x] Remove the white background strip above setup, login and recovery.
+- [x] Replace Local recovery proof with Recovery token and instructions using the actual `mix vxpipe.recover` command.
+- [x] Remove “Only an existing Superadmin can be recovered. Proofs expire after 15 minutes.”
+- [x] Verify all three screens at desktop/mobile sizes and run focused frontend checks.
+- [x] Complete root verification gates: all five passed; 3,788 tests, zero failures.
+
+Design review: keep the form's intended top spacing inside the dark surface;
+change user-facing wording without changing recovery authorization or expiry.

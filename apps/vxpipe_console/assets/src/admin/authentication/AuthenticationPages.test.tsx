@@ -49,7 +49,7 @@ test("local recovery asks for proof and confirmed replacement password", async (
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.test" } });
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: "an example passphrase" } });
   fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "an example passphrase" } });
-  fireEvent.change(screen.getByLabelText("Local recovery proof"), { target: { value: "local-proof" } });
+  fireEvent.change(screen.getByLabelText("Recovery token"), { target: { value: "local-proof" } });
   fireEvent.click(screen.getByRole("button", { name: /Recover access/ }));
 
   await waitFor(() => expect(submit).toHaveBeenCalledWith("owner@example.test", "an example passphrase", "local-proof"));

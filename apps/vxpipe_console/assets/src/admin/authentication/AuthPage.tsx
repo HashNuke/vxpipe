@@ -59,7 +59,7 @@ export function AuthPage({
         {setup
           ? "Create the first Superadmin account to manage your platform, tenants and users."
           : recover
-            ? "Use a one-time proof from the installation's local recovery command to set a new Superadmin password."
+            ? <>Run <code>mix vxpipe.recover</code> on the server running Vxpipe to get a recovery token. Paste it below to verify access and set a new password.</>
             : "Use your account to open the Console."}
       </p>
       {completed ? (
@@ -88,14 +88,14 @@ export function AuthPage({
               />
               {proofRequired || recover ? (
                 <FormField
-                  label={recover ? "Local recovery proof" : "Local setup proof"}
+                  label={recover ? "Recovery token" : "Local setup proof"}
                   type="password"
                   autoComplete="off"
                   required
                   value={proof}
                   onChange={(event) => setProof(event.target.value)}
                   disabled={pending}
-                  hint="Get this one-time proof from the installation operator."
+                  hint={recover ? undefined : "Get this one-time proof from the installation operator."}
                 />
               ) : null}
             </>
@@ -132,13 +132,11 @@ export function AuthPage({
           </Button>
         </form>
       )}
-      <p className="access-footnote">
+      {!recover ? <p className="access-footnote">
         {setup
           ? "Your email is your sign-in name. No verification email will be sent."
-          : recover
-            ? "Only an existing Superadmin can be recovered. Proofs expire after 15 minutes."
-            : <>Forgot your password? Contact an administrator to set a new one. If no Superadmin can sign in, <a href="/auth/recover">use local recovery</a>.</>}
-      </p>
+          : <>Forgot your password? Contact an administrator to set a new one. If no Superadmin can sign in, <a href="/auth/recover">use local recovery</a>.</>}
+      </p> : null}
     </main>
   );
 }
