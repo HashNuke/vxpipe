@@ -120,6 +120,7 @@ function parseCapability(value: unknown): Capability {
 function parseDestination(value: unknown): NavigationItem {
   const data = record(value);
   const destinations: Record<string, NavigationItem> = {
+    api_keys: { label: "API Keys", href: "/api-keys" },
     roles: { label: "Roles", href: "/roles" },
     users: { label: "Users", href: "/users" }, services: { label: "Services", href: "/platform/services" },
   };

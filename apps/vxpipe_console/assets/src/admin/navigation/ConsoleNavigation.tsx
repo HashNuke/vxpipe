@@ -17,6 +17,7 @@ export function ConsoleNavigation({ csrfToken, fetchImpl, onSessionExpired = exp
   const auth = useMemo(() => new AuthenticationApi(csrfToken, fetchImpl), [csrfToken, fetchImpl]);
   const location = useLocation();
   const navigate = useNavigate();
+  const legacyQuery = location.pathname === "/my-tenants" ? location.search : "";
   const go = (path: string) => { if (crossDocument) window.location.assign(path); else void navigate(path); };
   const { tenantKey } = useParams();
   const [selection, setSelection] = useState<string>();
@@ -41,7 +42,7 @@ export function ConsoleNavigation({ csrfToken, fetchImpl, onSessionExpired = exp
       setResult({ key: selectedKey, data });
       if (tenantKey) setSelection(tenantKey);
       if (location.pathname === "/" || location.pathname === "/admin") navigate(data.landingPath, { replace: true });
-      else if (location.pathname === "/my-tenants") navigate("/tenants" + location.search, { replace: true });
+      else if (location.pathname === "/my-tenants") navigate("/tenants" + legacyQuery, { replace: true });
     }).catch(async error => {
       if (controller.signal.aborted) return;
       setResult(undefined);
@@ -54,7 +55,7 @@ export function ConsoleNavigation({ csrfToken, fetchImpl, onSessionExpired = exp
       } else { fail(error); setUnavailable(true); }
     });
     return () => controller.abort();
-  }, [api, selectedKey, tenantKey, location.pathname, location.search, revision, navigate, fail]);
+  }, [api, selectedKey, tenantKey, location.pathname, legacyQuery, revision, navigate, fail]);
   useEffect(() => {
     let active = true;
     setSessionUnavailable(false);

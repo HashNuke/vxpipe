@@ -20,11 +20,21 @@ test("mixed scopes expose all tenants but only permitted tenant destinations", (
   ] };
   expect(landingPath(role, users[4], tenants)).toBe("/tenants");
   expect(navigationItems(role, users[4], tenants[2]).tenant.map(item => item.label)).toEqual(["Calls"]);
-  expect(navigationItems(role, users[4], tenants[0]).tenant.map(item => item.label)).toEqual(["Calls", "Services", "API Keys"]);
+  expect(navigationItems(role, users[4], tenants[0]).tenant.map(item => item.label)).toEqual(["Calls", "Services"]);
   expect(navigationItems(role, users[4], tenants[2]).platform.map(item => item.label)).toEqual([]);
 });
 test("platform user reads do not imply role management or tenant access", () => {
   const role: Role = { ...roles[3], grants: [{ permission: "users.read", scope: "installation" }] };
   expect(navigationItems(role, users[4]).platform.map(item => item.label)).toEqual(["Users"]);
   expect(visibleTenants(role, users[4], tenants)).toEqual([]);
+});
+
+test("access-key permissions expose only API Keys in Settings for a tenant key manager", () => {
+  const role: Role = { ...roles[3], grants: [
+    { permission: "access_keys.read", scope: "assigned_tenants" },
+    { permission: "access_keys.write", scope: "assigned_tenants" },
+  ] };
+  expect(navigationItems(role, users[4], tenants[0]).platform).toEqual([{ label: "API Keys", href: "/api-keys" }]);
+  expect(navigationItems(role, users[4], tenants[0]).tenant).toEqual([]);
+  expect(navigationItems(role, { ...users[4], memberships: [] }).platform).toEqual([]);
 });

@@ -1,4 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { ApiKeysPage } from "../apiKeys/ApiKeysPage";
+import { apiKeysFixture } from "../apiKeys/apiKeysFixtures";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Building2 } from "lucide-react";
 import { AuthenticationJourney } from "../authentication/AuthenticationJourney";
 import { AccountPage } from "../authentication/AccountPage";
@@ -34,7 +36,8 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
 }) {
   const [tenantKeys, setTenantKeys] = useState(initialTenantKeys);
   const [directoryTenants, setDirectoryTenants] = useState(initialTenants);
-  const { user, role } = identity ?? navigationFixture(persona);
+  const { user, role } = useMemo(() => identity ?? navigationFixture(persona), [identity, persona]);
+  const keysApi = useMemo(() => apiKeysFixture(role, user, directoryTenants), [role, user, directoryTenants]);
   const visible = visibleTenants(role, user, directoryTenants);
   const landing = landingPath(role, user, directoryTenants);
   const [path, setPath] = useState(initialPath === "/" ? landing : initialPath.split("?")[0]);
@@ -77,6 +80,10 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
     {path === "/diagnostics" ? <>{empty("Reporter offline", "The bounded diagnostics collector could not be reached. Call traffic is unaffected; check the Console supervision tree, then reload this page.")}<div className="navigation-shortcuts">{link("/samples/voice", "Voice console")}</div></>
     : <>{empty("Disconnected", path === "/samples/transfer" ? "In the caller console, ask the agent for human support. Then connect this desk to hear the private briefing before you accept." : "Choose a call spec and configure its services before starting a voice call.")}<div className="navigation-shortcuts">{link("/getting-started", "Prepare a sample call")}{link(path === "/samples/voice" ? "/samples/transfer" : "/samples/voice", path === "/samples/voice" ? "Human transfer desk" : "Voice console")}</div></>}
   </main>);
+  if (path === "/api-keys" || path === "/api-keys/new") {
+    const permitted = navigationItems(role, user).platform.some(item => item.href === "/api-keys");
+    return shell(permitted ? <ApiKeysPage key={path} api={keysApi} initialCreating={path.endsWith("/new")} onCreatingChange={creating => navigate(creating ? "/api-keys/new" : "/api-keys")} /> : <main>{heading("Access unavailable")}</main>);
+  }
   if (path === "/getting-started") return shell(<NavigationAuxiliary page="getting-started" tenant={tenant ?? tenants[0]} onNavigate={navigate} />);
   if (path === "/tenants/new") return shell(canCreateTenants(role) ? <TenantCreationForm onCancel={() => navigate("/tenants")} onCreate={async name => {
     if (creationOutcome === "error") throw new Error("Storybook creation unavailable");

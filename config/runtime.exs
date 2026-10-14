@@ -159,6 +159,7 @@ if database_enabled? do
     demo_tenant_repository: {Vxpipe.Persistence.DemoTenantStore, Vxpipe.Persistence.Repo},
     artifact_repository: {Vxpipe.Persistence.ArtifactStore, Vxpipe.Persistence.Repo},
     usage_repository: {Vxpipe.Persistence.UsageStore, Vxpipe.Persistence.Repo},
+    access_key_repository: {Vxpipe.Persistence.AccessKeyStore, Vxpipe.Persistence.Repo},
     credential_repository: {Vxpipe.Persistence.CredentialStore, Vxpipe.Persistence.Repo},
     operator_api_key_repository:
       {Vxpipe.Persistence.OperatorApiKeyStore, Vxpipe.Persistence.Repo},

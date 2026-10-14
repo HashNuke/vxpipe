@@ -107,20 +107,20 @@ test("a new role can grant all-tenant read and assigned-tenant write", () => {
 });
 
 
-test("API key writes use Services read instead of a separate API key read grant", () => {
+test("provider credential writes use Services read", () => {
   render(<Editor />);
-  expect(screen.queryByRole("checkbox", { name: "Read Tenant API keys" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Write Tenant API keys" }));
+  expect(screen.queryByRole("checkbox", { name: "Read Provider credentials" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Write Provider credentials" }));
   expect(screen.getByRole("checkbox", { name: "Read Tenant services" })).toBeChecked();
   fireEvent.click(screen.getByRole("checkbox", { name: "Read Tenant services" }));
-  expect(screen.getByRole("checkbox", { name: "Write Tenant API keys" })).not.toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Write Provider credentials" })).not.toBeChecked();
 });
 
-test("API key write scope keeps its Services read prerequisite broad enough", () => {
+test("provider credential write scope keeps its Services read prerequisite broad enough", () => {
   render(<Editor />);
-  fireEvent.click(screen.getByRole("checkbox", { name: "Write Tenant API keys" }));
-  fireEvent.change(screen.getByRole("combobox", { name: "Write scope for Tenant API keys" }), { target: { value: "all_tenants" } });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Write Provider credentials" }));
+  fireEvent.change(screen.getByRole("combobox", { name: "Write scope for Provider credentials" }), { target: { value: "all_tenants" } });
   expect(screen.getByRole("combobox", { name: "Read scope for Tenant services" })).toHaveValue("all_tenants");
   fireEvent.change(screen.getByRole("combobox", { name: "Read scope for Tenant services" }), { target: { value: "assigned_tenants" } });
-  expect(screen.getByRole("combobox", { name: "Write scope for Tenant API keys" })).toHaveValue("assigned_tenants");
+  expect(screen.getByRole("combobox", { name: "Write scope for Provider credentials" })).toHaveValue("assigned_tenants");
 });

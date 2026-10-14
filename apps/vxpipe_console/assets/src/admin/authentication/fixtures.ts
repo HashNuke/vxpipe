@@ -19,7 +19,7 @@ export const roles: Role[] = [
     name: "Tenant Manager",
     kind: null,
     grants: [
-      ...["calls.read", "calls.write", "call_specs.read", "call_specs.write", "tenant_services.read", "tenant_services.write", "tenant_api_keys.write"].map(
+      ...["calls.read", "calls.write", "call_specs.read", "call_specs.write", "tenant_services.read", "tenant_services.write", "tenant_api_keys.write", "access_keys.read", "access_keys.write"].map(
         (permission) => ({ permission, scope: "assigned_tenants" as const }),
       ),
       { permission: "platform_services.read", scope: "installation" },

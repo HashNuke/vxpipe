@@ -94,7 +94,8 @@ export function PermissionEditor({
                           type="checkbox"
                           aria-label={`${label} ${group.label}`}
                           checked={!!grant}
-                          disabled={readOnly}
+                          disabled={readOnly || (action === "write" && group.reservedWrite)}
+                          title={action === "write" && group.reservedWrite ? "Superadmins only" : undefined}
                           onChange={(event) => toggle(group.resource, action, event.target.checked, actionScope)}
                         />
                         {label}

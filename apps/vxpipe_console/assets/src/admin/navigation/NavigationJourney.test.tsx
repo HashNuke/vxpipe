@@ -9,7 +9,7 @@ afterEach(() => { cleanup(); window.history.replaceState({}, "", "/"); });
 test("single-tenant entry shows dashboard with only permitted links", () => {
   render(<NavigationJourney persona="single" />);
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "#/platform/services");
+  expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "#/api-keys");
   expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "My account" })).toBeVisible();
   expect(screen.queryByText("acme_demo_000001")).not.toBeInTheDocument();
@@ -68,10 +68,10 @@ test("platform read access hides credential mutation controls", () => {
   expect(screen.getByRole("heading", { name: "Platform Services" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
 });
-test("tenant service read access includes the API-key destination without mutations", () => {
+test("tenant service read access does not grant API-key management", () => {
   render(<NavigationJourney persona="service-reader" initialPath="/t/acme_demo_000001/services" />);
   expect(screen.getByRole("heading", { name: "Services" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "API Keys" })).toBeVisible();
+  expect(screen.queryByRole("link", { name: "API Keys" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
 });
 test("read-only member cannot mutate samples or invoke platform setup", () => {
@@ -84,7 +84,7 @@ test("read-only member cannot mutate samples or invoke platform setup", () => {
 test("workspace API keys remain available before voice readiness", () => {
   render(<NavigationJourney initialPath="/t/acme_demo_000001/services" />);
   expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("link", { name: "API Keys" }));
+  fireEvent.click(screen.getByRole("link", { name: "Settings" }));
   expect(screen.getByRole("heading", { name: "API Keys" })).toBeVisible();
 });
 test("legacy service read permission includes masked credential metadata", () => {
@@ -117,30 +117,32 @@ test("dashboard has no duplicate resource buttons or retry action", () => {
   expect(screen.getAllByRole("link", { name: "Calls" })).toHaveLength(1);
 });
 
-test("API Keys sits directly below Services in the tenant sidebar", () => {
+test("API Keys moves from tenant navigation into Settings", async () => {
   render(<NavigationJourney initialPath="/t/acme_demo_000001/services" />);
   const links = within(screen.getByRole("navigation", { name: "Tenant" })).getAllByRole("link");
-  expect(links.map(link => link.textContent)).toEqual(["Calls", "Call Specs", "Services", "API Keys"]);
-  expect(screen.queryByRole("button", { name: "API keys" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("link", { name: "API Keys" }));
+  expect(links.map(link => link.textContent)).toEqual(["Calls", "Call Specs", "Services"]);
+  fireEvent.click(screen.getByRole("link", { name: "Settings" }));
   expect(screen.getByRole("link", { name: "API Keys" })).toHaveAttribute("aria-current", "page");
+  expect(await screen.findByRole("table", { name: "API keys" })).toBeVisible();
 });
 
-test("created keys remain in the inventory after sidebar navigation, but their secrets do not", () => {
-  render(<NavigationJourney initialPath="/t/acme_demo_000001/api-keys" />);
+test("created keys survive Settings navigation without revealing their secrets again", async () => {
+  render(<NavigationJourney initialPath="/api-keys" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Create API key" }));
+  await screen.findByLabelText("Name");
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Customer backend" } });
+  fireEvent.click(screen.getByRole("combobox", { name: "Tenant" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Acme" }));
   fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
-  fireEvent.change(screen.getByLabelText("Key name"), { target: { value: "Customer backend" } });
-  fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
-  expect(screen.getByLabelText("API key")).toBeVisible();
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Services" }));
-  fireEvent.click(screen.getByRole("link", { name: "API Keys" }));
-  expect(screen.getByRole("table", { name: "API keys" })).toHaveTextContent("Customer backend");
+  expect(await screen.findByLabelText("API key")).toBeVisible();
+  fireEvent.click(screen.getByRole("link", { name: "Back to tenants" }));
+  fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+  expect(await screen.findByRole("table", { name: "API keys" })).toHaveTextContent("Customer backend");
   expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
 });
 
-test("API key story inventory survives navigation through Calls", () => {
+test("API key stories open Settings without a selected tenant", async () => {
   render(<SetupStory scenario="api-key-existing" theme="dark" />);
-  fireEvent.click(screen.getByRole("link", { name: "Calls" }));
-  fireEvent.click(screen.getByRole("link", { name: "API Keys" }));
-  expect(screen.getByRole("table", { name: "API keys" })).toHaveTextContent("Application");
+  expect(screen.queryByRole("combobox", { name: "Switch tenant" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("table", { name: "API keys" })).toHaveTextContent("Website calls");
 });

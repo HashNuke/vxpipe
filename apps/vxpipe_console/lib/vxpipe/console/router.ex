@@ -102,6 +102,8 @@ defmodule Vxpipe.Console.Router do
     get "/roles", Vxpipe.Console.CanonicalPageController, :index
     get "/roles/new", Vxpipe.Console.CanonicalPageController, :index
     get "/roles/:id", Vxpipe.Console.CanonicalPageController, :index
+    get "/api-keys", Vxpipe.Console.CanonicalPageController, :index
+    get "/api-keys/new", Vxpipe.Console.CanonicalPageController, :index
     get "/platform/services", Vxpipe.Console.CanonicalPageController, :index
     get "/t/:tenant_key/dashboard", Vxpipe.Console.CanonicalPageController, :index
     get "/t/:tenant_key/calls", Vxpipe.Console.CanonicalPageController, :index
@@ -148,6 +150,11 @@ defmodule Vxpipe.Console.Router do
 
   scope "/admin/api" do
     pipe_through :user_api
+
+    get "/api-keys", Vxpipe.Console.ApiKeyController, :index
+    get "/api-keys/tenants", Vxpipe.Console.ApiKeyController, :tenants
+    post "/api-keys", Vxpipe.Console.ApiKeyController, :create
+    delete "/api-keys/:id", Vxpipe.Console.ApiKeyController, :delete
 
     post "/platform/credentials/test", Vxpipe.Console.AdminServicesController, :validate_platform
     post "/platform/credentials", Vxpipe.Console.AdminServicesController, :create_platform

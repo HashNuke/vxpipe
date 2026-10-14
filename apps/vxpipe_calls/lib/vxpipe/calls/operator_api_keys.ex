@@ -10,6 +10,9 @@ defmodule Vxpipe.Calls.OperatorApiKeys do
   def bootstrap(options), do: issue(:bootstrap, options)
   def replace(options), do: issue(:replace, options)
 
+  def authenticate("vxpk_" <> _ = secret, options),
+    do: Vxpipe.Calls.ApiKeyManagement.authenticate_platform(secret, options)
+
   def authenticate(secret, options) do
     with true <- valid_secret?(secret),
          {:ok, repository} <- Repositories.fetch(options, :operator_api_key_repository),

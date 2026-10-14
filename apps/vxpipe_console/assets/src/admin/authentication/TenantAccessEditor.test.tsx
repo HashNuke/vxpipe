@@ -29,7 +29,7 @@ test("adds a searched tenant read-only, changes its access and removes it", () =
   expect(access).toHaveValue("read");
   fireEvent.change(access, { target: { value: "read_write" } });
   expect(
-    screen.getByText("Read and write calls, Read and write Call Specs, Read and write Services, Write API keys"),
+    screen.getByText("Read and write calls, Read and write Call Specs, Read and write Services, Write provider credentials, Read and write API keys"),
   ).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Remove Northwind" }));
   expect(screen.getByText("No tenants assigned")).toBeVisible();
@@ -44,7 +44,7 @@ test("shows inherited all-tenant access with no membership picker", () => {
     />,
   );
   expect(screen.getByText("All tenants — granted by role")).toBeVisible();
-  expect(screen.getByText(/Read and write calls, Read and write Call Specs, Read and write Services, Write API keys/)).toBeVisible();
+  expect(screen.getByText(/Read and write calls, Read and write Call Specs, Read and write Services, Write provider credentials, Read and write API keys/)).toBeVisible();
   expect(
     screen.queryByRole("button", { name: "Add tenants" }),
   ).not.toBeInTheDocument();

@@ -29,7 +29,24 @@ defmodule Vxpipe.Calls.Administration do
 
   @spec authenticate(String.t(), String.t(), atom(), keyword()) ::
           {:ok, Principal.t()} | {:error, term()}
-  def authenticate(tenant_key, secret, required_scope, options \\ []) do
+  def authenticate(tenant_key, secret, required_scope, options \\ [])
+
+  def authenticate(tenant_key, "vxpk_" <> _ = secret, required_scope, options) do
+    with :ok <- validate_tenant_key(tenant_key),
+         :ok <- validate_required_scope(required_scope),
+         {:ok, authority} <- Vxpipe.Calls.ApiKeyManagement.authenticate_platform(secret, options),
+         {:ok, repository} <- Repositories.fetch(options, :credential_repository),
+         {:ok, _tenant} <- Repositories.call(repository, :fetch_tenant, [tenant_key]) do
+      {:ok,
+       %Principal{
+         tenant_key: tenant_key,
+         api_key_id: authority.api_key_id,
+         scopes: MapSet.new([:admin, :calls])
+       }}
+    end
+  end
+
+  def authenticate(tenant_key, secret, required_scope, options) do
     with :ok <- validate_tenant_key(tenant_key),
          :ok <- validate_required_scope(required_scope),
          true <- is_binary(secret),
@@ -66,11 +83,14 @@ defmodule Vxpipe.Calls.Administration do
     {issued, stored} = key_pair(tenant.key, "bootstrap", scopes, inserted_at, options)
 
     case Repositories.call(repository, :bootstrap_tenant, [tenant, stored]) do
-      {:ok, {_tenant, _api_key}} -> {:ok, tenant, issued}
+      {:ok, {_tenant, _api_key}} ->
+        {:ok, tenant, issued}
+
       {:error, reason} when reason in [:tenant_key_conflict, :api_key_id_conflict] ->
         attempt_bootstrap(repository, name, scopes, options, attempts_left - 1)
 
-      {:error, _reason} = error -> error
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -82,11 +102,14 @@ defmodule Vxpipe.Calls.Administration do
     {issued, stored} = key_pair(tenant_key, name, scopes, inserted_at, options)
 
     case Repositories.call(repository, :insert_api_key, [tenant_key, stored]) do
-      {:ok, _api_key} -> {:ok, issued}
+      {:ok, _api_key} ->
+        {:ok, issued}
+
       {:error, :api_key_id_conflict} ->
         attempt_key_issue(repository, tenant_key, name, scopes, options, attempts_left - 1)
 
-      {:error, _reason} = error -> error
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -163,8 +186,8 @@ defmodule Vxpipe.Calls.Administration do
          ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/,
          value
        ),
-      do: :ok,
-      else: {:error, :invalid_api_key_id}
+       do: :ok,
+       else: {:error, :invalid_api_key_id}
   end
 
   defp validate_uuid(_value), do: {:error, :invalid_api_key_id}

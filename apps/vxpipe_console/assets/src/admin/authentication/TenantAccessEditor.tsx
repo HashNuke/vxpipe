@@ -45,10 +45,10 @@ export function TenantAccessEditor({
     `${tenant.name} ${tenant.key}`.toLowerCase().includes(search.toLowerCase()),
   );
   const summary = (access?: Membership["access"]) => {
-    const resources = [["calls", "calls"], ["call_specs", "Call Specs"], ["tenant_services", "Services"], ["tenant_api_keys", "API keys"]];
+    const resources = [["calls", "calls"], ["call_specs", "Call Specs"], ["tenant_services", "Services"], ["tenant_api_keys", "provider credentials"], ["access_keys", "API keys"]];
     return resources.flatMap(([resource, name]) => {
       const level = effectiveAccess(role, resource, access);
-      if (resource === "tenant_api_keys") return level === "write" ? ["Write API keys"] : [];
+      if (resource === "tenant_api_keys") return level === "write" ? ["Write provider credentials"] : [];
       return level === "none" ? [] : [`${level === "write" ? "Read and write" : "Read"} ${name}`];
     }).join(", ") || "No tenant permissions";
   };

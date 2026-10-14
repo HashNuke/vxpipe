@@ -1,3 +1,4 @@
+import { ApiKeysRoute } from "./admin/apiKeys/ApiKeysRoute";
 import { callSpecSearch } from "./admin/callSpecSearch";
 import { TenantCreationPage } from "./admin/navigation/TenantCreationPage";
 import { NavigationError } from "./admin/navigation/navigationApi";
@@ -157,6 +158,8 @@ export function App(props: AppProps) {
         <Route path="/roles/new" element={<ConfiguredRoute render={(props) => <RoleNewRoute {...props} />} />} />
         <Route path="/roles/:id" element={<ConfiguredRoute render={(props) => <RoleDetailRoute {...props} />} />} />
         <Route path="/roles" element={<ConfiguredRoute render={(props) => <RolesRoute {...props} />} />} />
+        <Route path="/api-keys" element={<ConfiguredRoute render={props => <ApiKeysRoute {...props} />} />} />
+        <Route path="/api-keys/new" element={<ConfiguredRoute render={props => <ApiKeysRoute {...props} />} />} />
         <Route path="/platform/services" element={<ConfiguredRoute render={(props) => <ScopedServicesRoute {...props} platform />} />} />
         <Route path="/" element={<WorkspaceDirectory />} />
         <Route path="/tenants" element={<WorkspaceDirectory />} />

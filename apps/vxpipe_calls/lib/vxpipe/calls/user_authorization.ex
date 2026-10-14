@@ -10,9 +10,15 @@ defmodule Vxpipe.Calls.UserAuthorization do
   alias Vxpipe.Identity.Authorization
 
   @tenant_actions [
-    "calls.read", "calls.write", "call_specs.read", "call_specs.write",
-    "tenant_services.read", "tenant_services.write",
-    "tenant_api_keys.write"
+    "calls.read",
+    "calls.write",
+    "call_specs.read",
+    "call_specs.write",
+    "tenant_services.read",
+    "tenant_services.write",
+    "tenant_api_keys.write",
+    "access_keys.read",
+    "access_keys.write"
   ]
 
   @spec authorize_tenant(map(), String.t(), String.t()) :: :ok | {:error, :forbidden | term()}
@@ -140,6 +146,7 @@ defmodule Vxpipe.Calls.UserAuthorization do
     with :ok <- tenant_key_format(tenant_key) do
       grants = Map.get(principal, :grants) || MapSet.new()
       ctx = context(principal)
+
       Authorization.authorize(grants, action, {:tenant, tenant_key}, ctx)
       |> map_denial()
     end
@@ -185,8 +192,8 @@ defmodule Vxpipe.Calls.UserAuthorization do
     if authorize_installation(principal, "tenants.read") == :ok or
          authorize_installation(principal, "tenants.write") == :ok or
          Enum.any?(@tenant_actions, &MapSet.member?(grants, &1)),
-      do: :ok,
-      else: {:error, :forbidden}
+       do: :ok,
+       else: {:error, :forbidden}
   end
 
   @spec listable_assigned_keys(map()) :: {:ok, [String.t()]} | {:error, :forbidden}

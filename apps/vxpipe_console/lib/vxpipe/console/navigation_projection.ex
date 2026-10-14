@@ -64,6 +64,8 @@ defmodule Vxpipe.Console.NavigationProjection do
 
   defp platform_destinations(principal) do
     [
+      {Vxpipe.Calls.ApiKeyAccess.visible?(principal),
+       %{id: "api_keys", label: "API Keys", path: "/api-keys"}},
       {principal.account_kind in [:admin, :superadmin],
        %{id: "roles", label: "Roles", path: "/roles"}},
       {installed?(principal, "users.read"), %{id: "users", label: "Users", path: "/users"}},

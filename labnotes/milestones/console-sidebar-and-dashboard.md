@@ -557,3 +557,22 @@ the single-tenant dashboard landing, and redirect legacy /my-tenants bookmarks.
 - [x] Put Unpublished changes below Published when a newer saved revision exists.
 - [x] Verify the mixed-status table with a focused regression test.
 - [x] Inspect desktop and narrow Storybook rendering, including horizontal table scrolling.
+
+### Settings API-key management
+
+User requests: move API Keys into Settings, add Create & Join Calls, Full Tenant
+Access and Full Platform Access; require a searchable tenant picker for tenant
+keys; show Tenant in a separate list column; implement UI and backend together.
+API-key management permissions must be separate and support tenant scope.
+
+Design review: [access contract](../../docs/api-key-access.md). Prerequisites:
+identity grants/membership caps, tenant credential storage and Settings shell.
+Implement permission/storage contracts before endpoints and UI; inbound MCP is a
+separate server capability, with the single-endpoint direction recorded above.
+
+- [x] Add distinct management grants and preserve provider-credential permissions.
+- [x] Add durable platform keys, masked metadata, scoped listing/search and revocation.
+- [x] Enforce key issuance authority and integrate machine-key authentication.
+- [x] Wire authenticated Settings APIs and navigation with backend permission checks.
+- [x] Build tenant picker, Tenant column, three access types and Storybook states.
+- [x] Verify focused failures first, full relevant suites and desktop/mobile rendering. 3,808 backend tests and 753 frontend tests passed; all five root gates, TypeScript, ESLint and CSS build passed. Desktop/mobile Chrome verified inventory, tenant search, creation, reveal dismissal, revocation, platform mode and separate permission rows.

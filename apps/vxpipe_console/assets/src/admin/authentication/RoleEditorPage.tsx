@@ -27,6 +27,8 @@ export function RoleEditorPage({
       ? [
           ...operationalGrants("all_tenants"),
           ...[
+            "platform_api_keys.read",
+            ...(role.kind === "superadmin" ? ["platform_api_keys.write"] : []),
             "platform_services.read",
             "platform_services.write",
             "users.read",

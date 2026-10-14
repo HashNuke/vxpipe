@@ -57,17 +57,17 @@ test("call history return links retain the call spec filter", async () => {
   expect(screen.getByRole("combobox", { name: "Call spec" })).toHaveTextContent("Appointment reminders");
 });
 
-test.each(["api-key-existing", "choose-services"] as const)("%s identifies the tenant above its content", async scenario => {
+test.each(["choose-services"] as const)("%s identifies the tenant above its content", async scenario => {
   const { SetupStory } = await import("./SetupStory");
   render(<SetupStory scenario={scenario} theme="dark" />);
   expect(within(screen.getByRole("main")).getByText("Demo", { exact: true })).toBeVisible();
 });
 
-test("API key workspace breadcrumb opens the same tenant dashboard", async () => {
+test("API key creation breadcrumb returns to Settings inventory", async () => {
   const { SetupStory } = await import("./SetupStory");
   const { fireEvent } = await import("@testing-library/react");
   render(<SetupStory scenario="api-key-full-access" theme="dark" />);
-  fireEvent.click(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("button", { name: "Demo" }));
-  expect(screen.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-  expect(screen.getByLabelText("Demo dashboard")).toBeVisible();
+  const breadcrumb = await screen.findByRole("navigation", { name: "Breadcrumb" });
+  fireEvent.click(within(breadcrumb).getByRole("button", { name: "API Keys" }));
+  expect(await screen.findByRole("table", { name: "API keys" })).toBeVisible();
 });

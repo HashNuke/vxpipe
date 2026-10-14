@@ -20,7 +20,7 @@ export function NavigationShell({ children, role, user, tenants, selected, path,
   useEffect(() => setOpen(false), [path]);
   const main = useRef<HTMLDivElement>(null);
   const items = projectedItems ?? (role && user ? navigationItems(role, user, selected) : { tenant: [], platform: [] });
-  const settings = /^\/(roles|users|platform)(\/|$)/.test(path);
+  const settings = /^\/(api-keys|roles|users|platform)(\/|$)/.test(path);
   const href = (path: string) => realLinks ? path : `#${path}`;
   function navigate(next: string) { setOpen(false); onNavigate(next); requestAnimationFrame(() => main.current?.focus()); }
   const rail = <>

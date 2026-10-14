@@ -56,6 +56,9 @@ defmodule Vxpipe.Console.RequireUser do
     if query == "", do: "", else: "?" <> query
   end
 
+  defp permitted?(principal, ["api-keys" | rest]) when rest in [[], ["new"]],
+    do: Vxpipe.Calls.ApiKeyAccess.visible?(principal)
+
   defp permitted?(principal, ["tenants", "new"]), do: installed?(principal, "tenants.write")
   defp permitted?(principal, ["getting-started"]), do: installed?(principal, "tenants.write")
   defp permitted?(_principal, ["admin"]), do: true

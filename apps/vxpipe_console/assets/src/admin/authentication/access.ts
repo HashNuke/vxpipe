@@ -69,10 +69,23 @@ export const permissionGroups = [
   },
   {
     resource: "tenant_api_keys",
-    label: "Tenant API keys",
+    label: "Provider credentials",
     detail: "Create, update and remove provider credentials. Requires Services read access.",
     tenant: true,
     writeOnly: true,
+  },
+  {
+    resource: "access_keys",
+    label: "Tenant API Keys",
+    detail: "List and manage Vxpipe API keys within permitted tenants.",
+    tenant: true,
+  },
+  {
+    resource: "platform_api_keys",
+    label: "Platform API Keys",
+    detail: "View platform API keys. Creation and revocation are reserved to Superadmins.",
+    tenant: false,
+    reservedWrite: true,
   },
   {
     resource: "tenants",

@@ -30,6 +30,98 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     :ok
   end
 
+  test "Settings API-key endpoints return scoped metadata and one-time issuance secrets" do
+    settings = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
+
+    Application.put_env(
+      :vxpipe_calls,
+      Vxpipe.Calls,
+      Keyword.put(
+        settings,
+        :access_key_repository,
+        {Vxpipe.Console.Test.AccessKeyRepository, self()}
+      )
+    )
+
+    member(["access_keys.read", "access_keys.write", "calls.read", "calls.write"], %{
+      @key => :read_write
+    })
+
+    conn = login()
+    page = conn |> recycle() |> get("/admin/api/api-keys?q=Backend") |> json_response(200)
+    assert page["creatable_kinds"] == ["calls"]
+    assert [%{"tenant" => %{"key" => @key}, "last_four" => "abcd"}] = page["keys"]
+    refute Map.has_key?(hd(page["keys"]), "secret")
+    assert_received {:key_list, {:keys, [@key]}, false, %{query: "Backend"}}
+
+    tenants =
+      conn
+      |> recycle()
+      |> get("/admin/api/api-keys/tenants?kind=calls&q=Acme")
+      |> json_response(200)
+
+    assert [%{"key" => @key}] = tenants["tenants"]
+    assert_received {:key_tenants, {:keys, [@key]}, %{query: "Acme"}}
+
+    issued =
+      conn
+      |> recycle()
+      |> post("/admin/api/api-keys", %{
+        "name" => "Backend",
+        "kind" => "calls",
+        "tenant_key" => @key
+      })
+      |> json_response(201)
+
+    assert String.starts_with?(issued["secret"], "vxak_")
+    assert issued["key"]["can_revoke"]
+    assert_received {:key_insert, %{scopes: ["calls"], tenant_key: @key}}
+
+    assert conn
+           |> recycle()
+           |> delete("/admin/api/api-keys/" <> issued["key"]["id"])
+           |> response(204)
+
+    assert conn
+           |> recycle()
+           |> get("/admin/api/api-keys/tenants?kind[]=calls")
+           |> json_response(422)
+  end
+
+  test "API-key-only users get Settings access without platform administration or other tenants" do
+    member(["access_keys.read", "access_keys.write", "calls.read", "calls.write"], %{
+      @key => :read_write
+    })
+
+    conn = login()
+    data = conn |> recycle() |> get("/admin/api/navigation") |> json_response(200)
+
+    assert data["platform_destinations"] == [
+             %{"id" => "api_keys", "label" => "API Keys", "path" => "/api-keys"}
+           ]
+
+    assert conn |> recycle() |> get("/api-keys") |> html_response(200) =~ "/assets/admin.js"
+    assert conn |> recycle() |> get("/roles") |> response(403)
+
+    assert conn
+           |> recycle()
+           |> post("/admin/api/api-keys", %{"name" => "Forbidden", "kind" => "platform"})
+           |> json_response(403)
+
+    assert conn
+           |> recycle()
+           |> post("/admin/api/api-keys", %{
+             "name" => "Foreign",
+             "kind" => "calls",
+             "tenant_key" => @other
+           })
+           |> json_response(403)
+
+    member([])
+    assert conn |> recycle() |> get("/api-keys") |> response(403)
+    assert conn |> recycle() |> get("/admin/api/api-keys") |> json_response(403)
+  end
+
   test "tenant creation checks page and API permissions and returns a dashboard destination" do
     member(["tenants.read"], %{})
     conn = login()

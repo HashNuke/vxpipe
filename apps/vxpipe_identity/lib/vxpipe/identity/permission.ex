@@ -15,22 +15,166 @@ defmodule Vxpipe.Identity.Permission do
         }
 
   @catalog [
-    %{key: "calls.read", resource: :calls, scopes: [:all_tenants, :assigned_tenants], mutating: false, requires_read: nil, reserved: false},
-    %{key: "calls.write", resource: :calls, scopes: [:all_tenants, :assigned_tenants], mutating: true, requires_read: "calls.read", reserved: false},
-    %{key: "call_specs.read", resource: :call_specs, scopes: [:all_tenants, :assigned_tenants], mutating: false, requires_read: nil, reserved: false},
-    %{key: "call_specs.write", resource: :call_specs, scopes: [:all_tenants, :assigned_tenants], mutating: true, requires_read: "call_specs.read", reserved: false},
-    %{key: "platform_services.read", resource: :platform_services, scopes: [:installation], mutating: false, requires_read: nil, reserved: false},
-    %{key: "platform_services.write", resource: :platform_services, scopes: [:installation], mutating: true, requires_read: "platform_services.read", reserved: false},
-    %{key: "tenant_services.read", resource: :tenant_services, scopes: [:all_tenants, :assigned_tenants], mutating: false, requires_read: nil, reserved: false},
-    %{key: "tenant_services.write", resource: :tenant_services, scopes: [:all_tenants, :assigned_tenants], mutating: true, requires_read: "tenant_services.read", reserved: false},
-    %{key: "tenant_api_keys.write", resource: :tenant_api_keys, scopes: [:all_tenants, :assigned_tenants], mutating: true, requires_read: "tenant_services.read", reserved: false},
-    %{key: "tenants.read", resource: :tenants, scopes: [:installation], mutating: false, requires_read: nil, reserved: false},
-    %{key: "tenants.write", resource: :tenants, scopes: [:installation], mutating: true, requires_read: "tenants.read", reserved: false},
-    %{key: "diagnostics.read", resource: :diagnostics, scopes: [:installation], mutating: false, requires_read: nil, reserved: true},
-    %{key: "users.read", resource: :users, scopes: [:installation], mutating: false, requires_read: nil, reserved: false},
-    %{key: "users.members.write", resource: :users, scopes: [:installation], mutating: true, requires_read: "users.read", reserved: true},
-    %{key: "users.admins.write", resource: :users, scopes: [:installation], mutating: true, requires_read: "users.read", reserved: true},
-    %{key: "users.superadmins.write", resource: :users, scopes: [:installation], mutating: true, requires_read: "users.read", reserved: true}
+    %{
+      key: "calls.read",
+      resource: :calls,
+      scopes: [:all_tenants, :assigned_tenants],
+      mutating: false,
+      requires_read: nil,
+      reserved: false
+    },
+    %{
+      key: "calls.write",
+      resource: :calls,
+      scopes: [:all_tenants, :assigned_tenants],
+      mutating: true,
+      requires_read: "calls.read",
+      reserved: false
+    },
+    %{
+      key: "call_specs.read",
+      resource: :call_specs,
+      scopes: [:all_tenants, :assigned_tenants],
+      mutating: false,
+      requires_read: nil,
+      reserved: false
+    },
+    %{
+      key: "call_specs.write",
+      resource: :call_specs,
+      scopes: [:all_tenants, :assigned_tenants],
+      mutating: true,
+      requires_read: "call_specs.read",
+      reserved: false
+    },
+    %{
+      key: "platform_services.read",
+      resource: :platform_services,
+      scopes: [:installation],
+      mutating: false,
+      requires_read: nil,
+      reserved: false
+    },
+    %{
+      key: "platform_services.write",
+      resource: :platform_services,
+      scopes: [:installation],
+      mutating: true,
+      requires_read: "platform_services.read",
+      reserved: false
+    },
+    %{
+      key: "tenant_services.read",
+      resource: :tenant_services,
+      scopes: [:all_tenants, :assigned_tenants],
+      mutating: false,
+      requires_read: nil,
+      reserved: false
+    },
+    %{
+      key: "tenant_services.write",
+      resource: :tenant_services,
+      scopes: [:all_tenants, :assigned_tenants],
+      mutating: true,
+      requires_read: "tenant_services.read",
+      reserved: false
+    },
+    %{
+      key: "tenant_api_keys.write",
+      resource: :tenant_api_keys,
+      scopes: [:all_tenants, :assigned_tenants],
+      mutating: true,
+      requires_read: "tenant_services.read",
+      reserved: false
+    },
+    %{
+      key: "access_keys.read",
+      resource: :access_keys,
+      scopes: [:all_tenants, :assigned_tenants],
+      mutating: false,
+      requires_read: nil,
+      reserved: false
+    },
+    %{
+      key: "access_keys.write",
+      resource: :access_keys,
+      scopes: [:all_tenants, :assigned_tenants],
+      mutating: true,
+      requires_read: "access_keys.read",
+      reserved: false
+    },
+    %{
+      key: "platform_api_keys.read",
+      resource: :platform_api_keys,
+      scopes: [:installation],
+      mutating: false,
+      requires_read: nil,
+      reserved: false
+    },
+    %{
+      key: "platform_api_keys.write",
+      resource: :platform_api_keys,
+      scopes: [:installation],
+      mutating: true,
+      requires_read: "platform_api_keys.read",
+      reserved: true
+    },
+    %{
+      key: "tenants.read",
+      resource: :tenants,
+      scopes: [:installation],
+      mutating: false,
+      requires_read: nil,
+      reserved: false
+    },
+    %{
+      key: "tenants.write",
+      resource: :tenants,
+      scopes: [:installation],
+      mutating: true,
+      requires_read: "tenants.read",
+      reserved: false
+    },
+    %{
+      key: "diagnostics.read",
+      resource: :diagnostics,
+      scopes: [:installation],
+      mutating: false,
+      requires_read: nil,
+      reserved: true
+    },
+    %{
+      key: "users.read",
+      resource: :users,
+      scopes: [:installation],
+      mutating: false,
+      requires_read: nil,
+      reserved: false
+    },
+    %{
+      key: "users.members.write",
+      resource: :users,
+      scopes: [:installation],
+      mutating: true,
+      requires_read: "users.read",
+      reserved: true
+    },
+    %{
+      key: "users.admins.write",
+      resource: :users,
+      scopes: [:installation],
+      mutating: true,
+      requires_read: "users.read",
+      reserved: true
+    },
+    %{
+      key: "users.superadmins.write",
+      resource: :users,
+      scopes: [:installation],
+      mutating: true,
+      requires_read: "users.read",
+      reserved: true
+    }
   ]
 
   @by_key Map.new(@catalog, &{&1.key, &1})
@@ -76,6 +220,9 @@ defmodule Vxpipe.Identity.Permission do
     "tenant_services.read",
     "tenant_services.write",
     "tenant_api_keys.write",
+    "access_keys.read",
+    "access_keys.write",
+    "platform_api_keys.read",
     "tenants.read",
     "tenants.write",
     "diagnostics.read"
@@ -90,6 +237,7 @@ defmodule Vxpipe.Identity.Permission do
       "users.read",
       "users.members.write",
       "users.admins.write",
+      "platform_api_keys.write",
       "users.superadmins.write" | @operational_grants
     ])
   end
