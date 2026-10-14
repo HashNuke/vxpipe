@@ -1,6 +1,6 @@
 # Morse-code API design
 
-Status: proposed implementation design, 2026-10-14. The user approved a separate
+Status: implementation in progress, 2026-10-14. The user approved a separate
 Go service and clarified complete ElevenLabs TTS/STT compatibility as the target.
 Implementation is tracked in the
 [Morse-code API milestone](../labnotes/milestones/remote-morse-code-audio.md).
@@ -159,10 +159,12 @@ Reviewed on 2026-10-14; refresh and pin exact schemas/SDK versions in checkpoint
 
 ## Verification evidence
 
-This design is based on source inspection and current official API references,
-not a running prototype. `bin/setup` completed successfully during planning.
-The planning checkpoint checks document links, index counts/order and diff
-whitespace. Go benchmarks, API conformance, Vxpipe runtime tests, browser checks
-and Railway deployment remain unchecked implementation acceptance gates. The
+The Go server, authenticated discovery and explicit PCM synthesis/batch recognition
+are implemented. Pinned SDK discovery and PCM round trips pass, including response
+schema validation. Independent Morse fixtures and Go/Elixir codec interoperability
+pass; these establish the first two checkpoints, not full API compatibility.
+`bin/setup` completed successfully. Full format/stream/WS conformance, Vxpipe
+provider integration, benchmarks, browser checks and Railway deployment remain
+unchecked implementation acceptance gates. The
 [planning labnote](../labnotes/20261014-1947-remote-morse-milestone.md) records the
 separate specification review and exact planning validation.

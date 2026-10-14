@@ -1,11 +1,11 @@
 # Morse-code API service and providers
 
-Status: implementation started, 2026-10-14. **0 of 9
-implementation checkpoints complete.** The user requested planning first and
+Status: implementation started, 2026-10-14. **2 of 9
+implementation checkpoints complete (A and B).** The user requested planning first and
 clarified the scope as complete ElevenLabs **TTS/STT** compatibility, including
 HTTP, streaming, WebSockets, discovery and authentication. Other ElevenLabs
-product APIs are outside this milestone. The Go server/catalog slice is implemented;
-speech endpoints and Vxpipe integration remain pending.
+product APIs are outside this milestone. The Go server/catalog and HTTP PCM speech slice are implemented;
+other API surfaces and Vxpipe provider integration remain pending.
 
 ## Runnable outcome
 
@@ -200,6 +200,20 @@ is a separate recorded follow-up after successful cutover, not part of this
 milestone's automatic cleanup. Rollback restores the previous origin and restarts
 Vxpipe; it does not modify call specs or credentials.
 
+Endpoint and deployment acceptance must cover this matrix:
+
+| Environment | Go listener | Vxpipe origin | Required evidence |
+| --- | --- | --- | --- |
+| Native development | Loopback and selected free port | Explicit matching HTTP origin | Discovery, probe, HTTP TTS and WS STT all reach that process |
+| Container development | Reachable container interface and injected port | Reachable host/container DNS origin | No accidental use of the container's own loopback |
+| Local TLS fixture | Test HTTPS listener | HTTPS origin | HTTPS/WSS derivation and certificate validation |
+| Railway | `0.0.0.0:$PORT` | Generated or custom HTTPS origin | Public readiness, streaming, WS upgrades and bounded drain |
+| Cutover/rollback | New/previous verified listener | Change runtime variable and restart | Same saved service, credentials and call spec; all new traffic uses selected origin |
+
+If the selected origin is unavailable, report service unavailability and recover
+through ordinary lifecycle handling. Do not send a request or key to a fallback
+origin. Test this both before and after switching between two local servers.
+
 ## Checkpoints
 
 Each checkpoint leaves a runnable slice. Write and run the smallest externally
@@ -214,7 +228,7 @@ Dependencies: prerequisites above; no Go project assumed to exist.
 - [x] Inspect the sibling project's instructions/status before creating or editing
   it. Initialize a standalone Go module, pinned toolchain, `cmd/morsecode-audio`,
   focused internal packages and CI; no Vxpipe runtime dependency.
-- [ ] Freeze the speech API ledger from official reference/schema and clients,
+- [x] Freeze the speech API ledger from official reference/schema and clients,
   including every format, auth location, default, error and retention conflict.
   Record accepted exceptions separately from implemented parity.
 - [x] Write failing HTTP tests, then add `net/http` startup, `/healthz`, `/readyz`,
@@ -233,8 +247,11 @@ HTTP schema snapshot and field inventory. Initial package tests failed before
 implementation; focused tests, vet and race checks now pass. The pinned ElevenLabs
 Python SDK 2.72.0 reads discovery and six responses validate against the captured
 schema. A real binary served a nondefault local port and shut down on SIGTERM.
-Complete WS contract fixtures and retention decisions remain open, so A stays
-in progress. See [implementation evidence](../20261014-2120-implement-morse-api.md).
+All three WS AsyncAPI contracts (61 schemas) are now pinned with source digests;
+HTTP/WS snapshot hashes and references validate. Selected coder/websocket for D.
+The ledger proposes exact no-retention errors; their owner acceptance remains a
+separate H gate, and no unimplemented API feature is marked complete.
+See [implementation evidence](../20261014-2120-implement-morse-api.md).
 
 Exit: a clean checkout starts locally and official-client discovery plus auth
 fixtures pass. Missing scope decisions stay recorded; writing the ledger does
@@ -244,18 +261,27 @@ not mark API features implemented.
 
 Dependencies: A.
 
-- [ ] Add independent known-tone and sample-run fixtures before Go codec code.
+- [x] Add independent known-tone and sample-run fixtures before Go codec code.
   Match the existing local Morse default and reference alphabet/timing.
-- [ ] Implement bounded incremental synthesis/detection behind transport-free
+- [x] Implement bounded incremental synthesis/detection behind transport-free
   Go APIs; test normalization, final tail, unsupported text, silence, incomplete
   signals, odd bytes and randomized chunk boundaries.
-- [ ] Add authenticated HTTP TTS with explicit `output_format=pcm_16000` and
+- [x] Add authenticated HTTP TTS with explicit `output_format=pcm_16000` and
   synchronous multipart WAV/PCM STT. This is an intermediate profile until C/H;
   do not claim default-format/full compatibility yet.
-- [ ] Stream multipart parts without temporary files; bound encoded input,
+- [x] Stream multipart parts without temporary files; bound encoded input,
   decoded audio duration, text and generated output before expensive allocation.
-- [ ] Prove Go TTS → local Elixir STT and local Elixir TTS → Go STT, in addition
+- [x] Prove Go TTS → local Elixir STT and local Elixir TTS → Go STT, in addition
   to independent fixture checks. Keep cross-repository checks explicitly tagged.
+
+Evidence: independent square-wave fixtures pass at seven PCM rates with arbitrary
+byte boundaries. Tone/space ratios, normalization, malformed signal failures,
+manual/automatic finalization and sample-derived timestamps pass. Go race/vet
+checks and the official SDK PCM round trip plus response-schema validation pass.
+CallEngine's tagged interoperability lane passes Go synthesis → Elixir decoding
+at four rates and Elixir synthesis → Go transcription. HTTP uploads use bounded
+memory without temporary files. See implementation labnotes for initial failures
+and corrections. This checkpoint does not claim MP3 defaults or streaming APIs.
 
 Exit: a CLI request generates `SOS TEST 123`, its audio decodes correctly through
 the HTTP STT endpoint, and invalid/silent input never invents a transcript.
