@@ -24,7 +24,7 @@ export function App(props: ComponentProps<typeof ProductionApp>) {
           const directory = allTenants(role) ? "/tenants" : "/my-tenants";
           const tenant = key ? { key, name: key.startsWith("acme") ? "Acme" : "Example tenant", dashboard_path: `/t/${key}/dashboard`, capabilities: { calls: capability("calls"), call_specs: capability("call_specs"), services: capability("tenant_services"), api_keys: capability("tenant_api_keys") } } : null;
           const destinations = navigationItems(role, user).platform.map(item => ({ id: item.label.toLowerCase(), label: item.label, path: item.href }));
-          return Response.json({ actor: { id: user.id, kind: role.kind ?? "member" }, tenant_scope: allTenants(role) ? "all" : "assigned", directory_access: !!role.kind || role.grants.some(grant => ["calls.read", "call_specs.read", "tenant_services.read", "tenant_api_keys.read", "tenants.read"].includes(grant.permission)), directory_path: directory, landing_path: directory, platform_destinations: destinations, tenant });
+          return Response.json({ actor: { id: user.id, kind: role.kind ?? "member" }, tenant_scope: allTenants(role) ? "all" : "assigned", directory_access: !!role.kind || role.grants.some(grant => ["calls.read", "call_specs.read", "tenant_services.read", "tenants.read"].includes(grant.permission)), directory_path: directory, landing_path: directory, platform_destinations: destinations, tenant });
         } catch { return Response.json({}, { status: 503 }); }
       }
       let response: Response;

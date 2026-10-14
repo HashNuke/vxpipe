@@ -111,7 +111,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
   end
 
   test "authenticated bootstrap is private, scoped, and re-resolves permission changes" do
-    member(["calls.read", "tenant_api_keys.read", "tenant_api_keys.write", "users.read"])
+    member(["calls.read", "tenant_services.read", "tenant_api_keys.write", "users.read"])
     conn = login()
     response = conn |> recycle() |> get("/admin/api/navigation?tenant=#{@key}")
     data = json_response(response, 200)
@@ -126,7 +126,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
 
     assert data["tenant"]["capabilities"]["calls"] == %{"read" => true, "write" => false}
     assert data["tenant"]["capabilities"]["api_keys"] == %{"read" => true, "write" => false}
-    refute data["tenant"]["capabilities"]["services"]["read"]
+    assert data["tenant"]["capabilities"]["services"]["read"]
     assert Plug.Conn.get_resp_header(response, "cache-control") == ["private, no-store"]
     refute Map.has_key?(data, "tenants")
 
@@ -240,7 +240,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
   end
 
   test "dashboard returns only authorized data and separates empty from failed calls" do
-    member(["tenant_api_keys.read"])
+    member(["tenant_services.read"])
     conn = login()
     data = conn |> recycle() |> get("/admin/api/tenants/#{@key}/dashboard") |> json_response(200)
     assert data["tenant"]["key"] == @key
@@ -301,7 +301,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
   end
 
   test "canonical pages preserve page permissions and conceal foreign dashboards" do
-    member(["calls.read", "tenant_api_keys.read"])
+    member(["calls.read", "tenant_services.read"])
     conn = login()
 
     for path <- [

@@ -11,7 +11,7 @@ const other = "BBBBBBBBBBBBBBBB";
 const capability = { read: true, write: false };
 const tenant = (key: string) => ({ key, name: key === other ? "Beta" : "Acme", dashboard_path: `/t/${key}/dashboard`, capabilities: { calls: capability, call_specs: capability, services: capability, api_keys: capability } });
 const user = { id: "user", email: "operator@example.test", enabled: true, roleId: "role", memberships: [{ tenantId: key, access: "read" }, { tenantId: other, access: "read" }] };
-const role = { id: "role", name: "Reader", description: "", grants: ["calls.read", "call_specs.read", "tenant_services.read", "tenant_api_keys.read"].map(permission => ({ permission, scope: "assigned_tenants" })) };
+const role = { id: "role", name: "Reader", grants: ["calls.read", "call_specs.read", "tenant_services.read", "tenant_services.read"].map(permission => ({ permission, scope: "assigned_tenants" })) };
 const response = (data: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(data), { status }));
 function fetcher({ directoryAccess = true, callsError = false } = {}) {
   return vi.fn((input: RequestInfo | URL) => {

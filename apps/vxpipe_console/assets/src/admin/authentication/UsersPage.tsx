@@ -136,7 +136,6 @@ export function UsersPage({
               const role = roles.find((item) => item.id === user.roleId) ?? {
                 id: user.roleId,
                 name: "Unknown role",
-                description: "",
                 kind: null,
                 grants: [],
               } as Role;

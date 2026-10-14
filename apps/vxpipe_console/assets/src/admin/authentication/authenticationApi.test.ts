@@ -125,8 +125,8 @@ test("maps minimal role options without granting authority", async () => {
   const { roles } = await api.roleOptions();
 
   expect(roles).toEqual([
-    { id: "role-1", name: "Superadmin", description: "", kind: "superadmin", grants: [] },
-    { id: "role-2", name: "Member", description: "", kind: null, grants: [] },
+    { id: "role-1", name: "Superadmin", kind: "superadmin", grants: [] },
+    { id: "role-2", name: "Member", kind: null, grants: [] },
   ]);
 });
 
@@ -184,7 +184,7 @@ test("sends the server role revision for optimistic updates", async () => {
   );
   const api = new AuthenticationApi("csrf-token", fetchImpl);
 
-  await api.updateRole("role-1", { name: "Support", description: "", grants: [] }, 3);
+  await api.updateRole("role-1", { name: "Support", grants: [] }, 3);
 
   expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))).toMatchObject({
     expected_revision: 3,

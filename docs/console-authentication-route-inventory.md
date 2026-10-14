@@ -16,7 +16,7 @@ controller and owning Calls/Persistence operation enforce it.
 | `/admin/api/tenants/:key/call-specs*` | Calls/Persistence | `call_specs.read` for listing/show, `call_specs.write` for save/publish; platform references require the authoring modifier |
 | Tenant providers, service bindings, service directory, telephony application reads, phone numbers | Calls/Persistence | `tenant_services.read` on the resolved tenant |
 | Tenant telephony application writes | Calls/Persistence | `tenant_services.write` on the resolved tenant |
-| Tenant credentials (`GET /admin/api/tenants/:key/credentials`) and write/test/delete | Calls/Persistence | `tenant_api_keys.read/write` on the resolved tenant |
+| Tenant credentials (`GET /admin/api/tenants/:key/credentials`) and write/test/delete | Calls/Persistence | `tenant_services.read` for reads/testing submitted credentials; `tenant_api_keys.write` for mutations, on the resolved tenant |
 | Platform service directory and credentials | Calls/Persistence | `platform_services.read/write` at installation scope |
 | Demo onboarding and sample installation | Console and Calls | Built-in administrator; relevant `tenants.write` and `call_specs.write` |
 | `/admin/samples/*` and `/admin/samples/calls`, `/transfers` | Console and Calls | Built-in administrator for sample page; `calls.write` for creation on the target tenant |

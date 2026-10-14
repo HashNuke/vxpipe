@@ -42,7 +42,6 @@ export function RolesPage({
           >
             <div>
               <RoleBadge role={role} />
-              <p className="access-muted">{role.description}</p>
             </div>
             <span className="access-muted">
               {typeof count === "number" ? `Users: ${count}` : "Users: see details"}

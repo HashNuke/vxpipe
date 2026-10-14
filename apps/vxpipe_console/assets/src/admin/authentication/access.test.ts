@@ -137,7 +137,6 @@ describe("operational capabilities derived from the server principal", () => {
         ...roles[2].grants,
         { permission: "tenant_services.read", scope: "assigned_tenants" as const },
         { permission: "tenant_services.write", scope: "assigned_tenants" as const },
-        { permission: "tenant_api_keys.read", scope: "assigned_tenants" as const },
         { permission: "tenant_api_keys.write", scope: "assigned_tenants" as const },
       ],
     };

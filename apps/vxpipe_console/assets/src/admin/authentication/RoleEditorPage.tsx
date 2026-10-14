@@ -16,13 +16,12 @@ export function RoleEditorPage({
   role?: Role;
   affectedUsers?: number;
   onSave: (
-    draft: Pick<Role, "name" | "description" | "grants">,
+    draft: Pick<Role, "name" | "grants">,
   ) => Promise<SaveResult>;
   onDelete?: () => Promise<SaveResult>;
   onNavigate: Navigate;
 }) {
   const [name, setName] = useState(role?.name ?? "");
-  const [description, setDescription] = useState(role?.description ?? "");
   const [grants, setGrants] = useState<Grant[]>(
     role?.kind
       ? [
@@ -50,7 +49,6 @@ export function RoleEditorPage({
     try {
       const result = await onSave({
         name: name.trim(),
-        description: description.trim(),
         grants,
       });
       setError(result.error);
@@ -99,13 +97,6 @@ export function RoleEditorPage({
               maxLength={80}
               value={name}
               onChange={(event) => setName(event.target.value)}
-              readOnly={!!role?.kind}
-            />
-            <FormField
-              label="Description"
-              maxLength={240}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
               readOnly={!!role?.kind}
             />
           </section>

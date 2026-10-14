@@ -26,6 +26,14 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
   @tenant "AAAAAAAAAAAAAAAA"
   @other "BBBBBBBBBBBBBBBB"
 
+  test "services read includes credential metadata without allowing credential writes" do
+    principal = base_principal(%{grants: MapSet.new(["tenant_services.read"]), assigned_tenants: %{@tenant => :read}})
+    assert :ok = UserAuthorization.authorize_credential_read(principal, @tenant)
+    assert {:error, _} = UserAuthorization.authorize_credential_write(principal, @tenant)
+    assert {:error, _} = UserAuthorization.authorize_credential_read(principal, @other)
+    assert {:error, :unknown_permission} = Vxpipe.Identity.Permission.fetch("tenant_api_keys.read")
+  end
+
   test "tenant operation authorization rejects unregistered grant strings" do
     principal = base_principal(%{
       grants: MapSet.new(["unknown.write"]),
@@ -77,12 +85,11 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
           "platform_services.write",
           "tenant_services.read",
           "tenant_services.write",
-          "tenant_api_keys.read",
           "tenant_api_keys.write"
         ]),
       all_tenant_actions:
         MapSet.new(["calls.read", "calls.write", "call_specs.read", "call_specs.write",
-          "tenant_services.read", "tenant_services.write", "tenant_api_keys.read", "tenant_api_keys.write"])
+          "tenant_services.read", "tenant_services.write", "tenant_api_keys.write"])
     })
   end
 
@@ -148,15 +155,14 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
              )
   end
 
-  test "tenant directory supports all-tenant service and key roles and empty assignments" do
+  test "tenant directory supports all-tenant service readers and empty assignments" do
     repository = start_supervised!({TestAdminRepository, {:ok, {[tenant_fixture(@tenant)], 1}}})
     options = [admin_repository: TestAdminRepository.admin_repository(repository)]
 
-    for action <- ["tenant_services.read", "tenant_api_keys.read"] do
-      principal = base_principal(%{grants: MapSet.new([action]), all_tenant_actions: MapSet.new([action])})
-      assert {:ok, %TenantPage{total: 1}} = OperatorAdministration.list_tenants(principal, options)
-      assert_received {:admin_repository_list_tenants, 25, 0}
-    end
+    action = "tenant_services.read"
+    principal = base_principal(%{grants: MapSet.new([action]), all_tenant_actions: MapSet.new([action])})
+    assert {:ok, %TenantPage{total: 1}} = OperatorAdministration.list_tenants(principal, options)
+    assert_received {:admin_repository_list_tenants, 25, 0}
 
     unassigned = base_principal(%{grants: MapSet.new(["calls.read"])})
     assert {:ok, %TenantPage{tenants: [], total: 0}} = OperatorAdministration.list_tenants(unassigned, [])
@@ -343,7 +349,6 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
         "call_specs.write",
         "tenant_services.read",
         "tenant_services.write",
-        "tenant_api_keys.read",
         "tenant_api_keys.write" | extra_grants
       ])
 
@@ -482,7 +487,7 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
 
     reader =
       base_principal(%{
-        grants: MapSet.new(["tenant_api_keys.read"]),
+        grants: MapSet.new(["tenant_services.read"]),
         assigned_tenants: %{@tenant => :read},
         all_tenant_actions: MapSet.new()
       })
@@ -701,7 +706,7 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
              Vxpipe.Calls.list_operator_services(member, @tenant, opts)
   end
 
-  test "service and API-key inventories stay separate for custom roles" do
+  test "service readers receive credential metadata in their tenant inventory" do
     tenant = tenant_fixture(@tenant)
     credential = %Vxpipe.Calls.ProviderCredential{
       id: "11111111-1111-4111-8111-111111111111",
@@ -718,16 +723,11 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
       grants: MapSet.new(["tenant_services.read"]),
       assigned_tenants: %{@tenant => :read}
     })
-    key_reader = base_principal(%{
-      grants: MapSet.new(["tenant_api_keys.read"]),
-      assigned_tenants: %{@tenant => :read}
-    })
+    assert {:ok, directory} = Vxpipe.Calls.list_operator_services(service_reader, @tenant, opts)
+    assert [%Vxpipe.Calls.ProviderCredential{}] = directory.credentials
+    assert directory.telephony_services == []
+    assert {:error, :forbidden} = Vxpipe.Calls.list_operator_services(service_reader, @other, opts)
 
-    assert {:ok, service_directory} = Vxpipe.Calls.list_operator_services(service_reader, @tenant, opts)
-    assert service_directory.credentials == []
-    assert {:ok, key_directory} = Vxpipe.Calls.list_operator_services(key_reader, @tenant, opts)
-    assert [%Vxpipe.Calls.ProviderCredential{}] = key_directory.credentials
-    assert key_directory.telephony_services == []
   end
 
   test "assigned tenant manager manages telephony applications within assignment" do

@@ -12,12 +12,6 @@ import {
 } from "../components/ui/dialog";
 import { effectiveAccess, hasAssignedGrants } from "./access";
 import type { Membership, Role, Tenant } from "./types";
-const label = (access: string) =>
-  access === "write" || access === "read_write"
-    ? "read & write"
-    : access === "read"
-      ? "read"
-      : "none";
 export function TenantAccessEditor({
   role,
   tenants,
@@ -50,18 +44,20 @@ export function TenantAccessEditor({
   const matches = tenants.filter((tenant) =>
     `${tenant.name} ${tenant.key}`.toLowerCase().includes(search.toLowerCase()),
   );
-  const summary = (access?: Membership["access"]) =>
-    `Calls: ${label(effectiveAccess(role, "calls", access))} · Call specs: ${label(effectiveAccess(role, "call_specs", access))} · Services: ${label(effectiveAccess(role, "tenant_services", access))} · API keys: ${label(effectiveAccess(role, "tenant_api_keys", access))}`;
+  const summary = (access?: Membership["access"]) => {
+    const resources = [["calls", "calls"], ["call_specs", "Call Specs"], ["tenant_services", "Services"], ["tenant_api_keys", "API keys"]];
+    return resources.flatMap(([resource, name]) => {
+      const level = effectiveAccess(role, resource, access);
+      if (resource === "tenant_api_keys") return level === "write" ? ["Write API keys"] : [];
+      return level === "none" ? [] : [`${level === "write" ? "Read and write" : "Read"} ${name}`];
+    }).join(", ") || "No tenant permissions";
+  };
   return (
     <Dialog open={open} onOpenChange={setOpen}>
     <section className="access-section" aria-label="Tenant access" ref={setPortalContainer}>
       <div className="access-section-heading">
         <div>
           <h2>Tenant access</h2>
-          <p className="access-muted">
-            The role defines available actions. Assignments define where they
-            apply.
-          </p>
         </div>
         {assigned && !readOnly ? (
           <DialogTrigger asChild>
@@ -105,9 +101,6 @@ export function TenantAccessEditor({
             <div className="access-tenant-row" key={membership.tenantId}>
               <div>
                 <strong>{tenant?.name ?? "Unavailable tenant"}</strong>
-                <small className="access-key">
-                  {tenant?.key ?? membership.tenantId}
-                </small>
                 <p className="access-muted">
                   {readOnly && unknownGrants
                     ? membership.access === "read"
@@ -200,7 +193,7 @@ export function TenantAccessEditor({
                     )
                   }
                 />
-                <span>{tenant.name}<small>{tenant.key}</small></span>
+                <span>{tenant.name}</span>
               </label>
             );
           })}

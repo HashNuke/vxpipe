@@ -12,7 +12,7 @@ defmodule Vxpipe.Calls.UserAuthorization do
   @tenant_actions [
     "calls.read", "calls.write", "call_specs.read", "call_specs.write",
     "tenant_services.read", "tenant_services.write",
-    "tenant_api_keys.read", "tenant_api_keys.write"
+    "tenant_api_keys.write"
   ]
 
   @spec authorize_tenant(map(), String.t(), String.t()) :: :ok | {:error, :forbidden | term()}
@@ -72,7 +72,7 @@ defmodule Vxpipe.Calls.UserAuthorization do
 
   @spec credential_read_action(:platform | term()) :: String.t()
   def credential_read_action(:platform), do: "platform_services.read"
-  def credential_read_action(_owner), do: "tenant_api_keys.read"
+  def credential_read_action(_owner), do: "tenant_services.read"
 
   @spec credential_write_action(:platform | term()) :: String.t()
   def credential_write_action(:platform), do: "platform_services.write"
@@ -96,11 +96,11 @@ defmodule Vxpipe.Calls.UserAuthorization do
 
   def authorize_credential_read(principal, {:tenant, key})
       when is_map(principal) and is_binary(key) do
-    authorize_tenant_scoped(principal, "tenant_api_keys.read", key, false)
+    authorize_tenant_scoped(principal, "tenant_services.read", key, false)
   end
 
   def authorize_credential_read(principal, key) when is_map(principal) and is_binary(key) do
-    authorize_tenant_scoped(principal, "tenant_api_keys.read", key, false)
+    authorize_tenant_scoped(principal, "tenant_services.read", key, false)
   end
 
   def authorize_credential_read(_principal, _owner), do: {:error, :forbidden}

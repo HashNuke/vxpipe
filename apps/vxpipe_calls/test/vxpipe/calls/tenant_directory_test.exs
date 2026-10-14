@@ -139,7 +139,7 @@ defmodule Vxpipe.Calls.TenantDirectoryTest do
       admin_repository: {Vxpipe.Calls.TestDashboardRepository, {self(), tenant(@key), {:ok, []}}}
     ]
 
-    keys_only = principal(%{grants: MapSet.new(["tenant_api_keys.read"])})
+    keys_only = principal(%{grants: MapSet.new(["tenant_services.read"])})
     assert {:ok, dashboard} = Vxpipe.Calls.TenantDashboard.fetch(keys_only, @key, opts)
     refute Map.has_key?(dashboard, :recent_calls)
     refute_received {:recent_calls, _, _}

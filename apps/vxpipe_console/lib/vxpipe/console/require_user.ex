@@ -97,9 +97,7 @@ defmodule Vxpipe.Console.RequireUser do
     do: tenant?(principal, "calls.read", tenant)
 
   defp permitted?(principal, ["admin", "tenants", tenant, "services" | _]),
-    do:
-      tenant?(principal, "tenant_services.read", tenant) or
-        tenant?(principal, "tenant_api_keys.read", tenant)
+    do: tenant?(principal, "tenant_services.read", tenant)
 
   defp permitted?(principal, ["admin", "tenants", tenant, "setup-services"]),
     do: permitted?(principal, ["admin", "tenants", tenant, "services"])

@@ -398,7 +398,8 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
         "grants" => []
       })
 
-    assert %{"role" => %{"id" => "new-role"}} = json_response(created, 201)
+    assert %{"role" => %{"id" => "new-role"} = role} = json_response(created, 201)
+    refute Map.has_key?(role, "description")
   end
 
   test "role filter options are available to user-directory readers" do

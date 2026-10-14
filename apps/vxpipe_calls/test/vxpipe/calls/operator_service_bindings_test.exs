@@ -3,7 +3,7 @@ defmodule Vxpipe.Calls.OperatorServiceBindingsTest do
   alias Vxpipe.Calls.{InstallationOperator, Principal, TestOperatorCredentialRepository}
   alias Vxpipe.Identity.Principal, as: UserPrincipal
 
-  test "service-only reader cannot see credential identifiers in bindings" do
+  test "service reader can see credential metadata in bindings" do
     tenant = "AAAAAAAAAAAAAAAA"
     binding = %{
       provider: "deepgram", name: "deepgram", source: :tenant, status: :connected,
@@ -23,8 +23,8 @@ defmodule Vxpipe.Calls.OperatorServiceBindingsTest do
 
     assert {:ok, %{bindings: [visible]}} =
              Vxpipe.Calls.list_operator_service_bindings(principal, tenant, options)
-    assert visible.credential_id == nil
-    assert visible.saved_fields == []
+    assert visible.credential_id == "credential-id"
+    assert visible.saved_fields == ["api_key"]
   end
 
   test "operator inventory includes public models before a tenant exists" do

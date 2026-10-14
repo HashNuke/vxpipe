@@ -26,6 +26,20 @@ defmodule Vxpipe.Identity.RolesTest do
       uuid: Vxpipe.Identity.FakeUuid
     }
 
+  test "Services read can cover narrower service and credential writes" do
+    assert {:ok, role} = Roles.create_role(deps(), superadmin(), %{
+      name: "Credential manager", slug: "credential-manager", description: "Discard this",
+      grants: [%{permission: "tenant_services.read", scope: :all_tenants},
+        %{permission: "tenant_services.write", scope: :assigned_tenants},
+        %{permission: "tenant_api_keys.write", scope: :assigned_tenants}]
+    })
+    refute Map.has_key?(role, :description)
+    assert {:error, {:missing_prerequisite, "tenant_services.read"}} = Roles.create_role(deps(), superadmin(), %{
+      name: "Invalid", slug: "invalid", grants: [%{permission: "tenant_services.read", scope: :assigned_tenants},
+        %{permission: "tenant_api_keys.write", scope: :all_tenants}]
+    })
+  end
+
   test "ordinary users cannot create roles" do
     assert {:error, :forbidden} =
              Roles.create_role(deps(), member(), %{name: "Custom", slug: "custom", grants: []})

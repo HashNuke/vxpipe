@@ -12,7 +12,7 @@ type UserInput = {
   roleId: string;
   memberships: Membership[];
 };
-type RoleInput = Pick<Role, "name" | "description" | "grants">;
+type RoleInput = Pick<Role, "name" | "grants">;
 
 /** Thrown for HTTP/API failures; carries the status and backend error code. */
 export class AuthenticationError extends Error {
@@ -279,7 +279,6 @@ export class AuthenticationApi {
 function roleBody(input: RoleInput) {
   return {
     name: input.name,
-    description: input.description,
     grants: input.grants.map((grant: Grant) => ({
       permission: grant.permission,
       scope: grant.scope,
@@ -300,7 +299,6 @@ function parseRoleOption(entry: unknown): Role {
   return {
     id,
     name: record.name,
-    description: typeof record.description === "string" ? record.description : "",
     kind: kind === "superadmin" || kind === "admin" ? kind : null,
     grants: [],
   };

@@ -6,7 +6,6 @@ defmodule Vxpipe.Persistence.Schema.IdentityRole do
     field(:public_id, Ecto.UUID, autogenerate: true)
     field(:slug, :string)
     field(:name, :string)
-    field(:description, :string)
     field(:kind, :string)
     field(:revision, :integer, default: 1)
 
@@ -15,7 +14,7 @@ defmodule Vxpipe.Persistence.Schema.IdentityRole do
 
   def changeset(role, attributes) do
     role
-    |> cast(attributes, [:public_id, :slug, :name, :description, :kind, :revision])
+    |> cast(attributes, [:public_id, :slug, :name, :kind, :revision])
     |> validate_required([:public_id, :slug, :name])
     |> validate_format(:slug, ~r/\A[a-z0-9][a-z0-9_-]{1,62}\z/)
     |> validate_inclusion(:kind, ["superadmin", "admin"])
@@ -26,7 +25,7 @@ defmodule Vxpipe.Persistence.Schema.IdentityRole do
 
   def ordinary_changeset(role, attributes) do
     role
-    |> cast(attributes, [:public_id, :slug, :name, :description, :revision])
+    |> cast(attributes, [:public_id, :slug, :name, :revision])
     |> validate_required([:public_id, :slug, :name])
     |> validate_format(:slug, ~r/\A[a-z0-9][a-z0-9_-]{1,62}\z/)
     |> validate_number(:revision, greater_than: 0)

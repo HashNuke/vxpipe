@@ -41,7 +41,6 @@ defmodule Vxpipe.Identity.AuthorizationReviewTest do
       "platform_services.write",
       "tenant_services.read",
       "tenant_services.write",
-      "tenant_api_keys.read",
       "tenant_api_keys.write",
       "tenants.read",
       "tenants.write",
@@ -88,7 +87,6 @@ defmodule Vxpipe.Identity.AuthorizationReviewTest do
           "call_specs.write",
           "tenant_services.read",
           "tenant_services.write",
-          "tenant_api_keys.read",
           "tenant_api_keys.write"
         ])
     }
@@ -106,7 +104,7 @@ defmodule Vxpipe.Identity.AuthorizationReviewTest do
   end
 
   test "tenant service and API-key grants require a tenant scope and honor assignment caps" do
-    for key <- ["tenant_services.read", "tenant_services.write", "tenant_api_keys.read", "tenant_api_keys.write"] do
+    for key <- ["tenant_services.read", "tenant_services.write", "tenant_api_keys.write"] do
       assert Permission.valid_scope?(key, :assigned_tenants)
       assert Permission.valid_scope?(key, :all_tenants)
       refute Permission.valid_scope?(key, :installation)

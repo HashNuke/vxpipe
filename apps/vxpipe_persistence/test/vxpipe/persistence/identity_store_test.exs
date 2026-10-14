@@ -10,6 +10,14 @@ defmodule Vxpipe.Persistence.IdentityStoreTest do
     IdentityUserStore
   }
 
+  test "roles no longer store or expose a description" do
+    result = Vxpipe.Persistence.Repo.query!("SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'roles' AND column_name = 'description'")
+    assert result.rows == []
+    assert {:ok, roles} = IdentityRoleStore.list()
+    assert roles != []
+    refute Enum.any?(roles, &Map.has_key?(&1, :description))
+  end
+
   defp deps do
     %{
       users: IdentityUserStore,
@@ -62,7 +70,7 @@ defmodule Vxpipe.Persistence.IdentityStoreTest do
     {:ok, manager} = IdentityRoleStore.fetch_by_slug("tenant-manager")
     {:ok, member} = IdentityRoleStore.fetch_by_slug("tenant-member")
 
-    for key <- ["tenant_services.read", "tenant_services.write", "tenant_api_keys.read", "tenant_api_keys.write"] do
+    for key <- ["tenant_services.read", "tenant_services.write", "tenant_api_keys.write"] do
       assert %{permission: ^key, scope: :assigned_tenants} =
                Enum.find(manager.grants, &(&1.permission == key))
 

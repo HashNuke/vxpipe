@@ -31,7 +31,6 @@ defmodule Vxpipe.Console.UserManagementPayload do
     %{
       id: record.public_id,
       name: record.name,
-      description: record.description || "",
       kind: if(record.kind in [:admin, :superadmin], do: record.kind, else: nil),
       revision: record.revision,
       grants: Enum.map(record.grants, &Map.take(&1, [:permission, :scope]))

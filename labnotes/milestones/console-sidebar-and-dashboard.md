@@ -301,3 +301,60 @@ pagination independent. No prerequisite milestone change is needed.
   typecheck, lint and desktop/mobile browser verification passed.
 
 Evidence: [Calls follow-up labnotes](../20261014-0528-refine-call-directory.md).
+
+## User and role review — 2026-10-14
+
+### User requests (verbatim)
+
+> We dont need to display tenant ID for the list of tenants the user has access to. Just the tenant name and permissions will do.
+>
+> We have permissions listed like this:
+> "Calls: read · Call specs: read · Services: read · API keys: read"
+> I would prefer it listed like this:
+> "Read calls, Read Call Specs, Read Services, Read API keys"
+>
+> Although I dont know what permisisons the Read API keys is about. So please explain that when you are ready.
+>
+> I think for the user details page when the user has access to all tenants, we display permissions. That should also be formatted appropriately.
+>
+> Why do we need a role description under the roles dropdown on the create user page? Not needed. Remove.
+> "Manages tenant operations in assigned tenants."
+>
+> We also dont need this: "The role defines available actions. Assignments define where they apply."
+>
+> We display role descriptions here too - http://localhost:6006/?path=/story/vxpipe-console-roles-roles--roles
+> I would remove that.
+>
+> We dont even need description field for roles in our db and also on our UI - http://localhost:6006/?path=/story/vxpipe-console-roles-roles--create-role
+>
+> Ok then Read API keys is a permission we dont want to define. Read services can already encapsulate the Read API keys permission.
+>
+> I think you shold include all my requests so far in the most recent milestone as tasks and track them to completion.
+
+### Design review and dependency order
+
+First simplify role metadata and user-access presentation. Then replace the API-key
+read grant with Services read across the catalog, authorization, role editor,
+fixtures, and persisted grants. API-key writes retain their separate permission.
+Migrate grant scopes without reducing existing access or broadening write access;
+Services read now intentionally includes credential metadata and masked previews.
+Historical migrations remain intact; new migrations perform the cutover.
+
+- [x] Remove tenant IDs from assigned-tenant rows and chooser labels.
+- [x] Format assigned/all-tenant summaries as comma-separated action phrases.
+- [x] Explain API-key read: provider credential metadata and masked previews,
+  not full secret retrieval; credential mutation requires write permission.
+- [x] Remove role dropdown description and tenant-access explanatory sentence.
+- [x] Remove role descriptions from list, create/edit form, types, API and database.
+- [x] Fold API-key read into Services read, including role-grant migration and UI.
+- [x] Verify permission boundaries, migrations and affected user/role workflows.
+- [x] Verify rendered desktop/mobile views and complete required checks.
+- [x] Commit coherent checkpoints and synchronize evidence here.
+
+Evidence: [user-access labnotes](../20261014-0543-clarify-user-access.md).
+
+Acceptance: all five root gates passed, including 3,788 backend tests with zero
+failures (133 excluded). Frontend 730 tests, typecheck, lint, final focused tests,
+desktop/mobile user and role views, and the grant-migration integration test passed.
+Tenant and Calls checkpoints are `52893cea` and `04990a6e`; the user/role checkpoint
+commits this checklist and its evidence with the implementation.

@@ -36,7 +36,7 @@ defmodule Vxpipe.Console.NavigationProjection do
             {name,
              %{
                read:
-                 UserAuthorization.authorize_tenant(principal, action <> ".read", tenant.key) ==
+                 UserAuthorization.authorize_tenant(principal, read_action(action), tenant.key) ==
                    :ok,
                write:
                  UserAuthorization.authorize_tenant(principal, action <> ".write", tenant.key) ==
@@ -46,6 +46,9 @@ defmodule Vxpipe.Console.NavigationProjection do
         )
     }
   end
+
+  defp read_action("tenant_api_keys"), do: "tenant_services.read"
+  defp read_action(action), do: action <> ".read"
 
   def dashboard_path(key), do: "/t/#{URI.encode(key, &URI.char_unreserved?/1)}/dashboard"
 

@@ -61,22 +61,15 @@ test("tenant creation is retained for an authorized platform operator", () => {
   expect(screen.getByRole("heading", { name: "New tenant" })).toBeVisible();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
-test("API-key-only Services does not expose provider inventory or write controls", () => {
-  render(<NavigationJourney persona="keys-only" initialPath="/t/acme_demo_000001/services" />);
-  expect(screen.getByRole("heading", { name: "Services" })).toBeVisible();
-  expect(screen.getByRole("heading", { name: "API keys" })).toBeVisible();
-  expect(screen.queryByText("Deepgram")).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Create API key" })).not.toBeInTheDocument();
-});
 test("platform read access hides credential mutation controls", () => {
   render(<NavigationJourney persona="platform-reader" initialPath="/platform/services" />);
   expect(screen.getByRole("heading", { name: "Platform Services" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
 });
-test("tenant service read access does not disclose an API-key destination", () => {
+test("tenant service read access includes the API-key destination without mutations", () => {
   render(<NavigationJourney persona="service-reader" initialPath="/t/acme_demo_000001/services" />);
   expect(screen.getByRole("heading", { name: "Services" })).toBeVisible();
-  expect(screen.queryByRole("button", { name: "API keys" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "API keys" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
 });
 test("read-only member cannot mutate samples or invoke platform setup", () => {
@@ -92,10 +85,10 @@ test("workspace API keys remain available before voice readiness", () => {
   fireEvent.click(screen.getByRole("button", { name: "API keys" }));
   expect(screen.getByRole("heading", { name: "Create API Keys" })).toBeVisible();
 });
-test("legacy service read permission does not disclose credential metadata", () => {
+test("legacy service read permission includes masked credential metadata", () => {
   render(<NavigationJourney persona="service-reader" initialPath="/t/acme_demo_000001/legacy-services" />);
-  expect(screen.queryByText("Credentials")).not.toBeInTheDocument();
-  expect(screen.queryByText(/\*{4}/)).not.toBeInTheDocument();
+  expect(screen.getByText("Credentials")).toBeVisible();
+  expect(screen.getAllByText(/\*{4}/).length).toBeGreaterThan(0);
 });
 
 test("tenant selection needs no review hint", () => {

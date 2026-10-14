@@ -289,7 +289,9 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
 
           {:ok, %{requires_read: required}} ->
             case Map.fetch(scope_by_key, required) do
-              {:ok, read_scope} when read_scope == grant.scope ->
+              {:ok, read_scope} when read_scope == grant.scope or
+                     (required == "tenant_services.read" and read_scope == :all_tenants and
+                        grant.scope == :assigned_tenants) ->
                 {:cont, {:ok, acc}}
 
               _ ->
@@ -308,8 +310,7 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
       IdentityRole.ordinary_changeset(%IdentityRole{}, %{
         public_id: Map.get(attrs, :public_id, Map.get(attrs, "public_id")),
         slug: Map.get(attrs, :slug, Map.get(attrs, "slug")),
-        name: Map.get(attrs, :name, Map.get(attrs, "name")),
-        description: Map.get(attrs, :description, Map.get(attrs, "description"))
+        name: Map.get(attrs, :name, Map.get(attrs, "name"))
       })
 
     case Repo.insert(changeset) do
@@ -331,8 +332,6 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
     changeset =
       IdentityRole.ordinary_changeset(role, %{
         name: Map.get(changes, :name, Map.get(changes, "name", role.name)),
-        description:
-          Map.get(changes, :description, Map.get(changes, "description", role.description)),
         revision: role.revision + 1
       })
 

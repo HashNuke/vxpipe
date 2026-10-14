@@ -22,7 +22,7 @@ defmodule Vxpipe.Console.RequireUserAPITest do
        %{
          user_public_id: "keys",
          account_kind: :member,
-         grants: MapSet.new(["tenant_api_keys.read"]),
+         grants: MapSet.new(["tenant_services.read"]),
          assigned_tenants: %{"north" => :read},
          all_tenant_actions: MapSet.new()
        }}
@@ -70,10 +70,10 @@ defmodule Vxpipe.Console.RequireUserAPITest do
     assert denied.halted
   end
 
-  test "credential-only readers can open services, but not bindings or foreign tenants" do
+  test "service readers can inspect credentials and bindings, but not foreign tenants" do
     for {path, allowed?} <- [
           {"/admin/api/tenants/north/services", true},
-          {"/admin/api/tenants/north/service-bindings", false},
+          {"/admin/api/tenants/north/service-bindings", true},
           {"/admin/api/tenants/south/services", false}
         ] do
       result =

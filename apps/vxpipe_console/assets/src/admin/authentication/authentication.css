@@ -457,9 +457,13 @@
   border-bottom: 1px solid var(--admin-row-line);
 }
 .access-grants {
-  display: flex;
+  display: grid;
+  grid-template-columns: 54px 1fr;
   gap: 18px;
   align-items: center;
+}
+.access-grants-write-only label {
+  grid-column: 2;
 }
 .access-grants label,
 .access-check {

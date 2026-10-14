@@ -42,7 +42,7 @@ defmodule Vxpipe.Console.RoutePermissionTest do
              "tenant-a",
              "credentials"
            ]) ==
-             {:tenant, "tenant_api_keys.read", "tenant-a"}
+             {:tenant, "tenant_services.read", "tenant-a"}
   end
 
   test "call spec editor lookups require spec read access, not service administration" do

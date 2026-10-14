@@ -16,4 +16,4 @@ export const CreatingApiKey: Story = { args: { scenario: "api-key-creating" } };
 export const ApiKeyError: Story = { args: { scenario: "api-key-error" } };
 export const ApiKeyCreated: Story = { args: { scenario: "api-key-created" } };
 export const ExistingApiKey: Story = { args: { scenario: "api-key-existing" } };
-export const ReadOnlyApiKeys: Story = { render: args => <NavigationJourney theme={args.theme} {...{ persona: "keys-only", initialPath: `${tenant}/api-keys` }} /> };
+export const ReadOnlyApiKeys: Story = { render: args => <NavigationJourney theme={args.theme} {...{ persona: "service-reader", initialPath: `${tenant}/api-keys` }} /> };

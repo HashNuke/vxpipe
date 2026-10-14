@@ -238,7 +238,6 @@ defmodule Vxpipe.Persistence.IdentityRecord do
       public_id: role.public_id,
       slug: role.slug,
       name: role.name,
-      description: role.description,
       kind: kind,
       revision: role.revision,
       grants: grants

@@ -36,7 +36,6 @@ export function RoleSelect({
             ))}
         </select>
       )}
-      <p className="access-muted">{selected?.description}</p>
     </div>
   );
 }

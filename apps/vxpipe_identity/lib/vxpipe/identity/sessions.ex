@@ -194,7 +194,6 @@ defmodule Vxpipe.Identity.Sessions do
       "call_specs.write",
       "tenant_services.read",
       "tenant_services.write",
-      "tenant_api_keys.read",
       "tenant_api_keys.write"
     ]
   end

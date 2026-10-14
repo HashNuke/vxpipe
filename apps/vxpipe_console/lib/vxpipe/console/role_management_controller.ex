@@ -39,7 +39,6 @@ defmodule Vxpipe.Console.RoleManagementController do
     attrs = %{
       slug: "custom-" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower),
       name: Map.get(params, "name"),
-      description: Map.get(params, "description", ""),
       grants: Map.get(params, "grants")
     }
 
@@ -52,7 +51,6 @@ defmodule Vxpipe.Console.RoleManagementController do
   def update(conn, %{"id" => id} = params) do
     attrs = %{
       name: Map.get(params, "name"),
-      description: Map.get(params, "description", ""),
       grants: Map.get(params, "grants"),
       expected_revision: Map.get(params, "expected_revision")
     }

@@ -49,7 +49,6 @@ test("local Superadmin recovery signs in after a valid proof", async () => {
 const superadminRole = {
   id: "role-super",
   name: "Superadmin",
-  description: "",
   kind: "superadmin",
   grants: [],
   revision: 1,
@@ -57,7 +56,6 @@ const superadminRole = {
 const adminRole = {
   id: "role-admin",
   name: "Admin",
-  description: "",
   kind: "admin",
   grants: [],
   revision: 1,
@@ -65,7 +63,6 @@ const adminRole = {
 const memberRole = {
   id: "role-member",
   name: "Tenant Member",
-  description: "",
   kind: null,
   grants: [{ permission: "calls.read", scope: "assigned_tenants" }],
   revision: 2,
@@ -515,8 +512,7 @@ test("users.read-only viewers keep directory filters through the role-options en
   const readerRole = {
     id: "role-reader",
     name: "Custom directory access",
-    description: "",
-    kind: null,
+      kind: null,
     grants: [{ permission: "users.read", scope: "installation" }],
     revision: 1,
   };
@@ -569,7 +565,6 @@ test("unknown role filters keep the URL and explain the empty directory", async 
 const readMemberRole = {
   id: "role-member",
   name: "Tenant Member",
-  description: "",
   kind: null,
   grants: [
     { permission: "calls.read", scope: "assigned_tenants" },

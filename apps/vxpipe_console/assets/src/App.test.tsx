@@ -46,7 +46,6 @@ const operationalUser = {
 const operationalRole = {
   id: "superadmin",
   name: "Superadmin",
-  description: "",
   kind: "superadmin",
   grants: [],
 };
@@ -73,7 +72,7 @@ test("first-run setup submits credentials and opens the Console", async () => {
 test("the production users route renders server-filtered rows and role filters", async () => {
   window.history.replaceState({}, "", "/users");
   const owner = { id: "owner", email: "owner@example.test", roleId: "superadmin", enabled: true, memberships: [] };
-  const role = { id: "superadmin", name: "Superadmin", description: "", kind: "superadmin", grants: [] };
+  const role = { id: "superadmin", name: "Superadmin", kind: "superadmin", grants: [] };
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role });

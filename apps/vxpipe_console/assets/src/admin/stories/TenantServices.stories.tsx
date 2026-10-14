@@ -52,5 +52,5 @@ export const Light: Story = { args: { theme: "light" } };
 export const Narrow: Story = {
   globals: { viewport: { value: "390px-844px", isRotated: false } },
 };
-export const ApiKeyOnlyServices: Story = { render: args => <NavigationJourney theme={args.theme} {...{ persona: "keys-only", initialPath: `${tenant}/services` }} /> };
+export const ReadOnlyServicesAndCredentials: Story = { render: args => <NavigationJourney theme={args.theme} {...{ persona: "service-reader", initialPath: `${tenant}/services` }} /> };
 export const ReadOnlyTenantServices: Story = { render: args => <NavigationJourney theme={args.theme} {...{ persona: "service-reader", initialPath: `${tenant}/services` }} /> };

@@ -2,7 +2,7 @@ import { canCreateTenants, effectiveAccess } from "../authentication/access";
 import type { Role, Tenant, User } from "../authentication/types";
 
 // Storybook presentation model only. Production consumes the server navigation projection.
-const tenantResources = ["calls", "call_specs", "tenant_services", "tenant_api_keys"];
+const tenantResources = ["calls", "call_specs", "tenant_services"];
 export type NavigationItem = { label: string; href: string };
 export function allTenants(role: Role): boolean {
   return canCreateTenants(role) || role.grants.some(grant => grant.scope === "all_tenants" && tenantResources.some(resource => grant.permission === `${resource}.read`));
@@ -25,7 +25,7 @@ export function navigationItems(role: Role, user: User, tenant?: Tenant): { tena
       { label: "Calls", resource: "calls", path: "calls" },
       { label: "Call Specs", resource: "call_specs", path: "call-specs" },
       { label: "Services", resource: "tenant_services", path: "services" },
-    ].filter(item => tenantAccess(role, user, tenant, item.resource) !== "none" || (item.path === "services" && tenantAccess(role, user, tenant, "tenant_api_keys") !== "none"))
+    ].filter(item => tenantAccess(role, user, tenant, item.resource) !== "none")
       .map(item => ({ label: item.label, href: `/t/${encodeURIComponent(tenant.key)}/${item.path}` })) : [],
     platform: [
       ...(allTenants(role) ? [{ label: "Tenants", href: "/tenants" }] : []),

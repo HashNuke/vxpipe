@@ -55,7 +55,7 @@ retry button; the user can refresh. The picker retains its local retry action.
 Roles is visible only to built-in Admin/Superadmin under the current role API.
 Users requires users.read. Platform Services requires platform_services.read.
 Tenant Calls and Call Specs require their own read grants. Services admits either
-tenant_services.read or tenant_api_keys.read, rendering only allowed subsections;
+tenant_services.read, including credential metadata and masked previews;
 credential metadata and mutations retain their independent API-key permissions.
 Read/write membership caps and built-in privileged-user restrictions are unchanged.
 The UI hides writes without write authority; every request is reauthorized server-side.

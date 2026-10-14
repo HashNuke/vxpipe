@@ -6,6 +6,21 @@ defmodule Vxpipe.Persistence.IdentityMigrationAcceptanceTest do
   @pre_auth_version "20261013000100"
   @child_dir Path.expand("../..", __DIR__)
 
+  test "service-read migration merges existing read scopes without broadening writes" do
+    with_disposable_database("services", fn database ->
+      run_mix!(database, ["ecto.migrate", "--to", "20261014000100", "--quiet"])
+      query(database, "INSERT INTO roles (public_id, slug, name, revision, inserted_at, updated_at) VALUES (gen_random_uuid(), 'migration-mixed', 'Mixed', 1, now(), now()), (gen_random_uuid(), 'migration-keys', 'Keys', 1, now(), now())")
+      query(database, "INSERT INTO role_permissions (role_id, permission_key, scope) SELECT id, 'tenant_api_keys.read', CASE WHEN slug = 'migration-mixed' THEN 'all_tenants' ELSE 'assigned_tenants' END FROM roles WHERE slug LIKE 'migration-%'")
+      query(database, "INSERT INTO role_permissions (role_id, permission_key, scope) SELECT id, permission, 'assigned_tenants' FROM roles CROSS JOIN unnest(ARRAY['tenant_services.read','tenant_services.write','tenant_api_keys.write']) AS permission WHERE slug = 'migration-mixed'")
+      migrate(database)
+      assert query(database, "SELECT scope FROM role_permissions JOIN roles ON roles.id = role_id WHERE slug = 'migration-mixed' AND permission_key = 'tenant_services.read'") == "all_tenants"
+      assert query(database, "SELECT count(*) FROM role_permissions JOIN roles ON roles.id = role_id WHERE slug = 'migration-mixed' AND permission_key LIKE '%.write' AND scope = 'assigned_tenants'") == "2"
+      assert query(database, "SELECT scope FROM role_permissions JOIN roles ON roles.id = role_id WHERE slug = 'migration-keys' AND permission_key = 'tenant_services.read'") == "assigned_tenants"
+      assert query(database, "SELECT count(*) FROM permissions WHERE key = 'tenant_api_keys.read'") == "0"
+      assert query(database, "SELECT revision FROM roles WHERE slug = 'migration-mixed'") == "2"
+    end)
+  end
+
   test "fresh migration allows first-run setup and survives a fresh VM login" do
     with_disposable_database("fresh", fn database ->
       migrate(database)

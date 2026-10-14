@@ -6,7 +6,6 @@ export type Grant = { permission: string; scope: Scope };
 export type Role = {
   id: string;
   name: string;
-  description: string;
   kind: SystemKind;
   grants: Grant[];
   /** Server revision for optimistic role updates; absent on minimal option metadata. */

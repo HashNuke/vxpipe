@@ -25,7 +25,7 @@ export function effectiveAccess(
   const allows = (action: string) =>
     role.grants.some(
       (grant) =>
-        grant.permission === `${resource}.${action}` &&
+        grant.permission === `${resource === "tenant_api_keys" && action === "read" ? "tenant_services" : resource}.${action}` &&
         (grant.scope === "all_tenants" ||
           (grant.scope === "assigned_tenants" && membership !== undefined &&
             (action === "read" || membership === "read_write"))),
@@ -64,14 +64,15 @@ export const permissionGroups = [
   {
     resource: "tenant_services",
     label: "Tenant services",
-    detail: "Inspect and configure tenant-owned services.",
+    detail: "View services and credential metadata; configure tenant-owned services.",
     tenant: true,
   },
   {
     resource: "tenant_api_keys",
     label: "Tenant API keys",
-    detail: "View metadata; issue and revoke keys.",
+    detail: "Create, update and remove provider credentials. Requires Services read access.",
     tenant: true,
+    writeOnly: true,
   },
   {
     resource: "tenants",
@@ -106,7 +107,7 @@ export function operationalGrants(
   return permissionGroups
     .filter((group) => group.tenant)
     .flatMap((group) => [
-      { permission: `${group.resource}.read`, scope },
+      ...(group.writeOnly ? [] : [{ permission: `${group.resource}.read`, scope }]),
       { permission: `${group.resource}.write`, scope },
     ]);
 }

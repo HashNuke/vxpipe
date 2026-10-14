@@ -74,7 +74,7 @@ there are no separate `users.admins.read` or `users.superadmins.read` prerequisi
 Built-ins cover new registered operational actions, while privileged account rules
 remain explicit. Unknown actions deny for everyone.
 
-The route inventory also needs `tenant_services.read/write` and `tenant_api_keys.read/write`
+The route inventory also needs `tenant_services.read/write` and `tenant_api_keys.write`
 with tenant scopes (`all_tenants` or `assigned_tenants`), plus installation-scoped
 `tenants.read/write`, `diagnostics.read` and the existing platform-service authoring
 modifier described below; the ten rows above are not an implicit grant to other
@@ -182,7 +182,7 @@ permission checks described above.
 | `/admin/users/:user_id` | Account details; edit email, role, status and tenant assignments where permitted. Passwords are never populated or returned. | `users.read`; editing additionally checks current/requested category writes. Admins see privileged accounts read-only. |
 | `/admin/users/:user_id/reset-password` | Set a replacement password: new password and confirm password; show target email as read-only context. | Write permission for the target category. Only Superadmins can reset Admin/Superadmin accounts. |
 | `/admin/roles` | Role directory, including protected built-ins. | Superadmins and Admins. Directory-filter metadata remains separately available to `users.read`. |
-| `/admin/roles/new` | Create an ordinary role: name, description, permissions and scopes. | Superadmins and Admins. |
+| `/admin/roles/new` | Create an ordinary role: name, permissions and scopes. | Superadmins and Admins. |
 | `/admin/roles/:role_id` | Role details/edit; built-ins are read-only. | Superadmins and Admins. |
 
 Logout is a CSRF-protected `POST /auth/logout` action, not a separate page. Direct
@@ -278,7 +278,7 @@ are the proposed contract; use existing internal/public identifier conventions.
 | Table | Fields and constraints |
 | --- | --- |
 | `users` | Internal primary key, unique public UUID, display email, unique normalized email, password hash, non-null role FK, `disabled_at`, timestamps. No plaintext password column. |
-| `roles` | Internal ID, public UUID, unique stable slug, editable name/description, revision, timestamps. Protected system kind (`superadmin` or `admin`) for the two seeded built-ins, immutable through role editing; ordinary roles have no system kind. Ordinary names/descriptions/grants remain editable. |
+| `roles` | Internal ID, public UUID, unique stable slug, editable name, revision, timestamps. Protected system kind (`superadmin` or `admin`) for the two seeded built-ins, immutable through role editing; ordinary roles have no system kind. Ordinary names/grants remain editable. |
 | `permissions` | Application-seeded permission key and catalog metadata (resource kind, valid scopes, read/mutating classification, prerequisites and allowed built-in kinds for reserved grants). No UI-created permission keys. |
 | `role_permissions` | Role FK, permission FK, checked scope; unique `(role_id, permission_id)`. Scope validity and dependencies validated by the owning policy workflow. Built-ins use protected policies, not editable grants; reserved permissions cannot be inserted for ordinary roles. |
 | `user_tenant_memberships` | User FK, tenant FK, checked `access_level` (`read` or `read_write`), timestamps; unique `(user_id, tenant_id)` and tenant lookup index. |
@@ -467,3 +467,17 @@ confirmation for creation/reset. Reviewed reset rollback, target-session revocat
 self-reset behavior and read-only privileged accounts. No mail-backed recovery is implied.
 
 Operational instructions: [setup, upgrades and local recovery](development/console-authentication-operations.md).
+
+### Services and credential read consolidation — 2026-10-14
+
+`tenant_services.read` includes provider credential metadata and masked previews;
+there is no separate API-key read permission. Credential creation, replacement and
+deletion still require `tenant_api_keys.write`. Full secrets are never returned.
+An all-tenant Services read grant can satisfy the read prerequisite for assigned
+Services or API-key writes; write scope remains unchanged.
+
+The migration merges existing credential-read grants into Services read, preserving
+the wider read scope and incrementing affected role revisions. It does not broaden
+write grants. Splitting those merged scopes on rollback is ambiguous, so that
+migration is irreversible. Role descriptions are removed from storage and APIs;
+rolling back the column migration cannot recover discarded descriptions.

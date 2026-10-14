@@ -9,6 +9,29 @@ export function PermissionEditor({
   onChange?: (value: Grant[]) => void;
   readOnly?: boolean;
 }) {
+  function includeCredentialRead(grants: Grant[]): Grant[] {
+    const write = grants.find((grant) => grant.permission === "tenant_api_keys.write");
+    if (!write) return grants;
+    const read = grants.find((grant) => grant.permission === "tenant_services.read");
+    if (!read) return [...grants, { permission: "tenant_services.read", scope: write.scope }];
+    if (write.scope === "all_tenants" && read.scope !== "all_tenants") {
+      return grants.map((grant) => grant === read ? { ...grant, scope: "all_tenants" } : grant);
+    }
+    return grants;
+  }
+
+  function changeScope(resource: string, scope: Scope, action?: "read" | "write") {
+    let next = value.map((grant) =>
+      grant.permission === `${resource}.${action ?? "read"}` ||
+      (!action && grant.permission === `${resource}.write`)
+        ? { ...grant, scope } : grant,
+    );
+    if (resource === "tenant_services" && action !== "write" && scope === "assigned_tenants") {
+      next = next.map((grant) => grant.permission === "tenant_api_keys.write" ? { ...grant, scope } : grant);
+    }
+    onChange?.(includeCredentialRead(next));
+  }
+
   function toggle(
     resource: string,
     action: "read" | "write",
@@ -18,20 +41,23 @@ export function PermissionEditor({
     let next = value.filter(
       (grant) => grant.permission !== `${resource}.${action}`,
     );
+    const readResource = resource === "tenant_api_keys" ? "tenant_services" : resource;
     if (checked) {
       next.push({ permission: `${resource}.${action}`, scope });
       if (
         action === "write" &&
-        !next.some((grant) => grant.permission === `${resource}.read`)
+        !next.some((grant) => grant.permission === `${readResource}.read`)
       )
-        next.push({ permission: `${resource}.read`, scope });
-    } else if (action === "read")
-      next = next.filter((grant) => grant.permission !== `${resource}.write`);
+        next.push({ permission: `${readResource}.read`, scope });
+    } else if (action === "read") {
+      next = next.filter((grant) => grant.permission !== `${resource}.write` &&
+        !(resource === "tenant_services" && grant.permission === "tenant_api_keys.write"));
+    }
     if (!next.some((grant) => grant.permission === "call_specs.write"))
       next = next.filter(
         (grant) => grant.permission !== "call_specs.use_platform_services",
       );
-    onChange?.(next);
+    onChange?.(includeCredentialRead(next));
   }
   return (
     <section className="access-section" aria-label="Role permissions">
@@ -57,22 +83,14 @@ export function PermissionEditor({
           // must not collapse them into one scope.
           const independentScopes =
             group.tenant && !!read && !!write;
-          const updateScope = (permission: string, next: Scope) =>
-            onChange?.(
-              value.map((grant) => {
-                if (grant.permission === permission)
-                  return { ...grant, scope: next };
-                return grant;
-              }),
-            );
           return (
             <div className="access-permission-row" key={group.resource}>
               <div>
                 <strong>{group.label}</strong>
                 <p className="access-muted">{group.detail}</p>
               </div>
-              <div className="access-grants">
-                <label>
+              <div className={`access-grants${group.writeOnly ? " access-grants-write-only" : ""}`}>
+                {!group.writeOnly ? <label>
                   <input
                     type="checkbox"
                     aria-label={`Read ${group.label}`}
@@ -88,7 +106,7 @@ export function PermissionEditor({
                     }
                   />
                   Read
-                </label>
+                </label> : null}
                 {!group.readOnly ? (
                   <label>
                     <input
@@ -119,9 +137,9 @@ export function PermissionEditor({
                       value={read.scope}
                       disabled={readOnly}
                       onChange={(event) =>
-                        updateScope(
-                          `${group.resource}.read`,
-                          event.target.value as Scope,
+                        changeScope(
+                          group.resource,
+                          event.target.value as Scope, "read",
                         )
                       }
                     >
@@ -133,9 +151,9 @@ export function PermissionEditor({
                       value={write.scope}
                       disabled={readOnly}
                       onChange={(event) =>
-                        updateScope(
-                          `${group.resource}.write`,
-                          event.target.value as Scope,
+                        changeScope(
+                          group.resource,
+                          event.target.value as Scope, "write",
                         )
                       }
                     >
@@ -149,14 +167,7 @@ export function PermissionEditor({
                   value={scope}
                   disabled={readOnly || (!read && !write)}
                   onChange={(event) =>
-                    onChange?.(
-                      value.map((grant) =>
-                        grant.permission === `${group.resource}.read` ||
-                        grant.permission === `${group.resource}.write`
-                          ? { ...grant, scope: event.target.value as Scope }
-                          : grant,
-                      ),
-                    )
+                    changeScope(group.resource, event.target.value as Scope)
                   }
                 >
                   <option value="assigned_tenants">Assigned tenants</option>

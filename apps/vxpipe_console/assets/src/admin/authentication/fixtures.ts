@@ -5,24 +5,21 @@ export const roles: Role[] = [
   {
     id: id(1),
     name: "Superadmin",
-    description: "Full operational access and management of every account.",
     kind: "superadmin",
     grants: [],
   },
   {
     id: id(2),
     name: "Admin",
-    description: "Full operational access. Manages member accounts only.",
     kind: "admin",
     grants: [],
   },
   {
     id: id(4),
     name: "Tenant Manager",
-    description: "Manages tenant operations in assigned tenants.",
     kind: null,
     grants: [
-      ...["calls.read", "calls.write", "call_specs.read", "call_specs.write", "tenant_services.read", "tenant_services.write", "tenant_api_keys.read", "tenant_api_keys.write"].map(
+      ...["calls.read", "calls.write", "call_specs.read", "call_specs.write", "tenant_services.read", "tenant_services.write", "tenant_api_keys.write"].map(
         (permission) => ({ permission, scope: "assigned_tenants" as const }),
       ),
       { permission: "call_specs.use_platform_services", scope: "installation" },
@@ -31,7 +28,6 @@ export const roles: Role[] = [
   {
     id: id(5),
     name: "Tenant Member",
-    description: "Reads calls and call specs in assigned tenants.",
     kind: null,
     grants: ["calls.read", "call_specs.read"].map((permission) => ({
       permission,

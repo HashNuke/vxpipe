@@ -45,7 +45,6 @@ defmodule Vxpipe.Identity.Roles do
         public_id: public_id,
         slug: validated.slug,
         name: validated.name,
-        description: Map.get(attrs, :description, Map.get(attrs, "description")),
         grants: validated.grants,
         audit_event: %{
           action: "role_created",
@@ -73,8 +72,6 @@ defmodule Vxpipe.Identity.Roles do
          {:ok, validated} <- validate_definition(changes, current) do
       roles.apply_update(role_public_id, %{
         name: validated.name,
-        description:
-          Map.get(changes, :description, Map.get(changes, "description", current[:description])),
         grants: validated.grants,
         expected_revision:
           Map.get(changes, :expected_revision, Map.get(changes, "expected_revision")),
@@ -242,7 +239,9 @@ defmodule Vxpipe.Identity.Roles do
 
           {:ok, %{requires_read: required}} ->
             case Map.fetch(scope_by_key, required) do
-              {:ok, read_scope} when read_scope == grant.scope ->
+              {:ok, read_scope} when read_scope == grant.scope or
+                     (required == "tenant_services.read" and read_scope == :all_tenants and
+                        grant.scope == :assigned_tenants) ->
                 {:cont, {:ok, acc}}
 
               _ ->

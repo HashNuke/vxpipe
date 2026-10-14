@@ -29,7 +29,7 @@ test("adds a searched tenant read-only, changes its access and removes it", () =
   expect(access).toHaveValue("read");
   fireEvent.change(access, { target: { value: "read_write" } });
   expect(
-    screen.getByText("Calls: read & write · Call specs: read & write · Services: read & write · API keys: read & write"),
+    screen.getByText("Read and write calls, Read and write Call Specs, Read and write Services, Write API keys"),
   ).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Remove Northwind" }));
   expect(screen.getByText("No tenants assigned")).toBeVisible();
@@ -44,6 +44,7 @@ test("shows inherited all-tenant access with no membership picker", () => {
     />,
   );
   expect(screen.getByText("All tenants — granted by role")).toBeVisible();
+  expect(screen.getByText(/Read and write calls, Read and write Call Specs, Read and write Services, Write API keys/)).toBeVisible();
   expect(
     screen.queryByRole("button", { name: "Add tenants" }),
   ).not.toBeInTheDocument();
@@ -58,6 +59,8 @@ test("read-only viewers cannot edit assigned access", () => {
     />,
   );
   expect(screen.getByText(tenants[0].name)).toBeVisible();
+  expect(screen.queryByText(tenants[0].key)).not.toBeInTheDocument();
+  expect(screen.getByText("Read calls, Read Call Specs")).toBeVisible();
   expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });
@@ -79,7 +82,7 @@ test("all-tenant write does not enable assignment write without an assigned gran
     />,
   );
   expect(
-    screen.getByText("Calls: read & write · Call specs: read · Services: none · API keys: none"),
+    screen.getByText("Read and write calls, Read Call Specs"),
   ).toBeVisible();
   expect(
     screen.getByRole("combobox", { name: "Access for Northwind" }),

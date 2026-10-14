@@ -333,7 +333,6 @@ defmodule Vxpipe.Persistence.IdentityAuthReviewTest do
                {"call_specs.write", :assigned_tenants},
                {"tenant_services.read", :assigned_tenants},
                {"tenant_services.write", :assigned_tenants},
-               {"tenant_api_keys.read", :assigned_tenants},
                {"tenant_api_keys.write", :assigned_tenants},
                {"call_specs.use_platform_services", :installation}
              ])

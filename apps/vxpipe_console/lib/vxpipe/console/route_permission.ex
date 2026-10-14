@@ -111,7 +111,7 @@ defmodule Vxpipe.Console.RoutePermission do
     do: {:tenant, "calls.read", tenant}
 
   defp tenant_requirement("GET", tenant, ["services"]),
-    do: {:tenant_any, ["tenant_services.read", "tenant_api_keys.read"], tenant}
+    do: {:tenant, "tenant_services.read", tenant}
 
   defp tenant_requirement("GET", tenant, ["service-bindings"]),
     do: {:tenant, "tenant_services.read", tenant}
@@ -120,7 +120,7 @@ defmodule Vxpipe.Console.RoutePermission do
     do: {:tenant, "tenant_services.read", tenant}
 
   defp tenant_requirement("GET", tenant, ["credentials"]),
-    do: {:tenant, "tenant_api_keys.read", tenant}
+    do: {:tenant, "tenant_services.read", tenant}
 
   defp tenant_requirement("POST", tenant, ["telephony-applications"]),
     do: {:tenant, "tenant_services.write", tenant}
