@@ -67,6 +67,7 @@ defmodule Vxpipe.Console.EndpointOriginRuntimeConfigurationTest do
   test "Tailscale development retains the configured host origin check", %{runtime: runtime} do
     System.put_env(%{
       "APP_HOST" => "console.example.ts.net",
+      "SECRET_KEY_BASE" => String.duplicate("test-only-", 8),
       "VXPIPE_DEV_TLS" => "phoenix",
       "VXPIPE_TAILSCALE_IP" => "100.64.0.1",
       "VXPIPE_DEV_TLS_CERTFILE" => "test-cert.pem",

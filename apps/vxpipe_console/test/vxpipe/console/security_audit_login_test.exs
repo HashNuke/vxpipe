@@ -1,7 +1,6 @@
 defmodule Vxpipe.Console.SecurityAuditLoginTest do
-  # Findings from the 2026-10-14 security audit. Tests tagged :security_open assert
-  # the secure behaviour and fail until their fix lands; run them with
-  # `mix test --only security_open`. See labnotes/milestones/security-audit-remediation.md.
+  # Regression tests for findings from the 2026-10-14 security audit.
+  # See labnotes/milestones/security-audit-remediation.md.
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
@@ -45,7 +44,6 @@ defmodule Vxpipe.Console.SecurityAuditLoginTest do
 
   # SEC-1: production reaches /auth only through a same-host proxy, so every client
   # shares the proxy's loopback remote_ip and one per-address throttle bucket.
-  @tag :security_open
   test "failed logins from one client behind the proxy do not lock out other clients" do
     for attempt <- 1..30 do
       conn =
@@ -69,7 +67,6 @@ defmodule Vxpipe.Console.SecurityAuditLoginTest do
 
   # SEC-2: a non-string password reaches Argon2Hasher.verify/2, which has no fallback
   # clause, so existing accounts answer differently from unknown ones.
-  @tag :security_open
   test "a non-string password is rejected identically for existing and unknown accounts" do
     unknown =
       post(build_conn(), "https://localhost/auth/api/login", %{

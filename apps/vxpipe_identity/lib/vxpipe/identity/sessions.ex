@@ -19,6 +19,7 @@ defmodule Vxpipe.Identity.Sessions do
 
     with {:ok, normalized} <- Email.normalize(email),
          :ok <- check_rate(deps, attempts, normalized, client_address, now),
+         :ok <- password_shape(password),
          {:ok, user} <- fetch_user(users, normalized),
          :ok <- check_enabled(user),
          true <- hasher.verify(password, user.password_hash) || {:error, :invalid_credentials},
@@ -116,6 +117,10 @@ defmodule Vxpipe.Identity.Sessions do
       error -> error
     end
   end
+
+  # Any non-string password is an ordinary counted failure, never a hasher crash.
+  defp password_shape(password) when is_binary(password), do: :ok
+  defp password_shape(_password), do: {:error, :invalid_credentials}
 
   defp check_enabled(%{disabled_at: nil}), do: :ok
   defp check_enabled(%{"disabled_at" => nil}), do: :ok

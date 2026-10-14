@@ -1,7 +1,6 @@
 defmodule Vxpipe.Gateway.HTTP.SecurityAuditJoinTokenTest do
-  # Findings from the 2026-10-14 security audit. Tests tagged :security_open assert
-  # the secure behaviour and fail until their fix lands; run them with
-  # `mix test --only security_open`. See labnotes/milestones/security-audit-remediation.md.
+  # Regression tests for findings from the 2026-10-14 security audit.
+  # See labnotes/milestones/security-audit-remediation.md.
   use ExUnit.Case, async: false
 
   import Plug.Conn
@@ -35,7 +34,6 @@ defmodule Vxpipe.Gateway.HTTP.SecurityAuditJoinTokenTest do
 
   # SEC-3: join tokens are bearer credentials for a live call, but their lifetime has
   # only a 300-second floor, so a request can mint a token valid for centuries.
-  @tag :security_open
   test "rejects a join-token lifetime beyond one day", context do
     for path <- [prepare_path(), token_path()] do
       conn =

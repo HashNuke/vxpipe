@@ -346,8 +346,12 @@ if config_env() == :dev do
 
   console_endpoint =
     case nonempty_env.("SECRET_KEY_BASE") do
-      nil ->
+      nil when console_ip in [{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 1}] ->
         console_endpoint
+
+      # The dev.exs fallback secret is public; never sign with it on a network listener.
+      nil ->
+        raise "SECRET_KEY_BASE is required for a non-loopback development listener"
 
       secret when byte_size(secret) >= 64 ->
         config :vxpipe_console, :operator_login_secret, secret

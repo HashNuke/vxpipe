@@ -1,6 +1,6 @@
 # Security audit remediation
 
-Status: open. SEC-1 to SEC-4 are reproduced and not yet fixed. D-2 is fixed and D-1 is accepted.
+Status: SEC-1 to SEC-4 and D-2 are fixed, with regression tests; D-1 is accepted. Final root gate evidence is below.
 Audited source: `a02f0114` (clean worktree), 2026-10-14.
 Labnotes: [security codebase audit](../20261014-1215-security-codebase-audit.md).
 
@@ -27,17 +27,10 @@ boundary and produces a concrete result.
 
 ## Reproductions
 
-Each open finding has a test that asserts the secure behaviour and fails on the
-audited tree. The tests carry `@tag :security_open`, which the Console and Gateway
-`test_helper.exs` files exclude by default so the root gate stays green. To list
-the open findings, run this from the owning app:
-
-```shell
-mix test --only security_open
-```
-
-When you fix a finding, remove its tag in the same commit so the test joins the
-default suite.
+Each finding has a test that asserts the secure behaviour. These tests failed on the
+audited tree and pass after the fixes. While findings were open, the tests carried
+`@tag :security_open` and were excluded by default. The fixes removed the tag and the
+exclusions, so they now run in the default suite.
 
 | ID | Severity | File | Test |
 | --- | --- | --- | --- |
@@ -71,9 +64,9 @@ Observed failures on `a02f0114`:
   1. Derive the client address from the last `X-Forwarded-For` hop only when the immediate peer is the trusted loopback proxy (the same rule as `TrustedProxyScheme`), and use it for setup, login and recovery.
   2. Consider letting a correct password bypass the address bucket, or replacing the hard block with per-account backoff.
 - **Tasks:**
-  - [ ] Introduce a trusted client-address plug (a single owner, next to `TrustedProxyScheme`) and use it in `UserAuthController`.
-  - [ ] Decide the account-lockout policy (hard block or backoff) and record the decision.
-  - [ ] Remove `:security_open` from the SEC-1 test, then run the Console and Identity suites.
+  - [x] Added `Vxpipe.Console.ClientAddress.for_throttling/1`. For a loopback peer it uses the last `X-Forwarded-For` entry; otherwise it uses `remote_ip`. `UserAuthController` uses it for setup, login and recovery. `client_address_test.exs` covers the forwarded, spoofed and malformed cases.
+  - [ ] The account-lockout policy is unchanged: 10 failures per account in 10 minutes is still a hard block. Changing it to backoff needs an owner decision.
+  - [x] Removed `:security_open` from the SEC-1 test. The focused Console auth tests (28) and the Identity suite (59) pass.
 
 ## SEC-2: a non-string password distinguishes existing accounts without throttling (low)
 
@@ -92,8 +85,9 @@ Observed failures on `a02f0114`:
   2. Add a fallback `verify/2` clause that returns `false`.
   3. Call `Argon2.no_user_verify/0` for unknown and disabled users.
 - **Tasks:**
-  - [ ] Apply the fix to login, and check setup and recovery for the same pattern.
-  - [ ] Remove `:security_open` from the SEC-2 test.
+  - [x] `Sessions.login/4` now rejects a non-binary password as a counted `:invalid_credentials` failure, and `Argon2Hasher.verify/2` has a fallback clause that returns `false`. Setup and recovery already reject such passwords in `Password.confirm/2`.
+  - [x] Removed `:security_open` from the SEC-2 test.
+  - [ ] Not done: the dummy Argon2 verify for unknown and disabled users, which would close the timing difference. It would need a new `PasswordHasher` callback.
 
 ## SEC-3: join-token lifetime has no upper bound (low)
 
@@ -104,8 +98,8 @@ Observed failures on `a02f0114`:
   - Very large values push `expires_at` past PostgreSQL's range and return 500 instead of 400; only the requesting tenant is affected.
 - **Fix:** set one maximum, for example 86_400 s, and enforce it in both validators; the domain check is authoritative.
 - **Tasks:**
-  - [ ] Add the bound in `Vxpipe.Calls.Admissions` and in the Gateway input validation, and document it in the API reference.
-  - [ ] Remove `:security_open` from the SEC-3 test, and add a Calls-level test for the domain bound.
+  - [x] Added an 86,400-second maximum in `Vxpipe.Calls.Admissions` and in the Gateway `CallAdmissions` validation. No API reference documents this field, so there was nothing to update.
+  - [x] Removed `:security_open` from the SEC-3 test, and added the Calls test "rejects a join-token lifetime beyond one day". Without the cap it fails with `:join_token_conflict`.
 
 ## SEC-4: a development Console on a network address keeps the public development secret (low, dev profile)
 
@@ -120,8 +114,8 @@ Observed failures on `a02f0114`:
   - Browser sessions themselves are still validated against the database.
 - **Fix:** in the dev block, raise when the listener is not loopback and `SECRET_KEY_BASE` is missing. Consider disabling `debug_errors` off loopback.
 - **Tasks:**
-  - [ ] Add the guard and keep the existing runtime-configuration tests green.
-  - [ ] Remove `:security_open` from the SEC-4 test.
+  - [x] The `config/runtime.exs` dev block now raises "SECRET_KEY_BASE is required for a non-loopback development listener". `bin/setup` already writes a `SECRET_KEY_BASE`. Two runtime tests that configure network dev listeners now supply a test secret, and the provider runtime test also restores the variable.
+  - [x] Removed `:security_open` from the SEC-4 test.
 
 ## Owner decisions
 
@@ -174,6 +168,6 @@ Observed failures on `a02f0114`:
 
 ## Acceptance
 
-- [ ] SEC-1 to SEC-4 fixed, with their tests untagged and green.
+- [x] SEC-1 to SEC-4 fixed, with their tests untagged and green.
 - [x] D-1 accepted as designed; D-2 fixed, with a regression test.
 - [ ] Root completion checks pass (`mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix credo --strict`, `mix test`, `mix deps.unlock --check-unused`).

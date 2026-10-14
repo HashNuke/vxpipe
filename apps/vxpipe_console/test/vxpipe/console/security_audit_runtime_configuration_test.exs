@@ -1,7 +1,6 @@
 defmodule Vxpipe.Console.SecurityAuditRuntimeConfigurationTest do
-  # Findings from the 2026-10-14 security audit. Tests tagged :security_open assert
-  # the secure behaviour and fail until their fix lands; run them with
-  # `mix test --only security_open`. See labnotes/milestones/security-audit-remediation.md.
+  # Regression tests for findings from the 2026-10-14 security audit.
+  # See labnotes/milestones/security-audit-remediation.md.
   use ExUnit.Case, async: false
 
   @runtime Path.expand("../../../../../config/runtime.exs", __DIR__)
@@ -50,7 +49,6 @@ defmodule Vxpipe.Console.SecurityAuditRuntimeConfigurationTest do
   # SEC-4: a development Console bound to a network address keeps the public
   # development secret_key_base from config/dev.exs, although env.sample says a
   # SECRET_KEY_BASE is required for a non-loopback host or listener.
-  @tag :security_open
   test "development refuses a non-loopback listener without SECRET_KEY_BASE", %{
     runtime: runtime
   } do

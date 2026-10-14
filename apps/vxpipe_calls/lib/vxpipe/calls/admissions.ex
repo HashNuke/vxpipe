@@ -14,6 +14,8 @@ defmodule Vxpipe.Calls.Admissions do
   }
 
   @default_token_ttl_seconds 300
+  # Join tokens are bearer credentials for a live call; cap how long an unused one lives.
+  @maximum_token_ttl_seconds 86_400
 
   @spec prepare(Principal.t(), String.t(), map(), keyword()) ::
           {:ok, PreparedCall.t(), IssuedJoinToken.t()} | {:error, term()}
@@ -193,8 +195,13 @@ defmodule Vxpipe.Calls.Admissions do
 
   defp token_ttl(options) do
     case Keyword.get(options, :join_token_ttl_seconds, @default_token_ttl_seconds) do
-      seconds when is_integer(seconds) and seconds >= @default_token_ttl_seconds -> {:ok, seconds}
-      _invalid -> {:error, :invalid_join_token_ttl}
+      seconds
+      when is_integer(seconds) and seconds >= @default_token_ttl_seconds and
+             seconds <= @maximum_token_ttl_seconds ->
+        {:ok, seconds}
+
+      _invalid ->
+        {:error, :invalid_join_token_ttl}
     end
   end
 

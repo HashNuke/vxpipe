@@ -1,1 +1,1 @@
-ExUnit.start(exclude: [:integration, :live_providers, :security_open])
+ExUnit.start(exclude: [:integration, :live_providers])

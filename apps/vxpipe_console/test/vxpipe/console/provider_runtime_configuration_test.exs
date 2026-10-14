@@ -6,7 +6,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
   @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE VXPIPE_CREDENTIAL_KEY_ID
     VXPIPE_CREDENTIAL_KEYS STORAGE_BUCKET AWS_SESSION_TOKEN VXPIPE_DEV_SPEECH_PROFILE
     VXPIPE_DEV_MODEL_FIXTURE VXPIPE_DEV_TENANT DEEPGRAM_API_KEY GEMINI_API_KEY APP_HOST PORT VXPIPE_DEV_TLS
-    TELEPHONY_HOST VXPIPE_CONFIG)
+    TELEPHONY_HOST VXPIPE_CONFIG SECRET_KEY_BASE)
   @settings [
     {:vxpipe_call_engine, Vxpipe.CallEngine.Application},
     {:vxpipe_gateway, Vxpipe.Gateway.Application},
@@ -118,6 +118,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
 
   test "a public application host supplies the shared HTTPS callback origin" do
     System.put_env("APP_HOST", "192.0.2.15")
+    System.put_env("SECRET_KEY_BASE", String.duplicate("test-only-", 8))
     configuration = Config.Reader.read!(@runtime, env: :dev)
 
     assert configuration

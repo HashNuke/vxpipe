@@ -67,3 +67,24 @@ Focused runs:
   failures, each for the intended reason.
 - The default lane shows the Secure-cookie guard passing and the tagged tests
   excluded.
+
+## Fixes (2026-10-14, after rebasing onto `5d815c85`)
+
+- **D-2:** demo sample installation now requires `call_specs.write` on the demo
+  tenant. This was committed separately, red then green.
+- **SEC-1:** added `Vxpipe.Console.ClientAddress`. It trusts the last
+  `X-Forwarded-For` entry only from a loopback peer, matching
+  `TrustedProxyScheme`, and is used for setup, login and recovery throttling.
+- **SEC-2:** `Sessions.login/4` treats a non-binary password as a counted failure,
+  and `Argon2Hasher.verify/2` returns `false` for non-binaries.
+- **SEC-3:** join-token TTL is capped at 86,400 s in Calls and in the Gateway. A new
+  Calls test fails without the cap, which was checked by temporarily reverting it.
+- **SEC-4:** the dev runtime raises when the listener is not loopback and there is
+  no `SECRET_KEY_BASE`. Two runtime tests with network listeners now set a test
+  secret.
+- The `:security_open` exclusions were removed from the test helpers, since no
+  open finding remains.
+- **Verification approach:** focused tests ran per fix, and the root gates ran once
+  at the end, at the user's request.
+- **Left open:** the per-account lockout policy, and the unknown-user Argon2
+  timing difference.

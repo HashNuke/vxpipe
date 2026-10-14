@@ -183,6 +183,18 @@ defmodule Vxpipe.Calls.AdmissionsTest do
     assert first.id != second.id
   end
 
+  test "rejects a join-token lifetime beyond one day", context do
+    assert {:ok, call, _first} = prepare(context)
+
+    assert {:error, :invalid_join_token_configuration} =
+             Calls.issue_join_token(
+               context.principal,
+               call.id,
+               context.caller_route.key,
+               Keyword.put(context.options, :join_token_ttl_seconds, 86_401)
+             )
+  end
+
   test "treats repeated creation as separate prepared calls", context do
     assert {:ok, first_call, _first_token} = prepare(context)
 

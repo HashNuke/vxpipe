@@ -270,7 +270,10 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
   end
 
   defp ttl_seconds(nil), do: {:ok, nil}
-  defp ttl_seconds(seconds) when is_integer(seconds) and seconds >= 300, do: {:ok, seconds}
+
+  defp ttl_seconds(seconds) when is_integer(seconds) and seconds in 300..86_400,
+    do: {:ok, seconds}
+
   defp ttl_seconds(_invalid), do: {:error, :invalid_request}
 
   defp bearer(conn) do

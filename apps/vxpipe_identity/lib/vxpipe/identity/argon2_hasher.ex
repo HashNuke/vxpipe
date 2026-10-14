@@ -15,4 +15,6 @@ defmodule Vxpipe.Identity.Argon2Hasher do
   rescue
     _ -> false
   end
+
+  def verify(_password, _hash), do: false
 end

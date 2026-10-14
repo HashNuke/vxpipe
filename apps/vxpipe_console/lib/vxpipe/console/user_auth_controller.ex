@@ -3,7 +3,7 @@ defmodule Vxpipe.Console.UserAuthController do
 
   use Phoenix.Controller, formats: [:json]
 
-  alias Vxpipe.Console.UserSession
+  alias Vxpipe.Console.{ClientAddress, UserSession}
 
   def status(conn, _params) do
     case backend().status() do
@@ -13,7 +13,7 @@ defmodule Vxpipe.Console.UserAuthController do
   end
 
   def setup(conn, params) do
-    address = conn.remote_ip |> :inet.ntoa() |> to_string()
+    address = ClientAddress.for_throttling(conn)
 
     case backend().setup(
            Map.get(params, "email"),
@@ -34,7 +34,7 @@ defmodule Vxpipe.Console.UserAuthController do
   end
 
   def login(conn, params) do
-    address = conn.remote_ip |> :inet.ntoa() |> to_string()
+    address = ClientAddress.for_throttling(conn)
 
     case backend().login(Map.get(params, "email"), Map.get(params, "password"), address) do
       {:ok, %{token: token}} -> started(conn, token)
@@ -45,7 +45,7 @@ defmodule Vxpipe.Console.UserAuthController do
   end
 
   def recover(conn, params) do
-    address = conn.remote_ip |> :inet.ntoa() |> to_string()
+    address = ClientAddress.for_throttling(conn)
 
     case backend().recover(
            Map.get(params, "proof"),
