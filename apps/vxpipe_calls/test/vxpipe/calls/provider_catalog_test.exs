@@ -188,7 +188,7 @@ defmodule Vxpipe.Calls.ProviderCatalogTest do
       user_public_id: "11111111-1111-4111-8111-111111111111",
       session_public_id: "22222222-2222-4222-8222-222222222222",
       account_kind: :admin,
-      grants: MapSet.new(["call_specs.read", "call_specs.use_platform_services"]),
+      grants: MapSet.new(["call_specs.read", "platform_services.read"]),
       assigned_tenants: %{tenant => :read_write},
       all_tenant_actions: MapSet.new()
     }

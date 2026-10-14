@@ -53,10 +53,6 @@ export function PermissionEditor({
       next = next.filter((grant) => grant.permission !== `${resource}.write` &&
         !(resource === "tenant_services" && grant.permission === "tenant_api_keys.write"));
     }
-    if (!next.some((grant) => grant.permission === "call_specs.write"))
-      next = next.filter(
-        (grant) => grant.permission !== "call_specs.use_platform_services",
-      );
     onChange?.(includeCredentialRead(next));
   }
   return (
@@ -78,138 +74,50 @@ export function PermissionEditor({
             read?.scope ??
             write?.scope ??
             (group.tenant ? "assigned_tenants" : "installation");
-          // Read and write grants carry independent scopes (for example
-          // all-tenant read with assigned-tenant write). A single selector
-          // must not collapse them into one scope.
-          const independentScopes =
-            group.tenant && !!read && !!write;
           return (
             <div className="access-permission-row" key={group.resource}>
               <div>
                 <strong>{group.label}</strong>
                 <p className="access-muted">{group.detail}</p>
               </div>
-              <div className={`access-grants${group.writeOnly ? " access-grants-write-only" : ""}`}>
-                {!group.writeOnly ? <label>
-                  <input
-                    type="checkbox"
-                    aria-label={`Read ${group.label}`}
-                    checked={!!read}
-                    disabled={readOnly}
-                    onChange={(event) =>
-                      toggle(
-                        group.resource,
-                        "read",
-                        event.target.checked,
-                        scope,
-                      )
-                    }
-                  />
-                  Read
-                </label> : null}
-                {!group.readOnly ? (
-                  <label>
-                    <input
-                      type="checkbox"
-                      aria-label={`Write ${group.label}`}
-                      checked={!!write}
-                      disabled={readOnly}
-                      onChange={(event) =>
-                        toggle(
-                          group.resource,
-                          "write",
-                          event.target.checked,
-                          scope,
-                        )
-                      }
-                    />
-                    Write
-                  </label>
-                ) : (
-                  <span className="access-muted">Read only</span>
-                )}
+              <div className="access-permission-actions">
+                {(["read", "write"] as const).map((action) => {
+                  if ((action === "read" && group.writeOnly) ||
+                      (action === "write" && group.readOnly)) return null;
+                  const grant = action === "read" ? read : write;
+                  const label = action === "read" ? "Read" : "Write";
+                  const actionScope = grant?.scope ?? scope;
+                  return (
+                    <div className="access-permission-action" key={action}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          aria-label={`${label} ${group.label}`}
+                          checked={!!grant}
+                          disabled={readOnly}
+                          onChange={(event) => toggle(group.resource, action, event.target.checked, actionScope)}
+                        />
+                        {label}
+                      </label>
+                      {group.tenant ? (
+                        <select
+                          aria-label={`${label} scope for ${group.label}`}
+                          value={actionScope}
+                          disabled={readOnly || !grant}
+                          onChange={(event) => changeScope(group.resource, event.target.value as Scope, action)}
+                        >
+                          <option value="assigned_tenants">Assigned tenants</option>
+                          <option value="all_tenants">All tenants</option>
+                        </select>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
-              {group.tenant ? (
-                independentScopes ? (
-                  <div className="access-permission-scopes">
-                    <select
-                      aria-label={`Read scope for ${group.label}`}
-                      value={read.scope}
-                      disabled={readOnly}
-                      onChange={(event) =>
-                        changeScope(
-                          group.resource,
-                          event.target.value as Scope, "read",
-                        )
-                      }
-                    >
-                      <option value="assigned_tenants">Read: Assigned tenants</option>
-                      <option value="all_tenants">Read: All tenants</option>
-                    </select>
-                    <select
-                      aria-label={`Write scope for ${group.label}`}
-                      value={write.scope}
-                      disabled={readOnly}
-                      onChange={(event) =>
-                        changeScope(
-                          group.resource,
-                          event.target.value as Scope, "write",
-                        )
-                      }
-                    >
-                      <option value="assigned_tenants">Write: Assigned tenants</option>
-                      <option value="all_tenants">Write: All tenants</option>
-                    </select>
-                  </div>
-                ) : (
-                  <div className="access-permission-scopes">
-                    <select
-                      aria-label={`Scope for ${group.label}`}
-                      value={scope}
-                      disabled={readOnly || (!read && !write)}
-                      onChange={(event) =>
-                        changeScope(group.resource, event.target.value as Scope)
-                      }
-                    >
-                      <option value="assigned_tenants">Assigned tenants</option>
-                      <option value="all_tenants">All tenants</option>
-                    </select>
-                  </div>
-                )
-              ) : null}
             </div>
           );
         })}
       </div>
-      <label className="access-check">
-        <input
-          type="checkbox"
-          checked={value.some(
-            (grant) => grant.permission === "call_specs.use_platform_services",
-          )}
-          disabled={
-            readOnly ||
-            !value.some((grant) => grant.permission === "call_specs.write")
-          }
-          onChange={(event) =>
-            onChange?.([
-              ...value.filter(
-                (grant) =>
-                  grant.permission !== "call_specs.use_platform_services",
-              ),
-              ...(event.target.checked
-                ? [
-                    {
-                      permission: "call_specs.use_platform_services",
-                      scope: "installation" as const,
-                    },
-                  ]
-                : []),
-            ])
-          }
-        />
-        Allow platform services in call specs
-      </label>
     </section>
   );
 }

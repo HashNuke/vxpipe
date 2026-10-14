@@ -110,7 +110,7 @@ defmodule Vxpipe.Calls.OperatorPhoneNumbersTest do
              OperatorPhoneNumbers.list(member, "bad", "primary-phone", query, options)
   end
 
-  test "member cannot list platform-owned numbers without use_platform_services" do
+  test "member cannot list platform-owned numbers without platform_services.read" do
     platform_snapshot = platform_telnyx_snapshot(@tenant, "platform-voice")
     tenant_snapshot = tenant_legacy_snapshot(@tenant, "tenant-voice")
 
@@ -193,7 +193,7 @@ defmodule Vxpipe.Calls.OperatorPhoneNumbersTest do
       session_public_id: "22222222-2222-4222-8222-222222222222",
       account_kind: :admin,
       grants:
-        MapSet.new(["call_specs.read", "call_specs.write", "call_specs.use_platform_services"]),
+        MapSet.new(["call_specs.read", "call_specs.write", "platform_services.read"]),
       assigned_tenants: %{tenant => :read_write},
       all_tenant_actions: MapSet.new()
     }

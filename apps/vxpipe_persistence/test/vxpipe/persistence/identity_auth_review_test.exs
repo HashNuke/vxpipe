@@ -334,7 +334,7 @@ defmodule Vxpipe.Persistence.IdentityAuthReviewTest do
                {"tenant_services.read", :assigned_tenants},
                {"tenant_services.write", :assigned_tenants},
                {"tenant_api_keys.write", :assigned_tenants},
-               {"call_specs.use_platform_services", :installation}
+               {"platform_services.read", :installation}
              ])
 
     member_grants = MapSet.new(by_slug["tenant-member"].grants, &{&1.permission, &1.scope})
@@ -348,7 +348,7 @@ defmodule Vxpipe.Persistence.IdentityAuthReviewTest do
     for role <- [by_slug["tenant-manager"], by_slug["tenant-member"]] do
       refute Enum.any?(role.grants, fn %{permission: p} -> String.starts_with?(p, "users.") end)
 
-      refute Enum.any?(role.grants, fn %{permission: p} -> String.starts_with?(p, "platform_") end)
+      refute Enum.any?(role.grants, fn %{permission: p} -> p == "platform_services.write" end)
     end
 
     superadmin = by_slug["superadmin"]

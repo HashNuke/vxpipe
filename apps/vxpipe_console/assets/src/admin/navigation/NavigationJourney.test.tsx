@@ -8,7 +8,9 @@ afterEach(() => { cleanup(); window.history.replaceState({}, "", "/"); });
 test("single-tenant entry shows dashboard with only permitted links", () => {
   render(<NavigationJourney persona="single" />);
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-  expect(screen.queryByRole("navigation", { name: "Platform" })).not.toBeInTheDocument();
+  const platform = screen.getByRole("navigation", { name: "Platform" });
+  expect(within(platform).getByRole("link", { name: "Services" })).toBeVisible();
+  expect(within(platform).queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "My account" })).toBeVisible();
   expect(screen.queryByText("acme_demo_000001")).not.toBeInTheDocument();
 });

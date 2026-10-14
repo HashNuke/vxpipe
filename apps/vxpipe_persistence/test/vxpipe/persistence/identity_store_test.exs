@@ -77,8 +77,8 @@ defmodule Vxpipe.Persistence.IdentityStoreTest do
       refute Enum.any?(member.grants, &(&1.permission == key))
     end
 
-    assert %{permission: "call_specs.use_platform_services", scope: :installation} =
-             Enum.find(manager.grants, &(&1.permission == "call_specs.use_platform_services"))
+    assert %{permission: "platform_services.read", scope: :installation} =
+             Enum.find(manager.grants, &(&1.permission == "platform_services.read"))
   end
 
   test "setup completes singleton and logs in the initial superadmin" do

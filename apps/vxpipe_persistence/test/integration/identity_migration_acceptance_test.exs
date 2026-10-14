@@ -6,6 +6,20 @@ defmodule Vxpipe.Persistence.IdentityMigrationAcceptanceTest do
   @pre_auth_version "20261013000100"
   @child_dir Path.expand("../..", __DIR__)
 
+  test "platform read replaces authoring grants without granting configuration writes" do
+    with_disposable_database("platform", fn database ->
+      run_mix!(database, ["ecto.migrate", "--to", "20261014000200", "--quiet"])
+      query(database, "INSERT INTO roles (public_id, slug, name, revision, inserted_at, updated_at) VALUES (gen_random_uuid(), 'old-author', 'Author', 1, now(), now()), (gen_random_uuid(), 'old-reader', 'Reader', 1, now(), now())")
+      query(database, "INSERT INTO role_permissions (role_id, permission_key, scope) SELECT id, 'call_specs.use_platform_services', 'installation' FROM roles WHERE slug IN ('old-author', 'old-reader')")
+      query(database, "INSERT INTO role_permissions (role_id, permission_key, scope) SELECT id, 'platform_services.read', 'installation' FROM roles WHERE slug = 'old-reader'")
+      migrate(database)
+      assert query(database, "SELECT count(*) FROM role_permissions JOIN roles ON roles.id = role_id WHERE slug IN ('old-author', 'old-reader') AND permission_key = 'platform_services.read' AND scope = 'installation'") == "2"
+      assert query(database, "SELECT count(*) FROM role_permissions JOIN roles ON roles.id = role_id WHERE slug IN ('old-author', 'old-reader') AND permission_key = 'platform_services.write'") == "0"
+      assert query(database, "SELECT count(*) FROM permissions WHERE key = 'call_specs.use_platform_services'") == "0"
+      assert query(database, "SELECT count(*) FROM roles WHERE slug IN ('old-author', 'old-reader') AND revision = 2") == "2"
+    end)
+  end
+
   test "service-read migration merges existing read scopes without broadening writes" do
     with_disposable_database("services", fn database ->
       run_mix!(database, ["ecto.migrate", "--to", "20261014000100", "--quiet"])

@@ -450,31 +450,27 @@
 }
 .access-permission-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   align-items: center;
   padding: 16px 0;
   border-bottom: 1px solid var(--admin-row-line);
 }
-.access-permission-scopes {
-  grid-column: 1 / -1;
+.access-permission-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 200px));
-  gap: 12px;
+  gap: 8px;
 }
-.access-permission-scopes select {
+.access-permission-action {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 200px);
+  align-items: center;
+  gap: 12px;
+  min-height: 24px;
+}
+.access-permission-action select {
   width: 100%;
 }
-.access-grants {
-  display: grid;
-  grid-template-columns: 54px 1fr;
-  gap: 18px;
-  align-items: center;
-}
-.access-grants-write-only label {
-  grid-column: 2;
-}
-.access-grants label,
+.access-permission-action label,
 .access-check {
   display: inline-flex;
   align-items: center;
@@ -583,18 +579,7 @@
     grid-row: 1;
     grid-column: 2;
   }
-  .access-permission-row {
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-  .access-permission-row > :first-child {
-    grid-column: 1 / -1;
-  }
   .access-component {
     padding: 20px 16px;
   }
-}
-
-@media (max-width: 480px) {
-  .access-permission-scopes { grid-template-columns: minmax(0, 200px); }
 }

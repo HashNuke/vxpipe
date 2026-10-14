@@ -367,7 +367,7 @@ test("roles list links to details and creation navigates to the new role", async
   });
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByText(/Define what people can do/)).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Roles", level: 1 })).toBeVisible();
   expect(screen.getByRole("link", { name: /Tenant Member/ })).toHaveAttribute(
     "href",
     "/roles/role-member",
@@ -400,7 +400,7 @@ test("roles list shows authoritative affected-user counts without paging the dir
   });
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByText(/Define what people can do/)).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Roles", level: 1 })).toBeVisible();
   expect(await screen.findByText("Users: 7")).toBeVisible();
   expect(await screen.findByText("Users: 0")).toBeVisible();
   expect(requestedUsers).not.toHaveBeenCalled();

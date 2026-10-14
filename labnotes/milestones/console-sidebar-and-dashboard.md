@@ -381,3 +381,30 @@ commits this checklist and its evidence with the implementation.
 UI follow-up acceptance: desktop/mobile browser checks, 730 frontend tests, final
 7 permission tests, typecheck/lint and all five root gates passed (3,788 tests;
 zero failures, 133 excluded).
+
+### Merge shared-service authoring into Platform Services read
+
+User decision: “That permission is useless and hard to understand. I think we
+should merge it with platform servies read.” This supersedes the separate
+platform-authoring permission described above.
+
+Design review: keep tenant Call Specs read/write checks; use Platform Services read
+to include shared services in telephony/model/voice lookups and permit references
+on save/publish. Platform service mutation still requires write. Migrate existing
+authoring grants to installation-scoped Platform Services read, without adding
+write grants. Remove the retired catalog entry and editor checkbox.
+
+- [x] Prove Platform Services read controls shared editor choices and authoring.
+- [x] Migrate existing authoring grants; remove the old permission and checkbox.
+- [x] Update docs, verify UI and permission boundaries, run completion gates and commit.
+
+Latest layout refinement supersedes the separate scope rows above:
+
+- [x] Use one row per action: `[checkbox] Read [scope]` and `[checkbox] Write [scope]`, with compact aligned dropdowns on desktop/mobile.
+- [x] Verify the revised action-row layout and existing scope dependencies.
+
+Acceptance: final 730 frontend tests, typecheck, lint and desktop/mobile role-editor
+inspection pass. All five root gates ran; one old Tenant Manager assertion in the
+3,788-test run was corrected and the full 278-test persistence suite passed on
+rerun. Other applications passed in the root run. The new migration integration
+test also passes. Evidence: [platform-read labnotes](../20261014-0702-merge-platform-read.md).

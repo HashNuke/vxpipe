@@ -36,7 +36,6 @@ defmodule Vxpipe.Identity.AuthorizationReviewTest do
       "calls.write",
       "call_specs.read",
       "call_specs.write",
-      "call_specs.use_platform_services",
       "platform_services.read",
       "platform_services.write",
       "tenant_services.read",
@@ -67,7 +66,6 @@ defmodule Vxpipe.Identity.AuthorizationReviewTest do
           "tenants.write",
           "platform_services.read",
           "platform_services.write",
-          "call_specs.use_platform_services",
           "diagnostics.read"
         ] do
       assert :ok = Authorization.authorize(grants, key, :installation), key

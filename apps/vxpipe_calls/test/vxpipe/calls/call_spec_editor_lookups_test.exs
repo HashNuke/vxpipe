@@ -57,7 +57,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookupsTest do
           "calls.write",
           "call_specs.read",
           "call_specs.write",
-          "call_specs.use_platform_services"
+          "platform_services.read"
         ]),
       assigned_tenants: %{tenant => :read_write},
       all_tenant_actions: MapSet.new()
@@ -285,7 +285,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookupsTest do
     refute dumped =~ "55555555-5555-4555-8555-555555555555"
   end
 
-  test "privileged principal with call_specs.use_platform_services sees platform bindings and services" do
+  test "privileged principal with platform_services.read sees platform bindings and services" do
     {:ok, {tenant, [credential], [service], false}} = services_fixture(@tenant)
     platform_service = platform_service_fixture(@tenant)
 

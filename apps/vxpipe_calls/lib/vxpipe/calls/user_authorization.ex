@@ -64,7 +64,7 @@ defmodule Vxpipe.Calls.UserAuthorization do
 
   @spec platform_authoring_allowed?(map()) :: boolean()
   def platform_authoring_allowed?(principal) when is_map(principal) do
-    case authorize_installation(principal, "call_specs.use_platform_services") do
+    case authorize_installation(principal, "platform_services.read") do
       :ok -> true
       _ -> false
     end

@@ -80,7 +80,6 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
           "calls.write",
           "call_specs.read",
           "call_specs.write",
-          "call_specs.use_platform_services",
           "platform_services.read",
           "platform_services.write",
           "tenant_services.read",
@@ -621,7 +620,7 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
              )
   end
 
-  test "authoring requires call_specs.write and preserves platform modifier" do
+  test "authoring requires call_specs.write and uses platform service read" do
     tenant_key = @tenant
 
     writer =
@@ -659,7 +658,7 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
           MapSet.new([
             "call_specs.read",
             "call_specs.write",
-            "call_specs.use_platform_services"
+            "platform_services.read"
           ]),
         assigned_tenants: %{tenant_key => :read_write},
         all_tenant_actions: MapSet.new()
@@ -667,6 +666,12 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
 
     assert Vxpipe.Calls.UserAuthorization.platform_authoring_allowed?(privileged)
     refute Vxpipe.Calls.UserAuthorization.platform_authoring_allowed?(writer)
+    assert {:error, :unknown_permission} =
+             Vxpipe.Identity.Permission.fetch("call_specs.use_platform_services")
+    platform_reader = base_principal(%{grants: MapSet.new(["platform_services.read"])})
+    assert {:error, :forbidden} = CallSpecAuthoring.save(platform_reader, tenant_key, %{}, [])
+    assert {:error, :forbidden} = CallSpecAuthoring.publish(platform_reader, tenant_key, "spec", 1, [])
+    assert {:error, :forbidden} = UserAuthorization.authorize_credential_write(platform_reader, :platform)
   end
 
   test "assigned tenant manager lists services only for assigned tenant" do

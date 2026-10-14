@@ -96,7 +96,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
   # `tenant_services.read` and never returns credentials, ingress keys, or
   # secrets. Repository rows are validated and pinned to the requested tenant
   # before projecting only `{key, name, provider}`. Members without
-  # `call_specs.use_platform_services` only see tenant-owned services; privileged
+  # `platform_services.read` only see tenant-owned services; privileged
   # authors may also select tenant-pinned platform-owned services they are
   # allowed to reference in specs.
   defp list_member_services(tenant_key, options, privileged?) do
@@ -162,7 +162,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
         _foreign -> false
       end)
 
-    # Members without `call_specs.use_platform_services` stay on tenant-owned
+    # Members without `platform_services.read` stay on tenant-owned
     # rows. Privileged authors may also select tenant-pinned platform-owned
     # rows they are allowed to reference. Foreign-tenant rows still fail closed
     # via `tenant_pinned?`.

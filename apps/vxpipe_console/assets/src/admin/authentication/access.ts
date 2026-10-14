@@ -83,7 +83,7 @@ export const permissionGroups = [
   {
     resource: "platform_services",
     label: "Platform services",
-    detail: "Inspect metadata; configure and test shared services.",
+    detail: "View shared services and use them in call specs; configure and test shared services.",
     tenant: false,
   },
   {

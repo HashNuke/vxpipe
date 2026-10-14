@@ -162,7 +162,7 @@ server-side permissions, including direct requests.
 - [x] Replace installation-wide browser assumptions throughout the entry-point inventory.
   Recheck writes in owning domain/persistence boundaries; filter tenant directories,
   pagination, counts, lookups, calls, specs, artifacts and streams by authorized scope.
-- [x] Preserve service-authoring restrictions through `call_specs.use_platform_services`:
+- [x] Preserve service-authoring restrictions (the separate `call_specs.use_platform_services` grant was merged into `platform_services.read` by the [October 14 Console review](console-sidebar-and-dashboard.md#merge-shared-service-authoring-into-platform-services-read)):
   seed it for Managers; members write tenant-owned references only. Test custom roles,
   full-spec save/publish, inherited services, platform-backed read/run access and zero allocated revisions on denial.
 - [x] Test member A=Read/B=ReadWrite/C=unassigned, empty memberships, unknown/foreign

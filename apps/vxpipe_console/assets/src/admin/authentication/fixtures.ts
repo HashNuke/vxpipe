@@ -22,7 +22,7 @@ export const roles: Role[] = [
       ...["calls.read", "calls.write", "call_specs.read", "call_specs.write", "tenant_services.read", "tenant_services.write", "tenant_api_keys.write"].map(
         (permission) => ({ permission, scope: "assigned_tenants" as const }),
       ),
-      { permission: "call_specs.use_platform_services", scope: "installation" },
+      { permission: "platform_services.read", scope: "installation" },
     ],
   },
   {

@@ -36,7 +36,7 @@ read/write operations for calls and call specs:
 | `calls.write` | Tenant | Start/control calls through existing operations. |
 | `call_specs.read` | Tenant | List/read source and revisions. |
 | `call_specs.write` | Tenant | Create/edit/publish call specs. |
-| `platform_services.read` | Installation | Inspect platform service metadata, never secret values. |
+| `platform_services.read` | Installation | Inspect shared service metadata and use shared services in call specs; never retrieve secret values. |
 | `platform_services.write` | Installation | Configure/test platform services. |
 | `users.read` | Installation | Read the safe account directory/profile projection. |
 | `users.members.write` | Installation, built-ins only | Create/manage ordinary user accounts only. |
@@ -259,16 +259,23 @@ All existing category checks apply to reset and creation; no public password res
 ### Service references in call specs
 
 Keep the existing distinction between executing a published spec and authoring it.
-Both built-ins and Tenant Manager may author specs using platform or tenant services:
-Tenant Managers can select/read a platform service without modifying its configuration.
-Seed `call_specs.use_platform_services` for Tenant Manager, independently of
-platform configuration writes. Custom roles must hold it as well as scoped
-`call_specs.write` to author platform-backed specs. Tenant Members are read-only;
-custom authoring roles without that modifier can author only tenant-owned service
-references. Validate the entire resulting spec on save and publish, including
-unchanged references. A member can read and run an already published
-platform-backed spec. Changing this historical restriction requires an explicit
-product decision; membership must not accidentally bypass it.
+Platform Services read (`platform_services.read`) permits shared-service choices in
+call-spec editor telephony, model and voice lookups, as well as shared-service
+references when saving or publishing. Tenant Call Specs read/write still gates the
+corresponding lookup/authoring operations and tenant scope. Platform Services write
+requires read and is needed to configure the shared services themselves.
+
+There is no separate `call_specs.use_platform_services` permission. The 2026-10-14
+migration converts existing grants into installation-scoped Platform Services read,
+including the seeded Tenant Manager role, and increments affected role revisions.
+This intentionally also permits inspecting platform service metadata. Existing
+read grants are retained; no write grants are added. The merge is irreversible
+because the previous source of a read grant cannot be recovered reliably.
+
+Custom authors without Platform Services read can use only tenant-owned services.
+Validate the entire resulting spec on save and publish, including unchanged
+references. Reading or executing an already published platform-backed spec keeps
+its existing tenant permission checks.
 
 ## Database organization
 

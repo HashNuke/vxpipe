@@ -76,7 +76,7 @@ test("changing one mixed scope leaves the other grant untouched", () => {
   ]);
 });
 
-test("platform-service authoring modifier keeps installation scope when call-spec scope changes", () => {
+test("platform service read replaces the separate authoring checkbox", () => {
   function ModifierEditor() {
     const [value, setValue] = useState<Grant[]>([]);
     return <>
@@ -87,12 +87,13 @@ test("platform-service authoring modifier keeps installation scope when call-spe
 
   render(<ModifierEditor />);
   fireEvent.click(screen.getByRole("checkbox", { name: "Write Call specs" }));
-  fireEvent.click(screen.getByRole("checkbox", { name: "Allow platform services in call specs" }));
-  expect(screen.getByTestId("grants")).toHaveTextContent('"permission":"call_specs.use_platform_services","scope":"installation"');
+  expect(screen.queryByRole("checkbox", { name: "Allow platform services in call specs" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Read Platform services" }));
+  expect(screen.getByTestId("grants")).toHaveTextContent('"permission":"platform_services.read","scope":"installation"');
   fireEvent.change(screen.getByRole("combobox", { name: "Read scope for Call specs" }), {
     target: { value: "all_tenants" },
   });
-  expect(screen.getByTestId("grants")).toHaveTextContent('"permission":"call_specs.use_platform_services","scope":"installation"');
+  expect(screen.getByTestId("grants")).toHaveTextContent('"permission":"platform_services.read","scope":"installation"');
 });
 
 test("a new role can grant all-tenant read and assigned-tenant write", () => {
@@ -118,8 +119,8 @@ test("API key writes use Services read instead of a separate API key read grant"
 test("API key write scope keeps its Services read prerequisite broad enough", () => {
   render(<Editor />);
   fireEvent.click(screen.getByRole("checkbox", { name: "Write Tenant API keys" }));
-  fireEvent.change(screen.getByRole("combobox", { name: "Scope for Tenant API keys" }), { target: { value: "all_tenants" } });
-  expect(screen.getByRole("combobox", { name: "Scope for Tenant services" })).toHaveValue("all_tenants");
-  fireEvent.change(screen.getByRole("combobox", { name: "Scope for Tenant services" }), { target: { value: "assigned_tenants" } });
-  expect(screen.getByRole("combobox", { name: "Scope for Tenant API keys" })).toHaveValue("assigned_tenants");
+  fireEvent.change(screen.getByRole("combobox", { name: "Write scope for Tenant API keys" }), { target: { value: "all_tenants" } });
+  expect(screen.getByRole("combobox", { name: "Read scope for Tenant services" })).toHaveValue("all_tenants");
+  fireEvent.change(screen.getByRole("combobox", { name: "Read scope for Tenant services" }), { target: { value: "assigned_tenants" } });
+  expect(screen.getByRole("combobox", { name: "Write scope for Tenant API keys" })).toHaveValue("assigned_tenants");
 });
