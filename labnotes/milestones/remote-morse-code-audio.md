@@ -371,6 +371,9 @@ Dependencies: C, D.
 - [x] Implement bounded in-memory token issuance for all three speech purposes
   and token-only batch/realtime STT; prove expiry, atomic consumption, wrong
   purpose/replay rejection, restart invalidation and browser-origin/CORS behavior.
+- [x] Build the incremental text-to-PCM planner with independent gap/timing
+  fixtures, cumulative text/duration bounds and a single final utterance tail.
+  Verify arbitrary text fragments reproduce finite synthesis at every PCM rate.
 - [ ] Write red single-context and multi-context transcript fixtures before
   handlers; cover initialization, incremental text, flush/end-input, keepalive,
   close-context/close-socket and terminal errors.
@@ -392,6 +395,9 @@ one accepted transcript. Invalid explicit tokens never fall back to supplied key
 Cross-origin STT and HTTP preflight fixtures pass; rendered-browser acceptance,
 TTS token consumption, bearer and first-message authentication remain pending.
 The Go race suite/vet and official SDK token smoke pass. E remains incomplete.
+The incremental text planner also passes independent tone/space intervals and
+84 fragmentation comparisons across seven rates. It does not yet implement WS
+scheduling, continuous encoded output or original-text alignment.
 
 Exit: a browser-capable client generates Morse with both WS APIs and consumes
 a token once; idle or abandoned sockets release memory and execution workers.

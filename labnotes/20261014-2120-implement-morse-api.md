@@ -183,3 +183,25 @@
 - Stopped the older D test server and verified its process handle exited 0.
   TTS WS, their token consumption/initial authentication and provider integration
   remain active work; E and the milestone remain unchecked.
+
+## Checkpoint E — incremental synthesis foundation
+
+- Token work is committed in Go as `1a4255a` and its milestone evidence as
+  `d3adfe1b`. Sent a CLI progress update; no repository push or hosted deployment
+  is claimed before final acceptance.
+- Added failing tests for a transport-free incremental text planner. Reusing
+  a complete utterance encoder for every WS message would insert fourteen units
+  of silence between fragments; the planner instead carries a pending gap and
+  emits that tail only at finalization.
+- Independent E/T intervals prove one/three/seven-unit timing, no early tail and
+  cumulative alignment. Eighty-four seeded fragmentation cases across seven rates
+  reproduce finite PCM, normalized text and alignment with arbitrary byte reads.
+  Unicode whitespace, invalid-fragment atomicity, stream limits, empty input and
+  one-way finalization pass. Full Go race suite and vet pass after implementation.
+- The planner owns no goroutines or audio queues; WS handlers must still enforce
+  bounded queues and connect continuous codecs. Original-text alignment, context
+  scheduling and transport behavior remain unchecked.
+- Reviewed live canonical TTS WS pages against pinned AsyncAPI and SDK 2.72.0.
+  Documentation examples use snake_case final/alignment fields, while the schema
+  and Python FinalOutput types use camelCase `isFinal`. Use the pinned SDK/schema
+  contract for output and document this discrepancy during WS conformance work.
