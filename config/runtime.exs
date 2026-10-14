@@ -7,6 +7,14 @@ nonempty_env = fn name ->
   end
 end
 
+# Kept private to provider startup; saved services and call specs contain no origin.
+# Missing hosted configuration is reported only when the Morse API is selected.
+config :vxpipe_providers, :morse_code_api,
+  base_url:
+    System.get_env("MORSE_CODE_API_BASE_URL") ||
+      if(config_env() == :dev, do: "http://127.0.0.1:8787", else: nil),
+  allow_http?: config_env() in [:dev, :test]
+
 worktree =
   if config_env() in [:dev, :test] do
     {metadata, _bindings} = Code.eval_file(Path.join(__DIR__, "worktree.exs"))

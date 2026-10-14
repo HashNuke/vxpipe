@@ -302,3 +302,41 @@
   are complete; milestone/index now show 5/9 (A–E). F/G provider integration,
   H complete semantics/load/owner decisions and I hosted acceptance remain open.
   No push, Railway deployment or whole-goal completion is claimed.
+
+
+## Checkpoint F — private endpoint foundation
+
+- Inspected actual provider manifests, shared credential/probe contracts,
+  ElevenLabs TTS configuration/request/session modules, capability/model catalogs,
+  plan startup and private runtime resolution. Existing TTS constructors reject
+  endpoint options; the upcoming integration needs a named provider and private
+  configuration boundary, not a public URL option or registry-only change.
+- Added a focused endpoint test before implementation: three tests failed on the
+  absent module. The new Providers-owned Endpoint validates a single HTTP(S)
+  origin and derives its WS/WSS counterpart. It preserves selected ports, accepts
+  container DNS and IPv6, normalizes a trailing root slash, and rejects embedded
+  credentials, query/fragment, paths, malformed ports and unsupported schemes.
+- `config/runtime.exs` alone reads MORSE_CODE_API_BASE_URL. Development defaults
+  to loopback:8787; test/production require explicit configuration when resolved.
+  HTTP is permitted only with the development/test policy. The shared parser has
+  no default host, network call, environment-file access or fallback. Four focused
+  parser/configuration tests pass, including sequential local/hosted resolution
+  and restoration of the test's application environment.
+- Kept the provider out of the registry until its actual TTS capability and
+  consumers exist. F/G remain incomplete; no UI, room, network-routing or cache
+  separation acceptance is inferred from endpoint parsing. The next slice must
+  add manifest, credential reachability probe, TTS configuration/request/session,
+  model/catalog/startup/runtime dispatch and endpoint-dependent cache identity.
+- Actual runtime-loader smoke checks pass with an explicit container-style HTTP
+  origin and with the variable absent in the test environment. The first derives
+  the matching WS origin; the second reports `:endpoint_not_configured`.
+- Root formatting, warnings-as-errors compilation, strict Credo and unused
+  dependency checks pass. The full umbrella test run exited 2: Gateway reported
+  one timeout in `HumanTransferWebRTCTest`'s five-participant handoff while waiting
+  for `:native_gate_waiting` at line 782 (603 tests, one failure, eight excluded).
+  CallEngine passed 2,162 tests with 83 excluded and Providers passed 34 tests.
+  The unchanged Gateway case then passed in isolation from its owning child
+  application (one test, zero failures, 68 excluded; 172.7 seconds). This suggests
+  a timing-sensitive failure but does not establish its cause or make the full
+  suite green. Keep that evidence visible at the next full integration gate;
+  no unrelated handoff behavior or test deadlines were changed.

@@ -443,11 +443,14 @@ Dependencies: C and the implemented provider/service prerequisites.
 
 - [ ] Red-test manifest, capability selection, arbitrary synthetic credential,
   model/voice configuration and private runtime endpoint resolution.
-- [ ] Add `MORSE_CODE_API_BASE_URL` runtime plumbing and a documented development
-  example. Test HTTP→WS and HTTPS→WSS derivation, trailing slash normalization,
-  invalid origins, explicit nondefault ports and missing production configuration.
-  Check discovery/probes and TTS all use the selected origin; no hardcoded hosted
-  URL may bypass it. Include the origin in any endpoint-dependent cache identity.
+- [x] Add the private origin validator and `MORSE_CODE_API_BASE_URL` runtime
+  setting: development-local default, explicit hosted configuration, HTTP→WS and
+  HTTPS→WSS derivation, trailing-slash normalization and nondefault ports.
+  Reject userinfo, query/fragment, non-root paths, invalid ports and schemes.
+- [ ] Connect the configured origin to discovery/probes and TTS; no hardcoded
+  hosted URL may bypass it. Include the origin in endpoint-dependent cache
+  identity. Test absent production configuration at actual provider selection,
+  while ordinary startup without this provider remains usable.
 - [ ] Introduce only the reusable ElevenLabs wire boundary needed for remote
   TTS; retain existing hosted-provider regression tests and scoped ownership.
 - [ ] Implement `MorseCodeApi.TTSSession`, truthful readiness, output credit,
@@ -459,6 +462,13 @@ Dependencies: C and the implemented provider/service prerequisites.
   routed to ElevenLabs and no synthetic key reaches public events.
 - [ ] Inspect the changed Console service/editor states in headless Chrome via
   `agent-browser`, at desktop/mobile sizes, including unavailable service errors.
+
+Foundation evidence (2026-10-14): four endpoint parser/configuration tests and
+actual runtime-loader override/absence checks pass. Formatting, compilation,
+Credo and unused-dependency checks pass. The full umbrella run reported one
+Gateway five-participant WebRTC handoff timeout; that unchanged case passed in
+isolation. Full integration acceptance remains open; see the
+[implementation labnotes](../20261014-2120-implement-morse-api.md).
 
 Exit: a saved service and published call spec produce audible Morse through
 ordinary room output and remain interruptible under backpressure.
