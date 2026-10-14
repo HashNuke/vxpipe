@@ -583,3 +583,25 @@
     padding: 20px 16px;
   }
 }
+
+.access-ui .access-permissions-heading {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.access-role-delete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.access-role-delete > button,
+.access-role-delete > .access-actions {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.access-role-delete > .access-actions {
+  padding-top: 0;
+}

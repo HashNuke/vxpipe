@@ -57,7 +57,7 @@ export function PermissionEditor({
   }
   return (
     <section className="access-section" aria-label="Role permissions">
-      <h2>Permissions</h2>
+      <h2 className="access-permissions-heading">Permissions</h2>
       <p className="access-muted">
         Choose actions, then where they apply. Write access includes read
         access.

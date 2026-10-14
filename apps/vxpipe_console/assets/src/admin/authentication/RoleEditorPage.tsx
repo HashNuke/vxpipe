@@ -135,13 +135,15 @@ export function RoleEditorPage({
         </fieldset>
       </form>
       {role && !role.kind ? (
-        <section className="access-section">
-          <h2>Delete role</h2>
-          <p className="access-muted">
-            {affectedUsers
-              ? "Reassign its users before deleting this role."
-              : "This role has no assigned users."}
-          </p>
+        <section className="access-section access-role-delete">
+          <div>
+            <h2>Delete role</h2>
+            <p className="access-muted">
+              {affectedUsers
+                ? "Reassign its users before deleting this role."
+                : "This role has no assigned users."}
+            </p>
+          </div>
           {confirmDelete ? (
             <div className="access-actions">
               <Button

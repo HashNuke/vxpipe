@@ -408,3 +408,13 @@ inspection pass. All five root gates ran; one old Tenant Manager assertion in th
 3,788-test run was corrected and the full 278-test persistence suite passed on
 rerun. Other applications passed in the root run. The new migration integration
 test also passes. Evidence: [platform-read labnotes](../20261014-0702-merge-platform-read.md).
+
+### Role editor hierarchy and delete alignment
+
+- [x] Move Delete role to the right end of its row, opposite its explanatory copy.
+- [x] Make Permissions visually distinct as a section heading above Calls and other permission names.
+- [x] Inspect desktop/mobile rendering.
+- [x] Finish focused tests and root completion gates: 32 frontend tests, typecheck, lint, all five root gates (3,788 tests, zero failures).
+
+Design review: presentation-only refinement; preserve existing authorization and
+confirmation behavior. Use larger heading typography and responsive action alignment.
