@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { TenantCallSpecsPage } from "./TenantCallSpecsPage";
@@ -88,11 +88,15 @@ test("keeps tenant context and real call spec links visible", () => {
   expect(selectCallSpec).toHaveBeenCalledWith("delivery-rescheduling");
 });
 
-test("distinguishes published, draft changes, and unpublished call specs", () => {
+test("keeps edited published specs published with a separate changes indicator", () => {
   render(<TenantCallSpecsPage state={populated} />);
 
-  expect(screen.getByText("Published")).toBeVisible();
-  expect(screen.getByText("Draft changes")).toBeVisible();
+  expect(screen.getAllByText("Published")).toHaveLength(2);
+  const changed = screen.getByRole("row", { name: /Delivery rescheduling/ });
+  expect(within(changed).getByText("Published")).toBeVisible();
+  expect(within(changed).getByText("Unpublished changes")).toBeVisible();
+  expect(screen.getAllByText("Unpublished changes")).toHaveLength(1);
+  expect(screen.queryByText("Draft changes")).not.toBeInTheDocument();
   expect(screen.getByText("Draft")).toBeVisible();
   expect(
     screen.getByRole("link", { name: "View 1 calls for Untitled call spec" }),

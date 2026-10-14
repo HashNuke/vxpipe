@@ -551,3 +551,9 @@ the single-tenant dashboard landing, and redirect legacy /my-tenants bookmarks.
 - [x] Add the regular sidebar link and fixed Settings back destination.
 - [x] Update scoped navigation contracts and regression tests.
 - [x] Finish browser and automated verification: desktop/mobile and assigned-tenant directory inspected; 750 frontend tests, TypeScript, ESLint, CSS build and static root gates passed. Full umbrella run: 3,802 tests with one unrelated speech deadline timeout; all 14 deadline tests passed on focused rerun. All 312 Console tests passed.
+
+### Call-spec publication labels
+- [x] Show only Draft or Published as the status.
+- [x] Put Unpublished changes below Published when a newer saved revision exists.
+- [x] Verify the mixed-status table with a focused regression test.
+- [x] Inspect desktop and narrow Storybook rendering, including horizontal table scrolling.
