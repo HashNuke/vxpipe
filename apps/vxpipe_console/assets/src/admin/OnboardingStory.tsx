@@ -96,6 +96,7 @@ const exampleApiKey: TenantApiKey = {
   id: "example-key",
   name: "Application",
   kind: "calls",
+  lastFour: "-key",
 };
 
 const demoTenant: SetupTenant = {
@@ -217,7 +218,7 @@ export function OnboardingStory({
   renderFrame,
   publicOrigin = "http://localhost:4000",
 }: {
-  renderFrame?: (content: ReactNode, page: SetupPage, tenant: SetupTenant) => ReactNode;
+  renderFrame?: (content: ReactNode, page: SetupPage, tenant: SetupTenant, navigate: (page: SetupPage) => void, keys: TenantApiKey[]) => ReactNode;
   publicOrigin?: string;
   scenario: OnboardingScenario;
   theme: "dark" | "light";
@@ -225,6 +226,7 @@ export function OnboardingStory({
   const providers = installedSetupProviders(Object.fromEntries(setupProviders.map((provider) => [
     provider.id, ["credential", ...provider.capabilities.map((capability) => capability === "s2s" ? "sts" : capability)],
   ])), modelCatalogFixture);
+  const [initialKeysForm, setInitialKeysForm] = useState(scenario.startsWith("api-key") && !["api-key-existing", "api-key-created"].includes(scenario));
   const [page, setPage] = useState<SetupPage>(
     scenario.startsWith("platform-")
       ? "platform"
@@ -330,6 +332,7 @@ export function OnboardingStory({
 
   function navigatePage(next: SetupPage) {
     if (keyPending) return;
+    setInitialKeysForm(false);
     setKeyCreation({ status: "idle" });
     setPage(next);
   }
@@ -342,6 +345,7 @@ export function OnboardingStory({
         id: `example-key-${apiKeys.length + 1}`,
         name,
         kind,
+        lastFour: "-key",
       };
       setApiKeys((current) => [...current, key]);
       setKeyCreation({
@@ -515,7 +519,7 @@ export function OnboardingStory({
             creation={keyCreation}
             initialKind={scenario === "api-key-full-access" ? "full" : "calls"}
             keys={apiKeys}
-            onCallSpecs={() => navigatePage("samples")}
+            initialCreating={initialKeysForm}
             onCreate={createApiKey}
             tenantName={tenant.name}
           />
@@ -652,5 +656,5 @@ export function OnboardingStory({
       ) : null}
     </AdminShell>
   );
-  return renderFrame ? renderFrame(content, page, tenant) : content;
+  return renderFrame ? renderFrame(content, page, tenant, navigatePage, apiKeys) : content;
 }

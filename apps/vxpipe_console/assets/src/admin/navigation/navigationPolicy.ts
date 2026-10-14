@@ -25,6 +25,7 @@ export function navigationItems(role: Role, user: User, tenant?: Tenant): { tena
       { label: "Calls", resource: "calls", path: "calls" },
       { label: "Call Specs", resource: "call_specs", path: "call-specs" },
       { label: "Services", resource: "tenant_services", path: "services" },
+      { label: "API Keys", resource: "tenant_api_keys", path: "api-keys" },
     ].filter(item => tenantAccess(role, user, tenant, item.resource) !== "none")
       .map(item => ({ label: item.label, href: `/t/${encodeURIComponent(tenant.key)}/${item.path}` })) : [],
     platform: [

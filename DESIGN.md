@@ -331,9 +331,11 @@ must be legible through more than decoration alone.
 ### Navigation
 
 Ordinary administration uses the shared sidebar. Vxpipe sits above the searchable
-tenant picker. Tenant links remain Calls, Call Specs, Services; Platform links
-remain Tenants, Roles, Users, Services. Omit unavailable destinations and empty
-groups. My account and Logout occupy the bottom region. The selected tenant
+tenant picker. Production tenant links remain Calls, Call Specs, Services. The
+Storybook fixtures extend that order with API Keys immediately below Services;
+this fixture destination does not establish production API-key authoring.
+Platform links remain Tenants, Roles, Users, Services. Omit unavailable
+destinations and empty groups. My account and Logout occupy the bottom region. The selected tenant
 stays visible when moving to platform pages within the same application; platform
 scope is explicit in the page title. Switching tenants opens its dashboard.
 

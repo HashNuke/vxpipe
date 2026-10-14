@@ -20,7 +20,7 @@ test("mixed scopes expose all tenants but only permitted tenant destinations", (
   ] };
   expect(landingPath(role, users[4], tenants)).toBe("/tenants");
   expect(navigationItems(role, users[4], tenants[2]).tenant.map(item => item.label)).toEqual(["Calls"]);
-  expect(navigationItems(role, users[4], tenants[0]).tenant.map(item => item.label)).toEqual(["Calls", "Services"]);
+  expect(navigationItems(role, users[4], tenants[0]).tenant.map(item => item.label)).toEqual(["Calls", "Services", "API Keys"]);
   expect(navigationItems(role, users[4], tenants[2]).platform.map(item => item.label)).toEqual(["Tenants"]);
 });
 test("platform user reads do not imply role management or tenant access", () => {

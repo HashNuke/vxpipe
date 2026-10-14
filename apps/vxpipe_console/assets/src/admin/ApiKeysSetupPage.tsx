@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Copy, KeyRound } from "lucide-react";
+import { Check, Copy, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./Button";
 import {
@@ -15,61 +15,51 @@ export function ApiKeysSetupPage({
   creation,
   initialKind = "calls",
   onCreate,
-  onCallSpecs,
+  initialCreating = false,
+  readOnly = false,
 }: {
   tenantName: string;
   keys: TenantApiKey[];
   creation: ApiKeyCreation;
   initialKind?: TenantApiKeyKind;
   onCreate: (name: string, kind: TenantApiKeyKind) => void;
-  onCallSpecs: () => void;
+  initialCreating?: boolean;
+  readOnly?: boolean;
 }) {
   const [name, setName] = useState("Application");
   const [kind, setKind] = useState(initialKind);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(initialCreating);
+  const [dismissed, setDismissed] = useState<string>();
+  const created = creation.status === "created" && dismissed !== creation.key.id;
+  const showForm = !readOnly && adding && !created;
   const busy = creation.status === "submitting";
   return (
     <>
-      <header className="setup-page-heading">
-        <h1>Create API Keys</h1>
-        <p>
-          Give your application access to {tenantName}. Choose the permissions
-          it needs.
-        </p>
+      <header className="setup-section-heading">
+        <h1>{showForm ? "Create API Keys" : "API Keys"}</h1>
+        {!showForm && !readOnly ? <Button onClick={() => {
+          if (creation.status === "created") setDismissed(creation.key.id);
+          setAdding(true);
+        }}><Plus aria-hidden="true" size={16} />Create API key</Button> : null}
       </header>
+      {created && creation.status === "created" ? (
+        <ApiKeyReveal key={creation.key.id} creation={creation} onDone={() => {
+          setDismissed(creation.key.id);
+          setAdding(false);
+        }} />
+      ) : null}
+      {!showForm ? (
+        keys.length ? <div className="setup-api-key-table-wrap">
+          <table aria-label="API keys" className="setup-api-key-table">
+            <thead><tr><th scope="col">Name</th><th scope="col">API key</th></tr></thead>
+            <tbody>{keys.map(key => <tr key={key.id}>
+              <td>{key.name}</td><td><code>••••••••{key.lastFour}</code></td>
+            </tr>)}</tbody>
+          </table>
+        </div> : <p className="setup-key-guidance">No API keys have been created for this tenant.</p>
+      ) : null}
       <div className="setup-key-content">
-        <p className="setup-key-guidance">
-          Use tenant API keys from your backend. Give callers short-lived join
-          tokens to connect to a call.
-        </p>
-        {creation.status === "created" ? (
-          <ApiKeyReveal creation={creation} />
-        ) : null}
-        {keys.length > 0 && creation.status !== "created" ? (
-          <section aria-label="Tenant API keys" className="setup-saved-keys">
-            <h2>Keys for {tenantName}</h2>
-            {keys.map((key) => (
-              <div className="setup-saved-key" key={key.id}>
-                <KeyRound aria-hidden="true" size={18} />
-                <div>
-                  <strong>{key.name}</strong>
-                  <p>{tenantApiKeyKind(key.kind).label}</p>
-                </div>
-                <span>Created</span>
-              </div>
-            ))}
-            <p>
-              Key values are shown only when created. Create another key if you
-              need a new value.
-            </p>
-            {!adding ? (
-              <Button onClick={() => setAdding(true)}>
-                Create another API key
-              </Button>
-            ) : null}
-          </section>
-        ) : null}
-        {creation.status !== "created" && (keys.length === 0 || adding) ? (
+        {showForm ? (
           <form
             className="setup-key-form"
             onSubmit={(event) => {
@@ -124,6 +114,9 @@ export function ApiKeysSetupPage({
                 are kept here; try again.
               </p>
             ) : null}
+            <p className="setup-key-guidance">Use tenant API keys from your backend. Give callers short-lived join tokens to connect to a call.</p>
+            <div className="setup-key-actions">
+            <Button type="button" disabled={busy} onClick={() => setAdding(false)}>Cancel</Button>
             <Button
               className="setup-primary"
               disabled={busy || !name.trim()}
@@ -131,32 +124,21 @@ export function ApiKeysSetupPage({
             >
               {busy ? "Creating key…" : "Create API key"}
             </Button>
+            </div>
           </form>
         ) : null}
       </div>
-      <footer className="setup-footer">
-        <p>
-          {keys.length
-            ? "You can now set up call specs for this tenant."
-            : "You can create a key now or return to this step later."}
-        </p>
-        <Button
-          className={keys.length ? "setup-primary" : undefined}
-          disabled={busy}
-          onClick={onCallSpecs}
-        >
-          Continue to Setup Call Specs
-          <ArrowRight aria-hidden="true" size={16} />
-        </Button>
-      </footer>
+
     </>
   );
 }
 
 function ApiKeyReveal({
   creation,
+  onDone,
 }: {
   creation: Extract<ApiKeyCreation, { status: "created" }>;
+  onDone: () => void;
 }) {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
     "idle",
@@ -181,7 +163,7 @@ function ApiKeyReveal({
         <span>{option.label}</span>
       </div>
       <p>
-        Copy this key now. Once you leave this step, its value cannot be shown
+        Copy this key now. Once you leave this page, its value cannot be shown
         again.
       </p>
       <label className="setup-key-name">
@@ -192,10 +174,13 @@ function ApiKeyReveal({
           value={creation.secret}
         />
       </label>
+      <div className="setup-key-actions">
       <Button onClick={() => void copy()}>
         <Copy aria-hidden="true" size={15} />
         {copyState === "copied" ? "Copied" : "Copy API key"}
       </Button>
+      <Button onClick={onDone}>Done</Button>
+      </div>
       <p className="setup-key-copy-status" role="status">
         {copyState === "error"
           ? "Copy failed. Select the key above and copy it manually."

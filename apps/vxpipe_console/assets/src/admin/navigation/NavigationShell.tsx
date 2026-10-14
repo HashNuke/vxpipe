@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Building2, FileCode2, LogOut, Menu, Phone, Plug, ShieldCheck, UserRound, Users, X } from "lucide-react";
+import { Building2, KeyRound, FileCode2, LogOut, Menu, Phone, Plug, ShieldCheck, UserRound, Users, X } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { shouldInterceptNavigation } from "../shouldInterceptNavigation";
 import { AdminOverlayContext } from "../AdminLayoutContext";
@@ -8,7 +8,7 @@ import type { Role, Tenant, Theme, User } from "../authentication/types";
 import { allTenants, navigationItems, type NavigationItem } from "./navigationPolicy";
 import { TenantPicker } from "./TenantPicker";
 import "./navigation.css";
-const icons = { Calls: Phone, "Call Specs": FileCode2, Services: Plug, Tenants: Building2, Roles: ShieldCheck, Users };
+const icons = { "API Keys": KeyRound, Calls: Phone, "Call Specs": FileCode2, Services: Plug, Tenants: Building2, Roles: ShieldCheck, Users };
 export function NavigationShell({ children, role, user, tenants, selected, path, onNavigate, onLogout, theme, pickerState, onRetry, projectedItems, directoryPath, picker, realLinks = false, email, external = false }: {
   children: ReactNode; role?: Role; user?: User; tenants: Tenant[]; selected?: Tenant; path: string;
   onNavigate: (path: string) => void; onLogout: () => void; theme: Theme;

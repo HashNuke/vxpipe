@@ -17,6 +17,7 @@ import { CallSpecCombobox } from "../CallSpecCombobox";
 import { callsForTenant } from "../callFixtures";
 import { callSpecs } from "../callSpecFixtures";
 import { CallDetailsStory } from "../CallDetailsStory";
+import type { TenantApiKey } from "../tenantApiKeys";
 import { NavigationAuxiliary } from "./NavigationAuxiliary";
 import { RecentCalls } from "./RecentCalls";
 import { navigationFixture, type Persona } from "./navigationFixtures";
@@ -27,9 +28,11 @@ import { landingPath, navigationItems, tenantAccess, visibleTenants } from "./na
 import "./navigation.css";
 
 export type NavigationState = "ready" | "loading" | "unavailable" | "empty";
-export function NavigationJourney({ persona = "all", initialPath = "/", theme = "dark", state = "ready", pickerState = "ready", initialTenants = tenants, directoryPageSize = 25, creationOutcome = "ready", identity }: {
+export function NavigationJourney({ persona = "all", initialPath = "/", theme = "dark", state = "ready", pickerState = "ready", initialTenants = tenants, directoryPageSize = 25, creationOutcome = "ready", identity, initialTenantKeys = {} }: {
+  initialTenantKeys?: Record<string, TenantApiKey[]>;
   creationOutcome?: "ready" | "error" | "pending"; directoryPageSize?: number; identity?: { role: Role; user: User }; initialTenants?: Tenant[]; persona?: Persona; initialPath?: string; theme?: Theme; state?: NavigationState; pickerState?: "ready" | "loading" | "unavailable";
 }) {
+  const [tenantKeys, setTenantKeys] = useState(initialTenantKeys);
   const [directoryTenants, setDirectoryTenants] = useState(initialTenants);
   const { user, role } = identity ?? navigationFixture(persona);
   const visible = visibleTenants(role, user, directoryTenants);
@@ -103,7 +106,7 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   if (leaf !== "dashboard" && !["api-keys", "samples", "legacy-services"].includes(leaf) && !nav.some(item => item.href === path)) return shell(<main>{context}{heading("Access unavailable")}{empty("Permission required", "Your role does not allow this action for this tenant.")}</main>);
   if (leaf === "services") return shell(<main>{context}<NavigationServices key={tenant.key} tenant={tenant} canReadKeys={tenantAccess(role, user, tenant, "tenant_api_keys") !== "none"} readOnly={tenantAccess(role, user, tenant, "tenant_api_keys") !== "write"} onNavigate={navigate} /></main>);
   if ((leaf === "legacy-services" && tenantAccess(role, user, tenant, "tenant_services") === "none") || (leaf === "api-keys" && tenantAccess(role, user, tenant, "tenant_api_keys") === "none") || (leaf === "samples" && (!canCreateTenants(role) || tenantAccess(role, user, tenant, "call_specs") !== "write"))) return shell(<main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow this action.")}</main>);
-  if (["api-keys", "samples", "legacy-services"].includes(leaf)) return shell(<>{context}<NavigationAuxiliary canReadKeys={tenantAccess(role, user, tenant, "tenant_api_keys") !== "none"} readOnly={tenantAccess(role, user, tenant, "tenant_api_keys") !== "write"} key={`${tenant.key}-${leaf}`} page={leaf} tenant={tenant} onNavigate={navigate} /></>);
+  if (["api-keys", "samples", "legacy-services"].includes(leaf)) return shell(<>{context}<NavigationAuxiliary keys={tenantKeys[tenant.key] ?? []} onKeysChange={keys => setTenantKeys(current => ({ ...current, [tenant.key]: keys }))} canReadKeys={tenantAccess(role, user, tenant, "tenant_api_keys") !== "none"} readOnly={tenantAccess(role, user, tenant, "tenant_api_keys") !== "write"} key={`${tenant.key}-${leaf}`} page={leaf} tenant={tenant} onNavigate={navigate} /></>);
   const title = leaf === "dashboard" ? "Dashboard" : leaf === "calls" ? "Calls" : "Call Specs";
   return shell(<main>{context}{heading(title, undefined,
     leaf === "call-specs" && tenantAccess(role, user, tenant, "call_specs") === "write" ? <Button onClick={() => window.open("?id=vxpipe-console-call-spec-editor-page--new-spec&viewMode=story", "_blank", "noopener")}>New call spec</Button> : undefined)}

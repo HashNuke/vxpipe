@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { SetupStory } from "../stories/SetupStory";
 import { NavigationJourney } from "./NavigationJourney";
 vi.mock("@vxpipe/react", () => ({ CallConsole: () => <div>Call inspector</div> }));
 vi.mock("../callSpecEditor/flow-canvas", () => ({ FlowCanvas: () => <div>Editor canvas</div> }));
@@ -71,7 +72,7 @@ test("platform read access hides credential mutation controls", () => {
 test("tenant service read access includes the API-key destination without mutations", () => {
   render(<NavigationJourney persona="service-reader" initialPath="/t/acme_demo_000001/services" />);
   expect(screen.getByRole("heading", { name: "Services" })).toBeVisible();
-  expect(screen.getByRole("button", { name: "API keys" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "API Keys" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
 });
 test("read-only member cannot mutate samples or invoke platform setup", () => {
@@ -84,8 +85,8 @@ test("read-only member cannot mutate samples or invoke platform setup", () => {
 test("workspace API keys remain available before voice readiness", () => {
   render(<NavigationJourney initialPath="/t/acme_demo_000001/services" />);
   expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "API keys" }));
-  expect(screen.getByRole("heading", { name: "Create API Keys" })).toBeVisible();
+  fireEvent.click(screen.getByRole("link", { name: "API Keys" }));
+  expect(screen.getByRole("heading", { name: "API Keys" })).toBeVisible();
 });
 test("legacy service read permission includes masked credential metadata", () => {
   render(<NavigationJourney persona="service-reader" initialPath="/t/acme_demo_000001/legacy-services" />);
@@ -115,4 +116,32 @@ test("dashboard has no duplicate resource buttons or retry action", () => {
   render(<NavigationJourney persona="single" state="unavailable" />);
   expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   expect(screen.getAllByRole("link", { name: "Calls" })).toHaveLength(1);
+});
+
+test("API Keys sits directly below Services in the tenant sidebar", () => {
+  render(<NavigationJourney initialPath="/t/acme_demo_000001/services" />);
+  const links = within(screen.getByRole("navigation", { name: "Tenant" })).getAllByRole("link");
+  expect(links.map(link => link.textContent)).toEqual(["Calls", "Call Specs", "Services", "API Keys"]);
+  expect(screen.queryByRole("button", { name: "API keys" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("link", { name: "API Keys" }));
+  expect(screen.getByRole("link", { name: "API Keys" })).toHaveAttribute("aria-current", "page");
+});
+
+test("created keys remain in the inventory after sidebar navigation, but their secrets do not", () => {
+  render(<NavigationJourney initialPath="/t/acme_demo_000001/api-keys" />);
+  fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
+  fireEvent.change(screen.getByLabelText("Key name"), { target: { value: "Customer backend" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
+  expect(screen.getByLabelText("API key")).toBeVisible();
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Services" }));
+  fireEvent.click(screen.getByRole("link", { name: "API Keys" }));
+  expect(screen.getByRole("table", { name: "API keys" })).toHaveTextContent("Customer backend");
+  expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
+});
+
+test("API key story inventory survives navigation through Calls", () => {
+  render(<SetupStory scenario="api-key-existing" theme="dark" />);
+  fireEvent.click(screen.getByRole("link", { name: "Calls" }));
+  fireEvent.click(screen.getByRole("link", { name: "API Keys" }));
+  expect(screen.getByRole("table", { name: "API keys" })).toHaveTextContent("Application");
 });

@@ -4,7 +4,7 @@ const tenant = `/t/${tenants[0].key}`;
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { setupMeta } from "./setupMeta";
 
-const meta = { ...setupMeta, title: "Vxpipe/Console/Services/API keys" } satisfies Meta<typeof setupMeta.component>;
+const meta = { ...setupMeta, title: "Vxpipe/Console/API Keys" } satisfies Meta<typeof setupMeta.component>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

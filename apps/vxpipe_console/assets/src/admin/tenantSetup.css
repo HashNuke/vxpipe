@@ -1281,3 +1281,38 @@
     grid-row: 1 / 3;
   }
 }
+
+/* API key inventory shares the Console table rhythm. */
+.setup-api-key-table-wrap {
+  margin-top: 24px;
+  overflow-x: auto;
+}
+.setup-api-key-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.setup-api-key-table th,
+.setup-api-key-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--admin-row-line);
+}
+.setup-api-key-table th {
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 500;
+  border-bottom-color: var(--admin-line);
+}
+.setup-api-key-table td {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.setup-api-key-table code {
+  white-space: nowrap;
+  font-family: "Geist Mono", monospace;
+}
+.setup-key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

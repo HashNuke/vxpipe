@@ -110,7 +110,7 @@ test.each(["Create & Join Calls", "Full Access"])(
       (screen.getByLabelText("API key") as HTMLInputElement).value,
     ).toContain("storybook-only");
     fireEvent.click(
-      screen.getByRole("button", { name: "Continue to Setup Call Specs" }),
+      screen.getByRole("button", { name: "3Setup Call Specs" }),
     );
     expect(
       screen.getByRole("heading", { name: "Setup Call Specs" }),
@@ -203,10 +203,10 @@ test("one speech provider covers two capabilities and a model provider unlocks s
   expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   expect(
-    screen.getByRole("heading", { name: "Create API Keys" }),
+    screen.getByRole("heading", { name: "API Keys" }),
   ).toBeVisible();
   fireEvent.click(
-    screen.getByRole("button", { name: "Continue to Setup Call Specs" }),
+    screen.getByRole("button", { name: "3Setup Call Specs" }),
   );
   expect(
     screen.getByRole("heading", { name: "Setup Call Specs" }),
@@ -221,7 +221,7 @@ test("one speech provider covers two capabilities and a model provider unlocks s
   fireEvent.click(
     within(navigation).getByRole("button", { name: /Create API Keys/ }),
   );
-  expect(screen.getByRole("heading", { name: "Create API Keys" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "API Keys" })).toBeVisible();
   expect(
     screen.queryByRole("button", { name: /^Back to/ }),
   ).not.toBeInTheDocument();
@@ -247,10 +247,10 @@ test("the supported default model reaches the chosen recipe", () => {
   render(<OnboardingStory scenario="multiple-providers" theme="light" />);
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   expect(
-    screen.getByRole("heading", { name: "Create API Keys" }),
+    screen.getByRole("heading", { name: "API Keys" }),
   ).toBeVisible();
   fireEvent.click(
-    screen.getByRole("button", { name: "Continue to Setup Call Specs" }),
+    screen.getByRole("button", { name: "3Setup Call Specs" }),
   );
   expect(
     screen.queryByRole("combobox", { name: "Language model provider" }),
@@ -301,10 +301,10 @@ test("updating a speech service preserves the sample model provider", () => {
   act(() => vi.advanceTimersByTime(1000));
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   expect(
-    screen.getByRole("heading", { name: "Create API Keys" }),
+    screen.getByRole("heading", { name: "API Keys" }),
   ).toBeVisible();
   fireEvent.click(
-    screen.getByRole("button", { name: "Continue to Setup Call Specs" }),
+    screen.getByRole("button", { name: "3Setup Call Specs" }),
   );
   expect(screen.getByText("Google AI Studio")).toBeVisible();
   expect(screen.getByText("gemini-2.5-flash")).toBeVisible();
@@ -316,7 +316,7 @@ test("the tenant directory opens a services-ready tenant before continuing to AP
   fireEvent.click(screen.getByRole("link", { name: "Open Demo" }));
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   expect(
-    screen.getByRole("heading", { name: "Create API Keys" }),
+    screen.getByRole("heading", { name: "API Keys" }),
   ).toBeVisible();
 });
 

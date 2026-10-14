@@ -19,7 +19,8 @@ spec editor and call history. Theme controls expose the existing light/dark styl
 | Tenants | Directory, My tenants, Dashboard, Create and Getting started |
 | Calls | Calls with filter/pagination states; standalone History |
 | Call Specs | Call spec directory and sample setup |
-| Services | Tenant services, Platform services, tenant inventory and API keys |
+| Services | Tenant services, Platform services and tenant inventory |
+| API Keys | Tenant key inventory, creation, one-time reveal and read-only states |
 | Users | User pages/forms, management journey; components for role selection and tenant access |
 | Roles | Role pages/forms; components for permission editing |
 | My account | Account page |
@@ -127,3 +128,14 @@ The populated Calls story also demonstrates the searchable call-spec picker,
 merged Call info column, local date/time and finalized durations. Storybook uses
 tenant fixture search with the production pagination contract; the application
 uses `/admin/api/tenants/:key/calls/spec-options` for storage-backed search.
+
+### Tenant API key inventory
+
+API Keys is a separate tenant sidebar item immediately below Services. The
+Storybook inventory lists key names and masked values with the final four
+characters visible. Creating a key returns to the inventory and shows a
+dismissible one-time copy panel; there is no call-spec continuation button.
+Sidebar navigation retains tenant-scoped fixture metadata and discards the
+secret reveal. These fixtures do not issue or persist production API keys.
+
+The inventory story is `vxpipe-console-api-keys--existing-api-key`.

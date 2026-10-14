@@ -136,14 +136,14 @@ export function TenantSetupPage({
           {connected.map(card)}
         </div>
       </section>
-      {!platform && onApiKeys ? (
+      {!platform && presentation === "setup" && onApiKeys ? (
         <footer className="setup-footer setup-services-footer">
           <Button
             className="setup-primary"
             disabled={presentation === "setup" && !ready}
             onClick={onApiKeys}
           >
-            {presentation === "workspace" ? "API keys" : "Continue"}
+            Continue
             <ArrowRight aria-hidden="true" size={16} />
           </Button>
         </footer>
