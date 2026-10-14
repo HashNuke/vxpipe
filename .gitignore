@@ -41,10 +41,8 @@ erl_crash.dump
 .env
 
 
-.impeccable/build
-.impeccable/mocks
-.impeccable/review/diff
-.impeccable/review/storybook/
+# Local design-tool metadata and review artifacts at any depth.
+.impeccable/
 
 sounds/*.wav
 
