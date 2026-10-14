@@ -55,11 +55,22 @@ test("lists access types and relative creation times with UTC tooltips", async (
   expect(await screen.findByRole("tooltip")).toHaveTextContent(new Date(createdAt).toUTCString().replace("GMT", "UTC"));
 });
 
-test("top back button returns to the list without creating a key", () => {
+test("creation breadcrumbs return to the list without creating a key", () => {
   const onCreate = vi.fn();
   render(<ApiKeysSetupPage tenantName="Acme" keys={[key]} creation={{ status: "idle" }} initialCreating onCreate={onCreate} />);
-  fireEvent.click(screen.getByRole("button", { name: "Back to API keys" }));
+  const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" });
+  expect(within(breadcrumb).getByText("Acme")).toBeVisible();
+  expect(within(breadcrumb).getByText("New API Key")).toHaveAttribute("aria-current", "page");
+  expect(screen.queryByRole("button", { name: "Back to API keys" })).not.toBeInTheDocument();
+  fireEvent.click(within(breadcrumb).getByRole("button", { name: "API Keys" }));
   expect(screen.getByRole("table", { name: "API keys" })).toBeVisible();
   expect(screen.queryByLabelText("Key name")).not.toBeInTheDocument();
   expect(onCreate).not.toHaveBeenCalled();
+});
+
+test("workspace breadcrumb opens its dashboard", () => {
+  const onSelectTenant = vi.fn();
+  render(<ApiKeysSetupPage tenantName="Acme" keys={[]} creation={{ status: "idle" }} initialCreating onCreate={vi.fn()} onSelectTenant={onSelectTenant} />);
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("button", { name: "Acme" }));
+  expect(onSelectTenant).toHaveBeenCalledOnce();
 });

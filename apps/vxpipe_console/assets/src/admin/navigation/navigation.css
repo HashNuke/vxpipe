@@ -14,13 +14,14 @@
 .navigation-account > span { display: block; padding: 0 12px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--admin-muted); }
 .navigation-workspace { min-width: 0; }
 .navigation-content { max-width: 1600px; margin: auto; padding: 36px 32px; outline: none; }
-.navigation-content h1 { margin: 0; font-size: 24px; line-height: 1.3; font-weight: 650; letter-spacing: -.025em; }
+.navigation-content h1, .navigation-content .tenant-setup h1 { margin: 0; font-size: 24px; line-height: 1.3; font-weight: 650; letter-spacing: -.025em; }
 .navigation-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
 .navigation-heading p, .navigation-description { color: var(--admin-muted); margin: 8px 0 0; font-size: 13px; line-height: 1.6; }
 .navigation-context { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; color: var(--admin-muted); font-size: 13px; }
 .navigation-context a { color: inherit; text-underline-offset: 3px; }
 .navigation-content .access-page { max-width: none; margin: 0; padding: 0; }
 .navigation-content .tenant-setup { max-width: none; margin: 0; padding: 0; }
+.navigation-content .setup-section-heading { margin-bottom: 28px; }
 .navigation-picker-menu { z-index: 80; width: 304px; max-width: calc(100vw - 32px); padding: 4px; color: var(--admin-ink); background: var(--admin-panel); border: 1px solid var(--admin-line); border-radius: 6px; box-shadow: 0 10px 24px #0003; }
 .navigation-search { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--admin-line); padding: 0 8px; }
 .navigation-search input { width: 100%; height: 42px; background: transparent; color: var(--admin-ink); border: 0; outline: none; font-size: 13px; }
@@ -69,8 +70,8 @@
   .navigation-mobile button { display: flex; align-items: center; gap: 8px; padding: 8px 0; background: transparent; border: 0; color: var(--admin-ink); font-size: 13px; }
   .navigation-mobile span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
   .navigation-context { flex-wrap: wrap; }
-  .navigation-heading { margin-bottom: 22px; }
-  .navigation-content h1 { font-size: 22px; }
+  .navigation-heading, .navigation-content .setup-section-heading { margin-bottom: 22px; }
+  .navigation-content h1, .navigation-content .tenant-setup h1 { font-size: 22px; }
 }
 @media (prefers-reduced-motion: no-preference) { .navigation-drawer { animation: navigation-enter 160ms ease-out; } @keyframes navigation-enter { from { transform: translateX(-20px); opacity: .8; } to { transform: translateX(0); opacity: 1; } } }
 .navigation-recent-calls { list-style: none; padding: 0; margin: 0; }

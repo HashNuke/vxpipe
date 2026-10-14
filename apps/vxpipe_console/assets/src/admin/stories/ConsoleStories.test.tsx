@@ -62,3 +62,12 @@ test.each(["api-key-existing", "choose-services"] as const)("%s identifies the t
   render(<SetupStory scenario={scenario} theme="dark" />);
   expect(within(screen.getByRole("main")).getByText("Demo", { exact: true })).toBeVisible();
 });
+
+test("API key workspace breadcrumb opens the same tenant dashboard", async () => {
+  const { SetupStory } = await import("./SetupStory");
+  const { fireEvent } = await import("@testing-library/react");
+  render(<SetupStory scenario="api-key-full-access" theme="dark" />);
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("button", { name: "Demo" }));
+  expect(screen.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  expect(screen.getByLabelText("Demo dashboard")).toBeVisible();
+});

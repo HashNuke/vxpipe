@@ -1,5 +1,5 @@
 import { modelCatalogFixture } from "./modelCatalogFixtures";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Building2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { AdminShell } from "./AdminShell";
@@ -217,10 +217,12 @@ export function OnboardingStory({
   scenario,
   theme,
   renderFrame,
+  onTenantDashboard,
   publicOrigin = "http://localhost:4000",
 }: {
   renderFrame?: (content: ReactNode, page: SetupPage, tenant: SetupTenant, navigate: (page: SetupPage) => void, keys: TenantApiKey[]) => ReactNode;
   publicOrigin?: string;
+  onTenantDashboard?: (tenant: SetupTenant) => void;
   scenario: OnboardingScenario;
   theme: "dark" | "light";
 }) {
@@ -479,8 +481,8 @@ export function OnboardingStory({
         className="tenant-setup"
         inert={overlayOpen ? true : undefined}
       >
-        {renderFrame && page !== "tenants" && !platformPage ? (
-          <div className="navigation-context">{tenant.name}</div>
+        {renderFrame && page !== "tenants" && page !== "keys" && !platformPage ? (
+          <div className="navigation-context"><Building2 size={15} aria-hidden />{tenant.name}</div>
         ) : null}
         {!renderFrame && page !== "tenants" && !platformPage ? (
           <nav aria-label="Tenant setup" className="setup-steps">
@@ -529,6 +531,7 @@ export function OnboardingStory({
             initialCreating={initialKeysForm}
             onCreate={createApiKey}
             tenantName={tenant.name}
+            onSelectTenant={onTenantDashboard ? () => onTenantDashboard(tenant) : undefined}
           />
         ) : null}
         {page === "samples" ? (

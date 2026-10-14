@@ -18,7 +18,7 @@ export function CallSpecRow({
   onEdit?: (callSpecId: string) => void;
   linkCalls?: boolean;
 }) {
-  const label = callSpec.name ?? callSpec.id;
+  const label = callSpec.name ?? "Untitled call spec";
   const href = `/t/${encodeURIComponent(tenant.key)}/calls?call_spec_id=${encodeURIComponent(callSpec.id)}`;
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -32,9 +32,6 @@ export function CallSpecRow({
       <th className="truncate px-4 py-4 text-sm font-semibold" scope="row" title={label}>
         <a className="rounded-sm text-[var(--admin-blue)] underline-offset-4 hover:underline" href={`/admin/tenants/${encodeURIComponent(tenant.key)}/call-specs/${encodeURIComponent(callSpec.id)}`} onClick={(event) => { if (onEdit && shouldInterceptNavigation(event)) { event.preventDefault(); onEdit(callSpec.id); } }}>{label}</a>
       </th>
-      <td className="truncate px-4 py-4 font-mono text-xs text-[var(--admin-muted)]" title={callSpec.id}>
-        {callSpec.id}
-      </td>
       <td className="px-4 py-4 font-mono text-xs tabular-nums text-[var(--admin-muted)]">
         v{callSpec.latestRevision}
       </td>

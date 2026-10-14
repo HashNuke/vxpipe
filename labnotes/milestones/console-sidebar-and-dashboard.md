@@ -488,3 +488,15 @@ keep the Connect action stable while adding an empty-state panel below it.
 Design review: preserve the existing key-kind contract and masked values. Use
 shadcn tooltips and the existing relative-time formatter; keep long table values
 readable with horizontal scrolling on small screens.
+
+### Consistent tenant headings and creation breadcrumbs
+
+- [x] Include the workspace icon alongside the tenant name on Services and API Keys.
+- [x] Match Services and API Keys title typography and spacing to Calls and Call Specs.
+- [x] Replace tenant label plus separate back button on creation with tenant › API Keys › New API Key breadcrumbs; retain return navigation.
+- [x] Verify desktop/mobile rendering and focused return-navigation behavior.
+- [x] Tenant breadcrumb opens its dashboard; compact the Calls filter and remove the Call Specs ID column.
+- [x] Complete final checks and commit: 73 frontend tests, TypeScript/ESLint, all root gates and 3,790 backend tests passed.
+
+Design review: reuse the existing workspace icon and navigation typography;
+API Keys is the parent of key creation. Keep one tenant context per view.

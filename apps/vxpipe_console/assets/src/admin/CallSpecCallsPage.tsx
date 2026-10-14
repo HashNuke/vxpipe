@@ -75,9 +75,9 @@ export function CallSpecCallsPage({
           onSelect={onSelectWorkspace}
           tenant={state.tenant}
         />
-        <div className="mb-4 flex flex-wrap items-end gap-3">
-          <div className="grid w-full min-w-0 max-w-full gap-1.5 text-xs font-semibold text-[var(--admin-muted)] sm:w-80">
-            <span>Call spec</span>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="flex w-full min-w-0 max-w-md items-center gap-3 text-sm text-[var(--admin-muted)]">
+            <span className="shrink-0">Call spec</span>
             <CallSpecCombobox
                 key={state.tenant.key}
                 search={searchCallSpecs}

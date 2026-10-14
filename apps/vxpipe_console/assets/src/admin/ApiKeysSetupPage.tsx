@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Copy, Plus } from "lucide-react";
+import { Building2, ChevronRight, Check, Copy, Plus } from "lucide-react";
 import { useState } from "react";
 import { formatAdminRelativeTime } from "./formatAdminRelativeTime";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
@@ -13,6 +13,7 @@ import {
 
 export function ApiKeysSetupPage({
   tenantName,
+  onSelectTenant,
   keys,
   creation,
   initialKind = "calls",
@@ -21,6 +22,7 @@ export function ApiKeysSetupPage({
   readOnly = false,
 }: {
   tenantName: string;
+  onSelectTenant?: () => void;
   keys: TenantApiKey[];
   creation: ApiKeyCreation;
   initialKind?: TenantApiKeyKind;
@@ -37,16 +39,19 @@ export function ApiKeysSetupPage({
   const busy = creation.status === "submitting";
   return (
     <>
+      {showForm ? (
+        <nav aria-label="Breadcrumb" className="navigation-context setup-key-breadcrumbs">
+          <ol>
+            <li><Building2 aria-hidden size={15} />{onSelectTenant ? <button type="button" disabled={busy} onClick={onSelectTenant}>{tenantName}</button> : <span>{tenantName}</span>}</li>
+            <li><ChevronRight aria-hidden size={14} /><button type="button" disabled={busy} onClick={() => setAdding(false)}>API Keys</button></li>
+            <li><ChevronRight aria-hidden size={14} /><span aria-current="page">New API Key</span></li>
+          </ol>
+        </nav>
+      ) : (
+        <div className="navigation-context"><Building2 aria-hidden size={15} />{tenantName}</div>
+      )}
       <header className="setup-section-heading">
-        <div className="setup-key-heading">
-          {showForm ? (
-            <Button aria-label="Back to API keys" title="Back to API keys" variant="ghost" disabled={busy} onClick={() => setAdding(false)}>
-              <ArrowLeft aria-hidden="true" size={16} />
-              API Keys
-            </Button>
-          ) : null}
-          <h1>{showForm ? "Create API Keys" : "API Keys"}</h1>
-        </div>
+        <h1>{showForm ? "New API Key" : "API Keys"}</h1>
         {!showForm && !readOnly ? <Button onClick={() => {
           if (creation.status === "created") setDismissed(creation.key.id);
           setAdding(true);

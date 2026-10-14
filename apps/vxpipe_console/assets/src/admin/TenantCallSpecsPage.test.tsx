@@ -95,7 +95,7 @@ test("distinguishes published, draft changes, and unpublished call specs", () =>
   expect(screen.getByText("Draft changes")).toBeVisible();
   expect(screen.getByText("Draft")).toBeVisible();
   expect(
-    screen.getByRole("link", { name: "View 1 calls for returns-intake" }),
+    screen.getByRole("link", { name: "View 1 calls for Untitled call spec" }),
   ).toBeVisible();
 });
 
@@ -202,4 +202,10 @@ test("offers new and edit links while preserving the separate calls link", () =>
   expect(edit).toHaveAttribute("href", "/admin/tenants/tn_demo_01/call-specs/delivery-rescheduling");
   fireEvent.click(edit); expect(navigate).toHaveBeenCalledWith("delivery-rescheduling");
   expect(screen.getByRole("link", { name: "View 5 calls for Delivery rescheduling" })).toHaveAttribute("href", "/t/tn_demo_01/calls?call_spec_id=delivery-rescheduling");
+});
+
+test("call spec list omits identifiers from visible columns", () => {
+  render(<TenantCallSpecsPage state={populated} />);
+  expect(screen.queryByRole("columnheader", { name: "ID" })).not.toBeInTheDocument();
+  expect(screen.queryByText("delivery-rescheduling", { exact: true })).not.toBeInTheDocument();
 });
