@@ -261,3 +261,44 @@
   removed that owned test container. Python syntax/document links and diff checks
   pass. Sent start and checkpoint CLI notifications. E remains incomplete and
   the milestone remains 4/9; multi-context TTS, Vxpipe integration and H/I remain.
+
+
+## Checkpoint E — multi-context TTS completion
+
+- Go commit `b922e71` implements independent contexts with a coordinator owning
+  input, deadlines and socket writes, per-context serial workers, bounded output
+  and round-robin publication. It reuses the existing generation encoder rather
+  than duplicating the Morse/codec implementation.
+- Initial route tests failed 401/404. The first implementation confused source
+  EOF cleanup with explicit cancellation and lost tails; an independent abort
+  marker fixes this and suppresses queued stale output after close is processed.
+  Another focused red test exposed initialization credentials rejected on a new
+  context; valid credentials now work there without permitting active mutation.
+- Reviewed the pinned SDK's detailed CloseContext contract: already-flushed work
+  continues after close. Preserve that output, cancel only unflushed work and
+  serialize immediate ID reuse behind the retiring context. Empty text is a
+  keepalive, not EOS. Close-socket flushes all contexts before normal completion.
+- Go race tests cover independent producers, repeated lifecycles, five-context
+  admission, token replay, default context, idle closure and per-context refresh,
+  ready-output fairness, global overload and disconnect/drain of MP3 workers.
+  Both TTS routes now run the full credential-location and initialization-timeout
+  tests. Full race suite/vet and focused follow-up tests pass.
+- SDK 2.72.0 has multi-context message/response models but no high-level transport
+  implementation. The runner uses these unmodified models, a plain WS transport
+  and pinned AsyncAPI validation; no nonexistent SDK client acceptance is claimed.
+- Rechecked upstream auth docs: general HTTP uses xi-api-key, realtime STT adds
+  its token query, and bearer query/initial fields belong to TTS WS. Do not invent
+  a requirement for general HTTP bearer auth from those TTS-specific bindings.
+- Native Chrome 154 cross-origin interruption passes against the production
+  image: canceled E emits 1,920 bytes, replacement T emits 32,640, each has one
+  final, normal socket close. Single-context key/token and independent STT browser
+  checks remain green. No audible playback or Console UI acceptance is claimed.
+- The read-only 512-MiB/two-CPU image passes single/multi SDK/schema checks and
+  SIGTERM with STT, single PCM/MP3 TTS and two multi-context MP3 encoders active.
+  Exit is 0, OOM false and filesystem diff empty; removed the owned test container.
+  CI includes multi-context checks and expanded drain. Documentation links,
+  Python syntax, formatting and diff checks pass.
+- Sent the requested CLI checkpoint notification. E's transport/lifecycle gates
+  are complete; milestone/index now show 5/9 (A–E). F/G provider integration,
+  H complete semantics/load/owner decisions and I hosted acceptance remain open.
+  No push, Railway deployment or whole-goal completion is claimed.

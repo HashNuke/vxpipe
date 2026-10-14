@@ -170,9 +170,11 @@ The Go server, authenticated discovery, HTTP synthesis formats/streaming, PCM
 batch recognition and realtime STT are implemented. Pinned SDK discovery, all
 four HTTP TTS routes, PCM round trips and repeated realtime STT turns pass,
 including HTTP/AsyncAPI schema validation. Independent Morse fixtures and
-Go/Elixir codec interoperability pass; these establish A–D, not full API
-compatibility. `bin/setup` completed successfully. Full optional-field/TTS WS
-conformance, Vxpipe provider integration, benchmarks, browser checks and Railway deployment remain
-unchecked implementation acceptance gates. The
+Go/Elixir codec interoperability pass. Both TTS WebSockets now have incremental
+output, auth, cancellation/context lifecycle, native Chrome and read-only-container
+drain evidence; these establish A–E, not full API compatibility. `bin/setup`
+completed successfully. Full optional-field/format semantics, Vxpipe provider
+integration and its Console browser checks, benchmarks and Railway deployment
+remain unchecked implementation acceptance gates. The
 [planning labnote](../labnotes/20261014-1947-remote-morse-milestone.md) records the
 separate specification review and exact planning validation.

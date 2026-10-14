@@ -1,12 +1,12 @@
 # Morse-code API service and providers
 
-Status: implementation started, 2026-10-14. **4 of 9
-implementation checkpoints complete (A–D).** The user requested planning first and
+Status: implementation started, 2026-10-14. **5 of 9
+implementation checkpoints complete (A–E).** The user requested planning first and
 clarified the scope as complete ElevenLabs **TTS/STT** compatibility, including
 HTTP, streaming, WebSockets, discovery and authentication. Other ElevenLabs
 product APIs are outside this milestone. The Go server/catalog, HTTP TTS
-formats/streaming, PCM batch STT and realtime STT are implemented; other API surfaces and
-Vxpipe provider integration remain pending.
+formats/streaming, PCM batch STT, realtime STT and both TTS WebSockets are
+implemented; full semantic compatibility and Vxpipe provider integration remain pending.
 
 ## Runnable outcome
 
@@ -389,27 +389,27 @@ Dependencies: C, D.
   text, flush/end-input, keepalive, original/normalized alignment and final/error
   messages. Verify bounded initialization, header/first-message/token auth,
   browser CORS and cancellation while PCM/MP3 codecs await more input.
-- [ ] Write red multi-context transcript fixtures before its handler; cover
+- [x] Write red multi-context transcript fixtures before its handler; cover
   initialization, incremental text, flush, close-context/close-socket and errors.
-- [ ] Implement interleaved context generation with fair bounded output and
+- [x] Implement interleaved context generation with fair bounded output and
   exactly correlated audio/alignment/final messages. Closing one context must
   not close or contaminate another. Preserve Morse gaps across text fragments.
-- [ ] Implement all speech token types, expiry, atomic single consumption,
+- [x] Implement all speech token types, expiry, atomic single consumption,
   wrong-purpose/reused-token errors and the pinned browser auth transports.
   Redact query strings containing tokens and initialization credentials.
-- [ ] Bound unauthenticated initialization time; define browser origin/CORS
+- [x] Bound unauthenticated initialization time; define browser origin/CORS
   policy and OPTIONS handling for the tested SDK flows.
-- [ ] Test header, first-message and token authentication with official SDK
+- [x] Test header, first-message and token authentication with official SDK
   flows where supported; test two contexts and abort one during output.
 
-Partial evidence: all three token types issue through the pinned SDK/schema;
+Evidence: all three token types issue through the pinned SDK/schema;
 batch and realtime STT consume tokens without keys. Clock-controlled tests cover
 15-minute expiry and capacity recovery; 16 concurrent consumers produce exactly
 one accepted transcript. Invalid explicit tokens never fall back to supplied keys.
-Single-context TTS consumes tokens and supports bearer/header/initial-message
+Both TTS routes consume tokens and supports bearer/header/initial-message
 credentials. Native Chrome 154 passes cross-origin initial-key/token TTS and
 token STT against the read-only container. This is browser API evidence, not
-acceptance of every browser SDK. The Go race suite/vet pass. E remains incomplete.
+acceptance of every browser SDK. The Go race suite/vet pass. E is complete for its transport/lifecycle scope.
 The incremental text planner also passes independent tone/space intervals and
 84 fragmentation comparisons across seven rates. Continuous codec output passes
 21 early-packet/independent-decode cases and starved-input cleanup. Single-context
@@ -419,8 +419,20 @@ Pinned Python SDK 2.72.0 passes PCM/default MP3 via a trusted local TLS fixture;
 disabling fixture session tickets resolved intermittent pre-upgrade stalls in ten
 consecutive Python 3.12/3.13 runs. Hosted TLS remains unverified. The production
 image passes active STT/PCM-TTS/MP3-TTS SIGTERM drain with exit 0, no OOM or file
-changes. Go commit `601f8cf` contains this slice. Multi-context scheduling, remaining
-auth surfaces and full optional-field/codec timing semantics remain E/H work.
+changes. Go commit `601f8cf` contains the single-context slice.
+
+Go commit `b922e71` adds multi-context TTS: the initial tests failed 401/404,
+then pass independent output, flush-close preservation, cancellation, immediate
+ID reuse, five-context limits, per-context idle refresh and fair ready-output
+rotation. Both routes pass all key/bearer/token locations and initialization
+limits. SDK 2.72.0 supplies multi-context payload/response types but no high-level
+transport client; a raw WS runner validates those types and the pinned AsyncAPI.
+Chrome interrupts E after 1,920 bytes, completes T with 32,640 bytes, and sees one
+final per context. The production image drains STT plus four active TTS encoders
+(single PCM/MP3 and two multi-context MP3), exiting 0 without OOM or file changes.
+General HTTP/STT auth remains the documented key/token interface; bearer fields
+belong to the TTS bindings. Full optional-field and codec timing semantics remain
+H work, and local acceptance does not establish hosted behavior.
 
 Exit: a browser-capable client generates Morse with both WS APIs and consumes
 a token once; idle or abandoned sockets release memory and execution workers.
