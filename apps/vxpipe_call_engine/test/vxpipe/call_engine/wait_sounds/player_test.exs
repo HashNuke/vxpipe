@@ -170,6 +170,9 @@ defmodule Vxpipe.CallEngine.WaitSounds.PlayerTest do
     replacement = start_supervised!({TestAudioOutputSink, observer: self()}, id: make_ref())
     sinks = %{"connection-changing" => replacement, "second" => second}
     assert :ok = Player.reconcile(player, %{attempt_id: "attempt", generation: 1}, sinks)
+    # The retired sink may still have a request queued before reconciliation.
+    # Wait for its observer messages before discarding that pre-cutover output.
+    _ = :sys.get_state(first)
     flush_outputs(first)
     assert_receive {:test_audio_output, ^replacement, replaced_frame}
     assert_receive {:test_audio_output, ^second, retained_frame}, 1_000

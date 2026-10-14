@@ -340,3 +340,19 @@
   a timing-sensitive failure but does not establish its cause or make the full
   suite green. Keep that evidence visible at the next full integration gate;
   no unrelated handoff behavior or test deadlines were changed.
+
+## Wait-sound test synchronization found during F verification
+
+- The next full umbrella run exposed `WaitSounds.PlayerTest`'s sink-replacement
+  case receiving a retired sink's frame after its zero-time mailbox cleanup.
+  `Player.reconcile/3` removes the sink but does not retract a request already
+  queued in that sink. The test had no acknowledgement that this queued request
+  had produced its observer message before clearing those pre-cutover messages.
+- Added a sink `:sys.get_state/1` acknowledgement after reconciliation and before
+  mailbox cleanup. This preserves the assertion that new output must not go to
+  the retired sink, without adding sleeps, loosening deadlines or changing the
+  player. The observed full-suite failure is the red evidence; the owning
+  child's full player test file passes all 12 tests after the fix.
+- The broader umbrella run remains active while this test-only checkpoint is
+  recorded. Its already-running player test used the old source; final results
+  and follow-up verification belong with the F implementation checkpoint.
