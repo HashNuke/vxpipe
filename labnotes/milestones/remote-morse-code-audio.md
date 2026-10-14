@@ -374,6 +374,9 @@ Dependencies: C, D.
 - [x] Build the incremental text-to-PCM planner with independent gap/timing
   fixtures, cumulative text/duration bounds and a single final utterance tail.
   Verify arbitrary text fragments reproduce finite synthesis at every PCM rate.
+- [x] Support one continuous codec stream for open-ended text input. Verify all
+  21 streaming formats emit audio before input ends, and cancel/join codecs even
+  when their input producer is waiting for another fragment.
 - [ ] Write red single-context and multi-context transcript fixtures before
   handlers; cover initialization, incremental text, flush/end-input, keepalive,
   close-context/close-socket and terminal errors.
@@ -396,8 +399,9 @@ Cross-origin STT and HTTP preflight fixtures pass; rendered-browser acceptance,
 TTS token consumption, bearer and first-message authentication remain pending.
 The Go race suite/vet and official SDK token smoke pass. E remains incomplete.
 The incremental text planner also passes independent tone/space intervals and
-84 fragmentation comparisons across seven rates. It does not yet implement WS
-scheduling, continuous encoded output or original-text alignment.
+84 fragmentation comparisons across seven rates. Continuous codec output passes
+21 early-packet/independent-decode cases and starved-input cleanup. These primitives
+do not yet implement WS scheduling, protocol handlers or original-text alignment.
 
 Exit: a browser-capable client generates Morse with both WS APIs and consumes
 a token once; idle or abandoned sockets release memory and execution workers.

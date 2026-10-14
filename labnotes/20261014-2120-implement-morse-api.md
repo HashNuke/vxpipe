@@ -205,3 +205,25 @@
   Documentation examples use snake_case final/alignment fields, while the schema
   and Python FinalOutput types use camelCase `isFinal`. Use the pinned SDK/schema
   contract for output and document this discrepancy during WS conformance work.
+
+## Checkpoint E — continuous codec lifecycle
+
+- Incremental synthesis is committed in Go as `e9dea0b`; milestone evidence is
+  `787ffb28`. Added a separate live encoding boundary because the existing finite
+  encoder explicitly assumes its input never blocks awaiting future network text.
+- New tests first failed on the missing EncodeLive function. The initial live
+  implementation then timed out for MP3, Opus and both G.711 formats while waiting
+  for audio before producer EOF. Known-PCM bounded probing removes FFmpeg's
+  default stream-analysis buffering without discarding input packets.
+- All 21 streaming formats now emit an actual audio packet while the producer
+  keeps input open after 600 ms of PCM. Independent decoding checks duration/tone
+  energy; PCM remains byte-identical. This proves incremental pipeline behavior,
+  not a measured network-latency target or WS endpoint conformance.
+- Live output closes its source before joining the codec/input copier. Tests
+  cover cancellation/close while input is starved, codec child failure, missing
+  codec, invalid WAV startup and pre-cancelled context. Normal PCM EOF cleanup
+  exposed a subsequent closed-pipe error; retaining the terminal read result fixes
+  repeated reads and all format regressions. Full Go race suite and vet pass.
+- The transport must still supply bounded queues and source Close semantics,
+  implement single/multi-context messages and alignment, and prove context/socket
+  ownership under cancellation. E remains incomplete.
