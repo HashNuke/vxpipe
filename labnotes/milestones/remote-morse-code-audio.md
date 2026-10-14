@@ -368,6 +368,9 @@ final publication per committed segment and no state leakage after close.
 
 Dependencies: C, D.
 
+- [x] Implement bounded in-memory token issuance for all three speech purposes
+  and token-only batch/realtime STT; prove expiry, atomic consumption, wrong
+  purpose/replay rejection, restart invalidation and browser-origin/CORS behavior.
 - [ ] Write red single-context and multi-context transcript fixtures before
   handlers; cover initialization, incremental text, flush/end-input, keepalive,
   close-context/close-socket and terminal errors.
@@ -381,6 +384,14 @@ Dependencies: C, D.
   policy and OPTIONS handling for the tested SDK flows.
 - [ ] Test header, first-message and token authentication with official SDK
   flows where supported; test two contexts and abort one during output.
+
+Partial evidence: all three token types issue through the pinned SDK/schema;
+batch and realtime STT consume tokens without keys. Clock-controlled tests cover
+15-minute expiry and capacity recovery; 16 concurrent consumers produce exactly
+one accepted transcript. Invalid explicit tokens never fall back to supplied keys.
+Cross-origin STT and HTTP preflight fixtures pass; rendered-browser acceptance,
+TTS token consumption, bearer and first-message authentication remain pending.
+The Go race suite/vet and official SDK token smoke pass. E remains incomplete.
 
 Exit: a browser-capable client generates Morse with both WS APIs and consumes
 a token once; idle or abandoned sockets release memory and execution workers.

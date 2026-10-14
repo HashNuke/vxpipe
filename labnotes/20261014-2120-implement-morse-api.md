@@ -156,3 +156,30 @@
   owner question about no-retention exceptions remains unresolved.
 - After green checks, moved mu-law expansion into the transport-free audio
   package and reran focused race/vet checks. Go checkpoint committed as `7329afb`.
+
+## Checkpoint E — token foundation
+
+- Continued from current worktree evidence; the previous turn made a planning
+  clarification, not further implementation. Committed D evidence and the endpoint
+  handoff clarification as `4d218ae1`; sent the requested CLI progress notification.
+- Reviewed pinned speech schemas and official token/authentication/batch references.
+  Token issuance covers realtime_scribe, batch_scribe and tts_websocket. The latter's
+  consumption waits for the TTS WS handlers; it is not claimed complete.
+- Added external protocol tests first: issuance failed 404, CORS preflight 401.
+  Added a bounded digest-only token registry with exact 15-minute expiry, purpose
+  checking and atomic one-time consumption. It retains no keys or user content.
+- Batch/realtime STT accept query tokens. Explicit tokens take precedence over
+  header credentials; invalid/replayed/duplicate/wrong-route tokens fail without
+  fallback. Successful authentication consumes before payload/upgrade validation.
+  Wrong-purpose attempts preserve a valid token for its intended route.
+- Tests cover expiry boundaries without sleeping, capacity recovery, drain,
+  replacement-server invalidation and 16 concurrent consumers admitting exactly
+  one transcript. Browser-Origin STT works; API preflight and error CORS work
+  without cookie authority. No rendered-browser acceptance is claimed yet.
+- Full Go race suite and vet pass; focused race checks pass after test refinements.
+  Official Python SDK 2.72.0 issues/schema-validates all token types, consumes
+  batch/realtime tokens and validates repeated STT events. Raw token-only requests
+  prove no key is needed; replay/purpose checks pass. CI includes the token runner.
+- Stopped the older D test server and verified its process handle exited 0.
+  TTS WS, their token consumption/initial authentication and provider integration
+  remain active work; E and the milestone remain unchecked.
