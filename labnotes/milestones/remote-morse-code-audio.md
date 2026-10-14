@@ -229,6 +229,14 @@ If the selected origin is unavailable, report service unavailability and recover
 through ordinary lifecycle handling. Do not send a request or key to a fallback
 origin. Test this both before and after switching between two local servers.
 
+The handoff must include a repeatable smoke command that accepts an explicit
+base URL and a synthetic compatibility key. Run it first against the selected
+local port, then against Railway's generated HTTPS domain, and finally against
+the custom domain. It must check readiness, authenticated discovery, a TTS/STT
+round trip and streaming/WS completion with bounded deadlines. Keep credentials
+out of its output. Record the tested origin and application revision so a local
+pass cannot be mistaken for hosted acceptance.
+
 ## Checkpoints
 
 Each checkpoint leaves a runnable slice. Write and run the smallest externally
@@ -523,8 +531,21 @@ Preparation deliverables in the Go repository:
 - [ ] Write the user's deployment runbook: connect the separate Go repository,
   select the Dockerfile build, set runtime variables/resource limits, keep one
   replica initially, deploy, check readiness, test the generated HTTPS domain,
-  then add `morse-audio.definerun.com` and its Railway-provided DNS record. Include
+  then add `morse-audio.definerun.com` and all Railway-provided DNS records. Include
   TLS/WSS checks, troubleshooting and rollback to the previous image/revision.
+- [ ] Provide the base-URL-parameterized smoke command described above and run
+  it against the local production image before handoff. Document separate
+  commands for the generated Railway domain and custom domain, plus restoring
+  Vxpipe's previous origin and restarting after a failed cutover.
+
+Runbook references: Railway detects a root `Dockerfile` automatically; confirm
+the selected builder in build logs. Configure `/readyz` as the deployment check,
+but do not describe that check as continuous uptime monitoring. For custom DNS,
+copy the CNAME and TXT records supplied by Railway and verify certificate
+issuance before switching Vxpipe. See the official
+[Dockerfile](https://docs.railway.com/builds/dockerfiles),
+[healthcheck](https://docs.railway.com/deployments/healthchecks) and
+[public networking](https://docs.railway.com/networking/public-networking) guides.
 
 User deployment and subsequent verification:
 
@@ -591,4 +612,8 @@ The endpoint/Railway revision additionally checks that local implementation and
 deployment preparation do not depend on a live Railway service, while hosted
 acceptance waits for the user's deployment. One origin reaches all provider
 operations; configuration changes require restart, not call-spec migration.
+The handoff review additionally requires the same explicit-origin smoke runner
+for local and hosted acceptance, complete DNS instructions and a tested rollback
+procedure. These are acceptance requirements; no implementation checkbox changes
+as a result of this documentation review.
 See [planning labnotes](../20261014-1947-remote-morse-milestone.md).

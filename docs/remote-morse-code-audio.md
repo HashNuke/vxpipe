@@ -142,6 +142,10 @@ allocation remain separately documented user operations.
 Deployment is performed by the user. Local preparation is independently
 reviewable; hosted tests and Vxpipe endpoint cutover remain pending until their
 deployment exists. The milestone records those two acceptance stages separately.
+Provide one smoke runner with an explicit base URL for the local production
+image, generated Railway domain and final custom domain. Record each result
+separately; a successful readiness probe alone does not establish streaming or
+speech compatibility. Keep the previous Vxpipe origin available for rollback.
 
 ## Primary API references
 

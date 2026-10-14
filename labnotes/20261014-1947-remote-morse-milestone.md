@@ -110,3 +110,22 @@ compatibility credential. The runbook must validate readiness and authenticated
 discovery before speech enablement. This documentation clarification leaves
 existing implementation progress and staged work intact; it does not deploy or
 change runtime configuration.
+
+### Repeatable deployment acceptance review
+
+Reviewed the requested configurable endpoint and Railway handoff against the
+current milestone. Retained the names `MorseCodeApiTTS` / `MorseCodeApiSTT`, the
+runtime `MORSE_CODE_API_BASE_URL` contract and existing implementation evidence.
+Added an explicit-origin smoke-runner deliverable spanning the local production
+image, Railway-generated domain and final custom domain, with separate results
+and rollback instructions. This is documentation work only.
+
+Rechecked official Railway Dockerfile, healthcheck and public networking docs.
+Clarified automatic root Dockerfile detection, deployment-only healthchecks and
+the supplied CNAME/TXT records. Dependency review leaves local preparation
+independent of user deployment; hosted acceptance still follows deployment and
+full compatibility checks. No implementation completion boxes were advanced.
+
+Validation passed: 19 relative links across the three edited documents, balanced
+code fences, unchanged completed-task counts and `git diff --check`. Reviewed
+the final diff; runtime tests are not applicable to this documentation change.
