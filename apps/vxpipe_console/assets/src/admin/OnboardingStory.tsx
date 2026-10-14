@@ -97,6 +97,7 @@ const exampleApiKey: TenantApiKey = {
   name: "Application",
   kind: "calls",
   lastFour: "-key",
+  createdAt: new Date().toISOString(),
 };
 
 const demoTenant: SetupTenant = {
@@ -304,7 +305,9 @@ export function OnboardingStory({
   const [unavailable, setUnavailable] = useState(scenario === "unavailable");
   const [apiKeys, setApiKeys] = useState<TenantApiKey[]>(
     ["api-key-created", "api-key-existing"].includes(scenario)
-      ? [exampleApiKey]
+      ? scenario === "api-key-existing"
+        ? [{ ...exampleApiKey, createdAt: "2026-09-01T10:00:00Z" }, { ...exampleApiKey, id: "example-full-key", name: "Administration", kind: "full", createdAt: "2026-10-12T08:30:00Z" }]
+        : [exampleApiKey]
       : [],
   );
   const [keyCreation, setKeyCreation] = useState<ApiKeyCreation>(
@@ -346,6 +349,7 @@ export function OnboardingStory({
         name,
         kind,
         lastFour: "-key",
+        createdAt: new Date().toISOString(),
       };
       setApiKeys((current) => [...current, key]);
       setKeyCreation({
@@ -475,6 +479,9 @@ export function OnboardingStory({
         className="tenant-setup"
         inert={overlayOpen ? true : undefined}
       >
+        {renderFrame && page !== "tenants" && !platformPage ? (
+          <div className="navigation-context">{tenant.name}</div>
+        ) : null}
         {!renderFrame && page !== "tenants" && !platformPage ? (
           <nav aria-label="Tenant setup" className="setup-steps">
             {steps.map((step, index) => (

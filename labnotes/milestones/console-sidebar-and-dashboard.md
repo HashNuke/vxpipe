@@ -475,3 +475,16 @@ validation and save permissions remain enforced.
 
 Design review: use the native Radix arrow geometry and existing service colors;
 keep the Connect action stable while adding an empty-state panel below it.
+
+### API key inventory details
+
+- [x] Add a Type column showing Create & Join Calls or Full Access for every key.
+- [x] Add a Created column with relative date/time and an exact UTC timestamp tooltip.
+- [x] Add a top back button to leave API key creation without submitting; place it above the heading so the heading aligns with the form.
+- [x] Show tenant names above main content on standalone tenant Services and API Keys pages, matching workspace context elsewhere.
+- [x] Update timestamp fixtures and verify desktop/mobile inventory and creation states.
+- [x] Complete root checks and commit: static checks and all 3,790 backend tests passed.
+
+Design review: preserve the existing key-kind contract and masked values. Use
+shadcn tooltips and the existing relative-time formatter; keep long table values
+readable with horizontal scrolling on small screens.

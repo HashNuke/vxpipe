@@ -56,3 +56,9 @@ test("call history return links retain the call spec filter", async () => {
   render(<CallsPageStory scenario="populated" theme="dark" />);
   expect(screen.getByRole("combobox", { name: "Call spec" })).toHaveTextContent("Appointment reminders");
 });
+
+test.each(["api-key-existing", "choose-services"] as const)("%s identifies the tenant above its content", async scenario => {
+  const { SetupStory } = await import("./SetupStory");
+  render(<SetupStory scenario={scenario} theme="dark" />);
+  expect(within(screen.getByRole("main")).getByText("Demo", { exact: true })).toBeVisible();
+});

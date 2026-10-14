@@ -1299,6 +1299,7 @@
 }
 .setup-api-key-table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
   text-align: left;
 }
@@ -1364,4 +1365,18 @@
   color: var(--admin-muted);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.setup-key-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.setup-key-heading > button {
+  margin-left: -12px;
+}
+.setup-key-created-time {
+  white-space: nowrap;
+  color: var(--admin-muted);
 }

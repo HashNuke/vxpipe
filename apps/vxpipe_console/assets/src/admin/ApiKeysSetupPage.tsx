@@ -1,5 +1,7 @@
-import { Check, Copy, Plus } from "lucide-react";
+import { ArrowLeft, Check, Copy, Plus } from "lucide-react";
 import { useState } from "react";
+import { formatAdminRelativeTime } from "./formatAdminRelativeTime";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 import { Button } from "./Button";
 import {
   tenantApiKeyKind,
@@ -36,7 +38,15 @@ export function ApiKeysSetupPage({
   return (
     <>
       <header className="setup-section-heading">
-        <h1>{showForm ? "Create API Keys" : "API Keys"}</h1>
+        <div className="setup-key-heading">
+          {showForm ? (
+            <Button aria-label="Back to API keys" title="Back to API keys" variant="ghost" disabled={busy} onClick={() => setAdding(false)}>
+              <ArrowLeft aria-hidden="true" size={16} />
+              API Keys
+            </Button>
+          ) : null}
+          <h1>{showForm ? "Create API Keys" : "API Keys"}</h1>
+        </div>
         {!showForm && !readOnly ? <Button onClick={() => {
           if (creation.status === "created") setDismissed(creation.key.id);
           setAdding(true);
@@ -51,9 +61,11 @@ export function ApiKeysSetupPage({
       {!showForm ? (
         keys.length ? <div className="setup-api-key-table-wrap">
           <table aria-label="API keys" className="setup-api-key-table">
-            <thead><tr><th scope="col">Name</th><th scope="col">API key</th></tr></thead>
+            <thead><tr><th scope="col">Name</th><th scope="col">API key</th><th scope="col">Type</th><th scope="col">Created</th></tr></thead>
             <tbody>{keys.map(key => <tr key={key.id}>
               <td>{key.name}</td><td><code>••••••••{key.lastFour}</code></td>
+              <td>{tenantApiKeyKind(key.kind).label}</td>
+              <td><ApiKeyCreatedTime value={key.createdAt} /></td>
             </tr>)}</tbody>
           </table>
         </div> : <p className="setup-key-guidance">No API keys have been created for this tenant.</p>
@@ -189,5 +201,23 @@ function ApiKeyReveal({
             : ""}
       </p>
     </section>
+  );
+}
+
+function ApiKeyCreatedTime({ value }: { value: string }) {
+  const relative = formatAdminRelativeTime(value);
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <time dateTime={value} tabIndex={0} className="setup-key-created-time">
+            {relative === "just now" ? "few seconds ago" : relative}
+          </time>
+        </TooltipTrigger>
+        <TooltipContent className="setup-service-tooltip" side="top" sideOffset={8}>
+          {new Date(value).toUTCString().replace("GMT", "UTC")}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

@@ -1,5 +1,5 @@
 export type TenantApiKeyKind = "calls" | "full";
-export type TenantApiKey = { id: string; name: string; kind: TenantApiKeyKind; lastFour: string };
+export type TenantApiKey = { id: string; name: string; kind: TenantApiKeyKind; lastFour: string; createdAt: string };
 export type ApiKeyCreation =
   | { status: "idle" | "submitting" | "error" }
   | { status: "created"; key: TenantApiKey; secret: string };
