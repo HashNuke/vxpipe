@@ -677,6 +677,16 @@
 .setup-service-heading select:disabled {
   opacity: 0.6;
 }
+.setup-service-placeholder {
+  display: grid;
+  place-content: center;
+  min-height: 128px;
+  padding: 24px 16px;
+  color: var(--admin-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
 .setup-modal-capabilities {
   margin-bottom: 20px;
 }
@@ -1315,4 +1325,20 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.setup-service-tooltip {
+  z-index: 100;
+  max-width: min(320px, calc(100vw - 24px));
+  background: #27272a;
+  color: #fafafa;
+  font-family: var(--font-sans);
+}
+.setup-service-tooltip > svg {
+  background: #27272a;
+  fill: #27272a;
+}
+
+.setup-service-status-error {
+  color: var(--admin-red);
 }

@@ -122,7 +122,8 @@ test("inherited services have no disable or remove control", () => {
 
 test("a failed tenant override never uses platform readiness", () => {
   render(<OnboardingStory scenario="tenant-override-error" theme="dark" />);
-  expect(screen.getByText("Credentials need attention")).toBeVisible();
+  expect(screen.getByLabelText("Credentials need attention")).toBeVisible();
+  expect(screen.queryByText("Credentials need attention")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 });
 

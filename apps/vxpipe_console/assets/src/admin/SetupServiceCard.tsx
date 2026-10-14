@@ -1,5 +1,6 @@
 import * as Popover from "@radix-ui/react-popover";
-import { CheckCheck, EllipsisVertical, Pencil, Trash2, TriangleAlert } from "lucide-react";
+import { CircleAlert, CheckCheck, EllipsisVertical, Pencil, Trash2, TriangleAlert } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 import { Button } from "./Button";
 import { ServiceLogo } from "./ServiceLogo";
 import {
@@ -29,6 +30,11 @@ export function SetupServiceCard({
   removing?: boolean;
   readOnly?: boolean;
 }) {
+  const issue = connection?.status === "invalid"
+    ? "Credentials need attention"
+    : connection?.status === "unavailable"
+      ? "Credential validation is unavailable. Try again."
+      : null;
   const connected = connection?.status === "connected";
   const needsPublicKey =
     provider.id === "telnyx" && !connection?.telephonyPublicKeyConfigured;
@@ -49,7 +55,20 @@ export function SetupServiceCard({
         <ServiceLogo name={provider.name} provider={provider.id} />
         <h3>{provider.name}</h3>
         <div className="setup-service-card-actions">
-          {connected ? (
+          {issue ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0} aria-label={issue} className="setup-service-status setup-service-status-error">
+                    <CircleAlert aria-hidden="true" size={18} />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="setup-service-tooltip" side="top" sideOffset={8}>
+                  {issue}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : connected ? (
             <span className="setup-service-status" title="Connected">
               <CheckCheck aria-hidden="true" size={18} />
               <span className="sr-only">Connected</span>
@@ -110,12 +129,6 @@ export function SetupServiceCard({
       </div>
       {source ? <p className="setup-service-source">{source}</p> : null}
       {removing ? <p role="status">Removing credentials…</p> : null}
-      {connection?.status === "invalid" ? (
-        <p className="setup-error">Credentials need attention</p>
-      ) : null}
-      {connection?.status === "unavailable" ? (
-        <p className="setup-error">Validation unavailable · retry</p>
-      ) : null}
       <div className="setup-service-card-footer">
         <div className="setup-tags">
           {provider.capabilities.map((capability) => (

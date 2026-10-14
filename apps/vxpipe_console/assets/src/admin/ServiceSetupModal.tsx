@@ -256,7 +256,11 @@ export function ServiceSetupModal({
               </p>
             ) : null}
           </>
-        ) : null}
+        ) : (
+          <p className="setup-service-placeholder">
+            Select a service above to enter its connection details.
+          </p>
+        )}
       </div>
     </SetupDialog>
   );

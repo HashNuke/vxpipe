@@ -1,5 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 
+import { CircleAlert } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
+
 import { Button } from "./Button";
 import {
   ApiKeyCredentialFields,
@@ -121,8 +124,9 @@ export function ServiceCredentialForm({
   }
 
   async function testCredentials() {
+    if (!onTest || !supportsCredentialTest || testResult?.status === "unsupported") return;
     const nextDraft = locallyValidDraft();
-    if (!nextDraft || !onTest || !supportsCredentialTest) return;
+    if (!nextDraft) return;
 
     setTestResult({ status: "testing" });
     try {
@@ -153,6 +157,7 @@ export function ServiceCredentialForm({
     }
   }, [status]);
 
+  const testUnavailable = !supportsCredentialTest || testResult?.status === "unsupported";
   const saving = status === "submitting";
   const testing = testResult?.status === "testing";
   const pending = saving || testing;
@@ -255,11 +260,6 @@ export function ServiceCredentialForm({
           Credentials tested successfully.
         </p>
       ) : null}
-      {testResult?.status === "unsupported" ? (
-        <p className="text-sm text-[var(--admin-muted)]" role="status">
-          {testResult.message}
-        </p>
-      ) : null}
       {testResult?.status === "error" ? (
         <p className="text-sm text-[var(--admin-red)]" role="alert">
           {testResult.message}
@@ -268,11 +268,6 @@ export function ServiceCredentialForm({
       {status === "success" ? (
         <p className="text-sm text-[var(--admin-green)]" role="status">
           Credential stored.
-        </p>
-      ) : null}
-      {credentialTestUnavailableProviders.has(provider) ? (
-        <p className="text-sm text-[var(--admin-muted)]">
-          Credential testing is unavailable for this provider. You can save its API key and verify it with a call.
         </p>
       ) : null}
       {beforeActions}
@@ -290,22 +285,36 @@ export function ServiceCredentialForm({
             Cancel
           </Button>
         ) : null}
-        <Button
-          aria-label={testing ? "Testing credentials" : "Test credentials"}
-          disabled={pending || !onTest || !supportsCredentialTest}
-          onClick={() => void testCredentials()}
-          type="button"
-          variant="ghost"
-        >
-          {testing ? (
-            "Testing…"
-          ) : (
-            <>
-              <span className="setup-test-full">Test credentials</span>
-              <span aria-hidden="true" className="setup-test-short">Test</span>
-            </>
-          )}
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                aria-label={testing ? "Testing credentials" : "Test credentials"}
+                disabled={pending || (!onTest && !testUnavailable)}
+                aria-disabled={testUnavailable || undefined}
+                className={testUnavailable ? "cursor-not-allowed text-[var(--admin-muted)]" : undefined}
+                onClick={() => void testCredentials()}
+                type="button"
+                variant="ghost"
+              >
+                {testUnavailable ? <CircleAlert aria-hidden="true" size={16} className="text-[var(--admin-red)]" /> : null}
+                {testing ? (
+                  "Testing…"
+                ) : (
+                  <>
+                    <span className="setup-test-full">Test credentials</span>
+                    <span aria-hidden="true" className="setup-test-short">Test</span>
+                  </>
+                )}
+              </Button>
+            </TooltipTrigger>
+            {testUnavailable ? (
+              <TooltipContent className="setup-service-tooltip" side="top" sideOffset={8}>
+                Credential testing is unavailable for this provider.
+              </TooltipContent>
+            ) : null}
+          </Tooltip>
+        </TooltipProvider>
         <Button disabled={pending || !supportedProvider} type="submit">
           {saving ? submittingLabel : submitLabel}
         </Button>

@@ -579,3 +579,14 @@ test("onboarding offers only installed AI and telephony services in their groups
     "Twilio",
   ]);
 });
+
+test("service picker prompts for a selection until a service is chosen", () => {
+  render(<OnboardingStory scenario="service-picker" theme="dark" />);
+  const message = "Select a service above to enter its connection details.";
+  expect(screen.getByText(message)).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox", { name: "Service" }), { target: { value: "deepgram" } });
+  expect(screen.queryByText(message)).not.toBeInTheDocument();
+  expect(screen.getByLabelText("API key")).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox", { name: "Service" }), { target: { value: "" } });
+  expect(screen.getByText(message)).toBeInTheDocument();
+});

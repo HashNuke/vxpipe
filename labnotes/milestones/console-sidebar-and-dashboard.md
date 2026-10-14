@@ -452,3 +452,15 @@ private-host checks.
 Design review: preserve the established Inter/Geist Mono pairing and component
 styles. Correct production font delivery and unify sans-serif tokens; avoid a
 typography redesign prompted solely by a stylistic hook warning.
+
+### Service picker guidance and credential status
+
+- [x] Add a placeholder prompting users to select a service before connection fields appear.
+- [x] Replace unsupported-testing inline text with an exclamation on Test credentials and a tooltip explaining that credential testing is unavailable for this provider.
+- [x] Replace credential-error text on service cards with an error icon beside Edit, matching the connected indicator's position, with a tooltip explanation.
+- [x] Verify selection/clearing, unsupported tests and saving; inspect desktop/mobile rendering and tooltips.
+- [x] Complete root checks and commit the checkpoint: static gates passed; one unrelated speech-to-speech test failed in the full suite and passed with all 29 file tests on isolated rerun.
+
+Design review: preserve the current service card and modal structure; provide
+compact status indicators with hover and keyboard explanations. Credential
+validation and save permissions remain enforced.

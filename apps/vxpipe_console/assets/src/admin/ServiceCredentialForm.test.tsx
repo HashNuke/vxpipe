@@ -156,9 +156,7 @@ test("keeps Save available when credential testing is unsupported", async () => 
   });
   fireEvent.click(screen.getByRole("button", { name: "Test credentials" }));
 
-  expect(await screen.findByRole("status")).toHaveTextContent(
-    "Credential testing is not available",
-  );
+  await waitFor(() => expect(screen.getByRole("button", { name: "Test credentials" })).toHaveAttribute("aria-disabled", "true"));
   expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
 });
 
@@ -320,14 +318,17 @@ for (const provider of ["deepseek", "openrouter", "fireworks", "cartesia", "elev
 }
 
 for (const provider of ["fireworks", "cartesia", "elevenlabs"] as const) {
-test(`${provider} saves independently and does not offer an unsupported credential probe`, () => {
+test(`${provider} saves independently and does not offer an unsupported credential probe`, async () => {
   const probe = vi.fn();
   const submit = vi.fn();
   render(<ServiceCredentialForm initialProvider={provider} onCancel={vi.fn()} onSubmit={submit} onTest={probe} status="idle" />);
   fireEvent.change(screen.getByLabelText("API key"), { target: { value: "synthetic-key" } });
   const testButton = screen.getByRole("button", { name: "Test credentials" });
-  expect(testButton).toBeDisabled();
-  expect(screen.getByText("Credential testing is unavailable for this provider. You can save its API key and verify it with a call.")).toBeInTheDocument();
+  expect(testButton).toHaveAttribute("aria-disabled", "true");
+  expect(screen.queryByText("Credential testing is unavailable for this provider. You can save its API key and verify it with a call.")).not.toBeInTheDocument();
+  expect(testButton.querySelector("svg")).toBeInTheDocument();
+  fireEvent.focus(testButton);
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Credential testing is unavailable for this provider.");
   fireEvent.click(testButton);
   expect(probe).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
