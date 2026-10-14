@@ -4,7 +4,6 @@ defmodule Vxpipe.Console.DiagnosticsSocket do
   use Phoenix.LiveView.Socket
 
   alias Vxpipe.Console.{DiagnosticsEnabled, TelephonyHostGuard, UserSession}
-  alias Vxpipe.Identity.Authorization
 
   @impl Phoenix.Socket
   def connect(_params, socket, connect_info) do
@@ -25,7 +24,7 @@ defmodule Vxpipe.Console.DiagnosticsSocket do
   defp authorized?(session) do
     case UserSession.fetch_session(session, backend: identity_backend()) do
       {:ok, principal} ->
-        Authorization.authorize(principal.grants, "diagnostics.read", :installation) == :ok
+        principal.account_kind == :superadmin
 
       {:error, _reason} ->
         false

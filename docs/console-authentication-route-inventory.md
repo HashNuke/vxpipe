@@ -21,7 +21,7 @@ controller and owning Calls/Persistence operation enforce it.
 | Demo onboarding and sample installation | Console and Calls | Built-in administrator; relevant `tenants.write` and `call_specs.write` |
 | `/admin/samples/*` and `/admin/samples/calls`, `/transfers` | Console and Calls | Built-in administrator for sample page; `calls.write` for creation on the target tenant |
 | `/tenants/:key/calls*` legacy redirects, recording and details | Console and Calls | `calls.read` on the resolved tenant |
-| `/admin/diagnostics`, LiveDashboard and socket | Console | Built-in `diagnostics.read`; repeat checks at LiveView/WebSocket entry |
+| `/admin/diagnostics`, LiveDashboard and socket | Console | Named Superadmin account only; repeat checks at LiveView/WebSocket entry and during LiveView events |
 
 The Console's existing `OperatorTraffic`, CSRF and private-cache controls remain
 applicable. `GatewayMount` keeps carrier, participant and independently issued

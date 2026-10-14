@@ -59,6 +59,52 @@ defmodule Vxpipe.Console.DiagnosticsLiveTest do
     :ok
   end
 
+  test "diagnostics reject non-superadmins even with diagnostics grants" do
+    start_supervised!(RevocableDiagnosticsIdentity)
+    Application.put_env(:vxpipe_console, :user_identity_backend, RevocableDiagnosticsIdentity)
+
+    for kind <- [:admin, :member] do
+      RevocableDiagnosticsIdentity.as_kind(kind)
+      conn = authenticated_conn()
+      session = Plug.Conn.get_session(conn)
+
+      for path <- [
+            "/admin/diagnostics",
+            "/admin/diagnostics/system",
+            "/admin/diagnostics/system/home"
+          ] do
+        assert response(get(conn, path), 403) == "Forbidden"
+
+        refute Vxpipe.Console.RequireUser.allowed_path?(
+                 %{FakeUserIdentity.principal() | account_kind: kind},
+                 path
+               )
+      end
+
+      assert :error =
+               Vxpipe.Console.DiagnosticsSocket.connect(%{}, %Phoenix.Socket{}, %{
+                 session: session
+               })
+
+      assert {:halt, _} =
+               Vxpipe.Console.DiagnosticsAuth.on_mount(
+                 :default,
+                 %{},
+                 session,
+                 %Phoenix.LiveView.Socket{}
+               )
+    end
+  end
+
+  test "an open diagnostics stream stops after Superadmin access is removed" do
+    start_supervised!(RevocableDiagnosticsIdentity)
+    Application.put_env(:vxpipe_console, :user_identity_backend, RevocableDiagnosticsIdentity)
+    {:ok, view, _html} = live(authenticated_conn(), "/admin/diagnostics")
+    RevocableDiagnosticsIdentity.as_kind(:admin)
+    send(view.pid, :refresh)
+    assert_redirect(view, "/auth/login")
+  end
+
   test "loads diagnostics through compiled static assets" do
     html = html_response(get(authenticated_conn(), "/admin/diagnostics"), 200)
 

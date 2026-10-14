@@ -28,6 +28,9 @@ defmodule Vxpipe.Console.RequireUserAPI do
     end
   end
 
+  defp authorize(%{account_kind: :superadmin}, :superadmin), do: :ok
+  defp authorize(_principal, :superadmin), do: {:error, :forbidden}
+
   defp authorize(_principal, :authenticated), do: :ok
 
   defp authorize(principal, {:installation, permission}) do

@@ -429,3 +429,14 @@ confirmation behavior. Use larger heading typography and responsive action align
 
 Design review: keep the form's intended top spacing inside the dark surface;
 change user-facing wording without changing recovery authorization or expiry.
+
+### Superadmin-only platform diagnostics
+
+- [x] Require the new named-user authentication for diagnostics and Phoenix LiveDashboard; allow only Superadmins.
+- [x] Apply the restriction to HTTP subpages, return paths, WebSocket connection and LiveView mount/event checks.
+- [x] Verify Admin/member denial even with diagnostic grants and disconnect an open stream after demotion.
+- [x] Run root completion gates: static checks passed; full suite had one unrelated WebRTC audio timeout, which passed on isolated rerun. All 303 Console tests passed.
+
+Design review: explicit account-kind gate; a role grant cannot override this
+restriction. Preserve existing disabled-diagnostics, session-revocation and
+private-host checks.

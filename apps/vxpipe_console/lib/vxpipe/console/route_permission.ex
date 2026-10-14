@@ -3,6 +3,7 @@ defmodule Vxpipe.Console.RoutePermission do
 
   @type requirement ::
           :authenticated
+          | :superadmin
           | {:installation, String.t()}
           | {:tenant, String.t(), String.t()}
           | {:directory, String.t()}
@@ -67,7 +68,7 @@ defmodule Vxpipe.Console.RoutePermission do
     do: {:installation, "tenants.write"}
 
   def for_request("GET", ["admin", "diagnostics" | _rest]),
-    do: {:installation, "diagnostics.read"}
+    do: :superadmin
 
   def for_request("GET", ["tenants", tenant, "calls" | _rest]),
     do: {:tenant, "calls.read", tenant}

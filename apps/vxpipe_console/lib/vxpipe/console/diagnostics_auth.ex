@@ -4,7 +4,6 @@ defmodule Vxpipe.Console.DiagnosticsAuth do
   import Phoenix.LiveView, only: [attach_hook: 4, redirect: 2]
 
   alias Vxpipe.Console.{DiagnosticsEnabled, UserSession}
-  alias Vxpipe.Identity.Authorization
 
   def on_mount(:default, _params, session, socket) do
     if DiagnosticsEnabled.enabled?() and authorized?(session) do
@@ -37,7 +36,7 @@ defmodule Vxpipe.Console.DiagnosticsAuth do
   defp authorized?(session) do
     case UserSession.fetch_session(session, backend: identity_backend()) do
       {:ok, principal} ->
-        Authorization.authorize(principal.grants, "diagnostics.read", :installation) == :ok
+        principal.account_kind == :superadmin
 
       {:error, _reason} ->
         false

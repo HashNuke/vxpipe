@@ -488,3 +488,12 @@ the wider read scope and incrementing affected role revisions. It does not broad
 write grants. Splitting those merged scopes on rollback is ambiguous, so that
 migration is irreversible. Role descriptions are removed from storage and APIs;
 rolling back the column migration cannot recover discarded descriptions.
+
+### Superadmin-only diagnostics
+
+Both `/admin/diagnostics` and `/admin/diagnostics/system` (including dashboard
+subpages and the diagnostics LiveView socket) require a current named-user
+session whose account kind is Superadmin. A `diagnostics.read` grant alone does
+not authorize access; Admin and member accounts are denied. The diagnostics
+enabled flag and private-host restriction still apply. Open LiveViews recheck
+the session and account kind on messages, events and parameter changes.

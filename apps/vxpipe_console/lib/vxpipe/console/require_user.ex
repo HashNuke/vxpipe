@@ -85,7 +85,7 @@ defmodule Vxpipe.Console.RequireUser do
     do: installed?(principal, "tenants.write")
 
   defp permitted?(principal, ["admin", "diagnostics" | _]),
-    do: installed?(principal, "diagnostics.read")
+    do: principal.account_kind == :superadmin
 
   defp permitted?(principal, ["admin", "samples" | _]),
     do: installed?(principal, "tenants.write")

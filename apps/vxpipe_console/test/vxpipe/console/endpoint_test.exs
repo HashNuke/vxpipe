@@ -259,7 +259,7 @@ defmodule Vxpipe.Console.EndpointTest do
            end)
   end
 
-  test "enabled diagnostics require installation operator authentication" do
+  test "enabled diagnostics require a named Superadmin session" do
     original = Application.fetch_env!(:vxpipe_console, :diagnostics)
 
     on_exit(fn -> Application.put_env(:vxpipe_console, :diagnostics, original) end)
