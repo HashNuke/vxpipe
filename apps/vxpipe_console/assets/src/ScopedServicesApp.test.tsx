@@ -377,11 +377,7 @@ test("keeps Save usable when a platform credential cannot be tested", async () =
   });
   fireEvent.click(screen.getByRole("button", { name: "Test credentials" }));
 
-  expect(
-    await screen.findByText(
-      "Credential testing is not available for this service. You can still save it.",
-    ),
-  ).toBeVisible();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Test credentials" })).toHaveAttribute("aria-disabled", "true"));
   expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
 
   fireEvent.click(screen.getByRole("button", { name: "Save" }));

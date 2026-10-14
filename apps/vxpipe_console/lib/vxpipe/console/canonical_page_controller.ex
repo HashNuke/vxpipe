@@ -2,7 +2,6 @@ defmodule Vxpipe.Console.CanonicalPageController do
   @moduledoc "Canonical page entry and safe redirects for legacy Console bookmarks."
   use Phoenix.Controller, formats: [:html]
 
-  alias Vxpipe.Calls.UserAuthorization
   alias Vxpipe.Console.AdminPageController
 
   def index(conn, %{"tenant_key" => key} = params) do
@@ -14,9 +13,8 @@ defmodule Vxpipe.Console.CanonicalPageController do
   end
 
   def index(conn, params) do
-    case {conn.path_info, UserAuthorization.visible_tenant_scope(conn.assigns.user_principal)} do
-      {["tenants"], {:assigned, _}} -> redirect(conn, to: "/my-tenants")
-      {["my-tenants"], :all} -> redirect(conn, to: "/tenants")
+    case conn.path_info do
+      ["my-tenants"] -> redirect(conn, to: "/tenants" <> query_suffix(conn))
       _ -> AdminPageController.index(conn, params)
     end
   end

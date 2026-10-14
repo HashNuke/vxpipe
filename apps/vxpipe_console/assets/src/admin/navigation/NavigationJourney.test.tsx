@@ -9,15 +9,14 @@ afterEach(() => { cleanup(); window.history.replaceState({}, "", "/"); });
 test("single-tenant entry shows dashboard with only permitted links", () => {
   render(<NavigationJourney persona="single" />);
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-  const platform = screen.getByRole("navigation", { name: "Platform" });
-  expect(within(platform).getByRole("link", { name: "Services" })).toBeVisible();
-  expect(within(platform).queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "#/platform/services");
+  expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "My account" })).toBeVisible();
   expect(screen.queryByText("acme_demo_000001")).not.toBeInTheDocument();
 });
 test("multi-tenant directory and search show only allowed tenants, selection opens dashboard", async () => {
   render(<NavigationJourney persona="multiple" />);
-  expect(screen.getByRole("heading", { name: "My tenants" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Tenants" })).toBeVisible();
   expect(screen.queryByText("Contoso Support")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("combobox", { name: "Switch tenant" }));
   fireEvent.change(screen.getByRole("combobox", { name: "Search tenants" }), { target: { value: "Northwind" } });
@@ -28,7 +27,7 @@ test("multi-tenant directory and search show only allowed tenants, selection ope
 test("platform and tenant services have distinct titles and correct active groups", () => {
   render(<NavigationJourney initialPath="/platform/services" />);
   expect(screen.getByRole("heading", { name: "Platform Services" })).toBeVisible();
-  const platform = screen.getByRole("navigation", { name: "Platform" });
+  const platform = screen.getByRole("navigation", { name: "Settings" });
   expect(within(platform).getByRole("link", { name: "Services" })).toHaveAttribute("aria-current", "page");
 });
 test("logout removes the private navigation and shows login", () => {

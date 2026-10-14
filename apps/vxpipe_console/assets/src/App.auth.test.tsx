@@ -626,7 +626,7 @@ test("zero-assignment members stay on the directory instead of forbidden onboard
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
   expect(await screen.findByText("No tenants yet")).toBeVisible();
-  expect(window.location.pathname).toBe("/my-tenants");
+  expect(window.location.pathname).toBe("/tenants");
   cleanup();
 });
 
@@ -643,6 +643,9 @@ test("sidebar exposes account and platform links matching authority", async () =
 
   expect(await screen.findByRole("heading", { name: "Tenants" })).toBeVisible();
   expect(screen.getByRole("link", { name: "My account" })).toHaveAttribute("href", "/account");
+  fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+  await screen.findByRole("link", { name: "Back to tenants" });
+  expect(screen.queryByRole("combobox", { name: "Switch tenant" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("href", "/users");
   expect(screen.getByRole("link", { name: "Roles" })).toHaveAttribute("href", "/roles");
   expect(screen.getByRole("link", { name: "Services" })).toHaveAttribute(

@@ -11,9 +11,9 @@ defmodule Vxpipe.Console.NavigationProjection do
          actor: %{id: principal.user_public_id, kind: principal.account_kind},
          tenant_scope: navigation.scope,
          directory_access: navigation.directory_access,
-         directory_path: directory_path(navigation.scope),
+         directory_path: "/tenants",
          landing_path: landing_path(navigation),
-         platform_destinations: platform_destinations(principal, navigation.scope),
+         platform_destinations: platform_destinations(principal),
          tenant: tenant
        }}
     end
@@ -59,15 +59,11 @@ defmodule Vxpipe.Console.NavigationProjection do
          do: {:ok, tenant(principal, tenant)}
   end
 
-  defp directory_path(:all), do: "/tenants"
-  defp directory_path(:assigned), do: "/my-tenants"
-
-  defp landing_path(%{landing_tenant: nil, scope: scope}), do: directory_path(scope)
+  defp landing_path(%{landing_tenant: nil}), do: "/tenants"
   defp landing_path(%{landing_tenant: tenant}), do: dashboard_path(tenant.key)
 
-  defp platform_destinations(principal, scope) do
+  defp platform_destinations(principal) do
     [
-      {scope == :all, %{id: "tenants", label: "Tenants", path: "/tenants"}},
       {principal.account_kind in [:admin, :superadmin],
        %{id: "roles", label: "Roles", path: "/roles"}},
       {installed?(principal, "users.read"), %{id: "users", label: "Users", path: "/users"}},

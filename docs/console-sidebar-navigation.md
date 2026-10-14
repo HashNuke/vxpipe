@@ -9,13 +9,24 @@ remains authoritative. This extends the Operator's Bench visual system.
 
 ## Experience
 
-A sticky, 232px-wide left rail holds Vxpipe, immediately followed by a searchable tenant
-picker. Tenant links are Calls, Call Specs, Services; Platform links are Tenants,
-Roles, Users, Services. My account and Logout stay at the bottom. Omit destinations
-without effective permission and omit empty groups. The selected tenant label
-links to its dashboard; the picker always switches to `/t/:tenant/dashboard`.
-The picker footer links to the appropriate directory, including My tenants for
-assigned users, without adding an extra top-level item to the requested menu.
+The regular layout has a sticky, 232px-wide left rail with Vxpipe, a searchable
+tenant picker, a **Tenants** link above tenant destinations and one **Settings** link. My account and
+Logout stay at the bottom. Omit Settings when no platform destination is permitted.
+The picker switches to `/t/:tenant/dashboard`; its footer opens `/tenants` in
+the regular layout using the same server-authorized tenant directory.
+
+Platform routes (`/roles`, `/users`, `/platform/services`, including
+nested forms) use a separate **Settings** sidebar. It contains only the permitted
+platform links and Logout, with **Back to tenants** at the top. It has no tenant
+picker, tenant links or tenant name in the mobile header. The Settings entry opens
+the first permitted platform destination; existing URLs and permission projections
+remain unchanged.
+
+Back always opens `/tenants` in the regular layout. Settings has no remembered
+tenant or workspace-page context. All-tenant operators may open this directory
+without being redirected to Settings; the server still controls which tenants
+they can see. Settings is presentation, not an authorization boundary. Legacy `/my-tenants` links
+redirect to `/tenants`, preserving supported search parameters.
 
 Content has one clear page title and its local actions. Remove global headers,
 account bars and sibling navigation from ordinary pages. Tenant resource pages
@@ -38,7 +49,7 @@ For authenticated `/`, decide on the server using a freshly resolved principal:
 
 1. `visible_tenant_scope == :all` → `/tenants`, even with zero or one tenant.
 2. Exactly one extant authorized tenant → `/t/:tenant/dashboard`.
-3. Zero or multiple extant authorized tenants → `/my-tenants`.
+3. Zero or multiple extant authorized tenants → `/tenants`.
 
 Use `Vxpipe.Calls.UserAuthorization.visible_tenant_scope/1`, not role names,
 assignment counts, a page of results, or installation-wide counts. All-tenant
@@ -47,7 +58,7 @@ currently does not confer tenant-resource access. Preserve this distinction.
 Memberships alone confer no access. Only stored, extant, authorized tenant rows
 count. A zero-tenant user can still use account and permitted platform resources. When
 there is no tenant-directory grant at all, navigation returns directory_access=false
-and the My tenants page renders the authoritative empty state without a directory
+and the Tenants page renders the authoritative empty state without a directory
 request. Preserve the existing directory authorization boundary.
 A directory database failure is unavailable, never zero access. Page errors have no
 retry button; the user can refresh. The picker retains its local retry action.
@@ -125,7 +136,7 @@ falling back to unscoped reads. The PostgreSQL adapter implements all three.
 
 ## Browser routes and compatibility
 
-Canonical pages: `/tenants`, `/tenants/new`, `/my-tenants`, `/t/:tenant/dashboard`,
+Canonical pages: `/tenants`, `/tenants/new`, `/t/:tenant/dashboard`,
 `/t/:tenant/calls`, `/t/:tenant/call-specs`, `/t/:tenant/services`, `/roles`,
 `/roles/new`, `/roles/:id`, `/users`, `/users/new`, `/users/:id`,
 `/users/:id/reset-password`, `/account`, `/platform/services`, `/getting-started`.
@@ -148,7 +159,7 @@ TenantWorkspaceNavigation and all TSX header uses (including Storybook-only page
 
 | Surface / source | Implemented treatment |
 | --- | --- |
-| `/admin`; TenantsPage, TenantSetupOverview | Shared sidebar; Tenants or My tenants; rows open dashboard. Authorized operators reach the dedicated New tenant form. |
+| `/admin`; TenantsPage, TenantSetupOverview | Shared sidebar; Tenants; rows open dashboard. Authorized operators reach the dedicated New tenant form. |
 | TenantCallSpecsPage | Sidebar + Call Specs title; retain New, row editing and call filters. |
 | CallSpecCallsPage (all calls and spec-filtered) | Sidebar + Calls title; keep spec filter, reset, pagination and standalone inspector links. |
 | ScopedServicesApp + TenantSetupPage, tenant | Sidebar + Services; remove repeated Tenant created banner on steady-state service view. Keep inherited/overridden bindings and dialogs. |
@@ -220,7 +231,7 @@ acceptance, or provider-live acceptance.
 
 ## Tenant directory and creation review — October 2026
 
-Tenants and My tenants use the same list presentation: name and relative created
+All permission scopes use the same Tenants list presentation: name and relative created
 age (full timestamp on hover), with the row linking to the dashboard. The October
 14 review removes tenant keys and Setup links from rows; tenant context headings
 also show only the name. Services remains available through permitted sidebar links. Search and pagination call the scoped directory API;

@@ -14,7 +14,7 @@ export type NavigationData = {
   actor: { id: string; kind: "member" | "admin" | "superadmin" };
   scope: "all" | "assigned";
   directoryAccess: boolean;
-  directoryPath: "/tenants" | "/my-tenants";
+  directoryPath: "/tenants";
   landingPath: string;
   platform: NavigationItem[];
   tenant: NavigationTenant | null;
@@ -84,7 +84,7 @@ function parseNavigation(value: unknown, tenantKey?: string): NavigationData {
   if (typeof actor.id !== "string" || !actor.id ||
     (actor.kind !== "member" && actor.kind !== "admin" && actor.kind !== "superadmin") ||
     (data.tenant_scope !== "all" && data.tenant_scope !== "assigned") || typeof data.directory_access !== "boolean") throw invalid();
-  const directoryPath = data.tenant_scope === "all" ? "/tenants" : "/my-tenants";
+  const directoryPath = "/tenants";
   if (data.directory_path !== directoryPath || typeof data.landing_path !== "string" ||
     !(data.landing_path === directoryPath || (data.tenant_scope === "assigned" && /^\/t\/[A-Za-z0-9_-]{16}\/dashboard$/.test(data.landing_path)))) throw invalid();
   const tenant = data.tenant === null ? null : parseTenant(data.tenant);
@@ -120,7 +120,7 @@ function parseCapability(value: unknown): Capability {
 function parseDestination(value: unknown): NavigationItem {
   const data = record(value);
   const destinations: Record<string, NavigationItem> = {
-    tenants: { label: "Tenants", href: "/tenants" }, roles: { label: "Roles", href: "/roles" },
+    roles: { label: "Roles", href: "/roles" },
     users: { label: "Users", href: "/users" }, services: { label: "Services", href: "/platform/services" },
   };
   const destination = typeof data.id === "string" && Object.hasOwn(destinations, data.id) ? destinations[data.id] : undefined;

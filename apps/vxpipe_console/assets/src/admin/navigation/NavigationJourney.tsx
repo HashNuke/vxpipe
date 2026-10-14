@@ -85,7 +85,7 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
     setDirectoryTenants(current => [...current, next]); navigate(`/t/${next.key}/dashboard`);
   }} /> : <main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow tenant creation.")}</main>);
   if (path === "/tenants" || path === "/my-tenants") {
-    const title = path === "/tenants" ? "Tenants" : "My tenants";
+    const title = "Tenants";
     const matching = visible.filter(item => `${item.name} ${item.key}`.toLowerCase().includes(query.toLowerCase()));
     const count = matching.length;
     const pages = Math.ceil(count / directoryPageSize);

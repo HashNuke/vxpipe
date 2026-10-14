@@ -9,7 +9,7 @@ const tenant = {
 };
 const navigation = {
   actor: { id: "user", kind: "member" }, tenant_scope: "assigned", directory_access: true,
-  landing_path: tenant.dashboard_path, directory_path: "/my-tenants", tenant,
+  landing_path: tenant.dashboard_path, directory_path: "/tenants", tenant,
   platform_destinations: [{ id: "users", label: "Users", path: "/users" }],
 };
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });

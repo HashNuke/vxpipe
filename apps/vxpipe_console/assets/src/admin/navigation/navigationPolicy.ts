@@ -16,7 +16,7 @@ export function visibleTenants(role: Role, user: User, tenants: Tenant[]): Tenan
 export function landingPath(role: Role, user: User, tenants: Tenant[]): string {
   if (allTenants(role)) return "/tenants";
   const visible = visibleTenants(role, user, tenants);
-  return visible.length === 1 ? `/t/${encodeURIComponent(visible[0].key)}/dashboard` : "/my-tenants";
+  return visible.length === 1 ? `/t/${encodeURIComponent(visible[0].key)}/dashboard` : "/tenants";
 }
 export function navigationItems(role: Role, user: User, tenant?: Tenant): { tenant: NavigationItem[]; platform: NavigationItem[] } {
   const allowed = (permission: string) => !!role.kind || role.grants.some(grant => grant.permission === permission && grant.scope === "installation");
@@ -29,7 +29,6 @@ export function navigationItems(role: Role, user: User, tenant?: Tenant): { tena
     ].filter(item => tenantAccess(role, user, tenant, item.resource) !== "none")
       .map(item => ({ label: item.label, href: `/t/${encodeURIComponent(tenant.key)}/${item.path}` })) : [],
     platform: [
-      ...(allTenants(role) ? [{ label: "Tenants", href: "/tenants" }] : []),
       ...(role.kind ? [{ label: "Roles", href: "/roles" }] : []),
       ...(allowed("users.read") ? [{ label: "Users", href: "/users" }] : []),
       ...(allowed("platform_services.read") ? [{ label: "Services", href: "/platform/services" }] : []),

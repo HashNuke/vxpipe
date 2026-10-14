@@ -37,6 +37,9 @@ navigation shell as production and suppress the old page headers.
 
 - **Tenants / Directory / Populated**, **Tenants / Dashboard / Single Tenant
   Login**, and **Tenants / My tenants** cover landing and scope states.
+- Open **shared / Sidebar / Settings** for the platform-only rail. From a tenant
+  page, Settings opens the permitted platform pages; Back to tenants returns
+  to the regular tenant directory. Verify the picker and tenant name are absent in Settings.
 - Search/select below Vxpipe; selection opens the tenant dashboard. No reviewer
   instructions are rendered in the rail. Context for a fixture belongs in docs.
 - **Calls / Calls** retains the call spec filter, pagination and new-tab inspector

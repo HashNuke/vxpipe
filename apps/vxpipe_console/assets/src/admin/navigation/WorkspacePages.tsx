@@ -13,7 +13,7 @@ export function WorkspaceDirectory() {
   const { data, session } = useConsoleNavigation();
   const search = useTenantDirectory();
   const tenants = search.result?.tenants ?? [];
-  return <TenantDirectoryView title={data.scope === "all" ? "Tenants" : "My tenants"}
+  return <TenantDirectoryView title="Tenants"
     state={!data.directoryAccess ? "no-access" : search.state} tenants={tenants}
     query={search.query} onQueryChange={search.setQuery} canCreate={!!session && canCreateTenants(session.role)}
     link={(href, children, label) => <Link to={href} aria-label={label}>{children}</Link>}

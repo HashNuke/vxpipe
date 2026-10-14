@@ -14,7 +14,7 @@ test.each([
   expect(screen.getByText("Text-to-speech")).toBeVisible();
   expect(screen.getByText("Speech-to-text")).toBeVisible();
   expect(screen.getByLabelText("API key")).toHaveAttribute("type", "password");
-  expect(screen.getByRole("button", {name: "Test credentials"})).toBeDisabled();
+  expect(screen.getByRole("button", {name: "Test credentials"})).toHaveAttribute("aria-disabled", "true");
   fireEvent.change(screen.getByLabelText("API key"), {target: {value: "synthetic-cartesia"}});
   fireEvent.click(screen.getByRole("button", {name: "Save"}));
   expect(submit).toHaveBeenCalledWith({provider: "cartesia", values: {apiKey: "synthetic-cartesia"}});
@@ -31,7 +31,7 @@ test.each([
   expect(screen.getByText("Speech-to-text")).toBeVisible();
   expect(screen.queryByText("Speech-to-speech")).not.toBeInTheDocument();
   expect(screen.getByLabelText("API key")).toHaveAttribute("type", "password");
-  expect(screen.getByRole("button", {name: "Test credentials"})).toBeDisabled();
+  expect(screen.getByRole("button", {name: "Test credentials"})).toHaveAttribute("aria-disabled", "true");
   fireEvent.change(screen.getByLabelText("API key"), {target: {value: "synthetic-elevenlabs"}});
   fireEvent.click(screen.getByRole("button", {name: "Save"}));
   expect(submit).toHaveBeenCalledWith({provider: "elevenlabs", values: {apiKey: "synthetic-elevenlabs"}});

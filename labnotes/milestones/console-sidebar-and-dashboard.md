@@ -515,3 +515,39 @@ storage and Console navigation.
 - [x] Remove the schema field/index and update all projections/lookups.
 - [x] Verify malformed IDs, tenant isolation, existing records and API workflows; migration preservation check and 279 persistence tests pass.
 - [x] Run root completion checks and commit the backend checkpoint. Static gates passed; full run exercised 3,791 tests. Fixed three sample-installer failures and reran all 303 Console tests successfully. One WebRTC timeout passed on the 20-test transfer-group rerun.
+
+### Separate platform Settings from tenant workspaces
+
+User request: platform pages need a different sidebar without tenant context,
+only platform links and a back button at the top. The regular sidebar should
+link to these pages through “Settings”.
+
+Design review: reuse the existing shell and drawer, selecting workspace or
+Settings navigation by route. Preserve server-projected permissions and URLs.
+Back to tenants always links to /tenants in the regular layout. Settings
+does not remember the previous tenant or page.
+
+- [x] Replace the regular sidebar's platform group with a permitted Settings link.
+- [x] Give platform pages a dedicated sidebar and mobile header without tenant context.
+- [x] Add Back to tenants with a fixed directory destination and permission-aware navigation tests.
+- [x] Add a Settings sidebar story and inspect desktop/mobile rendering.
+- [x] Complete frontend and root checks: 750 frontend tests; 43 focused tests after the fixed back-destination correction; TypeScript, ESLint, CSS build and all five root gates passed (3,801 backend tests).
+
+Earlier iteration (superseded by the shared directory below): removed the canonical
+/my-tenants → /tenants redirect for
+all-tenant users too. Post-login routing remains unchanged. Regression confirmed
+302 before the fix; all 312 Console tests and static gates passed afterward.
+
+### Shared tenant directory outside Settings
+
+User request: “move tenants outside the settings” and “/tenants can show tenants
+depending on what access the user has.”
+
+Design review: place Tenants above tenant-specific navigation; keep Roles, Users
+and Platform Services in Settings. Reuse backend-scoped directory search, preserve
+the single-tenant dashboard landing, and redirect legacy /my-tenants bookmarks.
+
+- [x] Use /tenants for every permission scope and remove Tenants from Settings.
+- [x] Add the regular sidebar link and fixed Settings back destination.
+- [x] Update scoped navigation contracts and regression tests.
+- [x] Finish browser and automated verification: desktop/mobile and assigned-tenant directory inspected; 750 frontend tests, TypeScript, ESLint, CSS build and static root gates passed. Full umbrella run: 3,802 tests with one unrelated speech deadline timeout; all 14 deadline tests passed on focused rerun. All 312 Console tests passed.

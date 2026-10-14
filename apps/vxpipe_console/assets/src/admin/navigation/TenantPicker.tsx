@@ -28,7 +28,7 @@ export function TenantPicker({ tenants, selected, directoryPath, onNavigate, sta
         {onMore && state === "ready" ? <button type="button" className="navigation-picker-footer" onClick={onMore}>Load more tenants</button> : null}
         </Command.List>
       </Command>
-      <a className="navigation-picker-footer" href={realLinks ? directoryPath : `#${directoryPath}`} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); changeOpen(false); onNavigate(directoryPath); }}>{directoryPath === "/tenants" ? "View all tenants" : "View my tenants"}</a>
+      <a className="navigation-picker-footer" href={realLinks ? directoryPath : `#${directoryPath}`} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); changeOpen(false); onNavigate(directoryPath); }}>View tenants</a>
     </Popover.Content>
   </Popover.Root>;
 }

@@ -41,7 +41,7 @@ export function ConsoleNavigation({ csrfToken, fetchImpl, onSessionExpired = exp
       setResult({ key: selectedKey, data });
       if (tenantKey) setSelection(tenantKey);
       if (location.pathname === "/" || location.pathname === "/admin") navigate(data.landingPath, { replace: true });
-      else if (["/tenants", "/my-tenants"].includes(location.pathname) && location.pathname !== data.directoryPath) navigate(data.directoryPath, { replace: true });
+      else if (location.pathname === "/my-tenants") navigate("/tenants" + location.search, { replace: true });
     }).catch(async error => {
       if (controller.signal.aborted) return;
       setResult(undefined);
@@ -54,7 +54,7 @@ export function ConsoleNavigation({ csrfToken, fetchImpl, onSessionExpired = exp
       } else { fail(error); setUnavailable(true); }
     });
     return () => controller.abort();
-  }, [api, selectedKey, tenantKey, location.pathname, revision, navigate, fail]);
+  }, [api, selectedKey, tenantKey, location.pathname, location.search, revision, navigate, fail]);
   useEffect(() => {
     let active = true;
     setSessionUnavailable(false);
@@ -91,7 +91,7 @@ function ServerTenantPicker({ api, data, onNavigate, onFailure }: {
   const [open, setOpen] = useState(false);
   const search = useTenantSearch(api, data.directoryAccess && open, onFailure, data);
   return <TenantPicker onOpenChange={setOpen} realLinks tenants={search.tenants.map(tenant => ({ ...tenant, id: tenant.key }))}
-    selected={data.tenant ? { ...data.tenant, id: data.tenant.key } : undefined} directoryPath={data.directoryPath}
+    selected={data.tenant ? { ...data.tenant, id: data.tenant.key } : undefined} directoryPath="/tenants"
     onNavigate={onNavigate} state={search.state} onRetry={search.retry} query={search.query} onQueryChange={search.setQuery}
     onMore={search.hasMore ? search.more : undefined} />;
 }

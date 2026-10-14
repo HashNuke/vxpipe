@@ -116,7 +116,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     response = conn |> recycle() |> get("/admin/api/navigation?tenant=#{@key}")
     data = json_response(response, 200)
     assert data["landing_path"] == "/t/#{@key}/dashboard"
-    assert data["directory_path"] == "/my-tenants"
+    assert data["directory_path"] == "/tenants"
     assert data["tenant_scope"] == "assigned"
     assert data["directory_access"]
 
@@ -143,9 +143,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     assert data["landing_path"] == "/tenants"
     assert data["tenant_scope"] == "all"
 
-    assert data["platform_destinations"] == [
-             %{"id" => "tenants", "label" => "Tenants", "path" => "/tenants"}
-           ]
+    assert data["platform_destinations"] == []
 
     refute_received {:candidates, _, _}
   end
@@ -158,7 +156,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
            |> recycle()
            |> get("/admin/api/navigation")
            |> json_response(200)
-           |> Map.fetch!("landing_path") == "/my-tenants"
+           |> Map.fetch!("landing_path") == "/tenants"
 
     configure([tenant(@key)])
 
@@ -174,7 +172,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
            |> recycle()
            |> get("/admin/api/navigation")
            |> json_response(200)
-           |> Map.fetch!("landing_path") == "/my-tenants"
+           |> Map.fetch!("landing_path") == "/tenants"
 
     configure({:error, :repository_unavailable})
     assert conn |> recycle() |> get("/admin/api/navigation") |> json_response(503)
@@ -185,7 +183,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     conn = login()
     data = conn |> recycle() |> get("/admin/api/navigation") |> json_response(200)
     refute data["directory_access"]
-    assert data["landing_path"] == "/my-tenants"
+    assert data["landing_path"] == "/tenants"
     refute_received {:candidates, _, _}
     assert conn |> recycle() |> get("/admin/api/tenants") |> json_response(403)
 
@@ -292,12 +290,18 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     member(["calls.read"])
     assert conn |> recycle() |> get("/") |> redirected_to() == "/t/#{@key}/dashboard"
     member(["calls.read"], %{@key => :read, @other => :read})
-    assert conn |> recycle() |> get("/") |> redirected_to() == "/my-tenants"
+    assert conn |> recycle() |> get("/") |> redirected_to() == "/tenants"
     member([])
-    assert conn |> recycle() |> get("/") |> redirected_to() == "/my-tenants"
+    assert conn |> recycle() |> get("/") |> redirected_to() == "/tenants"
     member(["calls.read"])
     configure({:error, :repository_unavailable})
     assert conn |> recycle() |> get("/") |> html_response(503) =~ "Try again"
+  end
+
+  test "all-tenant users can return to the regular directory without a settings redirect" do
+    conn = login()
+    assert conn |> recycle() |> get("/tenants") |> html_response(200) =~ "/assets/admin.js"
+    assert conn |> recycle() |> get("/") |> redirected_to() == "/tenants"
   end
 
   test "canonical pages preserve page permissions and conceal foreign dashboards" do
@@ -305,7 +309,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     conn = login()
 
     for path <- [
-          "/my-tenants",
+          "/tenants",
           "/account",
           "/t/#{@key}/dashboard",
           "/t/#{@key}/calls",
@@ -314,7 +318,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
       assert conn |> recycle() |> get(path) |> html_response(200) =~ "/assets/admin.js"
     end
 
-    assert conn |> recycle() |> get("/tenants") |> redirected_to() == "/my-tenants"
+    assert conn |> recycle() |> get("/my-tenants?q=Acme") |> redirected_to() == "/tenants?q=Acme"
     assert conn |> recycle() |> get("/t/#{@other}/dashboard") |> response(404)
 
     for path <- ["/users", "/roles", "/platform/services", "/t/#{@key}/call-specs"] do

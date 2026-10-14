@@ -19,7 +19,7 @@ function fetcher({ directoryAccess = true, callsError = false } = {}) {
     const selected = url.searchParams.get("tenant");
     if (url.pathname === "/auth/api/status") return response({ status: "complete" });
     if (url.pathname === "/admin/api/session") return response({ user, role });
-    if (url.pathname === "/admin/api/navigation") return response({ actor: { id: "user", kind: "member" }, tenant_scope: "assigned", directory_access: directoryAccess, landing_path: "/my-tenants", directory_path: "/my-tenants", platform_destinations: [], tenant: selected ? tenant(selected) : null });
+    if (url.pathname === "/admin/api/navigation") return response({ actor: { id: "user", kind: "member" }, tenant_scope: "assigned", directory_access: directoryAccess, landing_path: "/tenants", directory_path: "/tenants", platform_destinations: [], tenant: selected ? tenant(selected) : null });
     if (url.pathname === "/admin/api/tenants") {
       const keys = url.searchParams.get("q")?.toLowerCase().includes("beta") ? [other] : [key, other];
       return response({ tenants: keys.map(key => ({ ...tenant(key), created_at: "2026-10-13T00:00:00Z" })), pagination: { page: 1, page_size: 25, total: keys.length, total_pages: 1, has_next: false } });
@@ -57,12 +57,13 @@ test("remote tenant search switches from a resource page to the chosen dashboard
   expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeVisible();
 });
 
-test("no-access directory renders its empty state without fetching tenants", async () => {
-  window.history.replaceState({}, "", "/my-tenants");
+test("legacy directory redirects and renders no-access without fetching tenants", async () => {
+  window.history.replaceState({}, "", "/my-tenants?q=Acme");
   const fetchImpl = fetcher({ directoryAccess: false });
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
-  expect(await screen.findByRole("heading", { name: "My tenants" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Tenants" })).toBeVisible();
   expect(screen.getByText("No tenant access")).toBeVisible();
+  await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/tenants?q=Acme"));
   expect(fetchImpl.mock.calls.some(([input]) => new URL(String(input), "http://localhost").pathname === "/admin/api/tenants")).toBe(false);
 });
 
@@ -116,7 +117,7 @@ test("a revoked selected tenant clears old workspace data and resolves a fresh l
   let revoked = false;
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     if (revoked && String(input).startsWith("/admin/api/navigation?")) return response({}, 404);
-    if (revoked && String(input) === "/admin/api/navigation") return response({ actor: { id: "user", kind: "member" }, tenant_scope: "assigned", directory_access: false, landing_path: "/my-tenants", directory_path: "/my-tenants", platform_destinations: [], tenant: null });
+    if (revoked && String(input) === "/admin/api/navigation") return response({ actor: { id: "user", kind: "member" }, tenant_scope: "assigned", directory_access: false, landing_path: "/tenants", directory_path: "/tenants", platform_destinations: [], tenant: null });
     return base(input);
   });
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
@@ -124,7 +125,7 @@ test("a revoked selected tenant clears old workspace data and resolves a fresh l
   revoked = true;
   fireEvent(window, new Event("focus"));
   expect(await screen.findByText("No tenant access")).toBeVisible();
-  expect(window.location.pathname).toBe("/my-tenants");
+  expect(window.location.pathname).toBe("/tenants");
   expect(screen.queryByText("Acme")).not.toBeInTheDocument();
 });
 
@@ -176,7 +177,7 @@ test("revoking a resource read hides the open resource even when other tenant ac
 });
 
 test("refreshing authority also refreshes an already open tenant directory", async () => {
-  window.history.replaceState({}, "", "/my-tenants");
+  window.history.replaceState({}, "", "/tenants");
   let revoked = false;
   const base = fetcher();
   const fetchImpl = vi.fn((input: RequestInfo | URL) => revoked && String(input).startsWith("/admin/api/tenants?")
@@ -206,7 +207,7 @@ test("session expiry clears private navigation and account identity", async () =
 });
 
 test("tenant creators can create a tenant and land on its dashboard", async () => {
-  window.history.replaceState({}, "", "/my-tenants");
+  window.history.replaceState({}, "", "/tenants");
   const base = fetcher();
   const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     if (String(input) === "/admin/api/session") return response({ user, role: { ...role, grants: [...role.grants, { permission: "tenants.write", scope: "installation" }] } });
@@ -229,7 +230,7 @@ test("readers cannot open the tenant creation form", async () => {
 });
 
 test("tenant directory searches remotely and shows creation dates", async () => {
-  window.history.replaceState({}, "", "/my-tenants");
+  window.history.replaceState({}, "", "/tenants");
   const fetchImpl = fetcher();
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
   await screen.findByRole("link", { name: "Open Acme" });

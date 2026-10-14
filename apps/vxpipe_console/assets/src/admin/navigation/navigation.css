@@ -101,3 +101,9 @@
 .navigation-create { flex-shrink: 0; }
 .navigation-create a { display: inline-flex; align-items: center; min-height: 36px; padding: 8px 12px; border-radius: 6px; background: var(--primary); color: var(--primary-foreground); font-size: 13px; font-weight: 600; text-decoration: none; }
 .navigation-create a:hover { opacity: .9; }
+
+.navigation-back { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 12px; margin-bottom: 16px; border-radius: 4px; color: var(--admin-muted); text-decoration: none; font-size: 13px; }
+.navigation-back:hover { color: var(--admin-ink); background: var(--admin-soft); }
+.navigation-settings-title { padding: 0 12px; font-size: 21px; font-weight: 650; letter-spacing: -.025em; }
+.navigation-settings-groups { margin-top: 24px; }
+.navigation-drawer .navigation-back { margin-right: 32px; }
