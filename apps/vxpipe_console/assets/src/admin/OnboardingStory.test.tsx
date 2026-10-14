@@ -590,3 +590,12 @@ test("service picker prompts for a selection until a service is chosen", () => {
   fireEvent.change(screen.getByRole("combobox", { name: "Service" }), { target: { value: "" } });
   expect(screen.getByText(message)).toBeInTheDocument();
 });
+
+test("closing an empty service picker shows guidance and a way to connect", () => {
+  render(<OnboardingStory scenario="service-picker" theme="dark" />);
+  fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
+  expect(screen.getByRole("heading", { name: "No services connected" })).toBeVisible();
+  expect(screen.getByText("Connect an AI or telephony service to use it in your calls.")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
+  expect(screen.getByRole("dialog", { name: "Connect a service" })).toBeVisible();
+});

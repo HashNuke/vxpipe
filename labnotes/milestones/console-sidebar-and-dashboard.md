@@ -464,3 +464,14 @@ typography redesign prompted solely by a stylistic hook warning.
 Design review: preserve the current service card and modal structure; provide
 compact status indicators with hover and keyboard explanations. Credential
 validation and save permissions remain enforced.
+
+### Service tooltip alignment and empty page
+
+- [x] Review the error tooltip arrow and fix its alignment; preserve Radix/Floating UI positioning.
+- [x] Show guidance on the Services page when no services are connected and the picker is closed.
+- [x] Preserve permission-gated Connect action and modal focus restoration.
+- [x] Verify tooltips and the empty page on desktop/mobile, with focused frontend tests.
+- [x] Complete root checks and commit: all static gates and 3,790 backend tests passed.
+
+Design review: use the native Radix arrow geometry and existing service colors;
+keep the Connect action stable while adding an empty-state panel below it.

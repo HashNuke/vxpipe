@@ -132,9 +132,18 @@ export function TenantSetupPage({
             to use this tenant’s own credentials.
           </p>
         ) : null}
-        <div aria-label="Services" className="setup-provider-grid">
-          {connected.map(card)}
-        </div>
+        {connected.length === 0 ? (
+          <div className="setup-services-empty">
+            <h2>No services connected</h2>
+            <p>{readOnly
+              ? "Ask an administrator to connect an AI or telephony service for your calls."
+              : "Connect an AI or telephony service to use it in your calls."}</p>
+          </div>
+        ) : (
+          <div aria-label="Services" className="setup-provider-grid">
+            {connected.map(card)}
+          </div>
+        )}
       </section>
       {!platform && presentation === "setup" && onApiKeys ? (
         <footer className="setup-footer setup-services-footer">
