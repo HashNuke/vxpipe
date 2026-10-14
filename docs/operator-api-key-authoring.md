@@ -328,16 +328,15 @@ before a tenant exists, without keeping a separate frontend model inventory.
 
 ## Server-owned identity correction (2026-10-09)
 
-The user clarified that public identity is server-owned. Keep private numeric SQL
-keys and public UUIDs separate; do not expose an identity assignment/rename field
+Identity is server-owned; do not expose an identity assignment/rename field
 in the API or editor. The shared principal-aware authoring boundary now requires
 an existing revision in the same tenant when an ID is supplied. This applies to
 operator keys, tenant admin keys, Console sessions and the trusted save CLI.
 
 The former PUT upsert behavior was rejected because it let callers allocate public
 IDs through a URL. Merely validating UUID syntax would still allow callers to
-choose identity. Replacing public UUIDs with database primary keys was also
-rejected by the user's clarification. POST remains the creation operation; PUT is
+choose identity. On 2026-10-14 the user approved using database primary keys
+for call-spec references; see [call-spec identity](call-spec-identity.md). POST remains the creation operation; PUT is
 append-only. The CLI's `--call-spec-id` flag likewise locates an existing spec.
 
 This is an intentional API behavior change: clients using PUT to create must use

@@ -37,6 +37,40 @@ defmodule Vxpipe.Persistence.CallSpecStoreTest do
     [tenant: tenant, options: options]
   end
 
+  test "call spec references are the database primary key", %{tenant: tenant, options: options} do
+    assert {:ok, draft} = CallSpecs.save(tenant.key, call_spec_input(), options)
+    assert {id, ""} = Integer.parse(draft.call_spec_id)
+    stored = Repo.get!(Vxpipe.Persistence.Schema.CallSpec, id)
+    assert stored.tenant_id == Repo.get_by!(Vxpipe.Persistence.Schema.Tenant, key: tenant.key).id
+    refute :public_id in Vxpipe.Persistence.Schema.CallSpec.__schema__(:fields)
+    assert {:ok, fetched} = CallSpecs.fetch(tenant.key, Integer.to_string(id), 1, options)
+    assert fetched.call_spec_id == draft.call_spec_id
+
+    for invalid <- ["not-an-id", "0", "-1", "1.5", "9223372036854775808"] do
+      assert {:error, :not_found} = CallSpecs.fetch(tenant.key, invalid, 1, options)
+      assert {:error, :not_found} = CallSpecs.publish(tenant.key, invalid, 1, options)
+    end
+
+    assert {:ok, other, _key} =
+             Administration.bootstrap_tenant(
+               "Other tenant",
+               [:admin],
+               Keyword.put(options, :tenant_key_generator, fn -> "BBBBBBBBBBBBBBBB" end)
+             )
+
+    assert {:error, :not_found} = CallSpecs.fetch(other.key, draft.call_spec_id, 1, options)
+    assert {:error, :not_found} = CallSpecs.publish(other.key, draft.call_spec_id, 1, options)
+
+    assert {:error, :not_found} =
+             CallSpecs.save(
+               other.key,
+               call_spec_input(),
+               Keyword.put(options, :call_spec_id, draft.call_spec_id)
+             )
+
+    assert Repo.aggregate(Vxpipe.Persistence.Schema.CallSpec, :count) == 1
+  end
+
   test "persists immutable revisions and only resolves the published route", %{
     tenant: tenant,
     options: options

@@ -9,6 +9,7 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
         tenants: %{},
         keys: %{},
         call_specs: %{},
+        next_call_spec_id: 1,
         published_specs: %{},
         routes: %{},
         telephony_routes: [],
@@ -87,6 +88,13 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
         :error ->
           {{:error, :not_found}, state}
       end
+    end)
+  end
+
+  def allocate_id(agent) do
+    Agent.get_and_update(agent, fn state ->
+      {{:ok, Integer.to_string(state.next_call_spec_id)},
+       %{state | next_call_spec_id: state.next_call_spec_id + 1}}
     end)
   end
 

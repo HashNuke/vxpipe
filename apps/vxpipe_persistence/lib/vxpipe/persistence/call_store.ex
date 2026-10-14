@@ -5,6 +5,7 @@ defmodule Vxpipe.Persistence.CallStore do
 
   import Ecto.Query
 
+  alias Vxpipe.Persistence.CallSpecId
   alias Ecto.Multi
   alias Vxpipe.Calls.{AdmissionClaim, JoinToken, TelephonyAdmissionClaim}
   alias Vxpipe.Persistence.{PreparedCallRecord, TelephonyCallStore}
@@ -234,7 +235,7 @@ defmodule Vxpipe.Persistence.CallStore do
         join: tenant in Tenant,
         on: tenant.id == call_spec.tenant_id,
         where:
-          tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id and
+          tenant.key == ^tenant_key and call_spec.id == ^CallSpecId.database_id(call_spec_id) and
             revision.revision == ^revision_number,
         select: {tenant, call_spec, revision}
       )

@@ -145,7 +145,7 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       assert [%{"participant_ref" => "caller", "published" => false}] = first["routes"]
       assert Plug.Conn.get_resp_header(created, "cache-control") == ["private, no-store"]
       id = first["call_spec_id"]
-      assert id =~ ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
+      assert id =~ ~r/\A[1-9][0-9]*\z/
 
       published = write(auth, :post, path <> "/#{id}/revisions/1/publish", %{})
       assert json_response(published, 200)["call_spec"]["published"]

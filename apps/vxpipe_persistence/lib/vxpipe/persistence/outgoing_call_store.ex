@@ -3,6 +3,7 @@ defmodule Vxpipe.Persistence.OutgoingCallStore do
 
   import Ecto.Query
 
+  alias Vxpipe.Persistence.CallSpecId
   alias Ecto.Multi
   alias Vxpipe.Persistence.PreparedCallRecord
   alias Vxpipe.Persistence.Schema.Call
@@ -108,7 +109,8 @@ defmodule Vxpipe.Persistence.OutgoingCallStore do
         join: specification in assoc(revision, :call_spec),
         join: tenant in assoc(specification, :tenant),
         where:
-          tenant.key == ^call.tenant_key and specification.public_id == ^call.call_spec_id and
+          tenant.key == ^call.tenant_key and
+            specification.id == ^CallSpecId.database_id(call.call_spec_id) and
             revision.revision == ^call.call_spec_revision,
         select: {tenant, specification, revision}
       )

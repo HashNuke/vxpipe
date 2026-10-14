@@ -32,9 +32,8 @@ defmodule Vxpipe.Calls.CallSpecs do
            Repositories.call(credential_repository, :fetch_tenant, [tenant_key]),
          {:ok, call_spec_repository} <-
            Repositories.fetch(options, :call_spec_repository),
-         {:ok, source} <- json_safe(source) do
-      call_spec_id = Keyword.get_lazy(options, :call_spec_id, fn -> uuid(options) end)
-
+         {:ok, source} <- json_safe(source),
+         {:ok, call_spec_id} <- call_spec_id(call_spec_repository, options) do
       attempt_save(
         call_spec_repository,
         tenant_key,
@@ -107,6 +106,13 @@ defmodule Vxpipe.Calls.CallSpecs do
     else
       false -> {:error, :invalid_telephony_route}
       {:error, _reason} = error -> error
+    end
+  end
+
+  defp call_spec_id(repository, options) do
+    case Keyword.fetch(options, :call_spec_id) do
+      {:ok, id} -> {:ok, id}
+      :error -> Repositories.call(repository, :allocate_id, [])
     end
   end
 

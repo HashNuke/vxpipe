@@ -381,7 +381,7 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStoreTest do
 
     call_spec =
       %CallSpec{}
-      |> CallSpec.changeset(%{tenant_id: tenant.id, public_id: "publication-call-spec"})
+      |> CallSpec.changeset(%{tenant_id: tenant.id})
       |> Repo.insert!()
 
     revision =

@@ -1761,7 +1761,9 @@ The implemented control-plane baseline follows this boundary. `vxpipe_calls`
 defines credential and call spec/deployment repository ports, while
 `vxpipe_persistence` supplies the optional PostgreSQL adapter. Its tenant/API-key,
 immutable call spec revision, and participant-route tables use private SQL keys;
-public tenant keys, API-key IDs, call spec IDs, and route UUIDs remain separate.
+tenant keys, API-key IDs and route UUIDs remain separate. Call-spec references
+use the table primary key serialized as a decimal string; see
+[call-spec identity](call-spec-identity.md).
 Draft routes resolve only after explicit publication. See
 [tenant control-plane operations](tenant-control-plane.md) for migration and
 trusted bootstrap commands.

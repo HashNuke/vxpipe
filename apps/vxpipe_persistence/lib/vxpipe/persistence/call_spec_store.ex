@@ -5,12 +5,21 @@ defmodule Vxpipe.Persistence.CallSpecStore do
 
   import Ecto.Query
 
+  alias Vxpipe.Persistence.CallSpecId
   alias Ecto.Multi
   alias Vxpipe.Calls.{CallSpecRevision, ParticipantRoute, TelephonyRoute}
   alias Vxpipe.Persistence.Schema.{CallSpec, Tenant}
   alias Vxpipe.Persistence.Schema.CallSpecRevision, as: StoredRevision
   alias Vxpipe.Persistence.Schema.ParticipantRoute, as: StoredRoute
   alias Vxpipe.Persistence.Schema.TelephonyRoute, as: StoredTelephonyRoute
+
+  @impl true
+  def allocate_id(repo) do
+    case repo.query("SELECT nextval(pg_get_serial_sequence('call_specs', 'id'))") do
+      {:ok, %{rows: [[id]]}} -> {:ok, Integer.to_string(id)}
+      {:error, _reason} -> {:error, :call_spec_id_unavailable}
+    end
+  end
 
   @impl true
   def list_number_assignments(repo, tenant_key, numbers) do
@@ -25,7 +34,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
               s.published_revision_id == v.id,
           select: %{
             number: r.number,
-            call_spec_id: s.public_id,
+            call_spec_id: type(s.id, :string),
             name: fragment("?->>'name'", v.source)
           }
         )
@@ -40,7 +49,8 @@ defmodule Vxpipe.Persistence.CallSpecStore do
       from(revision in StoredRevision,
         join: call_spec in assoc(revision, :call_spec),
         join: tenant in assoc(call_spec, :tenant),
-        where: tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id,
+        where:
+          tenant.key == ^tenant_key and call_spec.id == ^CallSpecId.database_id(call_spec_id),
         select: max(revision.revision)
       )
 
@@ -107,7 +117,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
         join: call_spec in assoc(revision, :call_spec),
         join: tenant in assoc(call_spec, :tenant),
         where:
-          tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id and
+          tenant.key == ^tenant_key and call_spec.id == ^CallSpecId.database_id(call_spec_id) and
             revision.revision == ^revision_number,
         preload: [:participant_routes, :telephony_routes],
         select: {call_spec, revision}
@@ -136,7 +146,8 @@ defmodule Vxpipe.Persistence.CallSpecStore do
         join: tenant in assoc(call_spec, :tenant),
         left_join: revision in StoredRevision,
         on: revision.id == call_spec.published_revision_id,
-        where: tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id,
+        where:
+          tenant.key == ^tenant_key and call_spec.id == ^CallSpecId.database_id(call_spec_id),
         select: {call_spec, revision}
       )
 
@@ -245,7 +256,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
         where:
           tenant.key == ^tenant_key and route.public_id == ^route_key and
             not is_nil(route.published_at) and call_spec.published_revision_id == revision.id,
-        select: {route, tenant.key, call_spec.public_id, revision.revision}
+        select: {route, tenant.key, type(call_spec.id, :string), revision.revision}
       )
 
     case repo.one(query) do
@@ -267,7 +278,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
         where:
           route.service == ^service and route.number == ^number and
             not is_nil(route.published_at) and call_spec.published_revision_id == revision.id,
-        select: {route, tenant.key, call_spec.public_id, revision.revision},
+        select: {route, tenant.key, type(call_spec.id, :string), revision.revision},
         limit: 2
       )
 
@@ -290,19 +301,20 @@ defmodule Vxpipe.Persistence.CallSpecStore do
   end
 
   defp fetch_or_insert_call_spec(repo, tenant, call_spec_id) do
-    changeset =
-      CallSpec.changeset(%CallSpec{}, %{
-        tenant_id: tenant.id,
-        public_id: call_spec_id
-      })
+    id = CallSpecId.database_id(call_spec_id)
 
-    {:ok, _call_spec} =
-      repo.insert(changeset,
-        on_conflict: :nothing,
-        conflict_target: [:tenant_id, :public_id]
-      )
+    if id == 0 do
+      {:error, :not_found}
+    else
+      changeset = CallSpec.changeset(%CallSpec{id: id}, %{tenant_id: tenant.id})
 
-    {:ok, repo.get_by!(CallSpec, tenant_id: tenant.id, public_id: call_spec_id)}
+      with {:ok, _stored} <- repo.insert(changeset, on_conflict: :nothing, conflict_target: [:id]) do
+        case repo.get_by(CallSpec, tenant_id: tenant.id, id: id) do
+          nil -> {:error, :not_found}
+          stored -> {:ok, stored}
+        end
+      end
+    end
   end
 
   defp insert_routes(repo, tenant, revision, routes) do
@@ -367,7 +379,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
         join: call_spec in assoc(revision, :call_spec),
         join: tenant in assoc(call_spec, :tenant),
         where:
-          tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id and
+          tenant.key == ^tenant_key and call_spec.id == ^CallSpecId.database_id(call_spec_id) and
             revision.revision == ^revision_number,
         select: {call_spec, revision}
       )
@@ -397,7 +409,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
 
     %CallSpecRevision{
       tenant_key: tenant_key,
-      call_spec_id: call_spec.public_id,
+      call_spec_id: Integer.to_string(call_spec.id),
       revision: revision.revision,
       schema_version: revision.schema_version,
       source: revision.source,
@@ -406,11 +418,13 @@ defmodule Vxpipe.Persistence.CallSpecStore do
       validation_errors: revision.validation_errors,
       routes:
         routes
-        |> Enum.map(&to_route(&1, tenant_key, call_spec.public_id, revision.revision))
+        |> Enum.map(&to_route(&1, tenant_key, Integer.to_string(call_spec.id), revision.revision))
         |> Enum.sort_by(& &1.participant_ref),
       telephony_routes:
         telephony_routes
-        |> Enum.map(&to_telephony_route(&1, tenant_key, call_spec.public_id, revision.revision))
+        |> Enum.map(
+          &to_telephony_route(&1, tenant_key, Integer.to_string(call_spec.id), revision.revision)
+        )
         |> Enum.sort_by(& &1.participant_ref),
       published_at: if(published?, do: call_spec.published_at),
       inserted_at: revision.inserted_at

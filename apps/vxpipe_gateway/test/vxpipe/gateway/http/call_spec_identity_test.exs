@@ -33,7 +33,7 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecIdentityTest do
   end
 
   test "PUT cannot allocate a client-selected ID, including a well-formed UUID", ctx do
-    for id <- ["new", "11111111-1111-4111-8111-111111111111"] do
+    for id <- ["new", "999999999", "11111111-1111-4111-8111-111111111111"] do
       response = request(ctx, :put, ctx.path <> "/" <> id, %{"source" => source()})
       assert response.status == 404
       assert JSON.decode!(response.resp_body)["error"]["code"] == "call_spec_not_found"
@@ -56,7 +56,7 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecIdentityTest do
     assert created.status == 201
     first = JSON.decode!(created.resp_body)["call_spec"]
     id = first["call_spec_id"]
-    assert id =~ ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
+    assert id =~ ~r/\A[1-9][0-9]*\z/
 
     updated =
       request(ctx, :put, ctx.path <> "/" <> id, %{

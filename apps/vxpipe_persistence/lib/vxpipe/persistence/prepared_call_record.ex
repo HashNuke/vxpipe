@@ -43,7 +43,7 @@ defmodule Vxpipe.Persistence.PreparedCallRecord do
        %PreparedCall{
          id: call.public_id,
          tenant_key: tenant.key,
-         call_spec_id: call_spec.public_id,
+         call_spec_id: Integer.to_string(call_spec.id),
          call_spec_revision: revision.revision,
          schema_version: revision.schema_version,
          participant_routes: call.participant_routes,

@@ -263,9 +263,8 @@ Reads resolve the latest immutable revision or an explicit revision, and return
 source plus the latest and currently published revision numbers. Appending to a
 spec first checks that the ID exists in the requested tenant; shared principal-aware
 authoring enforces the same rule for Gateway and CLI writes. Creation assigns a
-public UUID internally and request bodies cannot assign or rename identity. A foreign or missing
-ID returns 404. Publishing addresses an explicit saved revision. No new repository
-protocol or database schema is needed.
+database primary key internally (serialized as a decimal string) and request bodies cannot assign or rename identity. A foreign or missing
+ID returns 404. Publishing addresses an explicit saved revision. See [call-spec identity](call-spec-identity.md) for allocation and migration details.
 
 Editor lookups contain effective credential names, tenant telephony application
 names and configured MCP integration names. MCP names come from the configured

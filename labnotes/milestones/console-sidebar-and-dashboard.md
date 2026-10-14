@@ -500,3 +500,18 @@ readable with horizontal scrolling on small screens.
 
 Design review: reuse the existing workspace icon and navigation typography;
 API Keys is the parent of key creation. Keep one tenant context per view.
+
+### Use the call-spec primary key for API references
+
+User request: “we dont need public ID for API references. internal primary key is
+what we should use. simplify. because this is over-engineering.”
+
+Design review: [identity decision](../../docs/call-spec-identity.md) specifies the
+wire format, tenant authorization, allocation and breaking migration. Relational
+links remain intact; no alias layer. Prerequisite: existing revision/authoring
+storage and Console navigation.
+
+- [x] Replace UUID allocation with repository primary-key allocation.
+- [x] Remove the schema field/index and update all projections/lookups.
+- [x] Verify malformed IDs, tenant isolation, existing records and API workflows; migration preservation check and 279 persistence tests pass.
+- [x] Run root completion checks and commit the backend checkpoint. Static gates passed; full run exercised 3,791 tests. Fixed three sample-installer failures and reran all 303 Console tests successfully. One WebRTC timeout passed on the 20-test transfer-group rerun.

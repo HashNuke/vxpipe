@@ -9,6 +9,8 @@ defmodule Vxpipe.Calls.CallSpecRepository do
               {:ok, [map()]} | {:error, term()}
   @optional_callbacks list_number_assignments: 3
 
+  @callback allocate_id(context()) :: {:ok, String.t()} | {:error, term()}
+
   @callback next_revision(context(), String.t(), String.t()) ::
               {:ok, pos_integer()} | {:error, term()}
   @callback insert_revision(

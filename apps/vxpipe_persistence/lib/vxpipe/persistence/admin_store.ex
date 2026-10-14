@@ -5,6 +5,7 @@ defmodule Vxpipe.Persistence.AdminStore do
 
   import Ecto.Query
 
+  alias Vxpipe.Persistence.CallSpecId
   alias Vxpipe.Calls.{CallDirectorySummary, CallSpecFilter, CallSpecSummary}
   alias Vxpipe.Calls.ProviderCredential, as: DomainProviderCredential
   alias Vxpipe.Calls.TelephonyService, as: DomainTelephonyService
@@ -133,12 +134,12 @@ defmodule Vxpipe.Persistence.AdminStore do
         left_join: calls in subquery(call_counts),
         on: calls.call_spec_id == call_spec.id,
         where: tenant.key == ^tenant_key,
-        order_by: [desc: latest.inserted_at, desc: call_spec.public_id],
+        order_by: [desc: latest.inserted_at, desc: call_spec.id],
         limit: ^limit,
         offset: ^offset,
         select: %{
           tenant_id: call_spec.tenant_id,
-          id: call_spec.public_id,
+          id: type(call_spec.id, :string),
           name: fragment("?->>'name'", latest.source),
           latest_revision: latest.revision,
           published_revision: published.revision,
@@ -211,7 +212,7 @@ defmodule Vxpipe.Persistence.AdminStore do
         order_by: [desc: call.created_at, desc: call.public_id],
         limit: ^limit,
         select:
-          {call.public_id, call_spec.public_id, fragment("?->>'name'", revision.source),
+          {call.public_id, type(call_spec.id, :string), fragment("?->>'name'", revision.source),
            revision.revision, call.state, call.created_at, call.started_at, call.ended_at,
            call.terminal_reason, publication.completeness}
       )
@@ -234,7 +235,7 @@ defmodule Vxpipe.Persistence.AdminStore do
             where: call.tenant_id == ^tenant_id and call.public_id == ^call_id,
             select: {
               call.public_id,
-              call_spec.public_id,
+              type(call_spec.id, :string),
               fragment("?->>'name'", revision.source),
               revision.revision,
               call.state,
@@ -285,7 +286,7 @@ defmodule Vxpipe.Persistence.AdminStore do
               order_by: [
                 asc: r.service,
                 asc: r.number,
-                asc: spec.public_id,
+                asc: spec.id,
                 asc: r.participant_ref
               ],
               limit: 501,
@@ -293,7 +294,7 @@ defmodule Vxpipe.Persistence.AdminStore do
                 tenant_key: ^tenant_key,
                 service: r.service,
                 number: r.number,
-                call_spec_id: spec.public_id,
+                call_spec_id: type(spec.id, :string),
                 call_spec_name: fragment("?->>'name'", revision.source),
                 call_spec_revision: revision.revision,
                 participant_ref: r.participant_ref,
@@ -464,7 +465,7 @@ defmodule Vxpipe.Persistence.AdminStore do
               latest.source,
               ^query
             ) or
-              fragment("strpos(lower(?), lower(?)) > 0", spec.public_id, ^query)
+              fragment("strpos(lower(?), lower(?)) > 0", type(spec.id, :string), ^query)
           )
           |> limit(^(limit + 1))
           |> offset(^offset)
@@ -492,11 +493,11 @@ defmodule Vxpipe.Persistence.AdminStore do
     |> order_by(
       [call_spec, _latest_number, latest],
       asc: fragment("lower(?->>'name')", latest.source),
-      asc: call_spec.public_id
+      asc: call_spec.id
     )
     |> select(
       [call_spec, _latest_number, latest],
-      {call_spec.public_id, fragment("?->>'name'", latest.source)}
+      {type(call_spec.id, :string), fragment("?->>'name'", latest.source)}
     )
   end
 
@@ -536,8 +537,10 @@ defmodule Vxpipe.Persistence.AdminStore do
             on:
               latest.call_spec_id == call_spec.id and
                 latest.revision == latest_number.revision,
-            where: call_spec.tenant_id == ^tenant_id and call_spec.public_id == ^selected_id,
-            select: {call_spec.public_id, fragment("?->>'name'", latest.source)}
+            where:
+              call_spec.tenant_id == ^tenant_id and
+                call_spec.id == ^CallSpecId.database_id(selected_id),
+            select: {type(call_spec.id, :string), fragment("?->>'name'", latest.source)}
           )
 
         case repo.one(query) do
@@ -570,7 +573,7 @@ defmodule Vxpipe.Persistence.AdminStore do
         offset: ^offset,
         select: %{
           id: call.public_id,
-          call_spec_id: call_spec.public_id,
+          call_spec_id: type(call_spec.id, :string),
           call_spec_name: fragment("?->>'name'", revision.source),
           call_spec_revision: revision.revision,
           state: call.state,
@@ -616,7 +619,7 @@ defmodule Vxpipe.Persistence.AdminStore do
 
   defp call_spec_filter(query, call_spec_id) do
     from([_call, _revision, call_spec, _publication] in query,
-      where: call_spec.public_id == ^call_spec_id
+      where: call_spec.id == ^CallSpecId.database_id(call_spec_id)
     )
   end
 

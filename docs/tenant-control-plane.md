@@ -113,10 +113,10 @@ mix vxpipe.call_spec.save \
 That tracked example selects Google Gemini inline and requires the tenant’s `google/default`
 credential. Deployments should provide their own call spec and configured host tools.
 
-The output contains a server-generated UUID `call_spec_id`, revision number, source digest,
+The output contains a database primary key `call_spec_id` encoded as a decimal string, revision number, source digest,
 validation results, and draft participant route UUIDs. Draft routes are not
 callable. `--call-spec-id` only selects an existing spec; it cannot assign an ID
-to a new spec. To edit a call spec, save the changed JSON under its existing public
+to a new spec. To edit a call spec, save the changed JSON under its existing
 ID; Vxpipe inserts the next revision rather than updating the old source:
 
 ```shell

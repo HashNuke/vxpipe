@@ -223,13 +223,35 @@ defmodule Vxpipe.Persistence.OperatorTelephonyApplicationsTest do
     assert current.call_spec_revision == 2
 
     {:ok, duplicate} = save(data, data.first, "+15550001001")
-    assert {:error, :phone_number_in_use} = Calls.publish_authorized_call_spec(data.operator, data.first.key, duplicate.call_spec_id, duplicate.revision, data.options)
+
+    assert {:error, :phone_number_in_use} =
+             Calls.publish_authorized_call_spec(
+               data.operator,
+               data.first.key,
+               duplicate.call_spec_id,
+               duplicate.revision,
+               data.options
+             )
+
     # Simulate pre-guard historical ambiguity to retain the directory's detection contract.
-    spec = Repo.get_by!(Vxpipe.Persistence.Schema.CallSpec, public_id: duplicate.call_spec_id)
-    revision = Repo.get_by!(Vxpipe.Persistence.Schema.CallSpecRevision, call_spec_id: spec.id, revision: duplicate.revision)
+    spec = Repo.get_by!(Vxpipe.Persistence.Schema.CallSpec, id: duplicate.call_spec_id)
+
+    revision =
+      Repo.get_by!(Vxpipe.Persistence.Schema.CallSpecRevision,
+        call_spec_id: spec.id,
+        revision: duplicate.revision
+      )
+
     now = DateTime.utc_now()
-    Repo.update_all(from(s in Vxpipe.Persistence.Schema.CallSpec, where: s.id == ^spec.id), set: [published_revision_id: revision.id, published_at: now])
-    Repo.update_all(from(r in Vxpipe.Persistence.Schema.TelephonyRoute, where: r.call_spec_revision_id == ^revision.id), set: [published_at: now])
+
+    Repo.update_all(from(s in Vxpipe.Persistence.Schema.CallSpec, where: s.id == ^spec.id),
+      set: [published_revision_id: revision.id, published_at: now]
+    )
+
+    Repo.update_all(
+      from(r in Vxpipe.Persistence.Schema.TelephonyRoute,
+        where: r.call_spec_revision_id == ^revision.id
+      ), set: [published_at: now])
 
     assert {:ok, %{applications: [%{published_routes: routes}]} = safe} =
              directory(data, data.first)
@@ -269,7 +291,7 @@ defmodule Vxpipe.Persistence.OperatorTelephonyApplicationsTest do
 
     spec =
       Repo.get_by!(Vxpipe.Persistence.Schema.CallSpec,
-        public_id: draft.call_spec_id,
+        id: draft.call_spec_id,
         tenant_id: tenant.id
       )
 

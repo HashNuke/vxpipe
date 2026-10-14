@@ -26,7 +26,8 @@ defmodule Vxpipe.Persistence.InspectionStore do
         where: tenant.key == ^tenant_key,
         order_by: [desc: call.created_at, desc: call.public_id],
         limit: ^limit,
-        select: {call, call_spec.public_id, revision.revision, latest_snapshot.global_revision}
+        select:
+          {call, type(call_spec.id, :string), revision.revision, latest_snapshot.global_revision}
       )
 
     calls =
@@ -51,7 +52,8 @@ defmodule Vxpipe.Persistence.InspectionStore do
         left_join: latest_snapshot in StoredSnapshot,
         on: latest_snapshot.id == call.latest_variables_snapshot_id,
         where: tenant.key == ^tenant_key and call.public_id == ^call_id,
-        select: {call, call_spec.public_id, revision.revision, latest_snapshot.global_revision}
+        select:
+          {call, type(call_spec.id, :string), revision.revision, latest_snapshot.global_revision}
       )
 
     case repo.one(query) do

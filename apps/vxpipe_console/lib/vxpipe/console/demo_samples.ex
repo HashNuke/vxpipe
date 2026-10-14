@@ -84,9 +84,8 @@ defmodule Vxpipe.Console.DemoSamples do
              authority,
              tenant_key,
              Keyword.merge(options, page: 1, limit: 100)
-           ) do
-      summaries = Map.new(page.call_specs, &{&1.id, &1})
-
+           ),
+         {:ok, summaries} <- index_original_names(page.call_specs, tenant_key, options) do
       results =
         model_provider
         |> catalog()
@@ -96,17 +95,30 @@ defmodule Vxpipe.Console.DemoSamples do
     end
   end
 
+  # The immutable first revision identifies a sample even after its display name
+  # is edited. Never overwrite a differing source or an ambiguous name match.
+  defp index_original_names(summaries, tenant_key, options) do
+    Enum.reduce_while(summaries, {:ok, %{}}, fn summary, {:ok, index} ->
+      case Vxpipe.Calls.fetch_call_spec(tenant_key, summary.id, 1, options) do
+        {:ok, first} ->
+          {:cont, {:ok, Map.update(index, first.source["name"], [summary], &[summary | &1])}}
+
+        {:error, _reason} = error ->
+          {:halt, error}
+      end
+    end)
+  end
+
   defp install_entry(entry, tenant_key, summaries, options) do
-    case Map.fetch(summaries, entry.id) do
-      :error -> create_entry(entry, tenant_key, options)
-      {:ok, summary} -> resume_entry(entry, tenant_key, summary, options)
+    case Map.get(summaries, entry.name, []) do
+      [] -> create_entry(entry, tenant_key, options)
+      [summary] -> resume_entry(entry, tenant_key, summary, options)
+      _ambiguous -> %{id: entry.id, name: entry.name, status: :conflict}
     end
   end
 
   defp create_entry(entry, tenant_key, options) do
-    save_options = Keyword.put(options, :call_spec_id, entry.id)
-
-    with {:ok, draft} <- Vxpipe.Calls.save_call_spec(tenant_key, entry.source, save_options),
+    with {:ok, draft} <- Vxpipe.Calls.save_call_spec(tenant_key, entry.source, options),
          {:ok, published} <-
            Vxpipe.Calls.publish_call_spec(
              tenant_key,
@@ -114,7 +126,7 @@ defmodule Vxpipe.Console.DemoSamples do
              draft.revision,
              options
            ) do
-      installed(entry, published.revision)
+      installed(entry, published)
     else
       {:error, reason} -> failed(entry, reason)
     end
@@ -122,13 +134,13 @@ defmodule Vxpipe.Console.DemoSamples do
 
   defp resume_entry(entry, tenant_key, summary, options) do
     with {:ok, latest} <-
-           Vxpipe.Calls.fetch_call_spec(tenant_key, entry.id, summary.latest_revision, options),
+           Vxpipe.Calls.fetch_call_spec(tenant_key, summary.id, summary.latest_revision, options),
          true <- latest.source_digest == source_digest(entry.source) do
       if summary.published_revision == latest.revision do
-        installed(entry, latest.revision)
+        installed(entry, latest)
       else
-        case Vxpipe.Calls.publish_call_spec(tenant_key, entry.id, latest.revision, options) do
-          {:ok, published} -> installed(entry, published.revision)
+        case Vxpipe.Calls.publish_call_spec(tenant_key, summary.id, latest.revision, options) do
+          {:ok, published} -> installed(entry, published)
           {:error, reason} -> failed(entry, reason)
         end
       end
@@ -139,7 +151,13 @@ defmodule Vxpipe.Console.DemoSamples do
   end
 
   defp installed(entry, revision) do
-    %{id: entry.id, name: entry.name, status: :installed, revision: revision}
+    %{
+      id: entry.id,
+      name: entry.name,
+      status: :installed,
+      call_spec_id: revision.call_spec_id,
+      revision: revision.revision
+    }
   end
 
   defp failed(entry, reason) do

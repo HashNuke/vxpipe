@@ -17,7 +17,7 @@ defmodule Vxpipe.Calls.CallSpecAuthoring do
   end
 
   # A supplied ID is only a locator for an existing tenant-owned spec. Creation
-  # leaves it unset so CallSpecs allocates the public UUID internally.
+  # leaves it unset so CallSpecs allocates the database primary key internally.
   defp existing_target(tenant_key, options) do
     case Keyword.fetch(options, :call_spec_id) do
       :error ->

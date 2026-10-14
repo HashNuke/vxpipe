@@ -507,7 +507,7 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
                Keyword.put(options, :call_spec_id, first.call_spec_id)
              )
 
-    call_spec = Repo.get_by!(CallSpec, public_id: first.call_spec_id)
+    call_spec = Repo.get_by!(CallSpec, id: first.call_spec_id)
     revision = Repo.get_by!(CallSpecRevision, call_spec_id: call_spec.id, revision: 2)
 
     Repo.insert!(
@@ -549,8 +549,8 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
   test "recent calls are bounded and scoped with stable ties and no call-spec catalog" do
     tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Dashboard")
     other = insert_tenant("BBBBBBBBBBBBBBBB", "Hidden")
-    revision = tenant |> insert_call_spec("dashboard") |> insert_revision(1, "Dashboard call")
-    foreign = other |> insert_call_spec("foreign") |> insert_revision(1, "Hidden call")
+    revision = tenant |> insert_call_spec() |> insert_revision(1, "Dashboard call")
+    foreign = other |> insert_call_spec() |> insert_revision(1, "Hidden call")
 
     calls =
       for number <- 1..7 do
@@ -579,12 +579,12 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
     other_tenant = insert_tenant("BBBBBBBBBBBBBBBB", "Other tenant")
 
-    call_spec = insert_call_spec(tenant, "delivery-rescheduling")
+    call_spec = insert_call_spec(tenant)
     old_revision = insert_revision(call_spec, 1, "Original delivery name")
     current_revision = insert_revision(call_spec, 2, "Delivery rescheduling")
-    other_call_spec = insert_call_spec(tenant, "appointment-reminders")
+    other_call_spec = insert_call_spec(tenant)
     reminder_revision = insert_revision(other_call_spec, 1, "Appointment reminders")
-    foreign_call_spec = insert_call_spec(other_tenant, "foreign-call-spec")
+    foreign_call_spec = insert_call_spec(other_tenant)
     foreign_revision = insert_revision(foreign_call_spec, 1, "Foreign call spec")
 
     older =
@@ -627,13 +627,13 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     attach_publication(reminder, :incomplete, "incomplete-publication")
 
     assert {:ok, {listed_tenant, call_specs, false, calls, 2}} =
-             AdminStore.list_calls(Repo, tenant.key, call_spec.public_id, 25, 0)
+             AdminStore.list_calls(Repo, tenant.key, Integer.to_string(call_spec.id), 25, 0)
 
     assert listed_tenant.key == tenant.key
 
     assert Enum.map(call_specs, &{&1.id, &1.name}) == [
-             {"appointment-reminders", "Appointment reminders"},
-             {"delivery-rescheduling", "Delivery rescheduling"}
+             {Integer.to_string(other_call_spec.id), "Appointment reminders"},
+             {Integer.to_string(call_spec.id), "Delivery rescheduling"}
            ]
 
     assert Enum.map(calls, & &1.id) == [newer.public_id, older.public_id]
@@ -670,7 +670,13 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
              AdminStore.list_calls(Repo, tenant.key, nil, 25, 25)
 
     assert {:error, :call_spec_not_found} =
-             AdminStore.list_calls(Repo, tenant.key, foreign_call_spec.public_id, 25, 0)
+             AdminStore.list_calls(
+               Repo,
+               tenant.key,
+               Integer.to_string(foreign_call_spec.id),
+               25,
+               0
+             )
 
     assert {:error, :tenant_not_found} =
              AdminStore.list_calls(Repo, "CCCCCCCCCCCCCCCC", nil, 25, 0)
@@ -679,37 +685,44 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
   test "bounds call spec filter options and reports truncation without breaking a deep link" do
     tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
 
-    for number <- 1..101 do
-      public_id = "call-spec-#{String.pad_leading(Integer.to_string(number), 3, "0")}"
-      call_spec = insert_call_spec(tenant, public_id)
-      insert_revision(call_spec, 1, "Call spec #{number}")
-    end
+    specs =
+      for number <- 1..101 do
+        call_spec = insert_call_spec(tenant)
+        insert_revision(call_spec, 1, "Call spec #{number}")
+        call_spec
+      end
+
+    selected_id = specs |> Enum.at(98) |> Map.fetch!(:id) |> Integer.to_string()
 
     assert {:ok, {_tenant, call_specs, true, [], 0}} =
              AdminStore.list_calls(Repo, tenant.key, nil, 25, 0)
 
     assert length(call_specs) == 100
-    refute Enum.any?(call_specs, &(&1.id == "call-spec-099"))
+    refute Enum.any?(call_specs, &(&1.id == selected_id))
 
     assert {:ok, {_tenant, selected_call_specs, true, [], 0}} =
-             AdminStore.list_calls(Repo, tenant.key, "call-spec-099", 25, 0)
+             AdminStore.list_calls(Repo, tenant.key, selected_id, 25, 0)
 
-    assert Enum.any?(selected_call_specs, &(&1.id == "call-spec-099"))
+    assert Enum.any?(selected_call_specs, &(&1.id == selected_id))
   end
 
   test "searches all tenant call specs by literal name or ID before paging" do
     tenant = insert_tenant("AAAAAAAAAAAAAAAA", "Example tenant")
     foreign = insert_tenant("BBBBBBBBBBBBBBBB", "Other tenant")
 
-    for number <- 1..105 do
-      spec = insert_call_spec(tenant, "spec-#{number}")
-      insert_revision(spec, 1, "Intake #{number}")
-    end
+    specs =
+      for number <- 1..105 do
+        spec = insert_call_spec(tenant)
+        insert_revision(spec, 1, "Intake #{number}")
+        spec
+      end
 
-    spec = insert_call_spec(foreign, "foreign")
+    last_id = specs |> List.last() |> Map.fetch!(:id) |> Integer.to_string()
+
+    spec = insert_call_spec(foreign)
     insert_revision(spec, 1, "Intake 105")
 
-    assert {:ok, {[%{id: "spec-105"}], false}} =
+    assert {:ok, {[%{id: ^last_id}], false}} =
              AdminStore.search_call_specs(Repo, tenant.key, "intake 105", 25, 0)
 
     assert {:ok, {rows, true}} = AdminStore.search_call_specs(Repo, tenant.key, "intake", 25, 0)
@@ -721,8 +734,8 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     assert length(last) == 5
     assert {:ok, {[], false}} = AdminStore.search_call_specs(Repo, tenant.key, "%", 25, 0)
 
-    assert {:ok, {[%{id: "spec-105"}], false}} =
-             AdminStore.search_call_specs(Repo, tenant.key, "spec-105", 25, 0)
+    assert {:ok, {[%{id: ^last_id}], false}} =
+             AdminStore.search_call_specs(Repo, tenant.key, last_id, 25, 0)
   end
 
   defp sequence(values) do
@@ -764,9 +777,9 @@ defmodule Vxpipe.Persistence.AdminStoreTest do
     |> Repo.insert!()
   end
 
-  defp insert_call_spec(tenant, public_id) do
+  defp insert_call_spec(tenant) do
     %CallSpec{}
-    |> CallSpec.changeset(%{tenant_id: tenant.id, public_id: public_id})
+    |> CallSpec.changeset(%{tenant_id: tenant.id})
     |> Repo.insert!()
   end
 

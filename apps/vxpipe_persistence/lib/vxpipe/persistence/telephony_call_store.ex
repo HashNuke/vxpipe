@@ -3,6 +3,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
 
   import Ecto.Query
 
+  alias Vxpipe.Persistence.CallSpecId
   alias Ecto.Multi
   alias Vxpipe.Calls.TelephonyAdmissionClaim
   alias Vxpipe.Persistence.PreparedCallRecord
@@ -95,7 +96,7 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
         join: tenant in Tenant,
         on: tenant.id == call_spec.tenant_id,
         where:
-          tenant.key == ^tenant_key and call_spec.public_id == ^call_spec_id and
+          tenant.key == ^tenant_key and call_spec.id == ^CallSpecId.database_id(call_spec_id) and
             revision.revision == ^revision_number,
         select: {tenant, call_spec, revision}
       )
@@ -267,8 +268,13 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
     repo.update(Vxpipe.Persistence.Schema.Call.start_changeset(call, incarnation_id, started_at))
   end
 
-  defp start_call(_repo, %{state: :running, incarnation_id: incarnation_id} = call, incarnation_id, _at),
-    do: {:ok, call}
+  defp start_call(
+         _repo,
+         %{state: :running, incarnation_id: incarnation_id} = call,
+         incarnation_id,
+         _at
+       ),
+       do: {:ok, call}
 
   defp start_call(_repo, _call, _incarnation_id, _started_at),
     do: {:error, :call_unavailable}
@@ -286,8 +292,12 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
     repo.update(StoredTelephonyLeg.activate_changeset(leg, incarnation_id))
   end
 
-  defp activate_leg(_repo, %{state: "active", incarnation_id: incarnation_id} = leg, incarnation_id),
-    do: {:ok, leg}
+  defp activate_leg(
+         _repo,
+         %{state: "active", incarnation_id: incarnation_id} = leg,
+         incarnation_id
+       ),
+       do: {:ok, leg}
 
   defp activate_leg(_repo, _leg, _incarnation_id), do: {:error, :telephony_leg_unavailable}
 

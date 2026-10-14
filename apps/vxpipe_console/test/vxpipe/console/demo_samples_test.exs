@@ -117,7 +117,7 @@ defmodule Vxpipe.Console.DemoSamplesTest do
       assert Enum.map(installed, &{&1.id, &1.status, &1.revision}) == expected_installations()
 
       assert {:ok, publication} =
-               Vxpipe.Calls.fetch_call_spec(tenant.key, "sample-voice-conversation", 1, options)
+               Vxpipe.Calls.fetch_call_spec(tenant.key, hd(installed).call_spec_id, 1, options)
 
       selection = publication.source["defaults"]["capabilities"]["model_inference"]
       assert selection["provider"] == provider
@@ -197,6 +197,8 @@ defmodule Vxpipe.Console.DemoSamplesTest do
     assert Enum.map(second, &{&1.id, &1.status, &1.revision}) == expected_installations()
 
     assert {:ok, page} = Vxpipe.Calls.list_operator_call_specs(authority, tenant.key, options)
+    assert Enum.all?(second, &Regex.match?(~r/\A[1-9][0-9]*\z/, &1.call_spec_id))
+    assert Enum.map(hd(concurrent), & &1.call_spec_id) == Enum.map(second, & &1.call_spec_id)
     assert page.total == 3
     assert Enum.all?(page.call_specs, &(&1.latest_revision == 1))
   end
@@ -262,13 +264,13 @@ defmodule Vxpipe.Console.DemoSamplesTest do
              Vxpipe.Calls.save_call_spec(
                tenant.key,
                edited,
-               Keyword.put(options, :call_spec_id, entry.id)
+               Keyword.put(options, :call_spec_id, hd(installed).call_spec_id)
              )
 
     assert {:ok, [conflict | _]} = DemoSamples.install(authority, tenant.key, options)
     assert conflict.status == :conflict
     assert {:ok, page} = Vxpipe.Calls.list_operator_call_specs(authority, tenant.key, options)
-    customized = Enum.find(page.call_specs, &(&1.id == entry.id))
+    customized = Enum.find(page.call_specs, &(&1.id == hd(installed).call_spec_id))
     assert customized.latest_revision == 2
     assert customized.published_revision == 1
   end

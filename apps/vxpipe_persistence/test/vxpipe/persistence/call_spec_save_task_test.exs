@@ -55,7 +55,7 @@ defmodule Vxpipe.Persistence.CallSpecSaveTaskTest do
     assert_receive {:mix_shell, :info, [json]}
     first = JSON.decode!(json)
     id = first["call_spec_id"]
-    assert id =~ ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
+    assert id =~ ~r/\A[1-9][0-9]*\z/
     Save.run(args ++ ["--call-spec-id", id])
     assert_receive {:mix_shell, :info, [updated]}
     assert JSON.decode!(updated)["call_spec_id"] == id

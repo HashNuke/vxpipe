@@ -392,7 +392,7 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
 
     call_spec =
       %CallSpec{}
-      |> CallSpec.changeset(%{tenant_id: tenant.id, public_id: "usage-call-spec"})
+      |> CallSpec.changeset(%{tenant_id: tenant.id})
       |> Repo.insert!()
 
     revision =
