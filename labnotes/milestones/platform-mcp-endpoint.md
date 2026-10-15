@@ -266,26 +266,26 @@ Depends on spec authoring. Runnable slice: create a call by published spec ID wi
 initial variables, receive `{call_id}`, then issue/redeem its token locally.
 
 - [x] Red-test `create_call(tenant_key, call_spec_id, ...)` for web and outgoing specs.
-- [ ] Share the create workflow with the existing spec-scoped REST call endpoint:
+- [x] Share the create workflow with the existing spec-scoped REST call endpoint:
   pin one published revision, prepare web calls, or submit outgoing calls. Existing
   REST clients keep their response shape; MCP returns the minimal `{call_id}`.
-- [ ] Validate and persist nested `variables` under the existing declared-section,
+- [x] Validate and persist nested `variables` under the existing declared-section,
   type and access rules before admission/dialing. Verify exact values arrive in
   the runtime; omission preserves the existing absent-section (`nil`) behavior.
   Reject invalid supplied variables before effects; do not inject new defaults.
-- [ ] Resolve web entry from the published spec without a caller-supplied route;
+- [x] Resolve web entry from the published spec without a caller-supplied route;
   carrier-only incoming specs return unsupported-entry, not a synthetic webhook.
   Web preparation is not live audio; outgoing acknowledgement is not an answer.
-- [ ] Preserve outgoing `to` validation and failed/unknown submission behavior.
+- [x] Preserve outgoing `to` validation and failed/unknown submission behavior.
   Extend optional tenant-wide `idempotency_key` claim/replay to prepared creation;
   same-key retry returns the same call, changed input conflicts, failed replay
   never admits/dials again. Requests without a key remain separate attempts.
-- [ ] Implement `create_join_token` with optional participant_key and existing TTL
+- [x] Implement `create_join_token` with optional participant_key and existing TTL
   limits. Default only to a suitable pinned web entry; require a selector when
   there is no eligible default. Return token, expiry and resolved participant key.
-- [ ] Add the shared non-participant-scoped token HTTP route; preserve the existing
+- [x] Add the shared non-participant-scoped token HTTP route; preserve the existing
   participant route. Validate eligibility against this call, not the latest spec.
-- [ ] Acceptance: nested-variable and invalid-variable cases, concurrent publication,
+- [x] Acceptance: nested-variable and invalid-variable cases, concurrent publication,
   duplicate create/replay, wrong tenant/spec/call/participant, TTL/single-use and
   ended-call denial pass with local Morse/fixtures and a fake dial adapter. Token
   values never enter logs, telemetry or audit; no live providers/real calls run.
@@ -294,7 +294,20 @@ Domain/storage evidence (2026-10-15): shared actual-actor policy, pinned web and
 outgoing claims, tenant-wide replay and pinned web token selection passed all
 219 Calls tests plus 46 focused Persistence tests after the expected missing-API
 red failures. Independent review found no domain/storage blockers. HTTP/MCP
-adapter acceptance and outgoing deadline handling remain in progress.
+adapter acceptance now passes as recorded below.
+
+Transport evidence: shared Gateway creation preserves existing HTTP envelopes,
+returns minimal MCP call IDs, and starts only freshly claimed outgoing calls.
+Canonical/explicit token routes share the pinned issuer and safe projections.
+The final focused Gateway selection passed 73 tests. Seven persisted Console tests cross HTTP/MCP for calls/full/platform credentials
+and verify browser CSRF and explicit-key precedence. Review exposed failed-web
+replay incorrectly reporting an outgoing error and wrappers masking CSRF rejection;
+both regressions were reproduced and fixed. Local fake-dial wire tests verify
+nested variables, idempotent recovery after a lost/timeout response, and no redial.
+Authorized create_call has a separate bounded 100-second handler deadline; other
+operations retain ten seconds. All seven isolated reference-client groups passed.
+Fast root format/compile/Credo/dependency gates passed; the next stable full-suite
+run remains part of the overall milestone acceptance.
 
 ## Checkpoint: authorized whole-call hangup
 

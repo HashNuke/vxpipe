@@ -1,9 +1,9 @@
 defmodule Vxpipe.Gateway.MCP.Tools do
   @moduledoc "Static MCP tool routing; each group delegates policy and operations to its owning application."
 
-  alias Vxpipe.Gateway.MCP.{CallSpecTools, TenantTools}
+  alias Vxpipe.Gateway.MCP.{CallSpecTools, CallTools, TenantTools}
 
-  @groups [TenantTools, CallSpecTools]
+  @groups [TenantTools, CallSpecTools, CallTools]
 
   def list(actor), do: Enum.flat_map(@groups, & &1.list(actor))
 

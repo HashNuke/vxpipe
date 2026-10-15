@@ -415,7 +415,11 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
         allowed_headers: ["content-type", "authorization"],
         allow_credentials: false
       ],
-      call_admission: [enabled: true, backend: TestAdmissionBackend.backend(backend)]
+      call_admission: [
+        enabled: true,
+        backend: TestAdmissionBackend.backend(backend),
+        calls_options: TestAdmissionBackend.calls_options(backend)
+      ]
     )
   end
 

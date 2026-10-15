@@ -23,11 +23,12 @@ not deferred Console-only features.
 The current server advertises tenant discovery and call-spec workflows according
 to key scope: `list_tenants`, `get_tenant`, `list_call_specs`, `get_call_spec`,
 `create_call_spec`, `update_call_spec`, `publish_call_spec_revision`,
-`list_providers`, and `list_provider_models`. Calls-only keys see tenant tools;
-full tenant and Settings platform keys also see spec/catalog tools. Each call
+`list_providers`, `list_provider_models`, `create_call`, and `create_join_token`.
+Calls-only keys see tenant and call tools; full tenant and Settings platform keys
+also see spec/catalog tools. Admin-only tenant keys cannot create calls or tokens. Each call
 independently checks its authority and selected tenant.
 
-Call creation/token/hangup and user/role tools below are approved remaining work;
+Hangup and user/role tools below are approved remaining work;
 they are not advertised yet. The [product HTTP API](product-http-api.md) documents
 the corresponding implemented HTTP operations. Browser migration remains tracked
 separately in the milestone.
@@ -470,8 +471,15 @@ See the [transport specification](https://modelcontextprotocol.io/specification/
 and [lifecycle specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle).
 
 Current defaults are 64 concurrent HTTP requests, a 128 KiB request body, a
-five-second body-read timeout and a ten-second handler deadline. Handler cleanup
-can add approximately one second. JSON-RPC IDs are strings of at most 256 bytes
+five-second body-read timeout and a ten-second handler deadline for ordinary
+operations. Authorized `create_call` requests have a separate 100-second deadline
+because outgoing submission can wait up to 35 seconds plus a 60-second ring bound.
+Configure the MCP client's request timeout above that deadline when using outgoing
+creation. A timeout or lost response is not evidence that no call was created:
+recover using the original idempotency key and input; never retry with a new key
+automatically. The server setting is `call_creation_timeout` in milliseconds;
+installations that increase `outgoing_start_timeout_ms` must increase the creation
+and client deadlines accordingly. Handler cleanup can add approximately one second. JSON-RPC IDs are strings of at most 256 bytes
 or integers in the inclusive range -9007199254740991 through 9007199254740991.
 Rejected oversized IDs are not echoed. Unknown valid notifications receive no
 JSON-RPC response body.

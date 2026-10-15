@@ -3,8 +3,8 @@
 Canonical product operations live under `/api`. Browser UI clients and external
 clients use the same handlers, application authorization and response schemas.
 This document grows with the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md);
-it describes tenant and call-spec reads, provider catalogs, and the existing
-spec-write contract. The complete migration inventory is in
+it describes tenant and call-spec reads, provider catalogs, spec writes,
+and call creation/join-token operations. The complete migration inventory is in
 [product API inventory](product-api-inventory.md).
 
 ## Authentication
@@ -228,3 +228,107 @@ request bodies, publication behavior and compatible installation-authoring route
 During migration, legacy Console `/admin/api` routes retain their original response
 envelopes. UI callers are migrated in subsequent milestone checkpoints; these API
 additions do not claim that all existing UI requests have migrated yet.
+
+
+## Create a call
+
+```http
+POST /api/tenants/:tenant_key/call-specs/:call_spec_id/calls
+Idempotency-Key: client-generated-request-id
+```
+
+Create & Join Calls and Full Tenant Access keys can create calls in their tenant;
+Full Platform Access keys can select any tenant. Browser users need `calls.write`
+for that tenant and a valid CSRF token. Admin-only tenant keys cannot create calls.
+
+The body accepts only optional `variables` (an object, default `{}`) and `to`
+(an E.164 destination when the outgoing spec requires one). Supplied variable
+sections must satisfy the published spec's schemas; values are not coerced.
+Omitted sections retain their existing absent value rather than gaining defaults.
+
+```sh
+curl --fail-with-body \
+  'https://YOUR-VXPIPE-HOST/api/tenants/AAAAAAAAAAAAAAAA/call-specs/YOUR_SPEC_ID/calls' \
+  -H 'Authorization: Bearer YOUR_VXPIPE_API_KEY' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: example-call-attempt-1' \
+  --data '{"variables":{}}'
+```
+
+A new call returns 201 with the existing response shape:
+
+```json
+{
+  "call": {
+    "id": "CREATED_CALL_ID",
+    "call_spec_id": "YOUR_SPEC_ID",
+    "revision": 1,
+    "state": "prepared",
+    "outgoing_outcome": null
+  }
+}
+```
+
+Creation pins one published revision. A web-entry spec produces a prepared call;
+it does not issue a token or start media. An outgoing spec starts its admission
+workflow and waits for dial-submission acknowledgement. This does not establish
+that the destination answered. Carrier-only incoming specs cannot be started by
+this operation and return 422 `unsupported_call_entry`.
+
+`Idempotency-Key` is optional, nonblank UTF-8, and at most 256 bytes. Reusing it
+for the same tenant, spec, variables and destination returns the same call with
+200, including after republication. Changed input returns 409
+`idempotency_conflict`. Without a key, each request is a separate attempt. Failed
+or uncertain outgoing replays preserve their failure and never dial again.
+After a lost response, retry with the original key and exactly the same input;
+do not automatically create another attempt with a new key.
+
+Other failures include 400 `invalid_request`, 403 `not_authorized`, 404
+`call_spec_not_found`, 422 `call_spec_not_published`, destination validation or
+variable-resolution errors, and 503 `call_management_unavailable`.
+`outgoing_call_start_failed` and `outgoing_submission_unknown` are 503 failures
+with `retryable: false`. Errors use `{error: {code, message, retryable, details}}`;
+responses never contain the pinned plan, initial variables or provider credentials.
+
+## Issue a join token
+
+```http
+POST /api/tenants/:tenant_key/calls/:call_id/join-tokens
+```
+
+This operation has the same call-management authority as creation. Its JSON body
+accepts optional `participant_key` and `join_token_ttl_seconds` (integer, default
+300, minimum 300, maximum 86400). Omit the participant only when the call has an
+eligible pinned web entry; otherwise select an eligible web participant explicitly.
+The participant is resolved against the call's pinned revision, never the latest
+published spec. Explicit null values and unknown fields are rejected.
+
+```sh
+curl --fail-with-body \
+  'https://YOUR-VXPIPE-HOST/api/tenants/AAAAAAAAAAAAAAAA/calls/YOUR_CALL_ID/join-tokens' \
+  -H 'Authorization: Bearer YOUR_VXPIPE_API_KEY' \
+  -H 'Content-Type: application/json' \
+  --data '{"join_token_ttl_seconds":300}'
+```
+
+A successful response is 201:
+
+```json
+{
+  "call_id": "YOUR_CALL_ID",
+  "participant_key": "RESOLVED_PARTICIPANT_KEY",
+  "join_token": {
+    "token": "SINGLE_USE_JOIN_TOKEN",
+    "expires_at": "2026-10-15T12:05:00Z"
+  }
+}
+```
+
+Keep this bearer token secret. It authorizes one scoped participant admission;
+it is not an API key. Existing participant-scoped issuance remains available at
+`POST /api/tenants/:tenant_key/calls/:call_id/participants/:participant_key/join-tokens`
+and uses the same policy and issuer. That route accepts only the optional TTL.
+Token redemption retains existing single-use admission behavior. Ended or failed
+calls cannot issue usable new tokens. Errors include 400 `participant_required`
+or `invalid_request`, 404 `call_route_not_found`, 409 `call_unavailable`, and the
+same authentication/unavailable errors as call creation.

@@ -10,8 +10,31 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
 
   @impl true
   def init(options) do
+    router =
+      Router.init(
+        call_spec_reads: Keyword.get(options, :call_spec_reads, []),
+        tenant_directory: Keyword.get(options, :tenant_directory, []),
+        call_spec_authoring: Keyword.get(options, :call_spec_authoring, []),
+        operator_api: Keyword.get(options, :operator_api, []),
+        call_admission: Keyword.get(options, :call_admission, []),
+        room_creation: Keyword.get(options, :room_creation, []),
+        telephony: Keyword.get(options, :telephony, []),
+        webrtc: Keyword.get(options, :webrtc, [])
+      )
+
+    mcp = Keyword.get(options, :mcp, [])
+
+    runtime =
+      case router.call_creation.backend do
+        {Vxpipe.Gateway.CallCreation, context} -> context
+        _custom -> []
+      end
+
+    mcp =
+      Keyword.put(mcp, :call_options, Keyword.merge(runtime, Keyword.get(mcp, :call_options, [])))
+
     %{
-      mcp: options |> Keyword.get(:mcp, []) |> Vxpipe.Gateway.MCP.Endpoint.init(),
+      mcp: Vxpipe.Gateway.MCP.Endpoint.init(mcp),
       cors: options |> Keyword.get(:cors, []) |> Cors.init(),
       parsers:
         Plug.Parsers.init(
@@ -20,17 +43,7 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
           json_decoder: JSON,
           length: 131_072
         ),
-      router:
-        Router.init(
-          call_spec_reads: Keyword.get(options, :call_spec_reads, []),
-          tenant_directory: Keyword.get(options, :tenant_directory, []),
-          call_spec_authoring: Keyword.get(options, :call_spec_authoring, []),
-          operator_api: Keyword.get(options, :operator_api, []),
-          call_admission: Keyword.get(options, :call_admission, []),
-          room_creation: Keyword.get(options, :room_creation, []),
-          telephony: Keyword.get(options, :telephony, []),
-          webrtc: Keyword.get(options, :webrtc, [])
-        )
+      router: router
     }
   end
 

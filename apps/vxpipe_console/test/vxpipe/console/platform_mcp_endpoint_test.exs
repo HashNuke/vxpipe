@@ -1,6 +1,7 @@
 defmodule Vxpipe.Console.PlatformMCPEndpointTest do
   use ExUnit.Case, async: false
 
+  import Ecto.Query
   import Phoenix.ConnTest
   import Plug.Conn
 
@@ -8,7 +9,15 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
   alias Vxpipe.Calls.ApiKeyManagement
   alias Vxpipe.Console.Endpoint
   alias Vxpipe.Gateway.HTTP.Mount
-  alias Vxpipe.Persistence.{AccessKeyStore, AdminStore, CallSpecStore, CredentialStore, Repo}
+
+  alias Vxpipe.Persistence.{
+    AccessKeyStore,
+    AdminStore,
+    CallSpecStore,
+    CallStore,
+    CredentialStore,
+    Repo
+  }
 
   @endpoint Endpoint
   @version "2025-11-25"
@@ -33,6 +42,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
         access_key_repository: {AccessKeyStore, Repo},
         admin_repository: {AdminStore, Repo},
         call_spec_repository: {CallSpecStore, Repo},
+        call_repository: {CallStore, Repo},
         registries: %{host_tools: %{}}
       )
     )
@@ -42,6 +52,10 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       :gateway_mount,
       Mount.init(
         mcp: [enabled: true, allowed_hosts: ["localhost"]],
+        call_admission: [
+          enabled: true,
+          browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}
+        ],
         tenant_directory: [enabled: true],
         call_spec_reads: [enabled: true],
         call_spec_authoring: [enabled: true]
@@ -61,7 +75,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
     catalog = request(data.key.secret, "tools/list", 2, session)
 
     assert Enum.map(json_response(catalog, 200)["result"]["tools"], & &1["name"]) ==
-             ["list_tenants", "get_tenant"]
+             ["list_tenants", "get_tenant", "create_call", "create_join_token"]
 
     assert get_resp_header(catalog, "cache-control") == ["no-store"]
 
@@ -312,6 +326,202 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
            }).status == 403
   end
 
+  test "persisted call creation and pinned single-use tokens agree across HTTP and MCP", data do
+    {:ok, full} = Calls.issue_api_key(data.tenant.key, "Full call fixture", [:admin, :calls])
+    administrator = Vxpipe.Console.Test.FakeUserIdentity.principal()
+
+    {:ok, platform} =
+      ApiKeyManagement.create(administrator, "Platform call fixture", "platform", nil, [])
+
+    {:ok, foreign, _} = Calls.bootstrap_tenant("Foreign call fixture", [:calls])
+
+    source =
+      Map.put(spec_source(), "call_variables", %{
+        "sections" => %{
+          "order" => %{
+            "schema" => %{"type" => "object", "properties" => %{"id" => %{"type" => "string"}}}
+          }
+        }
+      })
+
+    variables = %{"order" => %{"id" => "local-order"}}
+    {:ok, draft} = Calls.save_call_spec(data.tenant.key, source)
+
+    {:ok, _published} =
+      Calls.publish_call_spec(data.tenant.key, draft.call_spec_id, draft.revision)
+
+    creation_path = "/api/tenants/#{data.tenant.key}/call-specs/#{draft.call_spec_id}/calls"
+
+    for {secret, index} <- Enum.with_index([data.key.secret, full.secret, platform.secret], 1) do
+      session = session(secret)
+      key = "cross-transport-#{index}"
+
+      created =
+        tool(secret, session, 2, "create_call", %{
+          tenant_key: data.tenant.key,
+          call_spec_id: draft.call_spec_id,
+          variables: variables,
+          idempotency_key: key
+        })
+
+      assert created["isError"] == false
+      assert %{"call_id" => call_id} = created["structuredContent"]
+      assert map_size(created["structuredContent"]) == 1
+
+      replay =
+        rest_write(secret, :post, creation_path, %{variables: variables}, [
+          {"idempotency-key", key}
+        ])
+
+      assert get_resp_header(replay, "cache-control") == ["no-store"]
+
+      assert %{"call" => %{"id" => ^call_id, "state" => "prepared", "revision" => 1}} =
+               json_response(replay, 200)
+
+      assert Repo.aggregate(
+               from(c in Vxpipe.Persistence.Schema.Call, where: c.public_id == ^call_id),
+               :count
+             ) == 1
+
+      assert {:ok, stored} = Calls.fetch_call(data.tenant.key, call_id)
+      assert stored.initial_variables == variables
+
+      tokens_path = "/api/tenants/#{data.tenant.key}/calls/#{call_id}/join-tokens"
+      http = rest_write(secret, :post, tokens_path, %{}) |> json_response(201)
+
+      mcp =
+        tool(secret, session, 3, "create_join_token", %{
+          tenant_key: data.tenant.key,
+          call_id: call_id
+        })
+
+      assert mcp["isError"] == false
+      issued = mcp["structuredContent"]
+      participant = http["participant_key"]
+
+      assert Map.take(issued, ["call_id", "participant_key"]) ==
+               Map.take(http, ["call_id", "participant_key"])
+
+      assert {:ok, _, _} = DateTime.from_iso8601(issued["expires_at"])
+      refute issued["token"] == http["join_token"]["token"]
+
+      explicit_path =
+        "/api/tenants/#{data.tenant.key}/calls/#{call_id}/participants/#{participant}/join-tokens"
+
+      explicit = rest_write(secret, :post, explicit_path, %{}) |> json_response(201)
+      assert explicit["participant_key"] == participant
+      assert explicit["call_id"] == call_id
+
+      foreign_path = "/api/tenants/#{foreign.key}/calls/#{call_id}/join-tokens"
+      status = if secret == platform.secret, do: 404, else: 403
+      foreign_http = rest_write(secret, :post, foreign_path, %{}) |> json_response(status)
+
+      denied =
+        tool(secret, session, 4, "create_join_token", %{tenant_key: foreign.key, call_id: call_id})
+
+      assert denied["isError"] == true
+      assert denied["structuredContent"] == foreign_http
+
+      scope = %{tenant_key: data.tenant.key, call_id: call_id, participant_key: participant}
+      assert {:ok, _claim} = Calls.claim_join_token(issued["token"], scope)
+      assert {:error, :token_already_claimed} = Calls.claim_join_token(issued["token"], scope)
+
+      Repo.update_all(from(c in Vxpipe.Persistence.Schema.Call, where: c.public_id == ^call_id),
+        set: [state: :ended, ended_at: DateTime.utc_now()]
+      )
+
+      ended = rest_write(secret, :post, tokens_path, %{}) |> json_response(409)
+
+      assert tool(secret, session, 5, "create_join_token", %{
+               tenant_key: data.tenant.key,
+               call_id: call_id
+             })["structuredContent"] == ended
+    end
+  end
+
+  test "browser call writes enforce CSRF and explicit invalid keys never fall back to a session",
+       data do
+    backend = Application.get_env(:vxpipe_console, :user_identity_backend)
+
+    on_exit(fn ->
+      if backend,
+        do: Application.put_env(:vxpipe_console, :user_identity_backend, backend),
+        else: Application.delete_env(:vxpipe_console, :user_identity_backend)
+    end)
+
+    fake = Vxpipe.Console.Test.FakeUserIdentity
+    Application.put_env(:vxpipe_console, :user_identity_backend, fake)
+    {:ok, draft} = Calls.save_call_spec(data.tenant.key, spec_source())
+    {:ok, _} = Calls.publish_call_spec(data.tenant.key, draft.call_spec_id, draft.revision)
+    path = "/api/tenants/#{data.tenant.key}/call-specs/#{draft.call_spec_id}/calls"
+
+    auth =
+      post(build_conn(), "https://localhost/auth/api/login", %{
+        email: fake.email(),
+        password: fake.password()
+      })
+
+    page = auth |> recycle() |> get("https://localhost/account")
+    [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, page.resp_body)
+
+    auth = page
+
+    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+      auth
+      |> recycle()
+      |> Map.update!(:private, &Map.delete(&1, :plug_skip_csrf_protection))
+      |> put_req_header("x-csrf-token", "invalid")
+      |> post("https://localhost" <> path, %{})
+    end
+
+    invalid =
+      auth
+      |> recycle()
+      |> put_req_header("authorization", "Bearer invalid")
+      |> post("https://localhost" <> path, %{})
+
+    assert invalid.status == 401
+
+    created =
+      auth
+      |> recycle()
+      |> Map.update!(:private, &Map.delete(&1, :plug_skip_csrf_protection))
+      |> put_req_header("x-csrf-token", csrf)
+      |> post("https://localhost" <> path, %{})
+
+    call_id = json_response(created, 201)["call"]["id"]
+
+    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+      auth
+      |> recycle()
+      |> Map.update!(:private, &Map.delete(&1, :plug_skip_csrf_protection))
+      |> put_req_header("x-csrf-token", "invalid")
+      |> post(
+        "https://localhost/api/tenants/#{data.tenant.key}/calls/#{call_id}/join-tokens",
+        %{}
+      )
+    end
+
+    token =
+      auth
+      |> recycle()
+      |> Map.update!(:private, &Map.delete(&1, :plug_skip_csrf_protection))
+      |> put_req_header("x-csrf-token", csrf)
+      |> post(
+        "https://localhost/api/tenants/#{data.tenant.key}/calls/#{call_id}/join-tokens",
+        %{}
+      )
+
+    assert json_response(token, 201)["call_id"] == call_id
+  end
+
+  defp session(secret) do
+    initialized = request(secret, "initialize", 1, nil, initialize_params())
+    [session] = get_resp_header(initialized, "mcp-session-id")
+    on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
+    session
+  end
+
   def search_tenants(:empty, _scope, _query, _limit, _offset), do: {:ok, {[], 0}}
 
   defp rest(secret, path),
@@ -320,11 +530,14 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       |> put_req_header("authorization", "Bearer " <> secret)
       |> get("https://localhost" <> path)
 
-  defp rest_write(secret, method, path, body) do
+  defp rest_write(secret, method, path, body, headers \\ []) do
     conn =
       build_conn()
       |> put_req_header("authorization", "Bearer " <> secret)
       |> put_req_header("content-type", "application/json")
+
+    conn =
+      Enum.reduce(headers, conn, fn {key, value}, conn -> put_req_header(conn, key, value) end)
 
     dispatch(conn, Endpoint, method, "https://localhost" <> path, JSON.encode!(body))
   end

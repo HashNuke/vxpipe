@@ -25,6 +25,42 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
 
   def backend(agent), do: {__MODULE__, agent}
 
+  def calls_options(agent) do
+    [
+      credential_repository: {__MODULE__, agent},
+      call_repository: {__MODULE__, agent},
+      now: ~U[2026-09-09 12:00:00.000000Z],
+      join_token_generator: fn -> Agent.get(agent, & &1.join_token) end
+    ]
+  end
+
+  def fetch_api_key_by_digest(agent, digest) do
+    Agent.get(agent, fn state ->
+      if digest == :crypto.hash(:sha256, state.api_key) do
+        {:ok,
+         %{
+           id: "fixture-key",
+           tenant_key: tenant_key(),
+           scopes: MapSet.new([:calls]),
+           revoked_at: nil
+         }}
+      else
+        {:error, :not_found}
+      end
+    end)
+  end
+
+  def fetch_call(_agent, tenant, id) do
+    if tenant == tenant_key() and id == call_id(),
+      do: {:ok, prepared_call()},
+      else: {:error, :not_found}
+  end
+
+  def issue_join_token(agent, tenant, id, participant, token) do
+    operation(agent, {:issue_join_token, tenant, id, participant})
+    {:ok, token}
+  end
+
   def operations(agent), do: Agent.get(agent, &Enum.reverse(&1.operations))
 
   def authenticate(agent, tenant_key, secret) do
@@ -215,7 +251,12 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
       entry_receiver: "assistant",
       opening_audio: nil,
       media_policy: Vxpipe.CallEngine.ResolvedCallPlan.MediaPolicy.inherit(),
-      participants: %{},
+      participants: %{
+        "caller" => %{
+          participant_id: "part_test-caller",
+          connection: %{service: :web, mode: :receive, admission: :start_call}
+        }
+      },
       transfer_policy: %Vxpipe.CallEngine.CallSpec.TransferPolicy{
         attempt_timeout_ms: 30_000
       },

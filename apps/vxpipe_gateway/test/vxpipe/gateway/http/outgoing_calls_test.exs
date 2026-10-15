@@ -102,6 +102,186 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     assert stored.state == :running
   end
 
+  test "MCP outgoing creation has its own bounded deadline and HTTP replay never redials", c do
+    {configured, session} = mcp_endpoint(c, block?: true, call_creation_timeout: 2_000)
+    variables = %{"data" => %{"private" => "mcp-pinned-sentinel"}}
+    tasks = start_supervised!({Task.Supervisor, name: nil})
+
+    task =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        mcp_tool(c, configured, session, 2, "create_call", %{
+          tenant_key: c.tenant.key,
+          call_spec_id: c.published.call_spec_id,
+          variables: variables,
+          idempotency_key: "mcp-dial"
+        })
+      end)
+
+    assert_receive {:test_outbound_leg_connect, worker, request, _}, 1_000
+    {:ok, pinned} = Calls.fetch_call(c.tenant.key, request.call_id, c.options)
+    assert pinned.state == :running
+    assert pinned.plan.call_variables.sections["data"].value == variables["data"]
+    reference = task.ref
+    refute_receive {^reference, _response}, 50
+    send(worker, :release_test_dial)
+    response = Task.await(task, 2_000)
+    id = request.call_id
+    assert response.status == 200
+
+    assert %{
+             "result" => %{
+               "isError" => false,
+               "structuredContent" => %{"call_id" => ^id} = result
+             }
+           } = body(response)
+
+    assert map_size(result) == 1
+    refute response.resp_body =~ "mcp-pinned-sentinel"
+
+    replay = post(c, %{"variables" => variables}, "mcp-dial")
+    assert replay.status == 200
+    assert body(replay)["call"]["id"] == id
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  test "the longer creation deadline does not extend unrelated MCP tools", c do
+    options = Keyword.put(c.options, :admin_repository, {__MODULE__, self()})
+    {configured, session} = mcp_endpoint(%{c | options: options}, call_creation_timeout: 2_000)
+    response = mcp_tool(c, configured, session, 2, "get_tenant", %{tenant_key: c.tenant.key})
+    assert %{"error" => %{"code" => -32603}} = body(response)
+    assert_receive {:directory_blocked, handler}, 1_000
+    monitor = Process.monitor(handler)
+    assert_receive {:DOWN, ^monitor, :process, ^handler, _reason}, 1_000
+  end
+
+  test "an expired MCP creation deadline retains the durable idempotency claim", c do
+    {configured, session} = mcp_endpoint(c, block?: true, call_creation_timeout: 500)
+    tasks = start_supervised!({Task.Supervisor, name: nil})
+
+    task =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        mcp_tool(c, configured, session, 2, "create_call", %{
+          tenant_key: c.tenant.key,
+          call_spec_id: c.published.call_spec_id,
+          idempotency_key: "mcp-timeout"
+        })
+      end)
+
+    assert_receive {:test_outbound_leg_connect, worker, request, _}, 1_000
+    response = Task.await(task, 2_000)
+    assert %{"error" => %{"code" => -32603}} = body(response)
+    # The provider may already have received the submission when a client times out.
+    # Retrying the same durable claim must never issue a second dial.
+    send(worker, :release_test_dial)
+    replay = post(c, %{}, "mcp-timeout")
+    id = request.call_id
+
+    case body(replay) do
+      %{"call" => %{"id" => ^id}} ->
+        assert replay.status == 200
+
+      %{"error" => %{"code" => code}} ->
+        assert replay.status == 503
+        assert code in ["outgoing_call_start_failed", "outgoing_submission_unknown"]
+    end
+
+    {:ok, stored} = Calls.fetch_call(c.tenant.key, request.call_id, c.options)
+    assert stored.idempotency_key == "mcp-timeout"
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  def tenant_candidates(owner, _scope, _limit) do
+    send(owner, {:directory_blocked, self()})
+    receive do: (:release_directory -> {:ok, []})
+  end
+
+  test "a published web spec prepares one call with variables and no token or runtime", c do
+    web =
+      source()
+      |> Map.delete(:outgoing_call)
+      |> Map.put(:incoming_call, %{caller: "callee", handled_by: "assistant"})
+      |> put_in([:participants, "callee", :connection], %{
+        service: "web",
+        mode: "receive",
+        admission: "start_call"
+      })
+
+    {:ok, draft} = Calls.save_call_spec(c.tenant.key, web, c.options)
+    {:ok, _} = Calls.publish_call_spec(c.tenant.key, draft.call_spec_id, 1, c.options)
+
+    c = %{
+      c
+      | options:
+          Keyword.put(c.options, :join_token_generator, fn -> flunk("unexpected token") end)
+    }
+
+    input = %{"variables" => %{"data" => %{"private" => "pinned value"}}}
+    response = post(c, input, "web-retry", spec: draft.call_spec_id)
+    assert response.status == 201
+    assert get_resp_header(response, "cache-control") == ["no-store"]
+    assert %{"call" => %{"id" => id, "state" => "prepared", "revision" => 1}} = body(response)
+    {:ok, stored} = Calls.fetch_call(c.tenant.key, id, c.options)
+    assert stored.initial_variables == input["variables"]
+    assert stored.incarnation_id == nil
+    refute Map.has_key?(body(response), "join_token")
+    refute response.resp_body =~ "pinned value"
+    assert post(c, input, "web-retry", spec: draft.call_spec_id).status == 200
+    assert post(c, %{}, "web-retry", spec: draft.call_spec_id).status == 409
+
+    {:ok, token} =
+      Calls.issue_call_join_token(
+        c.principal,
+        c.tenant.key,
+        id,
+        nil,
+        Keyword.delete(c.options, :join_token_generator)
+      )
+
+    {:ok, claim} =
+      Calls.claim_join_token(
+        token.secret,
+        %{tenant_key: c.tenant.key, call_id: id, participant_key: token.participant_key},
+        c.options
+      )
+
+    {:ok, _} = Calls.mark_call_failed(claim, :startup_unknown, c.options)
+    replay = post(c, input, "web-retry", spec: draft.call_spec_id)
+    assert replay.status == 200
+    assert body(replay)["call"]["state"] == "failed"
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  test "browser call creation uses the same actor policy and explicit keys never fall back", c do
+    browser = %Vxpipe.Identity.Principal{
+      user_public_id: "user",
+      session_public_id: "session",
+      account_kind: :member,
+      grants: MapSet.new(["calls.write"]),
+      assigned_tenants: %{c.tenant.key => :read_write},
+      all_tenant_actions: MapSet.new()
+    }
+
+    configured = endpoint(c, browser_auth: {__MODULE__, browser})
+    assert post(c, %{}, nil, secret: nil, endpoint: configured).status == 201
+    assert_receive {:test_outbound_leg_connect, _, _, _}, 1_000
+    assert post(c, %{}, nil, secret: "invalid", endpoint: configured).status == 401
+    denied = endpoint(c, browser_auth: {__MODULE__, %{browser | grants: MapSet.new()}})
+    assert post(c, %{}, nil, secret: nil, endpoint: denied).status == 403
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  test "browser authentication failure returns a fixed error without private diagnostics", c do
+    configured = endpoint(c, browser_auth: {__MODULE__, :unavailable})
+    response = post(c, %{}, nil, secret: nil, endpoint: configured)
+    assert response.status == 503
+    assert body(response)["error"]["code"] == "call_management_unavailable"
+    refute response.resp_body =~ "private-browser-sentinel"
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  def authenticate(_conn, :unavailable), do: raise("private-browser-sentinel")
+  def authenticate(conn, actor), do: {:ok, conn, actor}
+
   test "durable start precedes dialing and 201 waits for its acknowledgement", c do
     task = Task.async(fn -> post(c, %{}, nil, block?: true) end)
     assert_receive {:test_outbound_leg_connect, worker, request, _}, 2_000
@@ -345,6 +525,63 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     assert stored.from_number == "+15550001000"
   end
 
+  defp mcp_endpoint(c, options) do
+    admission = start_supervised!({Vxpipe.Gateway.MCP.Admission, name: nil})
+
+    mcp = [
+      enabled: true,
+      allowed_hosts: ["localhost"],
+      admission: admission,
+      authentication: {Vxpipe.Gateway.MCP.Authentication, c.options},
+      call_creation_timeout: Keyword.fetch!(options, :call_creation_timeout)
+    ]
+
+    configured = endpoint(c, Keyword.put(options, :mcp, mcp))
+
+    initialized =
+      mcp_request(c, configured, nil, %{
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: %{
+          protocolVersion: "2025-11-25",
+          capabilities: %{},
+          clientInfo: %{name: "outgoing-test", version: "1"}
+        }
+      })
+
+    assert initialized.status == 200
+    [session] = get_resp_header(initialized, "mcp-session-id")
+    on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
+    # Initialization is not the slow operation under test. Accelerate ordinary
+    # callback deadlines after that handshake while retaining the configured
+    # creation deadline.
+    configured = put_in(configured, [:mcp, :protocol, :handler_call_timeout], 25)
+    {configured, session}
+  end
+
+  defp mcp_tool(c, configured, session, id, name, arguments),
+    do:
+      mcp_request(c, configured, session, %{
+        jsonrpc: "2.0",
+        id: id,
+        method: "tools/call",
+        params: %{name: name, arguments: arguments}
+      })
+
+  defp mcp_request(c, configured, session, request) do
+    connection =
+      conn(:post, "https://localhost/mcp", JSON.encode!(request))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer " <> c.key.secret)
+      |> put_req_header("mcp-protocol-version", "2025-11-25")
+
+    connection =
+      if session, do: put_req_header(connection, "mcp-session-id", session), else: connection
+
+    Endpoint.call(connection, configured)
+  end
+
   defp endpoint(c, options) do
     observer = Keyword.get(options, :observer, c.observer)
 
@@ -353,8 +590,10 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
        Map.new(options) |> Map.merge(%{owner: observer, observer: observer})}
 
     Endpoint.init(
+      mcp: Keyword.get(options, :mcp, []),
       call_admission: [
         enabled: true,
+        browser_auth: Keyword.get(options, :browser_auth),
         backend:
           {CallAdmission,
            Keyword.merge(c.options, [

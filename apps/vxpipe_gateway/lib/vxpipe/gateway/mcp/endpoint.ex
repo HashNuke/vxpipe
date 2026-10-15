@@ -18,6 +18,7 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
       call_options: Keyword.get(options, :call_options, []),
       body_limit: positive_limit!(options, :body_limit, 131_072),
       read_timeout: positive_limit!(options, :read_timeout, 5_000),
+      call_creation_timeout: positive_limit!(options, :call_creation_timeout, 100_000),
       protocol:
         ExMCP.HttpPlug.init(
           handler: Handler,
@@ -130,9 +131,19 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
            params["name"],
            Map.get(params, "arguments", %{})
          ) do
-      {:ok, _arguments} -> ExMCP.HttpPlug.call(conn, options.protocol)
-      {:error, :forbidden} -> error(conn, 403, "forbidden")
-      {:error, _reason} -> reject_request(conn, request, -32602, "Invalid tool arguments")
+      {:ok, _arguments} ->
+        protocol =
+          if params["name"] == "create_call",
+            do: Map.put(options.protocol, :handler_call_timeout, options.call_creation_timeout),
+            else: options.protocol
+
+        ExMCP.HttpPlug.call(conn, protocol)
+
+      {:error, :forbidden} ->
+        error(conn, 403, "forbidden")
+
+      {:error, _reason} ->
+        reject_request(conn, request, -32602, "Invalid tool arguments")
     end
   end
 

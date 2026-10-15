@@ -31,6 +31,7 @@ defmodule Vxpipe.Gateway.MCP.TenantToolsTest do
     session = initialize(context.options)
     catalog = request(context.options, session, "tools/list", 2)
     tools = JSON.decode!(catalog.resp_body)["result"]["tools"]
+    tools = Enum.filter(tools, &(&1["name"] in ["list_tenants", "get_tenant"]))
     assert Enum.map(tools, & &1["name"]) == ["list_tenants", "get_tenant"]
     assert Enum.all?(tools, &(&1["annotations"]["readOnlyHint"] == true))
     assert Enum.all?(tools, &(&1["inputSchema"]["additionalProperties"] == false))

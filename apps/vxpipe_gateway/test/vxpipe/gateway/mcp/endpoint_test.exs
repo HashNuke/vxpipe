@@ -51,7 +51,7 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
     assert tools.status == 200
 
     assert Enum.map(JSON.decode!(tools.resp_body)["result"]["tools"], & &1["name"]) ==
-             ["list_tenants", "get_tenant"]
+             ["list_tenants", "get_tenant", "create_call", "create_join_token"]
 
     assert Agent.get(context.backend, & &1.calls) == 2
     assert get_req_header(tools, "authorization") == []

@@ -70,6 +70,9 @@ defmodule Vxpipe.Console.Application do
       :webrtc
     ])
     |> Keyword.update!(:call_admission, &configure_recording(&1, recording))
+    |> Keyword.update!(:call_admission, fn options ->
+      Keyword.put(options, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
+    end)
     |> Keyword.update!(:call_spec_authoring, fn options ->
       Keyword.put(options, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
     end)

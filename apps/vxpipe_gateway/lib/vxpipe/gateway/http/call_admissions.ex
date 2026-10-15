@@ -11,7 +11,6 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
   @offer_endpoint "/api/rtvi/offer"
   # Clients send `variables`; Calls stores them as the call's initial Call Variables.
   @preparation_fields ["variables", "join_token_ttl_seconds"]
-  @token_fields ["join_token_ttl_seconds"]
 
   def init(options) do
     if Keyword.get(options, :enabled, false) do
@@ -19,6 +18,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
         backend: Keyword.get(options, :backend, {CallAdmission, []}),
         clock: Keyword.get(options, :clock, &DateTime.utc_now/0),
         enabled: true,
+        join_tokens: Vxpipe.Gateway.HTTP.CallJoinTokens.init(options),
         projection_supervisor:
           Keyword.get(
             options,
@@ -28,7 +28,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
         session_ttl_ms: Keyword.get(options, :session_ttl_ms, @default_session_ttl_ms)
       }
     else
-      %{enabled: false}
+      %{enabled: false, join_tokens: Vxpipe.Gateway.HTTP.CallJoinTokens.init(options)}
     end
   end
 
@@ -59,19 +59,13 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
     do: send_resp(conn, 404, "not found")
 
   def issue_token(conn, options, tenant_key, call_id, participant_key) do
-    with {:ok, secret} <- bearer(conn),
-         {:ok, principal} <- backend(options, :authenticate, [tenant_key, secret]),
-         {:ok, ttl_seconds} <- token_input(conn.body_params),
-         {:ok, token} <-
-           backend(options, :issue_token, [principal, call_id, participant_key, ttl_seconds]) do
-      send_json(conn, 201, %{
-        "call_id" => token.call_id,
-        "participant_key" => token.participant_key,
-        "join_token" => token_public(token)
-      })
-    else
-      {:error, reason} -> send_management_error(conn, reason)
-    end
+    Vxpipe.Gateway.HTTP.CallJoinTokens.issue_explicit(
+      conn,
+      options.join_tokens,
+      tenant_key,
+      call_id,
+      participant_key
+    )
   end
 
   def create_session(conn, %{enabled: false}, _tenant_key, _call_id, _participant_key),
@@ -253,14 +247,6 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
   end
 
   defp preparation_input(_invalid), do: {:error, :invalid_request}
-
-  defp token_input(body) when is_map(body) do
-    with :ok <- supported_fields(body, @token_fields) do
-      ttl_seconds(Map.get(body, "join_token_ttl_seconds"))
-    end
-  end
-
-  defp token_input(_invalid), do: {:error, :invalid_request}
 
   defp empty_input(body) when body == %{}, do: :ok
   defp empty_input(_body), do: {:error, :invalid_request}

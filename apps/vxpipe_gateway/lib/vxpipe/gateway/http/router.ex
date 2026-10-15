@@ -51,7 +51,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       operator_api:
         options |> Keyword.get(:operator_api, []) |> Vxpipe.Gateway.HTTP.OperatorAPI.init(),
       call_admission: CallAdmissions.init(call_admission),
-      outgoing_calls: Vxpipe.Gateway.HTTP.OutgoingCalls.init(call_admission),
+      call_creation: Vxpipe.Gateway.HTTP.CallCreation.init(call_admission),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
       telephony: telephony_events,
       telnyx_media: Telnyx.Media.init(media_options),
@@ -100,9 +100,9 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         options
       ),
       do:
-        Vxpipe.Gateway.HTTP.OutgoingCalls.create(
+        Vxpipe.Gateway.HTTP.CallCreation.create(
           conn,
-          options.outgoing_calls,
+          options.call_creation,
           tenant,
           specification
         )
@@ -130,6 +130,16 @@ defmodule Vxpipe.Gateway.HTTP.Router do
 
   def call(%Plug.Conn{method: "GET", path_info: ["api", "platform", "status"]} = conn, options) do
     Vxpipe.Gateway.HTTP.OperatorAPI.status(conn, options.operator_api)
+  end
+
+  def call(
+        %Plug.Conn{
+          method: "POST",
+          path_info: ["api", "tenants", tenant, "calls", id, "join-tokens"]
+        } = conn,
+        options
+      ) do
+    Vxpipe.Gateway.HTTP.CallJoinTokens.issue(conn, options.call_admission.join_tokens, tenant, id)
   end
 
   def call(%Plug.Conn{method: "POST", path_info: ["api", "rooms"]} = conn, options) do

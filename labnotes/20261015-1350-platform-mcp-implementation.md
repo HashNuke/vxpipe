@@ -280,3 +280,31 @@
   transaction lock and later authorization fails. Independent review found no
   authority/audit blockers; its query-error and ignored-filter findings are fixed.
 - Gateway HTTP/MCP account adapters are not part of this domain checkpoint.
+
+## Call creation and token HTTP/MCP adapters
+
+- Added transport-neutral Gateway.CallCreation over the shared Calls claim. HTTP
+  preserves its response envelope and 201/200 creation/replay distinction; MCP
+  returns only call_id. Both use actual browser/key actors. New web calls have no
+  runtime/token effects, and only newly claimed outgoing calls release admission.
+- Canonical optional-participant token issuance and the existing explicit route
+  use the same pinned eligibility, TTL and storage workflow. Shared projections
+  return the secret only in the intended token response; responses are no-store.
+- Review found failed web-call replay receiving an outgoing error, a browser
+  authentication exception escaping, and broad rescue masking CSRF rejection.
+  Focused red tests reproduced each issue; guards and exception handling now keep
+  web replay, safe errors and existing browser CSRF behavior intact.
+- MCP inherited runtime configuration previously lacked outgoing transport options.
+  Endpoint composition now supplies the shared configured runtime and allows
+  explicit MCP overrides. Fake-dial wire tests prove outgoing creation/replay.
+- The ordinary ten-second callback deadline was too short for the existing
+  outgoing submission wait. Authorized create_call now has a configurable
+  100-second default; other operations keep their prior bound. Accelerated deadline
+  tests verify timeout cleanup and durable same-key recovery without another dial.
+- Final focused Gateway selection passed 73 tests. Seven persisted Console tests
+  pass across calls/full/platform keys, nested
+  variables, canonical/explicit tokens, redemption, foreign/ended denial and
+  browser CSRF/key precedence. Independent domain, adapter and deadline reviews
+  found no remaining blockers. All seven isolated official-client acceptance
+  groups and fast root format/compile/Credo/dependency gates pass. The final stable
+  umbrella suite remains pending while subsequent account adapters are implemented.
