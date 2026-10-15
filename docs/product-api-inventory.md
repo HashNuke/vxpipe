@@ -224,7 +224,7 @@ Inspected sources:
 - [Gateway router](../apps/vxpipe_gateway/lib/vxpipe/gateway/http/router.ex),
   [spec writes](../apps/vxpipe_gateway/lib/vxpipe/gateway/http/call_spec_writes.ex),
   [admission](../apps/vxpipe_gateway/lib/vxpipe/gateway/http/call_admissions.ex), and
-  [outgoing calls](../apps/vxpipe_gateway/lib/vxpipe/gateway/http/outgoing_calls.ex).
+  [call creation](../apps/vxpipe_gateway/lib/vxpipe/gateway/http/call_creation.ex).
 - [Main UI requests](../apps/vxpipe_console/assets/src/App.tsx),
   [editor client](../apps/vxpipe_console/assets/src/admin/callSpecEditor/editor-api.ts),
   [account/role client](../apps/vxpipe_console/assets/src/admin/authentication/authenticationApi.ts),

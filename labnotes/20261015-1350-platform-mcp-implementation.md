@@ -580,3 +580,55 @@
   resource registration, final usage acknowledgement, reconciler persistence and
   post-persistence retirement still need wiring. An empty recreated tracker must
   never be accepted as recovery evidence. Full-suite verification follows.
+
+## Next integration review
+
+- Independent persistence review recommends private required/completed cleanup
+  fields and a one-time reservation in the existing admission-binding transaction.
+  Missing reserved membership remains unknown; a running/replayed bind cannot
+  manufacture an empty owner. Completion must lock the exact binding and preserve
+  the first timestamp. This is a design review, not implemented progress.
+- Archive close is stored with both lifecycle projections in one transaction.
+  Pending cleanup must defer ended without rejecting the fact, while preserving
+  valid outgoing timing/outcome metadata. Review corrected wording that could
+  have skipped those metadata updates after the fact was already committed.
+  Outgoing close also needs its narrow pre-start cancellation path. Publication
+  must be requested after cleanup commits because the earlier finalizer can stop
+  on call-not-ended. Final usage needs retained immutable observations and explicit
+  storage acknowledgement; today's best-effort reporter discards that evidence.
+- The next UI slice can expose the four access-key administration routes through
+  explicit Console-owned canonical route metadata, reusing existing controllers
+  and domain guards. Any explicit Authorization must deny before session fallback;
+  role/key/secret administration has no newly granted machine authority. Preserve
+  the existing host guard before mount dispatch and avoid a Gateway-to-Console
+  dependency. Roles and services follow this mechanism once verified.
+- Review found existing policy mismatches to address in those later slices:
+  credential validation permits read-only direct callers while HTTP requires
+  write; align the shared operation with the stricter existing HTTP contract.
+  Role detail/count composition needs actual-actor authorization, and full role
+  listings need bounded pagination. These are pending requirements, not fixes.
+- Incoming bootstrap review confirmed another integration requirement: seed an
+  already-live carrier leg atomically when starting its cleanup tracker. Otherwise
+  engine DOWN could seal and complete an empty tracker before registration. Capture
+  the original acknowledgement caller before DynamicSupervisor startup; missing
+  engine initialization fails closed while Leg retains carrier identity. This
+  extension is still pending, and must precede incoming tracker integration.
+
+## Cleanup and UI checkpoint verification
+
+- The root run against production snapshot 1d014ca6 passed Identity 67, MCP 37,
+  Providers 35, AgentRuntime 108, CallEngine 2,233, Calls 225, Gateway 701,
+  Artifacts 20 and Persistence 320 tests. Console had one failure among 335:
+  its exact canonical tenant-list assertion omitted the newly public timestamp.
+- Updated that assertion using the persisted fixture's timestamp. The full Console
+  suite then passed all 335 tests; no production source changed between runs.
+  Repeated root format check, warnings-as-errors compile, strict Credo and unused
+  dependency validation all passed. Review confirmed the exact assertion and
+  corrected integration-document wording, with no remaining findings.
+- Six changed documents have valid local link targets after correcting one stale
+  call-creation source link in the inventory. The prior 759 frontend tests,
+  types/lint/build, rendered browser checks and seven MCP acceptance groups remain
+  valid for unchanged source. No live-provider or external telephony lane ran.
+- Whole-call hangup remains incomplete: durable cleanup reservation/terminal
+  projection, atomic incoming registration and asynchronous admission, actual
+  resource/usage acknowledgement, reconciliation and public adapters remain next.

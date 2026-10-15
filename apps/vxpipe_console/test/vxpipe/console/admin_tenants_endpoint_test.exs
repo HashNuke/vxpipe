@@ -130,7 +130,8 @@ defmodule Vxpipe.Console.AdminTenantsEndpointTest do
              "items" => [
                %{
                  "tenant_key" => tenant.key,
-                 "name" => tenant.name
+                 "name" => tenant.name,
+                 "created_at" => DateTime.to_iso8601(tenant.inserted_at)
                }
              ],
              "pagination" => %{"page" => 1, "page_size" => 25, "total" => 1, "total_pages" => 1}

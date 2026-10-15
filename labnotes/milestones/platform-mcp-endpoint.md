@@ -430,6 +430,15 @@ after a seventh regression. Ten focused tests and the four fast root gates pass;
 follow-up review found no blockers. Durable fresh-owner authorization, resource
 registration, usage persistence, reconciliation and retirement remain unimplemented.
 
+Combined verification: the full umbrella run passed every application except one
+Console assertion still expecting tenant list items without `created_at`. Updated
+that assertion to the fixture's timestamp, then reran the entire Console suite:
+335 tests passed. The full run had already passed 2,233 CallEngine, 225 Calls,
+701 Gateway and 320 Persistence tests, with zero failures in the other applications.
+No production source changed between those runs. Final root format, compile,
+strict Credo and unused-dependency checks pass. The assertion and integration
+design follow-ups were independently reviewed; all findings are resolved.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:
