@@ -296,8 +296,8 @@ need registration, remote termination evidence and final-usage acknowledgement.
 The durable reservation and tracker must exist before releasing the startup gate.
 The Session/WebRTC hooks are implemented and locally verified. Managed admission
 now supplies the verified private binding from its refreshed durable claim, for
-both newly started and running-call sessions. Global runtime enablement and the
-complete active-call acceptance check remain separate gates.
+both newly started and running-call sessions. Runtime configuration now enables the complete composition when durable
+persistence is configured. The active-call acceptance check remains a separate gate.
 
 Telnyx and Twilio media sockets now also monitor their exact room incarnation.
 They reject startup against an unavailable or stale room and close on room
@@ -446,7 +446,23 @@ Tests must cover successful commit followed by a lost task result, immutable
 retry, requester death, and waiting for actual task DOWN before retirement. This
 ownership contract now has focused tracker tests. Managed admission creates a
 tracker only for a fresh durable reservation; an existing reservation must resolve
-an existing open tracker. Runtime rollout and complete integration checks remain.
+an existing open tracker. Runtime composition is enabled with durable persistence; complete integration
+checks remain.
+
+## Runtime composition
+
+`Gateway.Application.http_options/1` composes managed admission for both standalone
+Gateway and Console's embedded mount. With durable persistence configured, runtime
+configuration enables the default admission backend and archive writer in development
+and production, plus one named `CallCleanupReconciler` under Gateway's supervisor.
+The reconciler runs even when Gateway's own HTTP listener is disabled.
+
+Default incoming admission inherits archive/cleanup options while explicit incoming
+overrides remain authoritative. Custom handlers/backends are preserved. Without
+durable persistence the managed flag remains disabled; already managed persisted
+calls still require their existing ownership when joined. Apply the additive
+migrations and drain old application writers before rollout. This configuration
+work does not establish that full active-call acceptance has passed.
 
 ## Remaining carrier integration contracts
 
@@ -467,9 +483,8 @@ carrier owner atomically; existing reservations only look up membership. Identit
 and usage are retained before the admit/cancel/error decision, and media bindings
 carry the exact cleanup identity. Missing identity/usage or a lost command observer
 cannot acknowledge completion. Final storage plus authenticated carrier end,
-authority closure and command drainage gate orderly retirement. The option is not
-yet enabled globally. Incoming rooms now receive per-call outgoing connector
-scope so their transfer legs participate too.
+authority closure and command drainage gate orderly retirement. Durable runtime configuration now enables the option. Incoming rooms receive
+per-call outgoing connector scope so their transfer legs participate too.
 
 Outgoing owners must validate their request and private connector scope, retain
 usage, register with the existing exact tracker and monitor the room before reserving media or dispatching

@@ -46,7 +46,7 @@ defmodule Vxpipe.Console.Application do
       end
 
     gateway_settings
-    |> Keyword.fetch!(:http)
+    |> Vxpipe.Gateway.Application.http_options()
     |> Keyword.take([
       :mcp,
       :account_management,

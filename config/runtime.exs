@@ -295,25 +295,6 @@ if config_env() == :dev do
     |> Keyword.put(:port, port)
     |> Keyword.update!(:cors, &Keyword.put(&1, :allowed_origins, allowed_origins))
 
-  gateway_http =
-    if database_enabled? do
-      archive = [
-        enabled: true,
-        writer: {Vxpipe.Persistence.EctoStorage, []},
-        maximum_pending_facts: 256,
-        retry_delay_ms: 250,
-        drain_timeout_ms: 5_000,
-        source_policy: %{"revision" => 0}
-      ]
-
-      Keyword.put(gateway_http, :call_admission,
-        enabled: true,
-        backend: {Vxpipe.Gateway.CallAdmission, [archive: archive]}
-      )
-    else
-      gateway_http
-    end
-
   config :vxpipe_gateway, Vxpipe.Gateway.Application, http: gateway_http
 
   if database_enabled? do
@@ -476,8 +457,40 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
       do: ["localhost", "127.0.0.1", "::1"],
       else: [app_uri.host]
 
+  call_admission =
+    Application.fetch_env!(:vxpipe_gateway, Vxpipe.Gateway.Application)
+    |> Keyword.fetch!(:http)
+    |> Keyword.get(:call_admission, [])
+
+  call_admission =
+    if database_enabled? do
+      archive = [
+        enabled: true,
+        writer: {Vxpipe.Persistence.EctoStorage, []},
+        maximum_pending_facts: 256,
+        retry_delay_ms: 250,
+        drain_timeout_ms: 5_000,
+        source_policy: %{"revision" => 0}
+      ]
+
+      backend =
+        case Keyword.get(call_admission, :backend, {Vxpipe.Gateway.CallAdmission, []}) do
+          {Vxpipe.Gateway.CallAdmission, options} ->
+            {Vxpipe.Gateway.CallAdmission, Keyword.put_new(options, :archive, archive)}
+
+          custom ->
+            custom
+        end
+
+      call_admission |> Keyword.put(:enabled, true) |> Keyword.put(:backend, backend)
+    else
+      call_admission
+    end
+
   config :vxpipe_gateway, Vxpipe.Gateway.Application,
+    managed_cleanup: [enabled: database_enabled?],
     http: [
+      call_admission: call_admission,
       mcp: [
         enabled: database_enabled?,
         allowed_hosts: mcp_hosts,

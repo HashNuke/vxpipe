@@ -1564,3 +1564,17 @@ after correcting it, it reproduced actual unowned startup, then all 12 owning te
 passed with the guard. Independent review approved final ordering and compatibility.
 Global configuration is a separate checkpoint; active durable lifecycle acceptance
 and final root gates remain outstanding.
+
+### Durable runtime enablement
+
+One Gateway composition function now supplies managed admission options to native
+HTTP and Console's embedded mount. Durable runtime configuration enables the
+existing admission/archive backend in development and production, and one named
+bounded reconciler independent of the native HTTP listener. Incoming defaults
+inherit only archive/cleanup options; explicit overrides and custom handlers or
+backends remain intact. No Gateway-to-Persistence dependency was introduced.
+
+Gateway's four expected missing-composition failures and Console's missing-flag
+failure preceded implementation. Five Gateway tests and 15 Console runtime plus
+persisted MCP tests passed. Independent review approved, exact formatting and diff
+checks passed. Final active lifecycle/client acceptance and root gates remain.

@@ -75,6 +75,38 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     refute http |> Keyword.get(:operator_api, []) |> Keyword.get(:enabled, false)
   end
 
+  test "managed call cleanup and admission require durable persistence for either host", %{
+    runtime: runtime
+  } do
+    for environment <- [:dev, :prod] do
+      System.put_env("VXPIPE_DB_URL", "postgres://localhost/managed_runtime_configuration")
+
+      settings =
+        Config.Reader.read!(runtime, env: environment)
+        |> Keyword.fetch!(:vxpipe_gateway)
+        |> Keyword.fetch!(Vxpipe.Gateway.Application)
+
+      assert settings |> Keyword.fetch!(:managed_cleanup) |> Keyword.fetch!(:enabled)
+      http = Vxpipe.Gateway.Application.http_options(settings)
+      assert http |> Keyword.fetch!(:call_admission) |> Keyword.fetch!(:enabled)
+
+      assert {Vxpipe.Gateway.CallAdmission, options} =
+               http |> Keyword.fetch!(:call_admission) |> Keyword.fetch!(:backend)
+
+      assert Keyword.fetch!(options, :managed_cleanup)
+      assert options |> Keyword.fetch!(:archive) |> Keyword.fetch!(:enabled)
+    end
+
+    System.delete_env("VXPIPE_DB_URL")
+
+    settings =
+      Config.Reader.read!(runtime, env: :prod)
+      |> Keyword.fetch!(:vxpipe_gateway)
+      |> Keyword.fetch!(Vxpipe.Gateway.Application)
+
+    refute settings |> Keyword.fetch!(:managed_cleanup) |> Keyword.fetch!(:enabled)
+  end
+
   test "each database alias works and the first nonblank alias wins independently", %{
     runtime: runtime
   } do

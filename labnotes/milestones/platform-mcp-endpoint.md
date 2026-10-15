@@ -697,6 +697,17 @@ unowned startup, then passed with all 12 owning tests. Independent review approv
 ordering, Session metadata and legacy/custom-backend boundaries. Global runtime
 configuration and complete active-call acceptance remain open.
 
+Managed runtime composition is now enabled when durable persistence is configured.
+Standalone and Console-embedded HTTP/MCP use the same composed default backend;
+incoming admission receives shared archive/cleanup options with explicit overrides
+preserved. One named bounded reconciler runs even without a native Gateway HTTP
+listener. Custom backends/handlers and disabled persistence retain compatibility.
+
+Four Gateway missing-API reds and one Console runtime-config red preceded the
+implementation. Five Gateway composition tests and 15 Console runtime/persisted-MCP
+tests passed; exact formatting and independent review passed. Complete active-call
+acceptance and the final root gates remain outstanding.
+
 Combined recovery/carrier/sample verification: the frozen umbrella run passed all
 applications except an obsolete Console sample-route permission assertion. That
 assertion now reflects the authenticated gate plus actual-actor domain checks;
