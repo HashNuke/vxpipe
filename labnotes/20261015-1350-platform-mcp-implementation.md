@@ -308,3 +308,18 @@
   found no remaining blockers. All seven isolated official-client acceptance
   groups and fast root format/compile/Credo/dependency gates pass. The final stable
   umbrella suite remains pending while subsequent account adapters are implemented.
+
+## Whole-call hangup design review
+
+- Wrote docs/call-hangup-lifecycle.md while the account checkpoint's full umbrella
+  suite ran against frozen source. The design uses durable call-row intent,
+  existing admission ownership and one bounded Gateway reconciliation path.
+- Independent review found that existing archive facts and snapshots do not yet
+  share a validated room/incarnation anchor. The implementation must establish
+  this under the call-row lock before using archive evidence for recovery.
+- Review also identified outgoing pre-start close rejection and carrier owners
+  outside the engine subtree. The design now requires a narrow cancellation-close
+  projection and explicit Gateway cleanup acknowledgement before reporting ended.
+  An engine supervisor exit alone cannot prove remote carrier cleanup.
+- Late started projections must retain intent and immutable incarnation binding.
+  These are reviewed implementation requirements, not completed hangup behavior.

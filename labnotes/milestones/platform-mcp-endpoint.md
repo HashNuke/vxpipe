@@ -299,7 +299,8 @@ adapter acceptance now passes as recorded below.
 Transport evidence: shared Gateway creation preserves existing HTTP envelopes,
 returns minimal MCP call IDs, and starts only freshly claimed outgoing calls.
 Canonical/explicit token routes share the pinned issuer and safe projections.
-The final focused Gateway selection passed 73 tests. Seven persisted Console tests cross HTTP/MCP for calls/full/platform credentials
+The final focused Gateway selection passed 73 tests. Seven persisted Console tests
+cross HTTP/MCP for calls/full/platform credentials
 and verify browser CSRF and explicit-key precedence. Review exposed failed-web
 replay incorrectly reporting an outgoing error and wrappers masking CSRF rejection;
 both regressions were reproduced and fixed. Local fake-dial wire tests verify
@@ -313,6 +314,10 @@ run remains part of the overall milestone acceptance.
 
 Depends on call creation. Runnable slice: hang up a prepared, admitting, ringing or
 running local call through REST/MCP and observe its owned resources terminate.
+
+Implementation design: [durable whole-call hangup](../../docs/call-hangup-lifecycle.md).
+The design records admission ordering, cancellation intent, exact-incarnation
+completion evidence and recovery. Its review does not complete runtime tasks.
 
 - [ ] Red-test `hangup_call` with tenant ownership and calls-scope requirements,
   including denial before runtime lookup and repeated termination.
