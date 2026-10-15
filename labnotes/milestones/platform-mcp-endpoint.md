@@ -642,6 +642,15 @@ carrier proof or acknowledge/recreate tracker membership. Twelve focused tests
 pass after five expected reds, with independent review. Carrier owners still need
 to adopt the helper and enforce their independent retirement conditions.
 
+Recovery components now traverse bounded durable pages, coalesce wake hints,
+limit worker concurrency, and advance past unresolved rows. Worker-local deadlines
+survive reconciler death; restart begins a fresh traversal. Only verified exact
+intent can request shutdown, and later intent can replay stored completion without
+a tracker. Five missing-module reds preceded implementation; six focused tests
+pass, including real local incarnation shutdown, stale/unverified protection,
+blocked-row fairness, cursor retry and restart. Independent review approved.
+Application enablement, admission wiring and HTTP/MCP hangup remain open.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

@@ -146,6 +146,23 @@ intent stays eligible for terminal projection replay. Already-ended calls are
 excluded. A partial index supports bounded pages of at most 100 rows. The scan
 alone performs no shutdown or ownership reconstruction.
 
+`CallCleanupReconciler` implements that traversal as a supervised-process child
+with one bounded scan task and at most four row tasks by default. It retains at
+most one page (25 rows by default; maximum 100). Each task installs its own
+five-second deadline before work; completion releases its slot only after actual
+DOWN. A timed-out row advances the current traversal and remains eligible next
+cycle. Failed scans retry their current cursor with capped backoff. Coalesced wake
+hints preserve a running cycle and request another pass after it finishes; restart
+begins at the first cursor. No caller owns the scheduled tasks.
+
+`CallCleanupRecovery` only stops a verified exact incarnation with durable hangup
+intent. Pending normal cleanup alone does not stop an active call. Previously
+stored cleanup completion replays its original timestamp through Calls even after
+tracker retirement. Missing runtime/tracker evidence never creates membership or
+writes completion. These components have focused local verification; application
+supervision/configuration and hangup wake wiring remain pending with managed
+admission rollout.
+
 The engine now exposes `CallEngine.hangup_call/3` for the trusted tenant, room and
 incarnation, with fixed authority shutdown reason `:api_hangup`. Existing
 `end_call/3` retains its remote-hangup meaning. The incarnation check occurs inside

@@ -1353,3 +1353,24 @@ blocked-worker deadline even after owner death, seeded semantic obligations and
 success arriving before actual worker termination. The last case deliberately
 injects the task protocol result using its reference to hold this boundary open.
 Root and independent review approved; changed files formatted and diff checked.
+
+### Bounded cleanup reconciliation
+
+Implemented the restartable scheduler and separate exact-binding recovery operation.
+One bounded page is retained; row tasks have configurable concurrency and install
+worker-local deadlines before effects. A slot is released only after actual task
+DOWN. Failed/timed-out rows advance the finite cursor and remain durable for the
+next cycle; failed scans retry their current cursor with capped backoff. Wake hints
+coalesce without abandoning current work. No trackers or rooms are recreated.
+Normal pending cleanup without hangup intent never stops a room. Stored cleanup
+completion with later intent replays its original timestamp through Calls.
+
+Five expected missing-module reds preceded implementation. Six tests then passed,
+including real local room shutdown, stale and unverified binding protection,
+normal cleanup without intent, completion replay without tracker, blocked-row
+fairness, current-cursor retry and deadline survival across reconciler death.
+Independent source review approved; four Elixir paths formatted. The green command
+was inadvertently launched from the umbrella root: it ran the six Gateway tests
+and reported no matching paths for other applications, exiting zero. No broader
+suite coverage is claimed for that command. Production application supervision,
+configuration and hangup wake wiring remain pending with managed admission rollout.
