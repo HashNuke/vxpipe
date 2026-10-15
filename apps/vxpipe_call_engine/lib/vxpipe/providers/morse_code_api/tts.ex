@@ -62,21 +62,46 @@ defmodule Vxpipe.Providers.MorseCodeApi.TTS do
 
   def validate_text(_text), do: {:error, :invalid_text}
 
-  def request_url(%__MODULE__{} = config),
-    do: config.endpoint <> "/v1/text-to-speech/" <> config.voice <> "/stream"
+  def connection_options(%__MODULE__{} = config) do
+    uri = URI.new!(config.endpoint)
+    scheme = if uri.scheme == "https", do: "wss", else: "ws"
 
-  def request_options(%__MODULE__{} = config, text, into) do
-    [
-      headers: [{"xi-api-key", config.api_key}, {"accept", "application/octet-stream, audio/pcm"}],
-      params: [output_format: "pcm_#{config.sample_rate}"],
-      json: %{model_id: config.model, text: text},
-      into: into,
-      receive_timeout: 60_000,
-      retry: false,
-      max_redirects: 0,
-      decode_body: false
-    ]
+    url =
+      %{
+        uri
+        | scheme: scheme,
+          path: "/v1/text-to-speech/#{config.voice}/stream-input",
+          query:
+            URI.encode_query(%{
+              model_id: config.model,
+              output_format: "pcm_#{config.sample_rate}",
+              auto_mode: true
+            })
+      }
+      |> URI.to_string()
+
+    %{url: url, headers: []}
   end
+
+  def decode(payload) when is_binary(payload) and byte_size(payload) <= 65_536 do
+    case JSON.decode(payload) do
+      {:ok, %{"error" => _error}} ->
+        {:error, :invalid_message}
+
+      {:ok, %{"isFinal" => true} = message} ->
+        if Map.get(message, "audio") in [nil, ""],
+          do: :completed,
+          else: {:error, :invalid_message}
+
+      {:ok, %{"audio" => encoded}} when is_binary(encoded) ->
+        Base.decode64(encoded)
+
+      _invalid ->
+        {:error, :invalid_message}
+    end
+  end
+
+  def decode(_payload), do: {:error, :invalid_message}
 
   defp unique_options?(options),
     do: length(options) == length(Enum.uniq(Keyword.keys(options)))

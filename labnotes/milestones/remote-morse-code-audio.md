@@ -1,6 +1,11 @@
 # Hosted Morse audio provider
 
-Status: implementation and local Railway preparation complete, 2026-10-15.
+Status: original implementation and local Railway preparation complete, 2026-10-15.
+The baseline below records its original acceptance scope. Subsequent public
+hosting uses `https://morsecode.vxpipe.com` without authentication. The user has
+now requested WebSocket TTS; its changed contract and acceptance are tracked in
+[Realtime Morse synthesis](realtime-morse-synthesis.md). See the updated
+[design](../../docs/remote-morse-code-audio.md) for current behavior.
 Scope simplified at the user's request. This replaces the earlier goal of
 complete ElevenLabs speech API parity: the service performs existing Morse TTS/STT operations over
 the network, using the relevant ElevenLabs request and response conventions.

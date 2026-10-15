@@ -3,69 +3,113 @@ defmodule Vxpipe.Providers.MorseCodeApi.TTSRequestTest do
   @moduletag :integration
   @moduletag :capture_log
 
-  alias Vxpipe.CallEngine.TestTTSHTTPServer
+  alias Vxpipe.CallEngine.TestSpeechWireServer
   alias Vxpipe.Providers.MorseCodeApi.{Endpoint, TTS, TTSRequest}
 
-  test "uses the selected local origin and streams only complete PCM samples" do
-    config = config(chunks: [<<1>>, <<0, 2, 0>>])
+  test "streams complete PCM samples over the ElevenLabs WebSocket protocol" do
     owner = self()
 
-    assert :ok =
-             TTSRequest.run(config, "SOS", fn pcm ->
-               send(owner, {:pcm, pcm})
-               :ok
-             end)
+    task =
+      request(fn audio ->
+        send(owner, {:pcm, audio})
+        :ok
+      end)
 
-    assert_receive {:tts_http_request, _, "/v1/text-to-speech/morse/stream", [], body}
-    assert body == %{"model_id" => "morse_v1", "text" => "SOS"}
-    assert IO.iodata_to_binary(chunks([])) == <<1, 0, 2, 0>>
+    peer = assert_input()
+    send(peer, {:send, [audio(<<1>>), audio(<<0, 2, 0>>), final()]})
+    assert :ok = Task.await(task)
+    assert_receive {:pcm, <<1, 0, 2, 0>>}
+    assert_receive {:speech_wire_closed, ^peer}
   end
 
-  for options <- [
-        [status: 401],
-        [type: "application/json"],
-        [chunks: []],
-        [chunks: [<<1>>]],
-        [status: 302]
+  test "completion waits for consumer credit and cancellation closes the owned connection" do
+    owner = self()
+
+    task =
+      request(fn pcm ->
+        send(owner, {:waiting_for_credit, self(), pcm})
+
+        receive do
+          :credit -> :ok
+        end
+      end)
+
+    peer = assert_input()
+    send(peer, {:send, [audio(<<1, 0>>), final()]})
+    assert_receive {:waiting_for_credit, worker, <<1, 0>>}
+    task_ref = task.ref
+    refute_receive {^task_ref, :ok}
+    monitor = Process.monitor(worker)
+    Task.shutdown(task, :brutal_kill)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}
+    assert_receive {:speech_wire_closed, ^peer}
+  end
+
+  test "a partial audio response is not successful without isFinal" do
+    task = request(fn _ -> :ok end)
+    peer = assert_input()
+    send(peer, {:send, [audio(<<1, 0>>)]})
+    send(peer, :close)
+    assert {:error, :provider_unavailable} = Task.await(task)
+  end
+
+  for frames <- [
+        [{:text, ~s({"audio":"not base64!"})}],
+        [{:text, ~s({"error":"invalid_text"})}],
+        [{:text, ~s({"audio":"AQ=="})}, {:text, ~s({"isFinal":true})}],
+        [{:text, ~s({"isFinal":true})}]
       ] do
-    test "fails #{inspect(options)} without retry or redirect" do
-      config = config(unquote(Macro.escape(options)))
-
-      assert {:error, :provider_unavailable} =
-               TTSRequest.run(config, "E", fn _ -> flunk("unexpected audio") end)
-
-      assert_receive {:tts_http_request, _, _, _, _}
-      refute_receive {:tts_http_request, _, _, _, _}, 50
+    test "rejects malformed or incomplete audio #{inspect(frames)}" do
+      task = request(fn _ -> :ok end)
+      peer = assert_input()
+      send(peer, {:send, unquote(Macro.escape(frames))})
+      assert {:error, :provider_unavailable} = Task.await(task)
+      assert_receive {:speech_wire_closed, ^peer}
     end
   end
 
-  test "consumer rejection prevents successful completion" do
-    assert {:error, :provider_unavailable} =
-             TTSRequest.run(config([]), "E", fn _ -> {:error, :closed} end)
+  test "consumer rejection cannot produce a successful completion" do
+    task = request(fn _ -> {:error, :closed} end)
+    peer = assert_input()
+    send(peer, {:send, [audio(<<1, 0>>), final()]})
+    assert {:error, :provider_unavailable} = Task.await(task)
   end
 
-  defp config(options) do
-    server = start_supervised!({TestTTSHTTPServer, Keyword.put(options, :owner, self())})
+  test "an upgrade failure is not retried or exposed" do
+    task = request(fn _ -> flunk("unexpected audio") end, response: :reject)
+    assert {:error, :provider_unavailable} = Task.await(task)
+    assert_receive {:speech_wire_authorization, []}
+    refute_receive {:speech_wire_authorization, _}
+  end
+
+  defp request(consume, options \\ []) do
+    server = start_supervised!({TestSpeechWireServer, Keyword.put(options, :owner, self())})
 
     origin =
       server
-      |> TestTTSHTTPServer.endpoint()
+      |> TestSpeechWireServer.endpoint()
       |> URI.new!()
       |> Map.put(:path, nil)
+      |> Map.put(:scheme, "http")
       |> URI.to_string()
 
     assert {:ok, endpoint} = Endpoint.new(origin, allow_http?: true)
     assert {:ok, config} = TTS.new([api_key: "synthetic"], endpoint)
-    config
+    supervisor = start_supervised!(Task.Supervisor)
+    Task.Supervisor.async_nolink(supervisor, fn -> TTSRequest.run(config, "SOS", consume) end)
   end
 
-  defp chunks(acc) do
-    receive do
-      {:pcm, pcm} ->
-        assert rem(byte_size(pcm), 2) == 0
-        chunks([pcm | acc])
-    after
-      0 -> Enum.reverse(acc)
+  defp assert_input do
+    assert_receive {:speech_wire_connected, peer}
+
+    for expected <- [%{"text" => " "}, %{"text" => "SOS"}, %{"text" => ""}] do
+      assert_receive {:speech_wire_frame, ^peer, :text, payload}
+      assert JSON.decode!(payload) == expected
     end
+
+    peer
   end
+
+  defp audio(bytes), do: {:text, JSON.encode!(%{audio: Base.encode64(bytes), isFinal: false})}
+  defp final, do: {:text, JSON.encode!(%{audio: nil, isFinal: true})}
 end

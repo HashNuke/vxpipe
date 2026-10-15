@@ -29,7 +29,7 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiConfiguredRoomTest do
     Repo
   }
 
-  alias Vxpipe.Providers.MorseCodeApi.{Endpoint, STTSession, TTSSession}
+  alias Vxpipe.Providers.MorseCodeApi.{STTSession, TTSSession}
 
   setup do
     if Process.whereis(Repo) == nil, do: start_supervised!(Repo)
@@ -169,15 +169,9 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiConfiguredRoomTest do
     refute_received {:vxpipe_event, %AgentTurnCompleted{correlation_id: "blocked"}}
     refute opening_turn in ["first", "blocked", "replacement"]
 
-    assert {:ok, endpoint} = Endpoint.configured()
-    origin = URI.new!(endpoint.http)
-    requests = collect_observations(:configured_request)
-    assert length(requests) == 4
-
-    assert Enum.all?(
-             requests,
-             &(&1 == {origin.scheme, origin.host, origin.port, "/v1/text-to-speech/morse/stream"})
-           )
+    # All four successful syntheses now use WebSockets. The adapter must not
+    # silently fall back to an HTTP synthesis request.
+    assert collect_observations(:configured_request) == []
 
     events = collect_observations(:configured_public_event)
     assert events != []

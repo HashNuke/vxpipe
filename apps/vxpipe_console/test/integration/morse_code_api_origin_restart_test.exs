@@ -88,8 +88,8 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiOriginRestartTest do
                  [
                    {"GET", "/v1/models"},
                    {"GET", "/v1/speech-to-text/realtime"},
-                   {"GET", "/v1/voices"},
-                   {"POST", "/v1/text-to-speech/morse/stream"}
+                   {"GET", "/v1/text-to-speech/morse/stream-input"},
+                   {"GET", "/v1/voices"}
                  ]
       end
 

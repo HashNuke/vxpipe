@@ -55,7 +55,7 @@ defmodule Vxpipe.Providers.MorseCodeApi.TTSTest do
     end
   end
 
-  test "a private resolved origin controls authenticated PCM requests without redirects or fallback" do
+  test "a private resolved origin controls the realtime PCM WebSocket without credentials" do
     assert {:ok, endpoint} = Endpoint.new("http://morse-local:9876", allow_http?: true)
 
     assert {:ok, config} =
@@ -63,14 +63,20 @@ defmodule Vxpipe.Providers.MorseCodeApi.TTSTest do
 
     refute inspect(config) =~ "compatibility key"
     refute inspect(config) =~ "morse-local"
-    assert TTS.request_url(config) == "http://morse-local:9876/v1/text-to-speech/morse/stream"
-    options = TTS.request_options(config, "SOS", :sink)
-    assert {"xi-api-key", "my compatibility key"} in Keyword.fetch!(options, :headers)
-    assert Keyword.fetch!(options, :params) == [output_format: "pcm_24000"]
-    assert Keyword.fetch!(options, :json) == %{model_id: "morse_v1", text: "SOS"}
-    assert Keyword.fetch!(options, :max_redirects) == 0
-    assert Keyword.fetch!(options, :retry) == false
-    assert Keyword.fetch!(options, :decode_body) == false
+    connection = TTS.connection_options(config)
+    uri = URI.new!(connection.url)
+    assert uri.scheme == "ws"
+    assert uri.host == "morse-local"
+    assert uri.port == 9876
+    assert uri.path == "/v1/text-to-speech/morse/stream-input"
+
+    assert URI.decode_query(uri.query) == %{
+             "model_id" => "morse_v1",
+             "output_format" => "pcm_24000",
+             "auto_mode" => "true"
+           }
+
+    assert connection.headers == []
 
     assert {:ok, expected, Vxpipe.Providers.MorseCodeApi.TTSRequest} =
              TTSSession.request_configuration(config)
