@@ -533,9 +533,9 @@ Dependencies: D, F; E needed for complete API acceptance, not the PCM room path.
 - [ ] Implement a tested Morse-appropriate onset/endpoint profile. Do not copy
   Scribe's inferred-gap timers or local Silero behavior without proving their
   effect on tone gaps, partial revisions, forced segments and interruption.
-- [ ] Add model catalogs and **MorseCodeApiSTT** selection; verify ordinary
+- [x] Add model catalogs and **MorseCodeApiSTT** selection; verify ordinary
   tenant/platform credentials, publication, restart and service readiness paths.
-- [ ] Prove STT uses the same configured origin as TTS. Run the same saved call
+- [x] Prove STT uses the same configured origin as TTS. Run the same saved call
   spec against two local server origins across a Vxpipe restart and verify the
   second receives all new STT/TTS/probe traffic. Use local TLS fixtures for the
   HTTPS/WSS path; hosted availability is not a prerequisite for local acceptance.
@@ -564,10 +564,24 @@ case and a repeated audio round trip: independent `E E` input → Go recognition
 fixture reply → Go synthesis of `TEST`. Equal inputs have distinct room turn IDs;
 public transcripts contain no compatibility key. Console service and editor
 states render at desktop/mobile widths, and all 759 frontend tests pass.
-The two initial STT checklist items are complete; G remains open for local TLS
-and actual restart/origin switching, room permission/outage/replacement coverage,
+The two initial STT checklist items are complete; G remains open for
+room permission/outage/replacement coverage,
 transcript/error browser acceptance and final regression gates. See the
 [STT integration labnote](../20261015-0019-morse-stt-integration.md).
+
+G restart/TLS acceptance (2026-10-15): an isolated local integration lane starts
+two owned Go servers and a temporary PostgreSQL database. One process persists
+the encrypted service and publication; fresh Vxpipe processes reload them for
+HTTP → HTTPS/WSS → HTTP rollback, verifying unchanged credential ID/version and
+publication digest. Every observed discovery, probe, synthesis and recognition
+request uses the selected origin. The TLS process trusts only the fixture root;
+without that root both HTTPS and WSS fail. A root CA and separately signed server
+certificate are generated per run, without changing production verification.
+The fixture retires both servers and drops only its created database. The new
+tagged test passes, and the complete umbrella run for the STT integration reports
+3,841 tests, zero failures and 148 exclusions (seed 180080). This does not close
+the remaining room failure/permission and rendered transcript/error checks.
+See the [restart evidence and command](../20261015-0036-morse-origin-restart.md).
 
 Exit: the two remote speech capabilities complete an ordinary configured room
 round trip without paid speech/LLM services or local-codec bypasses.

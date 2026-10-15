@@ -43,7 +43,10 @@ checks pass. The previous foundation umbrella process finished with all apps
 passing except the service test edited while that VM still had the old manifest
 loaded; its one unsupported-STT failure is invalid mixed-snapshot evidence, not a
 passing regression. The new focused Console lane passes with current code. A
-fresh full umbrella run is active with runtime/tests left unchanged during it.
+fresh full umbrella run completed with runtime/tests left unchanged during it:
+3,841 tests, zero failures, 148 excluded, seed 180080 and exit status zero.
+The subsequent restart/TLS fixture has its own tagged acceptance evidence in
+[the restart labnote](20261015-0036-morse-origin-restart.md).
 
 Design review: this registers the existing scoped provider through the ordinary
 startup and conversation boundaries. No new call state machine, storage or

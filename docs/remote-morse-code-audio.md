@@ -251,8 +251,15 @@ G's configured-room test now recognizes two independent `E E` inputs through
 the Go WebSocket, publishes distinct canonical room turns and returns independently
 decoded `TEST` audio through Go HTTP synthesis. The same encrypted service is
 used for both capabilities. Saved-plan tests verify platform/tenant resolution
-and private HTTP/WS origin changes. These do not yet establish an actual restart
-between origins, local TLS room acceptance, permission revocation or service-loss
-recovery. The
+and private HTTP/WS origin changes. A separate local integration lane also
+reloads the same encrypted service and publication in fresh Vxpipe processes,
+completes actual rooms over HTTP and verified HTTPS/WSS, then rolls back to HTTP.
+Two owned Go servers record all discovery/probe/speech routes; traffic always
+uses the selected origin. Untrusted HTTPS/WSS are rejected before the fixture CA
+is loaded. The fixture uses a temporary PostgreSQL database and removes it after
+acceptance; Go still retains no content. See the
+[restart/TLS test command](../labnotes/20261015-0036-morse-origin-restart.md).
+Room permission revocation, service-loss recovery and remaining G acceptance
+are still pending. The
 [planning labnote](../labnotes/20261014-1947-remote-morse-milestone.md) records the
 separate specification review and exact planning validation.
