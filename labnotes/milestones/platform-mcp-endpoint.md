@@ -337,6 +337,15 @@ completion evidence and recovery. Its review does not complete runtime tasks.
   arbitrary sleeps or real telephony. Add/run relevant Lean verification if the
   implementation changes modeled source/speech transitions.
 
+Runtime prerequisite: exact-incarnation supervisor monitoring is implemented.
+Two focused regressions first failed for the missing API, then passed along with
+19 existing lifecycle tests. A held owned worker proves authority termination
+precedes whole-tree completion; monitoring remains available during cleanup and
+cannot adopt another tenant or replacement incarnation. Independent review found
+no blockers. The full CallEngine suite then passed 2,225 tests with zero failures.
+This does not yet implement the hangup workflow or prove Gateway
+carrier cleanup, and abnormal supervisor death is not successful cleanup evidence.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

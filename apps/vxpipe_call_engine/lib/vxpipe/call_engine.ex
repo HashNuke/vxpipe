@@ -109,6 +109,19 @@ defmodule Vxpipe.CallEngine do
       when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
       do: RoomSupervisor.monitor_room(tenant_id, room_id, incarnation_id)
 
+  @doc """
+  Monitors completion of the exact room's supervision tree, including cleanup
+  after its authority exits. A missing incarnation is unavailable, not evidence
+  of successful termination. Gateway-owned resources require separate completion.
+  Callers must distinguish orderly shutdown from a killed/crashed supervisor;
+  abnormal termination alone does not prove child cleanup completed.
+  """
+  @spec monitor_room_completion(String.t(), String.t(), String.t()) ::
+          {:ok, reference()} | {:error, :room_unavailable}
+  def monitor_room_completion(tenant_id, room_id, incarnation_id)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
+      do: Vxpipe.CallEngine.RoomIncarnationSupervisor.monitor(tenant_id, room_id, incarnation_id)
+
   @doc "Ends one exact room incarnation after a trusted host observes remote hangup."
   @spec end_call(String.t(), String.t(), String.t()) :: :ok | {:error, :room_unavailable}
   def end_call(tenant_id, room_id, incarnation_id)

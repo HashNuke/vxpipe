@@ -85,7 +85,10 @@ is not completion evidence. A previously captured trusted PID can be monitored
 after exit, but an absent or unverified lookup cannot justify `ended`.
 
 Supervisor completion can acknowledge cancellation when archiving is disabled or
-failed. Record the observed end time and a specific API-hangup terminal reason.
+failed, provided the supervisor completed orderly shutdown. A killed/crashed
+supervisor can exit before linked children finish and is not sufficient proof;
+retain uncertainty until independent cleanup evidence is available. Record the
+observed end time and a specific API-hangup terminal reason.
 Later archive close for that same incarnation must still drain successfully even
 if its timestamp differs. Restrict this exception to acknowledged cancellation;
 retain normal conflicting-end protection.

@@ -342,3 +342,17 @@
   against frozen source, including every default umbrella application with zero
   failures. No live-provider tests or real telephony ran. UI cutover and hangup
   remain incomplete; the milestone index now reflects actual tool progress.
+
+## Exact room completion monitoring
+
+- Named the incarnation supervisor by tenant, room and incarnation in the existing
+  registry. The new engine monitor observes that exact supervisor through cleanup,
+  including after RoomAuthority exits, without looking up a replacement room.
+- Two red missing-API tests became green; 21 focused completion/lifecycle tests
+  passed. The cleanup test holds an owned worker until an explicit acknowledgement
+  to distinguish authority exit from whole-tree completion without sleeps.
+- Independent review found no blockers. The API and lifecycle design explicitly
+  distinguish orderly shutdown from killed/crashed supervisors; Gateway carrier
+  owners still require their own cleanup acknowledgement. The full CallEngine
+  suite passed 2,225 tests with zero failures (75 integration tests excluded);
+  the next stable root verification remains outstanding.
