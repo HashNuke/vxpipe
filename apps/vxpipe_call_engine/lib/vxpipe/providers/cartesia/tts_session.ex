@@ -1,9 +1,9 @@
 defmodule Vxpipe.Providers.Cartesia.TTSSession do
   @moduledoc false
   @behaviour Vxpipe.CallEngine.Speech.TTSProvider
-  @behaviour Vxpipe.CallEngine.Speech.RequestTTSProvider
-  alias Vxpipe.CallEngine.Speech.{Descriptor, RequestTTSSession}
-  alias Vxpipe.Providers.Cartesia.{TTS, TTSRequest}
+  @behaviour Vxpipe.CallEngine.Speech.ContextTTSProvider
+  alias Vxpipe.CallEngine.Speech.{ContextTTSSession, Descriptor}
+  alias Vxpipe.Providers.Cartesia.TTS
 
   @impl true
   defdelegate models(), to: Vxpipe.Providers.Cartesia.TTS
@@ -31,13 +31,13 @@ defmodule Vxpipe.Providers.Cartesia.TTSSession do
   end
 
   @impl true
-  def start_link(options), do: RequestTTSSession.start_link(options, __MODULE__)
+  def start_link(options), do: ContextTTSSession.start_link(options, __MODULE__)
   @impl true
-  defdelegate speak(pid, reference, text), to: RequestTTSSession
+  defdelegate speak(pid, reference, text), to: ContextTTSSession
   @impl true
-  defdelegate cancel(pid, reference, playback), to: RequestTTSSession
+  defdelegate cancel(pid, reference, playback), to: ContextTTSSession
   @impl true
-  defdelegate close(pid), to: RequestTTSSession
+  defdelegate close(pid), to: ContextTTSSession
   @impl true
   defdelegate validate_text(text), to: TTS
 
@@ -45,9 +45,28 @@ defmodule Vxpipe.Providers.Cartesia.TTSSession do
   def request_configuration(%TTS{} = config) do
     with {:ok, descriptor} <-
            configure(model: config.model, voice: config.voice, sample_rate: config.sample_rate) do
-      {:ok, descriptor, TTSRequest}
+      {:ok, descriptor}
     end
   end
 
   def request_configuration(_config), do: {:error, :invalid_configuration}
+
+  @impl true
+  defdelegate connection_options(config), to: TTS
+  @impl true
+  defdelegate new_context_id(), to: TTS
+  @impl true
+  defdelegate open_utterance(config, context, text), to: TTS
+  @impl true
+  defdelegate close_utterance(config, context), to: TTS
+  @impl true
+  def cancel_utterance(config, context), do: TTS.close_utterance(config, context)
+  @impl true
+  defdelegate close_socket(config), to: TTS
+  @impl true
+  defdelegate keepalive_payload(config, context), to: TTS
+  @impl true
+  defdelegate decode_frame(payload), to: TTS
+  @impl true
+  defdelegate validate_audio(audio), to: TTS
 end

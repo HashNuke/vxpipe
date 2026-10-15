@@ -70,12 +70,13 @@ defmodule Vxpipe.Providers.MorseCodeApi.TTS do
       %{
         uri
         | scheme: scheme,
-          path: "/v1/text-to-speech/#{config.voice}/stream-input",
+          path: "/v1/text-to-speech/#{config.voice}/multi-stream-input",
           query:
             URI.encode_query(%{
               model_id: config.model,
               output_format: "pcm_#{config.sample_rate}",
-              auto_mode: true
+              auto_mode: true,
+              inactivity_timeout: 180
             })
       }
       |> URI.to_string()
@@ -83,25 +84,57 @@ defmodule Vxpipe.Providers.MorseCodeApi.TTS do
     %{url: url, headers: []}
   end
 
-  def decode(payload) when is_binary(payload) and byte_size(payload) <= 65_536 do
+  def new_context_id,
+    do: {:ok, "ctx_" <> Base.encode16(:crypto.strong_rand_bytes(9), case: :lower)}
+
+  def open_utterance(%__MODULE__{}, context, text)
+      when is_binary(context) and is_binary(text) do
+    [
+      JSON.encode!(%{"text" => " ", "context_id" => context}),
+      JSON.encode!(%{"text" => text, "context_id" => context}),
+      JSON.encode!(%{"context_id" => context, "flush" => true}),
+      JSON.encode!(%{"context_id" => context, "close_context" => true})
+    ]
+  end
+
+  def close_utterance(%__MODULE__{}, context) when is_binary(context),
+    do: JSON.encode!(%{"context_id" => context, "close_context" => true})
+
+  def close_socket(%__MODULE__{}), do: JSON.encode!(%{"close_socket" => true})
+
+  def keepalive_payload(%__MODULE__{}, context) when is_binary(context),
+    do: JSON.encode!(%{"text" => "", "context_id" => context})
+
+  def decode_frame(payload) when is_binary(payload) and byte_size(payload) <= 2_097_152 do
     case JSON.decode(payload) do
-      {:ok, %{"error" => _error}} ->
-        {:error, :invalid_message}
+      {:ok, %{"audio" => encoded, "contextId" => context} = frame}
+      when is_binary(encoded) and is_binary(context) ->
+        with {:ok, pcm} <- Base.decode64(encoded),
+             {:audio, pcm} <- validate_audio(pcm) do
+          if Map.get(frame, "isFinal") == true,
+            do: {:ok, {:audio_final, context, pcm}},
+            else: {:ok, {:audio, context, pcm}}
+        else
+          _invalid -> {:error, :invalid_message}
+        end
 
-      {:ok, %{"isFinal" => true} = message} ->
-        if Map.get(message, "audio") in [nil, ""],
-          do: :completed,
-          else: {:error, :invalid_message}
+      {:ok, %{"isFinal" => true, "contextId" => context}} when is_binary(context) ->
+        {:ok, {:final, context}}
 
-      {:ok, %{"audio" => encoded}} when is_binary(encoded) ->
-        Base.decode64(encoded)
-
-      _invalid ->
+      _other ->
         {:error, :invalid_message}
     end
   end
 
-  def decode(_payload), do: {:error, :invalid_message}
+  def decode_frame(_payload), do: {:error, :invalid_message}
+
+  def validate_audio(audio) when is_binary(audio) do
+    if byte_size(audio) > 0 and byte_size(audio) <= 1_048_576 and rem(byte_size(audio), 2) == 0,
+      do: {:audio, audio},
+      else: {:error, :invalid_message}
+  end
+
+  def validate_audio(_audio), do: {:error, :invalid_message}
 
   defp unique_options?(options),
     do: length(options) == length(Enum.uniq(Keyword.keys(options)))

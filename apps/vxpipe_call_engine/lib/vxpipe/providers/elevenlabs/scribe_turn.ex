@@ -17,7 +17,14 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTurn do
     finished?: false
   ]
 
-  def new(turn_ref) when is_reference(turn_ref), do: %__MODULE__{turn_ref: turn_ref}
+  def new(turn_ref) when is_reference(turn_ref), do: new(turn_ref, 0)
+
+  # Include idle PCM already transmitted in this commit epoch. Seed only when
+  # the turn starts transmitting, after preceding turns have settled.
+  def new(turn_ref, initial_bytes)
+      when is_reference(turn_ref) and is_integer(initial_bytes) and initial_bytes >= 0 and
+             initial_bytes < @segment_bytes,
+      do: %__MODULE__{turn_ref: turn_ref, segment_bytes: initial_bytes}
 
   def push_audio(%__MODULE__{ended?: true}, _audio), do: {:error, :input_closed}
   def push_audio(%__MODULE__{waiting?: true}, _audio), do: {:error, :busy}

@@ -15,20 +15,25 @@ API. The TTS WebSocket adapter sends no credential header.
 
 ## Speech boundary
 
-Realtime TTS uses `/v1/text-to-speech/morse/stream-input`. Initialize with
-`{"text":" "}`, submit text fragments, and send `{"text":""}` at end of input.
-Read base64 `audio` frames while sending; only `isFinal: true` completes the
-stream. `flush: true` finishes an utterance but keeps the socket available for
-more text. Fragment boundaries preserve letter/word spacing; only flush/EOS adds
-the 840-ms final silence. HTTP TTS remains available for direct callers.
+Realtime TTS uses `/v1/text-to-speech/morse/multi-stream-input`. Each utterance
+opens its own `context_id`: initialize with `{"text":" ","context_id":...}`,
+submit the complete text, then send `flush` and `close_context` for that ID.
+The server streams base64 `audio` frames tagged with `contextId` and ends the
+utterance with audio-free `{"isFinal":true,"contextId":...}`; the socket stays
+open for the next context. An empty `{"text":"","context_id":...}` is a
+keepalive that resets the inactivity clock without audio or completion, and
+`close_socket` drains flushed audio, cancels unflushed work and ends the socket. Fragment
+boundaries preserve letter/word spacing; only flush adds the 840-ms final
+silence. HTTP TTS remains available for direct callers.
 
-Vxpipe's current `speak` contract accepts a complete utterance. Its request task
-uses the WebSocket protocol for that utterance and consumes audio incrementally
-under the existing output-credit mechanism. It does not yet expose an incremental
-LLM-token input interface. Cancellation kills the owning task and closes its
-socket even while waiting for output credit. An early close without `isFinal`
-is a failure, never successful completion. No HTTP fallback or automatic retry
-can duplicate audible output.
+Vxpipe's current `speak` contract accepts a complete utterance. Its
+capability-owned session keeps one multi-context socket across utterances and
+consumes audio incrementally under the existing output-credit mechanism. It
+does not yet expose an incremental LLM-token input interface. Cancellation
+fences the utterance's delayed audio without ending the healthy socket; the
+context's own terminal settles the cancellation. An early close without
+`isFinal` is a failure, never successful completion. No HTTP fallback or
+automatic retry can duplicate audible output.
 
 Realtime STT uses `/v1/speech-to-text/realtime`. It emits `session_started`,
 cumulative `partial_transcript`, and final-segment `committed_transcript` events.

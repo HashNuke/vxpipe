@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 48 milestone specifications: 36 complete and 12 incomplete. Milestone 17, Telnyx calls and
+Status: 50 milestone specifications: 39 complete and 11 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -178,8 +178,9 @@ progress without claiming the entire milestone is complete.
 45. [ ] [Security audit remediation](security-audit-remediation.md) — The 2026-10-14 offline audit of `a02f0114` found four issues, each now fixed with a regression test: a global login/recovery lockout via the shared proxy address (medium), unthrottled account enumeration through a non-string password (low), unbounded join-token lifetime (low) and a public development secret on non-loopback dev listeners (low). The owner accepted the documented first-visitor Superadmin bootstrap. Demo sample installation now also requires `call_specs.write` on the demo tenant. Account-lockout policy and the unknown-user Argon2 timing difference remain follow-ups.
 46. [x] [Hosted Morse audio provider](remote-morse-code-audio.md) — Complete for the user-clarified scope: existing Morse PCM behavior over streamed HTTP TTS and realtime WS STT, one conventional MorseCodeApi adapter, configurable origin and a locally verified 2.9-MB Railway-ready Go image. Regression, interoperability, room and outage checks pass; both repositories are pushed. Public hosting is now at morsecode.vxpipe.com; realtime TTS and hosted capacity follow in the next milestone.
 47. [x] [Realtime Morse synthesis](realtime-morse-synthesis.md) — Incremental WebSocket TTS and the MorseCodeApi adapter are implemented. Local/hosted interoperability, room, origin/TLS/outage, root and Lean gates pass. Both repositories are pushed and the service deployed; paced short runs reached 64 STT and eight TTS sessions with expected above-limit 429s. The binary CLI and GitHub releases are shipped; separate 30-second searches repeated zero-error passes at 531 STT and 1,812 TTS, with normal admission defaults restored afterwards.
-48. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-49. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+48. [x] [Persistent speech sessions](persistent-speech-sessions.md) — Complete: capability-owned persistent MorseCodeApi, ElevenLabs and Cartesia TTS, same-socket manual Scribe STT with exact PCM accounting, and bounded Deepgram cancellation. Google streaming HTTP TTS remains the approved exception. Focused live providers, root checks, Lean and final CallEngine rerun pass; Go v0.1.4 is deployed and released.
+49. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+50. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 The worktree setup milestone is an enabling developer-tooling slice after the
 existing live-runner fixes and before delivery. Its prerequisites are already

@@ -104,7 +104,6 @@ defmodule Vxpipe.Providers.ElevenLabs.STTRoomTest do
     refute_receive {:vxpipe_event, %ParticipantTranscription{final: true}}, 50
     push(plan, room, caller, 22, :binary.copy(<<0, 0>>, 9_216))
     assert_receive {:scribe_commit, ^wire}, 1_000
-    monitor = Process.monitor(wire)
     assert :ok = Wire.deliver(wire, {:segment, "The same caller turn."})
 
     assert_receive {:vxpipe_event,
@@ -115,14 +114,13 @@ defmodule Vxpipe.Providers.ElevenLabs.STTRoomTest do
                     }},
                    1_000
 
-    assert_receive {:DOWN, ^monitor, :process, ^wire, _reason}, 1_000
+    drain_scribe(wire)
     push(plan, room, caller, 23, :binary.copy(<<1, 0>>, 2_048))
-    assert_receive {:scribe_started, next_wire}, 1_000
-    assert :ok = Wire.deliver(next_wire, {:ready, "synthetic-second"})
-    assert_receive {:scribe_audio, ^next_wire, _audio}, 1_000
+    assert_receive {:scribe_audio, ^wire, _audio}, 1_000
+    refute_received {:scribe_started, _replacement}
     push(plan, room, caller, 24, :binary.copy(<<0, 0>>, 9_216))
-    assert_receive {:scribe_commit, ^next_wire}, 1_000
-    assert :ok = Wire.deliver(next_wire, {:segment, "Yes."})
+    assert_receive {:scribe_commit, ^wire}, 1_000
+    assert :ok = Wire.deliver(wire, {:segment, "Yes."})
 
     assert_receive {:vxpipe_event,
                     %ParticipantTranscription{
@@ -236,6 +234,15 @@ defmodule Vxpipe.Providers.ElevenLabs.STTRoomTest do
     case :sys.get_state(provider) do
       %{inference_ref: nil} -> :ok
       _pending -> await_classified(provider, deadline)
+    end
+  end
+
+  defp drain_scribe(wire) do
+    receive do
+      {:scribe_audio, ^wire, _audio} -> drain_scribe(wire)
+      {:scribe_commit, ^wire} -> drain_scribe(wire)
+    after
+      0 -> :ok
     end
   end
 

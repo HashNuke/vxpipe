@@ -8,6 +8,78 @@ defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeechSessionTest do
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
   alias Vxpipe.CallEngine.{SpeechSessionOwner, TestTextToSpeechTransport}
 
+  test "a silent provider fails within its generation deadline" do
+    {session, wire} = start_session([], request_timeout_ms: 100)
+    provider = Session.provider(session)
+    monitor = Process.monitor(provider)
+    request = speak(session, wire, "never completed")
+
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _reason}, 1_000
+    assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+    refute_received {:vxpipe_speech, %Event{request_ref: ^request, kind: :completed}}
+    refute_received {:vxpipe_speech, %Event{request_ref: ^request, kind: :cancelled}}
+  end
+
+  test "cancellation without provider terminal evidence has a bounded deadline" do
+    {session, wire} = start_session([], cancel_timeout_ms: 100)
+    request = speak(session, wire, "never cancelled")
+    provider = Session.provider(session)
+    monitor = Process.monitor(provider)
+    assert {:ok, ticket} = Session.fence_output(session, request)
+    assert {:ok, _playback} = Session.cancel(session, ticket, 0)
+
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _reason}, 1_000
+    assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+    refute_received {:vxpipe_speech, %Event{request_ref: ^request, kind: :completed}}
+    refute_received {:vxpipe_speech, %Event{request_ref: ^request, kind: :cancelled}}
+  end
+
+  test "a completed request retires its generation deadline" do
+    {session, wire} = start_session([], request_timeout_ms: 100)
+    assert {:ok, handle} = Session.speak(session, "completed quickly")
+    request = handle.ref
+    assert_control(wire, %{"type" => "Speak", "text" => "completed quickly"})
+    assert_control(wire, %{"type" => "Flush"})
+    assert %Event{kind: :input_submitted, request_ref: ^request} = next_event(session)
+    provider = Session.provider(session)
+    monitor = Process.monitor(provider)
+
+    TestTextToSpeechTransport.deliver_control(
+      wire,
+      JSON.encode!(%{"type" => "SpeechMetadata", "speech_id" => "dg_sp_quick"})
+    )
+
+    assert %Event{
+             kind: :completed,
+             request_ref: ^request,
+             provider_request_id: "dg_sp_quick"
+           } = next_event(session)
+
+    assert :ok = Session.settle_output(session, handle, 0)
+    refute_receive {:DOWN, ^monitor, :process, ^provider, _reason}, 250
+    replacement = speak(session, wire, "replacement")
+    refute replacement == request
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _reason}, 1_000
+    assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+  end
+
+  test "a cancelled request retires its cancellation deadline" do
+    {session, wire} = start_session([], cancel_timeout_ms: 100)
+    request = speak(session, wire, "cancelled quickly")
+    provider = Session.provider(session)
+    monitor = Process.monitor(provider)
+    assert {:ok, ticket} = Session.fence_output(session, request)
+    assert {:ok, _playback} = Session.cancel(session, ticket, 0)
+    interrupt(session, wire, request, "dg_sp_quick_cancel", 0)
+    refute_receive {:DOWN, ^monitor, :process, ^provider, _reason}, 250
+    replacement = speak(session, wire, "replacement")
+    refute replacement == request
+    assert {:ok, replacement_ticket} = Session.fence_output(session, replacement)
+    assert {:ok, _playback} = Session.cancel(session, replacement_ticket, 0)
+    assert_receive {:DOWN, ^monitor, :process, ^provider, _reason}, 1_000
+    assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
+  end
+
   test "a failed Flush retains submission evidence for the accepted Speak" do
     {session, wire} = start_session(fail_after_controls: 1)
     provider = Session.provider(session)
@@ -365,12 +437,12 @@ defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeechSessionTest do
     assert :ok = Session.close(session)
   end
 
-  defp start_session(wire_options \\ []) do
+  defp start_session(wire_options \\ [], private_options \\ []) do
     tree = start_supervised!({CapabilityTree, owner: self()})
-    start_session_in(CapabilityTree.scope(tree), wire_options)
+    start_session_in(CapabilityTree.scope(tree), wire_options, private_options)
   end
 
-  defp start_session_in(scope, wire_options) do
+  defp start_session_in(scope, wire_options, private_options \\ []) do
     assert {:ok, config} =
              FluxTextToSpeech.new(
                api_key: "synthetic-tts-session-secret",
@@ -390,11 +462,13 @@ defmodule Vxpipe.Providers.Deepgram.FluxTextToSpeechSessionTest do
                  encoding: config.encoding,
                  sample_rate: config.sample_rate
                ],
-               private: [
-                 config: config,
-                 wire_module: TestTextToSpeechTransport,
-                 wire_options: wire_options
-               ]
+               private:
+                 private_options ++
+                   [
+                     config: config,
+                     wire_module: TestTextToSpeechTransport,
+                     wire_options: wire_options
+                   ]
              )
 
     assert_receive {:test_tts_transport_started, wire, connection}, 1_000

@@ -25,19 +25,24 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
 
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Media.Ingress
-  alias Vxpipe.CallEngine.{TestAudioOutputSink, TestRoomTTSRequest}
+  alias Vxpipe.CallEngine.{TestAudioOutputSink, TestTextToSpeechTransport}
   alias Vxpipe.CallEngine.TestCartesiaSTTTransport, as: CartesiaWire
   alias Vxpipe.Providers.Cartesia.{STTSession, TTSSession}
   alias Vxpipe.Providers.ElevenLabs.TTSSession, as: ElevenLabsTTS
 
   setup do
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-    Process.register(self(), TestRoomTTSRequest.Observer)
 
     providers =
       Map.new(
         [TTSSession, ElevenLabsTTS],
-        &{&1, [enabled: true, request_module: TestRoomTTSRequest, maximum_requests: 4]}
+        &{&1,
+         [
+           enabled: true,
+           wire_module: TestTextToSpeechTransport,
+           wire_options: [observer: self()],
+           maximum_requests: 4
+         ]}
       )
 
     activity =
@@ -84,6 +89,7 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
       selection: selection
     } do
       {plan, room} = start_room(selection)
+      assert_receive {:test_tts_transport_started, wire, _connection}, 2_000
       sink = start_supervised!({TestAudioOutputSink, observer: self()})
       attach(plan, room, sink)
       first = command(plan, room, "first", "hello")
@@ -92,12 +98,12 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
       assert_receive {:vxpipe_event, %TextOutput{correlation_id: "first", text: "Echo: hello"}},
                      2_000
 
-      assert_receive {:room_tts_request, worker, "Echo: hello"}, 2_000
+      context = expect_utterance(selection.provider, wire, "Echo: hello")
       pcm = :binary.copy(<<1, 0>>, 320)
-      send(worker, {:audio, pcm})
+      wire_reference = TestTextToSpeechTransport.deliver_audio_with_result(wire, {context, pcm})
       assert_receive {:test_audio_output, ^sink, %{correlation_id: "first", payload: ^pcm}}, 2_000
-      assert_receive {:room_tts_consumed, ^worker, :ok}, 2_000
-      send(worker, :complete)
+      assert_receive {:test_tts_audio_result, ^wire_reference, :ok}, 2_000
+      TestTextToSpeechTransport.deliver_control(wire, {:final, context})
       assert_receive {:test_audio_output_finish, ^sink, "first"}, 2_000
       refute_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "first"}}, 30
       assert :ok = TestAudioOutputSink.playback_completed(sink)
@@ -109,18 +115,31 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
       selection: selection
     } do
       {plan, room} = start_room(selection)
+      assert_receive {:test_tts_transport_started, wire, _connection}, 2_000
+      monitor = Process.monitor(wire)
       sink = start_supervised!({TestAudioOutputSink, observer: self()})
       attach(plan, room, sink)
       assert :ok = TestTransferConnection.send_text(command(plan, room, "first", "hello"))
-      assert_receive {:room_tts_request, worker, "Echo: hello"}, 2_000
-      monitor = Process.monitor(worker)
-      send(worker, {:audio, :binary.copy(<<1, 0>>, 320)})
+
+      assert_receive {:vxpipe_event, %TextOutput{correlation_id: "first", text: "Echo: hello"}},
+                     2_000
+
+      first_context = expect_utterance(selection.provider, wire, "Echo: hello")
+
+      first_reference =
+        TestTextToSpeechTransport.deliver_audio_with_result(
+          wire,
+          {first_context, :binary.copy(<<1, 0>>, 320)}
+        )
+
       assert_receive {:test_audio_output, ^sink, %{correlation_id: "first"}}, 2_000
-      assert_receive {:room_tts_consumed, ^worker, :ok}, 2_000
+      assert_receive {:test_tts_audio_result, ^first_reference, :ok}, 2_000
       assert :ok = TestAudioOutputSink.playback_started(sink)
       assert :ok = TestTransferConnection.send_text(command(plan, room, "second", "change"))
       assert_receive {:test_audio_output_interrupt, ^sink, "first", _played_ms}, 2_000
-      assert_receive {:DOWN, ^monitor, :process, ^worker, _reason}, 2_000
+
+      # Cancelling the utterance closes its context, not the healthy socket.
+      refute_received {:DOWN, ^monitor, :process, ^wire, _reason}
 
       assert_receive {:vxpipe_event,
                       %AgentTurnInterrupted{
@@ -129,18 +148,36 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
                       }},
                      2_000
 
-      assert_receive {:room_tts_request, next, "Echo: change"}, 2_000
-      refute next == worker
-      send(worker, {:audio, <<99, 0>>})
-      send(worker, :complete)
+      assert_receive {:vxpipe_event, %TextOutput{correlation_id: "second", text: "Echo: change"}},
+                     2_000
+
+      # The interruption ends the first utterance on its own context: Cartesia
+      # sends an explicit cancel, while ElevenLabs already queued the close
+      # with the utterance and only awaits its terminal here.
+      if selection.provider == "cartesia" do
+        assert_receive {:test_tts_control, ^wire, close_first}, 2_000
+        assert %{"context_id" => ^first_context, "cancel" => true} = JSON.decode!(close_first)
+      end
+
+      stale_reference =
+        TestTextToSpeechTransport.deliver_audio_with_result(wire, {first_context, <<99, 0>>})
+
+      assert_receive {:test_tts_audio_result, ^stale_reference, :ok}, 2_000
+      TestTextToSpeechTransport.deliver_control(wire, {:final, first_context})
       refute_receive {:test_audio_output, ^sink, %{payload: <<99, 0>>}}, 30
-      send(next, {:audio, <<2, 0>>})
+
+      second_context = expect_utterance(selection.provider, wire, "Echo: change")
+      refute second_context == first_context
+      refute_received {:test_tts_transport_started, _replacement, _connection}
+
+      next_reference =
+        TestTextToSpeechTransport.deliver_audio_with_result(wire, {second_context, <<2, 0>>})
 
       assert_receive {:test_audio_output, ^sink, %{correlation_id: "second", payload: <<2, 0>>}},
                      2_000
 
-      assert_receive {:room_tts_consumed, ^next, :ok}, 2_000
-      send(next, :complete)
+      assert_receive {:test_tts_audio_result, ^next_reference, :ok}, 2_000
+      TestTextToSpeechTransport.deliver_control(wire, {:final, second_context})
       assert_receive {:test_audio_output_finish, ^sink, "second"}, 2_000
       assert :ok = TestAudioOutputSink.playback_completed(sink)
       assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "second"}}, 2_000
@@ -260,6 +297,27 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
     end)
 
     {plan, room}
+  end
+
+  defp expect_utterance("cartesia", wire, text) do
+    assert_receive {:test_tts_control, ^wire, payload}, 2_000
+
+    assert %{"transcript" => ^text, "context_id" => context, "continue" => false} =
+             JSON.decode!(payload)
+
+    context
+  end
+
+  defp expect_utterance("elevenlabs", wire, text) do
+    assert_receive {:test_tts_control, ^wire, init}, 2_000
+    assert %{"text" => " ", "context_id" => context} = JSON.decode!(init)
+    assert_receive {:test_tts_control, ^wire, body}, 2_000
+    assert %{"text" => ^text, "context_id" => ^context} = JSON.decode!(body)
+    assert_receive {:test_tts_control, ^wire, flush}, 2_000
+    assert %{"context_id" => ^context, "flush" => true} = JSON.decode!(flush)
+    assert_receive {:test_tts_control, ^wire, close}, 2_000
+    assert %{"context_id" => ^context, "close_context" => true} = JSON.decode!(close)
+    context
   end
 
   defp attach(plan, room, sink, await? \\ true) do

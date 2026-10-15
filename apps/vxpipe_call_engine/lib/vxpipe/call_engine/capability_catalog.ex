@@ -22,6 +22,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
   alias Vxpipe.Providers.Rime.{TTS, TTSSession}
   alias Vxpipe.Providers.Registry
+  alias Vxpipe.CallEngine.Speech.ContextTTSSocket
   alias Vxpipe.Providers.MorseCode.DuplexSTSSession
   alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
 
@@ -301,7 +302,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
       Keyword.validate(settings,
         enabled: false,
         maximum_requests: nil,
-        request_module: Vxpipe.Providers.Cartesia.TTSRequest
+        wire_module: ContextTTSSocket,
+        wire_options: []
       )
 
   defp validate_provider_settings(ElevenLabsTTSSession, :text_to_speech, settings),
@@ -309,7 +311,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
       Keyword.validate(settings,
         enabled: false,
         maximum_requests: nil,
-        request_module: Vxpipe.Providers.ElevenLabs.TTSRequest
+        wire_module: ContextTTSSocket,
+        wire_options: []
       )
 
   defp validate_provider_settings(MorseCodeApiTTSSession, :text_to_speech, settings),
@@ -317,7 +320,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
       Keyword.validate(settings,
         enabled: false,
         maximum_requests: nil,
-        request_module: Vxpipe.Providers.MorseCodeApi.TTSRequest
+        wire_module: ContextTTSSocket,
+        wire_options: []
       )
 
   defp validate_provider_settings(

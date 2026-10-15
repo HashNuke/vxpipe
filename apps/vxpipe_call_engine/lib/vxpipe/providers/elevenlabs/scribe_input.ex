@@ -52,8 +52,13 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeInput do
 
   defp advance(state, frame, []) do
     audio = state.pre_roll <> frame
-    size = min(byte_size(audio), @pre_roll_bytes)
-    pre_roll = binary_part(audio, byte_size(audio) - size, size)
-    {%{state | pre_roll: pre_roll}, []}
+
+    if byte_size(audio) <= @pre_roll_bytes do
+      {%{state | pre_roll: audio}, []}
+    else
+      evicted_size = byte_size(audio) - @pre_roll_bytes
+      <<evicted::binary-size(evicted_size), pre_roll::binary>> = audio
+      {%{state | pre_roll: pre_roll}, [{:idle, evicted}]}
+    end
   end
 end

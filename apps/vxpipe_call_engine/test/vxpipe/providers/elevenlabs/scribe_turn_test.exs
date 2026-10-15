@@ -93,6 +93,20 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTurnTest do
             ]} = ScribeTurn.committed(turn, "Final.")
   end
 
+  test "wire-level budget seeds acoustic turns with preceding idle bytes" do
+    turn_ref = make_ref()
+    turn = ScribeTurn.new(turn_ref, 10 * 32_000)
+    audio = :binary.copy(<<1, 0>>, 16_000)
+
+    turn =
+      Enum.reduce(1..9, turn, fn _second, state ->
+        assert {:ok, state, [{:audio, ^audio}]} = ScribeTurn.push_audio(state, audio)
+        state
+      end)
+
+    assert {:ok, _turn, [{:audio, ^audio}, :commit]} = ScribeTurn.push_audio(turn, audio)
+  end
+
   test "bounded waiting input is never accepted twice or finalized from an unsolicited segment" do
     turn_ref = make_ref()
     turn = ScribeTurn.new(turn_ref)

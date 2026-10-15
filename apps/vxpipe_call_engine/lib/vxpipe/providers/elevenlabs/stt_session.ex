@@ -18,6 +18,13 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   @maximum_buffer_bytes 96_000
   @maximum_turns 4
   @timeout_ms 15_000
+  # Wire-level manual commit budget: 20s of transmitted PCM at 32kB/s. The
+  # provider counts every transmitted byte (idle/silence as well as voice) and
+  # forces an automatic commit past ~36s of uncommitted audio (see the
+  # ElevenLabs realtime transcripts/commit-strategies guide, manual 20-30s),
+  # while acoustic segmentation alone only counts voiced bytes. Mirrors
+  # ScribeTurn's 20s segment budget; idle commits keep the wire inside it.
+  @wire_commit_bytes 20 * 32_000
   @derive {Inspect, only: [:ready?]}
   defstruct [
     :allocation,
@@ -45,6 +52,9 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     stream: nil,
     input: nil,
     pending_audio: "",
+    idle_buffer: "",
+    wire_bytes: 0,
+    idle_waiting?: false,
     turns: []
   ]
 
@@ -278,6 +288,38 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
       do: {:noreply, state}
 
   def handle_info(
+        {:vxpipe_scribe_transport, wire, {:event, {:partial, ""}}},
+        %{wire: wire, ready?: true, idle_waiting?: true} = state
+      ),
+      do: {:noreply, state}
+
+  def handle_info(
+        {:vxpipe_scribe_transport, wire, {:event, {:segment, text}}},
+        %{wire: wire, ready?: true, idle_waiting?: true} = state
+      )
+      when text == "" do
+    with {:ok, state} <- acknowledge_idle(state),
+         {:ok, state} <- advance_recognition(state) do
+      {:noreply, state}
+    else
+      _failure -> fail(state)
+    end
+  end
+
+  # A provider-forced or mismatched recognized segment while an explicit idle
+  # commit is outstanding must fail closed. Attaching foreign speech to an
+  # unrelated acoustic turn (or silently dropping it) would confuse the later
+  # explicit commit acknowledgement; the empty idle acknowledgement is the only
+  # acceptable settlement for audio that carried no acoustic turn.
+  def handle_info(
+        {:vxpipe_scribe_transport, wire, {:event, {kind, text}}},
+        %{wire: wire, ready?: true, idle_waiting?: true} = state
+      )
+      when kind in [:partial, :segment] and text != "" do
+    fail(state)
+  end
+
+  def handle_info(
         {:vxpipe_scribe_transport, wire, {:event, {kind, text}}},
         %{wire: wire, ready?: true, turns: [head | rest]} = state
       )
@@ -387,7 +429,14 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     if length(state.turns) < @maximum_turns do
       with result when result in [:ok, :discarded] <-
              Event.emit(state.channel, :speech_started, turn_ref: ref) do
-        head = %{turn: ScribeTurn.new(ref), audio: "", endpoint_ms: nil}
+        head = %{
+          turn: ScribeTurn.new(ref),
+          wire_seeded?: false,
+          audio: "",
+          endpoint_ms: nil,
+          trailing: ""
+        }
+
         {:ok, %{state | turns: state.turns ++ [head]}}
       end
     else
@@ -403,6 +452,33 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     update_turn(state, ref, fn head -> %{head | endpoint_ms: duration} end)
   end
 
+  defp acoustic_action(state, {:idle, audio}) do
+    if state.turns == [] do
+      cond do
+        not state.wire_ready? ->
+          {:ok, %{state | idle_buffer: state.idle_buffer <> audio}}
+
+        # While an idle commit awaits acknowledgement, queue following input
+        # in order inside the existing bounded buffer instead of spending more
+        # of the provider's uncommitted wire budget.
+        is_reference(state.commit_ref) ->
+          {:ok, %{state | idle_buffer: state.idle_buffer <> audio}}
+
+        true ->
+          send_wire_binary(state, audio)
+      end
+    else
+      index = length(state.turns) - 1
+
+      turns =
+        List.update_at(state.turns, index, fn head ->
+          Map.update(head, :trailing, audio, &(&1 <> audio))
+        end)
+
+      {:ok, %{state | turns: turns}}
+    end
+  end
+
   defp update_turn(state, ref, update) do
     turns =
       Enum.map(state.turns, fn head ->
@@ -412,13 +488,46 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     {:ok, %{state | turns: turns}}
   end
 
-  defp advance_recognition(%{turns: []} = state), do: {:ok, state}
+  # Serial commit discipline: while any commit (acoustic or idle) awaits its
+  # acknowledgement, withhold all further wire sends. Following input stays
+  # queued in the existing bounded buffers (idle_buffer, turn audio/trailing)
+  # and drains in order once the acknowledgement arrives.
+  defp advance_recognition(%{commit_ref: ref} = state) when is_reference(ref),
+    do: {:ok, state}
 
-  defp advance_recognition(%{wire: nil} = state), do: open_wire(state)
+  defp advance_recognition(%{turns: []} = state) do
+    if state.wire_ready? and state.idle_buffer != "" do
+      case send_wire_binary(state, state.idle_buffer) do
+        {:ok, state} -> {:ok, %{state | idle_buffer: ""}}
+        failure -> failure
+      end
+    else
+      {:ok, state}
+    end
+  end
+
   defp advance_recognition(%{wire_ready?: false} = state), do: {:ok, state}
 
   defp advance_recognition(%{turns: [%{turn: %{waiting?: true}} | _]} = state),
     do: {:ok, state}
+
+  # Buffered pre-turn idle drains before the turn's own audio so the wire
+  # preserves ordered exactly-once PCM; its bytes join the same commit epoch,
+  # so they are accounted into the head turn's acoustic budget as well.
+  defp advance_recognition(%{turns: [_head | _rest], idle_buffer: buffer} = state)
+       when buffer != "" do
+    with {:ok, state} <- send_wire_binary(state, buffer) do
+      advance_recognition(%{state | idle_buffer: ""})
+    end
+  end
+
+  defp advance_recognition(%{turns: [%{wire_seeded?: false} = head | rest]} = state) do
+    # Onset may precede another turn's commit. Seed only when this turn owns
+    # the wire, after earlier trailing/idle PCM has reached that same epoch.
+    turn = ScribeTurn.new(head.turn.turn_ref, state.wire_bytes)
+    head = %{head | turn: turn, wire_seeded?: true}
+    advance_recognition(%{state | turns: [head | rest]})
+  end
 
   defp advance_recognition(%{turns: [head | rest]} = state) do
     cond do
@@ -457,7 +566,8 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   end
 
   defp recognition_action(state, {:audio, audio}) do
-    with :ok <- wire_call(state, :send_audio, [audio]), do: {:ok, state}
+    with :ok <- wire_call(state, :send_audio, [audio]),
+         do: {:ok, %{state | wire_bytes: state.wire_bytes + byte_size(audio)}}
   end
 
   defp recognition_action(state, :commit) do
@@ -469,7 +579,9 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
        %{
          state
          | commit_ref: ref,
-           commit_timer: Process.send_after(self(), {:commit_timeout, ref}, @timeout_ms)
+           commit_timer: Process.send_after(self(), {:commit_timeout, ref}, @timeout_ms),
+           wire_bytes: 0,
+           idle_waiting?: false
        }}
     end
   end
@@ -483,25 +595,17 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   end
 
   defp recognition_action(%{turns: [head | rest]} = state, {:turn_ended, ref, text}) do
-    with result when result in [:ok, :discarded] <-
+    trailing = Map.get(head, :trailing, "")
+
+    with {:ok, state} <- send_wire_binary(state, trailing),
+         result when result in [:ok, :discarded] <-
            emit(state, :turn_ended,
              turn_ref: ref,
              text: text,
              endpointing: :local_gap,
              audio_duration_ms: head.endpoint_ms
            ) do
-      Process.demonitor(state.wire_monitor, [:flush])
-      DynamicSupervisor.terminate_child(state.providers, state.wire)
-
-      {:ok,
-       %{
-         clear_commit(state)
-         | turns: rest,
-           wire: nil,
-           wire_monitor: nil,
-           wire_ready?: false,
-           request_id: nil
-       }}
+      {:ok, %{clear_commit(state) | turns: rest}}
     end
   end
 
@@ -519,45 +623,77 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
       Enum.reduce(
         state.turns,
         byte_size(state.input.pending) + byte_size(state.input.pre_roll) +
-          byte_size(state.pending_audio) + byte_size(state.accepted_audio || ""),
-        fn head, size -> size + byte_size(head.audio) + byte_size(head.turn.remainder) end
+          byte_size(state.pending_audio) + byte_size(state.accepted_audio || "") +
+          byte_size(state.idle_buffer),
+        fn head, size ->
+          size + byte_size(head.audio) + byte_size(head.turn.remainder) +
+            byte_size(Map.get(head, :trailing, ""))
+        end
       )
+
+  defp send_wire_binary(state, ""), do: {:ok, state}
+
+  defp send_wire_binary(state, binary) when is_binary(binary) do
+    chunks = chunk_binary(binary, [])
+
+    with {:ok, state} <-
+           Enum.reduce_while(chunks, {:ok, state}, fn chunk, {:ok, current} ->
+             case wire_call(current, :send_audio, [chunk]) do
+               :ok ->
+                 {:cont, {:ok, %{current | wire_bytes: current.wire_bytes + byte_size(chunk)}}}
+
+               _failure ->
+                 {:halt, {:error, :connection_lost}}
+             end
+           end) do
+      maybe_request_idle_commit(state)
+    end
+  end
+
+  # Issues an explicit idle commit once 20s of transmitted PCM has no acoustic
+  # turn to own it. The commit carries no speech_started/transcript/turn_ended
+  # semantics; its empty acknowledgement only releases the wire budget and lets
+  # queued input drain in order. Same bounded 15s settlement deadline as
+  # acoustic commits; a non-empty settlement fails closed elsewhere.
+  defp maybe_request_idle_commit(%{turns: []} = state) do
+    if state.wire_ready? and state.wire_bytes >= @wire_commit_bytes and
+         not is_reference(state.commit_ref) and not state.idle_waiting? do
+      with :ok <- wire_call(state, :commit, []) do
+        state = clear_commit(state)
+        ref = make_ref()
+
+        {:ok,
+         %{
+           state
+           | commit_ref: ref,
+             commit_timer: Process.send_after(self(), {:commit_timeout, ref}, @timeout_ms),
+             wire_bytes: 0,
+             idle_waiting?: true
+         }}
+      end
+    else
+      {:ok, state}
+    end
+  end
+
+  defp maybe_request_idle_commit(state), do: {:ok, state}
+
+  defp acknowledge_idle(%{idle_waiting?: true} = state) do
+    {:ok, %{clear_commit(state) | idle_waiting?: false, wire_bytes: 0}}
+  end
+
+  defp chunk_binary("", acc), do: Enum.reverse(acc)
+
+  defp chunk_binary(binary, acc) do
+    size = min(byte_size(binary), 32_000)
+    <<chunk::binary-size(size), rest::binary>> = binary
+    chunk_binary(rest, [chunk | acc])
+  end
 
   defp wire_call(state, operation, arguments) do
     apply(state.wire_module, operation, [state.wire | arguments])
   catch
     :exit, _reason -> {:error, :connection_lost}
-  end
-
-  defp open_wire(state) do
-    options = [
-      owner: self(),
-      connection: Scribe.connection_options(state.config),
-      commit_strategy: :manual,
-      transport_options: state.wire_options
-    ]
-
-    case DynamicSupervisor.start_child(
-           state.providers,
-           %{
-             id: state.wire_module,
-             start: {state.wire_module, :start_link, [options]},
-             restart: :temporary,
-             shutdown: :brutal_kill
-           }
-         ) do
-      {:ok, wire} ->
-        {:ok,
-         %{
-           state
-           | wire: wire,
-             wire_monitor: Process.monitor(wire),
-             setup_timer: Process.send_after(self(), :setup_timeout, @timeout_ms)
-         }}
-
-      _failure ->
-        {:error, :connection_lost}
-    end
   end
 
   defp fail(state), do: {:stop, {:shutdown, :session_failed}, state}

@@ -1,6 +1,8 @@
 defmodule Vxpipe.Providers.Cartesia.TTS do
   @moduledoc false
   @endpoint "https://api.cartesia.ai/tts/bytes"
+  @websocket_endpoint "wss://api.cartesia.ai/tts/websocket"
+  @cartesia_version "2026-08-14"
   @rates [8_000, 16_000, 24_000, 48_000]
   @enforce_keys [:api_key, :model, :voice, :sample_rate]
   @derive {Inspect, only: [:model, :voice, :sample_rate]}
@@ -73,28 +75,90 @@ defmodule Vxpipe.Providers.Cartesia.TTS do
 
   def validate_text(_text), do: {:error, :invalid_text}
 
-  def request_body(%__MODULE__{} = config, text) do
+  def cartesia_version, do: @cartesia_version
+
+  def connection_options(%__MODULE__{} = config) do
     %{
-      model_id: config.model,
-      transcript: text,
-      voice: config.voice,
-      output_format: %{container: "raw", encoding: "pcm_s16le", sample_rate: config.sample_rate}
+      url: websocket_url(config) <> "?cartesia_version=" <> @cartesia_version,
+      headers: [
+        {"authorization", "Bearer " <> config.api_key},
+        {"cartesia-version", @cartesia_version}
+      ]
     }
   end
 
-  def request_options(%__MODULE__{} = config, text, into) do
+  def new_context_id,
+    do: {:ok, "ctx_" <> Base.encode16(:crypto.strong_rand_bytes(9), case: :lower)}
+
+  def open_utterance(%__MODULE__{} = config, context, text)
+      when is_binary(context) and is_binary(text) do
     [
-      headers: [
-        {"authorization", "Bearer " <> config.api_key},
-        {"cartesia-version", "2026-08-14"},
-        {"accept", "application/octet-stream, audio/*"}
-      ],
-      json: request_body(config, text),
-      into: into,
-      receive_timeout: 60_000,
-      retry: false,
-      max_redirects: 0,
-      decode_body: false
+      JSON.encode!(%{
+        "model_id" => config.model,
+        "transcript" => text,
+        "voice" => %{"id" => config.voice},
+        "output_format" => %{
+          "container" => "raw",
+          "encoding" => "pcm_s16le",
+          "sample_rate" => config.sample_rate
+        },
+        "context_id" => context,
+        "continue" => false
+      })
     ]
+  end
+
+  def close_utterance(%__MODULE__{}, context) when is_binary(context),
+    do: JSON.encode!(%{"context_id" => context, "cancel" => true})
+
+  def close_socket(%__MODULE__{}), do: nil
+  def keepalive_payload(%__MODULE__{}, _context), do: nil
+
+  def decode_frame(payload) when is_binary(payload) and byte_size(payload) <= 65_536 do
+    case JSON.decode(payload) do
+      {:ok, %{"type" => "chunk", "data" => encoded, "done" => done, "context_id" => context}}
+      when is_binary(encoded) and is_binary(context) and is_boolean(done) ->
+        with {:ok, pcm} <- Base.decode64(encoded),
+             {:audio, pcm} <- validate_audio(pcm) do
+          if done,
+            do: {:ok, {:audio_final, context, pcm}},
+            else: {:ok, {:audio, context, pcm}}
+        else
+          _invalid -> {:error, :invalid_message}
+        end
+
+      {:ok, %{"type" => "done", "done" => true, "context_id" => context}}
+      when is_binary(context) ->
+        {:ok, {:final, context}}
+
+      {:ok, %{"type" => type}} when type in ["timestamps", "phoneme_timestamps", "flush_done"] ->
+        {:ok, :ignore}
+
+      {:ok, %{"type" => "error"}} ->
+        {:error, :provider_failure}
+
+      _other ->
+        {:error, :invalid_message}
+    end
+  end
+
+  def decode_frame(_payload), do: {:error, :invalid_message}
+
+  def validate_audio(audio) when is_binary(audio) do
+    if byte_size(audio) > 0 and byte_size(audio) <= 1_048_576 and rem(byte_size(audio), 2) == 0,
+      do: {:audio, audio},
+      else: {:error, :invalid_message}
+  end
+
+  def validate_audio(_audio), do: {:error, :invalid_message}
+
+  defp websocket_url(%__MODULE__{endpoint: @endpoint}), do: @websocket_endpoint
+
+  defp websocket_url(%__MODULE__{endpoint: endpoint}) do
+    uri = URI.new!(endpoint)
+    scheme = if uri.scheme == "https", do: "wss", else: "ws"
+
+    %{uri | scheme: scheme, path: "/tts/websocket", userinfo: nil, fragment: nil, query: nil}
+    |> URI.to_string()
   end
 end
