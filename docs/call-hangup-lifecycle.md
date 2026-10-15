@@ -161,6 +161,31 @@ and leaves durable completion unknown while Leg retains its carrier cleanup
 responsibility. Apply the same rule to any adopted resource with existing effects;
 post-start registration is sufficient only when rejection prevents those effects.
 
+### Local session and WebRTC registration
+
+The next resource integration registers each managed Session before issuing its
+credential and carries the exact cleanup binding privately into its WebRTC
+snapshot. A Session acknowledges only after its admission-release callback
+succeeds. Failed releases retain supervised retry ownership. Managed sessions
+monitor the claimant, bound connection and tracker even without a release
+callback; tracker loss closes the local session and cannot recreate membership.
+
+The WebRTC incarnation supervisor registers itself before starting children.
+Because this tree has no independent carrier or durable-usage obligation, it can
+acknowledge that fact at registration. This is not completion: the tracker must
+still observe orderly termination of the entire tree and the exact engine
+supervisor. Abnormal termination remains unknown. This avoids depending on a
+child's `terminate/2` callback or an HTTP request's lifetime. Registration failure
+prevents peer creation, media startup and engine attachment.
+
+These hooks alone must not enable managed admission. Web calls can initiate
+outgoing transfer legs outside those trees; initial and transfer carriers still
+need registration, remote termination evidence and final-usage acknowledgement.
+The durable reservation and tracker must exist before releasing the startup gate.
+This design was independently reviewed; resource-hook implementation remains open.
+
+### Terminal projection and publication
+
 For newly managed calls, archive projection must defer `ended` until Gateway
 completion even if archive close wins the race before a hangup request. Keep the
 archive fact writable while terminal projection waits. Preserve the approved

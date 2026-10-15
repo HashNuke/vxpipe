@@ -827,3 +827,25 @@ transactional conflicting-close rejection, the narrow acknowledged-cancellation
 late-close exception, immutable ownership/time, and publication retry gating.
 The combined root verification is still running; focused results above are not
 a claim that Gateway integration or the full hangup checkpoint is complete.
+
+### Resource integration design review
+
+Independent review selected supervisor-owned WebRTC registration before child
+startup. Its early acknowledgement means no independent remote/usage obligation;
+whole-root orderly termination is still required. Session acknowledgement follows
+successful admission release, with retries and tracker-loss monitoring. Managed
+admission must stay disabled until initial/transfer carrier resources are covered.
+Incoming inspection also identified synchronous answering and one-second failure
+retirement as incompatible with reliable late carrier cleanup. These are design
+findings, not implemented resource coverage.
+
+### Combined completion, usage and services verification
+
+All five root gates passed on the frozen source through `ac1db7b0`: formatting,
+compilation with warnings as errors, strict Credo, the default umbrella suite and
+unused-dependency check. Default suite results: Identity 67, MCP 37 (3 excluded),
+Providers 35, AgentRuntime 108 (8 excluded), CallEngine 2,233 (75 excluded),
+Calls 230, Gateway 708 (8 excluded), Artifacts 20, Persistence 365 (27 excluded),
+and Console 345 (19 excluded), all with zero failures. Focused SQL race evidence
+remains recorded separately; excluded live/integration lanes were not represented
+as default-suite passes. Local links in the hangup design and milestone are valid.

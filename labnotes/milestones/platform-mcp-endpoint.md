@@ -494,6 +494,9 @@ Final focused verification passed 135 Persistence tests, including separate SQL
 connection races/rollback and legacy compatibility, plus six Calls/finalizer tests.
 Gateway resource wiring/reconciliation and HTTP/MCP hangup remain unimplemented;
 this does not complete the hangup checkpoint.
+All five root gates then passed on frozen source including the completion, final
+usage and services changes: 4,148 default-suite tests, zero failures (140 excluded).
+Focused SQL races are separate evidence; no live providers were used.
 
 ## Checkpoint: platform-key user administration
 
