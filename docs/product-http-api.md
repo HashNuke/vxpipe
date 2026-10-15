@@ -4,7 +4,7 @@ Canonical product operations live under `/api`. Browser UI clients and external
 clients use the same handlers, application authorization and response schemas.
 This document grows with the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md);
 it describes tenant and call-spec reads, provider catalogs, spec writes,
-call creation/join-token operations, account administration, and session-only
+call creation, join tokens and whole-call hangup, account administration, and session-only
 API-key management, services, provider credentials, role administration and
 password reset, tenant creation and call inspection. The complete migration
 inventory is in

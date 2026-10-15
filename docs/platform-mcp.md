@@ -18,12 +18,13 @@ the earlier nine-tool machine-endpoint-only proposal. Several required operation
 need shared machine API/application changes; they remain part of this milestone,
 not deferred Console-only features.
 
-## Implemented tool subset
+## Implemented tools
 
 The current server advertises tenant discovery and call-spec workflows according
 to key scope: `list_tenants`, `get_tenant`, `list_call_specs`, `get_call_spec`,
 `create_call_spec`, `update_call_spec`, `publish_call_spec_revision`,
-`list_providers`, `list_provider_models`, `create_call`, and `create_join_token`.
+`list_providers`, `list_provider_models`, `create_call`, `create_join_token`, and
+`hangup_call`.
 Calls-only keys see tenant and call tools; full tenant and Settings platform keys
 also see spec/catalog tools. Admin-only tenant keys cannot create calls or tokens. Each call
 independently checks its authority and selected tenant.
@@ -31,10 +32,9 @@ independently checks its authority and selected tenant.
 Settings platform keys additionally see `list_users`, `create_user`, `update_user`,
 `disable_user`, and `list_role_options`. These share Identity account workflows
 with the canonical HTTP API and preserve transactional authority/audit guards.
-Hangup below is approved remaining work and is not advertised yet. The
-[product HTTP API](product-http-api.md) documents
-the corresponding implemented HTTP operations. Browser migration remains tracked
-separately in the milestone.
+All 17 tools are implemented. The [product HTTP API](product-http-api.md) documents
+the corresponding HTTP operations. Browser product callers use canonical routes;
+final active-call and cross-interface acceptance remain tracked in the milestone.
 
 ## What exists today
 

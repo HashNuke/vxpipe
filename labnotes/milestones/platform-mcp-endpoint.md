@@ -77,10 +77,10 @@ public Elixir operation with their actual authenticated actor.
   Evidence: [complete route inventory](../../docs/product-api-inventory.md), reviewed
   against Console/Gateway routes and frontend fetch modules. Non-MCP machine grants
   remain default-deny until explicitly defined; inventory is not route migration.
-- [ ] Select existing Calls/Identity/application functions as the shared operation
+- [x] Select existing Calls/Identity/application functions as the shared operation
   boundaries; extract controller-owned business checks/projections where necessary.
   Keep functions domain-focused, not a generic dispatcher or unnecessary new app.
-- [ ] Define trusted actor/input/result/error contracts. Shared functions enforce
+- [x] Define trusted actor/input/result/error contracts. Shared functions enforce
   authorization, tenant scope, validation, pagination, transactions, idempotency
   and lifecycle behavior even when called without an HTTP/MCP adapter.
 - [x] Move reusable Identity dependency composition out of Console-only wiring;
@@ -88,10 +88,10 @@ public Elixir operation with their actual authenticated actor.
   runtime orchestration in transport-neutral Gateway application modules.
   Evidence: `Vxpipe.Identity.dependencies/0`, runtime config under `:vxpipe_identity`,
   Console delegation; red then 61 Identity and eight Console tests passing, reviewed.
-- [ ] Define one HTTP handler/schema per product operation under `/api`, retaining
+- [x] Define one HTTP handler/schema per product operation under `/api`, retaining
   compatible published contracts. UI and external clients receive the same wire
   contract. Legacy `/admin/api` aliases may translate formats but cannot own policy.
-- [ ] Add configured authentication adapters: browser sessions with CSRF/origin
+- [x] Add configured authentication adapters: browser sessions with CSRF/origin
   protection, API-key Bearer for external requests, Bearer-only standalone hosting.
   Explicit Authorization never falls back to session authority; grants never union.
 - [x] Red-test and migrate one existing spec-write flow end to end: direct Elixir,
@@ -111,6 +111,15 @@ Rendered Chrome inspection at desktop and 390px mobile verified a draft save to
 local sandbox database and fake login identity. This does not complete the shared
 checkpoint: legacy adapters, full platform-service parity, all shared operation
 contracts and final gates remain outstanding.
+
+Shared-contract completion audit (2026-10-15): Calls/Identity own actor-aware
+policy and persistence contracts; Gateway owns transport-neutral runtime workflows.
+Canonical HTTP handlers/projections serve the UI and external clients. Product
+session authentication retains CSRF and explicit-header precedence; standalone
+hosting is Bearer-only. Legacy alias consolidation and the complete route inventory
+now cover the formerly pending operation groups. Source/test audit and independent
+review support the implementation checkboxes above; final cross-interface acceptance
+and root gates remain separate below.
 
 ## Checkpoint: authenticated MCP foundation
 
@@ -147,11 +156,11 @@ directly, without an HTTP loopback request or controller invocation.
 - [x] Mount exact `/mcp` through Gateway and Console before generic parsers; keep
   embedded enablement explicit, app/carrier host separation, HTTPS/loopback rules,
   host/origin checks, no-store responses and bounded work/body/deadline limits.
-- [ ] Implement the shared operation/key policy from the design matrix. Filter
+- [x] Implement the shared operation/key policy from the design matrix. Filter
   discovery and independently check invocation; isolate concurrent principals.
-- [ ] Define schemas, structured/text results, public error mapping, annotations,
+- [x] Define schemas, structured/text results, public error mapping, annotations,
   sanitized telemetry and no automatic mutation retries. Document concrete limits.
-- [ ] Implement the [argument/result contracts](../../docs/platform-mcp.md#argument-and-result-details)
+- [x] Implement the [argument/result contracts](../../docs/platform-mcp.md#argument-and-result-details)
   as per-tool schemas: required fields, typed defaults, null handling and safe
   projections. Public tenant arguments/memberships use `tenant_key`, not the
   internal `tenant_id`; preserve existing REST/Console wire shapes at adapters.
@@ -783,23 +792,23 @@ Depends on the implemented shared operations. Runnable slice: the Console uses t
 documented product endpoints for its business operations; only the explicitly
 inventoried session/navigation/authentication helpers remain UI-specific.
 
-- [ ] Migrate UI callers, TypeScript response parsing, fixtures and focused tests
+- [x] Migrate UI callers, TypeScript response parsing, fixtures and focused tests
   to canonical routes and shared schemas. Do not leave UI/public controllers with
   parallel implementations of tenant/spec/call/user actions.
-- [ ] Complete the inventory for remaining existing UI product operations, including
+- [x] Complete the inventory for remaining existing UI product operations, including
   services, roles and key management: one canonical handler per operation, explicit
   key/session policy preserving current delegation/privileged-account safeguards,
   and user-facing HTTP documentation. Do not quietly classify writes as UI helpers
   to avoid consolidation or assume all actor types share all permissions.
 - [x] Keep UI helpers few and compositional; helpers reuse authorized application
   reads. Record their purpose/credential contract and do not add a second write API.
-- [ ] Retain needed legacy routes as thin compatibility aliases with a documented
+- [x] Retain needed legacy routes as thin compatibility aliases with a documented
   migration/deprecation policy; retire duplicate controllers and unused policy maps
   once no consumer needs them. Preserve already published external contracts.
-- [ ] Maintain one canonical HTTP schema/documentation source, using existing
+- [x] Maintain one canonical HTTP schema/documentation source, using existing
   tooling where available; verify UI client and documented examples agree with it.
   MCP schemas/results adapt the same operation contracts without new business rules.
-- [ ] Acceptance: rendered desktop/mobile flows plus network inspection show the UI
+- [x] Acceptance: rendered desktop/mobile flows plus network inspection show the UI
   using documented endpoints; synthetic session/key requests exercise the same
   handlers. Verify changed frontend types/tests/build and no credential exposure.
 
@@ -941,6 +950,15 @@ After 17 expected failures in 53 tests, the final focused Console selection pass
 58 tests. Independent review approved and exact formatting passed. The alias
 retirement/compatibility policy is documented. No UI code changed in this slice;
 combined root verification and final cross-interface acceptance remain due.
+
+UI completion audit (2026-10-15): production fetch callers now use canonical
+product endpoints. Remaining private JSON routes are the inventoried session,
+account, navigation/dashboard and editor lookup helpers; sample-page links are HTML
+navigation. Each migrated flow has recorded desktop/mobile/network evidence above,
+and the latest frontend verification passed 770 tests plus types/lint/build. Legacy
+aliases share policy and preserve documented compatibility translations. Independent
+review supports these completed UI tasks; it does not close final umbrella or full
+MCP capability acceptance.
 
 ## Checkpoint: parity acceptance and documentation
 

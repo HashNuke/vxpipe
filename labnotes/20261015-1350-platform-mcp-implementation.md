@@ -1578,3 +1578,15 @@ Gateway's four expected missing-composition failures and Console's missing-flag
 failure preceded implementation. Five Gateway tests and 15 Console runtime plus
 persisted MCP tests passed. Independent review approved, exact formatting and diff
 checks passed. Final active lifecycle/client acceptance and root gates remain.
+
+### Completion evidence audit
+
+Reconciled the shared API, MCP schema/policy and UI migration checkboxes against
+source, focused test records, browser evidence and an independent read-only review.
+All 17 tools exist; each invocation authorizes independently of discovery. Canonical
+HTTP and legacy aliases use shared Calls/Identity/runtime operations, while browser
+session authentication remains distinct from explicit Bearer authority. Remaining
+private frontend fetches match the documented compositional helper inventory.
+Updated the tool catalog and route inventory to remove obsolete pending claims.
+Final runtime/client acceptance, request-boundary stress evidence and root gates
+remain unchecked; the milestone index remains incomplete.
