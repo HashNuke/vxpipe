@@ -1528,3 +1528,20 @@ no storage behavior was loosened. Independent review approved, exact formatting
 and diff checks passed. Real local persisted calls/full/platform parity covers
 prepared hangup and rejection of its unredeemed token. No runtime media or live
 service was invoked. Global rollout/full lifecycle acceptance remain outstanding.
+
+### Carrier end-command retries
+
+Incoming/outgoing owners now retain only an acceptance boolean until command
+observer DOWN. Failed/unknown outcomes and command-start failures schedule one
+correlated timer, initially 250 ms with backoff capped at five seconds. Workers
+cannot overlap, and abnormal observer loss keeps sticky uncertainty and suppresses
+further submissions. Authenticated end cancels pending retry work. Original carrier
+control identity and first cancellation reason remain retained; no path redials.
+
+Initial 79 tests had eight expected failures; first green passed 87. After a privacy
+refinement and terminal-event suppression cases, 119 owning/local-carrier tests
+passed, including both Telnyx/Twilio harnesses. Root review then found that explicit
+late-answer retry had stopped reattempting a failed local cancellation. One focused
+regression reproduced that gap; restoring close with the retained reason passed
+34 incoming/managed tests. Timed retries remain carrier-command-only. Independent
+review approved the final fix. Exact paths are formatted; no external services ran.

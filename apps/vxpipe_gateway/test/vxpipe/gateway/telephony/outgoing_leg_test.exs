@@ -364,6 +364,104 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     refute_receive {:test_telephony_dial, _}
   end
 
+  test "outgoing end retries after its command supervisor recovers", context do
+    leg = start_accepted_leg(context, service(self(), []))
+
+    case :sys.get_state(leg).dial_worker do
+      {worker, _} ->
+        monitor = Process.monitor(worker)
+        assert_receive {:DOWN, ^monitor, :process, ^worker, _}
+
+      nil ->
+        :ok
+    end
+
+    supervisor = Vxpipe.Gateway.Telephony.DialSupervisor
+    assert :ok = Supervisor.terminate_child(Vxpipe.Gateway.Supervisor, supervisor)
+    on_exit(fn -> Supervisor.restart_child(Vxpipe.Gateway.Supervisor, supervisor) end)
+    result = OutgoingLeg.disconnect(leg, 1_000)
+    assert {:ok, _} = Supervisor.restart_child(Vxpipe.Gateway.Supervisor, supervisor)
+    assert :ok = result
+    assert_receive {:test_telephony_end_leg, request}, 1_000
+    assert request.leg.provider_call_control_id == "outbound-call-control"
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
+  end
+
+  for outcome <- [:reject_test_telephony_end, :unknown_test_telephony_end] do
+    test "#{outcome} retries the original outgoing control without overlapping commands",
+         context do
+      leg =
+        start_accepted_leg(
+          context,
+          service(self(), api_key: "blocked-end:#{:erlang.pid_to_list(self())}")
+        )
+
+      assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+      assert_receive {:test_telephony_end_leg, first_request}
+      assert_receive {:test_telephony_end_pending, first}
+      on_exit(fn -> send(first, :accept_test_telephony_end) end)
+      refute_receive {:test_telephony_end_pending, _}, 300
+      first_monitor = Process.monitor(first)
+      send(first, unquote(outcome))
+      assert_receive {:DOWN, ^first_monitor, :process, ^first, :normal}
+      assert_receive {:test_telephony_end_pending, second}, 1_000
+      on_exit(fn -> send(second, :accept_test_telephony_end) end)
+      assert_receive {:test_telephony_end_leg, second_request}
+      assert second_request == first_request
+      send(second, :accept_test_telephony_end)
+      refute_receive {:test_telephony_end_pending, _}, 600
+      assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
+    end
+  end
+
+  test "authenticated outgoing end cancels retries while the managed owner awaits room closure",
+       c do
+    managed = managed_room()
+
+    assert {:ok, leg} =
+             start_managed_leg(
+               c,
+               managed,
+               service(self(), api_key: "blocked-end:#{:erlang.pid_to_list(self())}")
+             )
+
+    assert :ok = OutgoingLeg.await(leg, 1_000)
+    monitor = Process.monitor(leg)
+    assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+    assert_receive {:test_telephony_end_pending, first}
+    on_exit(fn -> send(first, :accept_test_telephony_end) end)
+    {observer, _} = :sys.get_state(leg).end_worker
+    observer_monitor = Process.monitor(observer)
+    send(first, :reject_test_telephony_end)
+    assert_receive {:DOWN, ^observer_monitor, :process, ^observer, :normal}
+    _ = :sys.get_state(leg)
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
+    refute_receive {:test_telephony_end_pending, _}, 600
+    refute_receive {:DOWN, ^monitor, :process, ^leg, _}, 0
+    assert :ok = stop_managed_room(managed)
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 1_000
+  end
+
+  test "abnormal outgoing end observer loss suppresses late-answer command overlap", context do
+    leg =
+      start_accepted_leg(
+        context,
+        service(self(), api_key: "blocked-end:#{:erlang.pid_to_list(self())}")
+      )
+
+    assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+    assert_receive {:test_telephony_end_pending, operation}
+    on_exit(fn -> Process.exit(operation, :kill) end)
+    {watcher, _} = :sys.get_state(leg).end_worker
+    monitor = Process.monitor(watcher)
+    Process.exit(watcher, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^watcher, :killed}
+    assert :ok = OutgoingLeg.dispatch(leg, lifecycle_event(:answered, []), 1_000)
+    assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+    refute_receive {:test_telephony_end_pending, _}, 600
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
+  end
+
   test "late answer queues cleanup after the in-flight end and owner waits for its worker",
        context do
     leg =

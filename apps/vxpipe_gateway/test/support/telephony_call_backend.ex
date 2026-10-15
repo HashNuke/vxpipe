@@ -177,6 +177,8 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
 
       receive do
         :release_incoming_end -> {:error, :command_rejected}
+        :unknown_incoming_end -> {:error, :submission_unknown}
+        :accept_incoming_end -> :ok
       end
     else
       :ok

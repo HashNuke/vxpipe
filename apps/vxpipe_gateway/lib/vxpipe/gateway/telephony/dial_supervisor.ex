@@ -41,6 +41,10 @@ defmodule Vxpipe.Gateway.Telephony.DialSupervisor do
       error ->
         error
     end
+  rescue
+    _exception -> {:error, :submission_unavailable}
+  catch
+    :exit, _reason -> {:error, :submission_unavailable}
   end
 
   defp submit_command(_owner, _message, _operation), do: {:error, :invalid_command_owner}

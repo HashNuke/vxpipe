@@ -10,6 +10,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   alias Vxpipe.Gateway.Telephony.{
     CarrierCleanup,
     ConfiguredService,
+    EndCommandRetry,
     IncomingLegActivationResult,
     IncomingLegActivationContext,
     IncomingLegIdentity,
@@ -80,6 +81,9 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       end_worker: nil,
       end_requested?: false,
       end_retry?: false,
+      end_accepted?: false,
+      end_reason: nil,
+      end_command_retry: %EndCommandRetry{},
       carrier_ended?: false,
       managed_cleanup?: false,
       cleanup: nil,
@@ -204,7 +208,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
         end
 
       status = if result == :ok, do: :ended, else: :closing
-      state = reply_waiters(%{state | status: status, carrier_ended?: true}, :ok)
+      state = reply_waiters(terminal_end(%{state | status: status, carrier_ended?: true}), :ok)
       if status == :ended and is_nil(state.room_monitor), do: send(self(), :retire)
       {:reply, result, state}
     else
@@ -252,10 +256,10 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   end
 
   def handle_info(
-        {:incoming_submission, :end, worker, _result},
+        {:incoming_submission, :end, worker, result},
         %{end_worker: {worker, _monitor}} = state
       ),
-      do: {:noreply, state}
+      do: {:noreply, %{state | end_accepted?: EndCommandRetry.accepted?(result)}}
 
   def handle_info(
         {:DOWN, monitor, :process, worker, reason},
@@ -285,7 +289,24 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
         commands_drained?: state.commands_drained? and reason == :normal
     }
 
-    state = if state.end_retry?, do: retry_end(%{state | end_retry?: false}), else: state
+    state =
+      cond do
+        not state.commands_drained? or state.carrier_ended? -> terminal_end(state)
+        state.end_retry? -> retry_end(%{state | end_retry?: false})
+        not state.end_accepted? -> schedule_end(state)
+        true -> state
+      end
+
+    maybe_retire(state)
+  end
+
+  def handle_info({:retry_carrier_end, token}, state) do
+    state =
+      case EndCommandRetry.take(state.end_command_retry, token) do
+        {:ok, retry} -> request_end(%{state | end_command_retry: retry, end_requested?: false})
+        :stale -> state
+      end
+
     maybe_retire(state)
   end
 
@@ -558,12 +579,14 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     end
   end
 
-  defp retry_end(%{carrier_ended?: true} = state), do: state
+  defp retry_end(%{commands_drained?: false} = state), do: terminal_end(state)
+  defp retry_end(%{carrier_ended?: true} = state), do: terminal_end(state)
 
   defp retry_end(%{end_worker: worker} = state) when not is_nil(worker),
     do: %{state | end_retry?: true}
 
-  defp retry_end(state), do: close(%{state | end_requested?: false}, :admission_cancelled)
+  defp retry_end(state),
+    do: close(%{state | end_requested?: false}, state.end_reason || :admission_cancelled)
 
   defp close(%{status: :ended} = state, _reason), do: reply_waiters(state, :ok)
 
@@ -574,30 +597,47 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       _cancel = call_backend(state.backend, :cancel_incoming, [state.claim, state.token, reason])
     end
 
-    state = %{state | status: :closing}
-
-    state =
-      if state.end_requested? or state.carrier_ended? do
-        state
-      else
-        case IncomingSubmission.start(self(), :end, fn ->
-               call_backend(state.backend, :end_incoming, [
-                 state.service,
-                 state.initial_event,
-                 state.activation || state.incoming_identity,
-                 reason
-               ])
-             end) do
-          {:ok, worker, monitor} ->
-            %{state | end_worker: {worker, monitor}, end_requested?: true}
-
-          _failure ->
-            state
-        end
-      end
-
-    reply_waiters(state, :ok)
+    state = %{state | status: :closing, end_reason: state.end_reason || reason}
+    state |> request_end() |> reply_waiters(:ok)
   end
+
+  defp request_end(%{commands_drained?: false} = state), do: terminal_end(state)
+  defp request_end(%{carrier_ended?: true} = state), do: terminal_end(state)
+  defp request_end(%{end_worker: worker} = state) when not is_nil(worker), do: state
+  defp request_end(%{end_requested?: true} = state), do: state
+
+  defp request_end(state) do
+    state = %{state | end_command_retry: EndCommandRetry.cancel(state.end_command_retry)}
+
+    case IncomingSubmission.start(self(), :end, fn ->
+           call_backend(state.backend, :end_incoming, [
+             state.service,
+             state.initial_event,
+             state.activation || state.incoming_identity,
+             state.end_reason
+           ])
+         end) do
+      {:ok, worker, monitor} ->
+        %{state | end_worker: {worker, monitor}, end_requested?: true, end_accepted?: false}
+
+      _failure ->
+        schedule_end(state)
+    end
+  end
+
+  defp schedule_end(state),
+    do: %{
+      state
+      | end_requested?: true,
+        end_command_retry: EndCommandRetry.schedule(state.end_command_retry)
+    }
+
+  defp terminal_end(state),
+    do: %{
+      state
+      | end_command_retry: EndCommandRetry.cancel(state.end_command_retry),
+        end_retry?: false
+    }
 
   defp revoke_media(%{prepared: %IncomingLegActivationContext{} = prepared} = state) do
     MediaAdmission.revoke(prepared.media_admission, self())

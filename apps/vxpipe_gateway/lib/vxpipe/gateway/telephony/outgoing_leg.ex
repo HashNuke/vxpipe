@@ -7,6 +7,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   alias Vxpipe.Gateway.Telephony.{
     DialSupervisor,
+    EndCommandRetry,
     MediaAdmission,
     MediaBinding,
     MediaSupervisor,
@@ -79,6 +80,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
        cancel_reason: nil,
        end_requested?: false,
        end_retry?: false,
+       end_accepted?: false,
+       end_command_retry: %EndCommandRetry{},
        end_worker: nil,
        early_events: [],
        service: Keyword.fetch!(options, :service),
@@ -425,8 +428,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
       else: submitted({:ok, %Submission{status: :unknown, provider_call_control_id: nil}}, state)
   end
 
-  def handle_info({:outgoing_end_result, worker, _result}, %{end_worker: {worker, _}} = state),
-    do: {:noreply, state}
+  def handle_info({:outgoing_end_result, worker, result}, %{end_worker: {worker, _}} = state),
+    do: {:noreply, %{state | end_accepted?: EndCommandRetry.accepted?(result)}}
 
   def handle_info(
         {:DOWN, monitor, :process, worker, reason},
@@ -435,6 +438,9 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     state = %{state | commands_drained?: state.commands_drained? and reason == :normal}
     state |> OutgoingLegLifecycle.end_worker_down() |> continue()
   end
+
+  def handle_info({:retry_carrier_end, token}, state),
+    do: state |> OutgoingLegLifecycle.retry_end(token) |> continue()
 
   def handle_info(:retire_unknown, state), do: continue(%{state | retire_unknown?: true})
   def handle_info(:retire, state), do: continue(%{state | retire?: true})
@@ -568,7 +574,11 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
       {:stop, result} ->
         MediaAdmission.revoke(state.media_admission, self())
         state = state |> observe_usage(event) |> InitialLegLifecycle.observe(event)
-        reply(result, %{state | status: :ended, pending_media: nil})
+
+        reply(
+          result,
+          OutgoingLegLifecycle.terminal_end(%{state | status: :ended, pending_media: nil})
+        )
 
       {:cancel, reason} ->
         state =

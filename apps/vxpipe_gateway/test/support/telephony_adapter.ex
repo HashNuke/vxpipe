@@ -79,6 +79,9 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
         send(observer(options), {:test_telephony_end_pending, self()})
 
         receive do
+          :unknown_test_telephony_end ->
+            {:ok, %Submission{status: :unknown, provider_call_control_id: nil}}
+
           :reject_test_telephony_end ->
             {:error, :command_rejected}
 

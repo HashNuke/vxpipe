@@ -193,6 +193,179 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert_receive {:incoming_end_requested, "call-control-1", :call_unavailable}
   end
 
+  test "incoming end retries after its command supervisor recovers", context do
+    backend =
+      start_supervised!({TestTelephonyCallBackend, observer: self(), started_failure?: true},
+        id: :start_retry
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+    assert :ok = handle_event(options, context.service, incoming_event())
+    assert {:ok, leg} = LegSupervisor.lookup(context.service.identity, "call-leg-1")
+
+    case :sys.get_state(leg).answer_worker do
+      {worker, _} ->
+        monitor = Process.monitor(worker)
+        assert_receive {:DOWN, ^monitor, :process, ^worker, _}
+
+      nil ->
+        :ok
+    end
+
+    supervisor = Vxpipe.Gateway.AdmissionTaskSupervisor
+    assert :ok = Supervisor.terminate_child(Vxpipe.Gateway.Supervisor, supervisor)
+    on_exit(fn -> Supervisor.restart_child(Vxpipe.Gateway.Supervisor, supervisor) end)
+    result = handle_event(options, context.service, answered_event())
+    assert {:ok, _} = Supervisor.restart_child(Vxpipe.Gateway.Supervisor, supervisor)
+    assert {:error, :call_unavailable} = result
+    assert_receive {:incoming_end_requested, "call-control-1", :call_unavailable}, 1_000
+
+    assert :ok =
+             handle_event(options, context.service, %{
+               answered_event()
+               | kind: :ended,
+                 end_reason: :hangup
+             })
+  end
+
+  for outcome <- [:release_incoming_end, :unknown_incoming_end] do
+    test "#{outcome} retries incoming cleanup on the original identity", context do
+      backend =
+        start_supervised!(
+          {TestTelephonyCallBackend,
+           observer: self(), started_failure?: true, end_blocked?: true},
+          id: :end_retry
+        )
+
+      options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+      assert :ok = handle_event(options, context.service, incoming_event())
+
+      assert {:error, :call_unavailable} =
+               handle_event(options, context.service, answered_event())
+
+      assert_receive {:incoming_end_requested, "call-control-1", reason}
+      assert_receive {:incoming_end_pending, first}
+      on_exit(fn -> send(first, :accept_incoming_end) end)
+      refute_receive {:incoming_end_pending, _}, 300
+      first_monitor = Process.monitor(first)
+      send(first, unquote(outcome))
+      assert_receive {:DOWN, ^first_monitor, :process, ^first, :normal}
+      assert_receive {:incoming_end_pending, second}, 1_000
+      on_exit(fn -> send(second, :accept_incoming_end) end)
+      assert_receive {:incoming_end_requested, "call-control-1", ^reason}
+      send(second, :accept_incoming_end)
+      refute_receive {:incoming_end_pending, _}, 600
+
+      assert :ok =
+               handle_event(options, context.service, %{
+                 answered_event()
+                 | kind: :ended,
+                   end_reason: :hangup
+               })
+    end
+  end
+
+  test "authenticated incoming end cancels retries while the owner awaits room closure",
+       context do
+    room = start_supervised!({Agent, fn -> :room end}, id: :retry_room)
+
+    backend =
+      start_supervised!(
+        {TestTelephonyCallBackend,
+         observer: self(), room_owner: room, started_failure?: true, end_blocked?: true},
+        id: :terminal_retry
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+    assert :ok = handle_event(options, context.service, incoming_event())
+    assert {:error, :call_unavailable} = handle_event(options, context.service, answered_event())
+    assert_receive {:incoming_end_pending, first}
+    on_exit(fn -> send(first, :accept_incoming_end) end)
+    assert {:ok, leg} = LegSupervisor.lookup(context.service.identity, "call-leg-1")
+    monitor = Process.monitor(leg)
+    {observer, _} = :sys.get_state(leg).end_worker
+    observer_monitor = Process.monitor(observer)
+    send(first, :release_incoming_end)
+    assert_receive {:DOWN, ^observer_monitor, :process, ^observer, :normal}
+    _ = :sys.get_state(leg)
+
+    assert :ok =
+             handle_event(options, context.service, %{
+               answered_event()
+               | kind: :ended,
+                 end_reason: :hangup
+             })
+
+    refute_receive {:incoming_end_pending, _}, 600
+    refute_receive {:DOWN, ^monitor, :process, ^leg, _}, 0
+    stop_supervised!(:retry_room)
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 1_000
+  end
+
+  test "abnormal incoming end observer loss suppresses late-answer command overlap", context do
+    backend =
+      start_supervised!(
+        {TestTelephonyCallBackend, observer: self(), started_failure?: true, end_blocked?: true},
+        id: :lost_end
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+    assert :ok = handle_event(options, context.service, incoming_event())
+    assert {:error, :call_unavailable} = handle_event(options, context.service, answered_event())
+    assert_receive {:incoming_end_pending, operation}
+    on_exit(fn -> Process.exit(operation, :kill) end)
+    assert {:ok, leg} = LegSupervisor.lookup(context.service.identity, "call-leg-1")
+    {watcher, _} = :sys.get_state(leg).end_worker
+    monitor = Process.monitor(watcher)
+    Process.exit(watcher, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^watcher, :killed}
+    assert :ok = handle_event(options, context.service, answered_event())
+    refute_receive {:incoming_end_pending, _}, 600
+
+    assert :ok =
+             handle_event(options, context.service, %{
+               answered_event()
+               | kind: :ended,
+                 end_reason: :hangup
+             })
+  end
+
+  test "late answer retries unavailable local cancellation with the original reason", context do
+    backend =
+      start_supervised!(
+        {TestTelephonyCallBackend,
+         observer: self(), started_failure?: true, cancel_failures: 1, end_blocked?: true},
+        id: :local_cancel_retry
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+    assert :ok = handle_event(options, context.service, incoming_event())
+    assert {:error, :call_unavailable} = handle_event(options, context.service, answered_event())
+    assert_receive {:incoming_end_pending, first}
+    on_exit(fn -> send(first, :accept_incoming_end) end)
+    assert :ok = handle_event(options, context.service, answered_event())
+    send(first, :accept_incoming_end)
+    assert_receive {:incoming_end_pending, second}
+    on_exit(fn -> send(second, :accept_incoming_end) end)
+
+    cancellations =
+      Enum.filter(
+        TestTelephonyCallBackend.operations(backend),
+        &match?({:cancel_incoming, _, _, _}, &1)
+      )
+
+    assert length(cancellations) == 2
+    assert Enum.all?(cancellations, &match?({:cancel_incoming, _, _, :call_unavailable}, &1))
+    send(second, :accept_incoming_end)
+
+    assert :ok =
+             handle_event(options, context.service, %{
+               answered_event()
+               | kind: :ended,
+                 end_reason: :hangup
+             })
+  end
+
   test "late authenticated answer queues another end without releasing cancelled startup",
        context do
     backend =
@@ -216,7 +389,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
              &match?({:release_incoming, _, _}, &1)
            )
 
-    send(retry_end, :release_incoming_end)
+    send(retry_end, :accept_incoming_end)
     refute_receive {:incoming_end_pending, _}
   end
 

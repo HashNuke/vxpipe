@@ -16,6 +16,10 @@ defmodule Vxpipe.Gateway.Telephony.IncomingSubmission do
       error ->
         error
     end
+  rescue
+    _exception -> {:error, :submission_unavailable}
+  catch
+    :exit, _reason -> {:error, :submission_unavailable}
   end
 
   # Install the owner's observer monitor before any operation can complete.

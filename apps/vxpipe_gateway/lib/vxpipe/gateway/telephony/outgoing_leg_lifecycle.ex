@@ -8,6 +8,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegLifecycle do
     CarrierCleanup,
     ConfiguredService,
     DialSupervisor,
+    EndCommandRetry,
     LegUsage,
     MediaAdmission,
     MediaBinding
@@ -29,6 +30,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegLifecycle do
   def adopted(%{cancel_reason: nil} = state), do: state
   def adopted(state), do: request_end(state)
 
+  def late_answer(%{commands_drained?: false} = state), do: state
+  def late_answer(%{status: :ended} = state), do: state
   def late_answer(%{cancel_reason: nil} = state), do: state
 
   def late_answer(%{end_worker: worker} = state) when not is_nil(worker),
@@ -39,15 +42,44 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegLifecycle do
   def end_worker_down(state) do
     state = %{state | end_worker: nil}
 
-    if state.end_retry? and state.status != :ended,
-      do: request_end(%{state | end_retry?: false, end_requested?: false}),
-      else: state
+    cond do
+      not state.commands_drained? or state.status == :ended ->
+        terminal_end(state)
+
+      state.end_retry? ->
+        request_end(%{state | end_retry?: false, end_requested?: false})
+
+      not state.end_accepted? ->
+        schedule_end(state)
+
+      true ->
+        state
+    end
   end
 
+  def retry_end(state, token) do
+    case EndCommandRetry.take(state.end_command_retry, token) do
+      {:ok, retry} -> request_end(%{state | end_command_retry: retry, end_requested?: false})
+      :stale -> state
+    end
+  end
+
+  def terminal_end(state),
+    do: %{
+      state
+      | end_command_retry: EndCommandRetry.cancel(state.end_command_retry),
+        end_retry?: false
+    }
+
+  defp request_end(%{commands_drained?: false} = state), do: terminal_end(state)
+  defp request_end(%{status: :ended} = state), do: terminal_end(state)
   defp request_end(%{carrier_control_id: nil} = state), do: state
+  defp request_end(%{end_worker: worker} = state) when not is_nil(worker), do: state
   defp request_end(%{end_requested?: true} = state), do: state
 
   defp request_end(state) do
+    state = %{state | end_command_retry: EndCommandRetry.cancel(state.end_command_retry)}
+
     case DialSupervisor.end_leg(
            self(),
            state.service,
@@ -56,12 +88,19 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegLifecycle do
            state.cancel_reason
          ) do
       {:ok, worker, monitor} ->
-        %{state | end_worker: {worker, monitor}, end_requested?: true}
+        %{state | end_worker: {worker, monitor}, end_requested?: true, end_accepted?: false}
 
       {:error, _reason} ->
-        state
+        schedule_end(state)
     end
   end
+
+  defp schedule_end(state),
+    do: %{
+      state
+      | end_requested?: true,
+        end_command_retry: EndCommandRetry.schedule(state.end_command_retry)
+    }
 
   def validate_cleanup(%{cleanup_scope: nil}), do: {:ok, nil}
 

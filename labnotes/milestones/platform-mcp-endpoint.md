@@ -671,12 +671,17 @@ fixture teardown barrier; both local carrier harnesses also passed their 30 case
 Independent review approved. Global configuration and per-call transfer scope
 wiring remain pending; no external telephony or live provider was used.
 
-Pre-rollout review found an additional recovery gap: both carrier owners currently
-ignore failed/uncertain end results and retry only on a late answer. Owner-held
-bounded retry after normal command-observer DOWN is required before enablement;
-abnormal observer loss must suppress overlap and remain unknown. The lifecycle
-design records the reviewed contract. This remains implementation work, not a
-completed recovery acceptance gate.
+Pre-rollout review found and resolved an additional recovery gap: both carrier
+owners now retry failed/uncertain end results after normal command-observer DOWN,
+using one timer and capped backoff. Abnormal observer loss suppresses overlap and
+remains unknown. Original control identity/reason and local late-answer cancellation
+retries are preserved; authenticated end cancels pending retry work.
+
+Eight expected failures in 79 tests preceded implementation; the first green had
+87 tests and the owning/local-carrier harness selection passed 119. Review caught
+a local-cancellation retry regression, reproduced with a focused red, then fixed;
+the final incoming/managed selection passed 34 tests. Independent review approved.
+Global managed rollout and complete lifecycle acceptance remain open.
 
 Combined recovery/carrier/sample verification: the frozen umbrella run passed all
 applications except an obsolete Console sample-route permission assertion. That
