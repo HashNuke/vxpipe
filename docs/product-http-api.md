@@ -5,7 +5,8 @@ clients use the same handlers, application authorization and response schemas.
 This document grows with the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md);
 it describes tenant and call-spec reads, provider catalogs, spec writes,
 call creation/join-token operations, account administration, and session-only
-API-key management, services and provider credentials. The complete migration
+API-key management, services, provider credentials, role administration and
+password reset. The complete migration
 inventory is in
 [product API inventory](product-api-inventory.md).
 
@@ -582,3 +583,65 @@ exceptions map to 503 `phone_numbers_unavailable`.
 UI consumers now use these canonical routes, including onboarding's service
 binding read. Onboarding demo-tenant/sample mutations remain pending product
 workflows for a separate migration; they are not reclassified as helpers.
+
+
+## Role administration (Console session only)
+
+These routes require a named browser administrator or superadministrator. They
+reject every Authorization header with 401 `session_required`; API keys do not
+acquire role-management authority. Mutations require the existing CSRF protection.
+Canonical `/api` and legacy `/admin/api` routes share the same handlers and Identity
+operations. Built-in roles remain immutable, reserved grants remain protected,
+and role updates preserve transaction-time actor revalidation and session revocation.
+
+| Method and path | Input | Response |
+| --- | --- | --- |
+| `GET /api/roles` | `page`, `page_size` | 200 `{roles,pagination}` |
+| `GET /api/roles/:id` | Public role ID | 200 `{role,affected_users}` |
+| `POST /api/roles` | `{name,grants}` | 201 `{role}` |
+| `PATCH /api/roles/:id` | `{name,grants,expected_revision}` | 200 `{role}` |
+| `DELETE /api/roles/:id` | Public role ID | 204, no body |
+
+Each role is `{id,name,kind,revision,grants}`. `kind` is `admin`, `superadmin`,
+or null for an ordinary role. Each grant contains `permission` and `scope` using
+the existing [identity permission contract](console-authentication-and-authorization.md).
+The server generates internal custom-role slugs; clients use the public `id`.
+`affected_users` counts assigned users and does not expose user records.
+
+The list defaults to page 1 and page size 25; maximum page size is 50. Unknown
+query parameters, invalid bounds and out-of-range pages are rejected. Pagination
+contains `{page,page_size,total,total_pages}`; an empty first page has zero total
+pages. Ordering is by name, then public role ID. The database applies the limit
+before projecting full grants. Paging is not a snapshot across concurrent writes.
+Legacy role lists now have this same bounded envelope.
+
+Errors use `{error:{code}}`: 403 `forbidden` or `protected_role`; 404 `not_found`;
+409 `role_in_use` or `stale`; 422 `invalid_page`, `invalid_pagination`,
+`page_out_of_range` or `invalid_role`; 503 `unavailable`. Updates require the
+current positive `expected_revision`; stale updates do not overwrite newer grants.
+Deletion does not silently reassign users of an in-use role.
+
+The role UI requests one page and loads affected-user counts only for that page.
+Account editing fetches full metadata for the selected role on demand; denial of
+full role metadata preserves existing memberships. Lightweight `/api/role-options`
+retains its separate safe-projection contract and existing selector paging.
+
+## Administrator password reset (Console session only)
+
+`POST /api/users/:id/reset-password` accepts:
+
+```json
+{"password":"NEW_PASSWORD","password_confirmation":"NEW_PASSWORD"}
+```
+
+The body is input-only. Success returns 204 with no password or user-secret data.
+Use an authenticated browser session and CSRF protection; any Authorization header
+is rejected with 401 `session_required`. The legacy `/admin/api` alias shares this
+handler. Machine-key reset authority and an MCP reset tool are not added.
+
+The shared Identity operation authorizes the actual actor against the target's
+account category: `users.members.write`, `users.admins.write` or
+`users.superadmins.write`. It preserves the existing password validation,
+transaction-time authorization and target-session revocation. Errors use
+`{error:{code}}`: 403 `forbidden`, 404 `not_found`, 409 `stale` or
+`last_superadmin`, 422 `invalid_account`, or 503 `unavailable`.

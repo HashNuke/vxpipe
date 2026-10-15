@@ -192,14 +192,17 @@ export class AuthenticationApi {
 
   resetPassword(id: string, password: string, confirmation: string) {
     return this.request<void>(
-      `/admin/api/users/${encodeURIComponent(id)}/reset-password`,
+      `/api/users/${encodeURIComponent(id)}/reset-password`,
       "POST",
       { password, password_confirmation: confirmation },
     );
   }
 
-  roles() {
-    return this.request<{ roles: Role[] }>("/admin/api/roles");
+  async roles(page = 1): Promise<{roles: Role[]; pagination: DirectoryPagination}> {
+    const result = await this.request<{roles: Role[]; pagination: DirectoryPagination}>(`/api/roles?page=${page}`);
+    if (!Array.isArray(result.roles)) throw invalidDirectoryResponse();
+    directoryPageCount(result.pagination, page, result.roles.length);
+    return result;
   }
 
   /**
@@ -225,17 +228,17 @@ export class AuthenticationApi {
 
   role(id: string) {
     return this.request<{ role: Role; affected_users: number }>(
-      `/admin/api/roles/${encodeURIComponent(id)}`,
+      `/api/roles/${encodeURIComponent(id)}`,
     );
   }
 
   createRole(input: RoleInput) {
-    return this.request<{ role: Role }>("/admin/api/roles", "POST", roleBody(input));
+    return this.request<{ role: Role }>("/api/roles", "POST", roleBody(input));
   }
 
   updateRole(id: string, input: RoleInput, expectedRevision?: number) {
     return this.request<{ role: Role }>(
-      `/admin/api/roles/${encodeURIComponent(id)}`,
+      `/api/roles/${encodeURIComponent(id)}`,
       "PATCH",
       {
         ...roleBody(input),
@@ -245,7 +248,7 @@ export class AuthenticationApi {
   }
 
   deleteRole(id: string) {
-    return this.request<void>(`/admin/api/roles/${encodeURIComponent(id)}`, "DELETE");
+    return this.request<void>(`/api/roles/${encodeURIComponent(id)}`, "DELETE");
   }
 
   /**

@@ -96,8 +96,11 @@ function sessionFetch(role = superadminRole, user = owner) {
       const path = String(input);
       if (path === "/admin/api/session") return response({ user, role });
       if (path === "/api/role-options?page=1") return response(rolePage([superadminRole, adminRole, memberRole]));
-      if (path === "/admin/api/roles")
-        return response({ roles: [superadminRole, adminRole, memberRole] });
+      if (path === "/api/roles?page=1") return response(rolePage([superadminRole, adminRole, memberRole]));
+      if (path.startsWith("/api/roles/")) {
+        const selected = [superadminRole, adminRole, memberRole].find(role => path.endsWith("/" + role.id));
+        return selected ? response({role:selected, affected_users:0}) : response({},404);
+      }
       if (path.startsWith("/api/users")) return response(userPage([owner, member]));
       if (path.startsWith("/api/tenants")) return response(tenantDirectory);
       if (path === "/auth/logout") return response({ ok: true });
@@ -149,8 +152,11 @@ test("account password changes explain the revoked session and redirect to sign 
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role: superadminRole });
     if (path === "/api/role-options?page=1") return response(rolePage([superadminRole, adminRole, memberRole]));
-    if (path === "/admin/api/roles")
-      return response({ roles: [superadminRole, adminRole, memberRole] });
+    if (path === "/api/roles?page=1") return response(rolePage([superadminRole, adminRole, memberRole]));
+      if (path.startsWith("/api/roles/")) {
+        const selected = [superadminRole, adminRole, memberRole].find(role => path.endsWith("/" + role.id));
+        return selected ? response({role:selected, affected_users:0}) : response({},404);
+      }
     if (path === "/admin/api/account" && init?.method === "PATCH") {
       expect(JSON.parse(String(init.body))).toEqual({
         email: "owner@example.test",
@@ -212,7 +218,7 @@ test("user creation sends password confirmation, role and tenant mapping", async
   fireEvent.change(screen.getByLabelText("Confirm password"), {
     target: { value: "an example passphrase" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Add tenants" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Add tenants" }));
   fireEvent.click(screen.getByRole("checkbox", { name: /Acme/ }));
   fireEvent.click(screen.getByRole("button", { name: "Done" }));
   fetchImpl.mockImplementationOnce((input: RequestInfo | URL, init?: RequestInit) => {
@@ -261,8 +267,11 @@ test("an Admin sees privileged user details read-only with a working back link",
         role: adminRole,
       });
     if (path === "/api/role-options?page=1") return response(rolePage([superadminRole, adminRole, memberRole]));
-    if (path === "/admin/api/roles")
-      return response({ roles: [superadminRole, adminRole, memberRole] });
+    if (path === "/api/roles?page=1") return response(rolePage([superadminRole, adminRole, memberRole]));
+      if (path.startsWith("/api/roles/")) {
+        const selected = [superadminRole, adminRole, memberRole].find(role => path.endsWith("/" + role.id));
+        return selected ? response({role:selected, affected_users:0}) : response({},404);
+      }
     if (path === "/api/users/user-1") return response({ user: owner });
     if (path.startsWith("/api/tenants")) return response(tenantDirectory);
     return response({}, 404);
@@ -285,8 +294,11 @@ test("superadmin edits save through PATCH and the reset route posts a replacemen
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role: superadminRole });
     if (path === "/api/role-options?page=1") return response(rolePage([superadminRole, adminRole, memberRole]));
-    if (path === "/admin/api/roles")
-      return response({ roles: [superadminRole, adminRole, memberRole] });
+    if (path === "/api/roles?page=1") return response(rolePage([superadminRole, adminRole, memberRole]));
+      if (path.startsWith("/api/roles/")) {
+        const selected = [superadminRole, adminRole, memberRole].find(role => path.endsWith("/" + role.id));
+        return selected ? response({role:selected, affected_users:0}) : response({},404);
+      }
     if (path === "/api/users/user-2") {
       if (init?.method === "PATCH") {
         expect(JSON.parse(String(init.body))).toMatchObject({ email: "member@example.test" });
@@ -295,7 +307,7 @@ test("superadmin edits save through PATCH and the reset route posts a replacemen
       return response({ user: member });
     }
     if (path.startsWith("/api/tenants")) return response(tenantDirectory);
-    if (path === "/admin/api/users/user-2/reset-password") return noContent();
+    if (path === "/api/users/user-2/reset-password") return noContent();
     return response({}, 404);
   });
   const view = render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
@@ -328,7 +340,7 @@ test("superadmin edits save through PATCH and the reset route posts a replacemen
   fireEvent.click(screen.getByRole("button", { name: "Set password" }));
   expect(screen.getByRole("alert")).toHaveTextContent("Passwords do not match");
   expect(resetFetch).not.toHaveBeenCalledWith(
-    "/admin/api/users/user-2/reset-password",
+    "/api/users/user-2/reset-password",
     expect.anything(),
   );
   fireEvent.change(screen.getByLabelText("Confirm password"), {
@@ -337,7 +349,7 @@ test("superadmin edits save through PATCH and the reset route posts a replacemen
   fireEvent.click(screen.getByRole("button", { name: "Set password" }));
   await waitFor(() =>
     expect(resetFetch).toHaveBeenCalledWith(
-      "/admin/api/users/user-2/reset-password",
+      "/api/users/user-2/reset-password",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ "x-csrf-token": "csrf-token" }),
@@ -351,7 +363,7 @@ test("roles list links to details and creation navigates to the new role", async
   fetchImpl.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role: superadminRole });
-    if (path === "/admin/api/roles") {
+    if (path === "/api/roles" || path === "/api/roles?page=1") {
       if (init?.method === "POST") {
         expect(JSON.parse(String(init.body))).toMatchObject({ name: "Support" });
         return response(
@@ -359,9 +371,9 @@ test("roles list links to details and creation navigates to the new role", async
           201,
         );
       }
-      return response({ roles: [superadminRole, adminRole, memberRole] });
+      return response(rolePage([superadminRole, adminRole, memberRole]));
     }
-    if (path.startsWith("/admin/api/roles/")) {
+    if (path.startsWith("/api/roles/")) {
       const id = path.split("/").pop();
       const role = [superadminRole, adminRole, memberRole].find((entry) => entry.id === id) ?? memberRole;
       return response({ role, affected_users: 1 });
@@ -386,16 +398,16 @@ test("roles list links to details and creation navigates to the new role", async
   cleanup();
 });
 
-test("roles list shows authoritative affected-user counts without paging the directory", async () => {
+test("roles list shows authoritative affected-user counts without scanning users", async () => {
   window.history.replaceState({}, "", "/roles");
   const requestedUsers = vi.fn();
   const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role: superadminRole });
-    if (path === "/admin/api/roles" && (!init?.method || init.method === "GET"))
-      return response({ roles: [superadminRole, memberRole] });
-    if (path === "/admin/api/roles/role-super") return response({ role: superadminRole, affected_users: 7 });
-    if (path === "/admin/api/roles/role-member") return response({ role: memberRole, affected_users: 0 });
+    if (path === "/api/roles?page=1" && (!init?.method || init.method === "GET"))
+      return response(rolePage([superadminRole, memberRole]));
+    if (path === "/api/roles/role-super") return response({ role: superadminRole, affected_users: 7 });
+    if (path === "/api/roles/role-member") return response({ role: memberRole, affected_users: 0 });
     if (path.startsWith("/api/users")) {
       requestedUsers();
       return response(userPage([]));
@@ -416,7 +428,7 @@ test("role updates send the server revision and stale edits ask for a reload", a
   const detailFetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role: superadminRole });
-    if (path === "/admin/api/roles/role-member") {
+    if (path === "/api/roles/role-member") {
       if (init?.method === "PATCH") {
         const body = JSON.parse(String(init.body));
         expect(body.expected_revision).toBe(2);
@@ -438,7 +450,7 @@ test("role deletion confirms before sending DELETE and returns to the list", asy
   const detailFetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role: superadminRole });
-    if (path === "/admin/api/roles/role-member") {
+    if (path === "/api/roles/role-member") {
       if (init?.method === "DELETE") return noContent();
       return response({ role: memberRole, affected_users: 0 });
     }
@@ -450,7 +462,7 @@ test("role deletion confirms before sending DELETE and returns to the list", asy
   fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
   await waitFor(() =>
     expect(detailFetch).toHaveBeenCalledWith(
-      "/admin/api/roles/role-member",
+      "/api/roles/role-member",
       expect.objectContaining({ method: "DELETE" }),
     ),
   );
@@ -471,6 +483,7 @@ test("sign out posts to the logout endpoint with CSRF before leaving", async () 
 
     expect(await screen.findByRole("heading", { name: "Users", level: 1 })).toBeVisible();
     expect(fetchImpl).toHaveBeenCalledWith("/api/role-options?page=1", expect.any(Object));
+  expect(fetchImpl.mock.calls.some(([input]) => String(input).startsWith("/api/roles"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Logout" }));
     await waitFor(() =>
       expect(fetchImpl).toHaveBeenCalledWith(
@@ -525,7 +538,7 @@ test("users.read-only viewers keep directory filters through the role-options en
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: reader, role: readerRole });
-    if (path === "/admin/api/roles") return response({ error: { code: "forbidden" } }, 403);
+    if (path === "/api/roles") return response({ error: { code: "forbidden" } }, 403);
     if (path === "/api/role-options?page=1")
       return response({
         roles: [
@@ -541,6 +554,7 @@ test("users.read-only viewers keep directory filters through the role-options en
 
   expect(await screen.findByRole("heading", { name: "Users", level: 1 })).toBeVisible();
   expect(fetchImpl).toHaveBeenCalledWith("/api/role-options?page=1", expect.any(Object));
+  expect(fetchImpl.mock.calls.some(([input]) => String(input).startsWith("/api/roles"))).toBe(false);
   expect(await screen.findByRole("option", { name: "Superadmin" })).toBeVisible();
   expect(await screen.findByRole("table", { name: "Users" })).toBeVisible();
   expect(document.querySelector("a.access-user-link")).toHaveAttribute(
@@ -557,8 +571,11 @@ test("unknown role filters keep the URL and explain the empty directory", async 
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role: superadminRole });
     if (path === "/api/role-options?page=1") return response(rolePage([superadminRole, adminRole, memberRole]));
-    if (path === "/admin/api/roles")
-      return response({ roles: [superadminRole, adminRole, memberRole] });
+    if (path === "/api/roles?page=1") return response(rolePage([superadminRole, adminRole, memberRole]));
+      if (path.startsWith("/api/roles/")) {
+        const selected = [superadminRole, adminRole, memberRole].find(role => path.endsWith("/" + role.id));
+        return selected ? response({role:selected, affected_users:0}) : response({},404);
+      }
     if (path.startsWith("/api/users"))
       return response({ error: { code: "unknown_role" } }, 422);
     return response({}, 404);
@@ -665,3 +682,24 @@ test("sidebar exposes account and platform links matching authority", async () =
 function rolePage(roles: unknown[]) {
   return { roles, pagination: { page: 1, page_size: 25, total: roles.length, total_pages: roles.length ? 1 : 0 } };
 }
+
+test("role directory pages explicitly and only fetches counts for the visible page", async () => {
+  window.history.replaceState({}, "", "/roles");
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    const path = String(input);
+    if (path === "/admin/api/session") return response({user: owner, role: superadminRole});
+    if (path === "/api/roles?page=1") return response({roles:[superadminRole], pagination:{page:1,page_size:1,total:2,total_pages:2}});
+    if (path === "/api/roles?page=2") return response({roles:[memberRole], pagination:{page:2,page_size:1,total:2,total_pages:2}});
+    if (path === "/api/roles/role-super") return response({role:superadminRole,affected_users:7});
+    if (path === "/api/roles/role-member") return response({role:memberRole,affected_users:2});
+    return response({},404);
+  });
+  render(<App csrfToken="csrf" fetchImpl={fetchImpl}/>);
+  expect(await screen.findByText("Users: 7")).toBeVisible();
+  expect(fetchImpl).not.toHaveBeenCalledWith("/api/roles?page=2", expect.anything());
+  expect(fetchImpl).not.toHaveBeenCalledWith("/api/roles/role-member", expect.anything());
+  fireEvent.click(screen.getByRole("button", {name:"Next page"}));
+  expect(await screen.findByText("Users: 2")).toBeVisible();
+  expect(window.location.search).toBe("?page=2");
+  expect(screen.queryByText("Users: 7")).not.toBeInTheDocument();
+});

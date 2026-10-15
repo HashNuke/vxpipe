@@ -12,11 +12,12 @@ and paginated role options use the canonical handlers. API-key administration
 also uses canonical Console handlers, with session-only authentication and the
 existing delegation policy. Tenant list items are
 `{tenant_key,name,created_at}`; navigation paths are derived by the UI. Account
-selectors temporarily enrich canonical role options with separately authorized
-legacy role-grant reads. Service/credential administration and authoring phone-number
+selectors fetch separately authorized full metadata only for their selected role
+through the canonical role detail route. Service/credential administration and authoring phone-number
 inventory now use canonical session-only handlers, including onboarding's service
-binding read. Role administration, password reset,
-tenant creation, onboarding/samples and call inspection still require migration.
+binding read. Role administration and password reset use canonical session-only
+handlers; role directories now paginate full metadata. Tenant creation,
+onboarding/samples and call inspection still require migration.
 Legacy routes remain available during that work; this inventory does not claim
 their removal or full controller consolidation.
 
@@ -157,7 +158,7 @@ schemas explicitly where pagination is introduced; keep legacy aliases compatibl
 | none | `POST API/users/:id/disable` | Same update operation with enabled=false -> safe result | Same write authority; revoke sessions, not independently issued keys |
 | `POST A/users/:id/reset-password` | `POST API/users/:id/reset-password` | Identity password reset; password/confirmation, no password response | S existing account-category reset permission; K denied pending reset policy; separate from MCP update |
 | `GET A/role-options` | `GET API/role-options` | Identity allowed role options; safe ID/name/kind + pagination | S `users.read`; Kplatform; no grants editing; migrate user editor |
-| `GET A/roles`; `GET A/roles/:id` | `GET API/roles`; `GET API/roles/:id` | Identity role read; role ID/name/kind/revision/grants, single-role affected user count | S Identity role-read policy; K denied pending role policy; retain revision/count semantics |
+| `GET A/roles`; `GET A/roles/:id` | `GET API/roles`; `GET API/roles/:id` | Identity actual-actor role read; page/page_size -> roles + pagination, exact detail and affected user count | S Identity role-read policy; K denied pending role policy; retain revision/count semantics |
 | `POST A/roles` | `POST API/roles` | Identity role create; name/grants -> `{role}`, 201 | S role-write policy; K denied pending role policy; retain reserved role protection |
 | `PATCH A/roles/:id` | `PATCH API/roles/:id` | Identity role update; expected revision/name/grants -> `{role}` | Same write authority; preserve optimistic concurrency and sessions behavior |
 | `DELETE A/roles/:id` | `DELETE API/roles/:id` | Identity role delete -> 204 | Same write authority; preserve affected-user/reserved-role protection |
@@ -165,6 +166,12 @@ schemas explicitly where pagination is introduced; keep legacy aliases compatibl
 | `GET A/api-keys/tenants` | `GET API/api-keys/tenants` | Calls key issuance target search; kind/q/page -> authorized tenant options | S issuance ceilings and key-management permissions; K denied pending delegation policy; not an unfiltered tenant picker |
 | `POST A/api-keys` | `POST API/api-keys` | Calls key issuance; `{name,kind,tenant_key}` -> `{key,secret}`, 201 | S existing delegation ceiling; platform issuance Superadmin-only; K denied pending delegation policy; secret returned once |
 | `DELETE A/api-keys/:id` | `DELETE API/api-keys/:id` | Calls key revoke -> 204 | S existing revoke policy; K denied pending delegation policy; revocation effective at next auth |
+
+The six role-administration/password-reset routes are implemented and use the
+same session-only precheck on canonical and legacy aliases. Full-role reads
+require the actual administrator actor, including direct Elixir detail/count
+calls; lists are bounded before metadata projection. Role options remain a
+separate safe projection. See the [HTTP role/reset contract](product-http-api.md#role-administration-console-session-only).
 
 The four access-key routes above are implemented, documented in the
 [HTTP contract](product-http-api.md#api-key-management-console-session-only), and

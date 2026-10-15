@@ -27,6 +27,12 @@ defmodule Vxpipe.Console.RoutePermission do
            ],
       do: for_request(method, ["admin", "api", "tenants", tenant, resource | rest])
 
+  def for_request(method, ["api", "roles" | rest]),
+    do: for_request(method, ["admin", "api", "roles" | rest])
+
+  def for_request("POST", ["api", "users", id, "reset-password"]),
+    do: for_request("POST", ["admin", "api", "users", id, "reset-password"])
+
   def for_request(method, ["admin", "api", "api-keys" | _rest])
       when method in ["GET", "POST", "DELETE"], do: :authenticated
 

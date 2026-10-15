@@ -213,6 +213,39 @@ defmodule Vxpipe.Console.Router do
           :update, metadata: %{console_product_api: true}
   end
 
+  scope "/api" do
+    pipe_through :session_product_api
+
+    post "/users/:id/reset-password", Vxpipe.Console.UserManagementController, :reset_password,
+      metadata: %{console_product_api: true}
+
+    get "/roles", Vxpipe.Console.RoleManagementController, :index,
+      metadata: %{console_product_api: true}
+
+    get "/roles/:id", Vxpipe.Console.RoleManagementController, :show,
+      metadata: %{console_product_api: true}
+
+    post "/roles", Vxpipe.Console.RoleManagementController, :create,
+      metadata: %{console_product_api: true}
+
+    patch "/roles/:id", Vxpipe.Console.RoleManagementController, :update,
+      metadata: %{console_product_api: true}
+
+    delete "/roles/:id", Vxpipe.Console.RoleManagementController, :delete,
+      metadata: %{console_product_api: true}
+  end
+
+  scope "/admin/api" do
+    pipe_through :session_product_api
+
+    post "/users/:id/reset-password", Vxpipe.Console.UserManagementController, :reset_password
+    get "/roles", Vxpipe.Console.RoleManagementController, :index
+    get "/roles/:id", Vxpipe.Console.RoleManagementController, :show
+    post "/roles", Vxpipe.Console.RoleManagementController, :create
+    patch "/roles/:id", Vxpipe.Console.RoleManagementController, :update
+    delete "/roles/:id", Vxpipe.Console.RoleManagementController, :delete
+  end
+
   scope "/admin/api" do
     pipe_through :session_product_api
 
@@ -282,12 +315,6 @@ defmodule Vxpipe.Console.Router do
     get "/users/:id", Vxpipe.Console.UserManagementController, :show
     post "/users", Vxpipe.Console.UserManagementController, :create
     patch "/users/:id", Vxpipe.Console.UserManagementController, :update
-    post "/users/:id/reset-password", Vxpipe.Console.UserManagementController, :reset_password
-    get "/roles", Vxpipe.Console.RoleManagementController, :index
-    get "/roles/:id", Vxpipe.Console.RoleManagementController, :show
-    post "/roles", Vxpipe.Console.RoleManagementController, :create
-    patch "/roles/:id", Vxpipe.Console.RoleManagementController, :update
-    delete "/roles/:id", Vxpipe.Console.RoleManagementController, :delete
   end
 
   scope "/admin/api" do

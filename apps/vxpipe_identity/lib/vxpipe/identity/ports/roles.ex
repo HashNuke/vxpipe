@@ -6,7 +6,9 @@ defmodule Vxpipe.Identity.Ports.Roles do
               {:ok, map()} | {:error, :not_found | :unavailable}
   @callback list_options(filters :: map()) ::
               {:ok, %{roles: [map()], total: non_neg_integer()}} | {:error, term()}
-  @optional_callbacks list_options: 1
+  @callback list_page(filters :: map()) ::
+              {:ok, %{roles: [map()], total: non_neg_integer()}} | {:error, term()}
+  @optional_callbacks list_options: 1, list_page: 1
   @callback list() :: {:ok, [map()]} | {:error, term()}
   @callback create(attrs :: map()) :: {:ok, map()} | {:error, term()}
   @callback apply_update(public_id :: String.t(), changes :: map()) ::

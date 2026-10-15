@@ -383,6 +383,7 @@ function UserNewRoute(props: AppProps) {
   const api = useAuthenticationApi(props);
   const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
   const navigate = useNavigate();
+  const loadRole = useRoleReader(api, onSessionExpired);
   const { session, sessionState } = useAccessSession(api, onSessionExpired);
   const { roles, rolesState } = useAccessRoles(api, sessionState === "ready", onSessionExpired);
   const tenants = useTenantOptions(api, sessionState === "ready", onSessionExpired);
@@ -426,6 +427,7 @@ function UserNewRoute(props: AppProps) {
           <UserEditorPage
             actorRole={current.role}
             roles={roles}
+            loadRole={loadRole}
             tenants={tenants}
             onNavigate={navigate}
             onSave={async (draft, password) => {
@@ -455,9 +457,10 @@ function UserDetailRoute(props: AppProps) {
   const api = useAuthenticationApi(props);
   const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
   const navigate = useNavigate();
+  const loadRole = useRoleReader(api, onSessionExpired);
   const { id = "" } = useParams();
   const { session, sessionState } = useAccessSession(api, onSessionExpired);
-  const { roles, rolesLimited, rolesState } = useAccessRoles(api, sessionState === "ready", onSessionExpired);
+  const { roles, rolesState } = useAccessRoles(api, sessionState === "ready", onSessionExpired);
   const tenants = useTenantOptions(api, sessionState === "ready", onSessionExpired);
   const [target, setTarget] = useState<AccessUser | null>(null);
   const [detail, setDetail] = useState<AccessLoadState | "missing" | "denied">("loading");
@@ -535,6 +538,7 @@ function UserDetailRoute(props: AppProps) {
             key={target.id}
             actorRole={current.role}
             roles={roles}
+            loadRole={loadRole}
             tenants={tenants}
             user={target}
             onNavigate={navigate}
@@ -544,7 +548,7 @@ function UserDetailRoute(props: AppProps) {
                   email: draft.email,
                   roleId: draft.roleId,
                   enabled: draft.enabled,
-                  memberships: rolesLimited ? target.memberships : draft.memberships,
+                  memberships: draft.memberships,
                 });
                 setTarget(updated);
                 return {};
@@ -651,6 +655,9 @@ function RolesRoute(props: AppProps) {
   const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
   const navigate = useNavigate();
   const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const [query, setQuery] = useSearchParams();
+  const page = readPage(query);
+  const [pagination, setPagination] = useState<{page:number;page_size:number;total:number;total_pages:number}>();
   const [roles, setRoles] = useState<AccessRole[]>([]);
   const [affectedUsers, setAffectedUsers] = useState<Record<string, number>>({});
   const [directoryState, setDirectoryState] = useState<AccessLoadState | "denied">("loading");
@@ -660,9 +667,11 @@ function RolesRoute(props: AppProps) {
     let active = true;
     setDirectoryState("loading");
     (async () => {
-      const { roles: directory } = await api.roles();
+      const { roles: directory, pagination: nextPagination } = await api.roles(page);
       if (!active) return;
       setRoles(directory);
+      setPagination(nextPagination);
+      setAffectedUsers({});
       // Counts come from the authoritative per-role endpoint; a bounded
       // user-directory scan would present partial counts as authoritative.
       const counts: Record<string, number> = {};
@@ -683,11 +692,15 @@ function RolesRoute(props: AppProps) {
           onSessionExpired();
           return;
         }
+        if (error instanceof AuthenticationError && error.status === 422 && error.code === "page_out_of_range" && page !== 1) {
+          setQuery({}, {replace:true});
+          return;
+        }
         setDirectoryState(isForbidden(error) ? "denied" : "unavailable");
       },
     );
     return () => { active = false; };
-  }, [api, sessionState, onSessionExpired]);
+  }, [api, sessionState, onSessionExpired, page, setQuery]);
 
   return (
     <AccessShell
@@ -725,7 +738,7 @@ function RolesRoute(props: AppProps) {
             </main>
           );
         }
-        return <RolesPage roles={roles} affectedUsers={affectedUsers} onNavigate={navigate} />;
+        return <RolesPage roles={roles} affectedUsers={affectedUsers} onNavigate={navigate} pagination={pagination} onPage={(next) => setQuery(next === 1 ? {} : {page:String(next)})} />;
       }}
     </AccessShell>
   );
@@ -925,6 +938,17 @@ function useAccessSession(api: AuthenticationApi, onSessionExpired: () => void) 
   return { session, sessionState };
 }
 
+function useRoleReader(api: AuthenticationApi, onSessionExpired: () => void) {
+  return useCallback(async (id: string) => {
+    try { return (await api.role(id)).role; }
+    catch (error: unknown) {
+      if (isForbidden(error)) return null;
+      if (isSessionExpired(error)) onSessionExpired();
+      throw error;
+    }
+  }, [api, onSessionExpired]);
+}
+
 function useAccessRoles(
   api: AuthenticationApi,
   ready: boolean,
@@ -937,21 +961,10 @@ function useAccessRoles(
   useEffect(() => {
     if (!ready) return;
     let active = true;
-    api.roleOptions().then(async ({ roles: options }) => {
-      // Account selectors use the public paginated directory. Full grant metadata
-      // still supports membership editing until role management joins that API.
-      try {
-        const { roles: directory } = await api.roles();
-        if (!active) return;
-        const byId = new Map(directory.map((role) => [role.id, role]));
-        setRoles(options.map((option) => byId.get(option.id) ?? option));
-        setRolesLimited(options.some((option) => !byId.has(option.id)));
-      } catch (error: unknown) {
-        if (!active) return;
-        if (!isForbidden(error)) throw error;
-        setRoles(options);
-        setRolesLimited(true);
-      }
+    api.roleOptions().then(({ roles: options }) => {
+      if (!active) return;
+      setRoles(options);
+      setRolesLimited(true);
       setRolesState("ready");
     }).catch((error: unknown) => {
       if (!active) return;

@@ -5,15 +5,32 @@ defmodule Vxpipe.Identity.Roles do
 
   @protected_kinds [:superadmin, :admin]
 
-  @spec list_roles(map(), map()) :: {:ok, [map()]} | {:error, :forbidden | term()}
+  @spec list_roles(map(), map()) :: {:ok, [map()]} | {:error, term()}
   def list_roles(deps, actor) do
-    roles = Map.fetch!(deps, :roles)
+    with :ok <- authorize_read(actor), do: deps.roles.list()
+  end
 
-    if actor.account_kind in @protected_kinds do
-      roles.list()
-    else
-      {:error, :forbidden}
+  @doc "Returns one bounded full-role page for a named administrator."
+  def list_roles(deps, actor, filters) do
+    with :ok <- authorize_read(actor),
+         {:ok, filters} <- role_options_page(filters),
+         {:ok, result} <- deps.roles.list_page(filters) do
+      Vxpipe.Identity.AccountPage.result(result, filters)
     end
+  end
+
+  def get_role(deps, actor, id) do
+    with :ok <- authorize_read(actor), do: deps.roles.fetch(id)
+  end
+
+  def affected_user_count(deps, actor, id) do
+    with :ok <- authorize_read(actor), do: deps.roles.count_users(id)
+  end
+
+  defp authorize_read(actor) do
+    with :ok <- Vxpipe.Identity.Authorization.require_actor_identity(actor),
+         :ok <- require_builtin(actor),
+         do: :ok
   end
 
   @spec list_role_options(map(), map()) :: {:ok, [map()]} | {:error, term()}
@@ -152,17 +169,6 @@ defmodule Vxpipe.Identity.Roles do
     case Map.get(changes, :expected_revision, Map.get(changes, "expected_revision")) do
       revision when is_integer(revision) and revision >= 1 -> :ok
       _ -> {:error, :stale_revision}
-    end
-  end
-
-  @spec affected_user_count(map(), String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
-  def affected_user_count(deps, role_public_id) do
-    roles = Map.fetch!(deps, :roles)
-
-    if function_exported?(roles, :count_users, 1) do
-      roles.count_users(role_public_id)
-    else
-      {:ok, 0}
     end
   end
 

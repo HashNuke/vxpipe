@@ -230,3 +230,11 @@ test("account email changes omit password fields", async () => {
     current_password: "current passphrase here",
   });
 });
+
+test("full role directories fetch exactly the requested canonical page", async () => {
+  const fetchImpl = vi.fn().mockResolvedValue(Response.json({roles: [], pagination: {page: 1, page_size: 25, total: 0, total_pages: 0}}));
+  const api = new AuthenticationApi("csrf", fetchImpl);
+  expect(await api.roles(1)).toEqual({roles: [], pagination: {page: 1, page_size: 25, total: 0, total_pages: 0}});
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
+  expect(fetchImpl).toHaveBeenCalledWith("/api/roles?page=1", expect.objectContaining({method:"GET"}));
+});

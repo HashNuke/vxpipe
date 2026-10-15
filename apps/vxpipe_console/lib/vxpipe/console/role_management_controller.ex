@@ -12,9 +12,15 @@ defmodule Vxpipe.Console.RoleManagementController do
     end
   end
 
-  def index(conn, _params) do
-    case backend().list_roles(conn.assigns.user_principal) do
-      {:ok, roles} -> json(conn, %{roles: Enum.map(roles, &UserManagementPayload.role/1)})
+  def index(conn, params) do
+    with {:ok, page, size} <- Vxpipe.Gateway.HTTP.PageQuery.parse(params),
+         {:ok, directory} <-
+           backend().list_roles(conn.assigns.user_principal, %{page: page, page_size: size}) do
+      json(conn, %{
+        roles: Enum.map(directory.roles, &UserManagementPayload.role/1),
+        pagination: Map.take(directory, [:page, :page_size, :total, :total_pages])
+      })
+    else
       error_result -> role_error(conn, error_result)
     end
   end
@@ -67,6 +73,10 @@ defmodule Vxpipe.Console.RoleManagementController do
       error_result -> role_error(conn, error_result)
     end
   end
+
+  defp role_error(conn, {:error, reason})
+       when reason in [:invalid_page, :invalid_pagination, :page_out_of_range],
+       do: error(conn, 422, Atom.to_string(reason))
 
   defp role_error(conn, {:error, :forbidden}), do: error(conn, 403, "forbidden")
   defp role_error(conn, {:error, :not_found}), do: error(conn, 404, "not_found")

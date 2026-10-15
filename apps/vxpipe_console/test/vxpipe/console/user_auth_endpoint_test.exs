@@ -108,6 +108,19 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
            }
          ]}
 
+    def list_roles(actor, filters) do
+      with {:ok, roles} <- list_roles(actor) do
+        {:ok,
+         %{
+           roles: roles,
+           total: length(roles),
+           page: filters.page,
+           page_size: filters.page_size,
+           total_pages: 1
+         }}
+      end
+    end
+
     def list_role_options(_actor),
       do: {:ok, [%{public_id: "role-member", name: "Tenant Member", kind: :member}]}
 

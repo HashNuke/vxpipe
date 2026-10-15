@@ -881,3 +881,26 @@ Independent Session/WebRTC review found no blockers. It confirmed registration
 before effects, retained release/acknowledgement retry state, private projection,
 whole-root completion requirements and tracker-loss handling. A documentation
 grammar correction was applied before commit.
+
+### Role administration and password-reset cutover
+
+Moved five role routes and password reset to canonical Console session APIs with
+legacy aliases sharing handlers, explicit Authorization rejection and CSRF.
+Identity role detail/count now authorize the actual actor before exact storage
+lookups. Full-role pages apply SQL limit/offset and stable name/public-ID order;
+the UI requests one page and only selected full-role metadata for account editing.
+Lightweight safe-role selectors retain their existing paged traversal. Restricted
+metadata access preserves memberships and loading prevents premature saves.
+
+Initial regressions: two Identity, two Persistence, five Console and three
+frontend failures. Final focused results: 24 Identity, 19 Persistence and 29
+Console tests passed. All 764 frontend tests across 100 files passed, together
+with TypeScript, ESLint and esbuild. Exact owned Elixir files were formatted.
+Independent review approved; its outdated fake backend list_roles arity finding
+was corrected. The implementing agent verified the HTTP docs against source.
+
+Rendered Chromium verification passed at desktop and mobile sizes: first/second
+role pages, protected role controls, custom role create/update/delete, selected
+role detail without a full directory scan, preserved membership on save, and
+password reset. Canonical network requests returned the expected 200/201/204.
+Browser and synthetic database fixture stopped; no live services were used.

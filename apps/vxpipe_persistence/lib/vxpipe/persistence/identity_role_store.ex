@@ -20,9 +20,13 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
 
   @impl true
   def fetch(public_id) do
-    case Repo.one(from(r in IdentityRole, where: r.public_id == ^public_id)) do
-      nil -> {:error, :not_found}
-      role -> {:ok, IdentityRecord.role_port_map(role)}
+    with {:ok, public_id} <- Ecto.UUID.cast(public_id) do
+      case Repo.one(from(r in IdentityRole, where: r.public_id == ^public_id)) do
+        nil -> {:error, :not_found}
+        role -> {:ok, IdentityRecord.role_port_map(role)}
+      end
+    else
+      :error -> {:error, :not_found}
     end
   rescue
     _ -> {:error, :unavailable}
@@ -43,6 +47,26 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
     {:ok,
      Repo.all(from(r in IdentityRole, order_by: [r.id]))
      |> Enum.map(&IdentityRecord.role_port_map/1)}
+  rescue
+    _ -> {:error, :unavailable}
+  end
+
+  @impl true
+  def list_page(filters) do
+    with {:ok, filters} <- Vxpipe.Identity.AccountPage.filters(filters) do
+      query =
+        from(r in IdentityRole,
+          order_by: [asc: r.name, asc: r.public_id],
+          limit: ^filters.page_size,
+          offset: ^((filters.page - 1) * filters.page_size)
+        )
+
+      {:ok,
+       %{
+         roles: Enum.map(Repo.all(query), &IdentityRecord.role_port_map/1),
+         total: Repo.aggregate(IdentityRole, :count)
+       }}
+    end
   rescue
     _ -> {:error, :unavailable}
   end
@@ -173,12 +197,16 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
 
   @impl true
   def count_users(public_id) do
-    case Repo.one(from(r in IdentityRole, where: r.public_id == ^public_id, select: r.id)) do
-      nil ->
-        {:error, :not_found}
+    with {:ok, public_id} <- Ecto.UUID.cast(public_id) do
+      case Repo.one(from(r in IdentityRole, where: r.public_id == ^public_id, select: r.id)) do
+        nil ->
+          {:error, :not_found}
 
-      role_id ->
-        {:ok, Repo.aggregate(from(u in IdentityUser, where: u.role_id == ^role_id), :count)}
+        role_id ->
+          {:ok, Repo.aggregate(from(u in IdentityUser, where: u.role_id == ^role_id), :count)}
+      end
+    else
+      :error -> {:error, :not_found}
     end
   rescue
     _ -> {:error, :unavailable}

@@ -623,6 +623,20 @@ and embedded telephony components have no production route; their request change
 have endpoint/component coverage, without claiming rendered coverage. Roles,
 password reset, tenant creation, onboarding/samples and call inspection remain open.
 
+Roles/password-reset UI cutover: six canonical Console routes now reuse their
+legacy handlers with session-only authentication, explicit-header rejection and
+CSRF. Shared role detail/count require the actual actor, and full role lists
+paginate in the database. The UI loads only the visible role page and selected
+account-role metadata, preserving memberships when full metadata is unavailable.
+
+Initial domain/store/endpoint/client reds preceded implementation. Final focused
+checks passed 24 Identity, 19 Persistence and 29 Console tests; all 764 frontend
+tests, TypeScript, lint and asset build passed. Independent review approved.
+Rendered Chrome at desktop/mobile verified page navigation, protected roles,
+create/update/delete, selected-role fetches, membership preservation and password
+reset using canonical routes. The synthetic fixture/browser stopped. Tenant
+creation, onboarding/samples, call inspection and final parity remain open.
+
 ## Checkpoint: parity acceptance and documentation
 
 Depends on all required capability checkpoints and supporting workflows.
