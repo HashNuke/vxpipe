@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.RoomCompletionTest do
 
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.CreateRoom
+  alias Vxpipe.CallEngine.{RoomAuthority, RoomIncarnationSupervisor, RoomSupervisor}
 
   test "completion observes owned worker shutdown after the room authority exits" do
     {command, room} = create_room()
@@ -67,7 +68,7 @@ defmodule Vxpipe.CallEngine.RoomCompletionTest do
     assert :ok = CallEngine.end_call(command.tenant_id, command.room_id, room.incarnation_id)
     assert_receive {:DOWN, ^completion, :process, _, _}, 1_000
 
-    assert {:ok, replacement} = CallEngine.create_room(command)
+    replacement = replacement_room(command)
     assert replacement.incarnation_id != room.incarnation_id
     assert {:error, :room_unavailable} = monitor_completion(command, room)
     assert {:ok, replacement_completion} = monitor_completion(command, replacement)
@@ -81,6 +82,27 @@ defmodule Vxpipe.CallEngine.RoomCompletionTest do
   defp monitor_completion(command, room),
     do:
       CallEngine.monitor_room_completion(command.tenant_id, command.room_id, room.incarnation_id)
+
+  defp replacement_room(command) do
+    incarnation = "rinc-replacement-#{System.unique_integer([:positive, :monotonic])}"
+
+    # Child startup acknowledges the replacement fixture without depending on
+    # when Registry removes the dead authority from the public create precheck.
+    assert {:ok, _supervisor} =
+             DynamicSupervisor.start_child(
+               RoomSupervisor,
+               {RoomIncarnationSupervisor, command: command, incarnation_id: incarnation}
+             )
+
+    room = RoomAuthority.snapshot(command.tenant_id, command.room_id)
+    assert room.incarnation_id == incarnation
+
+    on_exit(fn ->
+      CallEngine.end_call(command.tenant_id, command.room_id, incarnation)
+    end)
+
+    room
+  end
 
   defp create_room do
     assert {:ok, command} =

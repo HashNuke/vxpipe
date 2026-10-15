@@ -1,9 +1,9 @@
 # Durable whole-call hangup
 
 Status: implementation design for the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md).
-Durable cancellation intent, exact-supervisor monitoring and the generic engine
-startup gate are implemented.
-Runtime admission binding, reconciliation and the HTTP/MCP hangup operation remain
+Durable cancellation intent, exact-supervisor monitoring, the generic engine
+startup gate, runtime binding, and cleanup reservation prerequisites are implemented.
+Incoming gating, resource integration, reconciliation and HTTP/MCP hangup remain
 unfinished; the complete lifecycle below is still the implementation contract.
 
 ## Decision and ownership
@@ -29,7 +29,8 @@ The engine prerequisite is available as `call_admission: {owner_pid, token_ref}`
 on `CallEngine.start_call/2`, with `admit_call/4` and `cancel_call_admission/4`.
 It reuses the existing owner-monitored outgoing gate. Legacy outgoing options,
 APIs and submission acknowledgements remain supported; contradictory options
-are rejected. Gateway still needs to bind admission durably before release.
+are rejected. Web/outgoing admission binds durably before release; incoming
+integration remains.
 
 The call-row lock orders cancellation, token issuance/redemption and admission.
 A prepared call can become ended atomically. Later token operations and admission
@@ -155,7 +156,7 @@ Incoming carriers already exist before answering. The implemented
 resource and its original acknowledgement owner atomically during tracker
 initialization, before an engine DOWN can seal empty membership. Incoming Leg must
 use this entry point when tracking is wired. A missing exact engine fails startup
-and leave durable completion unknown while Leg retains its carrier cleanup
+and leaves durable completion unknown while Leg retains its carrier cleanup
 responsibility. Apply the same rule to any adopted resource with existing effects;
 post-start registration is sufficient only when rejection prevents those effects.
 
@@ -242,11 +243,15 @@ binding and running joins must look up surviving membership. A crash after the
 reservation but before tracker creation leaves unknown evidence. Do not add these
 fields to public create/update inputs or store process identifiers in the database.
 
-The pending result-bearing internal completion operation must lock and validate the exact
-tenant/call/room/incarnation, requires managed ownership, and preserves the first
+The pending result-bearing internal completion operation must lock and validate
+the exact tenant/call/room/incarnation, require managed ownership, and preserve the first
 completion timestamp. It reads cancellation intent under that lock to select the
-API-hangup reason. Schema/reservation and terminal-projection deferral must land
-together before managed admission is enabled. Existing writers must be drained
+API-hangup reason. Without intent, persist the acknowledgement and replay an
+already-stored normal archive close, or await a later close. Keep normal archive
+time/conflict rules; only acknowledged cancellation uses the observed cleanup
+time as terminal time. A retry must reevaluate intent, which may arrive after
+cleanup was acknowledged but before normal closure. Schema/reservation and
+terminal-projection deferral must land together before managed admission is enabled. Existing writers must be drained
 before rollout because they bypass this terminal gate.
 
 Archive closure now commits while cleanup is pending: defer the terminal `ended`
@@ -257,11 +262,21 @@ start-time validation without inventing `started_at`. An admitting managed call
 can close before any cancellation intent; a failed pre-start call needs intent
 for the narrow close-fact exception. Closure may precede intent but cannot precede
 creation. This does not generally allow failed web/incoming snapshots or other
-facts; verify archive queue ordering before enabling failed-state recovery.
-Completion
-must request publication again after its transaction commits, including retries:
+facts. The archive adapter treats `call_not_started` as terminal discard, so
+rejected earlier snapshots do not block close indefinitely; they remain archive
+quality loss rather than successful writes.
+
+Completion must request publication again after its transaction commits, including retries:
 the current publication finalizer can consume the earlier archive-close trigger
-while the call is not yet ended.
+while the call is not yet ended. Both publication-source reads and publication
+writes must reject managed calls with pending cleanup, including failed calls.
+Keep a retryable waiting result for managed nonterminal calls whose cleanup is
+already acknowledged but whose normal close has not arrived. Preserve legacy
+nonterminal behavior.
+Use a distinct `call_cleanup_pending` result so the existing finalizer retries:
+a completion trigger can encounter an existing finalizer that already read the
+pending state. Returning `call_not_ended` would let that older worker exit and
+lose the wakeup. These completion/publication changes remain implementation work.
 
 Final carrier observations must be generated once and retained with their
 immutable IDs for result-bearing usage-store retries. The current best-effort

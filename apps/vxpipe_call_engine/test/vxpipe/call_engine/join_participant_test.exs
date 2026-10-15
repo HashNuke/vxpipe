@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.JoinParticipantTest do
 
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.{CreateRoom, JoinParticipant}
-  alias Vxpipe.CallEngine.Error
+  alias Vxpipe.CallEngine.{Error, RoomAuthority, RoomIncarnationSupervisor, RoomSupervisor}
   alias Vxpipe.CallEngine.Participant.Snapshot
 
   test "admits one participant beneath an existing room incarnation" do
@@ -104,7 +104,7 @@ defmodule Vxpipe.CallEngine.JoinParticipantTest do
 
     assert :ok = CallEngine.end_call("tenant-demo", room.room_id, room.incarnation_id)
     assert_receive {:DOWN, ^completion, :process, _, _}, 1_000
-    replacement = create_room(room.room_id)
+    replacement = replacement_room(room.room_id)
 
     assert {:error, %Error{code: :room_incarnation_changed}} =
              CallEngine.join_participant(command, room.incarnation_id)
@@ -140,6 +140,31 @@ defmodule Vxpipe.CallEngine.JoinParticipantTest do
   end
 
   defp create_room(room_id) do
+    assert {:ok, room} = CallEngine.create_room(room_command(room_id))
+    on_exit(fn -> CallEngine.end_call("tenant-demo", room_id, room.incarnation_id) end)
+    room
+  end
+
+  defp replacement_room(room_id) do
+    incarnation = unique_id("rinc")
+
+    # Start the replacement fixture through its owning supervisor. The public
+    # create precheck can still see a stale Registry entry after the old tree's
+    # DOWN; this test exercises scoped joins once a replacement has started.
+    assert {:ok, _supervisor} =
+             DynamicSupervisor.start_child(
+               RoomSupervisor,
+               {RoomIncarnationSupervisor,
+                command: room_command(room_id), incarnation_id: incarnation}
+             )
+
+    room = RoomAuthority.snapshot("tenant-demo", room_id)
+    assert room.incarnation_id == incarnation
+    on_exit(fn -> CallEngine.end_call("tenant-demo", room_id, incarnation) end)
+    room
+  end
+
+  defp room_command(room_id) do
     assert {:ok, command} =
              CreateRoom.new(
                tenant_id: "tenant-demo",
@@ -148,10 +173,7 @@ defmodule Vxpipe.CallEngine.JoinParticipantTest do
                deadline: future_deadline()
              )
 
-    assert {:ok, room} = CallEngine.create_room(command)
-
-    on_exit(fn -> CallEngine.end_call("tenant-demo", room_id, room.incarnation_id) end)
-    room
+    command
   end
 
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)

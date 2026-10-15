@@ -463,6 +463,17 @@ conflict before the fix; all five UsageStore tests now pass, including changed
 content/time rejection, with independent review. Carrier retention and explicit
 persistence acknowledgement remain unimplemented.
 
+Combined cleanup/key checkpoint verification: all production source stayed frozen
+through the root run. Gateway passed 704 tests, Calls 226, Persistence 342 and
+Console 341, with zero failures in the other applications except CallEngine's
+replacement fixture. Full CallEngine reruns exposed two immediate-create Registry
+cleanup races in scoped join/completion fixtures. Both now start replacements
+through the owning supervisor's acknowledgement; the final full CallEngine suite
+passed 2,233 tests. Independent review found no blockers. Root format, warnings-as-
+errors compilation, strict Credo and unused-dependency checks pass. All checks used
+local fixtures; live-provider lanes remained excluded. Completion persistence and
+full hangup acceptance are still open.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

@@ -664,7 +664,6 @@
   machine delegation. Other service/role/UI migration remains outstanding.
 - Independent review of canonical and final legacy-alias changes found no blockers.
 
-
 ## Durable managed cleanup reservation
 
 - Added a separate managed binding operation preserving legacy callers. It uses
@@ -687,7 +686,6 @@
   Before failed-state recovery, check archive queue ordering: the narrow failed
   close exception intentionally does not admit earlier failed-call snapshots.
 
-
 ## Immutable usage retry timestamps
 
 - Found a real final-usage retry blocker while reviewing carrier cleanup: the
@@ -700,3 +698,47 @@
   changed instant rejection. Independent review found no blockers. This does not
   implement retained carrier observations or result-bearing final usage flush;
   those remain necessary before acknowledging carrier cleanup.
+
+## Completion integration design review
+
+- Independent source review clarified completion ordering: cancellation projects
+  the observed cleanup time and API reason. Without intent, retain acknowledgement
+  and project the normal archive close when available. Retry reevaluates intent
+  while preserving the original completion timestamp and exact binding.
+- Publication source/store currently accept failed calls without cleanup proof.
+  Gate both on managed pending cleanup with a distinct retryable pending result.
+  The existing finalizer stops on call-not-ended, so merely requesting publication
+  after commit can lose a wakeup against an older exiting finalizer. A pending
+  result keeps that owner retrying; successful completion retries still trigger.
+- Verified archive queue behavior: EctoStorage discards call-not-started errors;
+  rejected pre-close failed snapshots do not block indefinitely, but their loss
+  must remain reflected in archive quality. This review is pending implementation,
+  not evidence that completion/publication behavior has shipped.
+- Follow-up review covers acknowledged cleanup still awaiting normal closure:
+  managed nonterminal publication reads also stay retryable, preventing the same
+  exiting-finalizer race. Legacy nonterminal handling stays unchanged.
+- Reviewed the next final-usage API: retain each original full observation and
+  require a retained terminal observation before explicit storage acknowledgement.
+  Retrying a partial batch must reuse immutable values; persisted unknown usage
+  does not establish carrier termination. Implementation remains pending.
+
+
+## Managed cleanup checkpoint verification
+
+- Full root verification passed Identity 67, MCP 37, Providers 35, AgentRuntime
+  108, Calls 226, Gateway 704, Artifacts 20, Persistence 342 and Console 341 tests.
+  CallEngine initially failed one replacement-room fixture; its rerun reproduced
+  the same race in the second completion fixture. Both await exact supervisor
+  DOWN, but public creation can briefly see a dead Registry entry afterward.
+- Fixed only replacement setup in those two tests: start through the owning
+  DynamicSupervisor and assert the acknowledged fresh incarnation, then exercise
+  the unchanged public scoped-join/completion APIs. Retain exact teardown. This
+  avoids making the test depend on asynchronous Registry cleanup; production
+  public-create behavior was not changed. Independent review found no blockers.
+- All eight focused tests passed; final complete CallEngine rerun passed 2,233
+  tests. Production source did not change between the root run and reruns. Final
+  root format, warnings-as-errors compilation, strict Credo and unused dependency
+  checks passed. Five changed documents have valid relative link targets.
+- Previously verified 760 frontend tests, TypeScript, lint/build and rendered
+  key-management flows remain valid for unchanged frontend source. Local SQL
+  races passed separately; no live-provider or external telephony tests ran.
