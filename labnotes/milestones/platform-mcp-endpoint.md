@@ -125,7 +125,7 @@ directly, without an HTTP loopback request or controller invocation.
   independent of Calls/Gateway and preserve its existing tests.
   Evidence: three public-boundary probe tests failed without the handler, then
   passed. Direct Gateway dependency uses the existing shared lock unchanged.
-- [ ] Prove `2025-11-25` negotiation, initialized notification, ping, JSON results,
+- [x] Prove `2025-11-25` negotiation, initialized notification, ping, JSON results,
   request IDs and unsupported versions/methods. GET returns 405 without an
   unsolicited SSE stream; do not implement unrelated protocol extensions.
 - [ ] Resolve the dependency's session behavior before product handlers: bind any
@@ -137,14 +137,14 @@ directly, without an HTTP loopback request or controller invocation.
   Evidence: `Calls.authenticate_api_key/2`, bounded indexed digest lookup including
   revoked duplicates, Settings-platform/legacy provenance, 26 focused Calls and
   11 Persistence tests passing after red tests and the additive index migration.
-- [ ] Authenticate every HTTP request from one Bearer header. Reject absent,
+- [x] Authenticate every HTTP request from one Bearer header. Reject absent,
   invalid/revoked keys and fail closed on unavailable storage. No query/body keys
   or browser-cookie substitute; never retain raw keys in session/process state.
 - [ ] Implement the [authentication wire contract](../../docs/platform-mcp.md#authentication-contract-and-client-compatibility):
   400 for malformed/duplicate credentials, 401 with Bearer challenge for missing
   or invalid keys, 403 for insufficient authority, and 503 for unavailable key
   storage. No OAuth metadata/login redirects or fabricated token exchange.
-- [ ] Mount exact `/mcp` through Gateway and Console before generic parsers; keep
+- [x] Mount exact `/mcp` through Gateway and Console before generic parsers; keep
   embedded enablement explicit, app/carrier host separation, HTTPS/loopback rules,
   host/origin checks, no-store responses and bounded work/body/deadline limits.
 - [ ] Implement the shared operation/key policy from the design matrix. Filter
@@ -164,8 +164,16 @@ Probe evidence (2026-10-15): the pinned Plug creates in-memory sessions for
 `2025-11-25`. Tests prove selected-version initialization, notifications, ping,
 empty tool discovery, trusted per-request actor injection, wrong-key session 404,
 DELETE 204/subsequent 404 and monitored handler-timeout cleanup. Independent review
-found no blockers. This is not product-endpoint acceptance: strict version rejection,
-GET 405, real Bearer authentication, mounting and concurrency controls remain open.
+found no blockers in the probe. The product boundary now passes 21 Gateway probe,
+endpoint and mount tests plus two Console tests with real locally issued keys.
+It enforces version/method rules, per-request authentication, exact/prefixed mounts,
+host/origin/transport restrictions and bounded concurrent requests. Review found
+oversized retained request IDs and incorrect unknown-notification responses; both
+failed focused tests before fixes. IDs are limited to 256-byte strings or safe
+integers and rejected IDs are not echoed; notifications have no JSON-RPC body.
+Domain tools, complete scope/error acceptance and session expiry/restart evidence
+remain open. A dependency timeout/crash logging issue must be fixed before tools
+accept sensitive inputs or produce sensitive results.
 Handler cleanup may add approximately one second to the configured deadline.
 
 ## Checkpoint: tenant discovery and shared pagination

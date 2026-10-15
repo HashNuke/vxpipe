@@ -17,6 +17,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
     options =
       Keyword.validate!(options,
         path_prefix: "/",
+        mcp: [],
         operator_api: [],
         call_spec_authoring: [],
         call_admission: [],
@@ -29,6 +30,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
     %{
       endpoint:
         Endpoint.init(
+          mcp: Keyword.fetch!(options, :mcp),
           call_spec_authoring: Keyword.fetch!(options, :call_spec_authoring),
           operator_api: Keyword.fetch!(options, :operator_api),
           cors: Keyword.fetch!(options, :cors),
@@ -88,6 +90,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
   end
 
   defp gateway_path?(["healthz"]), do: true
+  defp gateway_path?(["mcp"]), do: true
   defp gateway_path?(["api" | _rest]), do: true
   defp gateway_path?(["webhooks", "platform", "telnyx"]), do: true
   defp gateway_path?(["webhooks", "tenants", _tenant, "telnyx"]), do: true

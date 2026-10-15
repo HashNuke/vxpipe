@@ -70,3 +70,24 @@
 - First full-suite run finished with old compiled modules versus newly written
   tests during concurrent edits, plus a compactor scheduling failure. It is not
   a stable-snapshot verification; rerun after the foundation work settles.
+
+## Authenticated MCP mounting boundary
+
+- Exact `/mcp` mounts in Gateway and Console ahead of generic body parsing; prefix
+  mounting uses the remaining path segments. Disabled mounts return 404. Runtime
+  hosts/origins use the app origin independently of the carrier callback origin.
+- Every method reauthenticates one Bearer credential before dispatch. Missing or
+  invalid credentials return 401, malformed headers 400, storage exceptions/exits
+  503; cookies/query/body fields and MCP session IDs never supply authority.
+- Monitored admission leases bound concurrent requests; body/read/handler limits,
+  host/origin/HTTPS checks and no-store responses are enforced at this boundary.
+- Review identified oversized request IDs retained by the dependency and response
+  bodies sent to unknown notifications. Two red regressions reproduced both;
+  bounded IDs and empty notification responses now pass. Focused Gateway selection
+  passes 21 tests, and Console passes two tests with real local issuance/revocation.
+- Rechecked official MCP authorization/client guidance: static Bearer configuration
+  remains appropriate for the approved key-based milestone; OAuth is the recommended
+  interoperable flow and OAuth-only clients remain explicitly outside its promise.
+- Dependency inspection found timeout/crash logs could include arguments or handler
+  state. A separate library fix is under review before sensitive tools are enabled.
+  No full milestone or full-suite acceptance is claimed by this boundary commit.

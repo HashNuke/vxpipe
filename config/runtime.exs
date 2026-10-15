@@ -462,8 +462,28 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
   telephony_public_base_url =
     if URI.parse(service_public_origin).scheme == "https", do: service_public_origin
 
+  {:ok, app_origin} =
+    Vxpipe.Gateway.HTTP.PublicOrigin.resolve(
+      host: nonempty_env.("APP_HOST"),
+      port: nonempty_env.("PORT"),
+      tls: if(config_env() == :dev, do: nonempty_env.("VXPIPE_DEV_TLS"))
+    )
+
+  app_uri = URI.parse(app_origin)
+
+  mcp_hosts =
+    if app_uri.host in ["localhost", "127.0.0.1", "::1"],
+      do: ["localhost", "127.0.0.1", "::1"],
+      else: [app_uri.host]
+
   config :vxpipe_gateway, Vxpipe.Gateway.Application,
     http: [
+      mcp: [
+        enabled: database_enabled?,
+        allowed_hosts: mcp_hosts,
+        allowed_origins: [app_origin],
+        allow_loopback_http: config_env() in [:dev, :test]
+      ],
       operator_api: [enabled: database_enabled?],
       call_spec_authoring: [enabled: database_enabled?],
       telephony: [

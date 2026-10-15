@@ -58,6 +58,7 @@ defmodule Vxpipe.Console.Application do
     gateway_settings
     |> Keyword.fetch!(:http)
     |> Keyword.take([
+      :mcp,
       :operator_api,
       :call_spec_authoring,
       :call_admission,

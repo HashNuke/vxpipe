@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
   @impl true
   def init(options) do
     %{
+      mcp: options |> Keyword.get(:mcp, []) |> Vxpipe.Gateway.MCP.Endpoint.init(),
       cors: options |> Keyword.get(:cors, []) |> Cors.init(),
       parsers:
         Plug.Parsers.init(
@@ -32,6 +33,10 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
   end
 
   @impl true
+  def call(%Plug.Conn{path_info: ["mcp"]} = conn, %{mcp: options}) do
+    Vxpipe.Gateway.MCP.Endpoint.call(conn, options)
+  end
+
   def call(conn, %{cors: cors_options, parsers: parser_options, router: router_options}) do
     GatewayTelemetry.observe_request(conn, fn ->
       conn = Cors.call(conn, cors_options)
