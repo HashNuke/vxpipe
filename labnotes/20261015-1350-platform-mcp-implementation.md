@@ -742,3 +742,27 @@
 - Previously verified 760 frontend tests, TypeScript, lint/build and rendered
   key-management flows remain valid for unchanged frontend source. Local SQL
   races passed separately; no live-provider or external telephony tests ran.
+
+
+## Retained final carrier usage
+
+- LegUsage now retains its bounded original observation batch alongside unchanged
+  live reporting. The explicit persistence operation requires terminal usage and
+  an actual terminal observation, then checks each Calls storage acknowledgement.
+  Only timestamp representation may differ; every other immutable field must match.
+- Partial writes can retry the same retained batch, without regenerating values
+  after provider identification or a duplicate terminal callback. Faults and invalid
+  acknowledgements return a bounded unavailable result. Nil, unfinished or empty
+  usage cannot fabricate success. Persisted unknown usage still means unknown
+  carrier outcome; the resource acknowledgement is a separate future check.
+- Four focused tests failed for the missing API. After implementation all 45
+  selected Gateway usage, incoming activation/ingress and outgoing-leg tests passed.
+  Independent review found no blockers; corrected a test title to state isolation
+  from the live room rather than claim a room teardown fixture was exercised.
+- Added exact verified room/incarnation checks for managed usage. A failed managed
+  call accepts retained usage only with cancellation intent, preserving its state
+  and terminal evidence. Legacy failures and missing intent still reject writes.
+  Two storage regressions failed before implementation, then all eight UsageStore
+  tests passed. Carrier-owner scheduling/acknowledgement integration remains next.
+- Independent storage review found no blockers in exact managed ownership or the
+  narrow failed-cancellation allowance; legacy behavior remains unchanged.

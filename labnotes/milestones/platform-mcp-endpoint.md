@@ -474,6 +474,16 @@ errors compilation, strict Credo and unused-dependency checks pass. All checks u
 local fixtures; live-provider lanes remained excluded. Completion persistence and
 full hangup acceptance are still open.
 
+Final carrier-usage prerequisite: `LegUsage.persist_final/2` now retries retained
+original observations through the result-bearing Calls store, independently of
+live room reporting. Missing/nonterminal/empty usage cannot acknowledge completion;
+partial failures and mismatched acknowledgements fail closed. Managed storage
+requires exact room/incarnation and only permits failed-call writes with cancellation
+intent. Four missing-API regressions and two storage-policy regressions preceded
+the fixes; 45 Gateway and eight Persistence tests pass, with independent review
+finding no blockers. Carrier-owner wiring and
+its separate semantic cleanup acknowledgement remain outstanding.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

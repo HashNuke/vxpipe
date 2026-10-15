@@ -70,6 +70,77 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
              )
   end
 
+  test "managed usage requires the stored room and incarnation", context do
+    context.call
+    |> Ecto.Changeset.change(gateway_cleanup_required: true, incarnation_binding_verified: true)
+    |> Repo.update!()
+
+    source = observation("managed-usage", "managed-attempt", 1, 1, :final)
+    foreign_room = %{source | attribution: %{source.attribution | room_id: "foreign-room"}}
+
+    foreign_incarnation = %{
+      source
+      | attribution: %{source.attribution | incarnation_id: "foreign-incarnation"}
+    }
+
+    assert {:error, :call_room_mismatch} =
+             Vxpipe.Calls.store_usage_observation(foreign_room, context.options)
+
+    assert {:error, :call_incarnation_mismatch} =
+             Vxpipe.Calls.store_usage_observation(foreign_incarnation, context.options)
+
+    assert Repo.aggregate(UsageObservation, :count) == 0
+    assert {:ok, ^source} = Vxpipe.Calls.store_usage_observation(source, context.options)
+  end
+
+  test "cancelled managed failures retain final usage without changing lifecycle evidence",
+       context do
+    failed =
+      context.call
+      |> Ecto.Changeset.change(
+        gateway_cleanup_required: true,
+        incarnation_binding_verified: true,
+        state: :failed,
+        ended_at: @observed_at,
+        terminal_reason: :startup_unknown,
+        hangup_requested_at: @observed_at
+      )
+      |> Repo.update!()
+
+    source = observation("failed-managed-usage", "failed-managed-attempt", 1, 1, :final)
+    assert {:ok, ^source} = Vxpipe.Calls.store_usage_observation(source, context.options)
+    assert {:ok, ^source} = Vxpipe.Calls.store_usage_observation(source, context.options)
+    assert Repo.get!(Call, context.call.id) == failed
+    assert Repo.aggregate(UsageObservation, :count) == 1
+
+    foreign = %{source | attribution: %{source.attribution | incarnation_id: "replacement"}}
+
+    assert {:error, :call_incarnation_mismatch} =
+             Vxpipe.Calls.store_usage_observation(foreign, context.options)
+  end
+
+  test "failed usage still requires both managed ownership and cancellation intent", context do
+    source = observation("unacknowledged-usage", "unacknowledged-attempt", 1, 1, :final)
+
+    for {required, intent} <- [{false, @observed_at}, {true, nil}] do
+      Repo.get!(Call, context.call.id)
+      |> Ecto.Changeset.change(
+        gateway_cleanup_required: required,
+        incarnation_binding_verified: true,
+        state: :failed,
+        ended_at: @observed_at,
+        terminal_reason: :startup_unknown,
+        hangup_requested_at: intent
+      )
+      |> Repo.update!()
+
+      assert {:error, :call_not_started} =
+               Vxpipe.Calls.store_usage_observation(source, context.options)
+    end
+
+    assert Repo.aggregate(UsageObservation, :count) == 0
+  end
+
   test "asynchronously stored facts maintain effective amounts and tenant-safe totals", context do
     first = observation("usage-observation-1", "model-attempt-1", 100, 1, :estimate)
     final = observation("usage-observation-2", "model-attempt-1", 160, 2, :final)

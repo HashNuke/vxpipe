@@ -197,6 +197,20 @@ live-room archive reporting. Extend failed-call acceptance only for the matching
 cancelled incarnation; do not silently discard unknown outgoing usage. This avoids
 adding another engine shutdown phase solely to keep the usage reporter alive.
 
+`LegUsage` now retains the original bounded observation batch while keeping live
+reporting. `persist_final/2` requires terminal usage and a retained terminal
+observation, then stores each original value through Calls. It acknowledges only
+matching stored observations (timestamp precision may normalize); any partial
+failure leaves the same batch available for immutable retries. Managed usage
+storage requires the exact verified incarnation and room. Failed-call storage is
+allowed only for a managed call with cancellation intent and does not change its
+lifecycle evidence. An `unknown` observation being stored is not proof that the
+carrier ended. Carrier-owner integration must run persistence in its supervised
+bounded work, retain context until success, and combine storage acknowledgement
+with independent carrier/resource completion before acknowledging cleanup. That
+integration is still pending.
+
+
 Owner death before binding can leave archive evidence. Establish one shared
 durable archive ownership anchor under the call-row lock, validating the call's
 room and exact incarnation across both facts and snapshots. Archive writes and

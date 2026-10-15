@@ -67,7 +67,28 @@ defmodule Vxpipe.Persistence.UsageStore do
   defp storage_available(%Call{state: state}) when state in [:admitting, :running, :ended],
     do: :ok
 
+  defp storage_available(%Call{
+         state: :failed,
+         gateway_cleanup_required: true,
+         hangup_requested_at: %DateTime{}
+       }),
+       do: :ok
+
   defp storage_available(_call), do: {:error, :call_not_started}
+
+  defp incarnation_matches(%Call{gateway_cleanup_required: true} = call, observation) do
+    cond do
+      call.room_id != observation.attribution.room_id ->
+        {:error, :call_room_mismatch}
+
+      is_nil(call.incarnation_id) or not call.incarnation_binding_verified or
+          call.incarnation_id != observation.attribution.incarnation_id ->
+        {:error, :call_incarnation_mismatch}
+
+      true ->
+        :ok
+    end
+  end
 
   defp incarnation_matches(call, observation) do
     incarnation_id = observation.attribution.incarnation_id
