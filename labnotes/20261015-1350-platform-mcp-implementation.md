@@ -1173,3 +1173,19 @@ All three Calls and 28 Persistence scan/completion/hangup tests now pass. Migrat
 source/test/design review approved bounds, candidate selection, finite traversal
 and plan-independent projection. This adds discovery only; the supervised
 reconciler, actual carrier integration and hangup transports remain outstanding.
+
+### Outgoing usage before preparation effects
+
+OutgoingLegDialer now identifies a validated request/service and creates its usage
+attempt before deadline checks or media reservation. Preparation reuses that
+attempt, and a definite failure emits terminal usage without losing its identity.
+Unavailable media storage returns a sanitized failure; invalid requests/services
+produce no usage or media effects. The owner records successful reservation and
+avoids revoking an unacquired token. Disconnect/abandonment preserves a failed
+unreserved owner's result instead of touching unavailable media.
+
+Initial red was 41 tests/four failures. Review found the later disconnect path
+still attempted revocation; a follow-up 41-test run reproduced two failures before
+the guard was narrowed to failed unreserved owners. All 51 focused tests now pass.
+Independent final review approved the four-file delta. Managed registration and
+final usage persistence remain integration work.

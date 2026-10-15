@@ -10,36 +10,41 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegDialer do
     ProviderEndpoint
   }
 
+  @spec identify(String.t(), OutboundLegRequest.t(), ConfiguredService.t(), keyword()) ::
+          {:ok, LegUsage.t() | nil} | {:error, term()}
+  def identify(leg_id, request, service, usage_options) when is_list(usage_options) do
+    with :ok <- validate(leg_id, request, service) do
+      {:ok, LegUsage.start_outgoing(request, service, leg_id, usage_options)}
+    end
+  end
+
   @spec prepare(
           String.t(),
           OutboundLegRequest.t(),
           ConfiguredService.t(),
           GenServer.server(),
           pid(),
-          keyword()
+          LegUsage.t() | nil
         ) :: {:ok, Dial.t(), LegUsage.t() | nil} | {:error, term(), LegUsage.t() | nil}
-  def prepare(leg_id, request, service, media_admission, leg, usage_options)
-      when is_binary(leg_id) and is_pid(leg) and is_list(usage_options) do
-    with :ok <- validate(leg_id, request, service),
-         {:ok, token} <-
-           MediaAdmission.reserve(
-             media_admission,
-             service.identity.ingress_key,
-             leg,
-             service.media_token_ttl_ms,
-             service
-           ),
-         dial <- dial_request(leg_id, request, service, token) do
-      usage = LegUsage.start_outgoing(request, service, leg_id, usage_options)
-      {:ok, dial, usage}
-    else
-      {:error, _reason} = error ->
-        :ok = MediaAdmission.revoke(media_admission, leg)
-        append_usage(error, nil)
+  def prepare(leg_id, request, service, media_admission, leg, usage)
+      when is_binary(leg_id) and is_pid(leg) do
+    case reserve(media_admission, service, leg) do
+      {:ok, token} -> {:ok, dial_request(leg_id, request, service, token), usage}
+      {:error, reason} -> {:error, reason, usage}
     end
   end
 
-  defp append_usage({:error, reason}, usage), do: {:error, reason, usage}
+  defp reserve(media_admission, service, leg) do
+    MediaAdmission.reserve(
+      media_admission,
+      service.identity.ingress_key,
+      leg,
+      service.media_token_ttl_ms,
+      service
+    )
+  catch
+    :exit, _reason -> {:error, :media_admission_unavailable}
+  end
 
   defp validate(leg_id, %OutboundLegRequest{} = request, %ConfiguredService{} = service) do
     identity = service.identity

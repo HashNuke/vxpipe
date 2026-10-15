@@ -197,6 +197,14 @@ any carrier work. The paused observer monitors its owner and has a bounded start
 wait. Dial/end callers retain the returned monitor, so even an immediate normal
 completion produces usable termination evidence rather than a late `:noproc`.
 
+Outgoing preparation now validates the request and service and retains one usage
+attempt before checking the deadline or reserving media. A definite pre-submission
+failure therefore retains its original start/failure observations for final
+persistence; invalid input creates neither usage nor media effects. Failed owners
+that never reserved media preserve that failure through disconnect/abandonment.
+This prepares the owner for final-usage acknowledgement but does not enable managed
+tracking by itself.
+
 Persist cleanup-required state with admission before effects, and bind completion
 acknowledgements to that same incarnation. The incarnation is already a sufficient
 generation identifier. Reconciliation can reconnect to a surviving owner, but

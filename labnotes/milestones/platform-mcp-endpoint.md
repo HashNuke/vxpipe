@@ -586,6 +586,13 @@ change; three Calls and 28 Persistence tests pass. Migration 20261015000700 adds
 the matching partial index, and independent review approved. The reconciler and
 resource integration remain open; a scan is not shutdown or completion evidence.
 
+Outgoing usage now begins after request/service validation and before deadline
+checks or media reservation. Definite preparation failures retain one attributed
+terminal attempt; invalid inputs have no usage/media effects, and disconnecting
+a failed unreserved owner preserves its result. Initial 41/four and follow-up
+41/two red selections preceded fixes; all 51 focused tests pass with independent
+review. Carrier tracker/final-usage integration remains open.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

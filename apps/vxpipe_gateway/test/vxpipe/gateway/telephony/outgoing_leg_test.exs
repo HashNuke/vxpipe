@@ -928,6 +928,70 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
   end
 
+  for failure <- [:media_unavailable, :expired_deadline] do
+    test "retains one validated attempt when preparation fails with #{failure}", context do
+      runtime = [usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}]
+
+      runtime =
+        if unquote(failure) == :expired_deadline,
+          do: Keyword.merge(runtime, deadline_ms: 10, monotonic_clock: fn -> 10 end),
+          else: runtime
+
+      assert {:ok, leg} =
+               LegSupervisor.start_outgoing(
+                 LegSupervisor,
+                 context.leg_id,
+                 request(),
+                 service(self(), []),
+                 :unavailable_outgoing_test_media_admission,
+                 runtime
+               )
+
+      expected =
+        if unquote(failure) == :expired_deadline,
+          do: :outbound_connection_unavailable,
+          else: :media_admission_unavailable
+
+      assert {:error, ^expected} = OutgoingLeg.await(leg, 1_000)
+      assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+      OutgoingLeg.abandon(leg)
+      assert {:error, ^expected} = OutgoingLeg.await(leg, 1_000)
+      assert_receive {:test_usage_observations, [started]}
+      assert_receive {:test_usage_observations, [failed]}
+      assert started.measurement.component == "carrier_legs"
+      assert failed.attempt_id == started.attempt_id
+      assert failed.outcome == :failed
+      assert failed.measurement == nil
+      assert failed.provider.operation_id == nil
+      refute_received {:test_usage_observations, _}
+      refute_received {:test_telephony_dial, _}
+    end
+  end
+
+  for invalid <- [:request, :service] do
+    test "invalid #{invalid} is rejected before usage or media access", context do
+      request = if unquote(invalid) == :request, do: %{request() | to: "invalid"}, else: request()
+      service = service(self(), [])
+
+      service =
+        if unquote(invalid) == :service, do: %{service | outbound_number: nil}, else: service
+
+      assert {:ok, leg} =
+               LegSupervisor.start_outgoing(
+                 LegSupervisor,
+                 context.leg_id,
+                 request,
+                 service,
+                 :unavailable_outgoing_test_media_admission,
+                 usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}
+               )
+
+      assert {:error, :invalid_outbound_telephony_request} = OutgoingLeg.await(leg, 1_000)
+      refute_received {:test_usage_observations, _}
+      refute_received {:test_telephony_dial, _}
+    end
+  end
+
   test "retains a rejected carrier dial without inventing duration or provider identity",
        context do
     service = service(self(), api_key: "reject:#{:erlang.pid_to_list(self())}")

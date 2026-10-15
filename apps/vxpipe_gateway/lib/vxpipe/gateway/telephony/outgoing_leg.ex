@@ -85,6 +85,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
        deadline_ms: Keyword.get(options, :deadline_ms),
        monotonic_clock: Keyword.fetch!(options, :monotonic_clock),
        media_admission: Keyword.fetch!(options, :media_admission),
+       media_reserved?: false,
        media_supervisor: Keyword.get(options, :media_supervisor, MediaSupervisor),
        binding: nil,
        result: nil,
@@ -102,9 +103,22 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   @impl true
   def handle_continue(:dial, state) do
-    if is_integer(state.deadline_ms) and state.monotonic_clock.() >= state.deadline_ms,
-      do: {:noreply, fail(state, :outbound_connection_unavailable, :failed)},
-      else: submit_dial(state)
+    case OutgoingLegDialer.identify(
+           state.leg_id,
+           state.request,
+           state.service,
+           state.usage_options
+         ) do
+      {:ok, usage} ->
+        state = %{state | usage: usage}
+
+        if is_integer(state.deadline_ms) and state.monotonic_clock.() >= state.deadline_ms,
+          do: {:noreply, fail(state, :outbound_connection_unavailable, :failed)},
+          else: submit_dial(state)
+
+      {:error, reason} ->
+        {:noreply, fail(state, reason, :failed)}
+    end
   end
 
   defp submit_dial(state) do
@@ -114,15 +128,17 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
            state.service,
            state.media_admission,
            self(),
-           state.usage_options
+           state.usage
          ) do
       {:ok, dial, usage} ->
+        state = %{state | usage: usage, media_reserved?: true}
+
         case DialSupervisor.submit(self(), state.service, dial) do
           {:ok, worker, monitor} ->
-            {:noreply, %{state | usage: usage, dial_worker: {worker, monitor}}}
+            {:noreply, %{state | dial_worker: {worker, monitor}}}
 
           {:error, _reason} ->
-            {:noreply, fail(%{state | usage: usage}, :dial_submission_unavailable, :failed)}
+            {:noreply, fail(state, :dial_submission_unavailable, :failed)}
         end
 
       {:error, reason, usage} ->
@@ -442,7 +458,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   defp fail(state, reason, usage_outcome) do
     result = {:error, reason}
-    :ok = MediaAdmission.revoke(state.media_admission, self())
+    if state.media_reserved?, do: MediaAdmission.revoke(state.media_admission, self())
     reply_waiters(state.waiters, result)
     Process.send_after(self(), :retire, 1_000)
     state = finish_usage(state, usage_outcome)

@@ -5,6 +5,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegLifecycle do
   alias Vxpipe.Gateway.Telephony.{ConfiguredService, DialSupervisor, MediaAdmission, MediaBinding}
 
   def cancel(%{status: :ended} = state, _reason), do: state
+  def cancel(%{status: :failed, media_reserved?: false} = state, _reason), do: state
 
   def cancel(state, reason) do
     if is_nil(state.cancel_reason) and is_nil(state.carrier_control_id) do
