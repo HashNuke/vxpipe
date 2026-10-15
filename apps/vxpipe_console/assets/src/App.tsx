@@ -1898,7 +1898,7 @@ async function loadCalls(
   if (selected.callSpecId) query.set("call_spec_id", selected.callSpecId);
 
   const response = await fetchImpl(
-    `/admin/api/tenants/${encodedTenant}/calls?${query.toString()}`,
+    `/api/tenants/${encodedTenant}/calls?${query.toString()}`,
     { headers: { accept: "application/json" }, signal },
   );
 
@@ -2077,7 +2077,7 @@ async function requestCallDetails(
   fetchImpl: Fetch,
 ) {
   const response = await fetchImpl(
-    `/admin/api/tenants/${encodeURIComponent(selected.tenantKey)}/calls/${encodeURIComponent(selected.callId)}`,
+    `/api/tenants/${encodeURIComponent(selected.tenantKey)}/calls/${encodeURIComponent(selected.callId)}`,
     { headers: { accept: "application/json" }, signal },
   );
 

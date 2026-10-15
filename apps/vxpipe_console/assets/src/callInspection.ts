@@ -32,7 +32,7 @@ export function createCallInspectionLoader(tenantKey: string, callId: string) {
   return {
     async refresh(signal: AbortSignal): Promise<CallDetailsSnapshot> {
       const response = await fetch(
-        `/tenants/${encodeURIComponent(tenantKey)}/calls/${encodeURIComponent(callId)}/inspection`,
+        `/api/tenants/${encodeURIComponent(tenantKey)}/calls/${encodeURIComponent(callId)}/inspection`,
         {
           signal,
           credentials: "same-origin",

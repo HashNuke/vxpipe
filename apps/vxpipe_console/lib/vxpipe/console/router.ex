@@ -53,6 +53,18 @@ defmodule Vxpipe.Console.Router do
     plug :user_api
   end
 
+  pipeline :session_product_artifact do
+    plug Vxpipe.Console.SessionProductAPI
+    plug :fetch_session
+    plug :put_secure_browser_headers
+    plug Vxpipe.Console.PrivateNoStore
+    plug Vxpipe.Console.RequireUserAPI
+  end
+
+  pipeline :session_product_precheck do
+    plug Vxpipe.Console.SessionProductAPI
+  end
+
   pipeline :operator do
     plug Vxpipe.Console.RequireOperator
     plug Vxpipe.Console.RequireTenant
@@ -132,6 +144,47 @@ defmodule Vxpipe.Console.Router do
     post "/setup", Vxpipe.Console.UserAuthController, :setup
     post "/login", Vxpipe.Console.UserAuthController, :login
     post "/recover", Vxpipe.Console.UserAuthController, :recover
+  end
+
+  scope "/api/tenants/:tenant_key/calls" do
+    pipe_through :session_product_api
+
+    get "/", Vxpipe.Console.AdminCallsController, :index, metadata: %{console_product_api: true}
+
+    get "/spec-options", Vxpipe.Console.AdminCallsController, :spec_options,
+      metadata: %{console_product_api: true}
+
+    get "/:call_id", Vxpipe.Console.AdminCallDetailsController, :show,
+      metadata: %{console_product_api: true}
+  end
+
+  scope "/api/tenants/:tenant_key/calls" do
+    pipe_through [:session_product_api, :user_call_access]
+
+    get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show,
+      metadata: %{console_product_api: true}
+  end
+
+  scope "/api/tenants/:tenant_key/calls" do
+    pipe_through [:session_product_artifact, :user_call_access]
+
+    get "/:call_id/details/:publication_id", Vxpipe.Console.CallDetailsController, :show,
+      metadata: %{console_product_api: true}
+
+    get "/:call_id/recordings/:artifact_id", Vxpipe.Console.CallRecordingController, :show,
+      metadata: %{console_product_api: true}
+  end
+
+  scope "/admin/api" do
+    pipe_through :session_product_api
+
+    get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index
+
+    get "/tenants/:tenant_key/calls/spec-options",
+        Vxpipe.Console.AdminCallsController,
+        :spec_options
+
+    get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
   end
 
   scope "/api" do
@@ -369,14 +422,6 @@ defmodule Vxpipe.Console.Router do
     post "/tenants/:tenant_key/call-specs/:id/revisions/:revision/publish",
          Vxpipe.Console.AdminCallSpecAuthoringController,
          :publish
-
-    get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index
-
-    get "/tenants/:tenant_key/calls/spec-options",
-        Vxpipe.Console.AdminCallsController,
-        :spec_options
-
-    get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
   end
 
   scope "/tenants/:tenant_key/calls" do
@@ -389,6 +434,7 @@ defmodule Vxpipe.Console.Router do
 
   scope "/tenants/:tenant_key/calls" do
     pipe_through [
+      :session_product_precheck,
       :browser,
       :operator_pages,
       :user_pages,
@@ -400,7 +446,7 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/tenants/:tenant_key/calls" do
-    pipe_through [:user_api, :user_call_access]
+    pipe_through [:session_product_api, :user_call_access]
 
     get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show
   end

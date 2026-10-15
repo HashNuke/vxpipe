@@ -95,6 +95,29 @@ defmodule Vxpipe.Console.CallInspectionQueryTest do
     refute_receive {:inspect_live_call, _, _, _}
   end
 
+  test "rejects supporting plans or summaries for another call or pinned revision" do
+    for prepared <- [
+          %{prepared_call() | id: "other"},
+          %{prepared_call() | tenant_key: "other"},
+          %{prepared_call() | call_spec_id: "other"},
+          %{prepared_call() | call_spec_revision: 4}
+        ] do
+      backend = backend(inspect_call: {:ok, detail_page()}, fetch_prepared_call: {:ok, prepared})
+
+      assert {:error, :call_inspection_unavailable} =
+               CallInspectionQuery.run(principal(), "call-public-id", backend: backend)
+
+      refute_receive {:fetch_call_history, _, _, _}
+    end
+
+    page = %{detail_page() | call: %{detail_page().call | id: "other"}}
+
+    assert {:error, :call_not_found} =
+             CallInspectionQuery.run(principal(), "call-public-id",
+               backend: backend(inspect_call: {:ok, page})
+             )
+  end
+
   defp backend(responses), do: {TestCallInspectionBackend, {self(), Map.new(responses)}}
 
   defp principal do

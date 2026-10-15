@@ -6,7 +6,7 @@ This document grows with the [platform MCP milestone](../labnotes/milestones/pla
 it describes tenant and call-spec reads, provider catalogs, spec writes,
 call creation/join-token operations, account administration, and session-only
 API-key management, services, provider credentials, role administration and
-password reset and tenant creation. The complete migration
+password reset, tenant creation and call inspection. The complete migration
 inventory is in
 [product API inventory](product-api-inventory.md).
 
@@ -366,6 +366,55 @@ Token redemption retains existing single-use admission behavior. Ended or failed
 calls cannot issue usable new tokens. Errors include 400 `participant_required`
 or `invalid_request`, 404 `call_route_not_found`, 409 `call_unavailable`, and the
 same authentication/unavailable errors as call creation.
+
+## Call inspection and artifacts (Console session only)
+
+These reads use the logged-in actor's tenant-scoped `calls.read` permission.
+They accept no machine-key authority or MCP tools. Every canonical route returns
+401 `session_required` when no valid session exists or any Authorization header
+is supplied, even alongside a valid cookie. Responses are private and no-store.
+
+| Method and path | Result |
+| --- | --- |
+| `GET /api/tenants/:tenant_key/calls` | Call directory with pagination and filter context |
+| `GET /api/tenants/:tenant_key/calls/spec-options` | Paginated spec choices for the call filter |
+| `GET /api/tenants/:tenant_key/calls/:call_id` | Tenant/spec metadata and inspection snapshot |
+| `GET /api/tenants/:tenant_key/calls/:call_id/inspection` | Inspection snapshot for polling |
+| `GET /api/tenants/:tenant_key/calls/:call_id/details/:publication_id` | Exact published JSON attachment |
+| `GET /api/tenants/:tenant_key/calls/:call_id/recordings/:artifact_id` | Streamed WAV recording |
+
+The call directory accepts `page` (default 1) and optional `call_spec_id`
+(nonempty, at most 256 bytes). Page size is fixed at 25. Its response is
+`{tenant,call_specs,call_specs_truncated,selected_call_spec_id,calls,pagination}`.
+Pagination contains `{page,page_size,total,total_pages}`. Tenant and filter
+visibility apply before results are returned. Spec choices are `{id,name}`.
+
+The spec-options route accepts `q` (trimmed, default empty, at most 256 bytes)
+and `page` (default 1), returning `{options:[{id,name}],has_more}` with at most 25 choices
+per page. This searches authorized call filters; it does not grant spec-source
+access. Invalid directory filters/pages return 422; unavailable directories or
+searches return 503 using `{error:{code}}`.
+
+Call detail returns `{tenant,call_spec,call_spec_revision,inspection}`. Polling
+returns just the same versioned inspection object (`schema_version: 1`). The
+shared query verifies the requested tenant/call and pinned revision before reading
+history; it does not silently select the latest spec. Missing calls return 404
+`call_not_found`, malformed inspection requests return 400
+`invalid_call_inspection`, and unavailable inspection returns 503
+`call_inspection_unavailable`.
+
+Publication and recording reads verify that the exact artifact belongs to the
+requested call. Published details are an `application/json` attachment with a
+safe filename. WAV responses retain streaming and byte-range support: 200 for a
+full read, 206 for an accepted range, 416 for an invalid range, and 502 when the
+initial artifact read fails. Clients should supply `Accept: audio/wav` when
+reading recordings; these endpoints do not require JSON Accept negotiation.
+
+Legacy call-directory/detail aliases under `/admin/api` and inspection/download
+aliases under `/tenants` remain thin compatibility routes to the same handlers
+and policy. Legacy downloads retain their browser login redirect when no session
+exists; explicit Authorization is still rejected before session fallback.
+New clients should use the canonical routes above.
 
 ## Users and role options
 

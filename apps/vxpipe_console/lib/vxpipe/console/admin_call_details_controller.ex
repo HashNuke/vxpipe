@@ -8,23 +8,17 @@ defmodule Vxpipe.Console.AdminCallDetailsController do
   def show(conn, %{"tenant_key" => tenant_key, "call_id" => call_id}) do
     authority = conn.assigns.user_principal
 
-    with {:ok, context} <- Vxpipe.Calls.fetch_operator_call(authority, tenant_key, call_id),
-         {:ok, access} <- Vxpipe.Calls.user_call_access(authority, tenant_key),
-         {:ok, result} <- CallInspectionQuery.run(access, call_id),
-         true <- context.call.call_spec_id == result.call.call_spec_id,
-         true <- context.call.call_spec_revision == result.call.call_spec_revision do
-      respond(conn, :ok, %{
-        tenant: %{key: context.tenant.key, name: context.tenant.name},
-        call_spec: %{id: context.call.call_spec_id, name: context.call.call_spec_name},
-        call_spec_revision: context.call.call_spec_revision,
-        inspection: CallInspectionPresenter.present(result)
-      })
-    else
+    case CallInspectionQuery.fetch(authority, tenant_key, call_id) do
+      {:ok, context, result} ->
+        respond(conn, :ok, %{
+          tenant: %{key: context.tenant.key, name: context.tenant.name},
+          call_spec: %{id: context.call.call_spec_id, name: context.call.call_spec_name},
+          call_spec_revision: context.call.call_spec_revision,
+          inspection: CallInspectionPresenter.present(result)
+        })
+
       {:error, reason} when reason in [:tenant_not_found, :call_not_found] ->
         error(conn, :not_found, "call_not_found")
-
-      false ->
-        error(conn, :service_unavailable, "call_inspection_unavailable")
 
       {:error, reason}
       when reason in [:invalid_call_inspection_request, :invalid_archive_request] ->

@@ -36,7 +36,10 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
   end
 
   test "requires an installation operator session for a call-details document" do
-    assert redirected_to(https_get(route()), 302) == "/auth/login"
+    assert json_response(https_get(route()), 401)["error"]["code"] == "session_required"
+
+    assert redirected_to(https_get(String.replace_prefix(route(), "/api", "")), 302) ==
+             "/auth/login"
   end
 
   test "downloads the exact published JSON with private response headers" do
@@ -72,7 +75,7 @@ defmodule Vxpipe.Console.CallDetailsEndpointTest do
   end
 
   defp route,
-    do: "/tenants/#{@tenant_key}/calls/#{@call_id}/details/#{@publication_id}"
+    do: "/api/tenants/#{@tenant_key}/calls/#{@call_id}/details/#{@publication_id}"
 
   defp authenticate do
     post(build_conn(), "https://localhost/auth/api/login", %{

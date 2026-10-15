@@ -1029,3 +1029,27 @@ blocked-answer usage test also verifies connected/terminal observations survive 
 late submission response. This is retention evidence, not durable final usage or
 managed cleanup acceptance; those integrations remain open.
 Independent source/test/design review approved this checkpoint with no blockers.
+
+### Canonical call inspection and artifact reads
+
+Six canonical session-only GET routes now serve the directory, spec-filter options,
+detail, inspection polling, published JSON and streamed WAV. UI callers use `/api`;
+legacy routes remain thin aliases. Exact method metadata leaves Gateway call-create
+and join-token POSTs untouched. Every explicit Authorization header is rejected
+before session fallback. Canonical downloads return JSON 401 without a session;
+legacy download aliases retain their login redirect for compatibility. A narrow
+artifact pipeline permits audio Accept negotiation without JSON-only parsing.
+
+The shared inspection query owns metadata agreement and verifies tenant, call and
+pinned spec identity before history access. Existing artifact ownership, streaming,
+range and no-store behavior is preserved. No new key grants or MCP tools are added.
+
+Initial reds: 30 Console tests with 25 expected failures and 37 frontend tests with
+five URL failures. Final checks passed 38 Console and all 764 frontend tests, plus
+TypeScript, lint, esbuild and formatting. Independent review approved. Rendered
+desktop/mobile inspection using a synthetic persisted prepared call verified
+canonical directory/filter/detail/polling 200 responses. Missing artifacts returned
+private 404 with JSON/audio Accept headers; positive JSON/WAV/range behavior has
+endpoint coverage. The current UI has no artifact links to claim rendered coverage
+for. Initial browser fixture setup needed explicit archive/usage composition; the
+corrected fixture, browser and database sandbox were stopped after verification.

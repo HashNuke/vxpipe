@@ -516,7 +516,7 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
     screen.getByRole("link", { name: /open call 018f27cb/i }),
   ).toBeVisible();
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=2&call_spec_id=delivery-rescheduling",
+    "/api/tenants/AAAAAAAAAAAAAAAA/calls?page=2&call_spec_id=delivery-rescheduling",
     expect.any(Object),
   );
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/session", expect.any(Object));
@@ -526,7 +526,7 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
     await screen.findByRole("option", { name: "Appointment reminders" }),
   );
 
-  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/tenants/AAAAAAAAAAAAAAAA/calls/spec-options?q=&page=1", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+  expect(fetchImpl).toHaveBeenCalledWith("/api/tenants/AAAAAAAAAAAAAAAA/calls/spec-options?q=&page=1", expect.objectContaining({ signal: expect.any(AbortSignal) }));
   expect(await screen.findByText("No matching calls")).toBeVisible();
   expect(window.location.pathname + window.location.search).toBe(
     "/t/AAAAAAAAAAAAAAAA/calls?call_spec_id=appointment-reminders",
@@ -553,7 +553,7 @@ test("loads an approved call details route into the reusable console", async () 
   expect(screen.getByText("call-public-id")).toBeVisible();
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/session", expect.any(Object));
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls/call-public-id",
+    "/api/tenants/AAAAAAAAAAAAAAAA/calls/call-public-id",
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
 });
@@ -593,7 +593,7 @@ test("opens call details in a new tab without replacing the call directory", asy
   expect(fetchImpl).toHaveBeenCalledTimes(2);
   expect(fetchImpl).toHaveBeenNthCalledWith(1, "/admin/api/session", expect.any(Object));
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=1",
+    "/api/tenants/AAAAAAAAAAAAAAAA/calls?page=1",
     expect.any(Object),
   );
 });
@@ -771,12 +771,12 @@ test("recovers an out-of-range call page without losing its call spec filter", a
   );
   expect(fetchImpl).toHaveBeenNthCalledWith(
     2,
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=999&call_spec_id=delivery-rescheduling",
+    "/api/tenants/AAAAAAAAAAAAAAAA/calls?page=999&call_spec_id=delivery-rescheduling",
     expect.any(Object),
   );
   expect(fetchImpl).toHaveBeenNthCalledWith(
     3,
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/calls?page=1&call_spec_id=delivery-rescheduling",
+    "/api/tenants/AAAAAAAAAAAAAAAA/calls?page=1&call_spec_id=delivery-rescheduling",
     expect.any(Object),
   );
 });

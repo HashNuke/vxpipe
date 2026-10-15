@@ -17,8 +17,9 @@ through the canonical role detail route. Service/credential administration and a
 inventory now use canonical session-only handlers, including onboarding's service
 binding read. Role administration and password reset use canonical session-only
 handlers; role directories now paginate full metadata. Tenant creation also uses
-the canonical session-only handler. Onboarding/samples and call inspection still
-require migration.
+the canonical session-only handler. Call directory/filter/detail, inspection polling
+and artifact downloads now use canonical session-only handlers and shared
+inspection ownership checks. Onboarding/samples still require migration.
 Legacy routes remain available during that work; this inventory does not claim
 their removal or full controller consolidation.
 
@@ -94,10 +95,11 @@ navigation in the UI. Neither is justification for a private tenant directory.
 | none | `POST API/T/C/join-tokens` | Shared token workflow; optional participant + TTL, resolve pinned entry if omitted | S `calls.write`; Kcalls/Kfull/Kplatform; reuse issuer, never guess another participant |
 | none | `POST API/T/C/hangup` | Gateway whole-call workflow + Calls admission interlock; empty body -> `{call_id,status}` | S `calls.write`; Kcalls/Kfull/Kplatform; status means durable `ending` or evidenced `ended` |
 | `GET A/T/calls` | `GET API/T/calls` | Calls directory; page and optional `call_spec_id`; current tenant/spec context, calls, pagination | S `calls.read`; K denied pending archival-read policy; migrate directory and filter types |
+| `GET A/T/calls/spec-options` | `GET API/T/calls/spec-options` | Calls spec-filter search; q/page -> `{options,has_more}`, fixed 25 rows | S `calls.read`; K denied; canonical UI filter route |
 | `GET A/T/C` | `GET API/T/C` | Calls metadata + shared inspection query; `{tenant,call_spec,call_spec_revision,inspection}` | S `calls.read`; K denied pending archival-read policy; extract Console query/presenter; retain pinned revision agreement check |
-| `GET T/C/inspection` | `GET API/T/C/inspection` | Same inspection query; inspection snapshot without directory envelope | Same scoped call-read policy; migrate poll URL emitted by server and `callInspection.ts` |
-| `GET T/C/details/:publication_id` | `GET API/T/C/details/:publication_id` | Calls/archival read ports; exact JSON publication attachment | Same scoped call-read policy; retain content type, no-store and safe Content-Disposition; update server-generated download URLs |
-| `GET T/C/recordings/:artifact_id` | `GET API/T/C/recordings/:artifact_id` | Calls/archival read ports + streaming response adapter; WAV bytes | Same scoped call-read policy; retain streaming, artifact ownership and unavailable states; update generated audio URLs |
+| `GET T/C/inspection` | `GET API/T/C/inspection` | Same inspection query; inspection snapshot without directory envelope | Same scoped call-read policy; canonical polling via `callInspection.ts`; no server-generated poll URL |
+| `GET T/C/details/:publication_id` | `GET API/T/C/details/:publication_id` | Calls/archival read ports; exact JSON publication attachment | Same scoped call-read policy; retain content type, no-store and safe Content-Disposition; canonical route available to clients |
+| `GET T/C/recordings/:artifact_id` | `GET API/T/C/recordings/:artifact_id` | Calls/archival read ports + streaming response adapter; WAV bytes | Same scoped call-read policy; retain streaming, artifact ownership and unavailable states; canonical route available to clients |
 | `POST API/T/C/participants/:participant_key/sessions` | same protocol endpoint | Gateway admission; empty object + one-time participant join token -> media session | Join-token Bearer, **not** account/API-key auth; keep token replay/expiry/binding checks |
 | `POST API/rtvi/offer`; `PATCH API/rtvi/offer` | unchanged | Gateway RTVI; SDP offer/session identifier and ICE candidate messages | Existing admitted media-session/connection capability; no conversion to account API auth |
 | `POST API/rooms`; `POST API/rooms/:room_id/sessions` | unchanged explicit opt-in development interface | Gateway Rooms; configured trusted preset/principal, room/session result | Existing configuration-gated development auth; not general tenant creation or MCP admission; keep disabled defaults |

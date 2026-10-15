@@ -690,6 +690,19 @@ desktop/mobile checks verified canonical POST 201 and dashboard navigation with 
 synthetic local database. Onboarding/samples, call inspection and final parity
 remain open; tenant creation is now migrated.
 
+Call inspection cutover: six canonical session-only GET routes now serve directory,
+filter options, detail, polling and JSON/WAV downloads. The shared inspection query
+verifies tenant/call/pinned-spec agreement; exact route metadata preserves Gateway
+write ownership. Both prefixes reject explicit Authorization. Canonical artifacts
+return session 401, while legacy browser downloads retain anonymous login redirects.
+
+After expected endpoint/query/client reds, all 38 Console and 764 frontend tests
+passed, with types/lint/build and independent review. Rendered desktop/mobile
+checks verified canonical directory/filter/detail/polling 200 responses. Missing
+artifact requests returned private 404 with JSON/audio Accept; positive attachment
+and WAV/range cases have endpoint coverage. Browser and synthetic database fixture
+stopped. Onboarding/samples and final cross-interface acceptance remain open.
+
 ## Checkpoint: parity acceptance and documentation
 
 Depends on all required capability checkpoints and supporting workflows.
