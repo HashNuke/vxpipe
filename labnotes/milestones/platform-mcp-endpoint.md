@@ -549,6 +549,15 @@ regressions preceded the change, and all 55 focused activation/ingress/local
 carrier-harness tests pass; independent review approved. Final durable usage,
 worker drainage, carrier tracker registration and managed admission remain open.
 
+Outgoing ownership prerequisite: initial and transfer owners now retain carrier
+identity through end submission and timeout abandonment. Late answer/media events
+request/coalesce another end; partial known control IDs reject replacement. Normal
+retirement waits for command drainage, and abnormal observer loss remains unknown.
+Expected initial/drainage/identity reds preceded fixes; 95 broader local tests and
+40 final focused tests pass, with independent review. Final usage persistence,
+tracker registration and managed admission remain open. Observer startup still
+needs monitor-before-release alignment to avoid conservative false unknown state.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

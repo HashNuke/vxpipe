@@ -445,6 +445,15 @@ defmodule Vxpipe.Gateway.Telephony.OutboundPhoneTransferTest do
 
     assert_machine_end(provider, leg_id)
 
+    ended = %{
+      PhoneTransferScenario.answering_machine_event(provider)
+      | kind: :ended,
+        answering_machine: nil,
+        end_reason: :hangup
+    }
+
+    assert :ok = OutgoingLeg.dispatch(leg, ended, 1_000)
+
     assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 2_000
 
     assert_receive {:vxpipe_event,

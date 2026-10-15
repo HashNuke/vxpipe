@@ -1053,3 +1053,31 @@ private 404 with JSON/audio Accept headers; positive JSON/WAV/range behavior has
 endpoint coverage. The current UI has no artifact links to claim rendered coverage
 for. Initial browser fixture setup needed explicit archive/usage composition; the
 corrected fixture, browser and database sandbox were stopped after verification.
+
+### Outgoing cancellation ownership
+
+Initial and transfer legs no longer exit when a carrier accepts an end command.
+Both retain original carrier identity and terminal usage while cancellation runs
+as bounded supervised work. Transfer timeout/disconnect abandon through the owner;
+they do not force-kill a potentially submitted attempt. Late answer/media evidence
+requests or queues another end, and partial known carrier IDs cannot be replaced
+by a different callback. Media remains revoked while cancellation is pending.
+
+Independent review found two drainage gaps: abnormal command-observer loss could
+leave its HTTP child alive, and an early retention timer could be forgotten before
+workers finished. Focused reds reproduced both; sticky unknown-drain state and
+retained timer intent now prevent false normal retirement. Normal observer results
+follow actual HTTP-task DOWN, and owner retirement waits for observer DOWN too.
+Unidentified abandoned legacy attempts retain their existing bounded unknown
+retirement; this is not managed cleanup success.
+
+Evidence: initial 30 tests/three expected failures; first focused green 35.
+Drainage/timer red selection 34/two failures; final broader selection 95 passed
+after two AMD fixtures were corrected to send authenticated ended events rather
+than assuming end acceptance proved termination. A partial-control identity red
+selection had 35/one failure, then final focused selection passed all 40 tests.
+Independent final review approved. No live providers or external telephony ran.
+The next drainage alignment must install observer monitors before releasing work
+to avoid conservative false unknown state when a fast observer exits before the
+owner can monitor it. Tracker registration, private binding propagation, final
+usage persistence and managed admission remain separate integration work.

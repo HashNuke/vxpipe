@@ -45,6 +45,9 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
              }}
         end
 
+      "control-only:" <> _observer ->
+        {:ok, %Submission{status: :accepted, provider_call_control_id: "outbound-call-control"}}
+
       "unknown:" <> _observer ->
         {:ok, %Submission{status: :unknown, provider_call_control_id: nil}}
 
@@ -69,11 +72,29 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
   def end_leg(options, request) do
     send(observer(options), {:test_telephony_end_leg, request})
 
-    {:ok,
-     %Submission{
-       status: :accepted,
-       provider_call_control_id: request.leg.provider_call_control_id
-     }}
+    case Keyword.fetch!(options, :api_key) do
+      "blocked-end:" <> _ ->
+        send(observer(options), {:test_telephony_end_pending, self()})
+
+        receive do
+          :reject_test_telephony_end ->
+            {:error, :command_rejected}
+
+          :accept_test_telephony_end ->
+            {:ok,
+             %Submission{
+               status: :accepted,
+               provider_call_control_id: request.leg.provider_call_control_id
+             }}
+        end
+
+      _ ->
+        {:ok,
+         %Submission{
+           status: :accepted,
+           provider_call_control_id: request.leg.provider_call_control_id
+         }}
+    end
   end
 
   @impl true
@@ -90,6 +111,8 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
       "observer:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       "unknown:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       "reject:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
+      "control-only:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
+      "blocked-end:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       "blocked:" <> encoded -> encoded |> String.to_charlist() |> :erlang.list_to_pid()
       _other -> self()
     end

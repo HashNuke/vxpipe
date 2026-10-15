@@ -23,6 +23,190 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     %{leg_id: leg_id, media_admission: media_admission}
   end
 
+  for purpose <- [:initial, :transfer] do
+    test "#{purpose} cancellation retains the owner until authenticated carrier termination",
+         context do
+      request = %{
+        request()
+        | purpose: unquote(purpose),
+          room_owner: self(),
+          attempt_id: make_ref()
+      }
+
+      assert {:ok, leg} =
+               LegSupervisor.start_outgoing(
+                 LegSupervisor,
+                 context.leg_id,
+                 request,
+                 service(self(), []),
+                 context.media_admission
+               )
+
+      assert :ok = OutgoingLeg.await(leg, 1_000)
+      monitor = Process.monitor(leg)
+      assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+      assert_receive {:test_telephony_end_leg, request}
+      assert request.leg.provider_call_control_id == "outbound-call-control"
+      assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
+      assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 1_000
+    end
+  end
+
+  test "a transfer connector timeout retains a pending dial for late cancellation", context do
+    observer = self()
+
+    registry =
+      Vxpipe.Gateway.TestTelephonyServiceRepository.registry(
+        enabled: true,
+        services: [service_options(self(), api_key: "blocked:#{:erlang.pid_to_list(self())}")]
+      )
+
+    options = [
+      leg_id: fn -> context.leg_id end,
+      media_admission: context.media_admission,
+      service_registry: registry
+    ]
+
+    start_supervised!(
+      {Task,
+       fn ->
+         send(
+           observer,
+           {:transfer_result, OutgoingLegConnector.connect(options, request(), 100)}
+         )
+       end}
+    )
+
+    assert_receive {:test_telephony_dial_pending, worker}, 1_000
+    on_exit(fn -> send(worker, :release_test_telephony_dial) end)
+    assert_receive {:transfer_result, {:error, :outbound_connection_unavailable}}, 1_000
+    assert {:ok, leg} = LegSupervisor.lookup_outgoing(context.leg_id)
+    monitor = Process.monitor(leg)
+    send(worker, :release_test_telephony_dial)
+    assert_receive {:test_telephony_end_leg, %EndLeg{reason: :transfer_cancelled}}, 1_000
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 1_000
+    assert_receive {:test_telephony_dial, _}
+    refute_receive {:test_telephony_dial, _}
+  end
+
+  test "late answer queues cleanup after the in-flight end and owner waits for its worker",
+       context do
+    leg =
+      start_accepted_leg(
+        context,
+        service(self(), api_key: "blocked-end:#{:erlang.pid_to_list(self())}")
+      )
+
+    monitor = Process.monitor(leg)
+    assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+    assert_receive {:test_telephony_end_pending, first}
+    on_exit(fn -> send(first, :reject_test_telephony_end) end)
+    assert :ok = OutgoingLeg.dispatch(leg, lifecycle_event(:answered, []), 1_000)
+    send(first, :reject_test_telephony_end)
+    assert_receive {:test_telephony_end_pending, second}
+    on_exit(fn -> send(second, :accept_test_telephony_end) end)
+    second_monitor = Process.monitor(second)
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
+    assert {:ok, ^leg} = LegSupervisor.lookup_outgoing(context.leg_id)
+    send(second, :accept_test_telephony_end)
+    assert_receive {:DOWN, ^second_monitor, :process, ^second, :normal}
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
+  end
+
+  test "carrier termination while dial is pending drains that command before owner retirement",
+       context do
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request(),
+               service(self(), api_key: "blocked:#{:erlang.pid_to_list(self())}"),
+               context.media_admission
+             )
+
+    assert_receive {:test_telephony_dial_pending, worker}
+    on_exit(fn -> send(worker, :release_test_telephony_dial) end)
+    monitor = Process.monitor(leg)
+    event = %{outgoing_event(context.leg_id) | kind: :ended, end_reason: :hangup}
+    assert :ok = OutgoingLeg.dispatch(leg, event, 1_000)
+    assert {:ok, ^leg} = LegSupervisor.lookup_outgoing(context.leg_id)
+    send(worker, :release_test_telephony_dial)
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
+    refute_receive {:test_telephony_end_leg, _}
+  end
+
+  test "an abnormal command observer death cannot prove its blocked operation drained", context do
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request(),
+               service(self(), api_key: "blocked:#{:erlang.pid_to_list(self())}"),
+               context.media_admission
+             )
+
+    assert_receive {:test_telephony_dial_pending, operation}
+    on_exit(fn -> Process.exit(operation, :kill) end)
+    {watcher, _} = :sys.get_state(leg).dial_worker
+    watcher_monitor = Process.monitor(watcher)
+    Process.exit(watcher, :kill)
+    assert_receive {:DOWN, ^watcher_monitor, :process, ^watcher, :killed}
+    assert {:ok, :unknown} = OutgoingLeg.await(leg, 1_000)
+    event = %{outgoing_event(context.leg_id) | kind: :ended, end_reason: :hangup}
+    assert :ok = OutgoingLeg.dispatch(leg, event, 1_000)
+    assert {:ok, ^leg} = LegSupervisor.lookup_outgoing(context.leg_id)
+    assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+  end
+
+  test "unknown retirement waits for a pending command and is retained until it drains",
+       context do
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request(),
+               service(self(), api_key: "blocked:#{:erlang.pid_to_list(self())}"),
+               context.media_admission
+             )
+
+    assert_receive {:test_telephony_dial_pending, operation}
+    on_exit(fn -> send(operation, :release_test_telephony_dial_unknown) end)
+    monitor = Process.monitor(leg)
+    assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+    # Deliver the owner's retention-deadline event while the command remains in flight.
+    send(leg, :retire_unknown)
+    _ = :sys.get_state(leg)
+    send(operation, :release_test_telephony_dial_unknown)
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 1_000
+    refute_receive {:test_telephony_end_leg, _}
+  end
+
+  test "late callback cannot replace the original control identity retained from submission",
+       context do
+    assert {:ok, leg} =
+             LegSupervisor.start_outgoing(
+               LegSupervisor,
+               context.leg_id,
+               request(),
+               service(self(), api_key: "control-only:#{:erlang.pid_to_list(self())}"),
+               context.media_admission
+             )
+
+    assert {:ok, :unknown} = OutgoingLeg.await(leg, 1_000)
+    assert :ok = OutgoingLeg.disconnect(leg, 1_000)
+
+    assert_receive {:test_telephony_end_leg,
+                    %EndLeg{leg: %{provider_call_control_id: "outbound-call-control"}}}
+
+    wrong = %{outgoing_event(context.leg_id) | provider_call_control_id: "another-control"}
+    assert {:error, :telephony_leg_mismatch} = OutgoingLeg.dispatch(leg, wrong, 1_000)
+    monitor = Process.monitor(leg)
+    ended = %{outgoing_event(context.leg_id) | kind: :ended, end_reason: :hangup}
+    assert :ok = OutgoingLeg.dispatch(leg, ended, 1_000)
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
+  end
+
   test "an initial submission timeout preserves its owner for late acceptance and cleanup",
        context do
     observer = self()
@@ -163,6 +347,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     monitor = Process.monitor(leg)
     send(room, :stop)
     assert_receive {:test_telephony_end_leg, %EndLeg{reason: :call_cancelled}}, 1_000
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
     assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 1_000
     refute_receive {:test_telephony_end_leg, _}, 20
   end
@@ -185,6 +370,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     monitor = Process.monitor(leg)
     assert :ok = OutgoingLeg.dispatch(leg, outgoing_event(context.leg_id), 1_000)
     assert_receive {:test_telephony_end_leg, %EndLeg{reason: :call_cancelled}}, 1_000
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
     assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}, 1_000
     assert_receive {:test_telephony_dial, _}
     refute_receive {:test_telephony_dial, _}, 20
@@ -500,7 +686,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
                context.media_admission
              )
 
-    assert :ok = OutgoingLeg.await(leg, 1_000)
+    assert {:ok, :unknown} = OutgoingLeg.await(leg, 1_000)
     assert_receive {:test_telephony_dial, dial}
 
     mismatched = %{outgoing_event(context.leg_id) | to: "+15550001002"}
@@ -538,7 +724,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
                context.media_admission
              )
 
-    assert :ok = OutgoingLeg.await(leg, 1_000)
+    assert {:ok, :unknown} = OutgoingLeg.await(leg, 1_000)
     assert_receive {:test_twilio_dial, dial}
 
     event = twilio_answered_event(context.leg_id)
@@ -601,6 +787,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
                     }}
 
     assert leg_id == context.leg_id
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
     assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
     refute_receive {:test_telephony_end_leg, _duplicate}
   end
@@ -777,6 +964,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
                     }}
 
     assert leg_id == context.leg_id
+    assert :ok = OutgoingLeg.dispatch(leg, ended_event(:hangup), 1_000)
     assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
     refute_receive {:test_telephony_end_leg, _duplicate}
   end

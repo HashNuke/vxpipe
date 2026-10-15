@@ -151,6 +151,22 @@ acknowledged outcomes plus termination of the registered local supervision trees
 Initial and transfer carrier legs both retain uncertain late-adoption cleanup.
 A successful end command is acceptance, not an authenticated terminal callback.
 
+Outgoing initial and transfer owners now share cancellation handling. Disconnect
+and transfer timeout abandon through the owner instead of killing a potentially
+submitted leg. Known carrier control IDs remain immutable across partial REST
+results and late callbacks. Cancellation revokes media admission, retains the
+owner, and submits a bounded end command; accepted or rejected end requests do
+not themselves prove termination. Late answered/media evidence requests another
+end attempt, coalescing it while a prior request remains in flight.
+
+Normal outgoing retirement waits for both command observers to terminate after
+their underlying HTTP tasks drain. Abnormal observer loss retains uncertainty
+even after a terminal carrier event, since the shared task supervisor may still
+own the request. Expired legacy retention deadlines are retained until known
+command drainage; unidentified abandoned attempts may then retire with unknown
+usage, without asserting managed cleanup completion. Final usage persistence and
+tracker acknowledgement still need wiring before managed admission is enabled.
+
 Persist cleanup-required state with admission before effects, and bind completion
 acknowledgements to that same incarnation. The incarnation is already a sufficient
 generation identifier. Reconciliation can reconnect to a surviving owner, but

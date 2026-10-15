@@ -46,33 +46,14 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
   end
 
   @impl true
-  def disconnect(_options, %OutgoingLegReference{purpose: :initial} = reference),
-    do: OutgoingLeg.abandon(reference.leg)
-
-  def disconnect(_options, %OutgoingLegReference{} = reference) do
-    case OutgoingLeg.disconnect(reference.leg, @disconnect_timeout) do
-      :ok ->
-        :ok
-
-      {:error, :telephony_leg_unavailable} ->
-        stop_local_owner(reference)
-    end
-  catch
-    :exit, _reason -> :ok
-  end
+  def disconnect(_options, %OutgoingLegReference{} = reference),
+    do: OutgoingLeg.disconnect(reference.leg, @disconnect_timeout)
 
   def disconnect(_options, _reference), do: {:error, :invalid_outbound_leg_reference}
 
   @impl true
   def owner(_options, %OutgoingLegReference{leg: leg}) when is_pid(leg), do: {:ok, leg}
   def owner(_options, _reference), do: {:error, :invalid_outbound_leg_reference}
-
-  defp stop_local_owner(reference) do
-    case DynamicSupervisor.terminate_child(reference.supervisor, reference.leg) do
-      :ok -> :ok
-      {:error, :not_found} -> :ok
-    end
-  end
 
   defp start_leg(options, request, service, leg_id, deadline, clock) do
     supervisor = Keyword.get(options, :leg_supervisor, LegSupervisor)
@@ -102,8 +83,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
   defp await_leg(supervisor, leg, leg_id, 0, :initial),
     do: unknown_reference(supervisor, leg, leg_id)
 
-  defp await_leg(supervisor, leg, _leg_id, 0, _purpose) do
-    _ = DynamicSupervisor.terminate_child(supervisor, leg)
+  defp await_leg(_supervisor, leg, _leg_id, 0, _purpose) do
+    OutgoingLeg.abandon(leg)
     {:error, :outbound_connection_unavailable}
   end
 
@@ -113,14 +94,18 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
         {:ok,
          %OutgoingLegReference{leg: leg, leg_id: leg_id, supervisor: supervisor, purpose: purpose}}
 
-      {:ok, :unknown} ->
+      {:ok, :unknown} when purpose == :initial ->
         unknown_reference(supervisor, leg, leg_id)
+
+      {:ok, :unknown} ->
+        OutgoingLeg.abandon(leg)
+        {:error, :outbound_connection_unavailable}
 
       {:error, :telephony_leg_unavailable} when purpose == :initial ->
         unknown_reference(supervisor, leg, leg_id)
 
       {:error, _reason} ->
-        _ = DynamicSupervisor.terminate_child(supervisor, leg)
+        OutgoingLeg.abandon(leg)
         {:error, :outbound_connection_unavailable}
     end
   end
