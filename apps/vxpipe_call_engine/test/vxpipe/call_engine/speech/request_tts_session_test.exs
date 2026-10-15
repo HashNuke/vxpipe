@@ -7,8 +7,9 @@ defmodule Vxpipe.CallEngine.Speech.RequestTTSSessionTest do
   alias Vxpipe.Providers.Google.TTSSession, as: GoogleSession
   alias Vxpipe.Providers.Cartesia.TTSSession, as: CartesiaSession
   alias Vxpipe.Providers.ElevenLabs.TTSSession, as: ElevenLabsSession
+  alias Vxpipe.Providers.MorseCodeApi.TTSSession, as: MorseApiSession
 
-  for provider <- [GoogleSession, CartesiaSession, ElevenLabsSession] do
+  for provider <- [GoogleSession, CartesiaSession, ElevenLabsSession, MorseApiSession] do
     @tag request_provider: provider
     test "#{inspect(provider)} a streamed request releases each PCM chunk only after consumer credit",
          %{request_provider: provider} do
@@ -69,7 +70,7 @@ defmodule Vxpipe.CallEngine.Speech.RequestTTSSessionTest do
   end
 
   test "a killed provider cannot leave its request task running" do
-    for provider <- [GoogleSession, CartesiaSession, ElevenLabsSession] do
+    for provider <- [GoogleSession, CartesiaSession, ElevenLabsSession, MorseApiSession] do
       session = start_session(provider)
       assert {:ok, _request} = Session.speak(session, "Held")
       assert %Event{kind: :input_submitted} = next_event(session)
@@ -95,11 +96,24 @@ defmodule Vxpipe.CallEngine.Speech.RequestTTSSessionTest do
         CartesiaSession ->
           {Vxpipe.Providers.Cartesia.TTS, [voice: "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"]}
 
+        MorseApiSession ->
+          {Vxpipe.Providers.MorseCodeApi.TTS, [voice: "morse"]}
+
         ElevenLabsSession ->
           {Vxpipe.Providers.ElevenLabs.TTS, [voice: "JBFqnCBsd6RMkjVDRZzb"]}
       end
 
-    assert {:ok, config} = configuration.new(Keyword.put(options, :api_key, "synthetic-key"))
+    configuration_options = Keyword.put(options, :api_key, "synthetic-key")
+
+    result =
+      if provider == MorseApiSession do
+        {:ok, endpoint} = Vxpipe.Providers.MorseCodeApi.Endpoint.new("https://morse.example")
+        Vxpipe.Providers.MorseCodeApi.TTS.new(configuration_options, endpoint)
+      else
+        configuration.new(configuration_options)
+      end
+
+    assert {:ok, config} = result
     config = %{config | endpoint: self()}
 
     assert {:ok, session, :starting} =

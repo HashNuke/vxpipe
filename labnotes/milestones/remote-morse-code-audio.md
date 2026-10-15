@@ -175,6 +175,20 @@ implementation must fail explicitly. No fabricated confidence or AI result.
 
 ### Local-first workflow and endpoint cutover
 
+Deliver this in four stages, using the existing checkpoints below rather than
+creating a second implementation checklist:
+
+| Stage | Owning checkpoints | Completion evidence |
+| --- | --- | --- |
+| Local provider development | A–G | `MorseCodeApiTTS` and `MorseCodeApiSTT` use the selected local Go origin for discovery, authentication probes and speech; a configured room completes repeated turns. |
+| Deployment preparation | H and I preparation | The separate Go repository contains the deployable image, Railway configuration and runbook; the production image passes local protocol, resource and shutdown checks. |
+| User deployment | I hosted verification | The user deploys the Go service; generated and custom HTTPS domains pass the same HTTP/WS smoke checks, with the tested revision recorded. |
+| Vxpipe switch and rollback | G local rehearsal, I hosted cutover | Changing only the runtime origin and restarting moves new sessions to the selected server; restoring the previous origin also passes with unchanged services and call specs. |
+
+Railway availability is not a dependency for the first two stages. Keep the
+endpoint configurable throughout all four stages; a future hosted default must
+not remove the ability to run the development workflow without a remote service.
+
 These are the intended commands after implementation, not commands implemented
 by this planning checkpoint:
 
@@ -441,7 +455,7 @@ a token once; idle or abandoned sockets release memory and execution workers.
 
 Dependencies: C and the implemented provider/service prerequisites.
 
-- [ ] Red-test manifest, capability selection, arbitrary synthetic credential,
+- [x] Red-test manifest, capability selection, arbitrary synthetic credential,
   model/voice configuration and private runtime endpoint resolution.
 - [x] Add the private origin validator and `MORSE_CODE_API_BASE_URL` runtime
   setting: development-local default, explicit hosted configuration, HTTP→WS and
@@ -451,11 +465,11 @@ Dependencies: C and the implemented provider/service prerequisites.
   hosted URL may bypass it. Include the origin in endpoint-dependent cache
   identity. Test absent production configuration at actual provider selection,
   while ordinary startup without this provider remains usable.
-- [ ] Introduce only the reusable ElevenLabs wire boundary needed for remote
+- [x] Introduce only the reusable ElevenLabs wire boundary needed for remote
   TTS; retain existing hosted-provider regression tests and scoped ownership.
-- [ ] Implement `MorseCodeApi.TTSSession`, truthful readiness, output credit,
+- [x] Implement `MorseCodeApi.TTSSession`, truthful readiness, output credit,
   interruption, cancellation and stale-generation rejection.
-- [ ] Connect credentials, service catalogs, editor selections and Console
+- [x] Connect credentials, service catalogs, editor selections and Console
   label **MorseCodeApiTTS**. Advertise STT only after G passes.
 - [ ] Run a configured local room with real Go HTTP streaming: conversational
   output, opening audio and interrupted/replaced output. Assert no request is
@@ -469,6 +483,17 @@ Credo and unused-dependency checks pass. The full umbrella run reported one
 Gateway five-participant WebRTC handoff timeout; that unchanged case passed in
 isolation. Full integration acceptance remains open; see the
 [implementation labnotes](../20261014-2120-implement-morse-api.md).
+
+TTS integration evidence (in progress, 2026-10-14): the manifest, private
+configuration, shared HTTP PCM reader, scoped request session, selection/startup
+dispatch and telemetry now exist. An explicitly tagged `live_morse_code_api`
+test calls the actual Go server and independently decodes its PCM at 8/16/24/48
+kHz. Local acceptance passed against Go revision `b922e71` on loopback port
+18796 using a caller-chosen key containing spaces. This proves the adapter's
+HTTP path, not a configured room or hosted deployment. The Console service form
+and model catalog are implemented; its desktop/mobile connection-success and
+unavailable states have been rendered. Editor/configured-room acceptance and the
+broader integration gate remain open.
 
 Exit: a saved service and published call spec produce audible Morse through
 ordinary room output and remain interruptible under backpressure.
@@ -570,6 +595,11 @@ Preparation deliverables in the Go repository:
   it against the local production image before handoff. Document separate
   commands for the generated Railway domain and custom domain, plus restoring
   Vxpipe's previous origin and restarting after a failed cutover.
+- [ ] Include a deployment handoff record with separate local-preparation and
+  hosted-verification results: Go/Vxpipe revisions, image identifier, selected
+  origin, smoke command and outcome, unresolved gates, and previous verified
+  origin/image for rollback. The record contains no keys or token URLs. Mark
+  hosted results pending until the user's deployment has actually been tested.
 
 Runbook references: Railway detects a root `Dockerfile` automatically; confirm
 the selected builder in build logs. Configure `/readyz` as the deployment check,
@@ -650,3 +680,9 @@ for local and hosted acceptance, complete DNS instructions and a tested rollback
 procedure. These are acceptance requirements; no implementation checkbox changes
 as a result of this documentation review.
 See [planning labnotes](../20261014-1947-remote-morse-milestone.md).
+
+The follow-up delivery review makes the four-stage dependency order explicit and
+adds a concrete handoff record to I. Local development and packaging can finish
+before deployment; the runtime override survives hosted verification. Existing
+implementation checkboxes are preserved. See the
+[endpoint and deployment planning note](../20261014-2356-morse-deployment-plan.md).

@@ -10,6 +10,7 @@ import type { ServiceProvider } from "./serviceTypes";
 const serviceMarks: Record<ServiceProvider, string> = {
   cartesia: "C",
   elevenlabs: "E",
+  morse_code_api: "M",
   rime: "R",
   google: "G",
   openai: "O",
@@ -28,6 +29,7 @@ type LogoSource = "lobehub" | "official" | "avatar";
 const logoSources: Record<ServiceProvider, LogoSource> = {
   cartesia: "avatar",
   elevenlabs: "avatar",
+  morse_code_api: "avatar",
   rime: "avatar",
   google: "official",
   openai: "avatar",

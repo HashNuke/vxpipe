@@ -8,6 +8,13 @@ import {
 
 const installedProviders = (capabilities: Parameters<typeof installedSetupProviders>[0]) => installedSetupProviders(capabilities, modelCatalogFixture);
 
+test("Morse API offers the implemented TTS model without advertising STT or STS", () => {
+  const [provider] = installedProviders({morse_code_api: ["credential", "credential_validation", "tts"]});
+  expect(provider).toMatchObject({id: "morse_code_api", capabilities: ["tts"], defaultModels: {tts: "morse_v1"}});
+  expect(provider?.recommendedModels.tts?.name).toBe("MorseCodeApiTTS");
+  expect(modelRecommendation(provider!, "tts")).toBe("morse_v1 · morse");
+});
+
 const capabilities = {
   cartesia: ["credential", "stt", "tts"],
   elevenlabs: ["credential", "stt", "tts"],

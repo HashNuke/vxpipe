@@ -255,6 +255,24 @@
           "parameter": "speaker"
         }
       }
+    ],
+    "morse_code_api": [
+      {
+        "id": "morse_v1",
+        "name": "MorseCodeApiTTS",
+        "default": true,
+        "voices": {
+          "type": "list",
+          "parameter": "voice",
+          "values": [
+            {
+              "id": "morse",
+              "name": "Morse 700 Hz",
+              "default": true
+            }
+          ]
+        }
+      }
     ]
   }
 }

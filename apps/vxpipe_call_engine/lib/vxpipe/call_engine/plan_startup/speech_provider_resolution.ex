@@ -82,6 +82,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution do
   defp configure_provider(Vxpipe.Providers.ElevenLabs.TTSSession, options, :text_to_speech),
     do: Vxpipe.Providers.ElevenLabs.TTS.new(options)
 
+  defp configure_provider(Vxpipe.Providers.MorseCodeApi.TTSSession, options, :text_to_speech),
+    do: Vxpipe.Providers.MorseCodeApi.TTS.new(options)
+
   defp configure_provider(provider, options, :text_to_speech) do
     case provider.configure(options) do
       {:ok, _descriptor} -> {:ok, options}

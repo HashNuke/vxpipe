@@ -569,6 +569,7 @@ test("onboarding offers only installed AI and telephony services in their groups
     "Rime",
     "Cartesia",
     "ElevenLabs",
+    "MorseCodeApi",
     "Google AI Studio",
     "OpenAI",
     "Zenmux",

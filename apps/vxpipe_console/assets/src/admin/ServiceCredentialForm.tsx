@@ -27,6 +27,7 @@ const providers = setupProviders.map((provider) => ({
 const apiKeyProviders: ReadonlySet<ServiceProvider> = new Set([
   "cartesia",
   "elevenlabs",
+  "morse_code_api",
   "deepgram",
   "google",
   "openai",
@@ -79,6 +80,8 @@ export function ServiceCredentialForm({
   const supportedProvider =
     apiKeyProviders.has(provider) || provider === "telnyx" || provider === "twilio";
   const supportsCredentialTest = supportedProvider && !credentialTestUnavailableProviders.has(provider);
+  const morse = provider === "morse_code_api";
+  const connectionError = "Morse API could not be reached. Check the configured endpoint and try again.";
   const includePublicKey = provider === "telnyx" && showTelnyxPublicKey;
   const [accountSid, setAccountSid] = useState("");
   const [authToken, setAuthToken] = useState("");
@@ -130,11 +133,12 @@ export function ServiceCredentialForm({
 
     setTestResult({ status: "testing" });
     try {
-      setTestResult(await onTest(nextDraft));
+      const result = await onTest(nextDraft);
+      setTestResult(morse && result.status === "error" ? { ...result, message: connectionError } : result);
     } catch {
       setTestResult({
         status: "error",
-        message: "Credentials could not be tested. Check the connection and try again.",
+        message: morse ? connectionError : "Credentials could not be tested. Check the connection and try again.",
       });
     }
   }
@@ -245,6 +249,12 @@ export function ServiceCredentialForm({
           placeholder={savedPlaceholder("apiKey")}
         />
       )}
+      {morse ? (
+        <p className="text-sm text-[var(--admin-muted)]">
+          Choose any nonempty compatibility key. MorseCodeApiTTS produces Morse tones;
+          the connection test checks the configured server.
+        </p>
+      ) : null}
       {validationMessage ? (
         <p className="text-sm text-[var(--admin-red)]" role="alert">
           {validationMessage}
@@ -257,7 +267,7 @@ export function ServiceCredentialForm({
       ) : null}
       {testResult?.status === "valid" ? (
         <p className="text-sm text-[var(--admin-green)]" role="status">
-          Credentials tested successfully.
+          {morse ? "Morse API is reachable." : "Credentials tested successfully."}
         </p>
       ) : null}
       {testResult?.status === "error" ? (
@@ -289,7 +299,7 @@ export function ServiceCredentialForm({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                aria-label={testing ? "Testing credentials" : "Test credentials"}
+                aria-label={testing ? (morse ? "Testing connection" : "Testing credentials") : (morse ? "Test connection" : "Test credentials")}
                 disabled={pending || (!onTest && !testUnavailable)}
                 aria-disabled={testUnavailable || undefined}
                 className={testUnavailable ? "cursor-not-allowed text-[var(--admin-muted)]" : undefined}
@@ -302,7 +312,7 @@ export function ServiceCredentialForm({
                   "Testing…"
                 ) : (
                   <>
-                    <span className="setup-test-full">Test credentials</span>
+                    <span className="setup-test-full">{morse ? "Test connection" : "Test credentials"}</span>
                     <span aria-hidden="true" className="setup-test-short">Test</span>
                   </>
                 )}

@@ -13,6 +13,11 @@ function maximumApiKeyBytes(provider: ServiceProvider) {
 
 export function validateCredentialDraft(draft: CredentialDraft): string | null {
   if ("apiKey" in draft.values) {
+    if (draft.provider === "morse_code_api") {
+      return byteLength(draft.values.apiKey) <= 8_192 && draft.values.apiKey.trim() !== "" && /^[\x20-\x7E]+$/.test(draft.values.apiKey)
+        ? null
+        : "Enter a nonempty compatibility key using printable ASCII characters.";
+    }
     if (
       byteLength(draft.values.apiKey) > maximumApiKeyBytes(draft.provider) ||
       !apiKeyPattern.test(draft.values.apiKey)

@@ -356,3 +356,68 @@
 - The broader umbrella run remains active while this test-only checkpoint is
   recorded. Its already-running player test used the old source; final results
   and follow-up verification belong with the F implementation checkpoint.
+
+## Checkpoint F — TTS provider and service form
+
+- Initial Morse configuration/request tests failed on absent modules; selection
+  failed until the manifest, catalog and startup dispatch existed. Runtime
+  routing initially returned invalid configuration. Telemetry initially emitted
+  `:other`. Each focused failure is now covered by its corresponding green test.
+- Extracted the ElevenLabs raw-PCM response reader into `ElevenLabs.PCMRequest`.
+  Both providers use it for content-type/sample validation, consumer credit and
+  transport failures. The original ElevenLabs configuration/request regressions
+  and Morse HTTP fixture tests pass together (20 tests at that checkpoint).
+- Added Morse-only credentials, the `/v1/models` reachability descriptor, model
+  and voice catalog, TTS configuration/session, runtime/startup dispatch and
+  provider telemetry. The origin remains private and participates in runtime
+  opening-audio cache identity. No STT/STS capability is advertised yet. A missing
+  origin makes the probe unavailable rather than permanently unsupported.
+- Extended the shared request-session lifecycle coverage to Morse: credit,
+  cancellation before replacement, stale output, worker failure and provider
+  death all pass. Session readiness means initialized; the HTTP request remains
+  responsible for detecting remote unavailability. No speech state machine was
+  changed.
+- The native Go smoke first exposed Mint rejecting a non-ASCII xi-api-key value.
+  Tightened the Vxpipe credential validator using a focused failing test: printable
+  ASCII including spaces is accepted, all-space/control/Unicode values fail before
+  transport. This does not introduce ownership validation or a key registry.
+- Against Go `b922e71` on loopback:18796, `SOS TEST` produces 66,240 / 132,480 /
+  198,720 / 397,440 bytes at 8/16/24/48 kHz and the independent Elixir decoder
+  recovers the text at each rate. The durable live-tagged test initially doubled
+  the expected duration; corrected its independent ITU count to 69 units at
+  60 ms. It passes. The owned Go process received SIGTERM and exited 0.
+- Applied Impeccable's existing-surface clarification guidance after loading
+  product/design context and inspecting the incumbent form. Added Morse service
+  parsing/catalog/fixtures, ASCII compatibility-key validation, connection-test
+  language and explicit reachable/unavailable states. Two new form tests failed
+  before those changes. Initial focused UI tests and TypeScript checking pass.
+- Headless Chrome 154 renders the real service components at desktop and 390px
+  mobile widths. Inspected connection success and unavailable states: readable
+  copy, masked input, visible actions and no horizontal overflow. Storybook
+  results are simulated UI evidence, distinct from the native Go smoke. The
+  browser requires `--no-sandbox` in this environment; a normal launch failed
+  before it could start. Added explicit Morse reachable/unavailable stories.
+- The first full frontend run passed 757/758 tests; its one failure was an exact
+  onboarding provider list missing the new Morse entry. Updated that assertion;
+  a subsequent run exposed an existing unload-guard test race, fixed separately
+  in `f7f54354`. All 758 frontend tests now pass, as does TypeScript checking.
+  The new Storybook callback initially inferred only the valid result variant;
+  an explicit `CredentialTestResult` return type fixes its error-story type check.
+- Added a persistence/PlanStartup acceptance test. A saved, published call resolves
+  the platform compatibility key, changes only private runtime endpoint/cache
+  identity when its origin changes, applies a tenant override, and returns to the
+  same platform identity after deleting the override. The published plan contains
+  neither origin nor key. Missing endpoint configuration fails startup. This
+  passes without any network requests; it does not prove an actual room cutover.
+- Root format/compile/Credo/unused-dependency gates pass. The first umbrella run
+  exposed the wait-sound race fixed in `446af0dc`, then terminated during Gateway
+  without final suite summaries despite a zero shell status. Confirmed that its
+  process and handle were terminal before starting a fresh run with explicit
+  exit-status reporting. Do not count the incomplete run as a full pass. The
+  fresh run completed: all CallEngine and Gateway tests passed. Console had one
+  failure in its exact provider-capability inventory, which omitted the newly
+  implemented provider. Added its credential/validation/TTS capabilities to that
+  expectation. All 14 focused Console service/activation/Scribe-room tests pass
+  (one hosted test excluded). A new complete umbrella run is in progress. Full F
+  room/editor acceptance is recorded in the following checkpoint rather than
+  inferred from this adapter/service implementation.

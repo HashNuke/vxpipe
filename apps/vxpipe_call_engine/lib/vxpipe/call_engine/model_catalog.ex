@@ -18,6 +18,7 @@ defmodule Vxpipe.CallEngine.ModelCatalog do
     "fireworks" => "Fireworks",
     "google" => "Google",
     "morse" => "Morse",
+    "morse_code_api" => "MorseCodeApi",
     "openai" => "OpenAI",
     "openrouter" => "OpenRouter",
     "rime" => "Rime",

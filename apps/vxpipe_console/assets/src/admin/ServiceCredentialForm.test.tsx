@@ -11,6 +11,26 @@ import { ServiceCredentialForm } from "./ServiceCredentialForm";
 
 afterEach(cleanup);
 
+test("Morse tests endpoint reachability and accepts a caller-chosen compatibility key", async () => {
+  const submit = vi.fn();
+  const probe = vi.fn().mockResolvedValue({ status: "valid" });
+  render(<ServiceCredentialForm initialProvider="morse_code_api" onCancel={vi.fn()} onSubmit={submit} onTest={probe} status="idle" />);
+  expect(screen.getByText(/Choose any nonempty compatibility key/)).toBeVisible();
+  fireEvent.change(screen.getByLabelText("API key"), { target: { value: "my compatibility key" } });
+  fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Morse API is reachable."));
+  expect(screen.queryByText("Credentials tested successfully.")).not.toBeInTheDocument();
+  fireEvent.submit(screen.getByRole("form", { name: "Credential setup" }));
+  expect(submit).toHaveBeenCalledWith({ provider: "morse_code_api", values: { apiKey: "my compatibility key" } });
+});
+
+test("Morse reports an unavailable endpoint without claiming key ownership failure", async () => {
+  render(<ServiceCredentialForm initialProvider="morse_code_api" onCancel={vi.fn()} onSubmit={vi.fn()} onTest={vi.fn().mockRejectedValue(new Error("offline"))} status="idle" />);
+  fireEvent.change(screen.getByLabelText("API key"), { target: { value: "synthetic" } });
+  fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Morse API could not be reached. Check the configured endpoint and try again."));
+});
+
 test("credential setup offers the installed provider catalog", () => {
   render(<ServiceCredentialForm onCancel={vi.fn()} onSubmit={vi.fn()} status="idle" />);
   const provider = screen.getByLabelText("Provider");

@@ -15,6 +15,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   alias Vxpipe.Providers.Cartesia.STTSession, as: CartesiaSTTSession
   alias Vxpipe.Providers.ElevenLabs.TTS, as: ElevenLabsTTS
   alias Vxpipe.Providers.ElevenLabs.TTSSession, as: ElevenLabsTTSSession
+  alias Vxpipe.Providers.MorseCodeApi.TTS, as: MorseCodeApiTTS
+  alias Vxpipe.Providers.MorseCodeApi.TTSSession, as: MorseCodeApiTTSSession
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
   alias Vxpipe.Providers.Rime.{TTS, TTSSession}
   alias Vxpipe.Providers.Registry
@@ -100,6 +102,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "elevenlabs"}),
     do: Registry.resolve_capability("elevenlabs", :tts)
 
+  def adapter(%CapabilitySelection{kind: :text_to_speech, provider: "morse_code_api"}),
+    do: Registry.resolve_capability("morse_code_api", :tts)
+
   def adapter(%CapabilitySelection{kind: :speech_to_text, provider: "morse"}),
     do: Registry.resolve_capability("morse", :stt)
 
@@ -179,6 +184,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     {:ok, elevenlabs} = Registry.fetch_capability("elevenlabs", :tts)
     {:ok, morse} = Registry.fetch_capability("morse", :tts)
 
+    {:ok, morse_api} = Registry.fetch_capability("morse_code_api", :tts)
+
     [
       deepgram,
       rime,
@@ -186,6 +193,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
       cartesia,
       elevenlabs,
       morse,
+      morse_api,
       Vxpipe.CallEngine.Provider.MorseCodeTTS.Session
     ]
   end
@@ -286,6 +294,14 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
         enabled: false,
         maximum_requests: nil,
         request_module: Vxpipe.Providers.ElevenLabs.TTSRequest
+      )
+
+  defp validate_provider_settings(MorseCodeApiTTSSession, :text_to_speech, settings),
+    do:
+      Keyword.validate(settings,
+        enabled: false,
+        maximum_requests: nil,
+        request_module: Vxpipe.Providers.MorseCodeApi.TTSRequest
       )
 
   defp validate_provider_settings(
@@ -432,6 +448,18 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   end
 
   def speech_options(%CapabilitySelection{
+        provider: "morse_code_api",
+        kind: :text_to_speech,
+        model: model,
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, [:voice, :sample_rate]),
+         {:ok, public} <- MorseCodeApiTTS.public_options(Keyword.put(options, :model, model)) do
+      {:ok, [model: public.model, voice: public.voice, sample_rate: public.sample_rate]}
+    end
+  end
+
+  def speech_options(%CapabilitySelection{
         kind: :speech_to_speech,
         provider: "google",
         model: "gemini-3.8-live",
@@ -561,6 +589,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp validate_speech(%{provider: "elevenlabs", kind: :text_to_speech}, options),
     do: validate_provider(ElevenLabsTTSSession, options)
+
+  defp validate_speech(%{provider: "morse_code_api", kind: :text_to_speech}, options),
+    do: validate_provider(MorseCodeApiTTSSession, options)
 
   defp validate_speech(%{provider: "openai", kind: :speech_to_speech}, options) do
     case GPTLive.public_options(options) do

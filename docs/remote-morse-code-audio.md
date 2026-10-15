@@ -19,6 +19,12 @@ boundaries. The standalone service does not import Vxpipe or call its local Mors
 implementation. Independent signal fixtures and cross-language interoperability
 tests establish shared audio behavior.
 
+Vxpipe's HTTP client accepts printable ASCII header values. Its Morse credential
+validator therefore accepts 1–8,192 bytes of printable ASCII, including spaces,
+with at least one non-space character. It rejects control characters and Unicode
+before making a request. This is a client transport constraint, not an ownership
+check or a required key prefix; the Go server still has no key registry.
+
 Go is a reasonable implementation choice for incremental DSP and concurrent
 network streams, but capacity is an acceptance measurement, not a language
 guarantee. Keep packages cohesive: Morse codec, audio formats, speech protocol,
@@ -104,6 +110,36 @@ readiness, permission retirement and output generation identity.
 - Durable token/job/transcript infrastructure: contradicts no persistence.
 
 ## Deployment implications
+
+The Vxpipe TTS adapter uses the `morse_v1` model and `morse` voice, with raw
+mono signed little-endian PCM at 8, 16, 24 or 48 kHz. Its catalog label is
+`MorseCodeApiTTS`; the service is `MorseCodeApi`. STT is not advertised until its
+integration checkpoint passes. HTTP requests reuse the bounded ElevenLabs PCM
+reader through an internal protocol boundary while keeping provider configuration,
+credentials and identities separate. Existing ElevenLabs constructors retain
+their fixed hosted endpoint.
+
+The HTTP session reports **initialized**, not a verified remote connection.
+The explicit service test probes the configured `/v1/models` endpoint; it reports
+reachability, not API-key ownership. Requests use no retries or redirects. An
+origin digest participates in opening-audio cache identity without appearing in
+public call-spec options. Session workers use the existing credit, cancellation
+and replacement lifecycle.
+
+The network test is excluded from the default suite. Start the Go server on a
+selected local port, then run from the Vxpipe root:
+
+```sh
+MORSE_CODE_API_BASE_URL=http://127.0.0.1:8787 \
+  mix test --only live_morse_code_api \
+  apps/vxpipe_call_engine/test/integration/morse_code_api_tts_test.exs
+```
+
+It supplies its own synthetic compatibility key, checks discovery and decodes
+`SOS TEST` using Vxpipe's independent Morse decoder at all four PCM rates. The
+same tag is selectable through `bin/livetests run --only live_morse_code_api`;
+configure the runtime origin explicitly. A local adapter pass does not establish
+configured-room, hosted TLS or full speech API acceptance.
 
 Use Vxpipe's temporary `MORSE_CODE_API_BASE_URL` runtime setting to develop against
 the local Go server first. Development defaults to `http://127.0.0.1:8787`; test

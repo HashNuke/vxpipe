@@ -666,7 +666,10 @@ defmodule Vxpipe.CallEngine.PlanStartup do
           {:ok,
            %TextToSpeechRuntime{
              asset_cache_identity:
-               %{"descriptor" => descriptor.cache_identity}
+               %{
+                 "descriptor" =>
+                   TextToSpeechRuntime.descriptor_cache_identity(selected_provider, descriptor)
+               }
                |> Map.put("selection", CapabilitySelection.identity(selection, plan.tenant_id))
                |> put_credential_cache_identity(Keyword.get(settings, :credential_identity)),
              call_id: plan.call_id,
