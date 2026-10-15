@@ -798,6 +798,15 @@ checks verified canonical install/retry 200 with three samples using synthetic
 credentials and no provider calls. Sample call/transfer and final parity remain
 open. Full root verification is recorded separately when complete.
 
+Combined verification after cleanup prerequisites and sample installation passed
+all five root gates. The full default umbrella suite reported 4,245 tests and zero
+failures (144 excluded), including the formerly failing outgoing retirement case.
+Source stayed frozen during the run. All 768 frontend tests, types/lint/build and
+recorded desktop/mobile checks pass. No live providers or external telephony ran.
+This is a green checkpoint, not final milestone acceptance: managed resource
+integration/reconciliation, hangup transports, sample call/transfer and complete
+parity/documentation remain open.
+
 ## Checkpoint: parity acceptance and documentation
 
 Depends on all required capability checkpoints and supporting workflows.

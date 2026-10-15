@@ -1288,3 +1288,19 @@ already-stored completion when later intent arrives, without requiring a retired
 tracker. Calls retains stored-result validation and publication triggers. The
 lifecycle design records failure tests and opt-in fresh-managed configuration.
 This is reviewed design only; no runtime source changed during the full suite.
+
+### Combined cleanup and onboarding verification
+
+The frozen runtime snapshot passed all five root completion commands: format,
+warnings-as-errors compilation, strict Credo, the complete default umbrella suite
+and unused-dependency validation. The full run reported 4,245 tests with zero
+failures (144 excluded). Application totals were Identity 69, MCP 37, Providers
+35, AgentRuntime 108, CallEngine 2,235, Calls 239, Gateway 766, Artifacts 20,
+Persistence 381 and Console 355. The formerly failing outgoing retirement case
+now passes in the full run. Source stayed frozen throughout verification.
+
+All 768 frontend tests and the recorded types/lint/build/browser checks also pass.
+No live-provider or external telephony lane ran. This establishes a green combined
+checkpoint for the committed prerequisites and onboarding installation; it does
+not complete managed admission, reconciliation, hangup HTTP/MCP, sample call/
+transfer migration or the milestone's final parity/documentation gates.
