@@ -128,7 +128,7 @@ directly, without an HTTP loopback request or controller invocation.
 - [x] Prove `2025-11-25` negotiation, initialized notification, ping, JSON results,
   request IDs and unsupported versions/methods. GET returns 405 without an
   unsolicited SSE stream; do not implement unrelated protocol extensions.
-- [ ] Resolve the dependency's session behavior before product handlers: bind any
+- [x] Resolve the dependency's session behavior before product handlers: bind any
   issued sessions to authenticated key identity, bound their count/lifetime, and
   verify DELETE/expiry/restart and timeout/disconnect cleanup truthfully.
 - [x] Add Calls-owned tenant-independent key authentication through a Persistence
@@ -171,8 +171,10 @@ host/origin/transport restrictions and bounded concurrent requests. Review found
 oversized retained request IDs and incorrect unknown-notification responses; both
 failed focused tests before fixes. IDs are limited to 256-byte strings or safe
 integers and rejected IDs are not echoed; notifications have no JSON-RPC body.
-Remaining domain tools, complete scope/error acceptance and session expiry/restart evidence
-remain open. Dependency diagnostics are now pinned to reviewed upstream commit
+Remaining domain tools and complete scope/error acceptance remain open. The
+isolated reference-client runner now verifies DELETE, accelerated expiry, full
+BEAM restart on the same port and fresh recovery. Request-owner death/timeout
+cleanup has focused tests; immediate TCP-disconnect cancellation is not claimed. Dependency diagnostics are now pinned to reviewed upstream commit
 `5fa760207bb09fc3b19b3049bc481b5e55106095`, which removes raw timeout/error details
 without changing callback or supervision semantics. Application callback fault
 handling remains Vxpipe's responsibility before sensitive tools are enabled.
@@ -356,9 +358,13 @@ inventoried session/navigation/authentication helpers remain UI-specific.
 
 Depends on all required capability checkpoints and supporting workflows.
 
-- [ ] Run a local reference client against the actual Console mount, standalone
+- [x] Run a local reference client against the actual Console mount, standalone
   Gateway and embedding prefix. Pin server-conformance tools and report applicable
   passes/omissions rather than using outbound acceptance as inbound proof.
+  Evidence: `bin/test-platform-mcp` passed all seven groups using SDK 1.30.0 and
+  conformance 0.1.16. The three selected official scenarios use a labeled loopback
+  synthetic-header adapter. See [acceptance scope](../../docs/development/platform-mcp-acceptance.md);
+  the SDK currently invokes tenant tools, so full capability parity stays open.
 - [ ] Verify all 13 required tools and four helpers against the authority matrix,
   including direct calls to undiscovered tools, revoked keys, unavailable storage,
   foreign resources, variable initialization, pagination, hangup and user activation.

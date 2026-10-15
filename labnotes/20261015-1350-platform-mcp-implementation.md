@@ -172,3 +172,20 @@
   passed 15. Independent policy review found no remaining blockers.
 - The broader spec HTTP/MCP checkpoint and stable full-suite verification are
   still in progress; this commit records the independently usable policy fix.
+
+## Isolated MCP reference acceptance
+
+- Added bin/test-platform-mcp with a separate loopback-only BEAM fixture. The
+  official SDK exercises the actual Console endpoint, standalone Gateway and
+  embedded prefix using synthetic key/storage adapters and production handlers.
+- All seven reported groups passed: three SDK mounts, three selected official
+  scenarios, and full BEAM restart/accelerated expiry/fresh recovery. The pinned
+  conformance CLI lacks custom headers, so its scenarios use an explicitly labeled
+  synthetic-header proxy; no OAuth or blanket protocol conformance is claimed.
+- Review found a generic rejected-promise assertion could pass on the wrong error.
+  It now requires the SDK's HTTP 400 and separately verifies JSON-RPC -32602 on
+  the wire. The SDK reports HTTP status before decoding that error body. Global
+  client cleanup now runs even after an assertion failure; re-review passed.
+- Syntax/format checks and the complete runner passed after those changes. The
+  runner starts no database, provider or umbrella application tree. It currently
+  invokes read-only tenant tools; wider capability acceptance remains separate.

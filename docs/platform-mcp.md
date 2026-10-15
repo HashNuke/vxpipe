@@ -441,8 +441,10 @@ protocol implementation.
 Use the repository's existing MCP `2025-11-25` profile. The product boundary
 rejects other revisions even though the dependency supports more versions.
 Local Plug tests demonstrate initialization, notifications, ping, key-bound
-sessions, deletion and request-worker cleanup. Official reference-client and
-conformance acceptance remain separate milestone gates.
+sessions, deletion and request-worker cleanup. The isolated
+[server acceptance runner](development/platform-mcp-acceptance.md) also verifies
+the official SDK against all three mounts and selected official conformance
+scenarios; this is not full protocol or OAuth certification.
 
 Use Streamable HTTP with JSON tool responses, initialization, initialized
 notification, ping, tool discovery and invocation. No unsolicited event stream:
@@ -463,8 +465,10 @@ JSON-RPC response body.
 The selected ExMCP session manager is node-local and shared: its current defaults
 are 10,000 sessions, 10,000 distinct request IDs per session, a one-hour idle TTL
 and cleanup every 60 seconds. These are dependency defaults, not per-key quotas;
-session expiry/restart acceptance remains outstanding. Request owner death releases
-Gateway admission and terminates the request handler. Clients must still supply
+the isolated runner verifies accelerated idle expiry and full BEAM restart on the
+same port, followed by fresh-session recovery. Request owner death releases
+Gateway admission and terminates the request handler. These checks do not claim
+immediate cancellation on every TCP disconnect. Clients must still supply
 their API key on subsequent requests, and use fresh request IDs within a session.
 
 Advertise tools only: no resources, prompts, subscriptions, sampling, elicitation,
