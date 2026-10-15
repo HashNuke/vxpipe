@@ -1,7 +1,9 @@
 # Durable whole-call hangup
 
 Status: implementation design for the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md).
-The lifecycle changes below are not implemented yet.
+Durable cancellation intent and exact-supervisor monitoring are implemented.
+Runtime admission binding, reconciliation and the HTTP/MCP hangup operation remain
+unfinished; the complete lifecycle below is still the implementation contract.
 
 ## Decision and ownership
 
@@ -118,6 +120,19 @@ both projections; do not invent a start time or weaken normal outgoing ordering.
 - Persisting raw process IDs as restart evidence is invalid across runtime death.
 
 ## Verification and implementation order
+
+`Calls.request_call_hangup/4` now persists intent with actual actor/tenant checks.
+Its repository locks the selected call: an unclaimed prepared call can end,
+while admitting/running/failed calls retain their lifecycle and first intent.
+Token issue/redemption reject that intent under the same lock. This operation
+does not stop a runtime. Migration `20261015000400` adds the nullable timestamp
+and `api_hangup` terminal reason and must precede application rollout.
+
+Focused verification passed 22 Calls tests, 57 Persistence compatibility tests
+and two separate-connection SQL race tests. Tests cover cancellation-first and
+redemption-first ordering, unusable outstanding tokens, failed outgoing uncertainty,
+transaction rollback and invalid/noncanonical UUIDs before mutation. The latter
+return not-found; persistence uses canonical public IDs.
 
 Read-only review confirmed the current web handler projects `mark_started` after
 starting the runtime, incoming activation precedes its started projection, and

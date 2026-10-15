@@ -30,6 +30,7 @@ defmodule Vxpipe.Persistence.PreparedCallRecord do
       created_at: call.created_at,
       started_at: call.started_at,
       ended_at: call.ended_at,
+      hangup_requested_at: call.hangup_requested_at,
       incarnation_id: call.incarnation_id,
       terminal_reason: call.terminal_reason
     })
@@ -65,6 +66,7 @@ defmodule Vxpipe.Persistence.PreparedCallRecord do
          created_at: call.created_at,
          started_at: call.started_at,
          ended_at: call.ended_at,
+         hangup_requested_at: call.hangup_requested_at,
          incarnation_id: call.incarnation_id,
          terminal_reason: call.terminal_reason
        }}

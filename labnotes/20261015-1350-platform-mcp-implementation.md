@@ -356,3 +356,24 @@
   owners still require their own cleanup acknowledgement. The full CallEngine
   suite passed 2,225 tests with zero failures (75 integration tests excluded);
   the next stable root verification remains outstanding.
+
+## Durable call cancellation intent
+
+- Added the actual-actor Calls request and narrow repository callback. The call
+  row holds the first request timestamp; only a prepared call with no admission
+  history, start or incarnation acquires immediate terminal evidence.
+- Admitting/running/failed calls retain their state, failure and outgoing facts.
+  Token issuance/redemption reject intent using the existing call lock, without
+  reversing token/call lock ordering or deleting credentials.
+- Red tests covered the missing domain/store API. Invalid UUID review reproduced
+  an infrastructure-style error; noncanonical UUID review reproduced mutation
+  followed by response mismatch. Both now return not-found before mutation.
+- Green: 22 Calls tests, 57 Persistence compatibility tests and two tagged local
+  SQL integration tests on separate connections. Lock barriers prove both
+  cancellation-first and redemption-first ordering; rollback and failed outgoing
+  unknown state are also covered. No external provider or carrier was contacted.
+- Migration 20261015000400 is applied to the test database only. Runtime binding,
+  reconciled cleanup and transport hangup are separate unfinished work.
+- Final independent review found no blockers in authority, lock ordering, terminal
+  evidence, rollback or the SQL race tests. Root formatting, warnings-as-errors
+  compilation and strict Credo pass; the stable full umbrella suite is running.

@@ -14,6 +14,10 @@ defmodule Vxpipe.Persistence.CallStore do
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredToken
 
   @impl true
+  def request_call_hangup(repo, tenant_key, call_id, requested_at),
+    do: Vxpipe.Persistence.CallHangupStore.request(repo, tenant_key, call_id, requested_at)
+
+  @impl true
   def fetch_call_by_key(repo, tenant_key, key),
     do: Vxpipe.Persistence.CallClaimStore.fetch_by_key(repo, tenant_key, key)
 
@@ -363,6 +367,9 @@ defmodule Vxpipe.Persistence.CallStore do
       do: :ok,
       else: {:error, :token_expired}
   end
+
+  defp admission_available(_repo, %Call{hangup_requested_at: %DateTime{}}, _participant_ref),
+    do: {:error, :call_unavailable}
 
   defp admission_available(repo, call, participant_ref) do
     already_admitted? =

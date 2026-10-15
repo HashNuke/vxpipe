@@ -5,6 +5,10 @@ defmodule Vxpipe.Calls.CallRepository do
 
   @type context :: term()
 
+  @doc "Under the call-row lock, persist first cancellation intent; end only an unclaimed prepared call. Never lock or revoke token rows from this operation."
+  @callback request_call_hangup(context(), String.t(), String.t(), DateTime.t()) ::
+              {:ok, PreparedCall.t()} | {:error, term()}
+
   @callback fetch_call_by_key(context(), String.t(), String.t()) ::
               {:ok, PreparedCall.t()} | {:error, :not_found}
 

@@ -346,6 +346,16 @@ no blockers. The full CallEngine suite then passed 2,225 tests with zero failure
 This does not yet implement the hangup workflow or prove Gateway
 carrier cleanup, and abnormal supervisor death is not successful cleanup evidence.
 
+Durable intent prerequisite: `Calls.request_call_hangup/4` now authorizes the
+actual actor/tenant and locks the call before recording cancellation. Unclaimed
+prepared calls end atomically; admitting/running/failed calls retain lifecycle
+evidence and first intent. Token issue/redemption reject intent under that lock.
+Twenty-two Calls tests, 57 Persistence compatibility tests and two real SQL
+connection race tests pass, including both lock orderings and unknown outgoing
+preservation. Migration 20261015000400 was applied to the test database. Runtime
+binding, shutdown/recovery and HTTP/MCP hangup remain unimplemented; this evidence
+does not check off the complete hangup tasks above.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

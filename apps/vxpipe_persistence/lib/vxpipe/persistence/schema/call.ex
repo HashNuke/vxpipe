@@ -50,10 +50,11 @@ defmodule Vxpipe.Persistence.Schema.Call do
     field(:created_at, :utc_datetime_usec)
     field(:started_at, :utc_datetime_usec)
     field(:ended_at, :utc_datetime_usec)
+    field(:hangup_requested_at, :utc_datetime_usec)
     field(:incarnation_id, :string)
 
     field(:terminal_reason, Ecto.Enum,
-      values: [:room_start_failed, :session_start_failed, :startup_unknown]
+      values: [:room_start_failed, :session_start_failed, :startup_unknown, :api_hangup]
     )
 
     belongs_to(:tenant, Tenant)
@@ -93,6 +94,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
       :created_at,
       :started_at,
       :ended_at,
+      :hangup_requested_at,
       :incarnation_id,
       :terminal_reason,
       :tenant_id,
@@ -153,6 +155,23 @@ defmodule Vxpipe.Persistence.Schema.Call do
     call
     |> change(state: :ended, terminal_reason: nil, ended_at: ended_at)
     |> check_constraint(:state, name: :calls_state)
+  end
+
+  def hangup_changeset(call, requested_at, prepared_unclaimed?) do
+    attrs =
+      if prepared_unclaimed?,
+        do: [
+          hangup_requested_at: requested_at,
+          state: :ended,
+          ended_at: requested_at,
+          terminal_reason: :api_hangup
+        ],
+        else: [hangup_requested_at: requested_at]
+
+    call
+    |> change(attrs)
+    |> check_constraint(:state, name: :calls_state)
+    |> check_constraint(:terminal_reason, name: :calls_terminal_reason)
   end
 
   def latest_variables_snapshot_changeset(call, snapshot_id) do

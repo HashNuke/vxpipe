@@ -1,6 +1,10 @@
 defmodule Vxpipe.Calls do
   @moduledoc "Database-neutral application workflows for durable call control-plane data."
 
+  @doc "Persists cancellation intent; runtime cleanup is a separate workflow."
+  def request_call_hangup(actor, tenant_key, call_id, options \\ []),
+    do: Vxpipe.Calls.CallHangups.request(actor, tenant_key, call_id, options)
+
   def authorize_call_management(actor),
     do: Vxpipe.Calls.CallManagementAuthorization.authorize(actor)
 
