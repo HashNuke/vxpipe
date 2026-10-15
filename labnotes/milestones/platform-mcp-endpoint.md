@@ -571,6 +571,13 @@ failure (37 tests/three failures); all 42 focused tests then passed. Independent
 review approved. This fixes the known race; full combined verification remains
 outstanding.
 
+Incoming worker drainage now retains owners through pending answer/end operations,
+installs observer monitors before effects, and keeps abnormal observer loss unknown.
+Terminal usage survives late answer results; room shutdown and timers share one
+retirement gate. Three expected red regressions preceded the changes. Final
+verification passes 59 activation/ingress/local carrier-harness tests, with
+independent review. Final usage persistence and tracker integration remain open.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

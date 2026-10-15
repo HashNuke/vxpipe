@@ -111,15 +111,21 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
 
   @impl true
   def submit_incoming(agent, prepared) do
-    if observer = Agent.get(agent, & &1.answer_observer) do
-      send(observer, {:incoming_answer_pending, self()})
+    decision =
+      if observer = Agent.get(agent, & &1.answer_observer) do
+        send(observer, {:incoming_answer_pending, self()})
 
-      receive do
-        :release_incoming_answer -> :ok
+        receive do
+          :release_incoming_answer -> :ok
+          :reject_incoming_answer -> {:error, :command_rejected}
+        end
+      else
+        :ok
       end
-    end
 
-    CallAdmission.submit_incoming(Agent.get(agent, & &1.runtime_options), prepared)
+    with :ok <- decision do
+      CallAdmission.submit_incoming(Agent.get(agent, & &1.runtime_options), prepared)
+    end
   end
 
   @impl true

@@ -96,6 +96,88 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert_receive {:incoming_result, :ok}
   end
 
+  for command <- [:answer, :end] do
+    test "carrier end and room shutdown wait for blocked #{command} command drainage", context do
+      room = start_supervised!({Agent, fn -> :room end}, id: :draining_room)
+
+      options =
+        [observer: self(), room_owner: room] ++
+          case unquote(command) do
+            :answer -> [activation_blocked?: true]
+            :end -> [bind_decision: :cancel, end_blocked?: true]
+          end
+
+      backend = start_supervised!({TestTelephonyCallBackend, options}, id: :draining_backend)
+      ingress = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+
+      start_supervised!(
+        {Task,
+         fn ->
+           send(
+             context.test_observer,
+             {:incoming_result, handle_event(ingress, context.service, incoming_event())}
+           )
+         end}
+      )
+
+      pending =
+        if unquote(command) == :answer, do: :incoming_answer_pending, else: :incoming_end_pending
+
+      release =
+        if unquote(command) == :answer, do: :release_incoming_answer, else: :release_incoming_end
+
+      assert_receive {^pending, operation}
+      on_exit(fn -> send(operation, release) end)
+      operation_monitor = Process.monitor(operation)
+      assert {:ok, leg} = LegSupervisor.lookup(context.service.identity, "call-leg-1")
+      monitor = Process.monitor(leg)
+      ended = %{answered_event() | kind: :ended, end_reason: :hangup}
+      assert :ok = Vxpipe.Gateway.Telephony.Leg.dispatch(leg, ended, 1_000)
+      stop_supervised!(:draining_room)
+      refute_receive {:DOWN, ^monitor, :process, ^leg, _}, 100
+      assert :ok = Vxpipe.Gateway.Telephony.Leg.await(leg, 1_000)
+      send(operation, release)
+      assert_receive {:DOWN, ^operation_monitor, :process, ^operation, :normal}
+      assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
+    end
+  end
+
+  test "lost answer observer cannot prove its blocked operation drained", context do
+    backend =
+      start_supervised!({TestTelephonyCallBackend, observer: self(), activation_blocked?: true},
+        id: :lost_observer
+      )
+
+    ingress = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+
+    start_supervised!(
+      {Task,
+       fn ->
+         send(
+           context.test_observer,
+           {:incoming_result, handle_event(ingress, context.service, incoming_event())}
+         )
+       end}
+    )
+
+    assert_receive {:incoming_answer_pending, operation}
+    on_exit(fn -> send(operation, :release_incoming_answer) end)
+    # Target the command's observer through the actual monitor relationship.
+    # Assertions below use the public Leg API, not private process state.
+    {:monitored_by, [observer]} = Process.info(operation, :monitored_by)
+    observer_monitor = Process.monitor(observer)
+    Process.exit(observer, :kill)
+    assert_receive {:DOWN, ^observer_monitor, :process, ^observer, :killed}
+    assert_receive {:incoming_result, :ok}
+    assert {:ok, leg} = LegSupervisor.lookup(context.service.identity, "call-leg-1")
+    monitor = Process.monitor(leg)
+    ended = %{answered_event() | kind: :ended, end_reason: :hangup}
+    assert :ok = Vxpipe.Gateway.Telephony.Leg.dispatch(leg, ended, 1_000)
+    send(leg, :retire)
+    refute_receive {:DOWN, ^monitor, :process, ^leg, _}, 100
+    assert :ok = Vxpipe.Gateway.Telephony.Leg.await(leg, 1_000)
+  end
+
   test "a failed start projection cancels admission without releasing startup", context do
     backend =
       start_supervised!({TestTelephonyCallBackend, observer: self(), started_failure?: true},
@@ -391,92 +473,108 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert is_pid(leg)
   end
 
-  test "retains incoming carrier usage through answer and end callbacks", context do
-    claim = TestTelephonyCallBackend.claim(context.backend)
+  for answer_result_timing <- [:before_end, :after_end] do
+    test "retains incoming carrier usage with answer result #{answer_result_timing}", context do
+      claim = TestTelephonyCallBackend.claim(context.backend)
 
-    binding = %MediaBinding{
-      provider: claim.provider,
-      service_id: claim.service,
-      ingress_key: context.service.identity.ingress_key,
-      tenant_id: claim.call.tenant_key,
-      call_id: claim.call.id,
-      room_id: claim.call.room_id,
-      incarnation_id: "rinc_phone-1",
-      participant_id: claim.participant_id,
-      provider_connection_id: claim.provider_connection_id,
-      provider_call_control_id: claim.provider_call_control_id,
-      provider_call_leg_id: claim.provider_call_leg_id,
-      provider_call_session_id: claim.provider_call_session_id,
-      client_state_leg_id: "tleg-incoming-usage",
-      leg: self()
-    }
+      binding = %MediaBinding{
+        provider: claim.provider,
+        service_id: claim.service,
+        ingress_key: context.service.identity.ingress_key,
+        tenant_id: claim.call.tenant_key,
+        call_id: claim.call.id,
+        room_id: claim.call.room_id,
+        incarnation_id: "rinc_phone-1",
+        participant_id: claim.participant_id,
+        provider_connection_id: claim.provider_connection_id,
+        provider_call_control_id: claim.provider_call_control_id,
+        provider_call_leg_id: claim.provider_call_leg_id,
+        provider_call_session_id: claim.provider_call_session_id,
+        client_state_leg_id: "tleg-incoming-usage",
+        leg: self()
+      }
 
-    usage =
-      LegUsage.start_incoming(binding,
-        usage_clock: fn -> ~U[2026-09-12 06:00:00.000Z] end,
-        usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}
-      )
+      usage =
+        LegUsage.start_incoming(binding,
+          usage_clock: fn -> ~U[2026-09-12 06:00:00.000Z] end,
+          usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}
+        )
 
-    activation = %IncomingLegActivationResult{
-      binding: binding,
-      media_url: "wss://voice.example.test/media",
-      submission: %Submission{
-        status: :accepted,
-        provider_call_control_id: claim.provider_call_control_id
-      },
-      usage: usage
-    }
+      activation = %IncomingLegActivationResult{
+        binding: binding,
+        media_url: "wss://voice.example.test/media",
+        submission: %Submission{
+          status: :accepted,
+          provider_call_control_id: claim.provider_call_control_id
+        },
+        usage: usage
+      }
 
-    backend =
+      backend =
+        start_supervised!(
+          {TestTelephonyCallBackend,
+           observer: self(), activation: activation, activation_blocked?: true},
+          id: :usage_backend
+        )
+
+      options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+      assert_receive {:test_usage_observations, [started]}
+      assert started.measurement.component == "carrier_legs"
+
       start_supervised!(
-        {TestTelephonyCallBackend,
-         observer: self(), activation: activation, activation_blocked?: true},
-        id: :usage_backend
+        {Task,
+         fn ->
+           send(
+             context.test_observer,
+             {:usage_incoming_result, handle_event(options, context.service, incoming_event())}
+           )
+         end}
       )
 
-    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
-    assert_receive {:test_usage_observations, [started]}
-    assert started.measurement.component == "carrier_legs"
+      assert_receive {:incoming_answer_pending, worker}
+      on_exit(fn -> send(worker, :release_incoming_answer) end)
 
-    start_supervised!(
-      {Task,
-       fn ->
-         send(
-           context.test_observer,
-           {:usage_incoming_result, handle_event(options, context.service, incoming_event())}
-         )
-       end}
-    )
+      answered = %{
+        answered_event()
+        | occurred_at: ~U[2026-09-12 06:00:03.250Z]
+      }
 
-    assert_receive {:incoming_answer_pending, worker}
-    on_exit(fn -> send(worker, :release_incoming_answer) end)
+      assert :ok = handle_event(context.options, context.service, answered)
+      assert_receive {:test_usage_observations, [connected]}
+      assert connected.delivery_id == answered.provider_event_id
 
-    answered = %{
-      answered_event()
-      | occurred_at: ~U[2026-09-12 06:00:03.250Z]
-    }
+      if unquote(answer_result_timing) == :before_end do
+        send(worker, :release_incoming_answer)
+        assert_receive {:usage_incoming_result, {:ok, "wss://voice.example.test/media"}}
+      end
 
-    assert :ok = handle_event(context.options, context.service, answered)
-    assert_receive {:test_usage_observations, [connected]}
-    assert connected.delivery_id == answered.provider_event_id
-    send(worker, :release_incoming_answer)
-    assert_receive {:usage_incoming_result, {:ok, "wss://voice.example.test/media"}}
+      assert {:ok, leg} = LegSupervisor.lookup(context.service.identity, "call-leg-1")
+      monitor = Process.monitor(leg)
 
-    ended = %{
-      answered
-      | kind: :ended,
-        provider_event_id: "event-ended-incoming-usage",
-        occurred_at: ~U[2026-09-12 06:01:08.750Z],
-        end_reason: :hangup
-    }
+      ended = %{
+        answered
+        | kind: :ended,
+          provider_event_id: "event-ended-incoming-usage",
+          occurred_at: ~U[2026-09-12 06:01:08.750Z],
+          end_reason: :hangup
+      }
 
-    assert :ok = handle_event(context.options, context.service, ended)
-    assert_receive {:test_usage_observations, [duration]}
-    assert duration.outcome == :succeeded
-    assert duration.measurement.component == "connection_duration"
-    assert duration.measurement.quantity == 65_500
-    assert duration.provider.operation_id == claim.provider_call_leg_id
-    assert duration.provider.session_id == claim.provider_call_session_id
+      assert :ok = handle_event(context.options, context.service, ended)
+      assert_receive {:test_usage_observations, [duration]}
+      assert duration.outcome == :succeeded
+      assert duration.measurement.component == "connection_duration"
+      assert duration.measurement.quantity == 65_500
+      assert duration.provider.operation_id == claim.provider_call_leg_id
+      assert duration.provider.session_id == claim.provider_call_session_id
+
+      if unquote(answer_result_timing) == :after_end do
+        send(worker, :release_incoming_answer)
+        assert_receive {:usage_incoming_result, :ok}
+      end
+
+      assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
+      refute_received {:test_usage_observations, _}
+    end
   end
 
   test "incoming retries retain exact call identity and initialized service", context do

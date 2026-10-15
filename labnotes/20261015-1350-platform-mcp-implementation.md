@@ -1112,3 +1112,28 @@ All 42 focused tests pass, including the formerly failing late-identity case; no
 warnings and exact-path formatting/diff checks pass. Root and independent subagent reviews
 approved the ordering and ownership contract. Full combined verification remains
 pending the concurrent incoming drainage and demo-tenant changes.
+
+### Incoming command drainage
+
+The incoming owner previously retired after carrier end plus room shutdown while
+answer/end HTTP work could still be running. Three focused regressions reproduced
+that behavior and abnormal observer loss: 19 tests, three expected failures.
+IncomingSubmission now installs the owner's observer monitor before work begins
+and sends results only after actual task termination. Leg retains observer state
+until DOWN, preserves unknown drainage after abnormal loss, and uses one retirement
+gate for room shutdown and timer events. Late answer results cannot mutate usage
+after authenticated carrier termination.
+
+The focused activation/ingress selection passed all 28 tests. A broader 58-test
+run found one old Telnyx fixture expecting carrier termination to kill a still
+blocked answer. The fixture now explicitly rejects that request, observes its
+normal DOWN, then the owner DOWN while preserving the no-answer-effect assertion.
+The final 59-test selection passes ingress, activation and both local carrier
+harnesses, including answer results before and after terminal usage. Independent
+source/test and final fixture reviews approved.
+This checkpoint does not register carrier cleanup roots or acknowledge final usage;
+those integrations remain open.
+
+Root format, warnings-as-errors compile, strict Credo and unused-dependency
+checks pass with the concurrent demo-tenant slice. Full combined tests remain
+pending; the last broad failure has focused regression coverage as recorded above.

@@ -73,6 +73,9 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       incoming_identity: nil,
       prepared: nil,
       answer_worker: nil,
+      answer_result_received?: false,
+      commands_drained?: true,
+      retire?: false,
       end_worker: nil,
       end_requested?: false,
       end_retry?: false,
@@ -235,35 +238,73 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   end
 
   @impl true
-  def handle_info(:retire, %{status: status} = state)
-      when status in [:ended, :unclaimed, :replay],
-      do: {:stop, :normal, state}
-
-  def handle_info(:retire, state), do: {:noreply, state}
+  def handle_info(:retire, state), do: maybe_retire(%{state | retire?: true})
 
   def handle_info(
         {:incoming_submission, :answer, worker, result},
-        %{answer_worker: worker} = state
+        %{answer_worker: {worker, _monitor}} = state
       ) do
-    {:noreply, answer_result(%{state | answer_worker: nil}, result)}
-  end
-
-  def handle_info({:incoming_submission, :end, worker, _result}, %{end_worker: worker} = state) do
-    # Submission acceptance is not authenticated terminal evidence.
-    state = %{state | end_worker: nil}
-    state = if state.end_retry?, do: retry_end(%{state | end_retry?: false}), else: state
-    {:noreply, state}
+    state = answer_result(%{state | answer_result_received?: true}, result)
+    maybe_retire(state)
   end
 
   def handle_info(
-        {:DOWN, monitor, :process, _room, _reason},
-        %{room_monitor: monitor, carrier_ended?: true} = state
+        {:incoming_submission, :end, worker, _result},
+        %{end_worker: {worker, _monitor}} = state
       ),
-      do: {:stop, :normal, state}
+      do: {:noreply, state}
+
+  def handle_info(
+        {:DOWN, monitor, :process, worker, reason},
+        %{answer_worker: {worker, monitor}} = state
+      ) do
+    state = %{
+      state
+      | answer_worker: nil,
+        commands_drained?: state.commands_drained? and reason == :normal
+    }
+
+    state =
+      if state.answer_result_received?,
+        do: state,
+        else: answer_result(state, {:error, :submission_unknown})
+
+    maybe_retire(state)
+  end
+
+  def handle_info(
+        {:DOWN, monitor, :process, worker, reason},
+        %{end_worker: {worker, monitor}} = state
+      ) do
+    state = %{
+      state
+      | end_worker: nil,
+        commands_drained?: state.commands_drained? and reason == :normal
+    }
+
+    state = if state.end_retry?, do: retry_end(%{state | end_retry?: false}), else: state
+    maybe_retire(state)
+  end
 
   def handle_info({:DOWN, monitor, :process, _room, _reason}, %{room_monitor: monitor} = state) do
-    {:noreply, close(%{state | room_monitor: nil, room_closed?: true}, :room_ended)}
+    state = %{state | room_monitor: nil, room_closed?: true}
+
+    state =
+      if state.carrier_ended?,
+        do: %{state | status: :ended, retire?: true},
+        else: close(state, :room_ended)
+
+    maybe_retire(state)
   end
+
+  # A lost observer cannot attest that its separate HTTP operation has drained.
+  defp maybe_retire(%{commands_drained?: false} = state), do: {:noreply, state}
+
+  defp maybe_retire(%{retire?: true, answer_worker: nil, end_worker: nil, status: status} = state)
+       when status in [:ended, :unclaimed, :replay],
+       do: {:stop, :normal, state}
+
+  defp maybe_retire(state), do: {:noreply, state}
 
   defp admit(state) do
     case call_backend(state.backend, :claim_incoming, [state.identity, state.initial_event]) do
@@ -358,7 +399,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
         case IncomingSubmission.start(self(), :answer, fn ->
                call_backend(state.backend, :submit_incoming, [prepared])
              end) do
-          {:ok, worker} -> %{state | answer_worker: worker}
+          {:ok, worker, monitor} -> %{state | answer_worker: {worker, monitor}}
           _failure -> close(state, :answer_submission_failed)
         end
 
@@ -381,6 +422,9 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   end
 
   defp prepared_activation(custom), do: custom
+
+  defp answer_result(%{carrier_ended?: true} = state, _result),
+    do: reply_waiters(state, :ok)
 
   defp answer_result(state, {:ok, activation}) do
     usage = identify_submission(state.usage, activation)
@@ -424,7 +468,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
   defp retry_end(%{carrier_ended?: true} = state), do: state
 
-  defp retry_end(%{end_worker: worker} = state) when is_pid(worker),
+  defp retry_end(%{end_worker: worker} = state) when not is_nil(worker),
     do: %{state | end_retry?: true}
 
   defp retry_end(state), do: close(%{state | end_requested?: false}, :admission_cancelled)
@@ -452,8 +496,11 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
                  reason
                ])
              end) do
-          {:ok, worker} -> %{state | end_worker: worker, end_requested?: true}
-          _failure -> state
+          {:ok, worker, monitor} ->
+            %{state | end_worker: {worker, monitor}, end_requested?: true}
+
+          _failure ->
+            state
         end
       end
 

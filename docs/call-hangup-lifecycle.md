@@ -113,6 +113,15 @@ another owner's resources. This incoming slice still uses the legacy binding
 operation; managed reservation, carrier usage acknowledgement and tracker wiring
 must land together before managed admission is enabled.
 
+Incoming retirement now also waits for answer/end observers and their underlying
+HTTP work to drain. Observer monitors are installed before operations start; result
+delivery follows actual task termination, and the owner retains each observer
+until its own DOWN. Abnormal observer loss remains unknown even when carrier end
+and room shutdown have both been observed. A single retirement check retains
+expired timers until drainage, and late answer results cannot modify already
+terminal carrier usage. This closes local command lifetime handling; final usage
+persistence and tracker acknowledgement remain required before managed completion.
+
 ## Cleanup and terminal evidence
 
 A supervised Gateway reconciler wakes after intent is committed and also scans

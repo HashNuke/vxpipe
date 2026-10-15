@@ -172,6 +172,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     )
 
     assert_receive {:incoming_answer_pending, worker}, 2_000
+    on_exit(fn -> send(worker, :reject_incoming_answer) end)
     worker_monitor = Process.monitor(worker)
     assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
     leg_monitor = Process.monitor(leg)
@@ -194,8 +195,11 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     assert post_fixture(context, "call-hangup-incoming", %{"call_leg_id" => "inbound-call-leg"}).status ==
              200
 
+    # Carrier termination does not drain a still-pending local command.
+    assert {:ok, ^leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+    send(worker, :reject_incoming_answer)
+    assert_receive {:DOWN, ^worker_monitor, :process, ^worker, :normal}, 2_000
     assert_receive {:DOWN, ^leg_monitor, :process, ^leg, :normal}
-    assert_receive {:DOWN, ^worker_monitor, :process, ^worker, _}, 2_000
     refute_received {:test_telephony_answer, _}
   end
 
