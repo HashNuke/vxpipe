@@ -12,14 +12,22 @@ defmodule Vxpipe.Gateway.CallCleanupSupervisor do
 
   # Admission may create an owner only for a fresh durable binding. Recovery must
   # use lookup: restarting an empty owner would lose the resource membership.
-  def start_new(binding),
-    do: DynamicSupervisor.start_child(__MODULE__, {CallCleanup, {binding, nil}})
+  def start_new(binding), do: start_new(binding, nil, [])
 
   # Existing carrier effects must already be in membership before an engine DOWN
   # can seal the tracker. Capture the admission caller, not the supervisor, as
   # the semantic acknowledgement owner.
-  def start_new(binding, {kind, root}) when is_pid(root) do
-    DynamicSupervisor.start_child(__MODULE__, {CallCleanup, {binding, {kind, root, self()}}})
+  def start_new(binding, {kind, root}) when is_pid(root),
+    do: start_new(binding, {kind, root}, [])
+
+  def start_new(binding, initial_resource, options) do
+    initial =
+      case initial_resource do
+        nil -> nil
+        {kind, root} when is_pid(root) -> {kind, root, self()}
+      end
+
+    DynamicSupervisor.start_child(__MODULE__, {CallCleanup, {binding, initial, options}})
   end
 
   def lookup(binding) do

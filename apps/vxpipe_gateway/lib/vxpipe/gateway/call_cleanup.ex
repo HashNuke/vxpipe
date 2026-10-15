@@ -10,7 +10,9 @@ defmodule Vxpipe.Gateway.CallCleanup do
 
   use GenServer, restart: :temporary
 
-  alias Vxpipe.CallEngine
+  alias Vxpipe.{CallEngine, Calls}
+
+  @task_supervisor Vxpipe.Gateway.AdmissionTaskSupervisor
 
   @resource_kinds [
     :session,
@@ -22,6 +24,10 @@ defmodule Vxpipe.Gateway.CallCleanup do
   ]
 
   def start_link({binding, _initial_resource} = options) do
+    GenServer.start_link(__MODULE__, options, name: name(binding))
+  end
+
+  def start_link({binding, _initial_resource, _completion_options} = options) do
     GenServer.start_link(__MODULE__, options, name: name(binding))
   end
 
@@ -43,27 +49,32 @@ defmodule Vxpipe.Gateway.CallCleanup do
   def observe(tracker), do: GenServer.call(tracker, :observe)
 
   @impl true
+  def init({binding, initial_resource}), do: init({binding, initial_resource, []})
+
   def init(
         {%{tenant_key: tenant, call_id: call, room_id: room, incarnation_id: incarnation} =
-           binding, initial_resource}
+           binding, initial_resource, options}
       )
       when is_binary(tenant) and is_binary(call) and is_binary(room) and is_binary(incarnation) do
-    case CallEngine.monitor_room_completion(tenant, room, incarnation) do
-      {:ok, monitor} ->
-        state = %{
-          binding: Map.take(binding, [:tenant_key, :call_id, :room_id, :incarnation_id]),
-          sealed?: false,
-          engine_outcome: :pending,
-          resources: %{},
-          monitors: %{monitor => :engine},
-          observers: %{},
-          completed_at: nil
-        }
+    with {:ok, completion} <- completion_options(options),
+         {:ok, monitor} <- CallEngine.monitor_room_completion(tenant, room, incarnation) do
+      state = %{
+        binding: Map.take(binding, [:tenant_key, :call_id, :room_id, :incarnation_id]),
+        sealed?: false,
+        engine_outcome: :pending,
+        resources: %{},
+        monitors: %{monitor => :engine},
+        observers: %{},
+        completed_at: nil,
+        completion: completion,
+        completion_task: nil,
+        completion_result: nil,
+        completion_retry: nil
+      }
 
-        {:ok, seed_resource(state, initial_resource)}
-
-      {:error, :room_unavailable} ->
-        {:stop, :room_unavailable}
+      {:ok, seed_resource(state, initial_resource)}
+    else
+      {:error, reason} -> {:stop, reason}
     end
   end
 
@@ -102,6 +113,24 @@ defmodule Vxpipe.Gateway.CallCleanup do
   end
 
   @impl true
+  def handle_info({ref, result}, %{completion_task: %Task{ref: ref}} = state),
+    do: {:noreply, %{state | completion_result: result == :ok}}
+
+  def handle_info(
+        {:DOWN, ref, :process, worker, reason},
+        %{completion_task: %Task{ref: ref, pid: worker}} = state
+      ) do
+    persisted? = state.completion_result == true and reason == :normal
+    state = %{state | completion_task: nil, completion_result: nil}
+
+    if persisted?,
+      do: {:stop, :normal, state},
+      else: {:noreply, retry_completion(state)}
+  end
+
+  def handle_info({:retry_completion, token}, %{completion_retry: token} = state),
+    do: {:noreply, persist_completion(%{state | completion_retry: nil})}
+
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state) do
     {target, monitors} = Map.pop(state.monitors, monitor)
     updated = record_down(%{state | monitors: monitors}, target, reason)
@@ -197,8 +226,81 @@ defmodule Vxpipe.Gateway.CallCleanup do
       end)
     end
 
-    updated
+    persist_completion(updated)
   end
+
+  defp persist_completion(%{completion: nil} = state), do: state
+  defp persist_completion(%{completed_at: nil} = state), do: state
+  defp persist_completion(%{completion_task: %Task{}} = state), do: state
+  defp persist_completion(%{completion_retry: token} = state) when not is_nil(token), do: state
+
+  defp persist_completion(state) do
+    binding = state.binding
+    completed_at = state.completed_at
+    options = state.completion
+
+    task =
+      Task.Supervisor.async_nolink(@task_supervisor, fn ->
+        # The deadline belongs to the worker before storage starts, so even loss
+        # of the tracker cannot leave a blocked completion operation unbounded.
+        {:ok, timer} = :timer.kill_after(options.timeout_ms, self())
+
+        try do
+          case Calls.complete_call_cleanup(binding, completed_at, options.calls_options) do
+            {:ok, _validated_call} -> :ok
+            _error -> :error
+          end
+        after
+          :timer.cancel(timer)
+        end
+      end)
+
+    %{state | completion_task: task, completion_result: nil}
+  catch
+    :exit, _ -> retry_completion(state)
+  end
+
+  defp retry_completion(state) do
+    token = make_ref()
+    delay = state.completion.retry_ms
+    Process.send_after(self(), {:retry_completion, token}, delay)
+    completion = %{state.completion | retry_ms: min(max(delay * 2, 1), 5_000)}
+    %{state | completion_retry: token, completion: completion}
+  end
+
+  defp completion_options(options) when is_list(options) do
+    if Keyword.keyword?(options) and Keyword.keys(options) -- [:completion] == [] do
+      case Keyword.fetch(options, :completion) do
+        :error -> {:ok, nil}
+        {:ok, completion} -> validate_completion(completion)
+      end
+    else
+      {:error, :invalid_completion_options}
+    end
+  end
+
+  defp completion_options(_options), do: {:error, :invalid_completion_options}
+
+  defp validate_completion(options) when is_list(options) do
+    if Keyword.keyword?(options) do
+      completion = %{
+        calls_options: Keyword.get(options, :calls_options, []),
+        timeout_ms: Keyword.get(options, :timeout_ms, 5_000),
+        retry_ms: Keyword.get(options, :retry_ms, 250)
+      }
+
+      if is_list(completion.calls_options) and Keyword.keyword?(completion.calls_options) and
+           is_integer(completion.timeout_ms) and completion.timeout_ms in 1..30_000 and
+           is_integer(completion.retry_ms) and completion.retry_ms in 0..5_000 and
+           Keyword.keys(options) -- [:calls_options, :timeout_ms, :retry_ms] == [],
+         do: {:ok, completion},
+         else: {:error, :invalid_completion_options}
+    else
+      {:error, :invalid_completion_options}
+    end
+  end
+
+  defp validate_completion(_options), do: {:error, :invalid_completion_options}
 
   defp project(state) do
     state

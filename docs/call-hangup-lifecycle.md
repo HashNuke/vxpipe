@@ -391,10 +391,10 @@ both projections; do not invent a start time or weaken normal outgoing ordering.
 
 ## Completion persistence ownership
 
-For the remaining integration, let the existing cleanup tracker persist its own
-completed evidence through `Calls.complete_call_cleanup/3`, using one bounded
-supervised task. Enable this only for a fresh managed tracker with explicit
-completion options. The reconciler discovers durable work and requests exact
+The cleanup tracker can persist its own completed evidence through
+`Calls.complete_call_cleanup/3`, using one bounded supervised task. This remains
+opt-in through explicit completion options on a fresh managed tracker; admission
+wiring is still pending. The reconciler discovers durable work and requests exact
 shutdown; it does not reconstruct missing trackers or own their final retirement.
 
 This avoids a recovery gap if an external reconciliation worker commits completion
@@ -416,7 +416,8 @@ if the tracker has retired. The pending scan already includes completed cleanup
 with new cancellation intent; this branch must not require a replacement tracker.
 Tests must cover successful commit followed by a lost task result, immutable
 retry, requester death, and waiting for actual task DOWN before retirement. This
-ownership refinement is reviewed design; persistence integration is pending.
+ownership contract now has focused tracker tests; managed admission and
+reconciliation integration remain pending.
 
 ## Remaining carrier integration contracts
 

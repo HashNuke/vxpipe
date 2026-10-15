@@ -1334,3 +1334,22 @@ the integrating owner's responsibility.
 Twelve helper tests passed after five expected red failures. Root and independent
 agent reviews approved; malformed top-level and nested options have coverage.
 Changed paths formatted and diff checked. Managed owner integration remains open.
+
+### Tracker-owned completion persistence
+
+Added explicit completion options to fresh tracker startup, leaving existing
+prerequisite callers unchanged. Once all resource evidence is complete, one
+supervised worker installs its deadline before storage. The tracker retains its
+first timestamp and exact binding across bounded-backoff retries, including a
+commit followed by worker death. It retires only after successful validated
+storage and actual normal task DOWN, independently of the initiating requester.
+Only success/failure crosses the tracker mailbox; full persisted calls stay within
+the worker. No production managed admission or reconciler is enabled yet.
+
+Six missing-start_new/3 reds preceded implementation. First combined tracker/helper
+run passed 31 tests; after independently reviewed response minimization, all 19
+tracker tests passed. Tests exercise requester death, a lost commit result,
+blocked-worker deadline even after owner death, seeded semantic obligations and
+success arriving before actual worker termination. The last case deliberately
+injects the task protocol result using its reference to hold this boundary open.
+Root and independent review approved; changed files formatted and diff checked.

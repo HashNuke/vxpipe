@@ -619,8 +619,13 @@ Completion ownership review chooses tracker-owned bounded persistence before
 retirement, avoiding an external worker's commit/retire gap without a second
 registry recovery mechanism. Reconciliation retains durable discovery/exact stop
 and replays stored completion for later intent without recreating a tracker.
-The lifecycle design records the reviewed contract and tests; implementation
-remains pending.
+The lifecycle design records the reviewed contract. Opt-in tracker persistence
+is now implemented: one task establishes its own deadline, retries the same
+binding/first timestamp, and retires the tracker only after success plus actual
+task termination. The worker returns only sanitized success/failure to its owner.
+Six missing-API reds preceded implementation; 31 tracker/helper tests passed,
+followed by 19 tracker tests after the response-minimization refinement. Independent
+review approved. Admission enablement and reconciliation remain pending.
 
 Managed failed-call accounting now accepts complete immutable usage batches without
 requiring cancellation intent, while retaining exact verified room/incarnation
