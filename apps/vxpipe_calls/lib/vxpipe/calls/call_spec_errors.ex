@@ -1,6 +1,6 @@
 defmodule Vxpipe.Calls.CallSpecErrors do
   @moduledoc """
-  Shared, value-free public errors for call-spec authoring transports.
+  Shared, value-free public errors for call-spec reading and authoring transports.
 
   Only validator/compiler details supply reason text. Service failures use fixed
   explanations; exception messages, provider payloads and arbitrary details never
@@ -66,6 +66,33 @@ defmodule Vxpipe.Calls.CallSpecErrors do
     do: {404, %{code: "call_spec_not_found"}}
 
   def response(_reason), do: {503, %{code: "call_spec_authoring_unavailable"}}
+
+  @doc "Projects directory and source-read failures without authoring-specific errors."
+  @spec read_response(term()) :: {pos_integer(), map()}
+  def read_response(:invalid_api_key), do: {401, %{code: "invalid_api_key"}}
+
+  def read_response(reason)
+      when reason in [
+             :forbidden,
+             :insufficient_scope,
+             :tenant_access_forbidden,
+             :installation_operator_required
+           ],
+      do: {403, %{code: "authoring_forbidden"}}
+
+  def read_response(:tenant_not_found), do: {404, %{code: "tenant_not_found"}}
+
+  def read_response(reason) when reason in [:not_found, :call_spec_not_found],
+    do: {404, %{code: "call_spec_not_found"}}
+
+  def read_response(reason) when reason in [:invalid_request, :invalid_tenant_key],
+    do: {400, %{code: "invalid_request"}}
+
+  def read_response(reason) when reason in [:invalid_page, :invalid_tenant_page_request],
+    do: {422, %{code: "invalid_page"}}
+
+  def read_response(:call_spec_page_out_of_range), do: {422, %{code: "page_out_of_range"}}
+  def read_response(_reason), do: {503, %{code: "call_spec_directory_unavailable"}}
 
   @doc "Projects the first fail-fast compiler error, including older stored error maps."
   def validation_errors([]), do: []

@@ -223,6 +223,48 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
     assert out_of_range["structuredContent"]["error"]["code"] == "page_out_of_range"
   end
 
+  test "directory and source errors match canonical HTTP reads without exposing backend details",
+       ctx do
+    for {name, suffix, arguments, reason, status, code} <- [
+          {"list_call_specs", "", %{}, :tenant_not_found, 404, "tenant_not_found"},
+          {"list_call_specs", "", %{}, {:private, "storage-sentinel"}, 503,
+           "call_spec_directory_unavailable"},
+          {"get_call_spec", "/missing", %{call_spec_id: "missing"}, :not_found, 404,
+           "call_spec_not_found"},
+          {"get_call_spec", "/missing", %{call_spec_id: "missing"},
+           {:private, "storage-sentinel"}, 503, "call_spec_directory_unavailable"}
+        ] do
+      options =
+        ctx.calls_options
+        |> Keyword.put(:admin_repository, {__MODULE__, {:failure, reason}})
+        |> Keyword.put(:call_spec_repository, {__MODULE__, {:failure, reason}})
+
+      http_options =
+        Vxpipe.Gateway.HTTP.Endpoint.init(
+          call_spec_reads: [
+            enabled: true,
+            browser_auth: {__MODULE__, {:browser, ctx.actor}},
+            calls_options: options
+          ]
+        )
+
+      http =
+        conn(:get, "/api/tenants/#{ctx.tenant.key}/call-specs" <> suffix)
+        |> Vxpipe.Gateway.HTTP.Endpoint.call(http_options)
+
+      assert http.status == status
+      assert JSON.decode!(http.resp_body) == %{"error" => %{"code" => code}}
+
+      endpoint = Keyword.put(ctx.endpoint, :call_options, options)
+      session = initialize(endpoint)
+      mcp = invoke(endpoint, session, 2, name, Map.put(arguments, :tenant_key, ctx.tenant.key))
+      assert mcp.status == 200
+      assert %{"isError" => true, "structuredContent" => projected} = result(mcp)
+      assert projected == JSON.decode!(http.resp_body)
+      refute mcp.resp_body =~ "storage-sentinel"
+    end
+  end
+
   test "typed inputs and foreign tenants fail before side effects", ctx do
     session = initialize(ctx.endpoint)
 
@@ -253,7 +295,12 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
     refute_received {:bindings, _}
   end
 
+  def authenticate(conn, {:browser, actor}), do: {:ok, conn, actor}
   def authenticate(actor, _secret), do: {:ok, actor}
+
+  def next_revision({:failure, reason}, _tenant, _id), do: {:error, reason}
+
+  def list_call_specs({:failure, reason}, _tenant, _limit, _offset), do: {:error, reason}
 
   def list_call_specs(owner, tenant, limit, offset) do
     send(owner, {:list_specs, tenant, limit, offset})

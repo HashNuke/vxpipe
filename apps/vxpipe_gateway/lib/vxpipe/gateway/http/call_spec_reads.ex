@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecReads do
   import Plug.Conn
 
   alias Vxpipe.Calls
-  alias Vxpipe.Calls.CallSpecPage
+  alias Vxpipe.Calls.{CallSpecErrors, CallSpecPage}
   alias Vxpipe.Gateway.CallSpecJSON
   alias Vxpipe.Gateway.HTTP.{PageQuery, ProductAuthentication}
 
@@ -88,36 +88,11 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecReads do
   defp respond(conn, {:ok, body}), do: json(conn, 200, body)
 
   defp respond(conn, {:error, reason}) do
-    {status, code} = error(reason)
-    json(conn, status, %{error: %{code: code}})
+    {status, error} = CallSpecErrors.read_response(reason)
+    json(conn, status, %{error: error})
   end
 
   defp respond(conn, _invalid), do: respond(conn, {:error, :repository_unavailable})
-
-  defp error(:invalid_api_key), do: {401, "invalid_api_key"}
-
-  defp error(reason)
-       when reason in [
-              :forbidden,
-              :insufficient_scope,
-              :tenant_access_forbidden,
-              :installation_operator_required
-            ],
-       do: {403, "authoring_forbidden"}
-
-  defp error(:tenant_not_found), do: {404, "tenant_not_found"}
-
-  defp error(reason) when reason in [:not_found, :call_spec_not_found],
-    do: {404, "call_spec_not_found"}
-
-  defp error(reason) when reason in [:invalid_request, :invalid_tenant_key],
-    do: {400, "invalid_request"}
-
-  defp error(reason) when reason in [:invalid_page, :invalid_tenant_page_request],
-    do: {422, "invalid_page"}
-
-  defp error(:call_spec_page_out_of_range), do: {422, "page_out_of_range"}
-  defp error(_reason), do: {503, "call_spec_directory_unavailable"}
 
   defp json(conn, status, body) do
     conn

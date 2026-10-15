@@ -254,7 +254,11 @@ and catalog routes preserve established HTTP shapes, with opt-in catalog paging.
 Independent policy, HTTP, MCP and final parity reviews found no remaining blockers.
 The stable snapshot also passed all five root completion commands, including the
 full umbrella suite with zero failures. No source changed during that verification.
-The overall milestone, remaining call/user tools and UI read/catalog cutover stay open.
+A follow-up parity regression also aligned MCP source/list read failures with
+canonical HTTP errors; 36 focused tests and independent review passed. Established
+sessions reject credentials supplied only through cookies, query strings or bodies
+on notifications and tool requests. The overall milestone, remaining call/user tools
+and UI read/catalog cutover stay open.
 
 ## Checkpoint: create calls with variables and issue join tokens
 

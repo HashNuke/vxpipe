@@ -229,3 +229,16 @@
   also passed: every application reported zero failures, including 649 Gateway,
   212 Calls and 328 Console tests (integration exclusions retained). No source
   changed during that run; live providers and telephony remained excluded.
+
+## Read-error parity and session credentials
+
+- A transport regression exposed MCP returning authoring errors for spec reads:
+  missing tenants and unavailable storage differed from canonical HTTP. Shared
+  Calls.CallSpecErrors.read_response now preserves the established read codes for
+  both transports; write and catalog projections are unchanged.
+- Valid MCP sessions still require Bearer authentication on every request, including
+  initialized notifications. Cookie, query and body credentials are rejected before
+  authentication storage access; a session ID grants no credential authority.
+- Red: one expected HTTP/MCP error mismatch. Green: 36 focused Gateway tests,
+  including existing request-owner cleanup coverage. Independent review found no
+  blockers. This checkpoint does not claim raw TCP-disconnect cancellation.

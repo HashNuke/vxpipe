@@ -168,6 +168,11 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
          do: CatalogPage.paginate(models, args["page"], args["page_size"])
   end
 
+  def error(name, reason) when name in ["list_call_specs", "get_call_spec"] do
+    {_status, projected} = CallSpecErrors.read_response(reason)
+    projected
+  end
+
   def error(_name, reason) when reason in [:call_spec_page_out_of_range, :page_out_of_range],
     do: %{code: "page_out_of_range"}
 

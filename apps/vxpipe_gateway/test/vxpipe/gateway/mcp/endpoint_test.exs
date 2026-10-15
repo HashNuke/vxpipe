@@ -87,6 +87,40 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
     assert Agent.get(context.backend, & &1.calls) == 0
   end
 
+  test "an existing session never substitutes for credentials on notifications or tools",
+       context do
+    initialized = call(:post, initialize(), context.options, @secret)
+    [session] = get_resp_header(initialized, "mcp-session-id")
+    on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
+
+    requests = [
+      rpc("notifications/initialized", 2) |> Map.delete("id"),
+      rpc("tools/list", 3),
+      rpc("tools/call", 4, %{"name" => "list_tenants", "arguments" => %{}})
+    ]
+
+    for request <- requests, source <- [:none, :cookie, :query, :body] do
+      url = "https://localhost/mcp" <> if(source == :query, do: "?api_key=#{@secret}", else: "")
+      body = if source == :body, do: Map.put(request, "api_key", @secret), else: request
+
+      conn =
+        conn(:post, url, JSON.encode!(body))
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("mcp-protocol-version", @version)
+        |> put_req_header("mcp-session-id", session)
+
+      conn =
+        if source == :cookie, do: put_req_cookie(conn, "vxpipe_user_session", @secret), else: conn
+
+      response = Endpoint.call(conn, Endpoint.init(context.options))
+      assert response.status == 401
+      assert get_resp_header(response, "www-authenticate") == [~s(Bearer realm="vxpipe")]
+    end
+
+    assert Agent.get(context.backend, & &1.calls) == 1
+    assert call(:post, rpc("tools/list", 5), context.options, @secret, session).status == 200
+  end
+
   test "malformed or multiple Authorization headers never reach authentication", context do
     for value <- [
           "Basic abc",
