@@ -478,7 +478,53 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
     assert {:error, :forbidden} = OperatorServiceBindings.list(platform_reader, @tenant, [])
   end
 
-  test "credential test requires read; create/update/delete require write" do
+  test "credential validation denies readers and foreign owners before invoking the validator" do
+    validator = TestOperatorCredentialValidator.validator(self(), :ok)
+    tenant_writer = tenant_manager_principal(@tenant)
+
+    cases = [
+      {base_principal(%{
+         grants: MapSet.new(["tenant_services.read"]),
+         assigned_tenants: %{@tenant => :read}
+       }), @tenant},
+      {base_principal(%{grants: MapSet.new(["platform_services.read"])}), :platform},
+      {%{tenant_writer | assigned_tenants: %{@tenant => :read}}, @tenant},
+      {tenant_writer, @other},
+      {tenant_writer, :platform}
+    ]
+
+    for {principal, owner} <- cases do
+      assert {:error, :forbidden} =
+               OperatorAdministration.validate_credential(
+                 principal,
+                 owner,
+                 "deepgram",
+                 "deepgram",
+                 "api_key",
+                 %{"api_key" => "synthetic"},
+                 provider_credential_validator: validator
+               )
+
+      refute_received {:operator_credential_validated, _, _, _}
+    end
+
+    platform_writer = base_principal(%{grants: MapSet.new(["platform_services.write"])})
+
+    assert :ok =
+             OperatorAdministration.validate_credential(
+               platform_writer,
+               :platform,
+               "deepgram",
+               "deepgram",
+               "api_key",
+               %{"api_key" => "synthetic"},
+               provider_credential_validator: validator
+             )
+
+    assert_received {:operator_credential_validated, "deepgram", "api_key", _}
+  end
+
+  test "credential test and create/update/delete require write" do
     validator = TestOperatorCredentialValidator.validator(self(), :ok)
 
     repo =
@@ -497,7 +543,7 @@ defmodule Vxpipe.Calls.UserPrincipalAuthorizationTest do
 
     assert :ok =
              OperatorAdministration.validate_credential(
-               reader,
+               writer,
                @tenant,
                "deepgram",
                "deepgram",

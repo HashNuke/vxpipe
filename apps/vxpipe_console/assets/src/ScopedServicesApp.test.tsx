@@ -172,7 +172,7 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
   expect(screen.getByRole("status", { name: "Notification" })).toHaveTextContent("Service saved.");
   expect(screen.getByRole("status", { name: "Notification" })).toHaveClass("fixed");
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/platform/credentials",
+    "/api/platform/credentials",
     expect.objectContaining({
       body: JSON.stringify({
         provider: "telnyx",
@@ -231,7 +231,7 @@ test("platform services test and save separately, then edit the exact persisted 
   expect(await screen.findByText("Credentials tested successfully.")).toBeVisible();
   expect(screen.getByRole("dialog")).toBeVisible();
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/platform/credentials/test",
+    "/api/platform/credentials/test",
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
@@ -246,7 +246,7 @@ test("platform services test and save separately, then edit the exact persisted 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/platform/credentials",
+    "/api/platform/credentials",
     expect.objectContaining({
       method: "POST",
       headers: expect.objectContaining({ "x-csrf-token": "csrf-example" }),
@@ -269,7 +269,7 @@ test("platform services test and save separately, then edit the exact persisted 
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(fetchImpl).toHaveBeenCalledWith(
-      "/admin/api/platform/credentials/deepgram-id",
+      "/api/platform/credentials/deepgram-id",
       expect.objectContaining({ method: "PATCH" }),
     ),
   );
@@ -291,7 +291,7 @@ test("platform services test and save separately, then edit the exact persisted 
     ).not.toBeInTheDocument(),
   );
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/platform/credentials/deepgram-id",
+    "/api/platform/credentials/deepgram-id",
     expect.objectContaining({ method: "DELETE" }),
   );
 });
@@ -385,7 +385,7 @@ test("keeps Save usable when a platform credential cannot be tested", async () =
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/platform/credentials",
+    "/api/platform/credentials",
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({

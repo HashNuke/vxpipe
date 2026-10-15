@@ -590,7 +590,7 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
                  stored.revision
                )
 
-      path = "/admin/api/tenants/#{tenant.key}/telephony-services/office/numbers"
+      path = "/api/tenants/#{tenant.key}/telephony-services/office/numbers"
       page = auth |> recycle() |> https_get(path) |> json_response(200)
       assert [%{"available" => false, "number" => "+15550001000"}] = page["numbers"]
 

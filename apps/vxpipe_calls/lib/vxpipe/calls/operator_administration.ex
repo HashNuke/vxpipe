@@ -353,7 +353,7 @@ defmodule Vxpipe.Calls.OperatorAdministration do
         options
       )
       when is_list(options) do
-    with :ok <- UserAuthorization.authorize_credential_read(principal, owner),
+    with :ok <- UserAuthorization.authorize_credential_write(principal, owner),
          :ok <- ProviderAuth.binding(owner, provider, name),
          :ok <- ProviderAuth.validate(provider, auth_kind, payload),
          {:ok, validator} <- Repositories.fetch(options, :provider_credential_validator) do

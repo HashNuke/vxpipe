@@ -13,6 +13,20 @@ defmodule Vxpipe.Console.RoutePermission do
   def for_request(method, ["api", "api-keys" | rest]),
     do: for_request(method, ["admin", "api", "api-keys" | rest])
 
+  def for_request(method, ["api", "platform", resource | rest])
+      when resource in ["services", "credentials"],
+      do: for_request(method, ["admin", "api", "platform", resource | rest])
+
+  def for_request(method, ["api", "tenants", tenant, resource | rest])
+      when resource in [
+             "services",
+             "service-bindings",
+             "credentials",
+             "telephony-applications",
+             "telephony-services"
+           ],
+      do: for_request(method, ["admin", "api", "tenants", tenant, resource | rest])
+
   def for_request(method, ["admin", "api", "api-keys" | _rest])
       when method in ["GET", "POST", "DELETE"], do: :authenticated
 

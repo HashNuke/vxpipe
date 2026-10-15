@@ -198,7 +198,7 @@ test("retires tenant setup services in favor of the service inventory", async ()
     "/t/AAAAAAAAAAAAAAAA/services",
   );
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/services",
+    "/api/tenants/AAAAAAAAAAAAAAAA/services",
     expect.any(Object),
   );
 });
@@ -295,6 +295,7 @@ test("an empty installation opens onboarding only when explicitly selected", asy
     screen.getByRole("heading", { name: "Connect your services" }),
   ).toBeVisible();
   expect(window.location.pathname).toBe("/getting-started");
+  expect(fetchImpl).toHaveBeenCalledWith("/api/tenants/DEMOabcdefgh1234/service-bindings", expect.objectContaining({ headers: { accept: "application/json" } }));
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/onboarding/demo-tenant", {
     method: "POST",
     headers: {
@@ -967,7 +968,7 @@ test("loads the approved services page directly and exposes all tenant destinati
   );
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/session", expect.any(Object));
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/tenants/AAAAAAAAAAAAAAAA/services",
+    "/api/tenants/AAAAAAAAAAAAAAAA/services",
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
 });
@@ -1047,7 +1048,7 @@ test("replaces credentials from the edit dialog and refreshes their safe preview
     if (url === "/admin/api/session") return response(operationalSession);
     if (init?.method === "PATCH") {
       expect(String(input)).toBe(
-        "/admin/api/tenants/AAAAAAAAAAAAAAAA/credentials/credential-google",
+        "/api/tenants/AAAAAAAAAAAAAAAA/credentials/credential-google",
       );
       expect(init?.method).toBe("PATCH");
       expect(JSON.parse(String(init?.body))).toEqual({

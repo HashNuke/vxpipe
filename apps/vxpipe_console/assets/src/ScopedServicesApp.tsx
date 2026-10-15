@@ -74,8 +74,8 @@ export function ScopedServicesApp({
   const tenantKey = scope.kind === "tenant" ? scope.tenantKey : null;
   const prefix =
     tenantKey === null
-      ? "/admin/api/platform"
-      : `/admin/api/tenants/${encodeURIComponent(tenantKey)}`;
+      ? "/api/platform"
+      : `/api/tenants/${encodeURIComponent(tenantKey)}`;
   const directoryUrl = `${prefix}/${tenantKey === null ? "services" : "service-bindings"}`;
 
   useEffect(() => {

@@ -63,7 +63,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
 
     configure_admin_repository({:ok, {tenant, [credential], [service], false}})
 
-    conn = authenticate() |> recycle() |> https_get("/admin/api/tenants/#{@tenant_key}/services")
+    conn = authenticate() |> recycle() |> https_get("/api/tenants/#{@tenant_key}/services")
 
     assert json_response(conn, 200) == %{
              "tenant" => %{"key" => @tenant_key, "name" => "Example tenant"},
@@ -158,7 +158,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
             authenticated
             |> recycle()
             |> put_req_header("x-csrf-token", csrf)
-            |> post("https://localhost/admin/api/tenants/#{@tenant_key}/credentials", %{
+            |> post("https://localhost/api/tenants/#{@tenant_key}/credentials", %{
               "provider" => provider,
               "values" => values
             })
@@ -212,7 +212,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       |> recycle()
       |> put_req_header("x-csrf-token", csrf)
       |> patch(
-        "https://localhost/admin/api/tenants/#{@tenant_key}/credentials/#{returned.id}",
+        "https://localhost/api/tenants/#{@tenant_key}/credentials/#{returned.id}",
         %{
           "provider" => "twilio",
           "values" => %{
@@ -245,14 +245,14 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     configure_admin_repository({:error, :tenant_not_found})
 
     missing =
-      authenticate() |> recycle() |> https_get("/admin/api/tenants/#{@tenant_key}/services")
+      authenticate() |> recycle() |> https_get("/api/tenants/#{@tenant_key}/services")
 
     assert json_response(missing, 404) == %{"error" => %{"code" => "tenant_not_found"}}
 
     configure_admin_repository({:error, :database_unavailable})
 
     unavailable =
-      authenticate() |> recycle() |> https_get("/admin/api/tenants/#{@tenant_key}/services")
+      authenticate() |> recycle() |> https_get("/api/tenants/#{@tenant_key}/services")
 
     assert json_response(unavailable, 503) == %{
              "error" => %{"code" => "service_directory_unavailable"}
@@ -266,7 +266,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       authenticated
       |> recycle()
       |> put_req_header("x-csrf-token", csrf)
-      |> post("https://localhost/admin/api/tenants/#{@tenant_key}/credentials", %{
+      |> post("https://localhost/api/tenants/#{@tenant_key}/credentials", %{
         "provider" => "google",
         "name" => "primary",
         "values" => %{"api_key" => "duplicate-private"}
@@ -280,7 +280,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       authenticated
       |> recycle()
       |> put_req_header("x-csrf-token", csrf)
-      |> post("https://localhost/admin/api/tenants/#{@tenant_key}/credentials", %{
+      |> post("https://localhost/api/tenants/#{@tenant_key}/credentials", %{
         "provider" => "unsupported",
         "name" => "primary",
         "values" => %{"api_key" => "private"}
@@ -293,14 +293,14 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       |> recycle()
       |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
       |> put_req_header("x-csrf-token", "invalid")
-      |> post("https://localhost/admin/api/tenants/#{@tenant_key}/credentials", %{
+      |> post("https://localhost/api/tenants/#{@tenant_key}/credentials", %{
         "provider" => "google",
         "name" => "primary",
         "values" => %{"api_key" => "private"}
       })
     end
 
-    anonymous = https_get("/admin/api/tenants/#{@tenant_key}/services")
+    anonymous = https_get("/api/tenants/#{@tenant_key}/services")
 
     assert json_response(anonymous, 401) == %{
              "error" => %{"code" => "session_required"}
@@ -320,7 +320,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
             authenticated
             |> recycle()
             |> put_req_header("x-csrf-token", csrf)
-            |> post("https://localhost/admin/api/tenants/#{@tenant_key}/credentials", %{
+            |> post("https://localhost/api/tenants/#{@tenant_key}/credentials", %{
               "provider" => "google",
               "name" => "primary",
               "values" => values
@@ -339,7 +339,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
 
   test "tests credentials without storing them" do
     configure_credential_validator({:error, :provider_credential_rejected})
-    path = "https://localhost/admin/api/tenants/#{@tenant_key}/credentials/test"
+    path = "https://localhost/api/tenants/#{@tenant_key}/credentials/test"
 
     body = %{
       "provider" => "google",
@@ -407,7 +407,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
         authenticated
         |> recycle()
         |> put_req_header("x-csrf-token", csrf)
-        |> post("https://localhost/admin/api/platform/credentials/test", %{
+        |> post("https://localhost/api/platform/credentials/test", %{
           "provider" => "google",
           "name" => "shared-model",
           "values" => %{"api_key" => "private"}
@@ -436,7 +436,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       "values" => %{"api_key" => "platform-example-key"}
     }
 
-    anonymous = post(build_conn(), "https://localhost/admin/api/platform/credentials", body)
+    anonymous = post(build_conn(), "https://localhost/api/platform/credentials", body)
     assert anonymous.status in [401, 403]
     refute_received {:operator_credential_created, _, _}
 
@@ -447,7 +447,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       authenticated
       |> recycle()
       |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
-      |> post("https://localhost/admin/api/platform/credentials", body)
+      |> post("https://localhost/api/platform/credentials", body)
     end
 
     refute_received {:operator_credential_created, _, _}
@@ -457,7 +457,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       |> recycle()
       |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
       |> put_req_header("x-csrf-token", csrf)
-      |> post("https://localhost/admin/api/platform/credentials", body)
+      |> post("https://localhost/api/platform/credentials", body)
 
     assert %{"credential" => %{"name" => "shared-model", "id" => id}} =
              json_response(response, 201)
@@ -501,7 +501,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     conn =
       authenticate()
       |> recycle()
-      |> https_get("/admin/api/tenants/#{@tenant_key}/service-bindings")
+      |> https_get("/api/tenants/#{@tenant_key}/service-bindings")
 
     assert %{"bindings" => [%{"source" => "platform", "name" => "shared-model"}]} =
              json_response(conn, 200)
@@ -540,7 +540,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
 
     configure_credential_repository({:ok, %{tenant: nil, bindings: [binding]}})
 
-    conn = authenticate() |> recycle() |> https_get("/admin/api/platform/services")
+    conn = authenticate() |> recycle() |> https_get("/api/platform/services")
 
     assert %{"tenant" => nil, "bindings" => [%{"source" => "platform"}]} =
              json_response(conn, 200)
@@ -552,7 +552,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
              "tenant" => nil
            }
 
-    assert https_get("/admin/api/platform/services").status == 401
+    assert https_get("/api/platform/services").status == 401
     refute_received {:operator_bindings_requested, _}
   end
 
@@ -578,7 +578,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     body = %{"provider" => "google", "values" => %{"api_key" => "platform-replacement"}}
 
     assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
-      patch(conn, "https://localhost/admin/api/platform/credentials/shared-id", body)
+      patch(conn, "https://localhost/api/platform/credentials/shared-id", body)
     end
 
     refute_received {:operator_credential_replaced, _, _, _, _, _, _}
@@ -586,7 +586,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     updated =
       conn
       |> put_req_header("x-csrf-token", csrf)
-      |> patch("https://localhost/admin/api/platform/credentials/shared-id", body)
+      |> patch("https://localhost/api/platform/credentials/shared-id", body)
 
     assert %{"credential" => %{"id" => "shared-id", "name" => "shared-model"}} =
              json_response(updated, 200)
@@ -653,7 +653,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
       authenticated
       |> recycle()
       |> put_req_header("x-csrf-token", csrf)
-      |> post("https://localhost/admin/api/tenants/#{@tenant_key}/credentials", %{
+      |> post("https://localhost/api/tenants/#{@tenant_key}/credentials", %{
         "provider" => "google",
         "name" => "named-model",
         "values" => %{"api_key" => "synthetic-named"}

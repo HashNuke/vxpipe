@@ -766,3 +766,30 @@
   tests passed. Carrier-owner scheduling/acknowledgement integration remains next.
 - Independent storage review found no blockers in exact managed ownership or the
   narrow failed-cancellation allowance; legacy behavior remains unchanged.
+
+
+## Canonical service administration
+
+- Moved 16 platform/tenant service, credential, telephony-application and authoring
+  phone-number operations to explicit Console-owned canonical routes. Legacy aliases
+  reuse the same controllers and session-only pre-parser credential guard. Existing
+  CSRF, tenant membership, inheritance, cursor/truncation and secret projections stay.
+- Direct credential validation previously accepted read-only actors despite HTTP
+  requiring write. It now checks existing write permission before invoking the
+  validator. Controllers map domain denials to 403 instead of unavailable errors.
+- Updated all four frontend consumers, including onboarding's binding read and
+  editor provider-number requests. Demo/sample mutations remain pending product
+  workflows. Complete HTTP wire schemas and inventory are documented.
+- Calls red23/1 and Console red19/17 preceded implementation; final selections
+  passed 53 Calls and 48 Console tests. Nine frontend URL failures preceded updates;
+  all 760 frontend tests, TypeScript, lint and asset build passed. Independent
+  review found no blockers.
+- Rendered Chrome verified platform validation200/create201/delete204, tenant
+  directory200/validation200/create201/update200, and onboarding binding lookup200.
+  Persisted synthetic session/storage and a fake validator avoided external calls.
+  Desktop1440x1000/mobile390x844 inspected; mobile had no horizontal overflow.
+  Browser and fixture stopped and database ownership released.
+- Existing routing limitation: tenant pages render TenantServicesPage; tenant
+  ScopedServicesApp and embedded telephony administration have no production route.
+  Their canonical requests have endpoint/component tests, but no rendered coverage
+  is claimed. This migration does not redesign or add a production page route.

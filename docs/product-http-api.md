@@ -5,8 +5,8 @@ clients use the same handlers, application authorization and response schemas.
 This document grows with the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md);
 it describes tenant and call-spec reads, provider catalogs, spec writes,
 call creation/join-token operations, account administration, and session-only
-API-key management. The complete
-migration inventory is in
+API-key management, services and provider credentials. The complete migration
+inventory is in
 [product API inventory](product-api-inventory.md).
 
 ## Authentication
@@ -463,3 +463,122 @@ Failures use `{error: {code}}`: 401 `session_required`, 403 `forbidden`, 404
 or 503 `api_keys_unavailable`. Public non-HTTPS and carrier-only hosts do not expose
 these routes. Legacy aliases remain for compatibility; new clients should use
 `/api/api-keys`.
+
+
+## Services and provider credentials (browser sessions)
+
+These Console-owned endpoints accept login sessions only. Explicit Authorization
+headers are rejected with 401 `session_required`, including with a valid cookie.
+Mutations require the existing CSRF token. Legacy `/admin/api` aliases use the
+same handlers, policy and credential rules. These endpoints do not accept machine keys or expose MCP tools. Errors normally use `{error:{code}}`.
+
+### Service directories
+
+- `GET /api/platform/services`: requires `platform_services.read`.
+- `GET /api/tenants/:tenant_key/service-bindings`: requires tenant
+  `tenant_services.read`, including the existing tenant membership constraint.
+
+Both return `{tenant, bindings, model_catalog, webhook_urls,
+provider_capabilities}`. Platform `tenant` is null; tenant scope returns
+`{key,name}`. Each binding contains `provider`, `name`, `source` (`platform` or
+`tenant`), `status` (`connected`, `invalid`, `unavailable`), nullable
+`credential_id`, `platform_available`, `saved_fields` (field names only), and
+nullable `last_validated_at`. Effective bindings preserve inherited platform and
+tenant overrides. `webhook_urls` has `platform` and nullable `tenant` URLs;
+`provider_capabilities` maps provider names to capability lists. `model_catalog`
+is the existing local model-catalog object. There is no page/cursor contract for
+these binding directories; domain validation caps accepted bindings at 1,500.
+Errors: 403 `forbidden`, 404 `tenant_not_found`, 503
+`service_directory_unavailable`.
+
+- `GET /api/tenants/:tenant_key/services`: requires `tenant_services.read`;
+  returns `{tenant:{key,name},credentials,telephony_services,truncated}`.
+- `GET /api/tenants/:tenant_key/credentials`: same authority; returns
+  `{tenant:{key,name},credentials,truncated}`.
+
+Credential rows contain `id`, `provider`, `name`, `auth_kind`, `status`,
+`credential_preview`, nullable `last_validated_at`, `created_at`, `updated_at`.
+Preview entries contain `label`, `format` (`masked` or `last_four`), and
+`last_four` only for the latter. Telephony rows contain `id`, `name`, `provider`,
+`provider_connection_id`, nullable `credential_id`, and `outbound_number`.
+These preserve the existing maximum 100 credentials and 100 telephony rows and
+`truncated` signal; there is no new page parameter. Errors match the directories
+above. Credential values are never returned.
+
+### Credential validation and mutation
+
+Use either prefix `/api/platform/credentials` or
+`/api/tenants/:tenant_key/credentials`. Platform operations require
+`platform_services.write`; tenant operations require `tenant_api_keys.write`
+and writable membership. Direct Calls credential validation enforces this
+same write authority, including before calling the provider validator.
+
+- `POST <prefix>/test`: JSON `{provider,name?,values}`; name defaults to provider.
+  Returns 200 `{status:"valid"}`. Does not store the credential.
+- `POST <prefix>`: same body; returns 201 `{credential:<safe metadata above>}`.
+  Saving does not implicitly call provider validation or claim validation.
+- `PATCH <prefix>/:credential_id`: JSON `{provider,values}` replaces the exact
+  credential's values while retaining its identity/name; returns 200
+  `{credential:<safe metadata>}`.
+- `DELETE <prefix>/:credential_id`: no body; returns 204.
+
+Values follow the provider schema: common API-key providers use `{api_key}`;
+Telnyx accepts `{api_key,public_key?}`; Twilio uses `{account_sid,auth_token}`.
+`auth_kind` is resolved server-side, not provided by the caller. Values are
+input-only. The provider schema validates types/formats before validation/storage.
+
+All operations may return 403 `forbidden`. Validation errors: 422
+`invalid_credential` or `credential_rejected`; 501
+`credential_validation_unsupported`; 503 `credential_validation_unavailable`.
+Create errors: 404 `tenant_not_found`; 409 `credential_already_exists`; 422
+`invalid_credential`; 503 `credential_store_unavailable`. Update errors: 404
+`credential_not_found`; 422 `invalid_credential`; 503
+`credential_store_unavailable`. Delete errors: 404 `tenant_not_found` or
+`provider_credential_not_found`; 409 `provider_credential_in_use`; 422
+`invalid_credential`; 503 `credential_store_unavailable`.
+
+### Tenant telephony applications
+
+- `GET /api/tenants/:tenant_key/telephony-applications`: requires
+  `tenant_services.read`; returns `{tenant:{key,name},applications,truncated}`.
+  Each application is `{id,name,provider_connection_id,outbound_number,
+  published_routes}`. Each published route contains `number`, `call_spec_id`,
+  `call_spec_name`, `call_spec_revision`, `participant_ref`, and `ambiguous`.
+  Existing bounds are 100 applications and 500 published routes, with truncation
+  signalled; no new pagination.
+- `POST /api/tenants/:tenant_key/telephony-applications`: requires
+  `tenant_services.write`; body `{name,provider_connection_id,outbound_number?}`;
+  creates a Telnyx application referencing the effective `telnyx` credential
+  binding. Returns 201 `{application:{id,name,provider_connection_id,
+  outbound_number}}`.
+- `PATCH /api/tenants/:tenant_key/telephony-applications/:service_id`: same write
+  authority; nonempty body permitting only `provider_connection_id` and
+  `outbound_number`; returns 200 with the same application envelope. Immutable
+  name, provider and credential ownership are not caller-editable here.
+
+Errors: 403 `forbidden`; 404 `tenant_not_found` or
+`telephony_service_not_found`; 409 `telephony_service_conflict`; 422
+`invalid_telephony_service`, `invalid_tenant_key`, or
+`provider_credential_unavailable`; 503 `telephony_services_unavailable`.
+
+### Authoring phone-number inventory
+
+`GET /api/tenants/:tenant_key/telephony-services/:service/numbers` requires
+`call_specs.write`, not merely service-directory access. Query parameters:
+`search` (default empty, max 64 bytes), optional provider cursor `page` (1–256
+bytes), optional `call_spec_id` (max 128 bytes, excludes that spec's current
+assignment when determining availability). Service names must be URL-encoded.
+Returns `{numbers,next_page}`, with at most 50 numbers per provider page. Each
+number is `{id,number,name,available,assigned_to}`; `assigned_to` contains spec
+names. `next_page` is an opaque provider cursor or null, not a page number.
+Credential payloads remain inside the provider reader and are not returned.
+Existing domain ownership rules still govern platform service visibility.
+
+Preserve existing CallSpecErrors mapping: 400 `invalid_request`; 403
+`authoring_forbidden`; 404 `call_spec_not_found`; domain unavailable failures
+map to 503 `call_spec_authoring_unavailable`, and unexpected controller
+exceptions map to 503 `phone_numbers_unavailable`.
+
+UI consumers now use these canonical routes, including onboarding's service
+binding read. Onboarding demo-tenant/sample mutations remain pending product
+workflows for a separate migration; they are not reclassified as helpers.

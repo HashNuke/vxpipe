@@ -67,7 +67,7 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsEndpointTest do
       issued: issued,
       credential: credential,
       options: options,
-      path: "/admin/api/tenants/#{tenant.key}/telephony-applications"
+      path: "/api/tenants/#{tenant.key}/telephony-applications"
     }
   end
 
@@ -109,7 +109,7 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsEndpointTest do
     assert %{"application" => %{"id" => ^id, "provider_connection_id" => "updated-application"}} =
              json_response(updated, 200)
 
-    foreign = "/admin/api/tenants/#{data.other.key}/telephony-applications/#{id}"
+    foreign = "/api/tenants/#{data.other.key}/telephony-applications/#{id}"
 
     assert json_response(
              write(authenticated, :patch, foreign, %{"outbound_number" => nil}, csrf),

@@ -1606,7 +1606,7 @@ function RoutedApp({
         }
         onTestCredential={(draft) =>
           testCredentialRequest(
-            `/admin/api/tenants/${encodeURIComponent(route.tenantKey)}/credentials/test`,
+            `/api/tenants/${encodeURIComponent(route.tenantKey)}/credentials/test`,
             draft,
             undefined,
             csrfToken,
@@ -1715,7 +1715,7 @@ async function loadOnboarding(
   const tenant = parseDemoTenant(await tenantResponse.json());
 
   const serviceResponse = await fetchImpl(
-    `/admin/api/tenants/${encodeURIComponent(tenant.key)}/service-bindings`,
+    `/api/tenants/${encodeURIComponent(tenant.key)}/service-bindings`,
     { headers: { accept: "application/json" }, signal },
   );
 
@@ -1939,7 +1939,7 @@ async function loadServices(
   isCurrent: () => boolean,
 ): Promise<TenantServicesPageState | undefined> {
   const encodedTenant = encodeURIComponent(selected.tenantKey);
-  const response = await fetchImpl(`/admin/api/tenants/${encodedTenant}/services`, {
+  const response = await fetchImpl(`/api/tenants/${encodedTenant}/services`, {
     headers: { accept: "application/json" },
     signal,
   });
@@ -2137,7 +2137,7 @@ async function saveCredential(
     const credentialPath = existing
       ? `/credentials/${encodeURIComponent(existing.credentialId)}`
       : "/credentials";
-    const response = await fetchImpl(`/admin/api/tenants/${encodedTenant}${credentialPath}`, {
+    const response = await fetchImpl(`/api/tenants/${encodedTenant}${credentialPath}`, {
       method: existing ? "PATCH" : "POST",
       headers: {
         accept: "application/json",

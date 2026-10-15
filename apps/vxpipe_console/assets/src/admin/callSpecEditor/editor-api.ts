@@ -85,7 +85,7 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     const query = new URLSearchParams({ search });
     if (page) query.set("page", page);
     if (callSpecId) query.set("call_spec_id", callSpecId);
-    const value = await get(`${browserBase}/telephony-services/${encodeURIComponent(service)}/numbers?${query}`, signal);
+    const value = await get(`${base}/telephony-services/${encodeURIComponent(service)}/numbers?${query}`, signal);
     if (!Array.isArray(value.numbers) || value.numbers.length > 50 || !value.numbers.every((item) => record(item) && typeof item.id === "string" && typeof item.number === "string" && typeof item.name === "string" && typeof item.available === "boolean" && names(item.assigned_to)) || !(value.next_page === null || typeof value.next_page === "string")) throw new Error("Invalid phone number inventory");
     return { numbers: value.numbers.map((item) => ({ id: item.id, number: item.number, name: item.name, available: item.available, assignedTo: item.assigned_to })), nextPage: value.next_page };
   }

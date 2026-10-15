@@ -563,7 +563,7 @@ account list/detail/create/update and paginated role options now use canonical
 HTTP routes. Tenant list timestamps are shared across HTTP/MCP; account inputs
 use canonical filters and membership tenant keys. Full role-grant reads still
 enrich account selectors through the existing authorized role endpoint until role
-administration migrates. Service/credential/role management, password reset,
+administration migrates. Role management, password reset,
 tenant creation, onboarding/samples and call inspection remain open.
 
 Nine frontend red failures and a tenant-projection regression preceded the changes.
@@ -584,6 +584,22 @@ passed, together with TypeScript, lint and the asset build. Rendered Chrome veri
 listing/target selection, creation, one-time secret dismissal and revocation.
 The existing table overflows horizontally at 390px; no layout changed in this slice.
 Remaining UI operations and final acceptance stay open.
+
+Services UI cutover: 16 Console-owned canonical service, credential, telephony-
+application and authoring number-inventory routes now share existing controllers
+with their legacy aliases. Both prefixes require sessions and reject explicit
+Authorization before fallback. Direct credential validation now requires the same
+write authority as HTTP, and domain denials map to 403. The UI uses canonical URLs,
+including onboarding's service-binding read; onboarding mutations remain pending.
+
+After expected policy/endpoint/client red failures, 53 Calls tests, 48 Console
+tests and all 760 frontend tests passed, with types/lint/build and independent
+review. Rendered desktop/mobile checks verified platform validation/create/delete,
+tenant validation/create/update and onboarding's canonical binding lookup using a
+fake validator. The fixture and browser stopped. Existing tenant scoped-service
+and embedded telephony components have no production route; their request changes
+have endpoint/component coverage, without claiming rendered coverage. Roles,
+password reset, tenant creation, onboarding/samples and call inspection remain open.
 
 ## Checkpoint: parity acceptance and documentation
 

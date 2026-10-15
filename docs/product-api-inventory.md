@@ -13,7 +13,9 @@ also uses canonical Console handlers, with session-only authentication and the
 existing delegation policy. Tenant list items are
 `{tenant_key,name,created_at}`; navigation paths are derived by the UI. Account
 selectors temporarily enrich canonical role options with separately authorized
-legacy role-grant reads. Service/credential/role administration, password reset,
+legacy role-grant reads. Service/credential administration and authoring phone-number
+inventory now use canonical session-only handlers, including onboarding's service
+binding read. Role administration, password reset,
 tenant creation, onboarding/samples and call inspection still require migration.
 Legacy routes remain available during that work; this inventory does not claim
 their removal or full controller consolidation.
@@ -131,6 +133,13 @@ tests in this milestone use a local fake adapter.
 | `PATCH A/T/telephony-applications/:service_id` | `PATCH API/T/telephony-applications/:service_id` | Calls telephony application update -> `{application}` | Same write grants; preserve published-route conflicts |
 | `POST A/onboarding/demo-tenant` | `POST API/onboarding/demo-tenant` | Calls authorized ensure-demo-tenant; `{tenant}` | S `tenants.write`; K denied pending tenant-creation policy; extract controller ambient installation authority behind shared policy |
 | `POST A/onboarding/demo-tenant/samples` | `POST API/onboarding/demo-tenant/samples` | Calls sample authoring workflow; installed sample IDs/names/status/revisions | S `tenants.write` **and** target `call_specs.write`; K denied pending sample-install policy; move `Console.DemoSamples` orchestration to owning boundary |
+
+Service/credential/telephony-application routes above and the authoring number
+inventory are implemented under `/api`, with existing handlers shared by their
+legacy aliases. Explicit Authorization is rejected before parsing/session fallback
+on both prefixes. Direct credential validation uses the same write permission as
+HTTP. See [service contracts](product-http-api.md#services-and-provider-credentials-browser-sessions).
+Onboarding creation/sample mutations remain pending product workflows.
 
 Service `truncated` results and provider cursors predate this milestone. Document
 their bounds instead of silently labelling them paginated. Required MCP product
