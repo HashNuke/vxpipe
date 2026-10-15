@@ -342,6 +342,22 @@ bounded work, retain context until success, and combine storage acknowledgement
 with independent carrier/resource completion before acknowledging cleanup. That
 integration is still pending.
 
+The owner-held `CarrierCleanup` helper now provides that registration and storage
+protocol without creating another owner process. It attaches only to an existing
+exact tracker, registers the original Leg, and retains one immutable terminal
+usage batch. Persistence runs under the existing task supervisor; each worker
+installs its own deadline before calling storage, so the bound survives Leg death.
+A result alone cannot complete storage: the owner also waits for the worker DOWN.
+Partial failure and timeout retry the same batch with capped backoff.
+
+Only the original Leg can acknowledge its tracker membership, after storage is
+confirmed, the current usage batch still matches, commands are drained, and the
+Leg independently proves carrier termination or no submitted command. Unknown
+usage can be stored without becoming carrier-completion proof. Tracker loss is
+reported unavailable and never creates a replacement tracker. These helper
+contracts are locally tested; connecting both carrier owners and managed admission
+remains a separate integration step.
+
 Owner death before binding can leave archive evidence. Establish one shared
 durable archive ownership anchor under the call-row lock, validating the call's
 room and exact incarnation across both facts and snapshots. Archive writes and

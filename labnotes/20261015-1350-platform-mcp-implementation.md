@@ -1189,3 +1189,22 @@ still attempted revocation; a follow-up 41-test run reproduced two failures befo
 the guard was narrowed to failed unreserved owners. All 51 focused tests now pass.
 Independent final review approved the four-file delta. Managed registration and
 final usage persistence remain integration work.
+
+### Carrier final-usage protocol
+
+Added owner-embedded CarrierCleanup state for exact existing-tracker registration,
+immutable terminal usage persistence and original-owner semantic acknowledgement.
+Storage runs under the existing admission task supervisor, waits for actual task
+DOWN, and retries partial failure/timeout with capped backoff. Unknown terminal
+usage is persisted, but acknowledgement separately requires known command drainage
+and carrier-ended or definitive not-submitted evidence. Tracker loss stays
+unavailable and cannot reconstruct membership.
+
+Initial nine contract tests failed for the absent API, then passed. Independent
+review identified a real window when the owner installed a deadline after spawning
+the worker: owner death could leave blocked storage unbounded. The worker now
+installs its own deadline before storage and cancels it locally after completion.
+An owner-death regression covers the boundary. Final selection passes all 27
+tests (ten helper, four LegUsage and 13 cleanup tracker), exact formatting and
+independent final review. Both carrier owners still require integration; the
+helper alone does not enable managed admission or hangup.

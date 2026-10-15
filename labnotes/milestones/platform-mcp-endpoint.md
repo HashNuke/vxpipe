@@ -593,6 +593,14 @@ a failed unreserved owner preserves its result. Initial 41/four and follow-up
 41/two red selections preceded fixes; all 51 focused tests pass with independent
 review. Carrier tracker/final-usage integration remains open.
 
+Carrier final-usage helper now retains an immutable batch, uses worker-owned
+deadlines and actual worker termination, retries storage, and requires the
+original Leg plus independent carrier/drainage evidence before acknowledgement.
+Unknown usage remains persistable; missing trackers are never recreated. Nine
+missing-API red tests preceded implementation; independent review found and fixed
+a deadline-installation window. All 27 helper/usage/tracker tests pass and final
+review approved. Carrier-owner integration and managed admission remain open.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:
