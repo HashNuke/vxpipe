@@ -163,9 +163,9 @@ post-start registration is sufficient only when rejection prevents those effects
 
 ### Local session and WebRTC registration
 
-The next resource integration registers each managed Session before issuing its
-credential and carries the exact cleanup binding privately into its WebRTC
-snapshot. A Session acknowledges only after its admission-release callback
+Sessions now accept a private cleanup binding and register before issuing their
+credentials and carry the exact cleanup binding privately into their WebRTC
+snapshots. A Session acknowledges only after its admission-release callback
 succeeds. Failed releases retain supervised retry ownership. Managed sessions
 monitor the claimant, bound connection and tracker even without a release
 callback; tracker loss closes the local session and cannot recreate membership.
@@ -182,7 +182,9 @@ These hooks alone must not enable managed admission. Web calls can initiate
 outgoing transfer legs outside those trees; initial and transfer carriers still
 need registration, remote termination evidence and final-usage acknowledgement.
 The durable reservation and tracker must exist before releasing the startup gate.
-This design was independently reviewed; resource-hook implementation remains open.
+The Session/WebRTC hooks are implemented and locally verified. Production
+admission does not yet supply the private binding; enabling it remains part of
+the complete resource-wiring checkpoint.
 
 ### Terminal projection and publication
 

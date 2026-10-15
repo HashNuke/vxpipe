@@ -498,6 +498,14 @@ All five root gates then passed on frozen source including the completion, final
 usage and services changes: 4,148 default-suite tests, zero failures (140 excluded).
 Focused SQL races are separate evidence; no live providers were used.
 
+Session/WebRTC resource hooks: a private exact binding now registers Sessions
+before issuance and their complete WebRTC supervision roots before child effects.
+Session acknowledgement waits for admission release; managed credentials monitor
+tracker/claimant/connection loss. Local-only WebRTC acknowledgement still requires
+whole-root orderly DOWN. Four Session and three real-WebRTC reds preceded the
+changes; the final 38-test focused selection passes. Production managed admission
+remains disabled until carrier/media coverage and reconciliation are connected.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

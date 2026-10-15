@@ -56,7 +56,8 @@ defmodule Vxpipe.Gateway.WebRTC.ConnectionSupervisor do
            __MODULE__,
            {ConnectionIncarnationSupervisor, child_options}
          ) do
-      {:ok, incarnation} -> {:ok, connection_id, incarnation}
+      {:ok, incarnation} when is_pid(incarnation) -> {:ok, connection_id, incarnation}
+      :ignore -> {:error, :connection_start_failed}
       {:error, _reason} -> {:error, :connection_start_failed}
     end
   end

@@ -849,3 +849,35 @@ Calls 230, Gateway 708 (8 excluded), Artifacts 20, Persistence 365 (27 excluded)
 and Console 345 (19 excluded), all with zero failures. Focused SQL race evidence
 remains recorded separately; excluded live/integration lanes were not represented
 as default-suite passes. Local links in the hangup design and milestone are valid.
+
+### Session and WebRTC cleanup registration
+
+Four focused Session regressions failed on missing membership, missing private
+binding/lifetime ownership, accepting lost/sealed trackers, and tracker loss not
+closing credentials. After implementation all 16 Session tests passed. Three real
+WebRTC regressions then failed because no supervision root was registered and a
+sealed tracker still accepted an offer.
+
+Sessions now register themselves before issuance, retain private binding and
+tracker monitoring, and acknowledge only after admission release succeeds. A
+successful release is retained across acknowledgement retries. Managed normal
+sessions also monitor claimant/connection lifetimes. Tracker loss closes locally
+without recreating membership. Public projection omits the private binding.
+
+WebRTC registers the root supervisor before any children, acknowledges only its
+lack of independent carrier/usage obligations, and still requires orderly whole-
+root termination. Rejected registration returns Supervisor's `:ignore`; the
+connection owner translates that into the existing startup-failed result.
+
+The first combined run found incorrect normalization of DynamicSupervisor's bare
+`:ignore` result, fixed directly. The second passed behavior assertions but exposed
+a new fixture teardown race: raw `GenServer.stop` conflicted with independent room
+shutdown. Only the new managed fixture now uses exact-incarnation `end_call`.
+The final combined selection passed all 38 Session, real-WebRTC and tracker tests,
+with no compile warnings. No production admission enables managed cleanup yet;
+initial/transfer carrier and media coverage plus reconciliation remain required.
+
+Independent Session/WebRTC review found no blockers. It confirmed registration
+before effects, retained release/acknowledgement retry state, private projection,
+whole-root completion requirements and tracker-loss handling. A documentation
+grammar correction was applied before commit.

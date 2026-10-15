@@ -11,7 +11,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler}
   alias Vxpipe.CallEngine.Command.JoinParticipant
   alias Vxpipe.Gateway.HTTP.Endpoint
-  alias Vxpipe.Gateway.SessionSupervisor
+  alias Vxpipe.Gateway.{CallCleanup, CallCleanupSupervisor, SessionSupervisor}
   alias Vxpipe.Gateway.WebRTC.Connection
 
   @moduletag capture_log: true
@@ -20,6 +20,63 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
   @automatic_bitrate -1_000
   @endpoint_options Endpoint.init(cors: [])
   @signal_voice 3_001
+
+  test "managed WebRTC registers its whole tree and completion waits for orderly shutdown" do
+    {plan, room, binding, tracker} = managed_room()
+    participant = Map.fetch!(plan.participants, "caller").participant_id
+    session = issue_session(plan, room, participant, cleanup_binding: binding)
+    client = connect(session.session_id)
+    assert {:ok, %{status: :open, resources: resources}} = CallCleanup.observe(tracker)
+    [{root, resource}] = Enum.filter(resources, fn {_pid, item} -> item.kind == :web_rtc end)
+    assert resource.owner == root
+    assert resource.acknowledgement == :complete
+    assert resource.root_outcome == :pending
+
+    [{controller, _}] =
+      Registry.lookup(Vxpipe.Gateway.WebRTC.Registry, {:connection, client.connection_id})
+
+    root_monitor = Process.monitor(root)
+    controller_monitor = Process.monitor(controller)
+    assert :ok = CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+    assert_receive {:DOWN, ^controller_monitor, :process, ^controller, _}, 5_000
+    assert_receive {:DOWN, ^root_monitor, :process, ^root, :shutdown}, 5_000
+    assert_receive {:call_cleanup_changed, ^tracker, %{status: :complete}}, 5_000
+  end
+
+  test "sealed cleanup rejects a WebRTC offer before creating transport children" do
+    {plan, room, binding, tracker} = managed_room()
+    participant = Map.fetch!(plan.participants, "caller").participant_id
+    session = issue_session(plan, room, participant, cleanup_binding: binding)
+    :ok = CallCleanup.seal(tracker)
+    client = start_supervised!({PeerConnection, []})
+    {:ok, _} = PeerConnection.add_transceiver(client, :audio, direction: :sendrecv)
+    {:ok, offer} = PeerConnection.create_offer(client)
+    :ok = PeerConnection.set_local_description(client, offer)
+
+    assert {:error, :connection_start_failed} =
+             Vxpipe.Gateway.WebRTC.ConnectionSupervisor.accept_offer(
+               session.session_id,
+               offer,
+               []
+             )
+
+    assert %{resources: resources} = CallCleanup.snapshot(tracker)
+    refute Enum.any?(resources, fn {_pid, resource} -> resource.kind == :web_rtc end)
+  end
+
+  test "lost cleanup membership closes the managed session and its WebRTC tree" do
+    {plan, room, binding, tracker} = managed_room()
+    participant = Map.fetch!(plan.participants, "caller").participant_id
+    session = issue_session(plan, room, participant, cleanup_binding: binding)
+    _client = connect(session.session_id)
+    %{resources: resources} = CallCleanup.snapshot(tracker)
+    [{root, _resource}] = Enum.filter(resources, fn {_pid, item} -> item.kind == :web_rtc end)
+    monitor = Process.monitor(root)
+    :ok = DynamicSupervisor.terminate_child(CallCleanupSupervisor, tracker)
+    assert_receive {:DOWN, ^monitor, :process, ^root, :shutdown}, 5_000
+    assert {:error, :not_found} = Vxpipe.Gateway.Session.claim(session.session_id)
+    assert {:error, :not_found} = CallCleanupSupervisor.lookup(binding)
+  end
 
   test "prepares the complete prospective room before opening changed participant routes" do
     alias Vxpipe.CallEngine.MediaPolicy.Authority
@@ -812,7 +869,25 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
 
   defp registries, do: %{host_tools: %{}}
 
-  defp issue_session(plan, room, participant_id) do
+  defp managed_room do
+    plan = compile_plan()
+    {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
+
+    on_exit(fn -> CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id) end)
+
+    binding = %{
+      tenant_key: plan.tenant_id,
+      call_id: plan.call_id,
+      room_id: plan.room_id,
+      incarnation_id: room.incarnation_id
+    }
+
+    {:ok, tracker} = CallCleanupSupervisor.start_new(binding)
+    on_exit(fn -> DynamicSupervisor.terminate_child(CallCleanupSupervisor, tracker) end)
+    {plan, room, binding, tracker}
+  end
+
+  defp issue_session(plan, room, participant_id, extra \\ []) do
     binding = [
       tenant_id: plan.tenant_id,
       actor_id: plan.actor_id,
@@ -822,7 +897,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanOnlyWebRTCTest do
       tool_visibility: plan.tool_visibility
     ]
 
-    assert {:ok, session} = SessionSupervisor.issue(binding, 30_000)
+    assert {:ok, session} = SessionSupervisor.issue(binding ++ extra, 30_000)
     session
   end
 

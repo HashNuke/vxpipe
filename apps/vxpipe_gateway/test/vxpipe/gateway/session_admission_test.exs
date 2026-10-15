@@ -4,7 +4,107 @@ defmodule Vxpipe.Gateway.SessionAdmissionTest do
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Command.CreateRoom
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility
-  alias Vxpipe.Gateway.{Session, SessionSupervisor}
+  alias Vxpipe.Gateway.{CallCleanup, CallCleanupSupervisor, Session, SessionSupervisor}
+
+  test "managed sessions register before issuance and wait for successful admission release" do
+    room = create_room()
+    {binding, tracker} = managed_binding(room)
+    counter = :atomics.new(1, [])
+    owner = self()
+
+    release = fn ->
+      attempt = :atomics.add_get(counter, 1, 1)
+      send(owner, {:managed_release, attempt})
+      if attempt == 1, do: {:error, :unavailable}, else: :ok
+    end
+
+    assert {:ok, snapshot} =
+             SessionSupervisor.issue(Keyword.put(binding, :release_admission, release), 60_000)
+
+    [{session, _}] = Registry.lookup(Vxpipe.Gateway.SessionRegistry, snapshot.session_id)
+    assert snapshot.admission_owner == session
+    assert Map.get(snapshot, :cleanup_binding) == Keyword.fetch!(binding, :cleanup_binding)
+    refute Map.has_key?(Vxpipe.Gateway.Session.Snapshot.to_public(snapshot), "cleanup_binding")
+
+    assert {:ok, %{resources: %{^session => %{owner: ^session, acknowledgement: :pending}}}} =
+             CallCleanup.observe(tracker)
+
+    monitor = Process.monitor(session)
+    end_room(room)
+    assert_receive {:managed_release, 1}, 1_000
+
+    assert_receive {:call_cleanup_changed, ^tracker,
+                    %{engine_outcome: :complete, status: :pending}},
+                   1_000
+
+    assert %{status: :pending} = CallCleanup.snapshot(tracker)
+    assert {:error, :already_claimed} = Session.claim(snapshot.session_id)
+    send(session, :release_admission)
+    assert_receive {:managed_release, 2}, 1_000
+    assert_receive {:DOWN, ^monitor, :process, ^session, :normal}, 1_000
+    assert_receive {:call_cleanup_changed, ^tracker, %{status: :complete}}, 1_000
+  end
+
+  test "managed normal sessions retain ownership after expiry until their connection exits" do
+    room = create_room()
+    {binding, tracker} = managed_binding(room)
+    assert {:ok, snapshot} = SessionSupervisor.issue(binding, 60_000)
+    [{session, _}] = Registry.lookup(Vxpipe.Gateway.SessionRegistry, snapshot.session_id)
+    assert snapshot.admission_owner == session
+    assert {:ok, _} = Session.claim(snapshot.session_id)
+    connection = start_supervised!({Agent, fn -> :connection end})
+    assert :ok = Session.bind_connection(snapshot.session_id, connection)
+    send(session, :expire)
+    assert %Vxpipe.Gateway.Session.Snapshot{} = Session.snapshot(session)
+
+    assert %{resources: %{^session => %{acknowledgement: :pending}}} =
+             CallCleanup.snapshot(tracker)
+
+    monitor = Process.monitor(session)
+    Agent.stop(connection)
+    assert_receive {:DOWN, ^monitor, :process, ^session, :normal}, 1_000
+
+    assert %{resources: %{^session => %{acknowledgement: :complete}}} =
+             CallCleanup.snapshot(tracker)
+  end
+
+  test "missing or sealed cleanup ownership rejects issuance but releases an owned admission" do
+    for unavailable <- [:missing, :sealed] do
+      room = create_room()
+      {binding, tracker} = managed_binding(room)
+      if unavailable == :sealed, do: CallCleanup.seal(tracker)
+
+      if unavailable == :missing,
+        do: DynamicSupervisor.terminate_child(CallCleanupSupervisor, tracker)
+
+      owner = self()
+
+      release = fn ->
+        send(owner, {:registration_release, unavailable})
+        :ok
+      end
+
+      assert {:error, :session_start_failed} =
+               SessionSupervisor.issue(Keyword.put(binding, :release_admission, release), 60_000)
+
+      assert_receive {:registration_release, ^unavailable}, 1_000
+      assert {:error, :session_start_failed} = SessionSupervisor.issue(binding, 60_000)
+    end
+  end
+
+  test "tracker loss closes managed credentials without recreating membership" do
+    room = create_room()
+    {binding, tracker} = managed_binding(room)
+    assert {:ok, snapshot} = SessionSupervisor.issue(binding, 60_000)
+    [{session, _}] = Registry.lookup(Vxpipe.Gateway.SessionRegistry, snapshot.session_id)
+    monitor = Process.monitor(session)
+    DynamicSupervisor.terminate_child(CallCleanupSupervisor, tracker)
+    assert_receive {:DOWN, ^monitor, :process, ^session, :normal}, 1_000
+    assert {:error, :not_found} = Session.claim(snapshot.session_id)
+
+    assert {:error, :not_found} =
+             CallCleanupSupervisor.lookup(Keyword.fetch!(binding, :cleanup_binding))
+  end
 
   test "issuance requires the exact live tenant, room and incarnation" do
     room = create_room()
@@ -294,6 +394,19 @@ defmodule Vxpipe.Gateway.SessionAdmissionTest do
     assert_receive {:session_call_result, {:error, :not_found}}, 1_000
     assert_receive {:DOWN, ^caller_monitor, :process, ^caller, :normal}, 1_000
     assert_receive {:DOWN, ^session_monitor, :process, ^session, :normal}, 1_000
+  end
+
+  defp managed_binding(room) do
+    cleanup = %{
+      tenant_key: room.tenant_id,
+      call_id: "call-#{room.room_id}",
+      room_id: room.room_id,
+      incarnation_id: room.incarnation_id
+    }
+
+    {:ok, tracker} = CallCleanupSupervisor.start_new(cleanup)
+    on_exit(fn -> DynamicSupervisor.terminate_child(CallCleanupSupervisor, tracker) end)
+    {Keyword.put(session_binding(room), :cleanup_binding, cleanup), tracker}
   end
 
   defp start_session(release, room \\ create_room()) do
