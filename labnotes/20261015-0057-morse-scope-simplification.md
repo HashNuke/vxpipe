@@ -32,3 +32,29 @@ but old complete checkboxes do not imply the reduced Go build has been verified.
 
 Verification for this specification checkpoint: relative links, code fences,
 whitespace and diff inspection. Runtime changes remain in a separate checkpoint.
+
+Implementation follow-up: Go commit 1d815f5 removes the unnecessary protocols,
+format conversion, token store, pinned schema inventories and separate Railway
+SDK module. The runtime is a static Go binary with coder/websocket as its only
+module dependency. The user also explicitly confirmed audio should stream;
+the encoder renders into 4096-byte buffers and HTTP flushes each buffer, while
+STT consumes continuous WebSocket PCM chunks. No complete audio response is
+buffered by the synthesis handler.
+
+The new default-PCM/no-codec test initially failed with codec_unavailable, and
+unsupported-extension tests initially showed the old endpoints still active.
+After simplification all 35 tests/subtests pass under the race detector; vet
+passes. Existing slow-reader, client-disconnect and socket-drain checks remain.
+A focused first-flush test stops a nearly five-minute response after less than
+one second of PCM, proving early delivery and termination on the flush error.
+
+The 2,895,429-byte scratch image ran read-only with 512 MiB, two CPUs and an
+injected port different from the published port. The single Go smoke command
+passed readiness/auth/discovery, streamed PCM, batch transcription and realtime
+partial/final recognition. Missing origin exits 1; SIGTERM exits 0. The owned
+container was removed. Hosted Railway checks remain pending user deployment.
+Vxpipe's full regression terminates with 3,841 tests, zero failures and 148
+exclusions (seed 899255). Its persisted-origin/TLS/outage lane and both ordinary
+configured-room scenarios also pass against the simplified binary. Root static
+gates pass. No Console UI code changed during simplification; the previous
+759-test frontend pass and rendered service/editor evidence still cover it.

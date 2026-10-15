@@ -5,7 +5,7 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiOriginRestartTest do
   @moduletag timeout: 240_000
 
   @tag :tmp_dir
-  test "one persisted service and publication survive HTTP to verified HTTPS cutover and rollback",
+  test "persisted Morse rooms survive origin cutover and retire recognition on service outage",
        %{tmp_dir: directory} do
     root = Path.expand("../../../..", __DIR__)
     fixture = Path.join(root, "apps/vxpipe_console/test/fixtures/morse_origin_proxy.go")
@@ -92,6 +92,23 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiOriginRestartTest do
                    {"POST", "/v1/text-to-speech/morse/stream"}
                  ]
       end
+
+      outage = ["run", "--no-compile", probe, "outage", path, "none"]
+
+      assert mix(root, env ++ [{"MORSE_CODE_API_BASE_URL", plain}], outage) =~
+               "Morse outage retired recognition without publishing a final or reply"
+
+      assert File.read!(path) == snapshot
+      requests = observations(port)
+      assert Enum.all?(requests, &(&1["origin"] == "plain"))
+
+      assert requests |> Enum.map(&{&1["method"], &1["path"]}) |> Enum.uniq() |> Enum.sort() ==
+               [
+                 {"GET", "/v1/models"},
+                 {"GET", "/v1/speech-to-text/realtime"},
+                 {"GET", "/v1/voices"},
+                 {"POST", "/__fixture/stop"}
+               ]
     after
       if Port.info(port) do
         Port.command(port, "stop\n")
@@ -110,6 +127,7 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiOriginRestartTest do
 
     case Jason.decode!(line) do
       %{"event" => "barrier"} -> Enum.reverse(requests)
+      %{"event" => "root_probe"} -> collect(port, requests)
       %{"event" => "request"} = request -> collect(port, [request | requests])
     end
   end

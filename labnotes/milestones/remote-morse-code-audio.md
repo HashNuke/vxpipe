@@ -61,6 +61,12 @@ The explicit PCM profile takes precedence over ElevenLabs' MP3 default.
 Document the supported subset accurately; unsupported formats/options must
 fail clearly. Do not claim arbitrary ElevenLabs SDK calls work unchanged.
 
+Streaming is required in both directions. TTS renders and flushes PCM chunks
+before the full audio is generated; Vxpipe starts consuming them immediately.
+Realtime STT accepts continuous PCM chunks and emits partial/final text. Preserve
+backpressure and cancellation. The batch upload route is only a file/debugging
+convenience and must not replace the streaming room path.
+
 Match the local Morse defaults: 700 Hz tone, 60 ms dot, amplitude 4096,
 1/3-unit marks, 1/3/7-unit gaps and a 14-unit utterance tail. Realtime recognition
 must not split a word gap into a completed turn. Use transcript onset for Morse;
@@ -101,16 +107,23 @@ application around the required contract above.
 
 - [x] Implement the Go Morse encoder/decoder and independent interoperability fixtures.
 - [x] Implement authenticated PCM TTS, batch PCM/WAV STT and realtime STT.
-- [x] Bound request sizes, active work and shutdown; keep processing in memory.
-- [ ] Remove unnecessary TTS WS/context/token/format machinery and its deployment
+- [x] Bound request sizes, streaming buffers and shutdown; keep processing in memory.
+- [x] Remove unnecessary TTS WS/context/token/format machinery and its deployment
   dependencies. Retain only code needed by the required speech paths.
-- [ ] Reduce documentation, smoke commands and CI to the supported contract;
+- [x] Reduce documentation, smoke commands and CI to the supported contract;
   remove claims that full ElevenLabs feature parity remains a future gate.
-- [ ] Verify the simplified server's normal round trip, invalid input, arbitrary
+- [x] Verify the simplified server's normal round trip, invalid input, arbitrary
   keys, missing keys, chunk boundaries and disconnect cleanup.
 
 Acceptance: a clean standalone checkout produces/recognizes Morse through the
 listed interfaces without an external codec service, database or paid provider.
+
+Simplification evidence: Go revision `1d815f5` removes unused protocols,
+FFmpeg, token storage, schema inventories and the separate Railway SDK module.
+The application has one WebSocket dependency and ships as a static nonroot
+binary. Vet and the 35-test/subtest race lane pass. A focused test proves an
+early flush for a nearly five-minute synthesis; disconnect/slow-reader checks
+still pass. The local production image passes the HTTP/WS smoke command.
 
 ### B — One ordinary Vxpipe provider
 
@@ -137,8 +150,8 @@ path; local Morse and real ElevenLabs remain separate existing providers.
 - [x] Repeat utterances with distinct room turn identities.
 - [x] Interrupt/replace blocked remote TTS output through the ordinary room API.
 - [x] Inspect Console service/model selection at desktop and mobile sizes.
-- [ ] Finish the real service-outage check and relevant regression gates.
-- [ ] Re-run the required local speech round trip against the simplified Go binary.
+- [x] Finish the real service-outage check and relevant regression gates.
+- [x] Re-run the required local speech round trip against the simplified Go binary.
 
 Use existing room policy tests for the policy engine. Retain focused failure and
 cancellation coverage for remote speech; no new policy test framework, browser
@@ -148,16 +161,22 @@ The current room fixtures use embedded PCM input/output, not browser WebRTC.
 Acceptance: the network boundary works, fails clearly and retires owned work
 without a fabricated final transcript or stale reply.
 
+Acceptance against Go `1d815f5`: the persisted origin/TLS/rollback and outage
+test passes (seed 582279); both repeated round-trip and blocked-output room
+cases pass (seed 141071). Root regression passes 3,841 tests, zero failures and
+148 exclusions (seed 899255). See the
+[network boundary evidence](../20261015-0049-morse-room-boundaries.md).
+
 ### D — Railway deployment package
 
-- [ ] Build a small standalone production image with an exec-form entrypoint,
+- [x] Build a small standalone production image with an exec-form entrypoint,
   nonroot runtime and no unnecessary codec packages.
 - [x] Honor `HOST`/`PORT`, serve HTTP and STT WS on one listener, and provide
   health/readiness plus bounded SIGTERM cleanup.
-- [ ] Keep one Railway configuration and a short runbook: repository connection,
+- [x] Document Railway service settings in one short runbook: repository connection,
   build settings, runtime variables, readiness, generated domain, custom domain,
   TLS/WSS verification and rollback. No volume or database.
-- [ ] Run one base-URL-parameterized smoke command against the local production
+- [x] Run one base-URL-parameterized smoke command against the local production
   image, including PCM round trip, realtime recognition and shutdown.
 - [ ] Record the verified Go/Vxpipe revisions, image and local outcome; leave
   hosted verification explicitly pending until deployment actually occurs.
@@ -170,12 +189,19 @@ uses the listening port. Do not describe readiness as continuous monitoring.
 Acceptance: the user can deploy the separate repository without additional
 application development, then switch Vxpipe through runtime configuration.
 
+Local package evidence: the scratch image is 2,895,429 bytes, runs as
+`65532:65532`, and passed smoke with a read-only filesystem, a 512-MiB limit
+and a nondefault injected port. SIGTERM exited 0. The Go repository's
+`docs/verification.md` records the image digest; `cmd/smoke -base-url ORIGIN`
+is the single local/hosted check. Deployment uses Railway's Dockerfile detection
+and documented UI settings, without an additional infrastructure module.
+
 ### E — Finish and publish
 
-- [ ] Go formatting, vet, unit/integration tests and race checks pass.
-- [ ] Vxpipe root formatting, warnings-as-errors compile, strict Credo, tests and
+- [x] Go formatting, vet, unit/integration tests and race checks pass.
+- [x] Vxpipe root formatting, warnings-as-errors compile, strict Credo, tests and
   unused dependency checks pass. Run Lean if speech state-machine code changes.
-- [ ] Relevant Console changes have focused tests and rendered verification.
+- [x] Relevant Console changes have focused tests and rendered verification.
 - [ ] Keep labnotes, this checklist and the milestone index accurate.
 - [ ] Commit small coherent checkpoints in each repository; push Vxpipe when
   implementation and local deployment preparation are complete.

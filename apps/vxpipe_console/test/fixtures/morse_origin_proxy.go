@@ -52,14 +52,17 @@ func backend(binary string) (string, func()) {
 	must(command.Start())
 	done := make(chan error, 1)
 	go func() { done <- command.Wait() }()
+	var stopped sync.Once
 	stop := func() {
-		_ = command.Process.Signal(syscall.SIGTERM)
-		select {
-		case <-done:
-		case <-time.After(7 * time.Second):
-			_ = command.Process.Kill()
-			<-done
-		}
+		stopped.Do(func() {
+			_ = command.Process.Signal(syscall.SIGTERM)
+			select {
+			case <-done:
+			case <-time.After(7 * time.Second):
+				_ = command.Process.Kill()
+				<-done
+			}
+		})
 	}
 	origin := fmt.Sprintf("http://127.0.0.1:%d", port)
 	client := &http.Client{Timeout: time.Second}
@@ -110,13 +113,28 @@ func certificate(directory string) (tls.Certificate, string) {
 	return pair, path
 }
 
-func proxy(target, name string, pair *tls.Certificate) (string, func()) {
+func proxy(target, name string, pair *tls.Certificate, stopBackend func()) (string, func()) {
 	upstream, err := url.Parse(target)
 	must(err)
 	forward := httputil.NewSingleHostReverseProxy(upstream)
 	forward.FlushInterval = -1
+	forward.ErrorLog = log.New(io.Discard, "", 0)
 	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, ErrorLog: log.New(io.Discard, "", 0), Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Local port discovery can probe both listeners while a fixture runs.
+		// Separate only credential-free root probes; all API and authenticated
+		// requests remain in the strict origin/path ledger.
+		if r.Method == http.MethodGet && r.URL.Path == "/" && r.URL.RawQuery == "" && r.Header.Get("xi-api-key") == "" && r.Header.Get("Authorization") == "" {
+			report(map[string]string{"event": "root_probe", "origin": name})
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		report(map[string]string{"event": "request", "origin": name, "method": r.Method, "path": r.URL.Path})
+		// This control exists only on the loopback test fixture, never the API.
+		if r.Method == http.MethodPost && r.URL.Path == "/__fixture/stop" {
+			stopBackend()
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		forward.ServeHTTP(w, r)
 	})}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -140,9 +158,9 @@ func main() {
 	second, stopSecond := backend(os.Args[1])
 	defer stopSecond()
 	pair, ca := certificate(os.Args[2])
-	plain, closePlain := proxy(first, "plain", nil)
+	plain, closePlain := proxy(first, "plain", nil, stopFirst)
 	defer closePlain()
-	secure, closeSecure := proxy(second, "secure", &pair)
+	secure, closeSecure := proxy(second, "secure", &pair, stopSecond)
 	defer closeSecure()
 	report(map[string]string{"event": "ready", "plain": plain, "secure": secure, "ca": ca})
 	// EOF also retires owned processes if the test exits unexpectedly.

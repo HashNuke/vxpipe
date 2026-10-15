@@ -3,7 +3,7 @@ defmodule Vxpipe.Console.Test.MorseRestartProbe do
   alias Vxpipe.CallEngine.{CallInvocation, CallSpec, CallSpecCompiler}
   alias Vxpipe.CallEngine.Command.AttachConnection
   alias Vxpipe.CallEngine.Diagnostics.{AgentRuntimeModelProvider, ModelFixture}
-  alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, ParticipantTranscription}
+  alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, ParticipantTranscription, TextOutput}
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder, Encoder}
   alias Vxpipe.CallEngine.Speech.SocketConnection
@@ -72,7 +72,7 @@ defmodule Vxpipe.Console.Test.MorseRestartProbe do
     IO.puts("Morse untrusted HTTPS and WSS rejected")
   end
 
-  def run("room", path, ca) do
+  def run(mode, path, ca) when mode in ["room", "outage"] do
     if ca != "none", do: :ok = :public_key.cacerts_load(String.to_charlist(ca))
     options = repositories()
     pin = path |> File.read!() |> Jason.decode!()
@@ -183,31 +183,7 @@ defmodule Vxpipe.Console.Test.MorseRestartProbe do
           15_000 -> raise "Morse restart room did not become ready"
         end
 
-        {:ok, profile} = Config.new()
-        {:ok, pcm} = Encoder.encode(profile, "E E")
-        stream(connection, identity, pcm, 0)
-
-        turn =
-          receive do
-            {:vxpipe_event,
-             %ParticipantTranscription{final: true, text: "E E", correlation_id: turn}} ->
-              turn
-          after
-            10_000 -> raise "Morse restart transcript missing"
-          end
-
-        audio = audio(sink, turn, [])
-        {:ok, decoder} = Decoder.new(profile)
-        {:ok, decoder, events} = Decoder.push(decoder, audio)
-        {:ok, _decoder, tail} = Decoder.flush(decoder)
-        ["TEST"] = for {:final, text} <- events ++ tail, do: text
-        :ok = PCMOutput.complete(sink)
-
-        receive do
-          {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^turn}} -> :ok
-        after
-          5_000 -> raise "Morse restart reply did not complete"
-        end
+        exercise(mode, connection, identity, sink)
       after
         GenServer.stop(attachment.room_authority, :shutdown)
       end
@@ -217,11 +193,107 @@ defmodule Vxpipe.Console.Test.MorseRestartProbe do
       after
         5_000 -> raise "Morse restart room did not retire"
       end
+
+      if mode == "outage" do
+        receive do
+          {:configured_speech_closed, ^connection} -> :ok
+        after
+          5_000 -> raise "Morse outage connection did not observe room retirement"
+        end
+
+        reject_stale_reply(sink)
+        IO.puts("Morse outage retired recognition without publishing a final or reply")
+      end
     after
       Supervisor.stop(supervisor)
     end
 
     IO.puts("Morse persisted service and room verified: " <> pin["digest"])
+  end
+
+  defp exercise("room", connection, identity, sink) do
+    {:ok, profile} = Config.new()
+    {:ok, pcm} = Encoder.encode(profile, "E E")
+    stream(connection, identity, pcm, 0)
+
+    turn =
+      receive do
+        {:vxpipe_event, %ParticipantTranscription{final: true, text: "E E", correlation_id: turn}} ->
+          turn
+      after
+        10_000 -> raise "Morse restart transcript missing"
+      end
+
+    audio = audio(sink, turn, [])
+    {:ok, decoder} = Decoder.new(profile)
+    {:ok, decoder, events} = Decoder.push(decoder, audio)
+    {:ok, _decoder, tail} = Decoder.flush(decoder)
+    ["TEST"] = for {:final, text} <- events ++ tail, do: text
+    :ok = PCMOutput.complete(sink)
+
+    receive do
+      {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^turn}} -> :ok
+    after
+      5_000 -> raise "Morse restart reply did not complete"
+    end
+  end
+
+  defp exercise("outage", connection, identity, _sink) do
+    {:ok, profile} = Config.new()
+    {:ok, pcm} = Encoder.encode(profile, "E E")
+    # One dot plus a word gap, with no second dot or utterance-final silence.
+    prefix_bytes = div(profile.sample_rate * profile.unit_duration_ms * 8 * 2, 1_000)
+    stream(connection, identity, binary_part(pcm, 0, prefix_bytes), 0)
+
+    receive do
+      {:vxpipe_event, %ParticipantTranscription{final: false, text: "E"}} -> :ok
+    after
+      5_000 -> raise "Morse outage fixture never received a partial transcript"
+    end
+
+    ingress = SpeechConnection.attachment(connection).media_ingress
+    monitor = Process.monitor(ingress)
+    origin = System.fetch_env!("MORSE_CODE_API_BASE_URL")
+
+    {:ok, %{status: 204}} =
+      Req.post(origin <> "/__fixture/stop", retry: false, max_redirects: 0)
+
+    receive do
+      {:vxpipe_connection_unavailable, :speech_to_text_unavailable} -> :ok
+    after
+      10_000 -> raise "Morse outage was not reported to the room connection"
+    end
+
+    receive do
+      {:DOWN, ^monitor, :process, ^ingress, _reason} -> :ok
+    after
+      5_000 -> raise "Morse outage left the recognition ingress running"
+    end
+
+    {:ok, %{status: 502}} =
+      Req.get(origin <> "/v1/models",
+        headers: [{"xi-api-key", @key}],
+        retry: false,
+        max_redirects: 0
+      )
+  end
+
+  defp reject_stale_reply(sink) do
+    receive do
+      {:vxpipe_event, %ParticipantTranscription{final: true}} ->
+        raise "Morse outage published a stale final transcript"
+
+      {:vxpipe_event, %TextOutput{}} ->
+        raise "Morse outage published a reply"
+
+      {:vxpipe_event, %AgentTurnCompleted{}} ->
+        raise "Morse outage completed an invented turn"
+
+      {:configured_pcm, ^sink, _frame} ->
+        raise "Morse outage produced reply audio"
+    after
+      0 -> :ok
+    end
   end
 
   defp repositories do
