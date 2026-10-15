@@ -8,14 +8,27 @@ defmodule Vxpipe.Console.LiveTelephonyPeerSocketTest do
     start_supervised!({Registry, keys: :unique, name: LiveTelephonyPeerSocket.Registry})
     leg = start_supervised!({Agent, fn -> nil end})
 
+    {:ok, command} =
+      Vxpipe.CallEngine.Command.CreateRoom.new(
+        tenant_id: "tenant",
+        actor_id: "peer-socket-test",
+        deadline: DateTime.add(DateTime.utc_now(), 60, :second)
+      )
+
+    {:ok, room} = Vxpipe.CallEngine.create_room(command)
+
+    on_exit(fn ->
+      Vxpipe.CallEngine.end_call(room.tenant_id, room.room_id, room.incarnation_id)
+    end)
+
     binding = %MediaBinding{
       provider: :telnyx,
       service_id: "service",
       ingress_key: "ingress",
       tenant_id: "tenant",
       call_id: "call",
-      room_id: "room",
-      incarnation_id: "incarnation",
+      room_id: room.room_id,
+      incarnation_id: room.incarnation_id,
       participant_id: "human",
       provider_connection_id: "application",
       provider_call_control_id: "private-control",

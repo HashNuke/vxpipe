@@ -951,3 +951,17 @@ source/documentation review approved. No live provider or carrier was used.
 Production still uses legacy binding; managed reservation/tracker integration,
 final usage acknowledgement and reconciliation remain outstanding. The complete
 root checks started on frozen source after this focused verification.
+
+### Incoming lifecycle full-suite verification
+
+The frozen root run passed Identity 69, MCP 37, Providers 35, AgentRuntime 108,
+CallEngine 2,233, Calls 230, Gateway 728, Artifacts 20 and Persistence 367 tests.
+Console reported two failures among 350 tests: its peer-socket fixtures supplied
+fabricated room identities, now correctly rejected by production socket startup.
+Only that fixture changed to create a real room and clean up its exact incarnation.
+Independent review approved. The complete Console rerun passed all 350 tests;
+production source remained unchanged. Across these runs, all 4,177 default-suite
+tests passed (140 excluded); no live providers or external telephony were used.
+Root formatting, warnings-as-errors compilation, strict Credo and the unused-
+dependency check all pass after the fixture correction. No modeled speech or
+source-cutover transition changed, so this checkpoint did not require Lean.

@@ -524,6 +524,14 @@ pass. Independent source/documentation review approved. This slice still uses
 legacy binding; managed carrier/media registration, final usage acknowledgements,
 reconciliation and the actual hangup transports remain open.
 
+Combined verification passed every default application suite: 4,177 tests with
+zero remaining failures (140 excluded). The root run found two Console socket
+fixtures with fabricated room IDs; after a reviewed fixture-only correction, the
+entire 350-test Console suite passed. Production source stayed unchanged between
+runs. This covers the incoming/socket, Session/WebRTC and role-cutover slices;
+managed resource integration and final milestone acceptance remain open.
+Root format, compile, strict Credo and unused-dependency checks also pass.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:
