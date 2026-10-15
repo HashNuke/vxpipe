@@ -33,7 +33,7 @@ defmodule Vxpipe.Providers.MorseCodeApi.SelectionTest do
     assert {:ok, [%{name: "MorseCodeApiTTS"}]} =
              ModelCatalog.models("morse_code_api", "text_to_speech")
 
-    assert {:error, :unsupported_provider_capability} =
+    assert {:ok, Vxpipe.Providers.MorseCodeApi.STTSession} =
              Registry.fetch_capability("morse_code_api", :stt)
 
     assert {:error, :unsupported_provider_capability} =

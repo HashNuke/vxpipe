@@ -16,6 +16,7 @@ test("Morse tests endpoint reachability and accepts a caller-chosen compatibilit
   const probe = vi.fn().mockResolvedValue({ status: "valid" });
   render(<ServiceCredentialForm initialProvider="morse_code_api" onCancel={vi.fn()} onSubmit={submit} onTest={probe} status="idle" />);
   expect(screen.getByText(/Choose any nonempty compatibility key/)).toBeVisible();
+  expect(screen.getByText(/MorseCodeApiSTT recognizes Morse tones/)).toBeVisible();
   fireEvent.change(screen.getByLabelText("API key"), { target: { value: "my compatibility key" } });
   fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Morse API is reachable."));

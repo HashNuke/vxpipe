@@ -10,6 +10,7 @@ defmodule Vxpipe.Providers.MorseCodeApi do
     %{
       credential: Vxpipe.Providers.MorseCodeApi.Credential,
       credential_validation: Vxpipe.Providers.MorseCodeApi.CredentialValidation,
+      stt: Vxpipe.Providers.MorseCodeApi.STTSession,
       tts: Vxpipe.Providers.MorseCodeApi.TTSSession
     }
   end

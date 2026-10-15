@@ -105,6 +105,14 @@
         "name": "Morse",
         "voices": null
       }
+    ],
+    "morse_code_api": [
+      {
+        "default": true,
+        "id": "morse_stt_v1",
+        "name": "MorseCodeApiSTT",
+        "voices": null
+      }
     ]
   },
   "speech_to_speech": {
@@ -183,6 +191,14 @@
         "default": true,
         "id": "morse",
         "name": "Morse",
+        "voices": null
+      }
+    ],
+    "morse_code_api": [
+      {
+        "default": true,
+        "id": "morse_stt_v1",
+        "name": "MorseCodeApiSTT",
         "voices": null
       }
     ]

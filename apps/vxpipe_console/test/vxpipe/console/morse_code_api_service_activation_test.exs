@@ -12,8 +12,8 @@ defmodule Vxpipe.Console.MorseCodeApiServiceActivationTest do
     Repo
   }
 
-  alias Vxpipe.Providers.MorseCodeApi.TTSSession
-  alias Vxpipe.Providers.MorseCode.STTSession
+  alias Vxpipe.CallEngine.Speech.ConversationalSTT
+  alias Vxpipe.Providers.MorseCodeApi.{STTSession, TTSSession}
 
   setup do
     if Process.whereis(Repo) == nil, do: start_supervised!(Repo)
@@ -115,6 +115,12 @@ defmodule Vxpipe.Console.MorseCodeApiServiceActivationTest do
     assert local.text_to_speech.usage_provider.name == "morse_code_api"
     assert local.text_to_speech.asset_cache_identity["credential"]["id"] == platform.id
     assert private(local).endpoint == "http://127.0.0.1:9876"
+    assert {ConversationalSTT, recognition} = stt_runtime(local).provider
+    assert Keyword.fetch!(recognition, :provider) == STTSession
+    assert Keyword.fetch!(recognition, :vad) == false
+    assert private_stt(local).endpoint == "ws://127.0.0.1:9876"
+    assert private_stt(local).api_key == private(local).api_key
+    assert stt_runtime(local).usage_provider.name == "morse_code_api"
 
     Application.put_env(:vxpipe_providers, :morse_code_api,
       base_url: "https://hosted.morse.example"
@@ -123,6 +129,8 @@ defmodule Vxpipe.Console.MorseCodeApiServiceActivationTest do
     assert {:ok, hosted} = PlanStartup.new(plan, runtime_options)
     assert private(hosted).endpoint == "https://hosted.morse.example"
     assert private(hosted).api_key == private(local).api_key
+    assert private_stt(hosted).endpoint == "wss://hosted.morse.example"
+    assert private_stt(hosted).api_key == private(hosted).api_key
     refute hosted.text_to_speech.asset_cache_identity == local.text_to_speech.asset_cache_identity
 
     assert {:ok, own} =
@@ -137,6 +145,7 @@ defmodule Vxpipe.Console.MorseCodeApiServiceActivationTest do
 
     assert {:ok, overridden} = PlanStartup.new(plan, runtime_options)
     assert private(overridden).api_key == "synthetic tenant compatibility key"
+    assert private_stt(overridden).api_key == private(overridden).api_key
 
     refute overridden.text_to_speech.asset_cache_identity ==
              hosted.text_to_speech.asset_cache_identity
@@ -147,6 +156,7 @@ defmodule Vxpipe.Console.MorseCodeApiServiceActivationTest do
 
     assert :ok = ProviderCredentials.delete(tenant.key, own.id, options)
     assert {:ok, restored} = PlanStartup.new(plan, runtime_options)
+    assert private_stt(restored).api_key == private(hosted).api_key
 
     assert restored.text_to_speech.asset_cache_identity ==
              hosted.text_to_speech.asset_cache_identity
@@ -156,6 +166,16 @@ defmodule Vxpipe.Console.MorseCodeApiServiceActivationTest do
   end
 
   defp private(startup), do: Keyword.fetch!(startup.text_to_speech.provider_private, :config)
+
+  defp private_stt(startup) do
+    stt_runtime(startup).provider_private
+    |> Keyword.fetch!(:recognizer_private)
+    |> Keyword.fetch!(:config)
+  end
+
+  defp stt_runtime(startup) do
+    Map.fetch!(startup.speech_to_text_runtimes, startup.caller.participant_id)
+  end
 
   defp source do
     %{
@@ -167,7 +187,11 @@ defmodule Vxpipe.Console.MorseCodeApiServiceActivationTest do
       defaults: %{
         capabilities: %{
           model_inference: %{provider: "fixture", model: "echo"},
-          speech_to_text: %{provider: "morse", model: "morse"},
+          speech_to_text: %{
+            provider: "morse_code_api",
+            model: "morse_stt_v1",
+            credential_name: "voice"
+          },
           text_to_speech: %{
             provider: "morse_code_api",
             model: "morse_v1",

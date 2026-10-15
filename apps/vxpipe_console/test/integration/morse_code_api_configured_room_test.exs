@@ -9,8 +9,15 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiConfiguredRoomTest do
   alias Vxpipe.CallEngine.{CallInvocation, CallSpec, CallSpecCompiler}
   alias Vxpipe.CallEngine.Command.{AttachConnection, SendText}
   alias Vxpipe.CallEngine.Diagnostics.{AgentRuntimeModelProvider, ModelFixture}
-  alias Vxpipe.CallEngine.Event.{AgentTurnCompleted, AgentTurnInterrupted}
-  alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder}
+
+  alias Vxpipe.CallEngine.Event.{
+    AgentTurnCompleted,
+    AgentTurnInterrupted,
+    ParticipantTranscription
+  }
+
+  alias Vxpipe.CallEngine.Media.AudioFrame
+  alias Vxpipe.CallEngine.Provider.MorseCode.{Config, Decoder, Encoder}
   alias Vxpipe.Calls.{Administration, ProviderCredentials, ProviderCredentialSource}
   alias Vxpipe.Console.Test.{PCMOutput, SpeechConnection}
 
@@ -22,8 +29,7 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiConfiguredRoomTest do
     Repo
   }
 
-  alias Vxpipe.Providers.MorseCode.STTSession
-  alias Vxpipe.Providers.MorseCodeApi.{Endpoint, TTSSession}
+  alias Vxpipe.Providers.MorseCodeApi.{Endpoint, STTSession, TTSSession}
 
   setup do
     if Process.whereis(Repo) == nil, do: start_supervised!(Repo)
@@ -80,6 +86,45 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiConfiguredRoomTest do
         call_spec_repository: {CallSpecStore, Repo}
       ]
     }
+  end
+
+  test "independent Morse input completes repeated remote recognition and synthesis room turns",
+       %{options: options} do
+    {plan, room} = published_room(options)
+    sink = start_supervised!({PCMOutput, observer: self()})
+    {connection, identity} = attach(plan, room, sink)
+    {opening, _turn} = collect_audio(sink)
+    assert decoded(opening) == "SOS"
+    assert :ok = PCMOutput.complete(sink)
+    assert_receive {:configured_speech_ready, ^connection}, 10_000
+    assert {:ok, profile} = Config.new(sample_rate: 16_000)
+
+    {_position, turn_ids} =
+      Enum.reduce(["E E", "E E"], {0, []}, fn text, {position, turn_ids} ->
+        assert {:ok, pcm} = Encoder.encode(profile, text)
+        position = stream_pcm(connection, identity, pcm, position)
+
+        assert_receive {:vxpipe_event,
+                        %ParticipantTranscription{final: true, text: ^text} = transcript},
+                       10_000
+
+        assert transcript.participant_id == Keyword.fetch!(identity, :participant_id)
+        assert transcript.provider_turn_index == length(turn_ids)
+        refute transcript.correlation_id in turn_ids
+
+        {reply, reply_turn} = collect_audio(sink)
+        assert reply_turn == transcript.correlation_id
+        assert decoded(reply) == "TEST"
+        assert :ok = PCMOutput.complete(sink)
+        assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^reply_turn}}, 5_000
+        {position, [reply_turn | turn_ids]}
+      end)
+
+    assert length(Enum.uniq(turn_ids)) == 2
+    refute_received {:vxpipe_event, %ParticipantTranscription{final: true}}
+    events = collect_observations(:configured_public_event)
+    assert Enum.any?(events, &match?(%ParticipantTranscription{final: false}, &1))
+    refute :erlang.term_to_binary(events) =~ "configured room compatibility key"
   end
 
   test "a saved service synthesizes opening and conversational audio and replaces blocked output",
@@ -215,7 +260,11 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiConfiguredRoomTest do
       defaults: %{
         capabilities: %{
           model_inference: %{provider: "fixture", model: "echo"},
-          speech_to_text: %{provider: "morse", model: "morse"},
+          speech_to_text: %{
+            provider: "morse_code_api",
+            model: "morse_stt_v1",
+            credential_name: "voice"
+          },
           text_to_speech: voice
         }
       },
@@ -315,6 +364,43 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiConfiguredRoomTest do
     assert {:ok, _decoder, final} = Decoder.flush(decoder)
     assert [text] = for({:final, text} <- events ++ final, do: text)
     text
+  end
+
+  defp stream_pcm(_connection, _identity, "", position), do: position
+
+  defp stream_pcm(connection, identity, pcm, position) do
+    size = min(byte_size(pcm), 640)
+    <<chunk::binary-size(size), rest::binary>> = pcm
+
+    frame =
+      struct!(
+        AudioFrame,
+        Keyword.take(identity, [
+          :tenant_id,
+          :room_id,
+          :incarnation_id,
+          :participant_id,
+          :connection_id
+        ]) ++
+          [
+            track_id: "configured-speech",
+            codec: :linear16,
+            sample_rate: 16_000,
+            channels: 1,
+            sequence_number: div(position, 640),
+            timestamp: div(position, 2),
+            payload: chunk,
+            received_at: System.monotonic_time(:millisecond)
+          ]
+      )
+
+    assert :ok = CallEngine.push_audio(SpeechConnection.attachment(connection), frame)
+
+    # Pace real media; this timer controls input rate, not test synchronization.
+    token = make_ref()
+    Process.send_after(self(), {:morse_pcm_pace, token}, div(size, 32))
+    assert_receive {:morse_pcm_pace, ^token}, 2_000
+    stream_pcm(connection, identity, rest, position + size)
   end
 
   def capture_request(_event, _measurements, %{request: request}, observer) do

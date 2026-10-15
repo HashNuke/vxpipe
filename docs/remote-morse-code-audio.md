@@ -125,13 +125,16 @@ hosted Scribe adapter retains its own segment accumulation and inferred endpoint
 rules. Morse partials provide transcript onset, empty keepalives do not finalize,
 and a stalled partial fails within a bounded deadline instead of becoming final.
 This rejects reusing Scribe's human-speech detector or transcript-inactivity timer
-as a Morse boundary. The new session remains unregistered until G's integration
-work is ready; no Morse STT selection is currently advertised.
+as a Morse boundary. The session is registered as `MorseCodeApiSTT` and resolves
+the same private origin and encrypted service credential as TTS. Ordinary human
+input uses the shared conversational wrapper with transcript onset by default.
+An explicitly enabled local VAD still selects the common Silero detector; it
+has no pure-tone onset guarantee and is not the accepted Morse profile.
 
 The Vxpipe TTS adapter uses the `morse_v1` model and `morse` voice, with raw
 mono signed little-endian PCM at 8, 16, 24 or 48 kHz. Its catalog label is
-`MorseCodeApiTTS`; the service is `MorseCodeApi`. STT is not advertised until its
-integration checkpoint passes. HTTP requests reuse the bounded ElevenLabs PCM
+`MorseCodeApiTTS`; the service is `MorseCodeApi`. Console offers recognition and
+synthesis from that one service. HTTP requests reuse the bounded ElevenLabs PCM
 reader through an internal protocol boundary while keeping provider configuration,
 credentials and identities separate. Existing ElevenLabs constructors retain
 their fixed hosted endpoint.
@@ -242,7 +245,14 @@ drain evidence. Vxpipe's TTS provider additionally has four-rate PCM, encrypted
 service/publication, configured-room opening/interruption/replacement and rendered
 service/editor evidence, establishing F. These establish A–F, not full API
 compatibility. `bin/setup` completed successfully. Full optional-field/format
-semantics, Vxpipe STT integration, benchmarks, final umbrella acceptance and
-Railway deployment remain unchecked implementation acceptance gates. The
+semantics, the remaining Vxpipe STT acceptance cases, benchmarks, final umbrella
+acceptance and Railway deployment remain unchecked implementation gates.
+G's configured-room test now recognizes two independent `E E` inputs through
+the Go WebSocket, publishes distinct canonical room turns and returns independently
+decoded `TEST` audio through Go HTTP synthesis. The same encrypted service is
+used for both capabilities. Saved-plan tests verify platform/tenant resolution
+and private HTTP/WS origin changes. These do not yet establish an actual restart
+between origins, local TLS room acceptance, permission revocation or service-loss
+recovery. The
 [planning labnote](../labnotes/20261014-1947-remote-morse-milestone.md) records the
 separate specification review and exact planning validation.

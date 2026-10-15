@@ -170,7 +170,8 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
 
   for {implementation, label} <- [
         {Vxpipe.Providers.Cartesia.STTSession, :cartesia},
-        {Vxpipe.Providers.ElevenLabs.STTSession, :elevenlabs}
+        {Vxpipe.Providers.ElevenLabs.STTSession, :elevenlabs},
+        {Vxpipe.Providers.MorseCodeApi.STTSession, :morse_code_api}
       ] do
     @tag stt_implementation: implementation, stt_label: label
     test "attributes #{label} recognition failure to the declared provider", %{

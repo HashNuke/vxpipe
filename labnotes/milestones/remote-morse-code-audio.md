@@ -7,7 +7,8 @@ HTTP, streaming, WebSockets, discovery and authentication. Other ElevenLabs
 product APIs are outside this milestone. The Go server/catalog, HTTP TTS
 formats/streaming, PCM batch STT, realtime STT and both TTS WebSockets are
 implemented, and Vxpipe TTS has configured-room acceptance. Full semantic
-compatibility, Vxpipe STT and final deployment acceptance remain pending.
+compatibility, remaining Vxpipe STT acceptance and final deployment acceptance
+remain pending.
 
 ## Runnable outcome
 
@@ -525,9 +526,9 @@ ordinary room output and remain interruptible under backpressure.
 
 Dependencies: D, F; E needed for complete API acceptance, not the PCM room path.
 
-- [ ] Red-test STT selection, acknowledgement readiness, credited input,
+- [x] Red-test STT selection, acknowledgement readiness, credited input,
   allocation retirement, endpoint provenance and repeated transcript turns.
-- [ ] Implement `MorseCodeApi.STTSession` using the focused compatible wire
+- [x] Implement `MorseCodeApi.STTSession` using the focused compatible wire
   layer. Preserve room-owned turn IDs and scoped startup/failure handling.
 - [ ] Implement a tested Morse-appropriate onset/endpoint profile. Do not copy
   Scribe's inferred-gap timers or local Silero behavior without proving their
@@ -546,8 +547,7 @@ Dependencies: D, F; E needed for complete API acceptance, not the PCM room path.
   disable or document microphone processing that can suppress pure tones.
 
 G session foundation (2026-10-15): the private STT configuration, shared bounded
-speech JSON codec, Morse socket and scoped session exist but are not registered
-in catalogs or startup dispatch yet. Four configuration/protocol and seven
+speech JSON codec, Morse socket and scoped session exist. Four configuration/protocol and seven
 lifecycle tests pass after initial failures. The real Go WebSocket accepts the
 explicit `morse_stt_v1` / 16 kHz / 840 ms silence profile and recognizes repeated
 independently generated `E E` turns without splitting their 420 ms word gap.
@@ -555,6 +555,19 @@ Readiness requires the full profile acknowledgement; empty keepalives and stalle
 drafts cannot invent final transcripts. This is session acceptance, not G's
 configured-room/Console acceptance. See the
 [STT contract labnote](../20261015-0009-morse-stt-contract.md).
+
+G provider/room integration (2026-10-15): manifest, catalog, runtime startup,
+usage identity and Console selection now include STT. The focused selection and
+catalog/telemetry lane passes 24 tests; saved-service/runtime/Console API coverage
+passes 20 tests. Real Go acceptance passes both the existing interrupted-output
+case and a repeated audio round trip: independent `E E` input → Go recognition →
+fixture reply → Go synthesis of `TEST`. Equal inputs have distinct room turn IDs;
+public transcripts contain no compatibility key. Console service and editor
+states render at desktop/mobile widths, and all 759 frontend tests pass.
+The two initial STT checklist items are complete; G remains open for local TLS
+and actual restart/origin switching, room permission/outage/replacement coverage,
+transcript/error browser acceptance and final regression gates. See the
+[STT integration labnote](../20261015-0019-morse-stt-integration.md).
 
 Exit: the two remote speech capabilities complete an ordinary configured room
 round trip without paid speech/LLM services or local-codec bypasses.

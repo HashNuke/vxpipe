@@ -522,7 +522,7 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
              "fireworks" => ["credential", "llm"],
              "google" => ["credential", "credential_validation", "llm", "sts", "stt", "tts"],
              "morse" => ["sts", "stt", "tts"],
-             "morse_code_api" => ["credential", "credential_validation", "tts"],
+             "morse_code_api" => ["credential", "credential_validation", "stt", "tts"],
              "openai" => ["credential", "credential_validation", "llm", "sts"],
              "openrouter" => ["credential", "credential_validation", "llm"],
              "rime" => ["credential", "credential_validation", "tts"],

@@ -8,6 +8,8 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
   alias Vxpipe.Providers.Cartesia.STT, as: CartesiaSTT
   alias Vxpipe.Providers.Cartesia.STTSession, as: CartesiaSTTSession
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
+  alias Vxpipe.Providers.MorseCodeApi.STT, as: MorseCodeApiSTT
+  alias Vxpipe.Providers.MorseCodeApi.STTSession, as: MorseCodeApiSTTSession
 
   @derive {Inspect, only: [:call_id, :participant_id, :activation_id, :usage_provider]}
   @enforce_keys [
@@ -125,6 +127,22 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
     end
   end
 
+  def provider({MorseCodeApiSTTSession, %MorseCodeApiSTT{} = config}, settings) do
+    with nil <- Keyword.get(settings, :transport),
+         nil <- Keyword.get(settings, :transport_options),
+         wire_module when is_atom(wire_module) and not is_nil(wire_module) <-
+           Keyword.get(settings, :wire_module, Vxpipe.Providers.MorseCodeApi.STTSocket),
+         wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
+         true <- Keyword.keyword?(wire_options) do
+      public = [model: config.model, encoding: config.encoding, sample_rate: config.sample_rate]
+
+      {:ok, {MorseCodeApiSTTSession, public},
+       [config: config, wire_module: wire_module, wire_options: wire_options]}
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
   def provider({provider, options} = selected, settings) do
     with nil <- Keyword.get(settings, :transport),
          nil <- Keyword.get(settings, :transport_options),
@@ -165,6 +183,14 @@ defmodule Vxpipe.CallEngine.SpeechToTextRuntime do
 
   def usage_identity(STTSession, %Scribe{} = config),
     do: usage_identity(STTSession, scribe_options(config))
+
+  def usage_identity(MorseCodeApiSTTSession, %MorseCodeApiSTT{} = config),
+    do:
+      usage_identity(MorseCodeApiSTTSession,
+        model: config.model,
+        encoding: config.encoding,
+        sample_rate: config.sample_rate
+      )
 
   def usage_identity(provider, options) do
     cond do

@@ -55,6 +55,9 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution do
       Vxpipe.Providers.ElevenLabs.STTSession ->
         Vxpipe.Providers.ElevenLabs.Scribe.new(options)
 
+      Vxpipe.Providers.MorseCodeApi.STTSession ->
+        Vxpipe.Providers.MorseCodeApi.STT.new(options)
+
       _other ->
         case provider.configure(options) do
           {:ok, _descriptor} -> {:ok, options}

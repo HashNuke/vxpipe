@@ -252,7 +252,8 @@ export function ServiceCredentialForm({
       {morse ? (
         <p className="text-sm text-[var(--admin-muted)]">
           Choose any nonempty compatibility key. MorseCodeApiTTS produces Morse tones;
-          the connection test checks the configured server.
+          MorseCodeApiSTT recognizes Morse tones. Human speech is not supported.
+          The connection test checks the configured server.
         </p>
       ) : null}
       {validationMessage ? (
