@@ -1208,3 +1208,19 @@ An owner-death regression covers the boundary. Final selection passes all 27
 tests (ten helper, four LegUsage and 13 cleanup tracker), exact formatting and
 independent final review. Both carrier owners still require integration; the
 helper alone does not enable managed admission or hangup.
+
+### Exact API-requested engine hangup
+
+Added a dedicated trusted CallEngine.hangup_call/3 path with fixed :api_hangup
+authority shutdown reason. Existing end_call/3 remains remote hangup. Tenant lookup
+and the serialized incarnation check prevent stale requests from stopping a
+replacement, with a bounded unavailable result for missing runtime. This remains
+a runtime primitive; authorization, durable intent and cleanup evidence belong
+to the higher-level workflow.
+
+The initial focused selection failed twice for the absent API (22 tests). It then
+passed 26 lifecycle/completion/admission tests. Independent review requested whole
+supervision-tree evidence for the new path: parameterized the held-worker drainage
+test as well. Final 27 tests pass. The authority exposes the semantic reason while
+the root has its ordinary orderly auto-shutdown outcome. No modeled speech/source
+transitions changed, so Lean is not applicable to this narrow primitive.

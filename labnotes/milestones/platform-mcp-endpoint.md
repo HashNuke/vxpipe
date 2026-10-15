@@ -601,6 +601,13 @@ missing-API red tests preceded implementation; independent review found and fixe
 a deadline-installation window. All 27 helper/usage/tracker tests pass and final
 review approved. Carrier-owner integration and managed admission remain open.
 
+The engine now accepts exact-incarnation API hangup with fixed `:api_hangup`
+authority reason, preserving remote hangup separately. Initial 22/two missing-API
+reds preceded implementation; all 27 focused lifecycle/completion/admission tests
+pass. Review added held-worker whole-tree drainage evidence and stale replacement
+protection. No modeled source/speech transitions changed. The authorized transport
+workflow and complete Gateway cleanup remain outstanding.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

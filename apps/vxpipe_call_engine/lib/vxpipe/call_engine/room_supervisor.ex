@@ -97,6 +97,16 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     :exit, _reason -> {:error, :room_unavailable}
   end
 
+  def hangup_call(tenant_id, room_id, incarnation_id) do
+    with {:ok, authority} <- lookup_room(tenant_id, room_id) do
+      GenServer.call(authority, {:hangup_call, incarnation_id}, 5_000)
+    else
+      _missing -> {:error, :room_unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :room_unavailable}
+  end
+
   def cancel_outgoing_admission(tenant_id, room_id, incarnation_id, token) do
     admission_control(tenant_id, room_id, incarnation_id, token, :cancel_outgoing)
   end

@@ -206,6 +206,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_call({:end_call, incarnation}, _from, state),
     do: EndCall.remote_hangup(incarnation, state)
 
+  def handle_call({:hangup_call, incarnation}, _from, state),
+    do: EndCall.api_hangup(incarnation, state)
+
   def handle_call({operation, _incarnation, _token} = request, from, state)
       when operation in [:admit_outgoing, :cancel_outgoing, :admit_call, :cancel_call_admission],
       do: OutgoingAdmission.control(request, from, state)

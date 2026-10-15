@@ -146,6 +146,12 @@ defmodule Vxpipe.CallEngine do
       when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
       do: RoomSupervisor.end_call(tenant_id, room_id, incarnation_id)
 
+  @doc "Requests API hangup for one trusted exact incarnation; completion requires separate resource evidence."
+  @spec hangup_call(String.t(), String.t(), String.t()) :: :ok | {:error, :room_unavailable}
+  def hangup_call(tenant_id, room_id, incarnation_id)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
+      do: RoomSupervisor.hangup_call(tenant_id, room_id, incarnation_id)
+
   @spec inspect_live_call(String.t(), String.t()) ::
           {:ok, Vxpipe.CallEngine.LiveInspection.Snapshot.t()} | {:error, :call_not_live}
   def inspect_live_call(tenant_id, call_id) when is_binary(tenant_id) and is_binary(call_id) do

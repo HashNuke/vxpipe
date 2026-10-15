@@ -16,6 +16,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EndCall do
     end
   end
 
+  @spec api_hangup(String.t(), State.t()) ::
+          {:stop, {:shutdown, :api_hangup}, :ok, State.t()}
+          | {:reply, {:error, :room_unavailable}, State.t()}
+  def api_hangup(incarnation_id, %State{} = state) do
+    if incarnation_id == state.snapshot.incarnation_id do
+      {:stop, {:shutdown, :api_hangup}, :ok, state}
+    else
+      {:reply, {:error, :room_unavailable}, state}
+    end
+  end
+
   @spec authorize(pid(), Context.t(), State.t()) :: :ok | {:error, Error.t()}
   def authorize(capability, %Context{} = context, %State{} = state) when is_pid(capability) do
     connection = Map.get(state.connections, context.connection_id)

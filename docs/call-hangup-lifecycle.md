@@ -146,8 +146,13 @@ intent stays eligible for terminal projection replay. Already-ended calls are
 excluded. A partial index supports bounded pages of at most 100 rows. The scan
 alone performs no shutdown or ownership reconstruction.
 
-Use an exact-incarnation engine shutdown operation with a fixed API-requested
-reason. Release participant sessions, carrier legs and owned workers through
+The engine now exposes `CallEngine.hangup_call/3` for the trusted tenant, room and
+incarnation, with fixed authority shutdown reason `:api_hangup`. Existing
+`end_call/3` retains its remote-hangup meaning. The incarnation check occurs inside
+the serialized authority, so a stale request cannot terminate a replacement.
+Successful submission is not whole-call completion: the engine supervision tree
+and Gateway resources still require their separate completion evidence.
+Release participant sessions, carrier legs and owned workers through
 normal lifecycle handling, preserving usage and archive draining. Pending Gateway
 sessions also observe room termination.
 
