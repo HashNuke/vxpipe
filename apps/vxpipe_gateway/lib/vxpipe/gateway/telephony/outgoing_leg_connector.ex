@@ -61,7 +61,13 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegConnector do
 
     runtime_options =
       options
-      |> Keyword.take([:media_supervisor, :usage_clock, :usage_reporter])
+      |> Keyword.take([
+        :media_supervisor,
+        :usage_clock,
+        :usage_reporter,
+        :cleanup_scope,
+        :cleanup_options
+      ])
       |> Keyword.merge(deadline_ms: deadline, monotonic_clock: clock)
 
     case LegSupervisor.start_outgoing(

@@ -86,6 +86,13 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
        monotonic_clock: Keyword.fetch!(options, :monotonic_clock),
        media_admission: Keyword.fetch!(options, :media_admission),
        media_reserved?: false,
+       cleanup_scope: Keyword.get(options, :cleanup_scope),
+       cleanup_options: Keyword.get(options, :cleanup_options, []),
+       cleanup_binding: nil,
+       cleanup: nil,
+       cleanup_room_monitor: nil,
+       cleanup_room_closed?: false,
+       dial_dispatched?: false,
        media_supervisor: Keyword.get(options, :media_supervisor, MediaSupervisor),
        binding: nil,
        result: nil,
@@ -103,21 +110,27 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   @impl true
   def handle_continue(:dial, state) do
-    case OutgoingLegDialer.identify(
-           state.leg_id,
-           state.request,
-           state.service,
-           state.usage_options
-         ) do
-      {:ok, usage} ->
-        state = %{state | usage: usage}
+    with {:ok, binding} <- OutgoingLegLifecycle.validate_cleanup(state),
+         {:ok, usage} <-
+           OutgoingLegDialer.identify(
+             state.leg_id,
+             state.request,
+             state.service,
+             state.usage_options
+           ) do
+      state = %{state | usage: usage, cleanup_binding: binding}
 
-        if is_integer(state.deadline_ms) and state.monotonic_clock.() >= state.deadline_ms,
-          do: {:noreply, fail(state, :outbound_connection_unavailable, :failed)},
-          else: submit_dial(state)
+      case OutgoingLegLifecycle.attach_cleanup(state) do
+        {:ok, state} ->
+          if is_integer(state.deadline_ms) and state.monotonic_clock.() >= state.deadline_ms,
+            do: continue(fail(state, :outbound_connection_unavailable, :failed)),
+            else: submit_dial(state)
 
-      {:error, reason} ->
-        {:noreply, fail(state, reason, :failed)}
+        {:error, reason, state} ->
+          continue(fail(state, reason, :failed))
+      end
+    else
+      {:error, reason} -> continue(fail(state, reason, :failed))
     end
   end
 
@@ -135,7 +148,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
         case DialSupervisor.submit(self(), state.service, dial) do
           {:ok, worker, monitor} ->
-            {:noreply, %{state | dial_worker: {worker, monitor}}}
+            {:noreply, %{state | dial_worker: {worker, monitor}, dial_dispatched?: true}}
 
           {:error, _reason} ->
             {:noreply, fail(state, :dial_submission_unavailable, :failed)}
@@ -173,6 +186,10 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     |> OutgoingLegLifecycle.adopted()
     |> continue()
   end
+
+  defp submitted({:error, _reason}, %{cleanup: cleanup, dial_dispatched?: true} = state)
+       when not is_nil(cleanup),
+       do: state |> succeed(:unknown, nil) |> OutgoingLegLifecycle.adopted() |> continue()
 
   defp submitted({:error, reason}, state), do: {:noreply, fail(state, reason, :failed)}
 
@@ -230,7 +247,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   def handle_call({:event, %Event{kind: kind} = event}, _from, %{status: :starting} = state)
       when kind in [:outgoing, :answered, :answering_machine, :ended] do
-    case OutgoingLegIdentity.from_event(event, state.leg_id, state.request, state.service, self()) do
+    case identity_from_event(state, event) do
       {:ok, binding} ->
         case register_and_bind(state, binding) do
           :ok -> handle_adopted_event(event, binding, succeed(state, :accepted, binding))
@@ -248,13 +265,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
         %{status: :unknown} = state
       )
       when kind in [:outgoing, :answered, :ended] do
-    case OutgoingLegIdentity.from_event(
-           event,
-           state.leg_id,
-           state.request,
-           state.service,
-           self()
-         ) do
+    case identity_from_event(state, event) do
       {:ok, binding} ->
         case register_and_bind(state, binding) do
           :ok -> handle_adopted_event(event, binding, state)
@@ -271,13 +282,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
         _from,
         %{status: :accepted} = state
       ) do
-    case OutgoingLegIdentity.from_event(
-           event,
-           state.leg_id,
-           state.request,
-           state.service,
-           self()
-         ) do
+    case identity_from_event(state, event) do
       {:ok, binding} when binding == state.binding -> {:reply, :ok, state}
       _mismatch -> {:reply, {:error, :telephony_leg_mismatch}, state}
     end
@@ -384,6 +389,18 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
   @impl true
   def handle_info(
         {:DOWN, monitor, :process, _pid, _reason},
+        %{cleanup_room_monitor: monitor} = state
+      )
+      when is_reference(monitor) do
+    state = %{state | cleanup_room_closed?: true}
+
+    state
+    |> OutgoingLegLifecycle.cancel(InitialLegLifecycle.cancellation_reason(state))
+    |> continue()
+  end
+
+  def handle_info(
+        {:DOWN, monitor, :process, _pid, _reason},
         %{initial: %{room_monitor: monitor}} = state
       ) do
     {:noreply, OutgoingLegLifecycle.cancel(state, InitialLegLifecycle.cancellation_reason(state))}
@@ -421,6 +438,16 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   def handle_info(:retire_unknown, state), do: continue(%{state | retire_unknown?: true})
   def handle_info(:retire, state), do: continue(%{state | retire?: true})
+
+  def handle_info(message, state) do
+    case OutgoingLegLifecycle.cleanup_message(state, message) do
+      {:handled, state} -> continue(state)
+      :unhandled -> {:noreply, state}
+    end
+  end
+
+  defp continue(%{cleanup: cleanup} = state) when not is_nil(cleanup),
+    do: OutgoingLegLifecycle.continue_cleanup(state)
 
   # An abnormal observer exit cannot attest that its separate HTTP task has drained.
   defp continue(%{commands_drained?: false} = state), do: {:noreply, state}
@@ -460,19 +487,15 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
     result = {:error, reason}
     if state.media_reserved?, do: MediaAdmission.revoke(state.media_admission, self())
     reply_waiters(state.waiters, result)
-    Process.send_after(self(), :retire, 1_000)
+    if is_nil(state.cleanup), do: Process.send_after(self(), :retire, 1_000)
     state = finish_usage(state, usage_outcome)
+
     %{state | result: result, status: :failed, waiters: []}
+    |> OutgoingLegLifecycle.store_final()
   end
 
   defp adopt_submission(%{binding: %MediaBinding{} = binding} = state, submission) do
-    case OutgoingLegIdentity.from_submission(
-           submission,
-           state.leg_id,
-           state.request,
-           state.service,
-           self()
-         ) do
+    case identity_from_submission(state, submission) do
       {:ok, ^binding} -> {:ok, binding}
       _mismatch -> {:error, :telephony_leg_mismatch}
     end
@@ -480,13 +503,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   defp adopt_submission(state, submission) do
     with {:ok, binding} <-
-           OutgoingLegIdentity.from_submission(
-             submission,
-             state.leg_id,
-             state.request,
-             state.service,
-             self()
-           ),
+           identity_from_submission(state, submission),
          :ok <- register_and_bind(state, binding) do
       {:ok, binding}
     end
@@ -625,6 +642,26 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
 
   defp finish_usage(state, outcome) do
     %{state | usage: LegUsage.fail(state.usage, outcome)}
+  end
+
+  defp identity_from_event(state, event) do
+    case OutgoingLegIdentity.from_event(event, state.leg_id, state.request, state.service, self()) do
+      {:ok, binding} -> {:ok, %{binding | cleanup_binding: state.cleanup_binding}}
+      error -> error
+    end
+  end
+
+  defp identity_from_submission(state, submission) do
+    case OutgoingLegIdentity.from_submission(
+           submission,
+           state.leg_id,
+           state.request,
+           state.service,
+           self()
+         ) do
+      {:ok, binding} -> {:ok, %{binding | cleanup_binding: state.cleanup_binding}}
+      error -> error
+    end
   end
 
   defp via(leg_id, service) do

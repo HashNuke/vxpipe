@@ -39,19 +39,25 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanup do
   Invalid bindings or options return an error without persistence state.
   """
   def attach(binding, kind, expected_anchor, options \\ []) do
-    with {:ok, anchor} <- exact_anchor(binding, expected_anchor),
-         true <- kind in [:incoming_leg, :outgoing_leg],
-         :ok <- valid_options(options) do
+    with :ok <- validate_attachment(binding, kind, expected_anchor, options) do
       attach_validated(kind, %__MODULE__{
         owner: self(),
-        binding: anchor,
+        binding: Map.take(binding, @keys),
         calls_options: Keyword.get(options, :calls_options, []),
         timeout_ms: Keyword.get(options, :timeout_ms, 5_000),
         retry_ms: Keyword.get(options, :retry_ms, 250)
       })
+    end
+  end
+
+  @doc "Validates private attachment configuration before allocating usage or carrier effects."
+  def validate_attachment(binding, kind, expected_anchor, options) do
+    with {:ok, _anchor} <- exact_anchor(binding, expected_anchor),
+         true <- kind in [:incoming_leg, :outgoing_leg],
+         :ok <- valid_options(options) do
+      :ok
     else
-      {:error, :invalid_cleanup_binding} = error -> error
-      {:error, :invalid_cleanup_options} = error -> error
+      {:error, _reason} = error -> error
       _ -> {:error, :cleanup_unavailable}
     end
   end

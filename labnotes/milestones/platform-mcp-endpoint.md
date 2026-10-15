@@ -651,6 +651,16 @@ pass, including real local incarnation shutdown, stale/unverified protection,
 blocked-row fairness, cursor retry and restart. Independent review approved.
 Application enablement, admission wiring and HTTP/MCP hangup remain open.
 
+Outgoing owners now opt into cleanup through validated private connector scope,
+including transfer owners and every media binding. They attach and monitor before
+effects, retain dispatched errors as uncertain, persist final usage, and require
+independent carrier/authority/command/storage evidence before acknowledgement.
+Tracker loss closes owned carrier/media but retains unresolved membership until
+independent authority closure; no whole-call success is invented. Initial 48 tests
+had seven reds (one also exposed a fixture shape error); final 63 focused tests
+pass, including ten managed cases, with two independent reviews. Production
+admission does not yet pass the private opt-in settings.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

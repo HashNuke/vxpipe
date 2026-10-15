@@ -1374,3 +1374,28 @@ was inadvertently launched from the umbrella root: it ran the six Gateway tests
 and reported no matching paths for other applications, exiting zero. No broader
 suite coverage is claimed for that command. Production application supervision,
 configuration and hangup wake wiring remain pending with managed admission rollout.
+
+### Outgoing managed-owner integration
+
+Outgoing connector and supervisor now forward private cleanup scope/options. The
+owner validates exact tenant/call/room and derived incarnation before usage or
+carrier effects, attaches to existing membership and monitors the exact authority
+before media/dial, including transfer owners. All reconstructed media bindings
+retain that identity. A dispatched generic error stays unknown and correlated;
+only no-dispatch or authenticated carrier-end proof can satisfy retirement.
+Final immutable storage, actual command-worker DOWN and authority closure remain
+independent requirements. Missing/sealed tracker attachment retains accounting
+context. Tracker loss closes only this owner's carrier/media, without inventing
+whole-call intent, and holds the owner until independent authority closure.
+Normal ended transfer owners also retain membership until that closure. The
+tracker's separate engine monitor still proves whole-tree completion.
+
+Initial 48-test selection had seven reds; six directly exercised missing behavior
+and one also had a media-fixture tuple destructuring error, corrected before green.
+First green passed 60 tests; final selection passed 63 (51 outgoing, 12 helper),
+including ten managed cases. Added verification covers invalid options before
+usage, storage retry after preparation failure, and final accounting despite an
+abnormally lost command observer without false acknowledgement. Root and independent
+agent reviews approved; all six changed paths formatted and diff checked.
+Private validation reuses CarrierCleanup's shared boundary instead of copying
+bounds. Production admission opt-in remains absent until the complete rollout.

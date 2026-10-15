@@ -464,6 +464,22 @@ supply no-carrier proof. Ambiguous dispatched outcomes retain correlation for la
 callbacks, and managed retirement cannot use the legacy unknown-retention timer
 as completion evidence.
 
+The outgoing owner now implements these rules behind private `cleanup_scope` and
+`cleanup_options` connector settings, which remain absent in production admission.
+Validation precedes usage allocation and effects. The existing tracker registration
+and exact authority monitor are installed before media reservation or dial,
+including transfer legs. Every reconstructed media binding retains the same exact
+cleanup identity. Final storage and command-worker DOWN independently gate
+acknowledgement; a dispatched error remains correlated and unknown.
+
+An ended managed transfer owner retains its membership and stored usage until the
+call authority closes. Tracker loss closes this owner's carrier/media resources,
+then similarly retains unresolved ownership until independent authority closure;
+it does not synthesize whole-call cancellation intent or a shutdown reason. The
+tracker separately owns the proof that the complete engine supervision tree has
+drained. This conservative retention avoids treating carrier-owner retirement as
+proof about the rest of the call.
+
 Keep a private managed-ownership marker even when registration fails, so an owner
 cannot accidentally fall back to legacy retirement. After validating the anchor
 and options, the carrier helper retains owner-held persistence context when the
