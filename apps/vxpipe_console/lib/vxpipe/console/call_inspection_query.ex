@@ -58,7 +58,8 @@ defmodule Vxpipe.Console.CallInspectionQuery do
          %CallDetailPage{call: %{tenant_key: tenant_key, id: call_id}},
          tenant_key,
          call_id
-       ), do: :ok
+       ),
+       do: :ok
 
   defp validate_call(%CallDetailPage{}, _tenant_key, _call_id), do: {:error, :call_not_found}
 

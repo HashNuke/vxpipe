@@ -558,6 +558,12 @@ Expected initial/drainage/identity reds preceded fixes; 95 broader local tests a
 tracker registration and managed admission remain open. Observer startup still
 needs monitor-before-release alignment to avoid conservative false unknown state.
 
+Combined verification after these slices: root format, warnings-as-errors compile,
+strict Credo and the unused-dependency check pass. The full default suite ran
+4,204 tests with one outgoing late-identity retirement failure (144 excluded); all other applications passed.
+The observer startup race is being corrected before claiming a green snapshot.
+This evidence does not complete hangup or final milestone acceptance.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

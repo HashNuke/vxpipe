@@ -1081,3 +1081,20 @@ The next drainage alignment must install observer monitors before releasing work
 to avoid conservative false unknown state when a fast observer exits before the
 owner can monitor it. Tracker registration, private binding propagation, final
 usage persistence and managed admission remain separate integration work.
+
+### Combined ownership verification
+
+Root formatting initially found one multiline clause in the Console inspection
+query that the child formatter had left differently; root formatting corrected it.
+Root format, warnings-as-errors compilation and strict Credo then passed. The
+complete default suite ran 4,204 tests with one failure (144 excluded): outgoing
+late-identity cancellation observed carrier termination but did not retire.
+All other applications passed, including 2,233 CallEngine, 367 Persistence and
+358 Console tests. The unused-dependency check passed separately after the test
+exit prevented the command chain from reaching it.
+
+The failure is consistent with the independently identified observer startup race:
+a command can finish before its owner installs the monitor, producing conservative
+`:noproc`/unknown-drain evidence. The next fix installs the monitor before releasing
+work and verifies ordering at the adapter boundary. This run is not recorded as
+green acceptance; combined verification must follow the fix and incoming drainage.
