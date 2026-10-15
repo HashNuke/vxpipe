@@ -1,6 +1,34 @@
 defmodule Vxpipe.Calls do
   @moduledoc "Database-neutral application workflows for durable call control-plane data."
 
+  def authorize_call_management(actor),
+    do: Vxpipe.Calls.CallManagementAuthorization.authorize(actor)
+
+  def authorize_call_management(actor, tenant_key),
+    do: Vxpipe.Calls.CallManagementAuthorization.authorize(actor, tenant_key)
+
+  def claim_call(actor, tenant_key, call_spec_id, variables, to, idempotency_key, options \\ []),
+    do:
+      Vxpipe.Calls.CallClaims.claim(
+        actor,
+        tenant_key,
+        call_spec_id,
+        variables,
+        to,
+        idempotency_key,
+        options
+      )
+
+  def issue_call_join_token(actor, tenant_key, call_id, participant_key \\ nil, options \\ []),
+    do:
+      Vxpipe.Calls.Admissions.issue_call_token(
+        actor,
+        tenant_key,
+        call_id,
+        participant_key,
+        options
+      )
+
   def mark_outgoing_call_started(call, incarnation_id, started_at, options \\ []),
     do: Vxpipe.Calls.OutgoingCalls.mark_started(call, incarnation_id, started_at, options)
 

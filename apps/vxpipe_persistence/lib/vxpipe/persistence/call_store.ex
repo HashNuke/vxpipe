@@ -14,6 +14,14 @@ defmodule Vxpipe.Persistence.CallStore do
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredToken
 
   @impl true
+  def fetch_call_by_key(repo, tenant_key, key),
+    do: Vxpipe.Persistence.CallClaimStore.fetch_by_key(repo, tenant_key, key)
+
+  @impl true
+  def claim_call(repo, call, authorize),
+    do: Vxpipe.Persistence.CallClaimStore.claim(repo, call, authorize)
+
+  @impl true
   def fetch_outgoing_by_key(repo, tenant_key, key),
     do: Vxpipe.Persistence.OutgoingCallStore.fetch_by_key(repo, tenant_key, key)
 

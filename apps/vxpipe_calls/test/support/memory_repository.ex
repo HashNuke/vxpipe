@@ -177,6 +177,9 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
          do: fetch_revision(agent, tenant_key, call_spec_id, revision)
   end
 
+  def fetch_call_by_key(agent, tenant, key), do: fetch_outgoing_by_key(agent, tenant, key)
+  def claim_call(agent, call, authorize), do: claim_outgoing_call(agent, call, authorize)
+
   def fetch_outgoing_by_key(agent, tenant_key, key) do
     Agent.get(agent, fn state ->
       Enum.find_value(state.calls, {:error, :not_found}, fn

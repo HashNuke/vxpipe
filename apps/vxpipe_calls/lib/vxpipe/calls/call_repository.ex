@@ -5,6 +5,13 @@ defmodule Vxpipe.Calls.CallRepository do
 
   @type context :: term()
 
+  @callback fetch_call_by_key(context(), String.t(), String.t()) ::
+              {:ok, PreparedCall.t()} | {:error, :not_found}
+
+  @doc "Claims one prepared web or admitting outgoing call, with final authorization inside the transaction and shared tenant-wide idempotency recovery."
+  @callback claim_call(context(), PreparedCall.t(), (-> {:ok, :authorized} | {:error, term()})) ::
+              {:ok, PreparedCall.t()} | {:duplicate, PreparedCall.t()} | {:error, term()}
+
   @callback fetch_outgoing_by_key(context(), String.t(), String.t()) ::
               {:ok, PreparedCall.t()} | {:error, :not_found}
 

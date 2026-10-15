@@ -265,7 +265,7 @@ and UI read/catalog cutover stay open.
 Depends on spec authoring. Runnable slice: create a call by published spec ID with
 initial variables, receive `{call_id}`, then issue/redeem its token locally.
 
-- [ ] Red-test `create_call(tenant_key, call_spec_id, ...)` for web and outgoing specs.
+- [x] Red-test `create_call(tenant_key, call_spec_id, ...)` for web and outgoing specs.
 - [ ] Share the create workflow with the existing spec-scoped REST call endpoint:
   pin one published revision, prepare web calls, or submit outgoing calls. Existing
   REST clients keep their response shape; MCP returns the minimal `{call_id}`.
@@ -289,6 +289,12 @@ initial variables, receive `{call_id}`, then issue/redeem its token locally.
   duplicate create/replay, wrong tenant/spec/call/participant, TTL/single-use and
   ended-call denial pass with local Morse/fixtures and a fake dial adapter. Token
   values never enter logs, telemetry or audit; no live providers/real calls run.
+
+Domain/storage evidence (2026-10-15): shared actual-actor policy, pinned web and
+outgoing claims, tenant-wide replay and pinned web token selection passed all
+219 Calls tests plus 46 focused Persistence tests after the expected missing-API
+red failures. Independent review found no domain/storage blockers. HTTP/MCP
+adapter acceptance and outgoing deadline handling remain in progress.
 
 ## Checkpoint: authorized whole-call hangup
 

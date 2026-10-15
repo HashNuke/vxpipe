@@ -242,3 +242,19 @@
 - Red: one expected HTTP/MCP error mismatch. Green: 36 focused Gateway tests,
   including existing request-owner cleanup coverage. Independent review found no
   blockers. This checkpoint does not claim raw TCP-disconnect cancellation.
+
+## Shared published-spec call claims
+
+- Calls now authorizes the actual browser, tenant-key or Settings platform actor
+  before preparing a published spec. Incoming web entries produce prepared calls
+  without minting unused tokens; outgoing entries retain their admission path.
+- Shared atomic claims preserve existing digest bytes and the tenant-wide
+  idempotency namespace. Replay precedes publication lookup, so later publication
+  cannot alter an existing attempt. Missing keys still mean distinct creations.
+- Token issuance resolves only the call's pinned eligible web entry or explicit
+  web participant. Existing TTL, terminal/admission guards and single-use storage
+  remain authoritative. No schema migration was needed for call claims.
+- Red: seven Calls tests and three Persistence tests failed for missing shared
+  functions. Green: all 219 Calls tests and 46 focused Persistence compatibility
+  tests. Independent review found no domain/storage blockers. Transport adapters
+  and their bounded outgoing request handling remain the next checkpoint.
