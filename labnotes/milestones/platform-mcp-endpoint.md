@@ -578,6 +578,14 @@ retirement gate. Three expected red regressions preceded the changes. Final
 verification passes 59 activation/ingress/local carrier-harness tests, with
 independent review. Final usage persistence and tracker integration remain open.
 
+Cleanup recovery discovery now scans bounded pages of unresolved intent and
+unfinished managed cleanup using a finite integer-key watermark per cycle. It
+retains failed/unbound work and completion replay without loading plans or
+constructing runtime owners. Six expected missing-API regressions preceded the
+change; three Calls and 28 Persistence tests pass. Migration 20261015000700 adds
+the matching partial index, and independent review approved. The reconciler and
+resource integration remain open; a scan is not shutdown or completion evidence.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

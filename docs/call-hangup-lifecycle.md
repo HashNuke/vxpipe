@@ -130,6 +130,22 @@ traversal/backoff: an unresolved old call cannot starve later cancellations.
 Request timeout or caller death does not discard intent or own the cleanup task.
 Recovery never starts a room or dials a carrier to resolve uncertainty.
 
+Recovery discovery uses an internal bounded keyset scan over call rows, selecting
+unended cancellation intent and unfinished managed cleanup (including normal
+completion without a hangup). Each cycle captures an upper internal primary key
+and advances past every returned row, including unresolved ones. At the end it
+starts a new cycle. New inserts and rows becoming eligible behind the cursor are
+therefore visited next cycle; this is a traversal watermark, not a database
+snapshot. Continuous new admissions cannot extend one cycle indefinitely.
+
+The scan returns only public ownership identifiers, the internal traversal key,
+verified-binding and cleanup flags, and cancellation/completion timestamps. It
+does not decode plans or load credentials. Unbound legacy intent stays visible
+without manufacturing an incarnation; already-acknowledged cleanup with a later
+intent stays eligible for terminal projection replay. Already-ended calls are
+excluded. A partial index supports bounded pages of at most 100 rows. The scan
+alone performs no shutdown or ownership reconstruction.
+
 Use an exact-incarnation engine shutdown operation with a fixed API-requested
 reason. Release participant sessions, carrier legs and owned workers through
 normal lifecycle handling, preserving usage and archive draining. Pending Gateway

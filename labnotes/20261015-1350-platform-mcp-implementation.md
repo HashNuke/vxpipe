@@ -1155,3 +1155,21 @@ Rendered Chrome at desktop and mobile verified canonical ensure 200, service
 binding 200, reload reuse of the persisted tenant key, empty services/sample
 waiting states and no mobile overflow. Browser and synthetic database fixture
 stopped. The public API and inventory documents match the implemented contract.
+
+### Bounded cleanup recovery discovery
+
+Added a trusted Calls scan and Persistence adapter for unresolved cancellation
+intent and unfinished managed cleanup. The scan returns minimal ownership metadata
+without decoding plans or loading secrets. Integer-key pagination uses a fixed
+upper watermark per cycle, so unresolved old rows and continuous new insertions
+cannot monopolize a traversal. Eligibility changes behind the cursor are picked
+up next cycle. Already-ended records are excluded; failed/unbound intent and
+completed cleanup with later intent remain discoverable.
+
+Three Calls and three Persistence tests first failed for the missing API (a
+duplicate fixture update field was corrected before the final expected red run).
+All three Calls and 28 Persistence scan/completion/hangup tests now pass. Migration
+20261015000700 applied the matching partial index to the test database. Independent
+source/test/design review approved bounds, candidate selection, finite traversal
+and plan-independent projection. This adds discovery only; the supervised
+reconciler, actual carrier integration and hangup transports remain outstanding.

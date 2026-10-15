@@ -1,6 +1,10 @@
 defmodule Vxpipe.Calls do
   @moduledoc "Database-neutral application workflows for durable call control-plane data."
 
+  @doc "Internal bounded recovery scan; cursors and cleanup ownership are not public API inputs."
+  def scan_call_cleanup(cursor \\ nil, limit \\ 100, options \\ []),
+    do: Vxpipe.Calls.CallCleanupScan.scan(cursor, limit, options)
+
   @doc "Persists trusted exact-incarnation cleanup acknowledgement; never accepts caller terminal reasons."
   def complete_call_cleanup(binding, completed_at, options \\ []),
     do: Vxpipe.Calls.CallCleanupCompletion.complete(binding, completed_at, options)

@@ -14,6 +14,10 @@ defmodule Vxpipe.Persistence.CallStore do
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredToken
 
   @impl true
+  def scan_call_cleanup(repo, cursor, limit),
+    do: Vxpipe.Persistence.CallCleanupScanStore.scan(repo, cursor, limit)
+
+  @impl true
   def complete_call_cleanup(repo, binding, completed_at),
     do: Vxpipe.Persistence.CallCleanupCompletionStore.complete(repo, binding, completed_at)
 

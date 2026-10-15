@@ -5,6 +5,10 @@ defmodule Vxpipe.Calls.CallRepository do
 
   @type context :: term()
 
+  @doc "Traverses unresolved cleanup in finite keyset cycles; never loads plans or creates runtime ownership."
+  @callback scan_call_cleanup(context(), Vxpipe.Calls.CallCleanupScan.cursor(), pos_integer()) ::
+              {:ok, Vxpipe.Calls.CallCleanupScan.page()} | {:error, term()}
+
   @callback complete_call_cleanup(context(), map(), DateTime.t()) ::
               {:ok, PreparedCall.t()} | {:error, term()}
 
