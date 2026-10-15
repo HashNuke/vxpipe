@@ -678,6 +678,15 @@ abnormal observer loss must suppress overlap and remain unknown. The lifecycle
 design records the reviewed contract. This remains implementation work, not a
 completed recovery acceptance gate.
 
+Combined recovery/carrier/sample verification: the frozen umbrella run passed all
+applications except an obsolete Console sample-route permission assertion. That
+assertion now reflects the authenticated gate plus actual-actor domain checks;
+the full Console rerun passed 352 tests. Across applications, 4,284 tests pass with
+144 excluded. Independent review approved the test-only correction. Managed
+rollout, carrier end retries, hangup transports and final parity remain open.
+Root formatting, warnings-as-errors compilation, strict Credo and unused-dependency
+checks also pass after the assertion correction.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

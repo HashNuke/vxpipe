@@ -1478,3 +1478,16 @@ editor-lookups and account-security helpers still using legacy UI paths. Updated
 inventory wording for completed sample migration and canonical tenant projections,
 and removed the stale classification of canonical call-filter options as a retained
 private helper. Final legacy-controller/schema consolidation still needs audit.
+
+### Combined carrier recovery and sample verification
+
+The frozen-source umbrella run passed every application except one old Console
+route-permission assertion: it still expected installation tenant-creation authority
+for configured sample calls. The migrated workflow checks the actual actor's
+call/spec authority after the authenticated route gate. Corrected that assertion
+without changing production behavior; independent review approved. The complete
+Console rerun passed 352 tests. Combined application evidence is 4,284 tests with
+zero remaining failures and 144 excluded. No live providers or external telephony
+ran. This is checkpoint verification, not completed hangup or final parity.
+Root format, warnings-as-errors compilation, strict Credo and unused-dependency
+checks also passed after the assertion correction.
