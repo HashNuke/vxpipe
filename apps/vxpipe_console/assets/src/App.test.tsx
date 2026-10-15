@@ -76,8 +76,9 @@ test("the production users route renders server-filtered rows and role filters",
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const path = String(input);
     if (path === "/admin/api/session") return response({ user: owner, role });
-    if (path === "/admin/api/roles") return response({ roles: [role] });
-    if (path.startsWith("/admin/api/users"))
+    if (path === "/api/role-options?page=1") return response(rolePage([role]));
+      if (path === "/admin/api/roles") return response({ roles: [role] });
+    if (path.startsWith("/api/users"))
       return response({ users: [owner], pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 } });
     return response({});
   });
@@ -87,13 +88,13 @@ test("the production users route renders server-filtered rows and role filters",
   expect(screen.getByRole("table", { name: "Users" }).tagName).toBe("TABLE");
   fireEvent.change(screen.getByRole("combobox", { name: "Filter by role" }), { target: { value: "superadmin" } });
   await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(
-    expect.stringContaining("/admin/api/users?role=superadmin"), expect.any(Object)
+    expect.stringContaining("/api/users?role_id=superadmin"), expect.any(Object)
   ));
 });
 
 const tenantPage = (page: number, name = "Example tenant") => ({
-  tenants: Array.from({ length: page === 1 ? 25 : 5 }, (_, index) => ({
-    key: `tenant${page}${index}`.padEnd(16, "0"),
+  items: Array.from({ length: page === 1 ? 25 : 5 }, (_, index) => ({
+    tenant_key: `tenant${page}${index}`.padEnd(16, "0"),
     name: index === 0 ? name : `Tenant ${page}-${index}`,
     created_at: "2026-09-17T01:00:00Z",
   })),
@@ -246,7 +247,7 @@ test("loads the scoped tenant page with sidebar account actions", async () => {
   expect(screen.getByRole("button", { name: "Logout" })).toBeVisible();
   expect(await screen.findByText("Example tenant")).toBeVisible();
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/session", expect.any(Object));
-  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/tenants?q=&page=1&page_size=25", expect.objectContaining({
+  expect(fetchImpl).toHaveBeenCalledWith("/api/tenants?q=&page=1&page_size=25", expect.objectContaining({
     headers: { accept: "application/json" },
     signal: expect.any(AbortSignal),
   }));
@@ -257,9 +258,9 @@ test("an empty installation opens onboarding only when explicitly selected", asy
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url === "/admin/api/session") return response(operationalSession);
-    if (url.startsWith("/admin/api/tenants?")) {
+    if (url.startsWith("/api/tenants?")) {
       return response({
-        tenants: [],
+        items: [],
         pagination: { page: 1, page_size: 25, total: 0, total_pages: 0 },
       });
     }
@@ -423,12 +424,12 @@ test("recovers an out-of-range page to the first tenant page", async () => {
   );
   expect(fetchImpl).toHaveBeenNthCalledWith(
     2,
-    "/admin/api/tenants?q=&page=999&page_size=25",
+    "/api/tenants?q=&page=999&page_size=25",
     expect.any(Object),
   );
   expect(fetchImpl).toHaveBeenNthCalledWith(
     3,
-    "/admin/api/tenants?q=&page=1&page_size=25",
+    "/api/tenants?q=&page=1&page_size=25",
     expect.any(Object),
   );
 });
@@ -437,7 +438,7 @@ test("opens a tenant's approved call specs page and canonicalizes the workspace 
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url === "/admin/api/session") return response(operationalSession);
-    if (url.startsWith("/admin/api/tenants?")) return response(tenantPage(1));
+    if (url.startsWith("/api/tenants?")) return response(tenantPage(1));
     if (url.endsWith("/dashboard")) return response(dashboard("tenant1000000000"));
     if (url.includes("/calls?")) {
       return response(callPage("tenant1000000000", "delivery-rescheduling"));
@@ -1293,4 +1294,8 @@ test("rejects a service directory for a different tenant", async () => {
 function dashboard(key: string) {
   const capability = { read: true, write: true };
   return { tenant: { key, name: "Example tenant", dashboard_path: `/t/${key}/dashboard`, capabilities: { calls: capability, call_specs: capability, services: capability, api_keys: capability } }, recent_calls: { status: "ready", calls: [] } };
+}
+
+function rolePage(roles: unknown[]) {
+  return { roles, pagination: { page: 1, page_size: 25, total: roles.length, total_pages: roles.length ? 1 : 0 } };
 }

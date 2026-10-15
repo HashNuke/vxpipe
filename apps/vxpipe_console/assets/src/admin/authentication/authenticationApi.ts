@@ -47,7 +47,7 @@ function errorMessage(status: number, code: unknown): string {
 }
 
 function apiPath(path: string): string {
-  if (!path.startsWith("/admin/api/") && !path.startsWith("/auth/api/")) {
+  if (!path.startsWith("/api/") && !path.startsWith("/admin/api/") && !path.startsWith("/auth/api/")) {
     throw new Error("Invalid authentication API path");
   }
   return path;
@@ -153,34 +153,38 @@ export class AuthenticationApi {
   }
 
   users(query: URLSearchParams) {
-    const suffix = query.size ? `?${query.toString()}` : "";
-    return this.request<PaginatedUsers>(`/admin/api/users${suffix}`);
+    const filters = new URLSearchParams();
+    for (const [key, value] of query) {
+      filters.set(key === "q" ? "query" : key === "role" ? "role_id" : key, value);
+    }
+    const suffix = filters.size ? `?${filters.toString()}` : "";
+    return this.request<PaginatedUsers>(`/api/users${suffix}`);
   }
 
   user(id: string) {
-    return this.request<{ user: User }>(`/admin/api/users/${encodeURIComponent(id)}`);
+    return this.request<{ user: User }>(`/api/users/${encodeURIComponent(id)}`);
   }
 
   createUser(input: UserInput) {
-    return this.request<{ user: User }>("/admin/api/users", "POST", {
+    return this.request<{ user: User }>("/api/users", "POST", {
       email: input.email,
       password: input.password,
       password_confirmation: input.passwordConfirmation,
       role_id: input.roleId,
       memberships: input.memberships.map((item) => ({
-        tenant_id: item.tenantId,
+        tenant_key: item.tenantId,
         access: item.access,
       })),
     });
   }
 
   updateUser(id: string, input: Omit<User, "id">) {
-    return this.request<{ user: User }>(`/admin/api/users/${encodeURIComponent(id)}`, "PATCH", {
+    return this.request<{ user: User }>(`/api/users/${encodeURIComponent(id)}`, "PATCH", {
       email: input.email,
       role_id: input.roleId,
       enabled: input.enabled,
       memberships: input.memberships.map((item) => ({
-        tenant_id: item.tenantId,
+        tenant_key: item.tenantId,
         access: item.access,
       })),
     });
@@ -204,14 +208,19 @@ export class AuthenticationApi {
    * read-only display data, never as authority.
    */
   async roleOptions(): Promise<{ roles: Role[] }> {
-    const data = await this.request<{ roles?: unknown; role_options?: unknown }>(
-      "/admin/api/role-options",
-    );
-    const entries = Array.isArray(data.roles) ? data.roles : data.role_options;
-    if (!Array.isArray(entries)) {
-      throw new AuthenticationError("The server returned an invalid response.");
+    const roles: Role[] = [];
+    let page = 1;
+    let totalPages = 1;
+    while (page <= totalPages) {
+      const data = await this.request<{ roles?: unknown; pagination?: DirectoryPagination }>(
+        `/api/role-options?page=${page}`,
+      );
+      if (!Array.isArray(data.roles)) throw invalidDirectoryResponse();
+      totalPages = directoryPageCount(data.pagination, page, data.roles.length);
+      roles.push(...data.roles.map(parseRoleOption));
+      page += 1;
     }
-    return { roles: entries.map(parseRoleOption) };
+    return { roles };
   }
 
   role(id: string) {
@@ -241,28 +250,24 @@ export class AuthenticationApi {
 
   /**
    * Tenant lookup for the user-form picker. The tenant directory returns
-   * `{key, name}` entries; memberships are keyed by tenant key, so the key
+   * `{tenant_key, name}` entries; memberships are keyed by tenant key, so the key
    * doubles as the option id. Follows every server page so no tenant is
    * silently omitted from assignment.
    */
   async tenantOptions(): Promise<{ tenants: Tenant[] }> {
-    const collected: Tenant[] = [];
+    const tenants: Tenant[] = [];
     let page = 1;
     let totalPages = 1;
     while (page <= totalPages) {
-      const data = await this.request<{
-        tenants?: unknown;
-        pagination?: { page?: unknown; page_size?: unknown; total?: unknown; total_pages?: unknown };
-      }>(`/admin/api/tenants?page=${page}`);
-      if (!Array.isArray(data.tenants)) {
-        throw new AuthenticationError("The server returned an invalid response.");
-      }
-      for (const entry of data.tenants) collected.push(parseTenantOption(entry));
-      const total = data.pagination?.total_pages;
-      totalPages = typeof total === "number" && Number.isInteger(total) && total > 0 ? total : page;
+      const data = await this.request<{ items?: unknown; pagination?: DirectoryPagination }>(
+        `/api/tenants?page=${page}`,
+      );
+      if (!Array.isArray(data.items)) throw invalidDirectoryResponse();
+      totalPages = directoryPageCount(data.pagination, page, data.items.length);
+      tenants.push(...data.items.map(parseTenantOption));
       page += 1;
     }
-    return { tenants: collected };
+    return { tenants };
   }
 
   updateAccount(email: string, currentPassword: string, newPassword?: string, confirmation?: string) {
@@ -291,7 +296,7 @@ function parseRoleOption(entry: unknown): Role {
     throw new AuthenticationError("The server returned an invalid response.");
   }
   const record = entry as Record<string, unknown>;
-  const id = record.id ?? record.public_id;
+  const id = record.id;
   const kind = record.kind;
   if (typeof id !== "string" || id.length === 0 || typeof record.name !== "string") {
     throw new AuthenticationError("The server returned an invalid response.");
@@ -309,8 +314,23 @@ function parseTenantOption(entry: unknown): Tenant {
     throw new AuthenticationError("The server returned an invalid response.");
   }
   const record = entry as Record<string, unknown>;
-  if (typeof record.key !== "string" || record.key.length === 0 || typeof record.name !== "string") {
+  if (typeof record.tenant_key !== "string" || record.tenant_key.length === 0 || typeof record.name !== "string") {
     throw new AuthenticationError("The server returned an invalid response.");
   }
-  return { id: record.key, key: record.key, name: record.name };
+  return { id: record.tenant_key, key: record.tenant_key, name: record.name };
+}
+
+type DirectoryPagination = { page: number; page_size: number; total: number; total_pages: number };
+
+function invalidDirectoryResponse() {
+  return new AuthenticationError("The server returned an invalid response.");
+}
+
+function directoryPageCount(value: DirectoryPagination | undefined, page: number, count: number): number {
+  if (!value || value.page !== page || !Number.isInteger(value.page_size) || value.page_size < 1 || value.page_size > 50 ||
+    !Number.isInteger(value.total) || value.total < 0 || value.total_pages !== Math.ceil(value.total / value.page_size) ||
+    page > Math.max(1, value.total_pages) || count !== Math.min(value.page_size, Math.max(0, value.total - (page - 1) * value.page_size))) {
+    throw invalidDirectoryResponse();
+  }
+  return value.total_pages;
 }

@@ -9,7 +9,7 @@ defmodule Vxpipe.Gateway.TenantJSON do
 
   def page(%TenantPage{} = page) do
     %{
-      items: Enum.map(page.tenants, &summary/1),
+      items: Enum.map(page.tenants, &tenant/1),
       pagination: %{
         page: page.page,
         page_size: page.page_size,

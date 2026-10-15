@@ -12,7 +12,7 @@ const response = (body: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(body), { status }));
 
 const tenantDirectory = {
-  tenants: [{ key: "acme_demo_000001", name: "Acme", created_at: "2026-09-17T01:00:00Z" }],
+  items: [{ tenant_key: "acme_demo_000001", name: "Acme", created_at: "2026-09-17T01:00:00Z" }],
   pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 },
 };
 
@@ -32,7 +32,7 @@ const serviceDirectory = {
 function pendingSessionFetch(path: string) {
   if (path.startsWith("/admin/api/navigation")) return new Promise<Response>(() => undefined);
   if (path === "/admin/api/session") return new Promise<Response>(() => undefined);
-  if (path.startsWith("/admin/api/tenants?")) return response(tenantDirectory);
+  if (path.startsWith("/api/tenants?")) return response(tenantDirectory);
   if (path.includes("/call-specs")) return response(callSpecPage);
   if (path.endsWith("/services") || path.includes("/service-bindings"))
     return response(serviceDirectory);

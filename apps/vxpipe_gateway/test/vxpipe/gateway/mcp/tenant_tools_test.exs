@@ -40,7 +40,13 @@ defmodule Vxpipe.Gateway.MCP.TenantToolsTest do
     result = JSON.decode!(listed.resp_body)["result"]
 
     assert result["structuredContent"] == %{
-             "items" => [%{"tenant_key" => @key, "name" => "Fixture"}],
+             "items" => [
+               %{
+                 "tenant_key" => @key,
+                 "name" => "Fixture",
+                 "created_at" => "2026-10-15T00:00:00Z"
+               }
+             ],
              "pagination" => %{"page" => 1, "page_size" => 25, "total" => 1, "total_pages" => 1}
            }
 

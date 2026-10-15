@@ -194,7 +194,7 @@ the not-found response. The argument selects a resource context, never authority
 
 | Tool | Arguments | Result and behavior |
 | --- | --- | --- |
-| `list_tenants` | `page`, `page_size` | Paginated `{tenant_key, name}` records visible to the key |
+| `list_tenants` | `page`, `page_size` | Paginated `{tenant_key, name, created_at}` records visible to the key |
 | `get_tenant` | `tenant_key` | `{tenant_key, name, created_at}` for one visible tenant; no service secrets |
 | `list_call_specs` | `tenant_key`, `page`, `page_size` | Paginated spec summaries with ID, latest revision and published revision |
 | `get_call_spec` | `tenant_key`, `call_spec_id`, optional `revision` | Portable definition, selected/latest/published revision metadata; latest saved revision by default |
@@ -267,7 +267,7 @@ performs existing session revocation.
 | Tool/result group | Structured result |
 | --- | --- |
 | All list tools | `{items, pagination}` using the envelope below |
-| Tenant list item / get_tenant | `{tenant_key, name}` / `{tenant_key, name, created_at}` |
+| Tenant list item / get_tenant | `{tenant_key, name, created_at}` for both |
 | Spec list item | `{call_spec_id, latest_revision, published_revision}`; published_revision may be null |
 | get_call_spec | `{call_spec_id, revision, latest_revision, published_revision, call_spec_definition}` |
 | Spec create/update | `{call_spec_id, revision, validation_errors}`; retain current draft-save/compiler-error semantics; neither implicitly publishes |
@@ -293,7 +293,7 @@ Every product `list_*` operation, including supporting discovery/role lists, acc
 
 ```json
 {
-  "items": [{"tenant_key": "PUBLIC_TENANT_KEY", "name": "Example"}],
+  "items": [{"tenant_key": "PUBLIC_TENANT_KEY", "name": "Example", "created_at": "2026-10-15T00:00:00Z"}],
   "pagination": {"page": 1, "page_size": 25, "total": 1, "total_pages": 1}
 }
 ```

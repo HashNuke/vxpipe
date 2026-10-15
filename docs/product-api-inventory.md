@@ -6,6 +6,16 @@ they are implemented. The [platform MCP design](platform-mcp.md) owns applicatio
 boundaries, authentication and the approved MCP tool set. Moving a route does not
 add an MCP tool or automatically grant a machine key permission to use it.
 
+Implemented UI cutover (2026-10-15): tenant discovery, spec directory/detail,
+spec writes/publication, provider/model catalogs, account list/detail/create/update
+and paginated role options use the canonical handlers. Tenant list items are
+`{tenant_key,name,created_at}`; navigation paths are derived by the UI. Account
+selectors temporarily enrich canonical role options with separately authorized
+legacy role-grant reads. Service/credential/role/key administration, password reset,
+tenant creation, onboarding/samples and call inspection still require migration.
+Legacy routes remain available during that work; this inventory does not claim
+their removal or full controller consolidation.
+
 ## Classification and migration rules
 
 Product operations have one canonical `/api` handler and response schema, used by

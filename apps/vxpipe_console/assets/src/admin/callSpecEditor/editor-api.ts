@@ -15,7 +15,8 @@ const revision = (value: unknown): value is number => Number.isSafeInteger(value
 const names = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
 
 export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch) {
-  const base = `/admin/api/tenants/${encodeURIComponent(tenant)}`;
+  const base = `/api/tenants/${encodeURIComponent(tenant)}`;
+  const browserBase = `/admin/api/tenants/${encodeURIComponent(tenant)}`;
   const specPath = (id: string) => `${base}/call-specs/${encodeURIComponent(id)}`;
   const options = (signal: AbortSignal): RequestInit => ({ signal, credentials: "same-origin", cache: "no-store", headers: { accept: "application/json" } });
   async function get(path: string, signal: AbortSignal): Promise<Record<string, unknown>> {
@@ -75,7 +76,7 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     return parseModelCatalog(Object.fromEntries(entries));
   }
   async function lookups(signal: AbortSignal): Promise<EditorLookups> {
-    const value = await get(`${base}/call-spec-editor-lookups`, signal);
+    const value = await get(`${browserBase}/call-spec-editor-lookups`, signal);
     if (!record(value.credential_names) || !Object.values(value.credential_names).every(names) || !names(value.mcp_integrations) ||
       !Array.isArray(value.telephony_services) || !value.telephony_services.every((service) => record(service) && typeof service.key === "string" && typeof service.name === "string")) throw new Error("Invalid editor lookups");
     return { credentialNames: value.credential_names as Record<string, string[]>, telephonyServices: value.telephony_services, mcpIntegrations: value.mcp_integrations };
@@ -84,7 +85,7 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     const query = new URLSearchParams({ search });
     if (page) query.set("page", page);
     if (callSpecId) query.set("call_spec_id", callSpecId);
-    const value = await get(`${base}/telephony-services/${encodeURIComponent(service)}/numbers?${query}`, signal);
+    const value = await get(`${browserBase}/telephony-services/${encodeURIComponent(service)}/numbers?${query}`, signal);
     if (!Array.isArray(value.numbers) || value.numbers.length > 50 || !value.numbers.every((item) => record(item) && typeof item.id === "string" && typeof item.number === "string" && typeof item.name === "string" && typeof item.available === "boolean" && names(item.assigned_to)) || !(value.next_page === null || typeof value.next_page === "string")) throw new Error("Invalid phone number inventory");
     return { numbers: value.numbers.map((item) => ({ id: item.id, number: item.number, name: item.name, available: item.available, assignedTo: item.assigned_to })), nextPage: value.next_page };
   }

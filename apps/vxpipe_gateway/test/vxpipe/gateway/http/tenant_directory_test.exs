@@ -23,7 +23,7 @@ defmodule Vxpipe.Gateway.HTTP.TenantDirectoryTest do
       assert get_resp_header(response, "cache-control") == ["no-store"]
 
       assert JSON.decode!(response.resp_body) == %{
-               "items" => Enum.map(tenants, &Map.take(public_tenant(&1), ["tenant_key", "name"])),
+               "items" => Enum.map(tenants, &public_tenant/1),
                "pagination" => %{
                  "page" => 1,
                  "page_size" => 25,

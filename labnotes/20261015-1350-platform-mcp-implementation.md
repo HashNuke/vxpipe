@@ -536,3 +536,26 @@
 - Three expected missing-API failures preceded implementation. All 21 focused
   activation, admission-adapter and ingress tests passed, including the final
   rerun. Independent review found no blockers. No real carrier calls were made.
+
+## Canonical tenant, spec and account UI requests
+
+- Moved tenant/spec/catalog/account requests and paginated role options to the
+  existing canonical API. Updated account filter/input names and tenant list
+  parsing. Added the already-public creation timestamp to both HTTP and MCP list
+  projections so directory rendering uses one shared contract.
+- Account membership editing still needs full role grants. The canonical options
+  directory is primary; a separately authorized legacy roles read enriches only
+  those returned IDs. Read-only users retain the existing grants-empty fallback.
+  Role/service/key administration and other inventoried product migrations remain.
+- Nine frontend red cases and one HTTP projection red case preceded the changes.
+  Final checks: 759 frontend tests, TypeScript, ESLint, asset build, 13 Gateway
+  tests, 11 persisted Console parity tests and seven reference-client groups pass.
+- Headless Chrome inspected desktop 1280px and mobile 390px: tenant pages,
+  account lists/role options, account creation and membership update/disable,
+  plus spec directory/detail/provider catalogs all used canonical network routes.
+  No horizontal overflow was observed. A default 120-second sandbox timeout
+  interrupted the first editor pass; a bounded 600-second fixture completed it.
+  Both fixture and browser were stopped and the sandbox released.
+- Independent review caught the SDK fixture's exact old tenant projection. Its
+  expected timestamp and HTTP/MCP documentation now agree; review confirmed the
+  fix. The inventory records the migrated slice and remaining routes explicitly.

@@ -193,7 +193,7 @@ one tenant through REST and MCP; a tenant key sees only its own tenant.
   keys use an assigned one-tenant scope; Settings platform keys use all tenants.
   Browser directory/visibility rules and scoped repository count/paging remain.
   Canonical HTTP and MCP now call those operations and share public JSON projection.
-- [x] Project `{tenant_key, name}` list entries and safe tenant info. Use the existing public
+- [x] Project `{tenant_key, name, created_at}` list entries and safe tenant info. Use the existing public
   `tenant_key` consistently; never expose internal database IDs or service secrets.
 - [x] Implement the shared list envelope: items plus page/page_size/total/total_pages;
   default page 1, size 25, allowed size 1–50, stable ordering with ID tie-breaker.
@@ -493,6 +493,23 @@ inventoried session/navigation/authentication helpers remain UI-specific.
 - [ ] Acceptance: rendered desktop/mobile flows plus network inspection show the UI
   using documented endpoints; synthetic session/key requests exercise the same
   handlers. Verify changed frontend types/tests/build and no credential exposure.
+
+UI cutover slice (2026-10-15): tenant discovery, spec directory/detail and catalogs,
+account list/detail/create/update and paginated role options now use canonical
+HTTP routes. Tenant list timestamps are shared across HTTP/MCP; account inputs
+use canonical filters and membership tenant keys. Full role-grant reads still
+enrich account selectors through the existing authorized role endpoint until role
+administration migrates. Service/credential/role/key management, password reset,
+tenant creation, onboarding/samples and call inspection remain open.
+
+Nine frontend red failures and a tenant-projection regression preceded the changes.
+All 759 frontend tests, TypeScript, ESLint and the asset build passed, along with
+13 focused Gateway and 11 persisted Console tests. Rendered Chrome/network checks
+at desktop and mobile verified tenant/account pagination, account creation,
+membership editing/disable and spec/catalog reads using canonical routes. The
+independent review found an outdated SDK response assertion; it and the public
+docs were corrected, and all seven reference-client groups passed. No live
+providers were used; the synthetic browser fixture and sandbox were stopped.
 
 ## Checkpoint: parity acceptance and documentation
 

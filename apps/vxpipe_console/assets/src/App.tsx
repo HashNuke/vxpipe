@@ -937,33 +937,26 @@ function useAccessRoles(
   useEffect(() => {
     if (!ready) return;
     let active = true;
-    api.roles().then(({ roles: directory }) => {
-      if (!active) return;
-      setRoles(directory);
-      setRolesLimited(false);
+    api.roleOptions().then(async ({ roles: options }) => {
+      // Account selectors use the public paginated directory. Full grant metadata
+      // still supports membership editing until role management joins that API.
+      try {
+        const { roles: directory } = await api.roles();
+        if (!active) return;
+        const byId = new Map(directory.map((role) => [role.id, role]));
+        setRoles(options.map((option) => byId.get(option.id) ?? option));
+        setRolesLimited(options.some((option) => !byId.has(option.id)));
+      } catch (error: unknown) {
+        if (!active) return;
+        if (!isForbidden(error)) throw error;
+        setRoles(options);
+        setRolesLimited(true);
+      }
       setRolesState("ready");
     }).catch((error: unknown) => {
       if (!active) return;
-      if (isSessionExpired(error)) {
-        onSessionExpired();
-        return;
-      }
-      if (!isForbidden(error)) {
-        setRolesState("unavailable");
-        return;
-      }
-      // `users.read` viewers cannot list full roles; minimal option
-      // metadata still drives filters, badges and read-only display.
-      api.roleOptions().then(({ roles: directory }) => {
-        if (!active) return;
-        setRoles(directory);
-        setRolesLimited(true);
-        setRolesState("ready");
-      }).catch((fallback: unknown) => {
-        if (!active) return;
-        if (isSessionExpired(fallback)) onSessionExpired();
-        else setRolesState("unavailable");
-      });
+      if (isSessionExpired(error)) onSessionExpired();
+      else setRolesState("unavailable");
     });
     return () => { active = false; };
   }, [api, ready, onSessionExpired]);
@@ -1669,7 +1662,7 @@ async function loadTenants(
   isCurrent: () => boolean,
   recoverFirstPage: () => void,
 ): Promise<TenantsPageState | undefined> {
-  const response = await fetchImpl(`/admin/api/tenants?page=${selected.page}`, {
+  const response = await fetchImpl(`/api/tenants?page=${selected.page}`, {
     headers: { accept: "application/json" },
     signal,
   });
@@ -1842,7 +1835,7 @@ async function loadCallSpecs(
 ): Promise<TenantCallSpecsPageState | undefined> {
   const encodedTenant = encodeURIComponent(selected.tenantKey);
   const response = await fetchImpl(
-    `/admin/api/tenants/${encodedTenant}/call-specs?page=${selected.page}`,
+    `/api/tenants/${encodedTenant}/call-specs?page=${selected.page}`,
     { headers: { accept: "application/json" }, signal },
   );
 

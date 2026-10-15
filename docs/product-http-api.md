@@ -59,7 +59,7 @@ Example response:
 ```json
 {
   "items": [
-    {"tenant_key": "AAAAAAAAAAAAAAAA", "name": "Example tenant"}
+    {"tenant_key": "AAAAAAAAAAAAAAAA", "name": "Example tenant", "created_at": "2026-10-15T00:00:00Z"}
   ],
   "pagination": {
     "page": 1,

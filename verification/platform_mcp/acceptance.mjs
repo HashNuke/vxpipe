@@ -145,7 +145,7 @@ try {
     assert.ok(catalog.tools.some(tool => tool.name === "list_tenants"));
     const result = await client.callTool({ name: "list_tenants", arguments: {} });
     assert.equal(result.isError, false);
-    assert.deepEqual(result.structuredContent.items, [{ tenant_key: tenant, name: "Acceptance tenant" }]);
+    assert.deepEqual(result.structuredContent.items, [{ tenant_key: tenant, name: "Acceptance tenant", created_at: "2026-10-15T00:00:00Z" }]);
     assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
     const detail = await client.callTool({ name: "get_tenant", arguments: { tenant_key: tenant } });
     assert.equal(detail.structuredContent.tenant_key, tenant);

@@ -20,11 +20,11 @@ function fetcher({ directoryAccess = true, callsError = false } = {}) {
     if (url.pathname === "/auth/api/status") return response({ status: "complete" });
     if (url.pathname === "/admin/api/session") return response({ user, role });
     if (url.pathname === "/admin/api/navigation") return response({ actor: { id: "user", kind: "member" }, tenant_scope: "assigned", directory_access: directoryAccess, landing_path: "/tenants", directory_path: "/tenants", platform_destinations: [], tenant: selected ? tenant(selected) : null });
-    if (url.pathname === "/admin/api/tenants") {
+    if (url.pathname === "/api/tenants") {
       const keys = url.searchParams.get("q")?.toLowerCase().includes("beta") ? [other] : [key, other];
-      return response({ tenants: keys.map(key => ({ ...tenant(key), created_at: "2026-10-13T00:00:00Z" })), pagination: { page: 1, page_size: 25, total: keys.length, total_pages: 1, has_next: false } });
+      return response({ items: keys.map(key => ({ ...tenant(key), tenant_key: key, created_at: "2026-10-13T00:00:00Z" })), pagination: { page: 1, page_size: 25, total: keys.length, total_pages: 1, has_next: false } });
     }
-    const routeKey = url.pathname.split("/")[4] ?? key;
+    const routeKey = url.pathname.split("/")[url.pathname.startsWith("/api/") ? 3 : 4] ?? key;
     if (url.pathname.endsWith("/dashboard")) return response({ tenant: tenant(routeKey), recent_calls: callsError ? { status: "unavailable" } : { status: "ready", calls: [] } });
     if (url.pathname.endsWith("/call-specs")) return response({ tenant: tenant(routeKey), call_specs: [], pagination: { page: 1, page_size: 25, total: 0, total_pages: 0 } });
     return response({}, 503);
@@ -64,7 +64,7 @@ test("legacy directory redirects and renders no-access without fetching tenants"
   expect(await screen.findByRole("heading", { name: "Tenants" })).toBeVisible();
   expect(screen.getByText("No tenant access")).toBeVisible();
   await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/tenants?q=Acme"));
-  expect(fetchImpl.mock.calls.some(([input]) => new URL(String(input), "http://localhost").pathname === "/admin/api/tenants")).toBe(false);
+  expect(fetchImpl.mock.calls.some(([input]) => new URL(String(input), "http://localhost").pathname === "/api/tenants")).toBe(false);
 });
 
 test("partial dashboard failure stays distinct from empty without a retry button", async () => {
@@ -150,7 +150,7 @@ test("a late tenant-search response cannot replace a newer query", async () => {
   fireEvent.change(search, { target: { value: "Beta" } });
   await screen.findByRole("option", { name: /Beta/ });
   expect(oldSignal?.aborted).toBe(true);
-  resolveOld(await response({ tenants: [{ key, name: "Old result", created_at: "2026-10-13T00:00:00Z" }], pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 } }));
+  resolveOld(await response({ items: [{ tenant_key: key, name: "Old result", created_at: "2026-10-13T00:00:00Z" }], pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 } }));
   await waitFor(() => expect(screen.getByRole("option", { name: /Beta/ })).toBeVisible());
   expect(screen.queryByRole("option", { name: /Old result/ })).not.toBeInTheDocument();
 });
@@ -180,8 +180,8 @@ test("refreshing authority also refreshes an already open tenant directory", asy
   window.history.replaceState({}, "", "/tenants");
   let revoked = false;
   const base = fetcher();
-  const fetchImpl = vi.fn((input: RequestInfo | URL) => revoked && String(input).startsWith("/admin/api/tenants?")
-    ? response({ tenants: [{ key: other, name: "Beta", created_at: "2026-10-13T00:00:00Z" }], pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 } }) : base(input));
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => revoked && String(input).startsWith("/api/tenants?")
+    ? response({ items: [{ tenant_key: other, name: "Beta", created_at: "2026-10-13T00:00:00Z" }], pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 } }) : base(input));
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
   await screen.findByRole("link", { name: "Open Acme" });
   revoked = true;

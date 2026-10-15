@@ -52,7 +52,7 @@ export class NavigationApi {
 
   async tenants(query = "", page = 1, signal?: AbortSignal): Promise<TenantDirectoryPage> {
     const params = new URLSearchParams({ q: query, page: String(page), page_size: "25" });
-    return parseTenantPage(await this.get(`/admin/api/tenants?${params}`, signal));
+    return parseTenantPage(await this.get(`/api/tenants?${params}`, signal));
   }
 
   async dashboard(tenantKey: string, signal?: AbortSignal): Promise<DashboardData> {

@@ -16,7 +16,7 @@ test("reads immutable source and historical metadata with scoped, abortable requ
   expect(snapshot.document.source).toEqual(editorFixture.source);
   expect(snapshot.document.readOnly).toBe(true);
   expect(snapshot.saved).toEqual({ callSpecId: "hello", revision: 2, publishedRevision: 1 });
-  expect(fetch).toHaveBeenCalledWith("/admin/api/tenants/tenant%20%2F%20one/call-specs/hello?revision=2", expect.objectContaining({ signal, credentials: "same-origin", cache: "no-store" }));
+  expect(fetch).toHaveBeenCalledWith("/api/tenants/tenant%20%2F%20one/call-specs/hello?revision=2", expect.objectContaining({ signal, credentials: "same-origin", cache: "no-store" }));
 });
 
 test("create, append and publish use exact bodies and CSRF; failures retain field paths", async () => {
@@ -51,6 +51,7 @@ test("loads installed provider/model listings and safe named lookups without liv
   const api = createEditorApi("tenant", "csrf", fetch);
   const signal = new AbortController().signal;
   expect(await api.catalog(signal)).toEqual(Object.fromEntries(catalogCapabilities.map((capability) => [capability, modelCatalogFixture[capability] ?? {}])));
+  expect(fetch.mock.calls.every(([url]) => String(url).startsWith("/api/tenants/tenant/providers"))).toBe(true);
   expect(await api.lookups(signal)).toEqual({ credentialNames: { google: ["primary"] }, telephonyServices: [{ key: "phone", name: "phone" }], mcpIntegrations: ["help"] });
 });
 
