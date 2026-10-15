@@ -8,7 +8,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
   alias Vxpipe.Calls.ApiKeyManagement
   alias Vxpipe.Console.Endpoint
   alias Vxpipe.Gateway.HTTP.Mount
-  alias Vxpipe.Persistence.{AccessKeyStore, AdminStore, CredentialStore, Repo}
+  alias Vxpipe.Persistence.{AccessKeyStore, AdminStore, CallSpecStore, CredentialStore, Repo}
 
   @endpoint Endpoint
   @version "2025-11-25"
@@ -31,7 +31,9 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       Keyword.merge(original,
         credential_repository: {CredentialStore, Repo},
         access_key_repository: {AccessKeyStore, Repo},
-        admin_repository: {AdminStore, Repo}
+        admin_repository: {AdminStore, Repo},
+        call_spec_repository: {CallSpecStore, Repo},
+        registries: %{host_tools: %{}}
       )
     )
 
@@ -40,7 +42,9 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       :gateway_mount,
       Mount.init(
         mcp: [enabled: true, allowed_hosts: ["localhost"]],
-        tenant_directory: [enabled: true]
+        tenant_directory: [enabled: true],
+        call_spec_reads: [enabled: true],
+        call_spec_authoring: [enabled: true]
       )
     )
 
@@ -194,6 +198,120 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
              error
   end
 
+  test "persisted full tenant and platform keys share source revisions across HTTP and MCP",
+       data do
+    {:ok, full} = Calls.issue_api_key(data.tenant.key, "Spec author", [:admin])
+    grants = Vxpipe.Identity.Permission.builtin_grants(:superadmin)
+
+    administrator = %Vxpipe.Identity.Principal{
+      user_public_id: "fixture",
+      session_public_id: "fixture",
+      account_kind: :superadmin,
+      grants: grants,
+      assigned_tenants: %{},
+      all_tenant_actions: grants
+    }
+
+    {:ok, platform} = ApiKeyManagement.create(administrator, "Spec platform", "platform", nil, [])
+    {:ok, foreign, _} = Calls.bootstrap_tenant("Foreign spec", [:admin])
+    {:ok, foreign_spec} = Calls.save_call_spec(foreign.key, spec_source())
+    base = "/api/tenants/#{data.tenant.key}/call-specs"
+
+    for secret <- [full.secret, platform.secret] do
+      initialized = request(secret, "initialize", 1, nil, initialize_params())
+      [session] = get_resp_header(initialized, "mcp-session-id")
+      on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
+
+      created =
+        tool(secret, session, 2, "create_call_spec", %{
+          tenant_key: data.tenant.key,
+          call_spec_definition: spec_source()
+        })
+
+      assert created["isError"] == false
+      id = created["structuredContent"]["call_spec_id"]
+      assert created["structuredContent"]["validation_errors"] == []
+      source = Map.put(spec_source(), "name", "Second revision")
+
+      updated =
+        rest_write(secret, :put, base <> "/" <> id, %{source: source}) |> json_response(201)
+
+      assert updated["call_spec"]["revision"] == 2
+
+      read = rest(secret, base <> "/" <> id) |> json_response(200) |> Map.fetch!("call_spec")
+
+      mcp =
+        tool(secret, session, 3, "get_call_spec", %{tenant_key: data.tenant.key, call_spec_id: id})[
+          "structuredContent"
+        ]
+
+      assert mcp ==
+               read
+               |> Map.take(~w(call_spec_id revision latest_revision published_revision))
+               |> Map.put("call_spec_definition", read["source"])
+
+      assert mcp["call_spec_definition"] == source
+      assert mcp["published_revision"] == nil
+
+      publication =
+        tool(secret, session, 4, "publish_call_spec_revision", %{
+          tenant_key: data.tenant.key,
+          call_spec_id: id,
+          revision: 1
+        })
+
+      assert publication["structuredContent"] == %{
+               "call_spec_id" => id,
+               "published_revision" => 1
+             }
+
+      historical = rest(secret, base <> "/" <> id <> "?revision=1") |> json_response(200)
+      assert historical["call_spec"]["source"] == spec_source()
+      assert historical["call_spec"]["latest_revision"] == 2
+      assert historical["call_spec"]["published_revision"] == 1
+
+      listed = rest(secret, base) |> json_response(200)
+
+      mcp_list =
+        tool(secret, session, 5, "list_call_specs", %{tenant_key: data.tenant.key})[
+          "structuredContent"
+        ]
+
+      assert mcp_list["pagination"] == listed["pagination"]
+
+      assert Enum.map(mcp_list["items"], & &1["call_spec_id"]) ==
+               Enum.map(listed["call_specs"], & &1["id"])
+
+      for name <- ["get_call_spec", "update_call_spec"] do
+        args = %{tenant_key: data.tenant.key, call_spec_id: foreign_spec.call_spec_id}
+
+        args =
+          if name == "update_call_spec",
+            do: Map.put(args, :call_spec_definition, source),
+            else: args
+
+        denied = tool(secret, session, if(name == "get_call_spec", do: 6, else: 7), name, args)
+        assert denied["isError"] == true
+        assert denied["structuredContent"]["error"]["code"] == "call_spec_not_found"
+      end
+
+      assert rest(secret, base <> "/" <> foreign_spec.call_spec_id).status == 404
+
+      assert rest_write(secret, :put, base <> "/" <> foreign_spec.call_spec_id, %{source: source}).status ==
+               404
+    end
+
+    initialized = request(data.key.secret, "initialize", 1, nil, initialize_params())
+    [session] = get_resp_header(initialized, "mcp-session-id")
+    on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
+    assert rest(data.key.secret, base).status == 403
+
+    assert request(data.key.secret, "tools/call", 2, session, %{
+             name: "list_call_specs",
+             arguments: %{tenant_key: data.tenant.key}
+           }).status == 403
+  end
+
   def search_tenants(:empty, _scope, _query, _limit, _offset), do: {:ok, {[], 0}}
 
   defp rest(secret, path),
@@ -201,6 +319,31 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       build_conn()
       |> put_req_header("authorization", "Bearer " <> secret)
       |> get("https://localhost" <> path)
+
+  defp rest_write(secret, method, path, body) do
+    conn =
+      build_conn()
+      |> put_req_header("authorization", "Bearer " <> secret)
+      |> put_req_header("content-type", "application/json")
+
+    dispatch(conn, Endpoint, method, "https://localhost" <> path, JSON.encode!(body))
+  end
+
+  defp spec_source,
+    do: %{
+      "schema_version" => "20261004.01",
+      "defaults" => %{
+        "capabilities" => %{"model_inference" => %{"provider" => "fixture", "model" => "test"}}
+      },
+      "incoming_call" => %{"caller" => "caller", "handled_by" => "assistant"},
+      "participants" => %{
+        "caller" => %{
+          "type" => "human",
+          "connection" => %{"service" => "web", "mode" => "receive", "admission" => "start_call"}
+        },
+        "assistant" => %{"type" => "agent", "prompt" => "Help."}
+      }
+    }
 
   defp tool(secret, session, id, name, arguments) do
     request(secret, "tools/call", id, session, %{name: name, arguments: arguments})

@@ -15,6 +15,7 @@ defmodule Vxpipe.Gateway.HTTP.Supervisor do
       Keyword.take(options, [
         :mcp,
         :tenant_directory,
+        :call_spec_reads,
         :operator_api,
         :call_spec_authoring,
         :call_admission,

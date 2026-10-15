@@ -18,6 +18,20 @@ the earlier nine-tool machine-endpoint-only proposal. Several required operation
 need shared machine API/application changes; they remain part of this milestone,
 not deferred Console-only features.
 
+## Implemented tool subset
+
+The current server advertises tenant discovery and call-spec workflows according
+to key scope: `list_tenants`, `get_tenant`, `list_call_specs`, `get_call_spec`,
+`create_call_spec`, `update_call_spec`, `publish_call_spec_revision`,
+`list_providers`, and `list_provider_models`. Calls-only keys see tenant tools;
+full tenant and Settings platform keys also see spec/catalog tools. Each call
+independently checks its authority and selected tenant.
+
+Call creation/token/hangup and user/role tools below are approved remaining work;
+they are not advertised yet. The [product HTTP API](product-http-api.md) documents
+the corresponding implemented HTTP operations. Browser migration remains tracked
+separately in the milestone.
+
 ## What exists today
 
 - Gateway owns machine HTTP routes and Calls owns their authorization/workflows.

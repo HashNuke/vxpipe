@@ -11,8 +11,16 @@ defmodule Vxpipe.Console.AdminProviderCatalogEndpointTest do
   setup do
     original_calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
     original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
+    mount = @endpoint.config(:gateway_mount)
+
+    Phoenix.Config.put(
+      @endpoint,
+      :gateway_mount,
+      put_in(mount, [:endpoint, :router, :call_spec_authoring, :enabled], true)
+    )
 
     on_exit(fn ->
+      Phoenix.Config.put(@endpoint, :gateway_mount, mount)
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, original_calls)
 
       if original_backend,
@@ -76,6 +84,36 @@ defmodule Vxpipe.Console.AdminProviderCatalogEndpointTest do
     response = https_get("/admin/api/tenants/#{@tenant_key}/providers?capability=text_to_speech")
     assert json_response(response, 401) == %{"error" => %{"code" => "session_required"}}
     refute_received {:operator_bindings_requested, _}
+  end
+
+  test "canonical catalogs use the session with legacy model metadata and optional pagination" do
+    configure_repository({:ok, %{tenant: %{key: @tenant_key, name: "Example"}, bindings: []}})
+    suffix = "/tenants/#{@tenant_key}/providers/deepgram/models?capability=text_to_speech"
+    auth = authenticate()
+    legacy = auth |> recycle() |> https_get("/admin/api" <> suffix) |> json_response(200)
+    canonical = auth |> recycle() |> https_get("/api" <> suffix) |> json_response(200)
+    assert canonical == legacy
+
+    paged =
+      auth |> recycle() |> https_get("/api" <> suffix <> "&page_size=1") |> json_response(200)
+
+    assert paged["items"] == canonical["models"]
+
+    assert paged["pagination"] == %{
+             "page" => 1,
+             "page_size" => 1,
+             "total" => 1,
+             "total_pages" => 1
+           }
+
+    invalid =
+      auth
+      |> recycle()
+      |> Plug.Conn.put_req_header("authorization", "Basic invalid")
+      |> https_get("/api" <> suffix)
+
+    assert json_response(invalid, 401)["error"]["code"] == "invalid_api_key"
+    assert json_response(https_get("/api" <> suffix), 401)["error"]["code"] == "session_required"
   end
 
   test "platform onboarding receives model listings before any tenant exists" do

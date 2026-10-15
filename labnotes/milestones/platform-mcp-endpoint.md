@@ -94,10 +94,10 @@ public Elixir operation with their actual authenticated actor.
 - [ ] Add configured authentication adapters: browser sessions with CSRF/origin
   protection, API-key Bearer for external requests, Bearer-only standalone hosting.
   Explicit Authorization never falls back to session authority; grants never union.
-- [ ] Red-test and migrate one existing spec-write flow end to end: direct Elixir,
+- [x] Red-test and migrate one existing spec-write flow end to end: direct Elixir,
   browser HTTP and API-key HTTP have equivalent behavior for equivalent authority.
   Direct application calls and invalid/missing CSRF or revoked credentials deny.
-- [ ] Acceptance: local browser/network inspection shows that UI flow using the
+- [x] Acceptance: local browser/network inspection shows that UI flow using the
   documented canonical route and response; a synthetic API-key request uses the
   same handler. No platform key is embedded in or issued just for the browser UI.
 
@@ -222,27 +222,39 @@ and live-provider lanes were not enabled.
 Depends on tenant discovery. Runnable slice: list/get a tenant's specs, discover
 models, save a draft, append a revision and explicitly publish it locally.
 
-- [ ] Red-test required list/get/create/update and supporting publish/catalog tools.
-- [ ] Extend principal-aware spec reads to tenant admin and Settings platform keys;
+- [x] Red-test required list/get/create/update and supporting publish/catalog tools.
+- [x] Extend principal-aware spec reads to tenant admin and Settings platform keys;
   add the missing machine GET routes. Calls-only keys cannot read portable source.
   Domain prerequisite implemented and reviewed: tenant admin source/list reads
   reject calls-only and foreign-tenant actors before storage, share source fetch
   and retain latest/historical/publication metadata. Shared read/write policy now
   also preserves Settings platform authority for canonical writes; red regressions
   and 67 Calls/15 Gateway focused tests passed, independently reviewed. Transport
-  acceptance is recorded below when the complete slice is verified.
-- [ ] Paginate spec summaries and provider/model helpers with the shared envelope;
+  acceptance is recorded below.
+- [x] Paginate spec summaries and provider/model helpers with the shared envelope;
   preserve existing catalog REST response shape when pagination is not requested.
-- [ ] Implement get by public ID and optional revision, returning portable source
+- [x] Implement get by public ID and optional revision, returning portable source
   and latest/published revision metadata only. No compiled plans/resolved secrets.
-- [ ] Map `call_spec_definition` to source; updates require `call_spec_id` and append
+- [x] Map `call_spec_definition` to source; updates require `call_spec_id` and append
   immutable revisions. Preserve server-generated IDs, validation, size limits,
   revision conflict and foreign-ID errors. Update cannot create a missing spec.
-- [ ] Keep publication explicit. Preserve transaction-time complete-source ownership
+- [x] Keep publication explicit. Preserve transaction-time complete-source ownership
   checks, especially tenant edits of platform-service-backed definitions.
-- [ ] Acceptance: REST/MCP produce equivalent revisions and denials; new draft
+- [x] Acceptance: REST/MCP produce equivalent revisions and denials; new draft
   creation/update never publishes or starts a call. Local catalog performs no paid
   provider calls. Supporting tools have the same authorization as their operations.
+
+Evidence (2026-10-15): seven MCP spec/catalog tools now use the shared Calls
+policy and operations. Forty focused Gateway HTTP tests, four MCP tool tests,
+21 Console editor/catalog tests and five persisted-key Console MCP tests pass.
+The persisted parity test crosses MCP create/publish with HTTP update/read/list
+for full tenant and Settings platform credentials; it verifies immutable historical
+source, publication metadata, scoped foreign IDs and calls-only denials. Source
+and catalog routes preserve established HTTP shapes, with opt-in catalog paging.
+Independent policy, HTTP, MCP and final parity reviews found no remaining blockers.
+The stable snapshot also passed all five root completion commands, including the
+full umbrella suite with zero failures. No source changed during that verification.
+The overall milestone, remaining call/user tools and UI read/catalog cutover stay open.
 
 ## Checkpoint: create calls with variables and issue join tokens
 

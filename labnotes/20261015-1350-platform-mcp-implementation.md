@@ -203,3 +203,29 @@
   publication and must not mint an unused token when creating a prepared call.
 - Implementation remains open. The current full-suite run uses the stable spec
   snapshot; this review does not change application source during verification.
+
+## Call-spec HTTP and MCP operations
+
+- Canonical spec list/detail reads now use shared Calls operations for browser
+  users, full tenant keys and Settings platform keys. Shared projections preserve
+  existing HTTP source/summary shapes; writes still omit source. Provider/model
+  catalogs accept browser sessions and opt-in bounded pagination while preserving
+  the established unpaged response envelopes.
+- Seven MCP spec/catalog tools adapt those same operations and safe projections.
+  Schemas reject extra authority fields, coercion, nulls and excessive page sizes.
+  Source updates append immutable drafts; publication remains explicit. Calls-only
+  keys cannot discover or invoke these operations, and foreign IDs remain scoped.
+- Four MCP tests first failed because the tools did not exist. Implementation
+  exposed a PCRE/JSON-Schema regex incompatibility in ID validation; the shared
+  ASCII hex escape now works in both engines. The publish fixture also needed its
+  explicit local model-inference default to produce a publishable source.
+- Focused verification passed 40 Gateway HTTP tests, four new MCP tests, 21 Console
+  editor/catalog tests, and five persisted-key Console MCP tests. The latter cross
+  MCP creation/publication with HTTP update/read/list for both full tenant and
+  platform credentials, preserving historical source and concealed foreign IDs.
+- Independent reviews of policy, HTTP adapters, MCP tools and final parity tests
+  found no remaining blockers. Fast root formatting, warnings-as-errors compilation,
+  strict Credo and unused-dependency checks passed. The stable full umbrella suite
+  also passed: every application reported zero failures, including 649 Gateway,
+  212 Calls and 328 Console tests (integration exclusions retained). No source
+  changed during that run; live providers and telephony remained excluded.

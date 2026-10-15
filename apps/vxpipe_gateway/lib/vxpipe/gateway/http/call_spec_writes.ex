@@ -3,6 +3,7 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
   import Plug.Conn
   alias Vxpipe.Calls.{CallSpecErrors, CallSpecRevision, ProviderAuth}
   alias Vxpipe.Gateway.HTTP.ProductAuthentication
+  alias Vxpipe.Gateway.CallSpecJSON
 
   def init(options),
     do: %{
@@ -44,7 +45,7 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
          {:ok, function, arguments, status} <- input(operation, conn.body_params),
          {:ok, %CallSpecRevision{tenant_key: ^tenant} = revision} <-
            backend(options, function, [author, tenant | arguments]) do
-      json(conn, status, %{call_spec: public_revision(revision)})
+      json(conn, status, %{call_spec: CallSpecJSON.write_revision(revision)})
     else
       {:error, reason} -> error(conn, reason)
       _invalid_result -> error(conn, :authoring_unavailable)
@@ -87,27 +88,6 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
     _error -> {:error, :authoring_unavailable}
   catch
     :exit, _reason -> {:error, :authoring_unavailable}
-  end
-
-  defp public_revision(revision) do
-    %{
-      call_spec_id: revision.call_spec_id,
-      revision: revision.revision,
-      schema_version: revision.schema_version,
-      source_digest: revision.source_digest,
-      published: not is_nil(revision.published_at),
-      published_at: if(revision.published_at, do: DateTime.to_iso8601(revision.published_at)),
-      validation_errors: CallSpecErrors.validation_errors(revision.validation_errors),
-      routes:
-        Enum.map(
-          revision.routes,
-          &%{
-            participant_key: &1.key,
-            participant_ref: &1.participant_ref,
-            published: not is_nil(&1.published_at)
-          }
-        )
-    }
   end
 
   defp error(conn, reason) do

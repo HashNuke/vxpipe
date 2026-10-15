@@ -60,6 +60,7 @@ defmodule Vxpipe.Console.Application do
     |> Keyword.take([
       :mcp,
       :tenant_directory,
+      :call_spec_reads,
       :operator_api,
       :call_spec_authoring,
       :call_admission,
@@ -72,6 +73,11 @@ defmodule Vxpipe.Console.Application do
     |> Keyword.update!(:call_spec_authoring, fn options ->
       Keyword.put(options, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
     end)
+    |> Keyword.update(
+      :call_spec_reads,
+      [browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}],
+      &Keyword.put(&1, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
+    )
     |> Keyword.update(
       :tenant_directory,
       [browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}],

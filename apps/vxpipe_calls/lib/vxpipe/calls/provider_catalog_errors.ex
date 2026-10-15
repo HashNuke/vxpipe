@@ -5,6 +5,8 @@ defmodule Vxpipe.Calls.ProviderCatalogErrors do
   def response(:invalid_capability), do: {422, %{code: "invalid_capability"}}
   def response(:invalid_tenant_key), do: {400, %{code: "invalid_tenant_key"}}
   def response(:tenant_not_found), do: {404, %{code: "tenant_not_found"}}
+  def response(:invalid_page), do: {422, %{code: "invalid_page"}}
+  def response(:page_out_of_range), do: {422, %{code: "page_out_of_range"}}
 
   def response(reason)
       when reason in [
@@ -16,6 +18,7 @@ defmodule Vxpipe.Calls.ProviderCatalogErrors do
 
   def response(reason)
       when reason in [
+             :forbidden,
              :insufficient_scope,
              :tenant_access_forbidden,
              :authoring_authority_required

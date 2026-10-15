@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.MCP.Handler do
   @moduledoc "MCP protocol callbacks over the operations enabled by Vxpipe."
   use ExMCP.Server.Handler
 
-  alias Vxpipe.Gateway.MCP.{Protocol, TenantTools}
+  alias Vxpipe.Gateway.MCP.{Protocol, Tools}
 
   def options(conn, _request),
     do: %{actor: conn.assigns.mcp_actor, call_options: conn.assigns.mcp_call_options}
@@ -25,7 +25,7 @@ defmodule Vxpipe.Gateway.MCP.Handler do
   end
 
   @impl ExMCP.Server.Handler
-  def handle_list_tools(nil, state), do: {:ok, TenantTools.list(state.actor), nil, state}
+  def handle_list_tools(nil, state), do: {:ok, Tools.list(state.actor), nil, state}
 
   def handle_list_tools(_cursor, state),
     do: {:error, ExMCP.Error.protocol_error(-32602, "Invalid cursor"), state}
@@ -36,15 +36,15 @@ defmodule Vxpipe.Gateway.MCP.Handler do
     # already rejected it as a user argument; it is not part of a product operation.
     arguments = Map.delete(arguments, "_meta")
 
-    with {:ok, arguments} <- TenantTools.authorize(state.actor, name, arguments),
-         {:ok, result} <- TenantTools.call(state.actor, name, arguments, state.call_options) do
+    with {:ok, arguments} <- Tools.authorize(state.actor, name, arguments),
+         {:ok, result} <- Tools.call(state.actor, name, arguments, state.call_options) do
       {:ok, result(result, false), state}
     else
       {:error, :invalid_tool_arguments} ->
         {:error, ExMCP.Error.protocol_error(-32602, "Invalid tool arguments"), state}
 
       {:error, reason} ->
-        {:ok, result(%{error: %{code: public_error(reason)}}, true), state}
+        {:ok, result(%{error: Tools.error(name, reason)}, true), state}
     end
   rescue
     _exception -> internal_error(state)
@@ -62,12 +62,6 @@ defmodule Vxpipe.Gateway.MCP.Handler do
       structuredContent: value,
       isError: error?
     }
-
-  defp public_error(:tenant_not_found), do: "tenant_not_found"
-  defp public_error(:tenant_page_out_of_range), do: "page_out_of_range"
-  defp public_error(:invalid_tenant_page_request), do: "invalid_pagination"
-  defp public_error(:forbidden), do: "forbidden"
-  defp public_error(_reason), do: "unavailable"
 
   defp internal_error(state),
     do: {:error, ExMCP.Error.protocol_error(-32603, "Operation failed"), state}

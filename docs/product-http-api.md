@@ -3,8 +3,9 @@
 Canonical product operations live under `/api`. Browser UI clients and external
 clients use the same handlers, application authorization and response schemas.
 This document grows with the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md);
-it describes the implemented tenant read routes and links the existing spec-write
-contract. The complete migration inventory is in [product API inventory](product-api-inventory.md).
+it describes tenant and call-spec reads, provider catalogs, and the existing
+spec-write contract. The complete migration inventory is in
+[product API inventory](product-api-inventory.md).
 
 ## Authentication
 
@@ -119,7 +120,102 @@ Failures have a bounded JSON envelope:
 Backend exceptions, credential material and internal database IDs are not returned.
 When the tenant directory feature is disabled, these routes return 404.
 
-## Existing call-spec writes
+## List call specs
+
+```http
+GET /api/tenants/:tenant_key/call-specs?page=1&page_size=25
+```
+
+Call-spec reads, writes and provider catalogs accept Full Tenant Access and Full
+Platform Access keys. Create & Join Calls keys cannot read source or catalogs.
+Tenant credentials are restricted to their own tenant. Browser users need
+`call_specs.read` for reads/catalogs and `call_specs.write` for writes, within the
+requested tenant; being signed in does not grant those permissions.
+
+The list accepts only `page` and `page_size`, with the same defaults and bounds
+as the tenant directory. Rows are ordered by latest revision timestamp descending,
+then public spec ID descending. It preserves the browser directory's rich summary
+schema and does not return source or compiled metadata:
+
+```json
+{
+  "tenant": {"key": "AAAAAAAAAAAAAAAA", "name": "Example tenant"},
+  "call_specs": [
+    {
+      "id": "example-spec",
+      "name": "Example spec",
+      "latest_revision": 3,
+      "published_revision": 2,
+      "call_count": 4,
+      "updated_at": "2026-10-15T00:00:00Z"
+    }
+  ],
+  "pagination": {"page": 1, "page_size": 25, "total": 1, "total_pages": 1}
+}
+```
+
+`published_revision` is null when no revision is published. The empty-first-page
+and out-of-range behavior matches tenant pagination. The canonical page-size
+maximum is 50; this does not change older Elixir/legacy directory limits.
+
+## Read a call spec
+
+```http
+GET /api/tenants/:tenant_key/call-specs/:call_spec_id
+GET /api/tenants/:tenant_key/call-specs/:call_spec_id?revision=2
+```
+
+Omitting `revision` selects the latest saved revision, which may be a draft.
+An explicit revision must be an integer from 1 through 2147483647. Unknown query
+parameters are rejected. The `{call_spec: ...}` response contains:
+
+- `call_spec_id`, selected `revision`, `schema_version`, and `source_digest`.
+- Portable `source`, ready to edit and submit to the existing write endpoints.
+- Current `latest_revision` and `published_revision`, even when reading history.
+- Selected-revision `published`, `published_at`, safe `validation_errors`, and
+  participant `routes` with `participant_key`, `participant_ref`, and `published`.
+
+Reading never publishes or starts a call. Responses exclude compiled metadata and
+database IDs. The public source field remains `source`; MCP maps its separate
+`call_spec_definition` argument/result at the protocol boundary.
+
+Spec read failures use the same `{error: {code: ...}}` envelope: 401
+`invalid_api_key`/`session_required`, 403 `authoring_forbidden`, 404
+`tenant_not_found`/`call_spec_not_found`, 400 `invalid_request`, 422
+`invalid_page`/`page_out_of_range`, or 503 `call_spec_directory_unavailable`.
+Invalid, unauthorized or unavailable reads never return backend error details.
+
+## Provider and model catalogs
+
+```http
+GET /api/tenants/:tenant_key/providers?capability=text_to_speech
+GET /api/tenants/:tenant_key/providers/:provider/models?capability=text_to_speech
+```
+
+`capability` is required. The catalog accepts the supported capability identifiers,
+including `text_to_speech`, `speech_to_text`, `speech_to_speech`, and
+`model_inference`. These are local catalog queries and do not call a live provider.
+Provider rows include safe credential availability booleans; model rows retain
+their voice and option metadata. Credentials themselves are never returned.
+
+With neither pagination parameter, existing clients receive the unchanged
+`{providers: [...]}` or `{models: [...]}` envelope. Supplying `page` or `page_size`
+opts into the bounded public list projection:
+
+```json
+{
+  "items": [],
+  "pagination": {"page": 1, "page_size": 25, "total": 0, "total_pages": 0}
+}
+```
+
+Pagination uses the same defaults and bounds as tenant lists and preserves catalog
+order. Invalid pagination returns 422 `invalid_page`; an excessive page returns
+422 `page_out_of_range`. Other catalog errors include 403 `authoring_forbidden`,
+422 `invalid_capability`, 404 `provider_not_found`/`tenant_not_found`, and 503
+`provider_catalog_unavailable`, alongside the authentication errors above.
+
+## Call-spec writes
 
 The canonical routes are `POST /api/tenants/:tenant_key/call-specs`,
 `PUT /api/tenants/:tenant_key/call-specs/:id`, and
@@ -130,6 +226,5 @@ CSRF protection. See the [authoring contract](operator-api-key-authoring.md) for
 request bodies, publication behavior and compatible installation-authoring routes.
 
 During migration, legacy Console `/admin/api` routes retain their original response
-envelopes. They are not alternate canonical schemas. The tenant directory UI cutover
-is tracked separately in the milestone; this API addition does not claim that all
-existing UI requests have migrated yet.
+envelopes. UI callers are migrated in subsequent milestone checkpoints; these API
+additions do not claim that all existing UI requests have migrated yet.

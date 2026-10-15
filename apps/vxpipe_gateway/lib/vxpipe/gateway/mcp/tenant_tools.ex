@@ -41,6 +41,14 @@ defmodule Vxpipe.Gateway.MCP.TenantTools do
     }
   ]
 
+  def names, do: Enum.map(@tools, & &1.name)
+
+  def error(_name, :tenant_not_found), do: %{code: "tenant_not_found"}
+  def error(_name, :tenant_page_out_of_range), do: %{code: "page_out_of_range"}
+  def error(_name, :invalid_tenant_page_request), do: %{code: "invalid_pagination"}
+  def error(_name, :forbidden), do: %{code: "forbidden"}
+  def error(_name, _reason), do: %{code: "unavailable"}
+
   def list(actor) do
     if Calls.authorize_tenant_discovery(actor) == :ok, do: @tools, else: []
   end

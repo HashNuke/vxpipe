@@ -486,6 +486,7 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
       ],
       operator_api: [enabled: database_enabled?],
       tenant_directory: [enabled: database_enabled?],
+      call_spec_reads: [enabled: database_enabled?],
       call_spec_authoring: [enabled: database_enabled?],
       telephony: [
         enabled: not is_nil(telephony_public_base_url),

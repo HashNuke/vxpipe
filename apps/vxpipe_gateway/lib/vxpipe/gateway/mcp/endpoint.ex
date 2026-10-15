@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
 
   import Plug.Conn
 
-  alias Vxpipe.Gateway.MCP.{Admission, Authentication, Handler, Protocol, TenantTools}
+  alias Vxpipe.Gateway.MCP.{Admission, Authentication, Handler, Protocol, Tools}
 
   @impl true
   def init(options) do
@@ -125,7 +125,7 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
   end
 
   defp authorize_tool(conn, %{"method" => "tools/call", "params" => params} = request, options) do
-    case TenantTools.authorize(
+    case Tools.authorize(
            conn.assigns.mcp_actor,
            params["name"],
            Map.get(params, "arguments", %{})

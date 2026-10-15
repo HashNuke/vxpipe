@@ -12,8 +12,16 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
   setup do
     original_calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
     original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
+    mount = @endpoint.config(:gateway_mount)
+
+    Phoenix.Config.put(
+      @endpoint,
+      :gateway_mount,
+      put_in(mount, [:endpoint, :router, :call_spec_reads, :enabled], true)
+    )
 
     on_exit(fn ->
+      Phoenix.Config.put(@endpoint, :gateway_mount, mount)
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, original_calls)
 
       if original_backend,
@@ -110,6 +118,40 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
     assert json_response(anonymous, 401) == %{"error" => %{"code" => "session_required"}}
   end
 
+  test "canonical spec directory shares the browser schema and rejects explicit invalid credentials" do
+    configure_admin_repository(
+      {:ok,
+       {%Tenant{
+          key: @tenant_key,
+          name: "Example",
+          inserted_at: ~U[2026-10-15 00:00:00Z]
+        }, [], 0}}
+    )
+
+    auth = authenticate()
+
+    legacy =
+      auth
+      |> recycle()
+      |> https_get("/admin/api/tenants/#{@tenant_key}/call-specs")
+      |> json_response(200)
+
+    path = "/api/tenants/#{@tenant_key}/call-specs"
+    assert auth |> recycle() |> https_get(path) |> json_response(200) == legacy
+    assert_received {:operator_call_specs_requested, @tenant_key, 25, 0}
+    assert_received {:operator_call_specs_requested, @tenant_key, 25, 0}
+
+    invalid =
+      auth
+      |> recycle()
+      |> Plug.Conn.put_req_header("authorization", "Basic invalid")
+      |> https_get(path)
+
+    assert json_response(invalid, 401)["error"]["code"] == "invalid_api_key"
+    assert json_response(https_get(path), 401)["error"]["code"] == "session_required"
+    refute_received {:operator_call_specs_requested, _, _, _}
+  end
+
   describe "editor authoring" do
     setup do
       alias Vxpipe.Persistence.{Repo, CredentialStore, CallSpecStore}
@@ -132,6 +174,10 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
         @endpoint,
         :gateway_mount,
         Vxpipe.Gateway.HTTP.Mount.init(
+          call_spec_reads: [
+            enabled: true,
+            browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}
+          ],
           call_spec_authoring: [
             enabled: true,
             browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}
@@ -201,6 +247,37 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
         write(auth, :post, "/api/tenants/#{tenant.key}/call-specs", %{"source" => editor_source()})
 
       assert json_response(denied, 403)["error"]["code"] == "authoring_forbidden"
+    end
+
+    test "canonical source reads agree with the editor for session and full tenant credentials",
+         %{
+           tenant: tenant,
+           authenticated: auth
+         } do
+      source = editor_source()
+
+      created =
+        write(auth, :post, "/api/tenants/#{tenant.key}/call-specs", %{"source" => source})
+        |> json_response(201)
+
+      id = created["call_spec"]["call_spec_id"]
+      suffix = "/tenants/#{tenant.key}/call-specs/#{id}?revision=1"
+      legacy = auth |> recycle() |> https_get("/admin/api" <> suffix) |> json_response(200)
+      {:ok, key} = Vxpipe.Calls.issue_api_key(tenant.key, "source reader", [:admin])
+
+      browser = auth |> recycle() |> https_get("/api" <> suffix)
+
+      machine =
+        build_conn()
+        |> Plug.Conn.put_req_header("authorization", "Bearer " <> key.secret)
+        |> https_get("/api" <> suffix)
+
+      assert json_response(browser, 200) == legacy
+      assert json_response(machine, 200) == legacy
+      assert legacy["call_spec"]["source"] == source
+      assert legacy["call_spec"]["latest_revision"] == 1
+      assert legacy["call_spec"]["published_revision"] == nil
+      refute Map.has_key?(created["call_spec"], "source")
     end
 
     test "canonical browser writes enforce CSRF and explicit credentials never fall back", %{
