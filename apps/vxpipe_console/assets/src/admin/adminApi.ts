@@ -457,7 +457,7 @@ function providerLabel(provider: ServiceProvider) {
     rime: "Rime",
     cartesia: "Cartesia",
     elevenlabs: "ElevenLabs",
-    morse_code_api: "MorseCodeApi",
+    morse_code_api: "MorseCode API",
     google: "Google AI Studio",
     openai: "OpenAI",
     vertex_ai: "Google Vertex AI",

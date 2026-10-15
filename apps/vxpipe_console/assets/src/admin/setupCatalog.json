@@ -31,7 +31,7 @@
     },
     {
       "id": "morse_code_api",
-      "name": "MorseCodeApi",
+      "name": "MorseCode API",
       "description": "Generate and recognize Morse tones with one service.",
       "capabilities": ["stt", "tts"],
       "sampleCapabilities": ["stt", "tts"]
