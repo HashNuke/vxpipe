@@ -6,7 +6,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
   @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE VXPIPE_CREDENTIAL_KEY_ID
     VXPIPE_CREDENTIAL_KEYS STORAGE_BUCKET AWS_SESSION_TOKEN VXPIPE_DEV_SPEECH_PROFILE
     VXPIPE_DEV_MODEL_FIXTURE VXPIPE_DEV_TENANT DEEPGRAM_API_KEY GEMINI_API_KEY APP_HOST PORT VXPIPE_DEV_TLS
-    TELEPHONY_HOST VXPIPE_CONFIG SECRET_KEY_BASE)
+    TELEPHONY_HOST VXPIPE_CONFIG SECRET_KEY_BASE MORSE_CODE_API_BASE_URL)
   @settings [
     {:vxpipe_call_engine, Vxpipe.CallEngine.Application},
     {:vxpipe_gateway, Vxpipe.Gateway.Application},
@@ -47,6 +47,41 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
     configuration = Config.Reader.read!(@runtime, env: :dev)
     refute Keyword.has_key?(configuration, :req_llm)
     assert_inline_sample(context.development)
+  end
+
+  test "Morse runtime configuration defaults locally and requires an explicit HTTPS production origin" do
+    development = Config.Reader.read!(@runtime, env: :dev)
+    local = development |> Keyword.fetch!(:vxpipe_providers) |> Keyword.fetch!(:morse_code_api)
+    assert local == [base_url: "http://127.0.0.1:8787", allow_http?: true]
+
+    System.put_env("APP_HOST", "console.example.test")
+    System.put_env("SECRET_KEY_BASE", String.duplicate("synthetic-runtime-secret-", 4))
+    production = Config.Reader.read!(@runtime, env: :prod)
+    missing = production |> Keyword.fetch!(:vxpipe_providers) |> Keyword.fetch!(:morse_code_api)
+    assert missing == [base_url: nil, allow_http?: false]
+
+    previous = Application.fetch_env(:vxpipe_providers, :morse_code_api)
+
+    on_exit(fn ->
+      case previous do
+        {:ok, value} -> Application.put_env(:vxpipe_providers, :morse_code_api, value)
+        :error -> Application.delete_env(:vxpipe_providers, :morse_code_api)
+      end
+    end)
+
+    Application.put_env(:vxpipe_providers, :morse_code_api, missing)
+
+    assert {:error, :endpoint_not_configured} =
+             Vxpipe.Providers.MorseCodeApi.TTS.new(api_key: "synthetic")
+
+    System.put_env("MORSE_CODE_API_BASE_URL", "https://morse.example.test/")
+    configured = Config.Reader.read!(@runtime, env: :prod)
+    hosted = configured |> Keyword.fetch!(:vxpipe_providers) |> Keyword.fetch!(:morse_code_api)
+    Application.put_env(:vxpipe_providers, :morse_code_api, hosted)
+    assert {:ok, selected} = Vxpipe.Providers.MorseCodeApi.TTS.new(api_key: "synthetic")
+    assert selected.endpoint == "https://morse.example.test"
+    assert {:ok, endpoint} = Vxpipe.Providers.MorseCodeApi.Endpoint.configured()
+    assert endpoint.websocket == "wss://morse.example.test"
   end
 
   @tag :tmp_dir

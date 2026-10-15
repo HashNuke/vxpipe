@@ -1,12 +1,13 @@
 # Morse-code API service and providers
 
-Status: implementation started, 2026-10-14. **5 of 9
-implementation checkpoints complete (A–E).** The user requested planning first and
+Status: implementation in progress, 2026-10-15. **6 of 9
+implementation checkpoints complete (A–F).** The user requested planning first and
 clarified the scope as complete ElevenLabs **TTS/STT** compatibility, including
 HTTP, streaming, WebSockets, discovery and authentication. Other ElevenLabs
 product APIs are outside this milestone. The Go server/catalog, HTTP TTS
 formats/streaming, PCM batch STT, realtime STT and both TTS WebSockets are
-implemented; full semantic compatibility and Vxpipe provider integration remain pending.
+implemented, and Vxpipe TTS has configured-room acceptance. Full semantic
+compatibility, Vxpipe STT and final deployment acceptance remain pending.
 
 ## Runnable outcome
 
@@ -461,7 +462,7 @@ Dependencies: C and the implemented provider/service prerequisites.
   setting: development-local default, explicit hosted configuration, HTTP→WS and
   HTTPS→WSS derivation, trailing-slash normalization and nondefault ports.
   Reject userinfo, query/fragment, non-root paths, invalid ports and schemes.
-- [ ] Connect the configured origin to discovery/probes and TTS; no hardcoded
+- [x] Connect the configured origin to discovery/probes and TTS; no hardcoded
   hosted URL may bypass it. Include the origin in endpoint-dependent cache
   identity. Test absent production configuration at actual provider selection,
   while ordinary startup without this provider remains usable.
@@ -471,10 +472,10 @@ Dependencies: C and the implemented provider/service prerequisites.
   interruption, cancellation and stale-generation rejection.
 - [x] Connect credentials, service catalogs, editor selections and Console
   label **MorseCodeApiTTS**. Advertise STT only after G passes.
-- [ ] Run a configured local room with real Go HTTP streaming: conversational
+- [x] Run a configured local room with real Go HTTP streaming: conversational
   output, opening audio and interrupted/replaced output. Assert no request is
   routed to ElevenLabs and no synthetic key reaches public events.
-- [ ] Inspect the changed Console service/editor states in headless Chrome via
+- [x] Inspect the changed Console service/editor states in headless Chrome via
   `agent-browser`, at desktop/mobile sizes, including unavailable service errors.
 
 Foundation evidence (2026-10-14): four endpoint parser/configuration tests and
@@ -492,8 +493,21 @@ kHz. Local acceptance passed against Go revision `b922e71` on loopback port
 18796 using a caller-chosen key containing spaces. This proves the adapter's
 HTTP path, not a configured room or hosted deployment. The Console service form
 and model catalog are implemented; its desktop/mobile connection-success and
-unavailable states have been rendered. Editor/configured-room acceptance and the
-broader integration gate remain open.
+unavailable states have been rendered.
+
+F acceptance (2026-10-15): Console's tagged configured-room test provisions an
+encrypted platform service, saves/publishes a call, and independently decodes
+real Go HTTP output for opening `SOS` and conversational `TEST`. It blocks sink
+credit, interrupts the turn, accepts replacement PCM and retires the room. All
+four observed synthesis requests use the selected origin; captured public events
+contain no synthetic key. This uses a controlled embedded PCM recipient, not a
+WebRTC/browser microphone. Chrome renders the editor's provider/model/voice
+selection at desktop and mobile widths. Actual production runtime-loader checks
+prove absent origin fails provider construction and configured HTTPS derives WSS.
+The earlier full run passed every application except one stale Console provider
+inventory assertion; its correction and focused regressions pass. The final
+umbrella rerun remains in progress, so the milestone-wide final gates remain open.
+See [configured-room evidence](../20261015-0003-morse-configured-room.md).
 
 Exit: a saved service and published call spec produce audible Morse through
 ordinary room output and remain interruptible under backpressure.

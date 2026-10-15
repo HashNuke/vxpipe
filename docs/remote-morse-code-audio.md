@@ -141,6 +141,19 @@ same tag is selectable through `bin/livetests run --only live_morse_code_api`;
 configure the runtime origin explicitly. A local adapter pass does not establish
 configured-room, hosted TLS or full speech API acceptance.
 
+Console's configured-room test exercises encrypted service provisioning and call
+publication before starting ordinary room output. It verifies opening audio,
+conversational synthesis, blocked sink credit, interruption and replacement using
+the real Go API and an independent PCM decoder. A controlled embedded recipient
+acknowledges playback; this does not establish WebRTC or microphone acceptance.
+Run from the Vxpipe root with the Go server already running:
+
+```sh
+MORSE_CODE_API_BASE_URL=http://127.0.0.1:8787 \
+  mix test --only live_morse_code_api \
+  apps/vxpipe_console/test/integration/morse_code_api_configured_room_test.exs
+```
+
 Use Vxpipe's temporary `MORSE_CODE_API_BASE_URL` runtime setting to develop against
 the local Go server first. Development defaults to `http://127.0.0.1:8787`; test
 servers use ephemeral ports. Outside development/test, selecting this provider
@@ -208,9 +221,11 @@ four HTTP TTS routes, PCM round trips and repeated realtime STT turns pass,
 including HTTP/AsyncAPI schema validation. Independent Morse fixtures and
 Go/Elixir codec interoperability pass. Both TTS WebSockets now have incremental
 output, auth, cancellation/context lifecycle, native Chrome and read-only-container
-drain evidence; these establish A–E, not full API compatibility. `bin/setup`
-completed successfully. Full optional-field/format semantics, Vxpipe provider
-integration and its Console browser checks, benchmarks and Railway deployment
-remain unchecked implementation acceptance gates. The
+drain evidence. Vxpipe's TTS provider additionally has four-rate PCM, encrypted
+service/publication, configured-room opening/interruption/replacement and rendered
+service/editor evidence, establishing F. These establish A–F, not full API
+compatibility. `bin/setup` completed successfully. Full optional-field/format
+semantics, Vxpipe STT integration, benchmarks, final umbrella acceptance and
+Railway deployment remain unchecked implementation acceptance gates. The
 [planning labnote](../labnotes/20261014-1947-remote-morse-milestone.md) records the
 separate specification review and exact planning validation.

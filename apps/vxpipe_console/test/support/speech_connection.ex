@@ -11,6 +11,7 @@ defmodule Vxpipe.Console.Test.SpeechConnection do
   def attach(connection), do: GenServer.call(connection, :attach, 5_000)
   def attachment(connection), do: GenServer.call(connection, :attachment, 5_000)
   def readiness(connection), do: GenServer.call(connection, :readiness, 1_000)
+  def send_text(connection, command), do: GenServer.call(connection, {:send_text, command}, 5_000)
 
   @impl true
   def prepare_binding(binding, _policy, demand) do
@@ -48,6 +49,7 @@ defmodule Vxpipe.Console.Test.SpeechConnection do
      %{
        command: command,
        observer: Keyword.fetch!(options, :observer),
+       audit_events?: Keyword.get(options, :audit_events?, false),
        binding: %{
          identity: identity,
          instance: self(),
@@ -55,6 +57,7 @@ defmodule Vxpipe.Console.Test.SpeechConnection do
          resource: resource,
          generation: make_ref(),
          attachment: nil,
+         output: Keyword.get(options, :output),
          track: %{
            track_id: "configured-speech",
            codec: :linear16,
@@ -67,7 +70,7 @@ defmodule Vxpipe.Console.Test.SpeechConnection do
 
   @impl true
   def handle_call(:attach, _from, state) do
-    case CallEngine.attach_connection(state.command) do
+    case CallEngine.attach_connection(state.command, state.binding.output) do
       {:ok, attachment} ->
         {:reply, {:ok, attachment}, put_in(state.binding.attachment, attachment)}
 
@@ -77,6 +80,9 @@ defmodule Vxpipe.Console.Test.SpeechConnection do
   end
 
   def handle_call(:attachment, _from, state), do: {:reply, state.binding.attachment, state}
+
+  def handle_call({:send_text, command}, _from, state),
+    do: {:reply, CallEngine.send_text(command), state}
 
   def handle_call(:vxpipe_connection_readiness, _from, state),
     do: {:reply, {:ok, state.binding}, state}
@@ -110,6 +116,12 @@ defmodule Vxpipe.Console.Test.SpeechConnection do
         %{binding: %{attachment: %{room_monitor: monitor}}} = state
       ) do
     send(state.observer, {:configured_speech_closed, self()})
+    {:noreply, state}
+  end
+
+  def handle_info({:vxpipe_event, event} = message, %{audit_events?: true} = state) do
+    send(state.observer, {:configured_public_event, event})
+    send(state.observer, message)
     {:noreply, state}
   end
 
