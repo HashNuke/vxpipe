@@ -1,7 +1,7 @@
 # Hosted Morse audio provider
 
-Status: implementation in progress. Scope simplified at the user's request on
-2026-10-15. This replaces the earlier goal of complete ElevenLabs speech API
+Status: implementation and local Railway preparation complete, 2026-10-15.
+Scope simplified at the user's request. This replaces the earlier goal of complete ElevenLabs speech API
 parity: the service should perform the existing Morse TTS/STT operations over
 the network, using the relevant ElevenLabs request and response conventions.
 
@@ -58,8 +58,8 @@ do not create a second speech state machine or another room framework.
 | Health | `GET /healthz`, `GET /readyz` | Unauthenticated local checks; readiness becomes false during shutdown |
 
 The explicit PCM profile takes precedence over ElevenLabs' MP3 default.
-Document the supported subset accurately; unsupported formats/options must
-fail clearly. Do not claim arbitrary ElevenLabs SDK calls work unchanged.
+Document the supported subset accurately; invalid PCM formats and unsupported
+JSON/WS fields fail clearly. Do not claim arbitrary ElevenLabs SDK calls work unchanged.
 
 Streaming is required in both directions. TTS renders and flushes PCM chunks
 before the full audio is generated; Vxpipe starts consuming them immediately.
@@ -203,11 +203,15 @@ and documented UI settings, without an additional infrastructure module.
   unused dependency checks pass. Run Lean if speech state-machine code changes.
 - [x] Relevant Console changes have focused tests and rendered verification.
 - [x] Keep labnotes, this checklist and the milestone index accurate.
-- [ ] Commit small coherent checkpoints in each repository; push Vxpipe when
+- [x] Commit small coherent checkpoints in each repository; push Vxpipe when
   implementation and local deployment preparation are complete.
 
 Hosted acceptance is a follow-up after the user's deployment, not a dependency
 for preparing the application. Never label localhost evidence as a hosted pass.
+
+Published: Go `main` at `1d815f5`; Vxpipe `morsecode-api` includes acceptance
+commit `7c9b8a4e` and deployment handoff `7e1deffc`. Both remote branches were
+pushed successfully. This completion update only records the verified status.
 
 ## Scope review
 

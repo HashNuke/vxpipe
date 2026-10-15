@@ -58,3 +58,11 @@ exclusions (seed 899255). Its persisted-origin/TLS/outage lane and both ordinary
 configured-room scenarios also pass against the simplified binary. Root static
 gates pass. No Console UI code changed during simplification; the previous
 759-test frontend pass and rendered service/editor evidence still cover it.
+
+Publication: Vxpipe's morsecode-api branch and the Go repository's main branch
+were pushed. Go's HTTPS remote had no noninteractive credential helper; using
+the existing working GitHub SSH transport for the same repository succeeded.
+No token was read, printed or saved. The final status update closes the scoped
+implementation and local deployment-preparation gates; user-owned hosted
+verification remains explicitly pending. Temporary servers/container/database
+were cleaned up and the isolated live-test reservation was released.
