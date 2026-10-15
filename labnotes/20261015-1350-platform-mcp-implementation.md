@@ -1137,3 +1137,21 @@ those integrations remain open.
 Root format, warnings-as-errors compile, strict Credo and unused-dependency
 checks pass with the concurrent demo-tenant slice. Full combined tests remain
 pending; the last broad failure has focused regression coverage as recorded above.
+
+### Demo tenant canonical operation
+
+The browser ensure-demo-tenant request now passes its actual Identity principal to
+Calls.DemoSetup. Authorization runs before repository access; trusted bootstrap
+authority remains a separate supported caller. Canonical and legacy routes share
+session-only authentication, explicit Authorization rejection, CSRF and host
+checks. The UI uses the canonical route; repeated requests reuse the durable
+binding without creating implicit grants, keys or specs. Sample installation
+remains a separate pending migration.
+
+Expected red selections were Calls 4 tests/two failures, Console 7/three and
+frontend 33/five. All selections then passed. TypeScript, ESLint, asset build,
+root formatting/compile/Credo/dependency checks and independent review passed.
+Rendered Chrome at desktop and mobile verified canonical ensure 200, service
+binding 200, reload reuse of the persisted tenant key, empty services/sample
+waiting states and no mobile overflow. Browser and synthetic database fixture
+stopped. The public API and inventory documents match the implemented contract.

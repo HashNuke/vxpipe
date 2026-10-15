@@ -1710,7 +1710,7 @@ async function loadOnboarding(
   onSessionExpired: () => void,
   isCurrent: () => boolean,
 ): Promise<OnboardingPageState | undefined> {
-  const tenantResponse = await fetchImpl("/admin/api/onboarding/demo-tenant", {
+  const tenantResponse = await fetchImpl("/api/onboarding/demo-tenant", {
     method: "POST",
     headers: {
       accept: "application/json",

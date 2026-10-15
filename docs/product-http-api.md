@@ -155,6 +155,30 @@ Permission denial returns 403 `forbidden`, invalid names return 422
 session, CSRF and host requirements. Tenant discovery remains the separately
 documented session/key GET operation.
 
+## Ensure the onboarding demo tenant (Console session only)
+
+```http
+POST /api/onboarding/demo-tenant
+Content-Type: application/json
+
+{}
+```
+
+Getting Started uses this operation to create or resume the installation's durable
+Demo tenant. It requires the actual browser actor's `tenants.write` permission,
+valid session/CSRF protection and an allowed host. Any Authorization header returns
+401 `session_required`; machine keys have no grant for this operation. The legacy
+`POST /admin/api/onboarding/demo-tenant` uses the same handler and policy.
+
+Success returns 200 `{tenant:{key,name,created_at}}`. Repeated requests reuse the
+same stored demo-tenant binding instead of selecting a tenant by name. The operation
+creates no implicit memberships, API keys or call specs. Permission denial returns
+403 `forbidden`; unavailable storage or identifier generation returns 503
+`demo_tenant_unavailable`, using `{error:{code}}`.
+
+Sample installation remains a separate workflow; ensuring a tenant neither grants
+spec-writing authority nor starts a call.
+
 ## List call specs
 
 ```http

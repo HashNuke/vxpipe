@@ -6,7 +6,7 @@ defmodule Vxpipe.Console.AdminOnboardingController do
   alias Vxpipe.Calls.{InstallationOperator, UserAuthorization}
 
   def ensure_demo_tenant(conn, _params) do
-    case Vxpipe.Calls.ensure_demo_tenant(InstallationOperator.authority()) do
+    case Vxpipe.Calls.ensure_demo_tenant(conn.assigns.user_principal) do
       {:ok, tenant} ->
         json(conn, %{
           tenant: %{
@@ -15,6 +15,11 @@ defmodule Vxpipe.Console.AdminOnboardingController do
             created_at: DateTime.to_iso8601(tenant.inserted_at)
           }
         })
+
+      {:error, :forbidden} ->
+        conn
+        |> put_status(403)
+        |> json(%{error: %{code: "forbidden"}})
 
       {:error, _reason} ->
         conn

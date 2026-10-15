@@ -19,7 +19,9 @@ binding read. Role administration and password reset use canonical session-only
 handlers; role directories now paginate full metadata. Tenant creation also uses
 the canonical session-only handler. Call directory/filter/detail, inspection polling
 and artifact downloads now use canonical session-only handlers and shared
-inspection ownership checks. Onboarding/samples still require migration.
+inspection ownership checks. Onboarding demo-tenant creation now uses the actual
+browser actor through its canonical session-only route. Sample installation and
+sample call/transfer workflows still require migration.
 Legacy routes remain available during that work; this inventory does not claim
 their removal or full controller consolidation.
 
@@ -135,7 +137,7 @@ tests in this milestone use a local fake adapter.
 | `GET A/T/telephony-applications` | `GET API/T/telephony-applications` | Calls `OperatorTelephonyApplications`; tenant, application rows, published routes, truncation | S `tenant_services.read`; K denied pending service policy; migrate `TenantTelephonyApplications` |
 | `POST A/T/telephony-applications` | `POST API/T/telephony-applications` | Calls telephony application create; existing validated definition -> `{application}`, 201 | S `tenant_services.write`; K denied pending service policy; preserve credential ownership |
 | `PATCH A/T/telephony-applications/:service_id` | `PATCH API/T/telephony-applications/:service_id` | Calls telephony application update -> `{application}` | Same write grants; preserve published-route conflicts |
-| `POST A/onboarding/demo-tenant` | `POST API/onboarding/demo-tenant` | Calls authorized ensure-demo-tenant; `{tenant}` | S `tenants.write`; K denied pending tenant-creation policy; extract controller ambient installation authority behind shared policy |
+| `POST A/onboarding/demo-tenant` | `POST API/onboarding/demo-tenant` | Calls authorized ensure-demo-tenant; `{tenant}` | S `tenants.write`; K denied; actual browser actor authorized directly before repository access |
 | `POST A/onboarding/demo-tenant/samples` | `POST API/onboarding/demo-tenant/samples` | Calls sample authoring workflow; installed sample IDs/names/status/revisions | S `tenants.write` **and** target `call_specs.write`; K denied pending sample-install policy; move `Console.DemoSamples` orchestration to owning boundary |
 
 Service/credential/telephony-application routes above and the authoring number

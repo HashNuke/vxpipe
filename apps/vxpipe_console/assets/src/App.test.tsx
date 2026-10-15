@@ -264,7 +264,7 @@ test("an empty installation opens onboarding only when explicitly selected", asy
         pagination: { page: 1, page_size: 25, total: 0, total_pages: 0 },
       });
     }
-    if (url === "/admin/api/onboarding/demo-tenant") {
+    if (url === "/api/onboarding/demo-tenant") {
       return response({
         tenant: {
           key: "DEMOabcdefgh1234",
@@ -296,7 +296,7 @@ test("an empty installation opens onboarding only when explicitly selected", asy
   ).toBeVisible();
   expect(window.location.pathname).toBe("/getting-started");
   expect(fetchImpl).toHaveBeenCalledWith("/api/tenants/DEMOabcdefgh1234/service-bindings", expect.objectContaining({ headers: { accept: "application/json" } }));
-  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/onboarding/demo-tenant", {
+  expect(fetchImpl).toHaveBeenCalledWith("/api/onboarding/demo-tenant", {
     method: "POST",
     headers: {
       accept: "application/json",

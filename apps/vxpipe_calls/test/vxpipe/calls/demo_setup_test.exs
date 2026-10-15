@@ -34,6 +34,32 @@ defmodule Vxpipe.Calls.DemoSetupTest do
     assert TestDemoTenantRepository.candidates(context.repository) == [first]
   end
 
+  test "browser tenant creators resume the same binding without implicit grants", context do
+    actor = %Vxpipe.Identity.Principal{
+      user_public_id: "user",
+      session_public_id: "session",
+      account_kind: :member,
+      grants: MapSet.new(["tenants.write"])
+    }
+
+    assert {:ok, tenant} = DemoSetup.ensure_tenant(actor, context.options)
+    assert {:ok, ^tenant} = DemoSetup.ensure_tenant(actor, context.options)
+    assert TestDemoTenantRepository.candidates(context.repository) == [tenant]
+  end
+
+  test "browser denial is enforced before repository access", context do
+    actor = %Vxpipe.Identity.Principal{
+      user_public_id: "user",
+      session_public_id: "session",
+      account_kind: :member,
+      grants: MapSet.new()
+    }
+
+    assert {:error, :forbidden} = DemoSetup.ensure_tenant(actor, [])
+    assert {:error, :forbidden} = DemoSetup.ensure_tenant(actor, context.options)
+    assert TestDemoTenantRepository.candidates(context.repository) == []
+  end
+
   test "requires installation operator authority and a configured repository", context do
     assert {:error, :installation_operator_required} =
              DemoSetup.ensure_tenant(%InstallationOperator{grant: :invalid}, context.options)

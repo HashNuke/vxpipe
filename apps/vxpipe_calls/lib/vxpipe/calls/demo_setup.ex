@@ -1,12 +1,13 @@
 defmodule Vxpipe.Calls.DemoSetup do
-  @moduledoc "Installation-operator workflow for the durable first demo tenant."
+  @moduledoc "Authorized browser and trusted bootstrap workflow for the durable first demo tenant."
 
-  alias Vxpipe.Calls.{InstallationOperator, PublicId, Repositories, Tenant}
+  alias Vxpipe.Calls.{InstallationOperator, PublicId, Repositories, Tenant, UserAuthorization}
+  alias Vxpipe.Identity.Principal, as: UserPrincipal
 
   @tenant_name "Demo"
   @maximum_attempts 4
 
-  @spec ensure_tenant(InstallationOperator.t(), keyword()) ::
+  @spec ensure_tenant(InstallationOperator.t() | UserPrincipal.t(), keyword()) ::
           {:ok, Tenant.t()} | {:error, term()}
   def ensure_tenant(authority, options \\ [])
 
@@ -15,8 +16,12 @@ defmodule Vxpipe.Calls.DemoSetup do
         options
       )
       when is_list(options) do
-    with {:ok, repository} <- Repositories.fetch(options, :demo_tenant_repository) do
-      ensure(repository, options, @maximum_attempts)
+    ensure_authorized(options)
+  end
+
+  def ensure_tenant(%UserPrincipal{} = actor, options) when is_list(options) do
+    with :ok <- UserAuthorization.authorize_installation(actor, "tenants.write") do
+      ensure_authorized(options)
     end
   end
 
@@ -24,6 +29,12 @@ defmodule Vxpipe.Calls.DemoSetup do
     do: {:error, :installation_operator_required}
 
   def ensure_tenant(_authority, _options), do: {:error, :installation_operator_required}
+
+  defp ensure_authorized(options) do
+    with {:ok, repository} <- Repositories.fetch(options, :demo_tenant_repository) do
+      ensure(repository, options, @maximum_attempts)
+    end
+  end
 
   defp ensure(_repository, _options, 0), do: {:error, :identifier_generation_exhausted}
 

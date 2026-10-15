@@ -732,6 +732,15 @@ artifact requests returned private 404 with JSON/audio Accept; positive attachme
 and WAV/range cases have endpoint coverage. Browser and synthetic database fixture
 stopped. Onboarding/samples and final cross-interface acceptance remain open.
 
+Demo-tenant onboarding cutover: the canonical and legacy ensure routes now pass
+the actual browser actor through Calls authorization before repository access.
+Session-only authentication, CSRF and explicit-header rejection are shared.
+Repeated requests reuse the durable binding without implicit grants or keys.
+After expected red regressions, four Calls, seven Console and 33 frontend tests
+pass, plus types/lint/build, root non-test gates and independent review. Rendered
+desktop/mobile checks verified canonical requests and persisted tenant reuse.
+Sample installation, sample call/transfer and final parity remain open.
+
 ## Checkpoint: parity acceptance and documentation
 
 Depends on all required capability checkpoints and supporting workflows.

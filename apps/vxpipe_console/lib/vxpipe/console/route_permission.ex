@@ -70,6 +70,9 @@ defmodule Vxpipe.Console.RoutePermission do
   def for_request("POST", ["admin", "api", "tenants"]), do: {:installation, "tenants.write"}
   def for_request("GET", ["admin", "api", "tenants"]), do: {:directory, "tenants.read"}
 
+  def for_request("POST", ["api", "onboarding", "demo-tenant"]),
+    do: {:installation, "tenants.write"}
+
   def for_request("POST", ["admin", "api", "onboarding", "demo-tenant"]),
     do: {:installation, "tenants.write"}
 
