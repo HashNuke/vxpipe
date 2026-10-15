@@ -38,6 +38,18 @@ for cross-tenant operations by platform credentials. MCP server implementation i
 separate from this API-key management slice; existing vxpipe_mcp is outbound.
 No claim of a working inbound MCP endpoint is made by this change.
 
+The [platform MCP proposal](platform-mcp.md) now records the tool/authority matrix
+and the requested tenant/spec/call/user workflows. Its [milestone](../labnotes/milestones/platform-mcp-endpoint.md)
+includes shared machine-API extensions, pagination, initial call variables, hangup
+and user activation. Implementation of these signatures/policy is authorized and in progress.
+The documented HTTP API is also the UI's product API: the browser uses its login
+session, external HTTP clients and MCP use keys, and all share authorized Elixir
+application operations. The browser never needs a Vxpipe API key for these calls.
+MCP clients configure `Authorization: Bearer <Vxpipe API key>` on every request;
+keys are never tool arguments or URL parameters. This static-key mode requires
+clients with configurable headers and does not implement MCP OAuth discovery.
+See the [authentication contract and client setup](platform-mcp.md#authentication-contract-and-client-compatibility).
+
 ## Rejected alternatives
 
 Separate tenant MCP URLs duplicate tenant selection without replacing permission

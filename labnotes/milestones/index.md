@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 50 milestone specifications: 39 complete and 11 incomplete. Milestone 17, Telnyx calls and
+Status: 51 milestone specifications: 39 complete and 12 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -179,8 +179,9 @@ progress without claiming the entire milestone is complete.
 46. [x] [Hosted Morse audio provider](remote-morse-code-audio.md) — Complete for the user-clarified scope: existing Morse PCM behavior over streamed HTTP TTS and realtime WS STT, one conventional MorseCodeApi adapter, configurable origin and a locally verified 2.9-MB Railway-ready Go image. Regression, interoperability, room and outage checks pass; both repositories are pushed. Public hosting is now at morsecode.vxpipe.com; realtime TTS and hosted capacity follow in the next milestone.
 47. [x] [Realtime Morse synthesis](realtime-morse-synthesis.md) — Incremental WebSocket TTS and the MorseCodeApi adapter are implemented. Local/hosted interoperability, room, origin/TLS/outage, root and Lean gates pass. Both repositories are pushed and the service deployed; paced short runs reached 64 STT and eight TTS sessions with expected above-limit 429s. The binary CLI and GitHub releases are shipped; separate 30-second searches repeated zero-error passes at 531 STT and 1,812 TTS, with normal admission defaults restored afterwards.
 48. [x] [Persistent speech sessions](persistent-speech-sessions.md) — Complete: capability-owned persistent MorseCodeApi, ElevenLabs and Cartesia TTS, same-socket manual Scribe STT with exact PCM accounting, and bounded Deepgram cancellation. Google streaming HTTP TTS remains the approved exception. Focused live providers, root checks, Lean and final CallEngine rerun pass; Go v0.1.4 is deployed and released.
-49. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-50. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+49. [ ] [Platform MCP endpoint](platform-mcp-endpoint.md) — Implementation authorized and started: one shared Elixir application API, one documented product HTTP API used by the UI and external clients, and `/mcp` over the same operations. Browser sessions authenticate UI requests; API keys authenticate external HTTP/MCP. Nine checkpoints cover the shared boundary, MCP, tenants, specs, calls, hangup, users, UI cutover and local parity. The user selected 13 required tools; four supporting workflow tools are proposed. Missing REST/Identity operations and UI migration are included. No implementation is claimed.
+50. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+51. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 The worktree setup milestone is an enabling developer-tooling slice after the
 existing live-runner fixes and before delivery. Its prerequisites are already
@@ -569,6 +570,17 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Outgoing calls and two-call live telephony](outgoing-calls-and-live-telephony.md#specification-review) | Reviewed with the user 2026-10-04 (30 s ring default, optional client Idempotency-Key, per-tenant limits deferred) | Tailscale, Telnyx OpenAPI and Twilio trial research in the [harness decision](../../docs/development/live-telephony-harness.md); internal admission, connection-intent and outbound-connector reading recorded in the labnote. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The 2026-09-19 speech plan adds a locally reviewed prerequisite before publishing the embedded interface. The packaging hold remains. |
 | [Worktree setup and concurrent development](worktree-setup.md#specification-review) | Complete; locally reviewed 2026-10-08 | Six implementation checkpoints complete. Reviewed database/configuration dependencies, branch-lifetime live ownership, explicit release, repeatable bootstrap, port/session isolation and concurrent acceptance. Two complete overlapping umbrella suites and rendered/synthetic acceptance pass; no independent-agent review or real live execution is claimed. |
+
+The 2026-10-15 [platform MCP endpoint specification](platform-mcp-endpoint.md#specification-review)
+has a completed local source/dependency review and remains unimplemented. The
+user-selected tenant/spec/call/user scope is incorporated, with refined signatures
+and key-policy extensions approved for implementation. The shared Elixir layer and single HTTP
+API for the session-authenticated UI and key-authenticated external clients are
+explicit user requirements. It builds on existing Settings API keys, Identity and
+application workflows, not unfinished packaging/onboarding work.
+Authentication research selects configured Bearer headers for this API-key scope;
+OAuth-only client compatibility requires separate OAuth work. The milestone records
+the wire contract, client setup and local acceptance without claiming implementation.
 
 ## Supporting milestone plans
 
