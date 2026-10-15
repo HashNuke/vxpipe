@@ -403,6 +403,15 @@ local WebRTC tests found one test-fixture registry cleanup race, removed from
 this boundary's test and verified in the focused rerun. Independent review found
 no blockers. Session authority death is not whole-call cleanup evidence.
 
+Combined admission checkpoint verification: the clean committed snapshot passed
+all five root gates: formatting, warnings-as-errors compilation, strict Credo,
+the full default umbrella suite and unused dependency validation. Every application
+reported zero failures, including 2,233 CallEngine, 225 Calls, 688 Gateway, 320
+Persistence and 335 Console tests. No source changed during the run. Local SQL
+races were verified separately; live providers and real telephony stayed excluded.
+The overall hangup checkpoint remains unchecked pending incoming admission,
+cleanup ownership/reconciliation, terminal evidence and HTTP/MCP parity.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

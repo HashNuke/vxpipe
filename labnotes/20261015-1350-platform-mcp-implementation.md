@@ -505,3 +505,21 @@
 - Independent review found no blockers. These monitors revoke credentials and
   release admission ownership; full resource-tree and carrier cleanup still need
   the planned cleanup owner and durable reconciliation.
+
+## Combined admission checkpoint verification
+
+- The clean snapshot at d0d1810e passed all five root completion commands:
+  format check, warnings-as-errors compile, strict Credo, full default umbrella
+  tests and unused dependency check. No source changed during that run.
+- Every application reported zero failures: Identity 67, MCP 37, Providers 35,
+  AgentRuntime 108, CallEngine 2,233, Calls 225, Gateway 688, Artifacts 20,
+  Persistence 320 and Console 335. Tagged live-provider/real telephony lanes
+  remained excluded; local SQL transaction races passed in the separate lane.
+- Final archive tests also passed seven cases after adding explicit verification-
+  flag success/rollback assertions. Changed documentation has no missing local
+  link targets. No source-cutover or speech state-machine changes required Lean.
+- Next incoming slice: prepare and retain activation context before supervised
+  answer submission, then integrate gated binding and fail-closed started
+  projection while preserving authenticated answered/media timestamps. Room DOWN
+  during a blocked answer must retain original carrier identity for cleanup.
+  Cleanup ownership, final usage, reconciliation and exposed hangup remain open.
