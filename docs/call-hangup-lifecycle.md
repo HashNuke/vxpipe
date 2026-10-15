@@ -389,6 +389,53 @@ lifecycle projector currently rejects archive close without a start time, before
 the general call-end projection runs. Add a narrow cancellation-close path through
 both projections; do not invent a start time or weaken normal outgoing ordering.
 
+## Remaining carrier integration contracts
+
+These are integration requirements identified from the existing owner paths; they
+are not claims that managed admission is enabled.
+
+Incoming admission must reserve and seed cleanup immediately after capturing the
+exact gated room, before a local identity/usage failure can bypass ownership.
+Allocate the retained usage identity before acting on the binding's admit/cancel
+decision. If identity allocation fails, still end the original authenticated
+carrier, but do not invent a usage batch or completion acknowledgement. A failure
+to create the room leaves no trusted incarnation to reconstruct later.
+
+Outgoing owners must validate their request and private connector scope, retain
+usage, register with the existing exact tracker and monitor the room before reserving media or dispatching
+a dial. Transfers need this room monitor too: the initial-leg lifecycle currently
+supplies it only for initial dials. Room termination requests cancellation of the
+original carrier; it does not prove that carrier termination has completed.
+The private per-call connector scope must propagate through initial and transfer
+requests and every media binding without becoming a caller-controlled field.
+
+Track whether a dial command was dispatched. A `failed` owner status or a generic
+adapter error is not proof that no carrier exists: an accepted HTTP response with
+missing/malformed identifiers can return an error after creating the remote call.
+Only pre-dispatch failure or an explicitly trustworthy provider rejection can
+supply no-carrier proof. Ambiguous dispatched outcomes retain correlation for late
+callbacks, and managed retirement cannot use the legacy unknown-retention timer
+as completion evidence.
+
+Keep a private managed-ownership marker even when registration fails, so an owner
+cannot accidentally fall back to legacy retirement. After validating the anchor
+and options, an unavailable tracker should still leave owner-held persistence
+context. That context can store usage but cannot acknowledge or create membership.
+On tracker loss, close the original resources. Once independent carrier end, local
+room closure, command drainage and matching final-storage completion are proven,
+the owner may retire without acknowledgement; the durable call remains unknown.
+Missing usage or unsuccessful storage must not satisfy that retirement gate.
+
+Normal managed preparation failure also needs durable usage without a hangup
+request. The current failed-call storage exception requires cancellation intent;
+before integration, extend it narrowly to managed failed calls with the exact
+verified room/incarnation. Persist the entire immutable batch, including its
+initial observation, with existing deduplication. This must not change failed
+state, cancellation intent, terminal timestamps, cleanup acknowledgement or
+publication readiness. Legacy failed calls and missing/unverified/mismatched
+ownership remain rejected. Test retry and unknown terminal accounting separately
+from carrier completion.
+
 ## Alternatives rejected
 
 - Request-owned fire-and-forget cleanup loses work on request or VM death.

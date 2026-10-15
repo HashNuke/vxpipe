@@ -608,6 +608,13 @@ pass. Review added held-worker whole-tree drainage evidence and stale replacemen
 protection. No modeled source/speech transitions changed. The authorized transport
 workflow and complete Gateway cleanup remain outstanding.
 
+Integration design review identified remaining owner contracts: seed managed
+incoming ownership before identity failures, monitor transfer rooms, distinguish
+dispatched uncertainty from definite no-carrier proof, preserve persistence on
+tracker loss, and allow exact-verified managed failed-call accounting without
+manufacturing lifecycle completion. The lifecycle design records these decisions
+and acceptance boundaries. They are reviewed requirements, not implemented work.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

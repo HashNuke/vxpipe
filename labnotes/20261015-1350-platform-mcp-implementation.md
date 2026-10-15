@@ -1253,3 +1253,22 @@ and mobile verified canonical POST 200, three installed samples, reload/retry
 reuse and no mobile overflow with synthetic Deepgram/OpenAI credential fixtures.
 No provider was invoked; browser and sandbox stopped. Full root gates are running
 against frozen source. Sample call/transfer workflows remain pending.
+
+### Carrier integration design review
+
+Read-only review during the frozen full-suite run identified required integration
+edges beyond simply passing cleanup state. Managed incoming reservation must seed
+its existing carrier before an identity failure can bypass ownership. Transfers
+need their own exact room monitor. Generic post-dispatch adapter errors can follow
+carrier acceptance, so failed state cannot prove no carrier. Retain a separate
+dispatched flag and callback correlation for unknown outcomes.
+
+Normal managed failed admissions also need exact-bound final usage storage without
+a hangup intent; the current narrower exception would retry forever. The required
+expansion preserves failed lifecycle/publication state and rejects legacy or
+unverified/mismatched ownership. Tracker attachment failure/loss must retain
+validated persistence context without rebuilding membership. Only independently
+finished carrier/room/commands and confirmed storage can allow retirement without
+acknowledgement, leaving durable completion unknown. These decisions and their
+test boundaries are recorded in the lifecycle design; implementation is pending.
+Independent incoming/outgoing planning reviews agreed on these obligations.
