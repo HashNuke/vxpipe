@@ -261,6 +261,12 @@ round trip and streaming/WS completion with bounded deadlines. Keep credentials
 out of its output. Record the tested origin and application revision so a local
 pass cannot be mistaken for hosted acceptance.
 
+The smoke runner must require an explicit origin, exit nonzero on any failed
+check, and print which transport failed without exposing credentials. It must
+never substitute the hosted URL when a local server is unavailable. The handoff
+must show how to return to the local Go server after hosted cutover, using the
+same provider names and runtime setting; local development remains supported.
+
 ## Checkpoints
 
 Each checkpoint leaves a runnable slice. Write and run the smallest externally
@@ -624,6 +630,19 @@ deployment. Prepare and verify the full handoff locally without waiting for a
 Railway account, domain or hosted endpoint; record hosted acceptance separately.
 
 Preparation deliverables in the Go repository:
+
+| Artifact | Required handoff content |
+| --- | --- |
+| `Dockerfile` and `.dockerignore` | Build from the standalone Go repository; include runtime codecs and certificates, with no Vxpipe checkout dependency. |
+| `.railway/railway.go` | Reviewed Railway service configuration, with its isolated pinned IaC module and instructions to apply it. |
+| `.env.example` | Go listener and resource settings with local examples; explain that Railway supplies `PORT`. No real keys or Vxpipe-only variables. |
+| `docs/railway-deployment.md` | Local container verification, Railway deployment, domain setup, shutdown settings, Vxpipe endpoint cutover and rollback. |
+| Smoke runner and handoff record | One documented command accepting any selected origin; separate local, generated-domain and custom-domain results with tested revisions. |
+
+Vxpipe's environment example and service setup documentation must separately
+show `MORSE_CODE_API_BASE_URL` for localhost and the deployed HTTPS origin. Keep
+the deployment runbook's Vxpipe commands clearly labeled so they are applied to
+the Vxpipe process rather than the Go Railway service.
 
 - [x] Add a pinned multistage `Dockerfile`, `.dockerignore`, current Railway IaC,
   `.env.example` and `docs/railway-deployment.md`. The image builds independently
