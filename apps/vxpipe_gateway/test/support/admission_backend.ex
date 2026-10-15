@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
     Agent.start_link(fn ->
       %{
         api_key: Keyword.fetch!(options, :api_key),
+        room: Keyword.get(options, :room, room_snapshot()),
         existing_call?: Keyword.get(options, :existing_call?, false),
         join_token: Keyword.fetch!(options, :join_token),
         observer: Keyword.fetch!(options, :observer),
@@ -109,7 +110,7 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
 
     Agent.get(agent, fn state ->
       if secret == state.join_token and expected_scope == expected_scope() do
-        {:ok, admission_claim(state.existing_call? or state.transfer_pending?)}
+        {:ok, admission_claim(state)}
       else
         {:error, :token_scope_mismatch}
       end
@@ -119,24 +120,31 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
   def start_call(agent, claim) do
     operation(agent, {:start_call, claim.call.id})
 
-    Agent.get(agent, fn state ->
-      cond do
-        state.transfer_pending? ->
-          {:transfer_pending, %{participant_id: "part_test-support", kind: :human}}
+    state = Agent.get(agent, & &1)
 
-        state.existing_call? ->
-          {:joined, participant_snapshot()}
+    cond do
+      state.transfer_pending? ->
+        {:transfer_pending, %{participant_id: "part_test-support", kind: :human}}
 
-        state.start_failure? ->
-          {:error, :room_start_failed}
+      state.existing_call? ->
+        {:joined, participant_snapshot(state.room)}
 
-        state.participant_failure? ->
-          {:started, room_snapshot()}
+      state.start_failure? ->
+        {:error, :room_start_failed}
 
-        true ->
-          {:ok, room_snapshot(), participant_snapshot()}
-      end
-    end)
+      true ->
+        room = state.room
+
+        case mark_started(agent, claim, room.incarnation_id, DateTime.utc_now()) do
+          {:ok, started} ->
+            if state.participant_failure?,
+              do: {:started, room, started},
+              else: {:ok, room, participant_snapshot(room), started}
+
+          {:error, reason} ->
+            {:admission_error, reason}
+        end
+    end
   end
 
   def release_admission(agent, claim) do
@@ -151,7 +159,11 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
     state = Agent.get(agent, & &1)
     send(state.observer, {:test_admission_started, incarnation_id, started_at})
 
-    if state.projection_failure?, do: {:error, :projection_failed}, else: {:ok, claim.call}
+    if state.projection_failure?,
+      do: {:error, :projection_failed},
+      else:
+        {:ok,
+         %{claim.call | state: :running, started_at: started_at, incarnation_id: incarnation_id}}
   end
 
   def mark_failed(agent, claim, reason) do
@@ -190,9 +202,17 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
     }
   end
 
-  defp admission_claim(existing_call?) do
+  defp admission_claim(state) do
+    call = admitted_call(state.existing_call? or state.transfer_pending?)
+    call = %{call | room_id: state.room.room_id, plan: %{call.plan | room_id: state.room.room_id}}
+
+    call =
+      if call.state == :running,
+        do: %{call | incarnation_id: state.room.incarnation_id},
+        else: call
+
     %AdmissionClaim{
-      call: admitted_call(existing_call?),
+      call: call,
       token_id: "40000000-0000-4000-8000-000000000004",
       participant_key: participant_key(),
       participant_ref: "caller",
@@ -277,11 +297,11 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
     }
   end
 
-  defp participant_snapshot do
+  defp participant_snapshot(room) do
     %ParticipantSnapshot{
-      tenant_id: tenant_key(),
-      room_id: "60000000-0000-4000-8000-000000000006",
-      incarnation_id: "rinc_test-admission",
+      tenant_id: room.tenant_id,
+      room_id: room.room_id,
+      incarnation_id: room.incarnation_id,
       participant_id: "part_test-caller",
       role: :human,
       state: :joined,

@@ -362,8 +362,8 @@ token and incarnation. Legacy outgoing APIs and acknowledgements are preserved.
 Thirty-three focused tests pass after five expected red failures, and independent
 review found no blockers. All five root completion checks passed against frozen
 source, including the full default umbrella suite with zero failures. Gateway
-has not yet connected this gate to durable
-binding, so the admission-versus-hangup acceptance above remains open.
+integration evidence follows below; admission-versus-hangup acceptance stays open
+until all transports and cleanup reconciliation are implemented.
 
 Exact-incarnation join prerequisite: participant admission now accepts an expected
 incarnation and checks it inside the room authority before any join effects.
@@ -384,6 +384,15 @@ four separate-connection transaction races and a 326-test Persistence selection
 passed; independent review found no remaining blockers. Root format, compile,
 strict Credo and dependency checks also passed. Runtime reconciliation, incoming
 gating and terminal cleanup proof remain open; binding is not completion evidence.
+
+Gateway web/outgoing admission now connects the gate to durable binding and a
+synchronous started projection before startup effects. Running web joins require
+the bound incarnation. Pre-release cancellation or storage errors close only the
+owned gate and do not write a generic failed state; replay still cannot redial.
+Forty-eight focused Gateway tests pass after nine expected red failures, with
+independent review. HTTP success shapes remain compatible, while persistence
+failure cannot issue a session. Incoming gating and complete cleanup/recovery
+acceptance remain outstanding.
 
 ## Checkpoint: platform-key user administration
 

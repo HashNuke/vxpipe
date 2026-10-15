@@ -12,12 +12,27 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
   @join_token "vxj_test-only-gateway-token"
 
   setup do
-    backend =
-      start_supervised!(
-        {TestAdmissionBackend, api_key: @api_key, join_token: @join_token, observer: self()}
+    {:ok, command} =
+      Vxpipe.CallEngine.Command.CreateRoom.new(
+        tenant_id: TestAdmissionBackend.tenant_key(),
+        actor_id: "actor_test-caller",
+        room_id: "admission-http-#{System.unique_integer([:positive])}",
+        deadline: DateTime.add(DateTime.utc_now(), 5, :second)
       )
 
-    [backend: backend, endpoint: endpoint_options(backend)]
+    {:ok, room} = Vxpipe.CallEngine.create_room(command)
+
+    on_exit(fn ->
+      Vxpipe.CallEngine.end_call(room.tenant_id, room.room_id, room.incarnation_id)
+    end)
+
+    backend =
+      start_supervised!(
+        {TestAdmissionBackend,
+         api_key: @api_key, join_token: @join_token, observer: self(), room: room}
+      )
+
+    [backend: backend, endpoint: endpoint_options(backend), room: room]
   end
 
   test "prepares through API-key auth without granting CORS or exposing private input", context do
@@ -136,6 +151,8 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
   end
 
   test "claims the token, starts once, and returns an allowed-origin WebRTC session", context do
+    incarnation_id = context.room.incarnation_id
+
     conn =
       :post
       |> conn(session_path(), JSON.encode!(%{}))
@@ -172,21 +189,28 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
     refute conn.resp_body =~ @join_token
     refute conn.resp_body =~ "never-return-this"
 
-    assert_receive {:test_admission_started, "rinc_test-admission", projected_at}
+    assert_receive {:test_admission_started, ^incarnation_id, projected_at}
     assert DateTime.to_iso8601(projected_at) == started_at
 
     assert [
              {:claim_token, _scope},
              {:start_call, ^call_id},
-             {:mark_started, ^call_id, "rinc_test-admission", ^projected_at}
+             {:mark_started, ^call_id, ^incarnation_id, ^projected_at}
            ] = await_operations(context.backend, 3)
   end
 
-  test "keeps a live session successful when asynchronous bookkeeping fails", _context do
+  test "does not issue a session or mark failed when synchronous admission persistence fails",
+       context do
+    incarnation_id = context.room.incarnation_id
+
     backend =
       start_supervised!(
         {TestAdmissionBackend,
-         api_key: @api_key, join_token: @join_token, observer: self(), projection_failure?: true},
+         api_key: @api_key,
+         join_token: @join_token,
+         observer: self(),
+         room: context.room,
+         projection_failure?: true},
         id: :projection_failure_backend
       )
 
@@ -197,15 +221,22 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
       |> put_req_header("authorization", "Bearer #{@join_token}")
       |> Endpoint.call(endpoint_options(backend))
 
-    assert conn.status == 201
-    assert_receive {:test_admission_started, "rinc_test-admission", %DateTime{}}
+    assert conn.status == 503
+    assert %{"error" => %{"code" => "call_start_failed"}} = body(conn)
+    refute Map.has_key?(body(conn), "session")
+    refute_receive {:test_admission_failed, _reason}
+    assert_receive {:test_admission_started, ^incarnation_id, %DateTime{}}
   end
 
-  test "records a safe pre-live startup failure after token acceptance", _context do
+  test "records a safe pre-live startup failure after token acceptance", context do
     backend =
       start_supervised!(
         {TestAdmissionBackend,
-         api_key: @api_key, join_token: @join_token, observer: self(), start_failure?: true},
+         api_key: @api_key,
+         join_token: @join_token,
+         observer: self(),
+         room: context.room,
+         start_failure?: true},
         id: :start_failure_backend
       )
 
@@ -221,11 +252,17 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
     assert_receive {:test_admission_failed, :room_start_failed}
   end
 
-  test "records live start when session setup fails after the room starts", _context do
+  test "records live start when session setup fails after the room starts", context do
+    incarnation_id = context.room.incarnation_id
+
     backend =
       start_supervised!(
         {TestAdmissionBackend,
-         api_key: @api_key, join_token: @join_token, observer: self(), participant_failure?: true},
+         api_key: @api_key,
+         join_token: @join_token,
+         observer: self(),
+         room: context.room,
+         participant_failure?: true},
         id: :participant_failure_backend
       )
 
@@ -238,15 +275,21 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
 
     assert conn.status == 503
     assert %{"error" => %{"code" => "session_start_failed"}} = body(conn)
-    assert_receive {:test_admission_started, "rinc_test-admission", %DateTime{}}
+    assert_receive {:test_admission_started, ^incarnation_id, %DateTime{}}
     refute_receive {:test_admission_failed, _reason}
   end
 
-  test "joins an eligible participant to the existing call without restarting it", _context do
+  test "joins an eligible participant to the existing call without restarting it", context do
+    incarnation_id = context.room.incarnation_id
+
     backend =
       start_supervised!(
         {TestAdmissionBackend,
-         api_key: @api_key, join_token: @join_token, observer: self(), existing_call?: true},
+         api_key: @api_key,
+         join_token: @join_token,
+         observer: self(),
+         room: context.room,
+         existing_call?: true},
         id: :existing_call_backend
       )
 
@@ -265,7 +308,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
                "state" => "running"
              },
              "participant" => %{"participant_id" => "part_test-caller"},
-             "session" => %{"incarnation_id" => "rinc_test-admission"}
+             "session" => %{"incarnation_id" => ^incarnation_id}
            } = body(conn)
 
     refute_receive {:test_admission_started, _incarnation_id, _started_at}
@@ -279,11 +322,18 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
     assert call_id == TestAdmissionBackend.call_id()
   end
 
-  test "issues a provisional session without joining a transfer-only human", _context do
+  test "issues a provisional session without joining a transfer-only human", context do
+    room_id = context.room.room_id
+    incarnation_id = context.room.incarnation_id
+
     backend =
       start_supervised!(
         {TestAdmissionBackend,
-         api_key: @api_key, join_token: @join_token, observer: self(), transfer_pending?: true},
+         api_key: @api_key,
+         join_token: @join_token,
+         observer: self(),
+         room: context.room,
+         transfer_pending?: true},
         id: :transfer_pending_backend
       )
 
@@ -303,15 +353,15 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
                "state" => "running"
              },
              "participant" => %{
-               "incarnation_id" => "rinc_test-admission",
+               "incarnation_id" => ^incarnation_id,
                "participant_id" => "part_test-support",
                "role" => "human",
-               "room_id" => "60000000-0000-4000-8000-000000000006",
+               "room_id" => ^room_id,
                "state" => "pending_transfer"
              },
              "session" => %{
                "session_id" => session_id,
-               "incarnation_id" => "rinc_test-admission",
+               "incarnation_id" => ^incarnation_id,
                "participant_id" => "part_test-support"
              }
            } = body(conn)

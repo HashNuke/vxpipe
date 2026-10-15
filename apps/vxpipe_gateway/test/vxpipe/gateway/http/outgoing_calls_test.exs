@@ -355,6 +355,41 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     refute_receive {:test_outbound_leg_connect, _, _, _}, 30
   end
 
+  test "canceled binding closes the pending outgoing room without projecting failure or dialing",
+       c do
+    assert {:ok, call} =
+             Calls.claim_outgoing_call(c.principal, c.published.call_spec_id, %{}, nil, c.options)
+
+    observer = self()
+
+    callback = fn
+      :bind, [^call, incarnation] ->
+        {:ok, monitor} =
+          Vxpipe.CallEngine.monitor_room_completion(call.tenant_key, call.room_id, incarnation)
+
+        send(observer, {:pending_completion, monitor})
+        {:ok, :cancel, %{call | incarnation_id: incarnation}}
+
+      operation, _arguments ->
+        flunk("unexpected persistence operation after cancellation: #{operation}")
+    end
+
+    options =
+      c.options
+      |> Keyword.put(:call_repository, {Vxpipe.Gateway.TestAdmissionBindingRepository, callback})
+      |> Keyword.put(
+        :outbound_leg_connector,
+        {TestOutboundLegConnector, %{owner: self(), observer: self()}}
+      )
+
+    assert {:error, :outgoing_call_start_failed} =
+             Vxpipe.Gateway.OutgoingCallAdmission.start(options, call)
+
+    assert_receive {:pending_completion, monitor}
+    assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
   test "projection failure cancels the unopened room without submitting a dial", c do
     {_module, context} = Keyword.fetch!(c.options, :call_repository)
 
@@ -367,9 +402,7 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
 
     response = post(%{c | options: options}, %{}, "projection-failed")
     assert response.status == 503
-    replay = post(c, %{}, "projection-failed")
-    assert replay.status == 503
-    assert body(replay) == body(response)
+    assert %{"error" => %{"code" => "outgoing_call_start_failed"}} = body(response)
 
     assert {:ok, failed} =
              TestMemoryRepository.fetch_outgoing_by_key(
@@ -380,6 +413,11 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
 
     id = failed.id
     assert {:ok, stored} = Calls.fetch_call(c.tenant.key, id, c.options)
+    assert stored.state == :admitting
+    assert stored.terminal_reason == nil
+    replay = post(c, %{}, "projection-failed")
+    assert replay.status == 200
+    assert %{"call" => %{"id" => ^id, "state" => "admitting"}} = body(replay)
     # Registry cleanup may follow the controller reply. Observe termination
     # rather than requiring the registry's asynchronous removal to win the race.
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {c.tenant.key, stored.room_id}) do

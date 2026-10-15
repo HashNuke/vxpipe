@@ -221,11 +221,14 @@ controller death, cancellation, repeat release and outgoing acknowledgement
 compatibility. All five root completion checks subsequently passed, including
 the complete default umbrella suite with zero failures.
 
-Read-only review confirmed the current web handler projects `mark_started` after
-starting the runtime, incoming activation precedes its started projection, and
-the current room monitor does not prove whole-supervisor termination. Independent
-design review identified the ordering, lock-order and archive fallback constraints
-above. This is design evidence, not runtime acceptance.
+Web and outgoing admission now bind ownership and synchronously persist start
+before releasing their startup gate. Running web joins use the exact bound
+incarnation. Pre-release cancellation/persistence failure closes the owned gate
+without projecting a generic failed state or issuing a session. The focused
+Gateway selection passed 48 tests after nine expected red failures; independent
+review found no blockers. Incoming activation still needs the same gate and
+retained cleanup context. These prerequisites do not yet establish whole-call
+cleanup or expose the HTTP/MCP hangup operation.
 
 Implement and verify in coherent checkpoints:
 

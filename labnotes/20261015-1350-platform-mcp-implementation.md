@@ -470,3 +470,20 @@
 - Binding and archived ownership do not prove shutdown. Incoming gating,
   acknowledged Gateway cleanup, final usage and reconciled terminal projection
   remain required by the overall milestone.
+
+## Web and outgoing gated admission
+
+- Gateway now orders gated runtime creation, durable binding, synchronous started
+  projection and gate release. Running joins bind the full claim and use the
+  engine's exact-incarnation join API. HTTP carries the persisted start result
+  instead of launching an asynchronous lifecycle projection.
+- Cancellation, binding failure and pre-release start failure close only the owned
+  gate and preserve lifecycle evidence. No session/provider startup occurs on
+  those paths. Outgoing projection-failure replay preserves the admitting call
+  and never redials. Existing wire success shapes remain compatible.
+- Nine expected red tests preceded implementation; 48 focused Gateway tests then
+  passed. Independent review corrected a malformed cancellation fixture and
+  restored no-redial replay coverage, with no remaining production blockers.
+- The fixtures now create real rooms so Session's exact monitor can be exercised.
+  Incoming admission is deliberately still an open runtime checkpoint; this does
+  not claim complete hangup/reconciliation behavior.

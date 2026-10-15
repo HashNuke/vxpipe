@@ -75,12 +75,15 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   def start_call(
-        _options,
+        options,
         %AdmissionClaim{call: %PreparedCall{state: :running} = call} = claim
       ) do
-    participant = Map.fetch!(call.plan.participants, claim.participant_ref)
-
-    admit_running_participant(call, participant)
+    with {:ok, :admit, bound} <- Calls.bind_call_admission(claim, call.incarnation_id, options) do
+      participant = Map.fetch!(bound.call.plan.participants, bound.participant_ref)
+      admit_running_participant(bound.call, participant)
+    else
+      _unavailable -> {:join_error, :participant_start_failed}
+    end
   end
 
   def start_call(options, claim) do
@@ -213,24 +216,64 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   defp start_prepared_call(options, claim) do
+    token = make_ref()
+    runtime = CallEngineOptions.build(options) |> Keyword.put(:call_admission, {self(), token})
+
     result =
       with :ok <- validate_phone_plan(claim.call.plan, options),
-           do: CallEngine.start_call(claim.call.plan, CallEngineOptions.build(options))
+           do: CallEngine.start_call(claim.call.plan, runtime)
 
     case result do
-      {:ok, room} ->
-        case CallEngine.participant_snapshot(
-               claim.call.tenant_key,
-               claim.call.room_id,
-               claim.participant_id
-             ) do
-          {:ok, participant} -> {:ok, room, participant}
-          {:error, _reason} -> {:started, room}
-        end
-
-      {:error, _reason} ->
-        {:error, :room_start_failed}
+      {:ok, room} -> admit_prepared_call(options, claim, room, token)
+      {:error, _reason} -> {:error, :room_start_failed}
     end
+  end
+
+  defp admit_prepared_call(options, claim, room, token) do
+    with {:ok, :admit, bound} <- Calls.bind_call_admission(claim, room.incarnation_id, options),
+         {:ok, started} <- mark_started(options, bound, room.incarnation_id, DateTime.utc_now()),
+         :ok <-
+           CallEngine.admit_call(
+             claim.call.tenant_key,
+             claim.call.room_id,
+             room.incarnation_id,
+             token
+           ) do
+      case CallEngine.participant_snapshot(
+             claim.call.tenant_key,
+             claim.call.room_id,
+             claim.participant_id
+           ) do
+        {:ok, participant} -> {:ok, room, participant, started}
+        {:error, _reason} -> {:started, room, started}
+      end
+    else
+      {:ok, :cancel, _bound} ->
+        cancel_prepared_call(claim, room, token, :call_admission_cancelled)
+
+      {:error, reason} ->
+        cancel_prepared_call(claim, room, token, reason)
+    end
+  rescue
+    exception ->
+      cancel_prepared_call(claim, room, token, :admission_failed)
+      reraise exception, __STACKTRACE__
+  catch
+    kind, reason ->
+      cancel_prepared_call(claim, room, token, :admission_failed)
+      :erlang.raise(kind, reason, __STACKTRACE__)
+  end
+
+  defp cancel_prepared_call(claim, room, token, reason) do
+    _cleanup =
+      CallEngine.cancel_call_admission(
+        claim.call.tenant_key,
+        claim.call.room_id,
+        room.incarnation_id,
+        token
+      )
+
+    {:admission_error, reason}
   end
 
   defp matching_incoming_service(service, claim) do
@@ -274,7 +317,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
              role: participant.kind,
              deadline: DateTime.add(DateTime.utc_now(), @command_timeout_seconds, :second)
            ),
-         {:ok, participant_snapshot} <- CallEngine.join_participant(command) do
+         {:ok, participant_snapshot} <- CallEngine.join_participant(command, incarnation_id) do
       {:joined, participant_snapshot}
     else
       _unavailable -> {:join_error, :participant_start_failed}

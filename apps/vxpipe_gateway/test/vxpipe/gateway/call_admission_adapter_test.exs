@@ -51,7 +51,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       accepted_at: DateTime.utc_now()
     }
 
-    assert {:joined, participant} = CallAdmission.start_call([], claim)
+    assert {:joined, participant} = CallAdmission.start_call(binding_options(), claim)
     assert participant.tenant_id == tenant_id
     assert participant.room_id == room_id
     assert participant.incarnation_id == room.incarnation_id
@@ -85,7 +85,7 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       accepted_at: DateTime.utc_now()
     }
 
-    assert {:transfer_pending, pending} = CallAdmission.start_call([], claim)
+    assert {:transfer_pending, pending} = CallAdmission.start_call(binding_options(), claim)
     assert pending.participant_id == participant_id
     assert pending.kind == :human
 
@@ -241,6 +241,59 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
     assert binding.leg == leg
     assert submission.status == :accepted
     assert_receive {:test_telephony_answer, _request}
+  end
+
+  test "a canceled running admission does not join or replace its existing room" do
+    tenant = unique_id("tenant")
+    room_id = unique_id("room")
+    participant_id = unique_id("support")
+    plan = resolved_plan(tenant, room_id, participant_id)
+
+    {:ok, command} =
+      CreateRoom.new(
+        tenant_id: tenant,
+        actor_id: plan.actor_id,
+        room_id: room_id,
+        deadline: future_deadline()
+      )
+
+    {:ok, room} = CallEngine.create_room(command)
+
+    claim = %AdmissionClaim{
+      call: prepared_call(plan, room.incarnation_id, DateTime.utc_now()),
+      token_id: unique_id("token"),
+      participant_key: unique_id("route"),
+      participant_ref: "support",
+      participant_id: participant_id,
+      accepted_at: DateTime.utc_now()
+    }
+
+    options = [
+      call_repository:
+        {Vxpipe.Gateway.TestAdmissionBindingRepository,
+         fn :bind, [^claim, incarnation] ->
+           assert incarnation == room.incarnation_id
+           {:ok, :cancel, claim}
+         end}
+    ]
+
+    assert {:join_error, :participant_start_failed} = CallAdmission.start_call(options, claim)
+
+    assert {:error, %{code: :participant_not_found}} =
+             CallEngine.participant_snapshot(tenant, room_id, participant_id)
+
+    assert {:ok, _monitor} = CallEngine.monitor_room(tenant, room_id, room.incarnation_id)
+  end
+
+  defp binding_options do
+    [
+      call_repository:
+        {Vxpipe.Gateway.TestAdmissionBindingRepository,
+         fn :bind, [claim, incarnation] ->
+           assert claim.call.incarnation_id == incarnation
+           {:ok, :admit, claim}
+         end}
+    ]
   end
 
   defp prepared_call(plan, incarnation_id, started_at, state \\ :running) do

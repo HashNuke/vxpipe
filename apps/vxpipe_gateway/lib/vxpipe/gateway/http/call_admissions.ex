@@ -85,10 +85,15 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
 
   defp start_session(conn, options, claim) do
     case backend(options, :start_call, [claim]) do
-      {:ok, room, participant} ->
-        started_at = options.clock.()
-        project(options, :mark_started, [claim, room.incarnation_id, started_at])
-        send_live_session(conn, options, claim, room.incarnation_id, participant, started_at)
+      {:ok, room, participant, started} ->
+        send_live_session(
+          conn,
+          options,
+          claim,
+          room.incarnation_id,
+          participant,
+          started.started_at
+        )
 
       {:joined, participant} ->
         send_live_session(
@@ -103,10 +108,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
       {:transfer_pending, participant} ->
         send_pending_transfer_session(conn, options, claim, participant)
 
-      {:started, room} ->
-        started_at = options.clock.()
-        project(options, :mark_started, [claim, room.incarnation_id, started_at])
-
+      {:started, _room, _started} ->
         send_error(
           conn,
           503,
@@ -125,6 +127,9 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
           "The call could not be started.",
           true
         )
+
+      {:admission_error, _reason} ->
+        send_error(conn, 503, "call_start_failed", "The call could not be started.", true)
 
       {:join_error, _reason} ->
         send_error(
