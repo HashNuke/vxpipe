@@ -389,6 +389,35 @@ lifecycle projector currently rejects archive close without a start time, before
 the general call-end projection runs. Add a narrow cancellation-close path through
 both projections; do not invent a start time or weaken normal outgoing ordering.
 
+## Completion persistence ownership
+
+For the remaining integration, let the existing cleanup tracker persist its own
+completed evidence through `Calls.complete_call_cleanup/3`, using one bounded
+supervised task. Enable this only for a fresh managed tracker with explicit
+completion options. The reconciler discovers durable work and requests exact
+shutdown; it does not reconstruct missing trackers or own their final retirement.
+
+This avoids a recovery gap if an external reconciliation worker commits completion
+then dies before retiring the tracker: completed rows correctly disappear from
+the pending scan, so that orphan would no longer be discovered. Owner-held
+persistence can retry the same binding and first completion timestamp while the
+tracker survives. If it dies, there is no orphan tracker to retire; the database
+either retains pending unknown work or already contains the committed proof.
+
+Install the deadline inside the task before storage, retain mailbox responsiveness,
+retry failures with capped backoff, and retire only after both acknowledged storage
+and actual task termination. The Calls facade owns exact stored-result validation
+and publication retriggering. Tracker status `complete` describes resource
+evidence; public `ended` still requires durable projection.
+
+A later hangup on a normally completed call may find durable cleanup completion
+before normal archive closure. Replay completion using its stored timestamp even
+if the tracker has retired. The pending scan already includes completed cleanup
+with new cancellation intent; this branch must not require a replacement tracker.
+Tests must cover successful commit followed by a lost task result, immutable
+retry, requester death, and waiting for actual task DOWN before retirement. This
+ownership refinement is reviewed design; persistence integration is pending.
+
 ## Remaining carrier integration contracts
 
 These are integration requirements identified from the existing owner paths; they

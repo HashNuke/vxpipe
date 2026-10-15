@@ -1272,3 +1272,19 @@ finished carrier/room/commands and confirmed storage can allow retirement withou
 acknowledgement, leaving durable completion unknown. These decisions and their
 test boundaries are recorded in the lifecycle design; implementation is pending.
 Independent incoming/outgoing planning reviews agreed on these obligations.
+
+### Completion persistence ownership review
+
+Found a recovery gap in external-worker completion: after storage commits, a
+worker can die before retiring its tracker, while the completed row is no longer
+in the pending scan. Independent review recommends the smaller solution: the
+existing tracker owns its bounded final persistence task and retries immutable
+completion until acknowledgement plus task DOWN, then retires. A surviving
+tracker always retains retry responsibility; if it dies there is no orphan to
+rediscover. This avoids adding registry recovery machinery or another process.
+
+The reconciler still owns durable discovery and exact shutdown. It replays an
+already-stored completion when later intent arrives, without requiring a retired
+tracker. Calls retains stored-result validation and publication triggers. The
+lifecycle design records failure tests and opt-in fresh-managed configuration.
+This is reviewed design only; no runtime source changed during the full suite.

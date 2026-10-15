@@ -615,6 +615,13 @@ tracker loss, and allow exact-verified managed failed-call accounting without
 manufacturing lifecycle completion. The lifecycle design records these decisions
 and acceptance boundaries. They are reviewed requirements, not implemented work.
 
+Completion ownership review chooses tracker-owned bounded persistence before
+retirement, avoiding an external worker's commit/retire gap without a second
+registry recovery mechanism. Reconciliation retains durable discovery/exact stop
+and replays stored completion for later intent without recreating a tracker.
+The lifecycle design records the reviewed contract and tests; implementation
+remains pending.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:
