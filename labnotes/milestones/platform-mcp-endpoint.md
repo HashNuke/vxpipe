@@ -622,6 +622,14 @@ and replays stored completion for later intent without recreating a tracker.
 The lifecycle design records the reviewed contract and tests; implementation
 remains pending.
 
+Managed failed-call accounting now accepts complete immutable usage batches without
+requiring cancellation intent, while retaining exact verified room/incarnation
+checks. Failed lifecycle, cleanup and publication fields remain unchanged; legacy
+failed-call usage stays denied. Two expected red failures preceded the change;
+all 66 focused usage/binding/completion tests pass with independent source review.
+This removes an accounting retry barrier; it does not prove carrier cleanup or
+complete the pending owner integration.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

@@ -455,15 +455,15 @@ room closure, command drainage and matching final-storage completion are proven,
 the owner may retire without acknowledgement; the durable call remains unknown.
 Missing usage or unsuccessful storage must not satisfy that retirement gate.
 
-Normal managed preparation failure also needs durable usage without a hangup
-request. The current failed-call storage exception requires cancellation intent;
-before integration, extend it narrowly to managed failed calls with the exact
-verified room/incarnation. Persist the entire immutable batch, including its
-initial observation, with existing deduplication. This must not change failed
-state, cancellation intent, terminal timestamps, cleanup acknowledgement or
-publication readiness. Legacy failed calls and missing/unverified/mismatched
-ownership remain rejected. Test retry and unknown terminal accounting separately
-from carrier completion.
+Normal managed preparation failure retains durable usage without a hangup
+request. The failed-call storage exception now permits managed calls with the
+exact verified room/incarnation. It persists the entire immutable batch, including
+its initial observation, with existing deduplication. Storage leaves failed state,
+cancellation intent, terminal timestamps, cleanup acknowledgement and publication
+readiness unchanged. Legacy failed calls and missing/unverified/mismatched
+ownership remain rejected. Focused tests cover whole-batch retry and unknown
+terminal accounting separately from carrier completion; owner integration remains
+pending.
 
 ## Alternatives rejected
 

@@ -69,8 +69,7 @@ defmodule Vxpipe.Persistence.UsageStore do
 
   defp storage_available(%Call{
          state: :failed,
-         gateway_cleanup_required: true,
-         hangup_requested_at: %DateTime{}
+         gateway_cleanup_required: true
        }),
        do: :ok
 

@@ -1304,3 +1304,19 @@ No live-provider or external telephony lane ran. This establishes a green combin
 checkpoint for the committed prerequisites and onboarding installation; it does
 not complete managed admission, reconciliation, hangup HTTP/MCP, sample call/
 transfer migration or the milestone's final parity/documentation gates.
+
+
+### Managed failed-call accounting
+
+Removed cancellation intent from the narrow managed-failed usage eligibility
+check. Existing locked tenant/call lookup, exact verified room/incarnation,
+immutable deduplication and lifecycle immutability remain intact. Real telephony
+initial plus failed/unknown terminal batches now persist and replay without
+manufacturing cleanup completion. Legacy failed rows remain denied with or without
+intent. This addresses ordinary managed preparation failure, which otherwise
+would retry final accounting forever without an API hangup request.
+
+Red: ten UsageStore tests with two expected call_not_started failures. Green:
+ten UsageStore tests, then 66 usage/binding/completion tests passing. Independent
+review approved the two-file runtime/test delta. Changed Elixir paths formatted;
+combined root gates remain due after the parallel cleanup/sample slices stabilize.

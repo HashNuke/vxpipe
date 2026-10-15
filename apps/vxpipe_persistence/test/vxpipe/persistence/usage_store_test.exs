@@ -8,7 +8,8 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
     Attribution,
     Measurement,
     Observation,
-    ProviderContext
+    ProviderContext,
+    TelephonyAttempt
   }
 
   alias Vxpipe.Calls.{Principal, UsageReport}
@@ -119,13 +120,74 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
              Vxpipe.Calls.store_usage_observation(foreign, context.options)
   end
 
-  test "failed usage still requires both managed ownership and cancellation intent", context do
+  for outcome <- [:failed, :unknown] do
+    @terminal_outcome outcome
+    test "managed failures without hangup retain #{outcome} carrier batches without completing cleanup",
+         context do
+      failed =
+        context.call
+        |> Ecto.Changeset.change(
+          gateway_cleanup_required: true,
+          incarnation_binding_verified: true,
+          state: :failed,
+          ended_at: @observed_at,
+          terminal_reason: :startup_unknown
+        )
+        |> Repo.update!()
+
+      {:ok, provider} = ProviderContext.new(name: "carrier-fixture")
+
+      {:ok, attempt, started} =
+        TelephonyAttempt.start(
+          %{
+            tenant_id: @tenant_key,
+            call_id: @call_id,
+            room_id: @room_id,
+            incarnation_id: @incarnation_id,
+            participant_id: "participant-caller"
+          },
+          "failed-managed-carrier",
+          provider,
+          @observed_at
+        )
+
+      {_attempt, {:ok, terminal}} =
+        TelephonyAttempt.finish(attempt, @terminal_outcome, @observed_at,
+          provenance: :locally_measured
+        )
+
+      batch = started ++ terminal
+      assert length(batch) == 2
+
+      for _delivery <- 1..2, source <- batch do
+        assert {:ok, ^source} = Vxpipe.Calls.store_usage_observation(source, context.options)
+      end
+
+      assert Repo.aggregate(UsageObservation, :count) == 2
+      assert Repo.get!(Call, context.call.id) == failed
+      assert failed.hangup_requested_at == nil
+      assert failed.gateway_cleanup_completed_at == nil
+
+      for source <- batch,
+          {field, reason} <- [
+            room_id: :call_room_mismatch,
+            incarnation_id: :call_incarnation_mismatch
+          ] do
+        foreign = %{source | attribution: Map.replace!(source.attribution, field, "replacement")}
+
+        assert {:error, ^reason} =
+                 Vxpipe.Calls.store_usage_observation(foreign, context.options)
+      end
+    end
+  end
+
+  test "legacy failed usage remains unavailable with or without cancellation intent", context do
     source = observation("unacknowledged-usage", "unacknowledged-attempt", 1, 1, :final)
 
-    for {required, intent} <- [{false, @observed_at}, {true, nil}] do
+    for intent <- [nil, @observed_at] do
       Repo.get!(Call, context.call.id)
       |> Ecto.Changeset.change(
-        gateway_cleanup_required: required,
+        gateway_cleanup_required: false,
         incarnation_binding_verified: true,
         state: :failed,
         ended_at: @observed_at,
