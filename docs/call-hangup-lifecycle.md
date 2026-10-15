@@ -1,7 +1,8 @@
 # Durable whole-call hangup
 
 Status: implementation design for the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md).
-Durable cancellation intent and exact-supervisor monitoring are implemented.
+Durable cancellation intent, exact-supervisor monitoring and the generic engine
+startup gate are implemented.
 Runtime admission binding, reconciliation and the HTTP/MCP hangup operation remain
 unfinished; the complete lifecycle below is still the implementation contract.
 
@@ -23,6 +24,12 @@ Neither a transport argument nor a stale runtime handle may select a replacement
 incarnation for termination.
 
 ## Admission ordering
+
+The engine prerequisite is available as `call_admission: {owner_pid, token_ref}`
+on `CallEngine.start_call/2`, with `admit_call/4` and `cancel_call_admission/4`.
+It reuses the existing owner-monitored outgoing gate. Legacy outgoing options,
+APIs and submission acknowledgements remain supported; contradictory options
+are rejected. Gateway still needs to bind admission durably before release.
 
 The call-row lock orders cancellation, token issuance/redemption and admission.
 A prepared call can become ended atomically. Later token operations and admission
@@ -133,6 +140,11 @@ and two separate-connection SQL race tests. Tests cover cancellation-first and
 redemption-first ordering, unusable outstanding tokens, failed outgoing uncertainty,
 transaction rollback and invalid/noncanonical UUIDs before mutation. The latter
 return not-found; persistence uses canonical public IDs.
+
+The generic gate passed 33 focused engine tests and independent review. Tests
+cover web/incoming deferred preparation, exact controller/token/incarnation,
+controller death, cancellation, repeat release and outgoing acknowledgement
+compatibility. The full umbrella run for these combined prerequisites is pending.
 
 Read-only review confirmed the current web handler projects `mark_started` after
 starting the runtime, incoming activation precedes its started projection, and

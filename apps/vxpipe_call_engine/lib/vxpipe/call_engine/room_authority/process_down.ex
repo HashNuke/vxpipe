@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
     CallerIdle,
     ConnectionLifecycle,
     OpeningAudio,
+    OutgoingAdmission,
     OutgoingCall,
     ParticipantLifecycle,
     ParticipantTransfer,
@@ -17,7 +18,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
         _reason,
         %{outgoing_admission: %{status: :pending, monitor: monitor}} = state
       )
-      when is_reference(monitor), do: {:stop, {:shutdown, :outgoing_admission_abandoned}, state}
+      when is_reference(monitor),
+      do: {:stop, {:shutdown, OutgoingAdmission.abandoned_reason(state)}, state}
 
   def handle(monitor, reason, %{outgoing_call: %{monitor: monitor}} = state)
       when is_reference(monitor), do: OutgoingCall.owner_down(monitor, reason, state)

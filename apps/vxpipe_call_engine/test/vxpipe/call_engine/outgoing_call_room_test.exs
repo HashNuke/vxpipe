@@ -218,6 +218,23 @@ defmodule Vxpipe.CallEngine.OutgoingCallRoomTest do
     refute_receive {:vxpipe_outgoing_submission, ^reference, _}, 30
   end
 
+  test "generic admission retains the outgoing submission acknowledgement exactly once" do
+    plan = plan()
+    token = make_ref()
+    assert {:ok, room} = start_call(plan, call_admission: {self(), token})
+
+    assert {:error, :startup_preparing} =
+             Vxpipe.CallEngine.RoomAuthority.readiness_binding(authority(plan))
+
+    refute_received {:test_outbound_leg_connect, _, _, _}
+    assert :ok = CallEngine.admit_call(plan.tenant_id, plan.room_id, room.incarnation_id, token)
+    assert_receive {:test_outbound_leg_connect, _, _, _}, 1_000
+    assert_receive {:vxpipe_outgoing_submission, ^token, {:ok, :accepted}}, 1_000
+    assert :ok = CallEngine.admit_call(plan.tenant_id, plan.room_id, room.incarnation_id, token)
+    refute_received {:test_outbound_leg_connect, _, _, _}
+    refute_received {:vxpipe_outgoing_submission, ^token, _}
+  end
+
   test "unknown submission is acknowledged before its room disappears" do
     plan = plan()
     reference = make_ref()
@@ -536,10 +553,12 @@ defmodule Vxpipe.CallEngine.OutgoingCallRoomTest do
          clock \\ fn -> System.monotonic_time(:millisecond) end
        ) do
     {admission, connector_options} = Keyword.pop(connector_options, :outgoing_admission)
+    {call_admission, connector_options} = Keyword.pop(connector_options, :call_admission)
     {archive, connector_options} = Keyword.pop(connector_options, :archive, enabled: false)
 
     CallEngine.start_call(plan,
       outgoing_admission: admission,
+      call_admission: call_admission,
       archive: archive,
       outbound_leg_connector:
         {TestOutboundLegConnector,

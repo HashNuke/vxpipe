@@ -356,6 +356,14 @@ preservation. Migration 20261015000400 was applied to the test database. Runtime
 binding, shutdown/recovery and HTTP/MCP hangup remain unimplemented; this evidence
 does not check off the complete hangup tasks above.
 
+Engine admission prerequisite: resolved web/incoming/outgoing plans can now use
+one owner-monitored startup gate, released or cancelled only by the exact owner,
+token and incarnation. Legacy outgoing APIs and acknowledgements are preserved.
+Thirty-three focused tests pass after five expected red failures, and independent
+review found no blockers. Root formatting/compile/strict Credo pass; full umbrella
+verification is running. Gateway has not yet connected this gate to durable
+binding, so the admission-versus-hangup acceptance above remains open.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

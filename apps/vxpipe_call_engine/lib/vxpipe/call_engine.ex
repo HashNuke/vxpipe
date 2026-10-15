@@ -43,6 +43,12 @@ defmodule Vxpipe.CallEngine do
     end
   end
 
+  @doc """
+  Starts a resolved room. With `call_admission: {owner_pid, token_ref}`, entry
+  preparation waits for that owner to call `admit_call/4` after durable binding.
+  Owner death closes a still-pending room. This gate does not itself authorize or
+  persist admission, and does not submit incoming carrier answers.
+  """
   @spec start_call(ResolvedCallPlan.t(), keyword()) ::
           {:ok, Vxpipe.CallEngine.Room.Snapshot.t()} | {:error, Error.t()}
   def start_call(%ResolvedCallPlan{} = plan, options \\ []) when is_list(options) do
@@ -51,6 +57,18 @@ defmodule Vxpipe.CallEngine do
       RoomSupervisor.start_call(plan, runtime_options)
     end
   end
+
+  @doc "Releases a gated resolved call using its controller's exact incarnation and token."
+  def admit_call(tenant_id, room_id, incarnation_id, token)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id) and
+             is_reference(token),
+      do: RoomSupervisor.admit_call(tenant_id, room_id, incarnation_id, token)
+
+  @doc "Cancels a gated resolved call using its controller's exact incarnation and token."
+  def cancel_call_admission(tenant_id, room_id, incarnation_id, token)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id) and
+             is_reference(token),
+      do: RoomSupervisor.cancel_call_admission(tenant_id, room_id, incarnation_id, token)
 
   @doc "Release one outgoing admission after its durable room-start projection commits."
   def admit_outgoing_call(tenant_id, room_id, incarnation_id, token)

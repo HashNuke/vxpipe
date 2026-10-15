@@ -377,3 +377,22 @@
 - Final independent review found no blockers in authority, lock ordering, terminal
   evidence, rollback or the SQL race tests. Root formatting, warnings-as-errors
   compilation and strict Credo pass; the stable full umbrella suite is running.
+
+## Generalized engine admission gate
+
+- Extended the existing outgoing gate to all resolved plans through call_admission
+  and generic admit/cancel APIs. Pending rooms retain owner monitors and readiness
+  restrictions; release starts entries once with exact caller/token/incarnation.
+- Legacy outgoing control/reasons remain compatible. Outgoing plans keep their
+  submission acknowledgement; web/incoming plans do not invent that event.
+  Contradictory generic/legacy options are rejected before entry startup.
+- Four generic gate tests and one outgoing test failed before implementation;
+  all 33 focused gate/outgoing tests passed afterwards. Independent review found
+  no ownership/protocol regression, including after dispatch refactoring.
+- Strict Credo initially rejected RoomAuthority at 818 lines. Moving cohesive
+  gate dispatch into OutgoingAdmission reduced it to 792 without changing the
+  threshold. Focused tests passed again; root formatting, warnings-as-errors
+  compilation and strict Credo now pass. Full umbrella verification is running
+  against frozen source. No source-cutover or speech state machine was changed.
+- Gateway binding, carrier cleanup and recovery are still unfinished. These
+  prerequisites do not expose the hangup API or mark its checkpoint complete.
