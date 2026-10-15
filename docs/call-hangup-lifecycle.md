@@ -208,8 +208,23 @@ They reject startup against an unavailable or stale room and close on room
 termination independently of the retained carrier owner. A carrier owner may
 remain alive to reconcile an uncertain end command; it must not keep media open
 after the room has stopped. This room-authority monitor controls socket lifetime,
-not whole-supervisor completion or remote carrier termination. Socket and media
-cleanup registration remain part of the resource integration work.
+not whole-supervisor completion or remote carrier termination.
+
+Media bindings now accept an optional private cleanup binding, validated against
+their exact tenant, call, room and incarnation. The media connection supervisor
+registers its entire root before starting children. Each provider socket registers
+the actual WebSock process from its init callback, separately from the media tree.
+Both acknowledge only the absence of independent carrier/usage obligations;
+completion still waits for orderly root termination. Missing, sealed or mismatched
+ownership rejects startup without constructing replacement tracking state.
+
+The media session monitors the resolved tracker before attachment, independently
+of its socket. Tracker loss closes the local media tree and socket. Repeated media
+startup can reuse a root only when the existing session agrees on the complete
+binding, socket owner, stream, tracker and root PID. A duplicate request cannot
+adopt an existing untracked tree or a replacement connection sharing its ID.
+These hooks are opt-in; production carrier/admission paths still need to supply
+the private binding alongside managed reservation and final-usage ownership.
 
 ### Terminal projection and publication
 

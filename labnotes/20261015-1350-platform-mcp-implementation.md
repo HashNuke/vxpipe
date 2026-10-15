@@ -965,3 +965,31 @@ tests passed (140 excluded); no live providers or external telephony were used.
 Root formatting, warnings-as-errors compilation, strict Credo and the unused-
 dependency check all pass after the fixture correction. No modeled speech or
 source-cutover transition changed, so this checkpoint did not require Lean.
+
+### Media tree and socket cleanup membership
+
+Added private exact cleanup bindings to media ownership. The media supervisor
+registers its entire root before starting children; provider sockets register the
+actual WebSock process before frame handling. These local-only resources may
+acknowledge immediately, but the tracker still requires orderly whole-root DOWN.
+MediaSession independently monitors the tracker before setup. Tracker loss closes
+both media and sockets without creating replacement membership.
+
+Duplicate startup now verifies the existing full binding, socket, stream, original
+tracker and actual root PID. It cannot adopt an untracked tree or a replacement
+sharing the connection identifier. Private binding validation includes all four
+tenant/call/room/incarnation fields; missing/sealed owners reject registration.
+
+Eleven regressions failed in the initial 42-test selection. After implementation,
+only four real loopback assertions failed because Bandit uses the orderly reason
+`{:shutdown, :local_closed}` rather than `:normal`. Tracker snapshots already
+reported complete correctly. Fixed the assertion and made the loopback fixture
+return 404 to unrelated non-upgrade probes. The broader selection then passed all
+99 tests: cleanup tracker, media admission/session, both provider sockets, local
+carrier harnesses and four explicitly selected loopback integration cases.
+Independent source/test review found no blockers. The loopback tests complete the
+WebSocket close handshake and observe actual owner termination, not just callback
+return values. Production admission still does not enable managed cleanup.
+Root format, warnings-as-errors compilation, strict Credo and unused-dependency
+checks pass for this slice. The earlier 4,177-test baseline predates these hooks;
+the final milestone still requires a complete root test run on its final source.

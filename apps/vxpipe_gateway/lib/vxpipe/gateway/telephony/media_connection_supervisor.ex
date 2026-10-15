@@ -3,7 +3,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaConnectionSupervisor do
 
   use Supervisor
 
-  alias Vxpipe.Gateway.Telephony.{MediaChildrenSupervisor, MediaSession}
+  alias Vxpipe.Gateway.Telephony.{MediaChildrenSupervisor, MediaCleanup, MediaSession}
 
   def start_link(options) do
     connection_id = Keyword.fetch!(options, :connection_id)
@@ -21,14 +21,21 @@ defmodule Vxpipe.Gateway.Telephony.MediaConnectionSupervisor do
 
   @impl true
   def init(options) do
-    connection_id = Keyword.fetch!(options, :connection_id)
+    case MediaCleanup.register(Keyword.fetch!(options, :binding), :telephony_media) do
+      {:ok, tracker} ->
+        connection_id = Keyword.fetch!(options, :connection_id)
+        options = Keyword.merge(options, cleanup_root: self(), cleanup_tracker: tracker)
 
-    children = [
-      {MediaChildrenSupervisor, connection_id: connection_id},
-      Supervisor.child_spec({MediaSession, options}, restart: :temporary, significant: true)
-    ]
+        children = [
+          {MediaChildrenSupervisor, connection_id: connection_id},
+          Supervisor.child_spec({MediaSession, options}, restart: :temporary, significant: true)
+        ]
 
-    Supervisor.init(children, strategy: :one_for_all, auto_shutdown: :any_significant)
+        Supervisor.init(children, strategy: :one_for_all, auto_shutdown: :any_significant)
+
+      {:error, _reason} ->
+        :ignore
+    end
   end
 
   defp via(connection_id) do

@@ -28,7 +28,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
     :client_state_leg_id,
     :leg
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [cleanup_binding: nil]
 
   @type t :: %__MODULE__{
           provider: atom(),
@@ -44,7 +44,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
           provider_call_leg_id: String.t(),
           provider_call_session_id: nil | String.t(),
           client_state_leg_id: String.t(),
-          leg: pid()
+          leg: pid(),
+          cleanup_binding: map() | nil
         }
 
   @spec valid?(t()) :: boolean()
@@ -65,8 +66,26 @@ defmodule Vxpipe.Gateway.Telephony.MediaBinding do
           binding.client_state_leg_id
         ],
         &present?/1
-      ) and optional_identifier?(binding.provider_call_session_id)
+      ) and optional_identifier?(binding.provider_call_session_id) and
+      match?({:ok, _}, cleanup_binding(binding))
   end
+
+  @doc false
+  def cleanup_binding(%__MODULE__{cleanup_binding: nil}), do: {:ok, nil}
+
+  def cleanup_binding(%__MODULE__{
+        tenant_id: tenant,
+        call_id: call,
+        room_id: room,
+        incarnation_id: incarnation,
+        cleanup_binding:
+          %{tenant_key: tenant, call_id: call, room_id: room, incarnation_id: incarnation} =
+            binding
+      })
+      when map_size(binding) == 4 and is_binary(call) and byte_size(call) in 1..128,
+      do: {:ok, binding}
+
+  def cleanup_binding(%__MODULE__{}), do: {:error, :invalid_cleanup_binding}
 
   @spec matches_event?(t(), Vxpipe.CallEngine.Telephony.Event.t()) :: boolean()
   def matches_event?(%__MODULE__{} = binding, %Vxpipe.CallEngine.Telephony.Event{} = event) do

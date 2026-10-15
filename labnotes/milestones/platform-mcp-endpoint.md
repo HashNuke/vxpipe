@@ -532,6 +532,15 @@ runs. This covers the incoming/socket, Session/WebRTC and role-cutover slices;
 managed resource integration and final milestone acceptance remain open.
 Root format, compile, strict Credo and unused-dependency checks also pass.
 
+Media ownership hooks now register whole media supervision roots and actual
+WebSock owners before effects using exact private bindings. Tracker loss closes
+both, and duplicate media startup validates the existing root, tracker, socket
+and full binding rather than adopting untracked connections. Eleven initial red
+regressions preceded implementation; all 99 focused tests pass, including four
+explicit local WebSocket integration cases and local carrier harnesses.
+Independent review approved. These remain opt-in hooks until carrier/final-usage
+ownership and reconciliation enable managed admission.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

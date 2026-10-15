@@ -12,7 +12,14 @@ defmodule Vxpipe.Gateway.CallCleanup do
 
   alias Vxpipe.CallEngine
 
-  @resource_kinds [:session, :web_rtc, :telephony_media, :incoming_leg, :outgoing_leg]
+  @resource_kinds [
+    :session,
+    :web_rtc,
+    :telephony_media,
+    :telephony_socket,
+    :incoming_leg,
+    :outgoing_leg
+  ]
 
   def start_link({binding, _initial_resource} = options) do
     GenServer.start_link(__MODULE__, options, name: name(binding))

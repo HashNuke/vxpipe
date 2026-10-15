@@ -33,6 +33,41 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocketTest do
     %{binding: binding, leg: leg, socket: socket}
   end
 
+  test "rejects managed media with missing, sealed or mismatched cleanup ownership", context do
+    binding = context.binding
+
+    cleanup = %{
+      tenant_key: binding.tenant_id,
+      call_id: binding.call_id,
+      room_id: binding.room_id,
+      incarnation_id: binding.incarnation_id
+    }
+
+    managed = Map.put(binding, :cleanup_binding, cleanup)
+
+    assert {:stop, :cleanup_unavailable, {1008, _}, _} =
+             TelephonyMediaSocket.init(%{binding: managed, clock: fn -> 0 end})
+
+    {:ok, tracker} = Vxpipe.Gateway.CallCleanupSupervisor.start_new(cleanup)
+
+    on_exit(fn ->
+      DynamicSupervisor.terminate_child(Vxpipe.Gateway.CallCleanupSupervisor, tracker)
+    end)
+
+    mismatched = %{managed | call_id: "different-call"}
+
+    assert {:stop, :cleanup_unavailable, {1008, _}, _} =
+             TelephonyMediaSocket.init(%{binding: mismatched, clock: fn -> 0 end})
+
+    assert :ok = Vxpipe.Gateway.CallCleanup.seal(tracker)
+
+    assert {:stop, :cleanup_unavailable, {1008, _}, _} =
+             TelephonyMediaSocket.init(%{binding: managed, clock: fn -> 0 end})
+
+    assert %{resources: resources} = Vxpipe.Gateway.CallCleanup.snapshot(tracker)
+    assert resources == %{}
+  end
+
   test "closes when its exact room ends while the carrier owner remains", context do
     binding = context.binding
 
