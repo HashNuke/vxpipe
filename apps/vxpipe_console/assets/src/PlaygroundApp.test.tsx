@@ -76,7 +76,7 @@ test("creates a room when randomUUID is unavailable on an HTTP origin", async ()
 
   const fetchMock = vi
     .fn()
-    .mockResolvedValueOnce({ ok: false, status: 404 })
+    .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({ error: { code: "durable_sample_disabled" } }) })
     .mockResolvedValueOnce({ ok: false });
   vi.stubGlobal("fetch", fetchMock);
 
@@ -85,7 +85,7 @@ test("creates a room when randomUUID is unavailable on an HTTP origin", async ()
 
   await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
-  expect(fetchMock).toHaveBeenNthCalledWith(1, "/admin/samples/calls", {
+  expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/samples/calls", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({}),
@@ -109,13 +109,14 @@ test("enters the uncluttered Pipecat page after creating a room", async () => {
   const console = await screen.findByRole("region", { name: "RTVI console" });
 
   expect(console).toHaveTextContent("Vxpipe RTVI Playground");
+  expect(screen.getByRole("link", { name: "Open transfer desk" })).toHaveAttribute("href", "/admin/samples/transfer?tenant_key=BBBBBBBBBBBBBBBB&call_id=30000000-0000-4000-8000-000000000003");
   expect(console).toHaveAttribute("data-transport", "smallwebrtc");
   expect(console).toHaveAttribute("data-webrtc-url", "/api/rtvi/offer");
   expect(console).toHaveAttribute("data-session-id", "sess_demo");
   expect(screen.queryByRole("button", { name: "Create room" })).not.toBeInTheDocument();
   expect(screen.queryByText("room_demo")).not.toBeInTheDocument();
   expect(screen.queryByText("rinc_demo")).not.toBeInTheDocument();
-  expect(fetchMock).toHaveBeenNthCalledWith(1, "/admin/samples/calls", {
+  expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/samples/calls", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({}),
@@ -155,7 +156,7 @@ test("keeps the database-free trusted room fallback", async () => {
 
   const fetchMock = vi
     .fn()
-    .mockResolvedValueOnce({ ok: false, status: 404 })
+    .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({ error: { code: "durable_sample_disabled" } }) })
     .mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -198,6 +199,15 @@ test("keeps the database-free trusted room fallback", async () => {
     body: JSON.stringify({ room_id: "room_00000000-0000-4000-8000-000000000001" }),
   });
   expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+test("missing or forbidden samples never fall back to unmanaged rooms", async () => {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: { code: "sample_call_not_found" } }) });
+  vi.stubGlobal("fetch", fetchMock);
+  render(<PlaygroundApp />);
+  fireEvent.click(screen.getByRole("button", { name: "Create room" }));
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledOnce();
 });
 
 function stubDurableAdmission() {

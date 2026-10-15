@@ -97,6 +97,37 @@ defmodule Vxpipe.Calls.CallCreationTest do
     end
   end
 
+  test "an internal expected publication rejects a changed revision before claiming a call", c do
+    updated =
+      publish(c.tenant, source(), Keyword.put(c.options, :call_spec_id, c.published.call_spec_id))
+
+    assert updated.revision == 2
+
+    options =
+      Keyword.merge(c.options,
+        expected_call_spec_revision: 1,
+        call_id_generator: fn -> "unexpected-call" end
+      )
+
+    assert {:error, :call_spec_revision_conflict} =
+             Calls.claim_call(c.actor, c.tenant, updated.call_spec_id, %{}, nil, nil, options)
+
+    assert :error = Calls.fetch_call(c.tenant, "unexpected-call", c.options)
+
+    assert {:ok, call} =
+             Calls.claim_call(
+               c.actor,
+               c.tenant,
+               updated.call_spec_id,
+               %{},
+               nil,
+               nil,
+               Keyword.put(c.options, :expected_call_spec_revision, 2)
+             )
+
+    assert call.call_spec_revision == 2
+  end
+
   test "shared authorization uses actual machine and browser actors before storage", c do
     platform = %InstallationOperator{
       grant: :installation_operator,

@@ -107,16 +107,22 @@ navigation in the UI. Neither is justification for a private tenant directory.
 | `POST API/rtvi/offer`; `PATCH API/rtvi/offer` | unchanged | Gateway RTVI; SDP offer/session identifier and ICE candidate messages | Existing admitted media-session/connection capability; no conversion to account API auth |
 | `POST API/rooms`; `POST API/rooms/:room_id/sessions` | unchanged explicit opt-in development interface | Gateway Rooms; configured trusted preset/principal, room/session result | Existing configuration-gated development auth; not general tenant creation or MCP admission; keep disabled defaults |
 
-The current browser sample buttons call `POST /admin/samples/calls` and
-`POST /admin/samples/transfers`. These are **product mutations**, not read-only UI
-helpers. Replace their hidden sample bootstrap path with canonical authorized
-sample preparation (proposed `POST /api/samples/calls` and
-`POST /api/samples/transfers`) over the same call creation/token workflows, or have
-the UI call those primary operations directly after sample installation. Keep
-the sample-enabled gate, tenant/spec-write preconditions and current token response.
-Do not grant sample routes ambient installation authority solely because the
-controller was historically protected by `tenants.write`. Shared operation tests
-must prove direct invocation cannot bypass these checks.
+The browser sample flows now use `POST /api/samples/calls` with `{}` and
+`POST /api/samples/transfers` with explicit `{tenant_key,call_id}`. Their legacy
+`/admin/samples` aliases share the same handlers. Both are session-only product
+mutations: explicit Authorization is rejected before parsing/session fallback,
+and CSRF/host protection remains required. They call `Calls.ConfiguredSamples`
+with the actual actor; there is no startup authoring, hidden API key or global
+latest-call selection.
+
+Call preparation requires `calls.write` for the configured tenant. Matching
+published source can be reused without authoring authority; creating/publishing a
+matching draft requires the actual actor's call-spec and inherited platform-service
+permissions. Edited/ambiguous source is a conflict, and publication selection is
+checked again before preparing the call. Transfer uses the explicit call's pinned
+participant routes and normal join eligibility. Both return the existing
+admission/token envelope with 201. Disabled configuration has a distinct 404 code;
+only that code permits the caller UI's existing development-room fallback.
 
 ## Services, provider credentials and onboarding
 

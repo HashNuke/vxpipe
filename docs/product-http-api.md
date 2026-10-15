@@ -214,6 +214,58 @@ Errors use `{error:{code}}`: 403 `forbidden`, 422 `invalid_tenant_key` or
 `sample_installation_unavailable`. Per-sample private failure details are omitted
 from the response.
 
+## Prepare configured browser samples (Console session only)
+
+```http
+POST /api/samples/calls
+Content-Type: application/json
+
+{}
+```
+
+This optional development workflow prepares the configured sample with its server-
+configured initial variables and issues an entry participant join token. It does
+not start media or invoke providers. It uses the actual browser actor and requires
+`calls.write` for the configured tenant. A matching published call spec is reusable
+by a call-only actor; creating or publishing a matching draft additionally requires
+call-spec authoring permission, including permission for inherited platform services.
+Edited or ambiguous configured definitions are not overwritten. A concurrent change
+to the selected publication produces a conflict before call preparation.
+
+The transfer desk uses an explicit call selected from the caller console:
+
+```http
+POST /api/samples/transfers
+Content-Type: application/json
+
+{"tenant_key":"TENANTabcdefgh12","call_id":"call-public-id"}
+```
+
+It selects the configured transfer participant from that call's pinned routes and
+revision. It never selects a global latest call. The call must belong to the
+configured tenant and sample spec and be eligible for a transfer token; prepared,
+cancelled or ended calls cannot bypass normal join rules. Transfer links contain
+only the public tenant and call identifiers, never a join token.
+
+Both operations return 201 with
+`{tenant_key,call_id,participant_key,join_token:{token,expires_at}}`. The token is
+single-use and is redeemed through the documented participant-session endpoint.
+No API keys are created or stored for the sample workflow. Repeated preparation
+creates a new call; it is not an automatic retry/idempotency interface.
+
+These routes require a browser session, CSRF protection and an allowed host.
+Any Authorization header returns 401 `session_required`; machine keys have no
+sample-helper grant. The `/admin/samples/calls` and `/admin/samples/transfers`
+compatibility aliases use the same handlers and credential policy.
+
+Errors use `{error:{code}}`: 403 `forbidden`, 422 `invalid_sample_target`,
+409 `sample_spec_conflict` or `sample_call_unavailable`, 404 `sample_call_not_found`,
+and 503 `sample_call_unavailable` or `sample_transfer_unavailable`. Disabled sample
+configuration returns 404 `durable_sample_disabled` for preparation or
+`sample_transfer_disabled` for transfer. Only preparation's exact `durable_sample_disabled` code allows the existing
+browser development-room fallback. Transfer's disabled code shows setup-required
+guidance; it never falls back. Other 404s and permission failures remain errors.
+
 ## List call specs
 
 ```http

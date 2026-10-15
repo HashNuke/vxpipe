@@ -118,6 +118,12 @@ defmodule Vxpipe.Calls do
     UsageProjections
   }
 
+  def prepare_configured_sample(actor, config, options \\ []),
+    do: Vxpipe.Calls.ConfiguredSamples.prepare(actor, config, options)
+
+  def prepare_sample_transfer(actor, config, tenant_key, call_id, options \\ []),
+    do: Vxpipe.Calls.ConfiguredSamples.transfer(actor, config, tenant_key, call_id, options)
+
   def install_demo_samples(actor, tenant_key, options \\ []),
     do: Vxpipe.Calls.DemoSamples.install(actor, tenant_key, options)
 

@@ -846,6 +846,22 @@ This is a green checkpoint, not final milestone acceptance: managed resource
 integration/reconciliation, hangup transports, sample call/transfer and complete
 parity/documentation remain open.
 
+Configured sample call/transfer cutover now uses canonical session-only routes and
+actual-actor Calls workflows. Startup authoring, hidden API keys and global latest-
+call selection are removed. Matching publication reuse, author-only draft creation/
+publication, revision conflict protection and explicit pinned transfer targets use
+the shared policies. Only the exact disabled preparation response permits the old
+development-room fallback; transfer never falls back.
+
+Expected domain/route/frontend reds preceded implementation. Final checks pass
+nine Calls, six Persistence, 20 Console and all 770 frontend tests, plus types,
+lint and asset build. Source and public documentation received independent review.
+Rendered desktop/mobile checks verified real canonical preparation/transfer 201,
+explicit selected-call links, missing-target guidance and no overflow using a
+synthetic media-session boundary. No microphone, media or provider was invoked;
+the fixture and sandbox stopped. Combined root gates and complete cross-interface
+acceptance remain open.
+
 ## Checkpoint: parity acceptance and documentation
 
 Depends on all required capability checkpoints and supporting workflows.

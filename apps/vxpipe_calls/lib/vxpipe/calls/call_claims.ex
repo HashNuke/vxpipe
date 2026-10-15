@@ -64,6 +64,7 @@ defmodule Vxpipe.Calls.CallClaims do
     with {:ok, specifications} <- Repositories.fetch(options, :call_spec_repository),
          {:ok, %{tenant_key: ^tenant, call_spec_id: ^id} = revision} <-
            Repositories.call(specifications, :fetch_published_revision, [tenant, id]),
+         :ok <- expected_revision(revision, options),
          {:ok, transport} <- transport(revision, mode),
          {:ok, call} <-
            PreparedCallFactory.build(
@@ -83,6 +84,14 @@ defmodule Vxpipe.Calls.CallClaims do
     else
       {:ok, _invalid} -> {:error, :call_spec_revision_not_found}
       error -> error
+    end
+  end
+
+  defp expected_revision(revision, options) do
+    case Keyword.get(options, :expected_call_spec_revision) do
+      nil -> :ok
+      expected when expected == revision.revision -> :ok
+      _changed -> {:error, :call_spec_revision_conflict}
     end
   end
 

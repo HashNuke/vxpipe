@@ -42,6 +42,9 @@ function PlaygroundSession() {
 
   return (
     <main className="console-page">
+      {connection.call ? <nav aria-label="Call tools">
+        <a href={`/admin/samples/transfer?tenant_key=${encodeURIComponent(connection.call.tenantKey)}&call_id=${encodeURIComponent(connection.call.callId)}`} target="_blank" rel="noreferrer">Open transfer desk</a>
+      </nav> : null}
       <ConsoleTemplate
         key={connection.incarnationId}
         transportType="smallwebrtc"

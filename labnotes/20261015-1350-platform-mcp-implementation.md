@@ -1399,3 +1399,37 @@ abnormally lost command observer without false acknowledgement. Root and indepen
 agent reviews approved; all six changed paths formatted and diff checked.
 Private validation reuses CarrierCleanup's shared boundary instead of copying
 bounds. Production admission opt-in remains absent until the complete rollout.
+
+### Configured sample call and transfer cutover
+
+Replaced stateful Console sample bootstrap with a stateless configuration adapter
+and Calls-owned actual-actor workflows. No startup saves/publication, generated
+machine key or global latest-call state remains. Call-only actors can reuse a
+matching publication; creating/publishing requires the actual author's policy,
+including inherited platform-service permissions. An internal expected-revision
+check prevents a changed publication from silently preparing another definition.
+Transfer takes explicit public tenant/call IDs and reads the pinned participant
+routes; normal prepared/cancelled/ended eligibility still applies.
+
+Canonical and legacy routes now share session-only, explicit-header rejection and
+CSRF handling. The UI uses canonical URLs and public-ID transfer links, checks
+returned call identity and requires a target before requesting transfer. Only the
+exact disabled preparation sentinel permits development-room fallback; transfer
+disabled shows setup guidance and never falls back. Old ambient-state tests and
+fixtures were replaced with owning domain, storage and endpoint contract tests.
+
+Initial reds: Calls one, Persistence three, Console three and five of ten frontend
+cases. A publication-race guard and platform-policy HTTP 403 mapping also had
+focused reds before implementation. Initial green attempts exposed fixture-only
+key-count, prepared-transfer and memory-repository not-found assumptions; corrected
+fixtures use real single-use token claim/start projections without runtime/media.
+Final focused selections passed nine Calls, six Persistence and 20 Console tests.
+All 770 frontend tests pass, with types, ESLint and asset build. An initial parallel
+frontend run timed out in existing App.auth; that owning file passed 19 tests and
+the bounded-worker full rerun passed without unrelated source edits.
+
+Independent source/docs review approved. Browser checks at 1440x1000 and 390x844
+verified canonical preparation 201, a real one-time claim behind a synthetic media
+boundary, public-ID transfer link, canonical transfer 201 for that call, missing-
+target guidance and no horizontal overflow. No microphone/Connect, media or provider
+ran. Browser fixture/sandbox stopped. Combined root completion gates remain due.

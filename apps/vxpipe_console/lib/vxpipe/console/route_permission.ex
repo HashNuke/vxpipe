@@ -99,11 +99,9 @@ defmodule Vxpipe.Console.RoutePermission do
     tenant_requirement(method, tenant, rest)
   end
 
-  def for_request("POST", ["admin", "samples", "calls"]),
-    do: {:installation, "tenants.write"}
-
-  def for_request("POST", ["admin", "samples", "transfers"]),
-    do: {:installation, "tenants.write"}
+  def for_request("POST", [prefix, "samples", action])
+      when prefix in ["admin", "api"] and action in ["calls", "transfers"],
+      do: :authenticated
 
   def for_request("GET", ["admin", "diagnostics" | _rest]),
     do: :superadmin

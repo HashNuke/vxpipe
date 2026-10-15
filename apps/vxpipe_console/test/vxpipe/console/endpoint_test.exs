@@ -6,7 +6,6 @@ defmodule Vxpipe.Console.EndpointTest do
   require Phoenix.ChannelTest
 
   alias Vxpipe.Console.{DiagnosticsSocket, LiveReloadSocket}
-  alias Vxpipe.Console.{SampleCall, TestSampleCallBackend}
   alias Vxpipe.Console.Test.FakeUserIdentity
   alias Vxpipe.Gateway.HTTP
 
@@ -86,107 +85,7 @@ defmodule Vxpipe.Console.EndpointTest do
     assert response(conn, 404) == "not found"
   end
 
-  test "trusted sample preparation returns only a scoped join locator" do
-    initial_variables = %{"order" => %{"id" => "private-endpoint-sentinel"}}
-
-    backend =
-      start_supervised!(
-        {TestSampleCallBackend, initial_variables: initial_variables, observer: self()},
-        id: :endpoint_sample_backend
-      )
-
-    sample =
-      start_supervised!(
-        {SampleCall,
-         backend: TestSampleCallBackend.backend(backend),
-         call_spec: %{
-           "schema_version" => "20260913.01",
-           "entry_caller" => "caller",
-           "entry_receiver" => "assistant"
-         },
-         initial_variables: initial_variables,
-         tenant_key: TestSampleCallBackend.tenant_key()},
-        id: :endpoint_sample_call
-      )
-
-    assert sample == Process.whereis(SampleCall)
-
-    conn =
-      authenticated_conn()
-      |> Plug.Conn.put_req_header("origin", "https://other.example.test")
-      |> post("/admin/samples/calls", %{})
-
-    assert %{
-             "call_id" => call_id,
-             "join_token" => %{
-               "expires_at" => "2026-09-09T13:05:02.000000Z",
-               "token" => "vxj_test-only-sample-join-token"
-             },
-             "participant_key" => participant_key,
-             "tenant_key" => tenant_key
-           } = json_response(conn, 201)
-
-    assert call_id == TestSampleCallBackend.call_id()
-    assert participant_key == TestSampleCallBackend.participant_key()
-    assert tenant_key == TestSampleCallBackend.tenant_key()
-    refute conn.resp_body =~ "private-endpoint-sentinel"
-    refute conn.resp_body =~ TestSampleCallBackend.api_key()
-    assert Plug.Conn.get_resp_header(conn, "access-control-allow-origin") == []
-  end
-
-  test "issues the latest sample call's configured transfer locator" do
-    initial_variables = %{"order" => %{"id" => "private-transfer-endpoint-sentinel"}}
-
-    backend =
-      start_supervised!(
-        {TestSampleCallBackend, initial_variables: initial_variables, observer: self()},
-        id: :endpoint_sample_transfer_backend
-      )
-
-    sample =
-      start_supervised!(
-        {SampleCall,
-         backend: TestSampleCallBackend.backend(backend),
-         call_spec: %{
-           "schema_version" => "20260913.01",
-           "entry_caller" => "caller",
-           "entry_receiver" => "assistant"
-         },
-         initial_variables: initial_variables,
-         tenant_key: TestSampleCallBackend.tenant_key(),
-         transfer_participant: "human-support"},
-        id: :endpoint_sample_transfer_call
-      )
-
-    assert sample == Process.whereis(SampleCall)
-    assert {:ok, _caller_token} = SampleCall.prepare()
-
-    conn =
-      authenticated_conn()
-      |> Plug.Conn.put_req_header("origin", "https://other.example.test")
-      |> post("/admin/samples/transfers", %{})
-
-    assert %{
-             "call_id" => call_id,
-             "join_token" => %{
-               "expires_at" => "2026-09-09T13:05:03.000000Z",
-               "token" => "vxj_test-only-transfer-join-token"
-             },
-             "participant_key" => participant_key,
-             "tenant_key" => tenant_key
-           } = json_response(conn, 201)
-
-    assert call_id == TestSampleCallBackend.call_id()
-    assert participant_key == TestSampleCallBackend.transfer_participant_key()
-    assert tenant_key == TestSampleCallBackend.tenant_key()
-    refute conn.resp_body =~ "private-transfer-endpoint-sentinel"
-    refute conn.resp_body =~ TestSampleCallBackend.api_key()
-    assert Plug.Conn.get_resp_header(conn, "access-control-allow-origin") == []
-  end
-
   test "returns not found when the durable trusted sample is disabled" do
-    assert Process.whereis(SampleCall) == nil
-
     conn = post(authenticated_conn(), "/admin/samples/calls", %{})
 
     assert %{"error" => %{"code" => "durable_sample_disabled"}} = json_response(conn, 404)

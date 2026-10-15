@@ -86,7 +86,7 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/admin/samples" do
-    pipe_through :user_api
+    pipe_through :session_product_api
 
     post "/calls", Vxpipe.Console.SampleCallController, :create
     post "/transfers", Vxpipe.Console.SampleTransferController, :create
@@ -144,6 +144,16 @@ defmodule Vxpipe.Console.Router do
     post "/setup", Vxpipe.Console.UserAuthController, :setup
     post "/login", Vxpipe.Console.UserAuthController, :login
     post "/recover", Vxpipe.Console.UserAuthController, :recover
+  end
+
+  scope "/api/samples" do
+    pipe_through :session_product_api
+
+    post "/calls", Vxpipe.Console.SampleCallController, :create,
+      metadata: %{console_product_api: true}
+
+    post "/transfers", Vxpipe.Console.SampleTransferController, :create,
+      metadata: %{console_product_api: true}
   end
 
   scope "/api" do

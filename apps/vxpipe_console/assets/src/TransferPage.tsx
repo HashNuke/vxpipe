@@ -45,6 +45,11 @@ function progressCopy(progress: TransferProgress): string {
 }
 
 export default function TransferPage() {
+  const query = new URLSearchParams(window.location.search);
+  const tenantKey = query.get("tenant_key");
+  const callId = query.get("call_id");
+  const hasTarget = Boolean(tenantKey && callId);
+  const missingTarget = "Open the transfer desk from the caller console to select a call.";
   const connection = useRef<TransferConnection | undefined>(undefined);
   const activeAttempt = useRef<string | undefined>(undefined);
   const accepting = useRef(false);
@@ -98,6 +103,7 @@ export default function TransferPage() {
   }
 
   async function connect() {
+    if (!tenantKey || !callId) { setError(missingTarget); return; }
     connection.current?.close();
     connection.current = undefined;
     activeAttempt.current = undefined;
@@ -110,7 +116,7 @@ export default function TransferPage() {
     record("Requesting destination admission");
 
     try {
-      const admission = await requestSampleAdmission("/admin/samples/transfers");
+      const admission = await requestSampleAdmission("/api/samples/transfers", { tenant_key: tenantKey, call_id: callId }, "sample_transfer_disabled");
 
       if (!admission) {
         setError(
@@ -219,13 +225,13 @@ export default function TransferPage() {
                 className="transfer-action"
                 type="button"
                 onClick={connect}
-                disabled={phase === "connecting"}
+                disabled={!hasTarget || phase === "connecting"}
               >
                 {phase === "connecting" ? "Connecting…" : "Connect transfer desk"}
               </button>
             )}
 
-            {error ? <p className="transfer-error" role="alert">{error}</p> : null}
+            {error || !hasTarget ? <p className="transfer-error" role="alert">{error || missingTarget}</p> : null}
           </section>
 
           <section className="transfer-ledger" aria-labelledby="transfer-ledger-title">
