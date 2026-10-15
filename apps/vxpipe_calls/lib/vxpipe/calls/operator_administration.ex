@@ -7,6 +7,7 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     CallSpecPage,
     InstallationOperator,
     OperatorCallContext,
+    Principal,
     ProviderAuth,
     ProviderCredential,
     ProviderCredentialHints,
@@ -92,12 +93,17 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     end
   end
 
-  @spec list_call_specs(InstallationOperator.t() | UserPrincipal.t(), String.t(), keyword()) ::
+  @spec list_call_specs(
+          InstallationOperator.t() | UserPrincipal.t() | Principal.t(),
+          String.t(),
+          keyword()
+        ) ::
           {:ok, CallSpecPage.t()} | {:error, term()}
-  def list_call_specs(%UserPrincipal{} = principal, tenant_key, options)
-      when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
+  def list_call_specs(principal, tenant_key, options)
+      when (is_struct(principal, UserPrincipal) or is_struct(principal, Principal)) and
+             is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
     with :ok <- ProviderAuth.tenant_key(tenant_key),
-         :ok <- UserAuthorization.authorize_tenant(principal, "call_specs.read", tenant_key),
+         :ok <- authorize_spec_list(principal, tenant_key),
          {:ok, page} <- positive_integer(options, :page, 1),
          {:ok, limit} <- page_size(options),
          {:ok, repository} <- Repositories.fetch(options, :admin_repository),
@@ -151,6 +157,15 @@ defmodule Vxpipe.Calls.OperatorAdministration do
 
   def list_call_specs(_authority, _tenant_key, _options),
     do: {:error, :installation_operator_required}
+
+  defp authorize_spec_list(%UserPrincipal{} = principal, tenant_key),
+    do: UserAuthorization.authorize_tenant(principal, "call_specs.read", tenant_key)
+
+  defp authorize_spec_list(%Principal{tenant_key: tenant, scopes: %MapSet{} = scopes}, tenant) do
+    if MapSet.member?(scopes, :admin), do: :ok, else: {:error, :insufficient_scope}
+  end
+
+  defp authorize_spec_list(%Principal{}, _tenant_key), do: {:error, :tenant_access_forbidden}
 
   @spec list_calls(InstallationOperator.t() | UserPrincipal.t(), String.t(), keyword()) ::
           {:ok, CallDirectoryPage.t()} | {:error, term()}

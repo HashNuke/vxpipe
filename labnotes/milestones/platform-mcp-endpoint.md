@@ -184,6 +184,10 @@ one tenant through REST and MCP; a tenant key sees only its own tenant.
 - [ ] Red-test `list_tenants` and `get_tenant` for calls/full/platform keys.
 - [ ] Extend Calls directory/read authorization for machine principals; expose
   `GET /api/tenants` and `GET /api/tenants/:tenant_key` through shared workflows.
+  Domain prerequisite implemented and independently reviewed: tenant calls/full
+  keys use an assigned one-tenant scope; Settings platform keys use all tenants.
+  Browser directory/visibility rules and scoped repository count/paging remain.
+  HTTP/MCP projections and parity acceptance are still pending.
 - [ ] Project `{tenant_key, name}` list entries and safe tenant info. Use the existing public
   `tenant_key` consistently; never expose internal database IDs or service secrets.
 - [ ] Implement the shared list envelope: items plus page/page_size/total/total_pages;
@@ -201,6 +205,9 @@ models, save a draft, append a revision and explicitly publish it locally.
 - [ ] Red-test required list/get/create/update and supporting publish/catalog tools.
 - [ ] Extend principal-aware spec reads to tenant admin and Settings platform keys;
   add the missing machine GET routes. Calls-only keys cannot read portable source.
+  Domain prerequisite implemented and reviewed: tenant admin source/list reads
+  reject calls-only and foreign-tenant actors before storage, share source fetch
+  and retain latest/historical/publication metadata. Transport routes remain open.
 - [ ] Paginate spec summaries and provider/model helpers with the shared envelope;
   preserve existing catalog REST response shape when pagination is not requested.
 - [ ] Implement get by public ID and optional revision, returning portable source

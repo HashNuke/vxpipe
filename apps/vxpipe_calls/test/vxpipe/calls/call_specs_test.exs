@@ -443,6 +443,78 @@ defmodule Vxpipe.Calls.CallSpecsTest do
              )
   end
 
+  test "tenant API admins read draft, latest and historical source with publication metadata", %{
+    tenant: tenant,
+    options: options
+  } do
+    authority = %Vxpipe.Calls.Principal{
+      tenant_key: tenant.key,
+      api_key_id: "key",
+      scopes: MapSet.new([:admin])
+    }
+
+    {:ok, first} = CallSpecs.save(tenant.key, call_spec_input(), options)
+
+    assert {:ok, %{call_spec: ^first, latest_revision: 1, published_revision: nil}} =
+             Vxpipe.Calls.fetch_operator_call_spec(
+               authority,
+               tenant.key,
+               first.call_spec_id,
+               options
+             )
+
+    {:ok, _} = CallSpecs.publish(tenant.key, first.call_spec_id, 1, options)
+
+    {:ok, second} =
+      CallSpecs.save(
+        tenant.key,
+        Map.put(call_spec_input(), :name, "Latest"),
+        Keyword.put(options, :call_spec_id, first.call_spec_id)
+      )
+
+    assert {:ok, %{call_spec: ^second, latest_revision: 2, published_revision: 1}} =
+             Vxpipe.Calls.fetch_operator_call_spec(
+               authority,
+               tenant.key,
+               first.call_spec_id,
+               options
+             )
+
+    assert {:ok, %{call_spec: historical, latest_revision: 2, published_revision: 1}} =
+             Vxpipe.Calls.fetch_operator_call_spec(
+               authority,
+               tenant.key,
+               first.call_spec_id,
+               Keyword.put(options, :revision, 1)
+             )
+
+    assert historical.source == first.source
+    assert historical.source_digest == first.source_digest
+
+    assert {:error, :not_found} =
+             Vxpipe.Calls.fetch_operator_call_spec(authority, tenant.key, "missing", options)
+  end
+
+  test "tenant spec reads deny calls-only and foreign principals before storage", %{
+    tenant: tenant
+  } do
+    authority = %Vxpipe.Calls.Principal{
+      tenant_key: tenant.key,
+      api_key_id: "key",
+      scopes: MapSet.new([:admin])
+    }
+
+    for {principal, key, reason} <- [
+          {authority, "BBBBBBBBBBBBBBBB", :tenant_access_forbidden},
+          {%{authority | scopes: MapSet.new([:calls])}, tenant.key, :insufficient_scope}
+        ] do
+      assert {:error, ^reason} =
+               Vxpipe.Calls.fetch_operator_call_spec(principal, key, "spec",
+                 call_spec_repository: {__MODULE__, :must_not_call}
+               )
+    end
+  end
+
   defp registries do
     %{
       host_tools: %{}

@@ -91,3 +91,19 @@
 - Dependency inspection found timeout/crash logs could include arguments or handler
   state. A separate library fix is under review before sensitive tools are enabled.
   No full milestone or full-suite acceptance is claimed by this boundary commit.
+
+## Principal-aware directory and spec reads
+
+- Tenant directory now accepts stored API principals: calls/full tenant keys see
+  only their own tenant; Settings platform credentials see the installation.
+  Browser visibility/directory checks remain unchanged; malformed repository rows
+  fail closed, and filtering/counts/paging remain in bounded repository queries.
+- Spec list/source operations now accept tenant admin keys and reject calls-only
+  or foreign tenant actors before accessing storage. Shared source fetching keeps
+  latest/historical/publication metadata and checks returned tenant/spec ownership.
+- Tenant tests first produced five expected failures, then 15 directory tests
+  passed. Spec tests first produced five failures, then 55 focused tests passed.
+  Independent review found no blocker and confirmed this is domain evidence only.
+- Legacy spec listing retains its existing maximum of 100; the new public MCP
+  pagination boundary must enforce the approved maximum 50 without silently
+  changing unrelated legacy directory contracts.
