@@ -85,6 +85,9 @@ defmodule Vxpipe.Calls do
   def search_operator_tenants(principal, options \\ []),
     do: Vxpipe.Calls.TenantDirectory.search(principal, options)
 
+  def authorize_tenant_discovery(principal),
+    do: Vxpipe.Calls.TenantDirectory.authorize(principal)
+
   def tenant_navigation(principal, options \\ []),
     do: Vxpipe.Calls.TenantDirectory.navigation(principal, options)
 

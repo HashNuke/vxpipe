@@ -2,6 +2,7 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
   @moduledoc false
   import Plug.Conn
   alias Vxpipe.Calls.{CallSpecErrors, CallSpecRevision, ProviderAuth}
+  alias Vxpipe.Gateway.HTTP.ProductAuthentication
 
   def init(options),
     do: %{
@@ -30,30 +31,30 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
     do: send_resp(conn, 404, "not found")
 
   def handle(conn, options, scope, tenant, operation) do
-    with {:ok, conn, author} <- authenticate(conn, options, scope, tenant),
-         :ok <- ProviderAuth.tenant_key(tenant),
-         {:ok, function, arguments, status} <- input(operation, conn.body_params),
-         {:ok, %CallSpecRevision{tenant_key: ^tenant} = revision} <-
-           backend(options, function, [author, tenant | arguments]) do
-      json(conn, status, %{call_spec: public_revision(revision)})
-    else
+    case authenticate(conn, options, scope, tenant) do
+      {:ok, conn, author} -> perform(conn, options, author, tenant, operation)
       {:halt, conn} -> conn
       {:error, reason} -> error(conn, reason)
       _invalid_result -> error(conn, :authoring_unavailable)
     end
   end
 
-  defp authenticate(conn, options, scope, tenant) do
-    case {get_req_header(conn, "authorization"), options.browser_auth} do
-      {[], {module, context}} ->
-        module.authenticate(conn, context)
-
-      _key_request ->
-        with {:ok, secret} <- bearer(conn),
-             {:ok, author} <- backend(options, :authenticate, [scope, tenant, secret]) do
-          {:ok, conn, author}
-        end
+  defp perform(conn, options, author, tenant, operation) do
+    with :ok <- ProviderAuth.tenant_key(tenant),
+         {:ok, function, arguments, status} <- input(operation, conn.body_params),
+         {:ok, %CallSpecRevision{tenant_key: ^tenant} = revision} <-
+           backend(options, function, [author, tenant | arguments]) do
+      json(conn, status, %{call_spec: public_revision(revision)})
+    else
+      {:error, reason} -> error(conn, reason)
+      _invalid_result -> error(conn, :authoring_unavailable)
     end
+  end
+
+  defp authenticate(conn, options, scope, tenant) do
+    ProductAuthentication.authenticate(conn, options.browser_auth, fn secret ->
+      backend(options, :authenticate, [scope, tenant, secret])
+    end)
   end
 
   defp input({:save, id}, %{"source" => source} = body)
@@ -78,13 +79,6 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
     do:
       is_binary(id) and byte_size(id) in 1..128 and String.valid?(id) and
         not String.contains?(id, [<<0>>, "\n", "\r"])
-
-  defp bearer(conn) do
-    case get_req_header(conn, "authorization") do
-      ["Bearer " <> secret] when byte_size(secret) in 1..256 -> {:ok, secret}
-      _invalid -> {:error, :invalid_api_key}
-    end
-  end
 
   defp backend(options, function, arguments) do
     {module, context} = options.backend

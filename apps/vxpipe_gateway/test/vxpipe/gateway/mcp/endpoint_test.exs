@@ -12,7 +12,7 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
 
   setup do
     actor = %Principal{
-      tenant_key: "tenant-one",
+      tenant_key: "AAAAAAAAAAAAAAAA",
       api_key_id: "key-one",
       scopes: MapSet.new([:calls])
     }
@@ -49,7 +49,10 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
 
     tools = call(:post, rpc("tools/list", 2), context.options, @secret, session_id)
     assert tools.status == 200
-    assert %{"result" => %{"tools" => []}} = JSON.decode!(tools.resp_body)
+
+    assert Enum.map(JSON.decode!(tools.resp_body)["result"]["tools"], & &1["name"]) ==
+             ["list_tenants", "get_tenant"]
+
     assert Agent.get(context.backend, & &1.calls) == 2
     assert get_req_header(tools, "authorization") == []
     refute inspect(tools.assigns) =~ @secret

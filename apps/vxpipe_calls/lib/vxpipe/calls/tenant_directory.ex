@@ -13,6 +13,10 @@ defmodule Vxpipe.Calls.TenantDirectory do
   alias Vxpipe.Calls.Principal, as: ApiPrincipal
   alias Vxpipe.Identity.Principal
 
+  def authorize(principal) do
+    with {:ok, _scope} <- directory_scope(principal), do: :ok
+  end
+
   def navigation(%Principal{} = principal, options) do
     scope = UserAuthorization.visible_tenant_scope(principal)
     directory_access = UserAuthorization.authorize_tenant_directory(principal) == :ok

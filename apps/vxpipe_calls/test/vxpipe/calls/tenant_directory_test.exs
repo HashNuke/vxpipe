@@ -8,6 +8,19 @@ defmodule Vxpipe.Calls.TenantDirectoryTest do
   @key "AAAAAAAAAAAAAAAA"
   @other "BBBBBBBBBBBBBBBB"
 
+  test "discovery policy is available without querying storage for transport authorization" do
+    key = %ApiPrincipal{tenant_key: @key, api_key_id: "key", scopes: MapSet.new([:calls])}
+    assert :ok = Vxpipe.Calls.authorize_tenant_discovery(key)
+
+    assert {:error, :forbidden} =
+             Vxpipe.Calls.authorize_tenant_discovery(%{key | scopes: MapSet.new()})
+
+    assert :ok = Vxpipe.Calls.authorize_tenant_discovery(principal())
+
+    assert {:error, :forbidden} =
+             Vxpipe.Calls.authorize_tenant_discovery(principal(%{grants: MapSet.new()}))
+  end
+
   test "all-tenant authority has precedence and requires no directory query" do
     for user <- [
           principal(%{account_kind: :admin}),

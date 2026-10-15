@@ -22,6 +22,7 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
         ),
       router:
         Router.init(
+          tenant_directory: Keyword.get(options, :tenant_directory, []),
           call_spec_authoring: Keyword.get(options, :call_spec_authoring, []),
           operator_api: Keyword.get(options, :operator_api, []),
           call_admission: Keyword.get(options, :call_admission, []),

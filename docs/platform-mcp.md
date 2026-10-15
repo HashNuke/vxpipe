@@ -438,11 +438,11 @@ Console composes the mount and browser authentication adapter. Do not add a Call
 outbound `vxpipe_mcp` child, introduce an HTTP loopback proxy, or build a new MCP
 protocol implementation.
 
-Propose the repository's existing MCP `2025-11-25` profile. Verify the pinned
-dependency's server behavior separately before enabling product tools; its broader
-version support must not widen the advertised Vxpipe profile. The package checkout
-provides `ExMCP.HttpPlug` and request-specific `handler_opts`; this is source
-evidence only, not demonstrated server compatibility.
+Use the repository's existing MCP `2025-11-25` profile. The product boundary
+rejects other revisions even though the dependency supports more versions.
+Local Plug tests demonstrate initialization, notifications, ping, key-bound
+sessions, deletion and request-worker cleanup. Official reference-client and
+conformance acceptance remain separate milestone gates.
 
 Use Streamable HTTP with JSON tool responses, initialization, initialized
 notification, ping, tool discovery and invocation. No unsolicited event stream:
@@ -452,6 +452,20 @@ storage or event replay is needed. The implementation probe must settle supporte
 session/DELETE behavior and version negotiation before enabling tool handlers.
 See the [transport specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 and [lifecycle specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle).
+
+Current defaults are 64 concurrent HTTP requests, a 128 KiB request body, a
+five-second body-read timeout and a ten-second handler deadline. Handler cleanup
+can add approximately one second. JSON-RPC IDs are strings of at most 256 bytes
+or integers in the inclusive range -9007199254740991 through 9007199254740991.
+Rejected oversized IDs are not echoed. Unknown valid notifications receive no
+JSON-RPC response body.
+
+The selected ExMCP session manager is node-local and shared: its current defaults
+are 10,000 sessions, 10,000 distinct request IDs per session, a one-hour idle TTL
+and cleanup every 60 seconds. These are dependency defaults, not per-key quotas;
+session expiry/restart acceptance remains outstanding. Request owner death releases
+Gateway admission and terminates the request handler. Clients must still supply
+their API key on subsequent requests, and use fresh request IDs within a session.
 
 Advertise tools only: no resources, prompts, subscriptions, sampling, elicitation,
 task extensions, audio streams, or outbound MCP proxy. Provide strict schemas,
@@ -528,8 +542,8 @@ the client's local environment. Never commit its value or put it in a model prom
 Use a dedicated Settings key with the narrowest access level needed.
 [VS Code also documents configurable remote headers](https://code.visualstudio.com/docs/agent-customization/mcp-servers)
 and recommends secret inputs or environment files instead of embedded keys.
-These are documented client capabilities, not evidence that our unimplemented
-server has passed interoperability tests. Implementation acceptance must exercise
+These are documented client capabilities, not evidence that the product endpoint
+has passed interoperability tests. Implementation acceptance must exercise
 a real reference client with a locally issued synthetic key.
 
 Clients that require OAuth discovery and cannot configure Authorization headers

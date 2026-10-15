@@ -123,3 +123,36 @@
 - Upstream focused selection passed 128 tests. With the new pin, Gateway's MCP
   selection passed 22 tests and outbound MCP passed 37 tests (three excluded).
   Independent review found no blocker. Full umbrella acceptance remains pending.
+
+## Canonical tenant HTTP and MCP discovery
+
+- Canonical HTTP list/detail routes share directory policy and safe JSON projection
+  with `list_tenants`/`get_tenant`. Tool discovery and invocation consult the same
+  Calls policy; foreign lookup stays concealed. Typed MCP schemas reject coercion,
+  nulls, extra authority fields and excessive page sizes before repository access.
+- Shared HTTP authentication preserves explicit-key precedence. Review caught that
+  a connection bound inside `with` was lost in error branches. Two red tests proved
+  missing browser response hooks, then the fix passed 39 Gateway and 18 Console
+  focused tests, including existing spec-write CSRF behavior. Re-review passed.
+- MCP tool tests first failed on empty discovery, missing scope enforcement and
+  callback fault handling. Six focused tests now pass. A separate red regression
+  identified ExMCP's request metadata injection; metadata is now separated from
+  already-validated public arguments before invoking Calls. Unknown tool names
+  never reach dependency tool telemetry. Exceptions/exits/throws return safe errors.
+- Four Console tests verify real-key session revocation and HTTP/MCP directory
+  parity across calls/full/platform access, paging boundaries, duplicate names,
+  foreign lookup and empty results. Fixture setup initially assumed an empty test
+  installation; corrected it to account for preexisting local bootstrap fixtures.
+  Ordering assertions use controlled duplicate-name IDs rather than assuming the
+  database collation matches Elixir's binary sort for unrelated baseline records.
+- Two request-lifecycle tests prove admission release on request-owner death during
+  authentication and tool work, plus termination of the blocked ExMCP handler.
+  Session expiry/restart requires isolated-process acceptance because dependency
+  public operations address its global manager; no global mutation was added.
+- Source and tests are now stable for the full umbrella check. No UI route cutover,
+  live provider test, external call or deployment occurred in this checkpoint.
+- Stable snapshot passed all root completion commands: formatting, compilation
+  with warnings as errors, strict Credo, unused-dependency check and `mix test`.
+  Every umbrella application's suite reported zero failures; live/integration
+  exclusions stayed enabled. The earlier compactor scheduling failure did not
+  recur. No speech/source-cutover state machine changed, so Lean was not required.

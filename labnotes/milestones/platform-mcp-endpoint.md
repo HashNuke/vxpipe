@@ -140,7 +140,7 @@ directly, without an HTTP loopback request or controller invocation.
 - [x] Authenticate every HTTP request from one Bearer header. Reject absent,
   invalid/revoked keys and fail closed on unavailable storage. No query/body keys
   or browser-cookie substitute; never retain raw keys in session/process state.
-- [ ] Implement the [authentication wire contract](../../docs/platform-mcp.md#authentication-contract-and-client-compatibility):
+- [x] Implement the [authentication wire contract](../../docs/platform-mcp.md#authentication-contract-and-client-compatibility):
   400 for malformed/duplicate credentials, 401 with Bearer challenge for missing
   or invalid keys, 403 for insufficient authority, and 503 for unavailable key
   storage. No OAuth metadata/login redirects or fabricated token exchange.
@@ -171,7 +171,7 @@ host/origin/transport restrictions and bounded concurrent requests. Review found
 oversized retained request IDs and incorrect unknown-notification responses; both
 failed focused tests before fixes. IDs are limited to 256-byte strings or safe
 integers and rejected IDs are not echoed; notifications have no JSON-RPC body.
-Domain tools, complete scope/error acceptance and session expiry/restart evidence
+Remaining domain tools, complete scope/error acceptance and session expiry/restart evidence
 remain open. Dependency diagnostics are now pinned to reviewed upstream commit
 `5fa760207bb09fc3b19b3049bc481b5e55106095`, which removes raw timeout/error details
 without changing callback or supervision semantics. Application callback fault
@@ -183,21 +183,36 @@ Handler cleanup may add approximately one second to the configured deadline.
 Depends on the authenticated foundation. Runnable slice: list tenants and inspect
 one tenant through REST and MCP; a tenant key sees only its own tenant.
 
-- [ ] Red-test `list_tenants` and `get_tenant` for calls/full/platform keys.
-- [ ] Extend Calls directory/read authorization for machine principals; expose
+- [x] Red-test `list_tenants` and `get_tenant` for calls/full/platform keys.
+- [x] Extend Calls directory/read authorization for machine principals; expose
   `GET /api/tenants` and `GET /api/tenants/:tenant_key` through shared workflows.
   Domain prerequisite implemented and independently reviewed: tenant calls/full
   keys use an assigned one-tenant scope; Settings platform keys use all tenants.
   Browser directory/visibility rules and scoped repository count/paging remain.
-  HTTP/MCP projections and parity acceptance are still pending.
-- [ ] Project `{tenant_key, name}` list entries and safe tenant info. Use the existing public
+  Canonical HTTP and MCP now call those operations and share public JSON projection.
+- [x] Project `{tenant_key, name}` list entries and safe tenant info. Use the existing public
   `tenant_key` consistently; never expose internal database IDs or service secrets.
-- [ ] Implement the shared list envelope: items plus page/page_size/total/total_pages;
+- [x] Implement the shared list envelope: items plus page/page_size/total/total_pages;
   default page 1, size 25, allowed size 1–50, stable ordering with ID tie-breaker.
-- [ ] Scope before counting/paging. Reject invalid/out-of-range pages; empty first
+- [x] Scope before counting/paging. Reject invalid/out-of-range pages; empty first
   page has zero totals. Use bounded database queries, not post-fetch filtering.
-- [ ] Acceptance: multi-page visible/foreign fixtures, zero rows, exact page boundary,
+- [x] Acceptance: multi-page visible/foreign fixtures, zero rows, exact page boundary,
   invalid sizes and duplicate sort values agree across REST/MCP without count leaks.
+
+Evidence: six focused MCP tool tests cover scope, schemas/defaults, metadata,
+safe callback errors and rejected tool-name telemetry. Four Console MCP tests
+exercise persisted keys/revocation and HTTP/MCP parity for calls/full/platform
+keys, duplicate-name ordering, page boundaries, foreign lookup and empty results.
+Canonical HTTP focused selection passes 39 Gateway tests; existing browser tenant
+and spec endpoints pass 18 tests. Reviews found and resolved authenticated-connection
+loss on HTTP errors and library-injected metadata being mistaken for tool arguments.
+The UI directory cutover and overall prerequisite/final gates remain open; this
+checklist does not mark the complete platform milestone implemented.
+
+Stable snapshot verification (2026-10-15): root format check, warnings-as-errors
+compilation, strict Credo, unused dependency check and the complete default umbrella
+suite all passed. All applications reported zero test failures; excluded integration
+and live-provider lanes were not enabled.
 
 ## Checkpoint: call-spec discovery and authoring
 

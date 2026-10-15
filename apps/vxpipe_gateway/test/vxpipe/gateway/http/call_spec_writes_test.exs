@@ -285,6 +285,24 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWritesTest do
     end
   end
 
+  test "browser response hooks survive input and authoring failures" do
+    for {body, result, status} <- [
+          {%{}, nil, 400},
+          {%{"source" => %{}}, {:error, :revision_conflict}, 409}
+        ] do
+      response = request(:post, @tenant_path, nil, body, result, {__MODULE__, []})
+      assert response.status == status
+      assert get_resp_header(response, "x-browser-response") == ["preserved"]
+    end
+  end
+
+  def authenticate(conn, []) do
+    conn = register_before_send(conn, &put_resp_header(&1, "x-browser-response", "preserved"))
+
+    {:ok, conn,
+     %Principal{tenant_key: @tenant, api_key_id: "synthetic", scopes: MapSet.new([:admin])}}
+  end
+
   defp source do
     %{
       "schema_version" => "20261004.01",
@@ -299,11 +317,12 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWritesTest do
     }
   end
 
-  defp request(method, path, key, body, result \\ nil) do
+  defp request(method, path, key, body, result \\ nil, browser_auth \\ nil) do
     options =
       Endpoint.init(
         call_spec_authoring: [
           enabled: true,
+          browser_auth: browser_auth,
           backend: {Vxpipe.Gateway.TestCallSpecAuthoringBackend, {self(), result}}
         ]
       )

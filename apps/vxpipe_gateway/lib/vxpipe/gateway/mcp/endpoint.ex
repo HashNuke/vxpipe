@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
 
   import Plug.Conn
 
-  alias Vxpipe.Gateway.MCP.{Admission, Authentication, Handler, Protocol}
+  alias Vxpipe.Gateway.MCP.{Admission, Authentication, Handler, Protocol, TenantTools}
 
   @impl true
   def init(options) do
@@ -15,6 +15,7 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
       allow_loopback_http: Keyword.get(options, :allow_loopback_http, false),
       admission: Keyword.get(options, :admission, Admission),
       authentication: Keyword.get(options, :authentication, {Authentication, []}),
+      call_options: Keyword.get(options, :call_options, []),
       body_limit: positive_limit!(options, :body_limit, 131_072),
       read_timeout: positive_limit!(options, :read_timeout, 5_000),
       protocol:
@@ -68,6 +69,7 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
         |> delete_req_header("authorization")
         |> assign(:mcp_actor, actor)
         |> assign(:mcp_identity, identity)
+        |> assign(:mcp_call_options, options.call_options)
         |> dispatch(options)
 
       {:error, :missing_credentials} ->
@@ -113,7 +115,7 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
     case JSON.decode(body) do
       {:ok, request} ->
         case Protocol.validate(conn, request) do
-          :ok -> ExMCP.HttpPlug.call(conn, options.protocol)
+          :ok -> authorize_tool(conn, request, options)
           {:error, code, message} -> reject_request(conn, request, code, message)
         end
 
@@ -121,6 +123,20 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
         ExMCP.HttpPlug.call(conn, options.protocol)
     end
   end
+
+  defp authorize_tool(conn, %{"method" => "tools/call", "params" => params} = request, options) do
+    case TenantTools.authorize(
+           conn.assigns.mcp_actor,
+           params["name"],
+           Map.get(params, "arguments", %{})
+         ) do
+      {:ok, _arguments} -> ExMCP.HttpPlug.call(conn, options.protocol)
+      {:error, :forbidden} -> error(conn, 403, "forbidden")
+      {:error, _reason} -> reject_request(conn, request, -32602, "Invalid tool arguments")
+    end
+  end
+
+  defp authorize_tool(conn, _request, options), do: ExMCP.HttpPlug.call(conn, options.protocol)
 
   defp reject_request(conn, request, code, message) do
     if Protocol.notification?(request),
