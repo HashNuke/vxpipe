@@ -1509,3 +1509,22 @@ production requirements rather than loosening shared validation. Legacy omitted
 enabled/membership defaults and nil email/role no-ops remain covered. Documentation
 records alias compatibility, the completed UI cutover and the retained helper set.
 No UI assets changed; final combined gates remain outstanding.
+
+### Shared hangup workflow and transports
+
+Gateway.CallHangup persists actual-actor cancellation through Calls before waking
+reconciliation or requesting exact runtime shutdown. HTTP and MCP share success
+and fixed error projections. Already-ended calls cause no new runtime effects;
+missing/unverified/uncertain ownership cannot claim completion or recreate an
+empty tracker. PreparedCall now exposes the private stored verification bit.
+Tracker lookup/snapshot accept bounded timeouts and expose uncertainty even before
+sealing, using the tracker-owned resource outcome policy.
+
+Initial workflow reds and three persisted projection reds preceded implementation.
+A separate regression exposed uncertainty hidden by an open tracker status. Final
+focused checks passed 42 Gateway, seven Calls, 44 Persistence and eight persisted
+Console tests. Expected struct equality fixtures now include the verified bit;
+no storage behavior was loosened. Independent review approved, exact formatting
+and diff checks passed. Real local persisted calls/full/platform parity covers
+prepared hangup and rejection of its unredeemed token. No runtime media or live
+service was invoked. Global rollout/full lifecycle acceptance remain outstanding.

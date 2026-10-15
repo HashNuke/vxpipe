@@ -481,6 +481,39 @@ calls cannot issue usable new tokens. Errors include 400 `participant_required`
 or `invalid_request`, 404 `call_route_not_found`, 409 `call_unavailable`, and the
 same authentication/unavailable errors as call creation.
 
+## Hang up a call
+
+```http
+POST /api/tenants/:tenant_key/calls/:call_id/hangup
+Content-Type: application/json
+
+{}
+```
+
+Uses the same calls authority as creation and join-token issuance: a browser
+session with the tenant's call-management permission, a calls/full-tenant key, or
+a Full Platform Access key. Browser requests retain CSRF protection. Only an empty
+JSON object is accepted; room and incarnation identities are resolved server-side.
+
+A successful response is HTTP 200 with `{ "call_id": "…", "status": "ending" }`
+or `{ "call_id": "…", "status": "ended" }`. An unused prepared call can end
+immediately; its tokens can no longer be issued or redeemed. For an active managed
+call, `ending` means shutdown was accepted with retained cleanup ownership. `ended`
+requires durable terminal evidence. Repeating the operation is safe, and an already
+ended call does not trigger another shutdown.
+
+Cancellation intent is persisted before runtime work. If cleanup cannot be
+confirmed, HTTP 503 `call_hangup_unknown` preserves that intent without claiming
+completion. Missing runtime ownership does not recreate a tracker or select a
+replacement call. Other errors are 400 `invalid_request`, 401 `invalid_api_key`,
+403 `not_authorized`, 404 `call_not_found`, and 503 `call_hangup_unavailable`, using
+the shared `{error: {code, message, retryable, details}}` envelope. These errors
+have `retryable: false`; clients must not automatically repeat mutations.
+
+MCP `hangup_call` invokes this same workflow and returns the same successful
+`{call_id,status}` projection. Complete managed runtime rollout and final lifecycle
+acceptance remain tracked in the [milestone](../labnotes/milestones/platform-mcp-endpoint.md).
+
 ## Call inspection and artifacts (Console session only)
 
 These reads use the logged-in actor's tenant-scoped `calls.read` permission.

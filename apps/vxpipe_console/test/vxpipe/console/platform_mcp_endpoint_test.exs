@@ -75,7 +75,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
     catalog = request(data.key.secret, "tools/list", 2, session)
 
     assert Enum.map(json_response(catalog, 200)["result"]["tools"], & &1["name"]) ==
-             ["list_tenants", "get_tenant", "create_call", "create_join_token"]
+             ["list_tenants", "get_tenant", "create_call", "create_join_token", "hangup_call"]
 
     assert get_resp_header(catalog, "cache-control") == ["no-store"]
 
@@ -436,6 +436,59 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
                tenant_key: data.tenant.key,
                call_id: call_id
              })["structuredContent"] == ended
+    end
+  end
+
+  test "persisted prepared hangup has HTTP/MCP parity and invalidates unredeemed tokens", data do
+    {:ok, full} = Calls.issue_api_key(data.tenant.key, "Full hangup fixture", [:admin, :calls])
+
+    {:ok, platform} =
+      ApiKeyManagement.create(
+        Vxpipe.Console.Test.FakeUserIdentity.principal(),
+        "Platform hangup fixture",
+        "platform",
+        nil,
+        []
+      )
+
+    {:ok, draft} = Calls.save_call_spec(data.tenant.key, spec_source())
+    {:ok, _} = Calls.publish_call_spec(data.tenant.key, draft.call_spec_id, draft.revision)
+
+    for secret <- [data.key.secret, full.secret, platform.secret] do
+      session = session(secret)
+
+      created =
+        tool(secret, session, 2, "create_call", %{
+          tenant_key: data.tenant.key,
+          call_spec_id: draft.call_spec_id
+        })
+
+      id = created["structuredContent"]["call_id"]
+
+      token =
+        tool(secret, session, 3, "create_join_token", %{tenant_key: data.tenant.key, call_id: id})[
+          "structuredContent"
+        ]
+
+      ended = tool(secret, session, 4, "hangup_call", %{tenant_key: data.tenant.key, call_id: id})
+      assert ended["isError"] == false
+      assert ended["structuredContent"] == %{"call_id" => id, "status" => "ended"}
+
+      response =
+        rest_write(secret, :post, "/api/tenants/#{data.tenant.key}/calls/#{id}/hangup", %{})
+
+      assert json_response(response, 200) == ended["structuredContent"]
+      assert get_resp_header(response, "cache-control") == ["no-store"]
+      assert {:ok, stored} = Calls.fetch_call(data.tenant.key, id)
+      assert stored.state == :ended and stored.terminal_reason == :api_hangup
+      assert stored.started_at == nil and stored.incarnation_id == nil
+
+      assert {:error, _} =
+               Calls.claim_join_token(token["token"], %{
+                 tenant_key: data.tenant.key,
+                 call_id: id,
+                 participant_key: token["participant_key"]
+               })
     end
   end
 

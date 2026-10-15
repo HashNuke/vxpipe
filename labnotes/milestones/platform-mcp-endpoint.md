@@ -319,9 +319,9 @@ Implementation design: [durable whole-call hangup](../../docs/call-hangup-lifecy
 The design records admission ordering, cancellation intent, exact-incarnation
 completion evidence and recovery. Its review does not complete runtime tasks.
 
-- [ ] Red-test `hangup_call` with tenant ownership and calls-scope requirements,
+- [x] Red-test `hangup_call` with tenant ownership and calls-scope requirements,
   including denial before runtime lookup and repeated termination.
-- [ ] Add a shared application workflow and `POST /api/tenants/:tenant_key/calls/:id/hangup`.
+- [x] Add a shared application workflow and `POST /api/tenants/:tenant_key/calls/:id/hangup`.
   Resolve room/incarnation server-side; do not expose unscoped engine termination.
 - [ ] Handle prepared calls durably and prevent token issue/redemption afterwards.
   Interlock cancellation with admission so a concurrent join/start cannot resurrect
@@ -686,6 +686,18 @@ the full Console rerun passed 352 tests. Across applications, 4,284 tests pass w
 rollout, carrier end retries, hangup transports and final parity remain open.
 Root formatting, warnings-as-errors compilation, strict Credo and unused-dependency
 checks also pass after the assertion correction.
+
+Hangup adapters now implement the seventeenth MCP tool and canonical HTTP route
+through one Gateway workflow. Intent is authorized and committed before runtime
+effects; verified existing ownership supports `ending`, durable evidence supports
+`ended`, and missing/uncertain ownership remains a safe 503. Private persisted
+incarnation verification and bounded tracker reads preserve that distinction.
+
+Expected missing-workflow/projection/schema tests preceded implementation. Final
+focused checks pass 42 Gateway, seven Calls, 44 Persistence and eight persisted
+Console tests, with exact formatting and independent review. Persisted parity
+covers calls/full-tenant/platform credentials and token denial after prepared-call
+cancellation. Managed rollout and complete active-call acceptance remain open.
 
 ## Checkpoint: platform-key user administration
 

@@ -30,10 +30,10 @@ defmodule Vxpipe.Gateway.CallCleanupSupervisor do
     DynamicSupervisor.start_child(__MODULE__, {CallCleanup, {binding, initial, options}})
   end
 
-  def lookup(binding) do
+  def lookup(binding, timeout \\ 5_000) do
     case GenServer.whereis(CallCleanup.name(binding)) do
       pid when is_pid(pid) ->
-        _ = CallCleanup.snapshot(pid)
+        _ = CallCleanup.snapshot(pid, timeout)
         {:ok, pid}
 
       nil ->

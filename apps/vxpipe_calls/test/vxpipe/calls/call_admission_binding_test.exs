@@ -49,7 +49,12 @@ defmodule Vxpipe.Calls.CallAdmissionBindingTest do
 
   test "binds an existing claim and retains its participant authority", c do
     assert {:ok, :admit, bound} = Calls.bind_call_admission(c.claim, "owner", c.options)
-    assert bound == %{c.claim | call: %{c.claim.call | incarnation_id: "owner"}}
+
+    assert bound == %{
+             c.claim
+             | call: %{c.claim.call | incarnation_id: "owner", incarnation_binding_verified: true}
+           }
+
     assert {:ok, :admit, ^bound} = Calls.bind_call_admission(c.claim, "owner", c.options)
 
     assert {:error, :call_incarnation_mismatch} =

@@ -56,6 +56,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         options |> Keyword.get(:operator_api, []) |> Vxpipe.Gateway.HTTP.OperatorAPI.init(),
       call_admission: CallAdmissions.init(call_admission),
       call_creation: Vxpipe.Gateway.HTTP.CallCreation.init(call_admission),
+      call_hangup: Vxpipe.Gateway.HTTP.CallHangups.init(call_admission),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
       telephony: telephony_events,
       telnyx_media: Telnyx.Media.init(media_options),
@@ -157,6 +158,13 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       ) do
     Vxpipe.Gateway.HTTP.CallJoinTokens.issue(conn, options.call_admission.join_tokens, tenant, id)
   end
+
+  def call(
+        %Plug.Conn{method: "POST", path_info: ["api", "tenants", tenant, "calls", id, "hangup"]} =
+          conn,
+        options
+      ),
+      do: Vxpipe.Gateway.HTTP.CallHangups.request(conn, options.call_hangup, tenant, id)
 
   def call(%Plug.Conn{method: "POST", path_info: ["api", "rooms"]} = conn, options) do
     Rooms.create(conn, options.rooms)

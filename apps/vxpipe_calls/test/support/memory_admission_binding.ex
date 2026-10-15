@@ -15,7 +15,7 @@ defmodule Vxpipe.Calls.TestMemoryAdmissionBinding do
            {:ok, eligible?} <- ownership(state, subject),
            :ok <- same_incarnation(current, incarnation),
            {:ok, reservation, updated} <- reserve(current, eligible?, mode) do
-        updated = %{updated | incarnation_id: incarnation}
+        updated = %{updated | incarnation_id: incarnation, incarnation_binding_verified: true}
 
         decision =
           if eligible? and current.state in [:admitting, :running] and

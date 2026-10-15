@@ -2,7 +2,15 @@ defmodule Vxpipe.Gateway.MCP.CallTools do
   @moduledoc "MCP adapters for shared call creation and pinned participant token issuance."
 
   alias Vxpipe.Calls
-  alias Vxpipe.Gateway.{CallCreation, CallCreationErrors, CallJoinTokenErrors, CallJoinTokenJSON}
+
+  alias Vxpipe.Gateway.{
+    CallCreation,
+    CallCreationErrors,
+    CallJoinTokenErrors,
+    CallJoinTokenJSON,
+    CallHangup,
+    CallHangupErrors
+  }
 
   @id %{type: "string", minLength: 1, maxLength: 128, pattern: "^[^\\x00\\r\\n]+$"}
   @tenant %{tenant_key: %{type: "string", pattern: "^[A-Za-z0-9_-]{16}$"}}
@@ -21,7 +29,10 @@ defmodule Vxpipe.Gateway.MCP.CallTools do
        call_id: @id,
        participant_key: @id,
        join_token_ttl_seconds: %{type: "integer", minimum: 300, maximum: 86_400, default: 300}
-     }), ["tenant_key", "call_id"], false}
+     }), ["tenant_key", "call_id"], false},
+    {"hangup_call",
+     "Request whole-call shutdown. Returns ending while owned cleanup drains, or ended with durable terminal evidence. Unknown cleanup remains an error; no automatic retries.",
+     Map.merge(@tenant, %{call_id: @id}), ["tenant_key", "call_id"], true}
   ]
   @tools Enum.map(@definitions, fn {name, description, properties, required, external?} ->
            %{
@@ -36,7 +47,7 @@ defmodule Vxpipe.Gateway.MCP.CallTools do
              annotations: %{
                readOnlyHint: false,
                destructiveHint: true,
-               idempotentHint: false,
+               idempotentHint: name == "hangup_call",
                openWorldHint: external?
              }
            }
@@ -84,6 +95,14 @@ defmodule Vxpipe.Gateway.MCP.CallTools do
              Keyword.put(options, :join_token_ttl_seconds, args["join_token_ttl_seconds"])
            ),
          do: {:ok, CallJoinTokenJSON.result(token)}
+  end
+
+  def call(actor, "hangup_call", args, options),
+    do: CallHangup.request(actor, args["tenant_key"], args["call_id"], options)
+
+  def error("hangup_call", reason) do
+    {_status, projected} = CallHangupErrors.response(reason)
+    projected
   end
 
   def error("create_call", reason) do

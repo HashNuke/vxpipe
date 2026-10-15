@@ -43,7 +43,9 @@ defmodule Vxpipe.Persistence.CallAdmissionBindingStoreTest do
     @kind kind
     test "#{kind} managed binding reserves cleanup once and retains it on running joins", c do
       subject = subject(c, @kind)
+      refute call(subject).incarnation_binding_verified
       assert {:ok, :admit, :new, bound} = managed_bind(subject, "managed", c)
+      assert call(bound).incarnation_binding_verified
       assert call(bound).gateway_cleanup_required
       assert call(bound).gateway_cleanup_completed_at == nil
       assert call(bound).started_at == nil
@@ -131,7 +133,13 @@ defmodule Vxpipe.Persistence.CallAdmissionBindingStoreTest do
       original = call(subject)
       assert {:ok, :admit, bound} = bind(subject, "owned", c)
       assert bound.__struct__ == subject.__struct__
-      assert call(bound) == %{original | incarnation_id: "owned"}
+
+      assert call(bound) == %{
+               original
+               | incarnation_id: "owned",
+                 incarnation_binding_verified: true
+             }
+
       assert {:ok, :admit, ^bound} = bind(subject, "owned", c)
       assert {:error, :call_incarnation_mismatch} = bind(subject, "replacement", c)
       assert {:error, reason} = started(subject, "replacement", c)
@@ -153,7 +161,13 @@ defmodule Vxpipe.Persistence.CallAdmissionBindingStoreTest do
       original = call(subject)
       {:ok, intent} = Calls.request_call_hangup(c.actor, c.tenant, original.id, c.options)
       assert {:ok, :cancel, bound} = bind(subject, "canceled-owner", c)
-      assert call(bound) == %{intent | incarnation_id: "canceled-owner"}
+
+      assert call(bound) == %{
+               intent
+               | incarnation_id: "canceled-owner",
+                 incarnation_binding_verified: true
+             }
+
       assert call(bound).state == :admitting
       assert call(bound).started_at == nil
       assert {:error, :call_unavailable} = started(subject, "canceled-owner", c)
@@ -252,7 +266,12 @@ defmodule Vxpipe.Persistence.CallAdmissionBindingStoreTest do
         end
 
       assert {:ok, :cancel, bound} = bind(subject, "failed-owner", c)
-      assert call(bound) == %{call(failed) | incarnation_id: "failed-owner"}
+
+      assert call(bound) == %{
+               call(failed)
+               | incarnation_id: "failed-owner",
+                 incarnation_binding_verified: true
+             }
     end
   end
 

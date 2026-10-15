@@ -88,6 +88,44 @@ defmodule Vxpipe.Gateway.MCP.CallToolsTest do
     assert conflict["structuredContent"]["error"]["code"] == "idempotency_conflict"
   end
 
+  test "hangup tool and HTTP replay agree and reject client runtime selectors", c do
+    session = initialize(c)
+
+    created =
+      invoke(c, session, 2, "create_call", %{tenant_key: c.tenant, call_spec_id: c.spec})
+      |> result()
+
+    id = created["structuredContent"]["call_id"]
+    ended = invoke(c, session, 3, "hangup_call", %{tenant_key: c.tenant, call_id: id}) |> result()
+    assert ended["isError"] == false
+    assert ended["structuredContent"] == %{"call_id" => id, "status" => "ended"}
+
+    response =
+      conn(:post, "/api/tenants/#{c.tenant}/calls/#{id}/hangup", "{}")
+      |> put_req_header("authorization", "Bearer " <> c.secret)
+      |> put_req_header("content-type", "application/json")
+      |> Endpoint.call(c.endpoint)
+
+    assert response.status == 200
+    assert JSON.decode!(response.resp_body) == ended["structuredContent"]
+
+    assert invoke(c, session, 4, "hangup_call", %{
+             tenant_key: c.tenant,
+             call_id: id,
+             incarnation_id: "override"
+           }).status == 400
+
+    catalog = request(c, session, 5, "tools/list", %{}) |> result()
+    tool = Enum.find(catalog["tools"], &(&1["name"] == "hangup_call"))
+
+    assert tool["annotations"] == %{
+             "destructiveHint" => true,
+             "idempotentHint" => true,
+             "openWorldHint" => true,
+             "readOnlyHint" => false
+           }
+  end
+
   test "MCP issues a pinned single-use token and denies invalid or foreign requests", c do
     session = initialize(c)
 

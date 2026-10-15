@@ -45,7 +45,7 @@ defmodule Vxpipe.Gateway.CallCleanup do
   def acknowledge(tracker, resource, outcome) when outcome in [:complete, :unknown],
     do: GenServer.call(tracker, {:acknowledge, resource, outcome})
 
-  def snapshot(tracker), do: GenServer.call(tracker, :snapshot)
+  def snapshot(tracker, timeout \\ 5_000), do: GenServer.call(tracker, :snapshot, timeout)
   def observe(tracker), do: GenServer.call(tracker, :observe)
 
   @impl true
@@ -306,14 +306,13 @@ defmodule Vxpipe.Gateway.CallCleanup do
     state
     |> Map.take([:binding, :sealed?, :engine_outcome, :resources, :completed_at])
     |> Map.put(:status, status(state))
+    |> Map.put(:uncertain?, uncertain?(state))
   end
 
   defp status(%{sealed?: false}), do: :open
 
   defp status(state) do
-    outcomes = [
-      state.engine_outcome | Enum.map(state.resources, fn {_, r} -> resource_outcome(r) end)
-    ]
+    outcomes = outcomes(state)
 
     cond do
       :unknown in outcomes -> :unknown
@@ -321,6 +320,11 @@ defmodule Vxpipe.Gateway.CallCleanup do
       true -> :pending
     end
   end
+
+  defp uncertain?(state), do: :unknown in outcomes(state)
+
+  defp outcomes(state),
+    do: [state.engine_outcome | Enum.map(state.resources, fn {_, r} -> resource_outcome(r) end)]
 
   defp resource_outcome(resource) do
     cond do

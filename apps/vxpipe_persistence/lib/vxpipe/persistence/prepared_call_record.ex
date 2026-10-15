@@ -67,6 +67,7 @@ defmodule Vxpipe.Persistence.PreparedCallRecord do
          started_at: call.started_at,
          ended_at: call.ended_at,
          hangup_requested_at: call.hangup_requested_at,
+         incarnation_binding_verified: call.incarnation_binding_verified,
          gateway_cleanup_required: call.gateway_cleanup_required,
          gateway_cleanup_completed_at: call.gateway_cleanup_completed_at,
          incarnation_id: call.incarnation_id,

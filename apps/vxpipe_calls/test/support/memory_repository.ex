@@ -26,6 +26,10 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
   def call_spec_repository(agent), do: {__MODULE__, agent}
   def call_repository(agent), do: {__MODULE__, agent}
 
+  defdelegate request_call_hangup(agent, tenant, id, now),
+    to: Vxpipe.Calls.TestMemoryCallHangup,
+    as: :request
+
   defdelegate bind_managed_call_admission(agent, subject, incarnation),
     to: Vxpipe.Calls.TestMemoryAdmissionBinding,
     as: :bind_managed

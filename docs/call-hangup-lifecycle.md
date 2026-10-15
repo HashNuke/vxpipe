@@ -4,11 +4,20 @@ Status: implementation design for the [platform MCP milestone](../labnotes/miles
 Durable cancellation intent, exact-supervisor monitoring, the generic engine
 startup gate, runtime binding, cleanup reservation and completion persistence are
 implemented.
-Incoming gating is implemented; managed resource integration, reconciliation and
-HTTP/MCP hangup remain unfinished. The complete lifecycle below is still the
+Incoming gating, carrier resource tracking and reconciliation components are
+implemented. Managed admission rollout remains unfinished. HTTP/MCP hangup adapters
+now use the shared Gateway workflow. The complete lifecycle below remains the
 implementation contract.
 
 ## Decision and ownership
+
+`Gateway.CallHangup.request/4` now persists intent through Calls, wakes the existing
+reconciler, and requests exact verified shutdown. HTTP and MCP share its projection
+and fixed errors. Tracker reads are bounded; an unsealed tracker also exposes
+uncertainty so known lost membership cannot be mistaken for accepted cleanup.
+The persisted verification bit is part of the private PreparedCall projection.
+Prepared/ended and unknown outcomes have domain, wire and persisted parity tests;
+global managed admission configuration and full active-call acceptance remain due.
 
 HTTP and MCP call the same authorized Calls operation. It persists cancellation
 intent before asking Gateway to stop runtime resources. Persistence owns row

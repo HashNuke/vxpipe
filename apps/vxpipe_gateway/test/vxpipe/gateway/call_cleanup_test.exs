@@ -69,6 +69,7 @@ defmodule Vxpipe.Gateway.CallCleanupTest do
     worker = start_supervised!({Task, fn -> receive do: (:finish -> :ok) end})
     :ok = CallCleanup.register(tracker, :incoming_leg, worker)
     :ok = CallCleanup.acknowledge(tracker, worker, :unknown)
+    assert %{status: :open, uncertain?: true} = CallCleanup.snapshot(tracker)
     send(worker, :finish)
     stop_room(c.binding)
 
@@ -77,7 +78,9 @@ defmodule Vxpipe.Gateway.CallCleanupTest do
                    1_000
 
     assert :ok = CallCleanup.acknowledge(tracker, worker, :complete)
-    assert_receive {:call_cleanup_changed, ^tracker, %{status: :complete}}, 1_000
+
+    assert_receive {:call_cleanup_changed, ^tracker, %{status: :complete, uncertain?: false}},
+                   1_000
   end
 
   test "abnormal resource termination cannot become complete through a later ack", c do
