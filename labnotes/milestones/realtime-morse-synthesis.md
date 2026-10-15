@@ -1,6 +1,6 @@
 # Realtime Morse synthesis
 
-Status: implementation and local acceptance in progress, 2026-10-15.
+Status: implemented and verified locally and hosted, 2026-10-15.
 
 ## Runnable slice and prerequisites
 
@@ -23,7 +23,7 @@ The [current design](../../docs/remote-morse-code-audio.md) owns rationale;
 - STT uses session/partial/committed events and optional timestamped commit;
   no invented speech-start or turn-end events. Echo keepalive configuration.
 - Configurable origin and verified TLS; public API with no storage.
-- Eight TTS slots shared by HTTP and sockets; separate 64 STT slots. Bound
+- Defaults: eight TTS slots shared by HTTP and sockets; separate 64 STT slots. Bound
   messages, input, duration, session lifetime and idle/write deadlines.
 - Direct HTTP APIs remain available. No multi-context, alignment or MP3 work.
 
@@ -41,7 +41,7 @@ The [current design](../../docs/remote-morse-code-audio.md) owns rationale;
   repeated-turn/interruption acceptance.
 - [x] Run persisted origin switch, TLS rejection and outage acceptance.
 - [x] Pass Go format/vet/full/race and Vxpipe root/Lean gates.
-- [ ] Update public docs, inspect desktop/mobile rendering, and commit/push.
+- [x] Update public docs, inspect desktop/mobile rendering, and commit/push.
 - [x] Deploy exact Go revision; smoke HTTP and both WebSockets on custom domain.
 - [x] Run bounded paced STT/TTS concurrency stages; record counts, latency,
   configured limits, admission rejections and workload limitations.
@@ -56,3 +56,15 @@ credit and room lifecycle. `isFinal` ends the TTS stream; a flush does not.
 STT committed text is a final segment, not a new conversational turn event.
 Hosted load results must distinguish configured admission limits from measured
 capacity. The index stays unchecked until all acceptance gates pass.
+
+## Follow-up acceptance
+
+The downloadable Go binary and CI-gated releases now include sustained-session
+load testing for all four services. Operator-configured admission limits allow
+explicit capacity experiments while retaining normal defaults. Separate
+30-second hosted searches repeated successful counts of 531 STT and 1,812 TTS
+with no errors, disconnects or operations exceeding ten seconds. First-event
+p95 was 1.814 seconds STT and 5.540 seconds TTS on the repeats. Normal admission
+limits were restored and verified after the search. Full stage tables, workload
+and limitations live in the Go project's docs/load-test.md. These observations
+do not establish mixed-workload capacity or a low-latency guarantee.
