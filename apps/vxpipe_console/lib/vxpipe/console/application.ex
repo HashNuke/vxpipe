@@ -59,6 +59,7 @@ defmodule Vxpipe.Console.Application do
     |> Keyword.fetch!(:http)
     |> Keyword.take([
       :mcp,
+      :account_management,
       :tenant_directory,
       :call_spec_reads,
       :operator_api,
@@ -70,6 +71,11 @@ defmodule Vxpipe.Console.Application do
       :webrtc
     ])
     |> Keyword.update!(:call_admission, &configure_recording(&1, recording))
+    |> Keyword.update(
+      :account_management,
+      [browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}],
+      &Keyword.put(&1, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
+    )
     |> Keyword.update!(:call_admission, fn options ->
       Keyword.put(options, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
     end)

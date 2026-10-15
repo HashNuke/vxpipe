@@ -14,6 +14,7 @@ defmodule Vxpipe.Gateway.HTTP.Supervisor do
     endpoint_options =
       Keyword.take(options, [
         :mcp,
+        :account_management,
         :tenant_directory,
         :call_spec_reads,
         :operator_api,

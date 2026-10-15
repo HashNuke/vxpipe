@@ -485,6 +485,7 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
         allow_loopback_http: config_env() in [:dev, :test]
       ],
       operator_api: [enabled: database_enabled?],
+      account_management: [enabled: database_enabled?],
       tenant_directory: [enabled: database_enabled?],
       call_spec_reads: [enabled: database_enabled?],
       call_spec_authoring: [enabled: database_enabled?],

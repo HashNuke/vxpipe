@@ -323,3 +323,22 @@
   An engine supervisor exit alone cannot prove remote carrier cleanup.
 - Late started projections must retain intent and immutable incarnation binding.
   These are reviewed implementation requirements, not completed hangup behavior.
+
+## Account HTTP and MCP acceptance
+
+- Canonical account endpoints and five MCP tools now invoke the same Gateway
+  input/actor adaptation and Identity operations. Settings platform keys become
+  narrow verified-key actors; tenant/legacy keys cannot inherit account authority.
+- Browser HTTP keeps session/CSRF behavior, explicit Authorization takes precedence,
+  and both transports share safe account errors and projections. Partial updates
+  retain omitted fields; role options paginate without exposing role grants.
+- Gateway declares its direct Identity dependency; endpoint composition supplies
+  the configured Identity dependencies to MCP without depending on Console.
+- Focused missing-module tests were red before implementation. Eight Gateway
+  account tests, 42 broader related Gateway tests and four persisted Console
+  account tests passed. Persisted tests exercise actual login/session revocation,
+  key-attributed audit, activation, pagination and malformed/unauthorized inputs.
+- Independent review found no blockers. All five root completion gates passed
+  against frozen source, including every default umbrella application with zero
+  failures. No live-provider tests or real telephony ran. UI cutover and hangup
+  remain incomplete; the milestone index now reflects actual tool progress.

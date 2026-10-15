@@ -38,6 +38,10 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       |> Keyword.merge(registry: telephony_events.registry, clock: telephony_events.clock)
 
     %{
+      account_management:
+        options
+        |> Keyword.get(:account_management, [])
+        |> Vxpipe.Gateway.HTTP.AccountManagement.init(),
       call_spec_reads:
         options |> Keyword.get(:call_spec_reads, []) |> Vxpipe.Gateway.HTTP.CallSpecReads.init(),
       tenant_directory:
@@ -67,6 +71,18 @@ defmodule Vxpipe.Gateway.HTTP.Router do
 
   def call(%Plug.Conn{method: "GET", path_info: ["api", "tenants"]} = conn, options),
     do: Vxpipe.Gateway.HTTP.TenantDirectory.index(conn, options.tenant_directory)
+
+  def call(%Plug.Conn{path_info: ["api", "users" | segments]} = conn, options),
+    do:
+      Vxpipe.Gateway.HTTP.AccountManagement.route(conn, options.account_management, [
+        "users" | segments
+      ])
+
+  def call(%Plug.Conn{path_info: ["api", "role-options"]} = conn, options),
+    do:
+      Vxpipe.Gateway.HTTP.AccountManagement.route(conn, options.account_management, [
+        "role-options"
+      ])
 
   def call(%Plug.Conn{method: "GET", path_info: ["api", "tenants", tenant]} = conn, options),
     do: Vxpipe.Gateway.HTTP.TenantDirectory.show(conn, options.tenant_directory, tenant)

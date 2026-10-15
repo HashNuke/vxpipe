@@ -4,7 +4,8 @@ Canonical product operations live under `/api`. Browser UI clients and external
 clients use the same handlers, application authorization and response schemas.
 This document grows with the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md);
 it describes tenant and call-spec reads, provider catalogs, spec writes,
-and call creation/join-token operations. The complete migration inventory is in
+call creation/join-token operations, and account administration. The complete
+migration inventory is in
 [product API inventory](product-api-inventory.md).
 
 ## Authentication
@@ -332,3 +333,85 @@ Token redemption retains existing single-use admission behavior. Ended or failed
 calls cannot issue usable new tokens. Errors include 400 `participant_required`
 or `invalid_request`, 404 `call_route_not_found`, 409 `call_unavailable`, and the
 same authentication/unavailable errors as call creation.
+
+## Users and role options
+
+```http
+GET /api/users?page=1&page_size=25
+GET /api/users/:user_id
+POST /api/users
+PATCH /api/users/:user_id
+POST /api/users/:user_id/disable
+GET /api/role-options?page=1&page_size=25
+```
+
+These installation-wide operations accept Full Platform Access keys. Tenant keys,
+including Full Tenant Access, and legacy operator keys cannot administer users.
+Browser sessions use their actual `users.read` and member/admin/superadmin account
+write permissions. Supplying a key selects that key's authority without combining
+it with the browser's permissions. Browser mutations require CSRF protection.
+
+The user directory accepts `page`, `page_size`, optional `query` (trimmed email
+search, at most 120 characters), and optional `role_id` (public UUID). Role options
+accept only `page` and `page_size`. Both use page 1 and size 25 by default, with
+size at most 50. Unknown filters are rejected. Users sort by normalized email,
+then public user UUID; roles sort by name, then public role UUID. Counts and
+filtering happen before pagination. Pages are not snapshots across concurrent
+writes; empty first pages and out-of-range errors follow the tenant-list rules.
+
+User lists return `{users, pagination}`; detail and mutation responses return
+`{user: ...}`. The compatible HTTP user shape is:
+
+```json
+{
+  "id": "PUBLIC_USER_UUID",
+  "email": "person@example.test",
+  "roleId": "PUBLIC_ROLE_UUID",
+  "enabled": true,
+  "memberships": [{"tenantId": "AAAAAAAAAAAAAAAA", "access": "read_write"}]
+}
+```
+
+`tenantId` in this existing response shape is the public tenant key, never a
+database primary key. Canonical request fields use `role_id` and
+`memberships[].tenant_key`. The same response schema serves browser and external
+HTTP clients. MCP projects the corresponding `user_id`, `role_id` and `tenant_key`
+fields. Neither projection returns passwords, hashes, session tokens or grants.
+
+Creation requires `email`, `password`, `password_confirmation`, and `role_id`.
+Optional `memberships` is an array of unique `{tenant_key, access}` entries with
+access `read` or `read_write`; the chosen role must support tenant assignments.
+Passwords must match and satisfy the existing 15–128-character policy. They are
+input-only and are not trimmed. Creation returns 201 and an enabled user.
+
+A PATCH contains one or more of `email`, `role_id`, `memberships`, and `enabled`.
+Omitted fields remain unchanged. Supplying `memberships: []` explicitly clears
+assignments. `enabled: false` disables the user and revokes their login sessions;
+`enabled: true` reactivates them but does not revive revoked sessions. Password
+fields and explicit null values are unsupported. Updates return 200.
+
+```sh
+curl --fail-with-body \
+  'https://YOUR-VXPIPE-HOST/api/users/YOUR_USER_UUID' \
+  -X PATCH \
+  -H 'Authorization: Bearer YOUR_PLATFORM_API_KEY' \
+  -H 'Content-Type: application/json' \
+  --data '{"enabled":true}'
+```
+
+The `/disable` operation takes `{}`, performs the same partial update with
+`enabled: false`, and is safe to repeat. It does not delete the user or change
+the independent API-key lifecycle. The last enabled superadmin cannot be disabled
+or demoted. Changes retain existing current/requested role-category guards.
+
+Role options return `{roles, pagination}`. Each role is `{id, name, kind}`, where
+kind is `admin`, `superadmin`, or null for an ordinary role. This endpoint does not
+expose or edit role grants. Password reset and role administration are not granted
+to API keys by these operations.
+
+Account failures use `{error: {code, message, retryable, details}}`: 401
+`invalid_api_key`/`session_required`, 403 `forbidden`, 404 `not_found`, 409
+`email_taken`/`last_superadmin`/`stale`, 422 validation or pagination codes, and
+503 `account_management_unavailable`. Successful machine writes revalidate the
+active platform key inside the transaction and attribute audit to its key ID.
+Deployments must apply migration `20261015000300` before enabling these writes.

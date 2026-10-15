@@ -12,6 +12,7 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
   def init(options) do
     router =
       Router.init(
+        account_management: Keyword.get(options, :account_management, []),
         call_spec_reads: Keyword.get(options, :call_spec_reads, []),
         tenant_directory: Keyword.get(options, :tenant_directory, []),
         call_spec_authoring: Keyword.get(options, :call_spec_authoring, []),
@@ -30,8 +31,10 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
         _custom -> []
       end
 
+    shared = Keyword.merge(runtime, router.account_management.identity_options)
+
     mcp =
-      Keyword.put(mcp, :call_options, Keyword.merge(runtime, Keyword.get(mcp, :call_options, [])))
+      Keyword.put(mcp, :call_options, Keyword.merge(shared, Keyword.get(mcp, :call_options, [])))
 
     %{
       mcp: Vxpipe.Gateway.MCP.Endpoint.init(mcp),

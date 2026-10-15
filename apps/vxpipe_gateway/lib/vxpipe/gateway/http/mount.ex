@@ -18,6 +18,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
       Keyword.validate!(options,
         path_prefix: "/",
         mcp: [],
+        account_management: [],
         tenant_directory: [],
         call_spec_reads: [],
         operator_api: [],
@@ -33,6 +34,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
       endpoint:
         Endpoint.init(
           mcp: Keyword.fetch!(options, :mcp),
+          account_management: Keyword.fetch!(options, :account_management),
           tenant_directory: Keyword.fetch!(options, :tenant_directory),
           call_spec_reads: Keyword.fetch!(options, :call_spec_reads),
           call_spec_authoring: Keyword.fetch!(options, :call_spec_authoring),

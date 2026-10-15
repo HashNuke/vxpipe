@@ -28,8 +28,11 @@ Calls-only keys see tenant and call tools; full tenant and Settings platform key
 also see spec/catalog tools. Admin-only tenant keys cannot create calls or tokens. Each call
 independently checks its authority and selected tenant.
 
-Hangup and user/role tools below are approved remaining work;
-they are not advertised yet. The [product HTTP API](product-http-api.md) documents
+Settings platform keys additionally see `list_users`, `create_user`, `update_user`,
+`disable_user`, and `list_role_options`. These share Identity account workflows
+with the canonical HTTP API and preserve transactional authority/audit guards.
+Hangup below is approved remaining work and is not advertised yet. The
+[product HTTP API](product-http-api.md) documents
 the corresponding implemented HTTP operations. Browser migration remains tracked
 separately in the milestone.
 
