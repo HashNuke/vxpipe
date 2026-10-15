@@ -26,12 +26,38 @@ defmodule Vxpipe.Gateway.Telephony.DialSupervisor do
     end)
   end
 
-  defp submit_command(owner, message, operation) do
-    Task.Supervisor.start_child(__MODULE__, fn ->
-      monitor = Process.monitor(owner)
-      task = Task.Supervisor.async_nolink(__MODULE__, operation)
-      await_submission(owner, monitor, task, message)
-    end)
+  defp submit_command(owner, message, operation) when owner == self() do
+    release = make_ref()
+
+    case Task.Supervisor.start_child(__MODULE__, fn ->
+           owner_monitor = Process.monitor(owner)
+           await_release(owner, owner_monitor, release, message, operation)
+         end) do
+      {:ok, observer} ->
+        monitor = Process.monitor(observer)
+        send(observer, {:release, release})
+        {:ok, observer, monitor}
+
+      error ->
+        error
+    end
+  end
+
+  defp submit_command(_owner, _message, _operation), do: {:error, :invalid_command_owner}
+
+  # The caller must own its monitor before even an immediately completed request
+  # can let the observer exit. A late monitor would report :noproc, losing proof.
+  defp await_release(owner, owner_monitor, release, message, operation) do
+    receive do
+      {:release, ^release} ->
+        task = Task.Supervisor.async_nolink(__MODULE__, operation)
+        await_submission(owner, owner_monitor, task, message)
+
+      {:DOWN, ^owner_monitor, :process, ^owner, _reason} ->
+        :ok
+    after
+      @submission_timeout -> exit(:command_start_timeout)
+    end
   end
 
   # A separate supervised observer remains responsive while the HTTP task is blocked.

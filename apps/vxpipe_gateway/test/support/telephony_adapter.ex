@@ -25,6 +25,7 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
 
   @impl true
   def dial(options, request) do
+    report_owner_monitors(options, :dial)
     send(observer(options), {:test_telephony_dial, request})
 
     case Keyword.fetch!(options, :api_key) do
@@ -70,6 +71,7 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
 
   @impl true
   def end_leg(options, request) do
+    report_owner_monitors(options, :end)
     send(observer(options), {:test_telephony_end_leg, request})
 
     case Keyword.fetch!(options, :api_key) do
@@ -105,6 +107,13 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
 
   @impl true
   def decode_media_message(_options, _message), do: :ignore
+
+  defp report_owner_monitors(options, kind) do
+    if owner = Keyword.get(options, :probe_owner_monitors) do
+      {:monitors, monitors} = Process.info(owner, :monitors)
+      send(owner, {:command_owner_monitors, kind, monitors})
+    end
+  end
 
   defp observer(options) do
     case Keyword.fetch!(options, :api_key) do

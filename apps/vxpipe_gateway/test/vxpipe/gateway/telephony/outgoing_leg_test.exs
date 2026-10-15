@@ -1,11 +1,12 @@
 defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine.Telephony.{EndLeg, Event, LegReference, OutboundLegRequest}
+  alias Vxpipe.CallEngine.Telephony.{Dial, EndLeg, Event, LegReference, OutboundLegRequest}
 
   alias Vxpipe.Gateway.Telephony.{
     CallIngress,
     ConfiguredService,
+    DialSupervisor,
     LegSupervisor,
     MediaAdmission,
     OutgoingLeg,
@@ -21,6 +22,32 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     on_exit(fn -> LegSupervisor.stop_outgoing(leg_id) end)
 
     %{leg_id: leg_id, media_admission: media_admission}
+  end
+
+  for command <- [:dial, :end] do
+    test "#{command} command installs the owner's completion monitor before carrier effects",
+         context do
+      kind = unquote(command)
+      service = service(self(), [])
+
+      service = %{
+        service
+        | adapter_options: Keyword.put(service.adapter_options, :probe_owner_monitors, self())
+      }
+
+      result = start_probe_command(kind, service, context.leg_id)
+
+      observer =
+        case result do
+          {:ok, pid} -> pid
+          {:ok, pid, _monitor} -> pid
+        end
+
+      assert_receive {:command_owner_monitors, ^kind, monitors}
+      assert {:process, observer} in monitors
+      assert {:ok, ^observer, monitor} = result
+      assert_receive {:DOWN, ^monitor, :process, ^observer, :normal}
+    end
   end
 
   for purpose <- [:initial, :transfer] do
@@ -1081,6 +1108,20 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     assert {:error, :leg_not_found} = LegSupervisor.lookup_outgoing(context.leg_id)
     refute_receive {:test_telephony_dial, _request}
   end
+
+  defp start_probe_command(:dial, service, leg_id) do
+    DialSupervisor.submit(self(), service, %Dial{
+      leg_id: leg_id,
+      from: "+15550001000",
+      to: "+15550001001",
+      callback_url: "https://example.test/callback",
+      media_url: "wss://example.test/media",
+      answering_machine_detection: :disabled
+    })
+  end
+
+  defp start_probe_command(:end, service, leg_id),
+    do: DialSupervisor.end_leg(self(), service, leg_id, "outbound-call-control", :call_cancelled)
 
   defp request do
     %OutboundLegRequest{

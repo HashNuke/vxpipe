@@ -118,8 +118,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLeg do
          ) do
       {:ok, dial, usage} ->
         case DialSupervisor.submit(self(), state.service, dial) do
-          {:ok, worker} ->
-            {:noreply, %{state | usage: usage, dial_worker: {worker, Process.monitor(worker)}}}
+          {:ok, worker, monitor} ->
+            {:noreply, %{state | usage: usage, dial_worker: {worker, monitor}}}
 
           {:error, _reason} ->
             {:noreply, fail(%{state | usage: usage}, :dial_submission_unavailable, :failed)}

@@ -45,8 +45,8 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegLifecycle do
            state.carrier_control_id,
            state.cancel_reason
          ) do
-      {:ok, worker} ->
-        %{state | end_worker: {worker, Process.monitor(worker)}, end_requested?: true}
+      {:ok, worker, monitor} ->
+        %{state | end_worker: {worker, monitor}, end_requested?: true}
 
       {:error, _reason} ->
         state

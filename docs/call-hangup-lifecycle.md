@@ -167,6 +167,11 @@ command drainage; unidentified abandoned attempts may then retire with unknown
 usage, without asserting managed cleanup completion. Final usage persistence and
 tracker acknowledgement still need wiring before managed admission is enabled.
 
+Outgoing command startup now installs the caller's observer monitor before releasing
+any carrier work. The paused observer monitors its owner and has a bounded startup
+wait. Dial/end callers retain the returned monitor, so even an immediate normal
+completion produces usable termination evidence rather than a late `:noproc`.
+
 Persist cleanup-required state with admission before effects, and bind completion
 acknowledgements to that same incarnation. The incarnation is already a sufficient
 generation identifier. Reconciliation can reconnect to a surviving owner, but

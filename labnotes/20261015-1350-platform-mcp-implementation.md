@@ -1098,3 +1098,17 @@ a command can finish before its owner installs the monitor, producing conservati
 `:noproc`/unknown-drain evidence. The next fix installs the monitor before releasing
 work and verifies ordering at the adapter boundary. This run is not recorded as
 green acceptance; combined verification must follow the fix and incoming drainage.
+
+### Outgoing observer startup ordering
+
+Two adapter-boundary regressions require the owner to monitor the actual observer
+before dial/end effects begin. The red selection reproduced both failures and the
+original full-suite late-identity failure: 37 tests, three failures. DialSupervisor
+now starts a paused observer, installs its monitor in the original caller, then
+releases work with a private reference. The observer monitors its owner immediately
+and bounds startup waiting. Both dial/end paths retain the returned monitor.
+
+All 42 focused tests pass, including the formerly failing late-identity case; no
+warnings and exact-path formatting/diff checks pass. Root and independent subagent reviews
+approved the ordering and ownership contract. Full combined verification remains
+pending the concurrent incoming drainage and demo-tenant changes.

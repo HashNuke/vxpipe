@@ -564,6 +564,13 @@ strict Credo and the unused-dependency check pass. The full default suite ran
 The observer startup race is being corrected before claiming a green snapshot.
 This evidence does not complete hangup or final milestone acceptance.
 
+Outgoing observer startup now installs the original caller's monitor before
+releasing carrier effects, with owner monitoring and a bounded paused-start wait.
+The red selection reproduced both ordering regressions and the original suite
+failure (37 tests/three failures); all 42 focused tests then passed. Independent
+review approved. This fixes the known race; full combined verification remains
+outstanding.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:
