@@ -26,7 +26,9 @@ defmodule Vxpipe.MCP.MixProject do
   defp deps do
     [
       {:bandit, "~> 1.12", only: :test},
-      {:ex_mcp, git: "https://github.com/HashNuke/ex_mcp.git", branch: "vxp"},
+      {:ex_mcp,
+       git: "https://github.com/HashNuke/ex_mcp.git",
+       ref: "5fa760207bb09fc3b19b3049bc481b5e55106095"},
       {:jason, "~> 1.4"},
       {:jsv, "~> 0.22"},
       {:plug, "~> 1.20"},

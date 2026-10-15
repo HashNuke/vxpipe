@@ -107,3 +107,19 @@
 - Legacy spec listing retains its existing maximum of 100; the new public MCP
   pagination boundary must enforce the approved maximum 50 without silently
   changing unrelated legacy directory contracts.
+
+## Dependency diagnostic privacy
+
+- Timeout logging in the pinned library could include the GenServer request and
+  its tool arguments; returned errors and option callbacks also printed raw data.
+  Upstream sentinel regressions reproduced these leaks. The reviewed fix records
+  classifications/shapes only and preserves response and supervision semantics.
+- Rejected a broader generic callback-crash wrapper: translating every crash into
+  shutdown would change transient supervision restart behavior. Vxpipe owns its
+  tool callback fault handling instead of changing unrelated library lifecycles.
+- Published upstream commit `5fa760207bb09fc3b19b3049bc481b5e55106095` on
+  `HashNuke/ex_mcp` branch `vxpipe-server-log-redaction`; both umbrella consumers
+  now pin that immutable revision. Only this dependency changed in `mix.lock`.
+- Upstream focused selection passed 128 tests. With the new pin, Gateway's MCP
+  selection passed 22 tests and outbound MCP passed 37 tests (three excluded).
+  Independent review found no blocker. Full umbrella acceptance remains pending.

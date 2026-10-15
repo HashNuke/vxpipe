@@ -172,8 +172,10 @@ oversized retained request IDs and incorrect unknown-notification responses; bot
 failed focused tests before fixes. IDs are limited to 256-byte strings or safe
 integers and rejected IDs are not echoed; notifications have no JSON-RPC body.
 Domain tools, complete scope/error acceptance and session expiry/restart evidence
-remain open. A dependency timeout/crash logging issue must be fixed before tools
-accept sensitive inputs or produce sensitive results.
+remain open. Dependency diagnostics are now pinned to reviewed upstream commit
+`5fa760207bb09fc3b19b3049bc481b5e55106095`, which removes raw timeout/error details
+without changing callback or supervision semantics. Application callback fault
+handling remains Vxpipe's responsibility before sensitive tools are enabled.
 Handler cleanup may add approximately one second to the configured deadline.
 
 ## Checkpoint: tenant discovery and shared pagination
