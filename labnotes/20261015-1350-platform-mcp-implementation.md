@@ -40,3 +40,15 @@
   its result cannot establish a stable green snapshot. Will rerun after the agents
   finish. Avoid concurrent migrations and sandbox browser transactions: an open
   browser transaction blocked the digest-index migration until fixture shutdown.
+
+## Public ExMCP integration probe
+
+- Gateway now declares its direct ExMCP dependency using the same git pin already
+  in the shared lock. Outbound MCP remains independent.
+- Three public-boundary tests first failed on the missing probe handler and then
+  passed. They exercise actor callbacks, initialize/notifications/ping/tools,
+  key-bound sessions, DELETE and monitored timeout cleanup without a network server.
+- The pinned 2025 profile requires sessions; stateless behavior selects a different
+  protocol revision. Wrong-key reuse deliberately returns 404. Product wrapper
+  still needs strict version/method rules, Bearer auth, limits and real mounts.
+- Independent review found no blockers and confirmed the limited evidence scope.

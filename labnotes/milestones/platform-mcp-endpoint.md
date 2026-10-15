@@ -120,9 +120,11 @@ advertised only as their checkpoints become usable.
 Depends on the shared application/HTTP contract. MCP invokes its public operations
 directly, without an HTTP loopback request or controller invocation.
 
-- [ ] Red-test the pinned public ExMCP Plug/handler boundary in Gateway; add the
+- [x] Red-test the pinned public ExMCP Plug/handler boundary in Gateway; add the
   direct owning-child dependency using the shared lock. Keep outbound `vxpipe_mcp`
   independent of Calls/Gateway and preserve its existing tests.
+  Evidence: three public-boundary probe tests failed without the handler, then
+  passed. Direct Gateway dependency uses the existing shared lock unchanged.
 - [ ] Prove `2025-11-25` negotiation, initialized notification, ping, JSON results,
   request IDs and unsupported versions/methods. GET returns 405 without an
   unsolicited SSE stream; do not implement unrelated protocol extensions.
@@ -154,6 +156,14 @@ directly, without an HTTP loopback request or controller invocation.
   sessions, wrong-key session reuse, disabled configuration and zero secret leakage.
   Include notifications/discovery/invocation without a repeated credential, a
   session ID without a key, cookie/query/body-only credentials and scope denials.
+
+Probe evidence (2026-10-15): the pinned Plug creates in-memory sessions for
+`2025-11-25`. Tests prove selected-version initialization, notifications, ping,
+empty tool discovery, trusted per-request actor injection, wrong-key session 404,
+DELETE 204/subsequent 404 and monitored handler-timeout cleanup. Independent review
+found no blockers. This is not product-endpoint acceptance: strict version rejection,
+GET 405, real Bearer authentication, mounting and concurrency controls remain open.
+Handler cleanup may add approximately one second to the configured deadline.
 
 ## Checkpoint: tenant discovery and shared pagination
 
