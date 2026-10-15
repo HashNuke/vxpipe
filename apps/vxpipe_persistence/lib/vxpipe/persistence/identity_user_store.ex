@@ -5,7 +5,7 @@ defmodule Vxpipe.Persistence.IdentityUserStore do
 
   import Ecto.Query
 
-  alias Vxpipe.Persistence.IdentityRecord
+  alias Vxpipe.Persistence.{IdentityAccountActor, IdentityRecord}
   alias Vxpipe.Persistence.Repo
   alias Vxpipe.Persistence.Schema.{AuthenticationInstallation, IdentityUser}
 
@@ -58,9 +58,7 @@ defmodule Vxpipe.Persistence.IdentityUserStore do
                Map.get(attrs, :memberships, Map.get(attrs, "memberships", %{}))
              ),
            :ok <-
-             IdentityRecord.insert_audit(
-               Map.get(attrs, :audit_event, Map.get(attrs, "audit_event"))
-             ) do
+             IdentityAccountActor.insert_audit(attrs) do
         IdentityRecord.user_port_map(
           Repo.preload(user, :role),
           IdentityRecord.load_memberships(user.id)
@@ -91,9 +89,7 @@ defmodule Vxpipe.Persistence.IdentityUserStore do
            :ok <- maybe_replace_memberships(user.id, changes),
            :ok <- maybe_revoke_user_sessions(user.id, changes),
            :ok <-
-             IdentityRecord.insert_audit(
-               Map.get(changes, :audit_event, Map.get(changes, "audit_event"))
-             ) do
+             IdentityAccountActor.insert_audit(changes) do
         IdentityRecord.user_port_map(
           Repo.preload(updated, :role),
           IdentityRecord.load_memberships(user.id)
@@ -135,7 +131,7 @@ defmodule Vxpipe.Persistence.IdentityUserStore do
 
       users =
         base
-        |> order_by([u], [u.id])
+        |> order_by([u], asc: u.normalized_email, asc: u.public_id)
         |> limit(^page_size)
         |> offset(^((page - 1) * page_size))
         |> Repo.all()
@@ -177,7 +173,7 @@ defmodule Vxpipe.Persistence.IdentityUserStore do
   defp revalidate_creator(attrs, target_role) do
     target_kind = IdentityRecord.role_kind(target_role.kind)
     required = Vxpipe.Identity.Permission.account_kind_permission(target_kind)
-    IdentityRecord.revalidate_actor(attrs, [required])
+    IdentityAccountActor.revalidate(attrs, [required], :create)
   end
 
   defp revalidate_updater(changes, current_user, requested_role) do
@@ -200,7 +196,7 @@ defmodule Vxpipe.Persistence.IdentityUserStore do
         ]
         |> Enum.uniq()
 
-      IdentityRecord.revalidate_actor(changes, required)
+      IdentityAccountActor.revalidate(changes, required, :update)
     end
   end
 
@@ -222,7 +218,9 @@ defmodule Vxpipe.Persistence.IdentityUserStore do
         Map.has_key?(changes, :expected_current_role_public_id) or
         Map.has_key?(changes, "expected_current_role_public_id") or
         Map.has_key?(changes, :actor_user_public_id) or
-        Map.has_key?(changes, "actor_user_public_id")
+        Map.has_key?(changes, "actor_user_public_id") or
+        Map.has_key?(changes, :actor_api_key_public_id) or
+        Map.has_key?(changes, "actor_api_key_public_id")
 
     has_proof? and not privileged?
   end

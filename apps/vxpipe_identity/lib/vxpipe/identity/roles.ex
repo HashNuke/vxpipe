@@ -30,6 +30,23 @@ defmodule Vxpipe.Identity.Roles do
     end
   end
 
+  @doc "Bounded safe role options for the canonical account API."
+  def list_role_options(deps, actor, filters) do
+    with :ok <- Vxpipe.Identity.AccountAuthority.require_read(actor),
+         {:ok, filters} <- role_options_page(filters),
+         {:ok, result} <- deps.roles.list_options(filters) do
+      Vxpipe.Identity.AccountPage.result(result, filters)
+    end
+  end
+
+  defp role_options_page(filters) when is_map(filters) do
+    if Enum.all?(Map.keys(filters), &(&1 in [:page, :page_size])),
+      do: Vxpipe.Identity.AccountPage.filters(filters),
+      else: {:error, :invalid_pagination}
+  end
+
+  defp role_options_page(_filters), do: {:error, :invalid_pagination}
+
   @spec create_role(map(), map(), map()) :: {:ok, map()} | {:error, term()}
   def create_role(deps, actor, attrs) do
     roles = Map.fetch!(deps, :roles)
@@ -239,7 +256,8 @@ defmodule Vxpipe.Identity.Roles do
 
           {:ok, %{requires_read: required}} ->
             case Map.fetch(scope_by_key, required) do
-              {:ok, read_scope} when read_scope == grant.scope or
+              {:ok, read_scope}
+              when read_scope == grant.scope or
                      (required == "tenant_services.read" and read_scope == :all_tenants and
                         grant.scope == :assigned_tenants) ->
                 {:cont, {:ok, acc}}

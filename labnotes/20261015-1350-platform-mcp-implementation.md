@@ -258,3 +258,25 @@
   functions. Green: all 219 Calls tests and 46 focused Persistence compatibility
   tests. Independent review found no domain/storage blockers. Transport adapters
   and their bounded outgoing request handling remain the next checkpoint.
+
+## Platform-key account domain and audit
+
+- Added a narrow Identity.ApiKeyActor for account operations. It has verified-key
+  identity, not fabricated user/session grants. Role CRUD and password reset remain
+  outside that authority; direct machine password-hash updates are denied.
+- Account writes lock and revalidate the exact active tenantless platform key in
+  their transaction. Trusted actor stamping excludes supplied audit identities;
+  the audit row records its API-key FK and cannot record both user and key actors.
+  Existing target-role, last-superadmin and session-revocation guards remain.
+- Migration 20261015000300 adds nullable indexed actor_api_key_id and the exclusive
+  actor constraint; system events may still have neither actor. Applied to the
+  test database only; deployments must run migrations before account-key writes.
+- Canonical account normalization preserves omitted update fields and strict
+  enabled booleans. User/role pages are bounded; role options omit grants and reject
+  filters their query cannot honor. Legacy browser query errors retain 422 status.
+- Missing-API, privilege and transport regressions were reproduced before fixes.
+  Green: 67 Identity, 53 focused Persistence and three Console tests. One separately
+  selected local SQL integration test proves key revocation waits on the account
+  transaction lock and later authorization fails. Independent review found no
+  authority/audit blockers; its query-error and ignored-filter findings are fixed.
+- Gateway HTTP/MCP account adapters are not part of this domain checkpoint.

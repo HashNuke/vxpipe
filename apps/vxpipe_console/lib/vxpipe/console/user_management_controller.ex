@@ -16,10 +16,26 @@ defmodule Vxpipe.Console.UserManagementController do
            }) do
       json(conn, UserManagementPayload.user_page(directory, page, 25))
     else
-      {:error, :invalid_page} -> error(conn, 422, "invalid_page")
-      {:error, :unknown_role} -> error(conn, 422, "unknown_role")
-      {:error, :forbidden} -> error(conn, 403, "forbidden")
-      {:error, _} -> error(conn, 503, "unavailable")
+      {:error, :invalid_page} ->
+        error(conn, 422, "invalid_page")
+
+      {:error, :unknown_role} ->
+        error(conn, 422, "unknown_role")
+
+      {:error, reason}
+      when reason in [
+             :page_out_of_range,
+             :invalid_pagination,
+             :invalid_search,
+             :invalid_role_filter
+           ] ->
+        error(conn, 422, Atom.to_string(reason))
+
+      {:error, :forbidden} ->
+        error(conn, 403, "forbidden")
+
+      {:error, _} ->
+        error(conn, 503, "unavailable")
     end
   end
 

@@ -48,6 +48,34 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
   end
 
   @impl true
+  def list_options(filters) do
+    with {:ok, filters} <- Vxpipe.Identity.AccountPage.filters(filters) do
+      query =
+        from(r in IdentityRole,
+          order_by: [asc: r.name, asc: r.public_id],
+          limit: ^filters.page_size,
+          offset: ^((filters.page - 1) * filters.page_size),
+          select: %{public_id: r.public_id, name: r.name, kind: r.kind}
+        )
+
+      roles =
+        Enum.map(Repo.all(query), fn role ->
+          Map.update!(role, :kind, fn kind ->
+            case kind do
+              "admin" -> :admin
+              "superadmin" -> :superadmin
+              _ -> nil
+            end
+          end)
+        end)
+
+      {:ok, %{roles: roles, total: Repo.aggregate(IdentityRole, :count)}}
+    end
+  rescue
+    _ -> {:error, :unavailable}
+  end
+
+  @impl true
   def create(attrs) do
     if Map.get(attrs, :kind, Map.get(attrs, "kind")) != nil do
       {:error, :protected_role}
@@ -289,7 +317,8 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
 
           {:ok, %{requires_read: required}} ->
             case Map.fetch(scope_by_key, required) do
-              {:ok, read_scope} when read_scope == grant.scope or
+              {:ok, read_scope}
+              when read_scope == grant.scope or
                      (required == "tenant_services.read" and read_scope == :all_tenants and
                         grant.scope == :assigned_tenants) ->
                 {:cont, {:ok, acc}}

@@ -325,7 +325,7 @@ Depends on foundation and pagination; does not require live calls. Runnable slic
 a Settings platform key lists/creates a user, disables them, then reactivates them.
 
 - [ ] Red-test required user tools plus paginated safe `list_role_options`.
-- [ ] Add an explicit machine actor carrying verified API key ID to the shared
+- [x] Add an explicit machine actor carrying verified API key ID to the shared
   Identity policy/ports and persistence transaction checks. Keep browser actor/session
   checks intact; never fabricate a user/session or trust tool-supplied grants.
 - [ ] Implement the design's Full Platform Access policy for users.read and existing
@@ -335,7 +335,7 @@ a Settings platform key lists/creates a user, disables them, then reactivates th
   `/api/users/:id/disable` POST and `/api/role-options` GET routes. Both transports
   invoke the same Identity workflow/configuration; Gateway never calls Console.
   Declare any direct Identity use in the owning child dependency list.
-- [ ] Revalidate machine key inside account-write transactions and attribute audit
+- [x] Revalidate machine key inside account-write transactions and attribute audit
   to its key ID. Add the minimal schema/port changes needed for machine audit actors;
   existing user audit history remains valid and credentials stay redacted.
 - [ ] Preserve target/current/requested role-category checks, membership validation,
@@ -351,6 +351,13 @@ a Settings platform key lists/creates a user, disables them, then reactivates th
 - [ ] Acceptance: platform/tenant denials, create/disable/reactivate/login outcomes,
   partial-field preservation, privileged targets, concurrency, key revocation,
   audit attribution and pagination agree between REST/MCP using synthetic accounts.
+
+Account-domain evidence (2026-10-15): narrow machine authority, transaction-time
+platform-key revalidation/audit and canonical input/paging passed 67 Identity,
+53 focused Persistence, three Console and one separately selected local SQL
+revocation-concurrency test. Independent review found no authority/audit blockers;
+query/filter compatibility findings were corrected. Migration 20261015000300 was
+applied to the test database. HTTP/MCP account adapter acceptance remains open.
 
 ## Checkpoint: UI cutover to the documented product API
 
