@@ -505,8 +505,9 @@ WebRTC/browser microphone. Chrome renders the editor's provider/model/voice
 selection at desktop and mobile widths. Actual production runtime-loader checks
 prove absent origin fails provider construction and configured HTTPS derives WSS.
 The earlier full run passed every application except one stale Console provider
-inventory assertion; its correction and focused regressions pass. The final
-umbrella rerun remains in progress, so the milestone-wide final gates remain open.
+inventory assertion. After correcting it, the complete umbrella rerun passed
+3,826 tests with zero failures and 145 excluded (seed 72837). This verifies F;
+later STT work and the remaining milestone still require their final gates.
 See [configured-room evidence](../20261015-0003-morse-configured-room.md).
 
 Exit: a saved service and published call spec produce audible Morse through
@@ -535,6 +536,17 @@ Dependencies: D, F; E needed for complete API acceptance, not the PCM room path.
 - [ ] Inspect Console transcripts/errors and service/editor states in rendered
   desktop/mobile browsers. Verify WebRTC/Opus separately if claiming that path;
   disable or document microphone processing that can suppress pure tones.
+
+G session foundation (2026-10-15): the private STT configuration, shared bounded
+speech JSON codec, Morse socket and scoped session exist but are not registered
+in catalogs or startup dispatch yet. Four configuration/protocol and seven
+lifecycle tests pass after initial failures. The real Go WebSocket accepts the
+explicit `morse_stt_v1` / 16 kHz / 840 ms silence profile and recognizes repeated
+independently generated `E E` turns without splitting their 420 ms word gap.
+Readiness requires the full profile acknowledgement; empty keepalives and stalled
+drafts cannot invent final transcripts. This is session acceptance, not G's
+configured-room/Console acceptance. See the
+[STT contract labnote](../20261015-0009-morse-stt-contract.md).
 
 Exit: the two remote speech capabilities complete an ordinary configured room
 round trip without paid speech/LLM services or local-codec bypasses.

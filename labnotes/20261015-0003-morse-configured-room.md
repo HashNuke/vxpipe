@@ -40,7 +40,10 @@ boundary against the unchanged Go server at `b922e71`, using loopback port 18796
   all other applications except Console's outdated exact provider inventory.
   That assertion is corrected in `8faa2c4e`; 14 focused Console service/activation/
   Scribe-room regressions pass with one hosted test excluded. The new full run
-  is active and has passed CallEngine again. Do not infer a final full-suite pass.
+  completed with explicit exit status zero: 3,826 tests, zero failures and 145
+  exclusions, seed 72837. It includes the new production runtime configuration
+  test. This is complete F regression evidence; STT changes made after the
+  CallEngine portion ran need their own final regression run.
 - Root format, warnings-as-errors compilation, strict Credo and unused-dependency
   checks pass for the room harness; the additional runtime test also passes its
   focused lane. No speech state machine or source-cutover implementation changed.

@@ -8,14 +8,12 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
     min_speech_duration_ms: 100,
     min_silence_duration_ms: 100
   ]
-  @errors ~w(auth_error quota_exceeded transcriber_error input_error invalid_request error
-    commit_throttled unaccepted_terms rate_limited queue_overflow resource_exhausted
-    session_time_limit_exceeded chunk_size_exceeded insufficient_audio_activity)
   @enforce_keys [:api_key, :model, :encoding, :sample_rate, :language_code, :commit_strategy]
   @derive {Inspect, only: [:model, :encoding, :sample_rate, :language_code, :commit_strategy]}
   defstruct @enforce_keys ++ [endpoint: @endpoint]
 
   alias Vxpipe.CallEngine.Speech.Model
+  alias Vxpipe.Providers.ElevenLabs.STTProtocol
 
   def models do
     [
@@ -87,64 +85,25 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
     }
   end
 
-  def encode_audio(audio)
-      when is_binary(audio) and byte_size(audio) in 2..32_000 and rem(byte_size(audio), 2) == 0,
-      do: {:ok, input_message(audio, false)}
-
-  def encode_audio(_audio), do: {:error, :invalid_audio}
-
-  def commit, do: input_message("", true)
-
-  def keepalive, do: input_message("", false)
+  defdelegate encode_audio(audio), to: STTProtocol
+  defdelegate commit(), to: STTProtocol
+  defdelegate keepalive(), to: STTProtocol
 
   def decode(payload, commit_strategy \\ :manual)
 
-  def decode(payload, commit_strategy)
-      when is_binary(payload) and byte_size(payload) <= 262_144 and
-             commit_strategy in [:manual, :vad] do
-    case JSON.decode(payload) do
-      {:ok, %{"message_type" => type} = message} -> decode_message(type, message, commit_strategy)
-      _invalid -> {:error, :invalid_message}
+  def decode(payload, strategy) when strategy in [:manual, :vad] do
+    case STTProtocol.decode(payload) do
+      {:ok, {:ready, session_id, config}} ->
+        if matching_configuration?(config, strategy),
+          do: {:ok, {:ready, session_id}},
+          else: {:error, :invalid_message}
+
+      event ->
+        event
     end
   end
 
   def decode(_payload, _strategy), do: {:error, :invalid_message}
-
-  defp decode_message(
-         "session_started",
-         %{"session_id" => session_id, "config" => config},
-         strategy
-       )
-       when is_binary(session_id) and byte_size(session_id) in 1..256 and is_map(config) do
-    if String.valid?(session_id) and matching_configuration?(config, strategy),
-      do: {:ok, {:ready, session_id}},
-      else: {:error, :invalid_message}
-  end
-
-  defp decode_message(type, %{"text" => text}, _strategy)
-       when type in ["partial_transcript", "committed_transcript"] and is_binary(text) and
-              byte_size(text) <= 65_536 do
-    if String.valid?(text) do
-      kind = if type == "partial_transcript", do: :partial, else: :segment
-      {:ok, {kind, text}}
-    else
-      {:error, :invalid_message}
-    end
-  end
-
-  defp decode_message(type, _message, _strategy) when type in @errors,
-    do: {:error, :provider_failure}
-
-  defp decode_message(_type, _message, _strategy), do: {:error, :invalid_message}
-
-  defp input_message(audio, commit?) do
-    JSON.encode!(%{
-      "message_type" => "input_audio_chunk",
-      "audio_base_64" => Base.encode64(audio),
-      "commit" => commit?,
-      "sample_rate" => 16_000
-    })
-  end
 
   defp unique_options?(options),
     do: length(options) == length(Enum.uniq(Keyword.keys(options)))

@@ -111,6 +111,23 @@ readiness, permission retirement and output generation identity.
 
 ## Deployment implications
 
+The new STT session foundation selects `morse_stt_v1` with mono 16 kHz S16LE
+input and the Go decoder's fixed 60 ms dot profile. Its wire query requests
+`commit_strategy=vad` and `vad_silence_threshold_secs=0.84`; here this means Morse
+tone silence, with no Silero model. The ordinary 7-unit word gap is 420 ms,
+below the 14-unit utterance gap. Readiness requires the server to echo the model,
+audio format, rate, commit mode and silence threshold. Different timing profiles
+must be explicitly implemented and tested before exposing new options.
+
+Only this acknowledged Morse profile gives its commits `provider_gap` authority.
+The shared ElevenLabs JSON codec still reports generic committed segments; the
+hosted Scribe adapter retains its own segment accumulation and inferred endpoint
+rules. Morse partials provide transcript onset, empty keepalives do not finalize,
+and a stalled partial fails within a bounded deadline instead of becoming final.
+This rejects reusing Scribe's human-speech detector or transcript-inactivity timer
+as a Morse boundary. The new session remains unregistered until G's integration
+work is ready; no Morse STT selection is currently advertised.
+
 The Vxpipe TTS adapter uses the `morse_v1` model and `morse` voice, with raw
 mono signed little-endian PCM at 8, 16, 24 or 48 kHz. Its catalog label is
 `MorseCodeApiTTS`; the service is `MorseCodeApi`. STT is not advertised until its
