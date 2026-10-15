@@ -30,9 +30,15 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
           {:ok, TelephonyAdmissionClaim.t()} | {:error, term()}
   def mark_started(repo, %TelephonyAdmissionClaim{} = claim, incarnation_id, started_at) do
     project_lifecycle(repo, claim, fn repo, call, leg ->
-      with {:ok, call} <- start_call(repo, call, incarnation_id, started_at),
+      with :ok <- Vxpipe.Persistence.CallIncarnationBinding.allow_start(call, incarnation_id),
+           {:ok, call} <-
+             Vxpipe.Persistence.CallIncarnationBinding.bind(repo, call, incarnation_id),
+           {:ok, call} <- start_call(repo, call, incarnation_id, started_at),
            {:ok, _leg} <- activate_leg(repo, leg, incarnation_id) do
         {:ok, call}
+      else
+        {:error, :call_incarnation_mismatch} -> {:error, :call_unavailable}
+        {:error, _reason} = error -> error
       end
     end)
   end

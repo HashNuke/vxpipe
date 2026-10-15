@@ -1,6 +1,10 @@
 defmodule Vxpipe.Calls do
   @moduledoc "Database-neutral application workflows for durable call control-plane data."
 
+  @doc "Binds an existing admission to one incarnation, returning whether startup may proceed."
+  def bind_call_admission(subject, incarnation_id, options \\ []),
+    do: Vxpipe.Calls.CallAdmissionBinding.bind(subject, incarnation_id, options)
+
   @doc "Persists cancellation intent; runtime cleanup is a separate workflow."
   def request_call_hangup(actor, tenant_key, call_id, options \\ []),
     do: Vxpipe.Calls.CallHangups.request(actor, tenant_key, call_id, options)

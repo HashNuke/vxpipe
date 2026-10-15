@@ -52,6 +52,7 @@ defmodule Vxpipe.Persistence.Schema.Call do
     field(:ended_at, :utc_datetime_usec)
     field(:hangup_requested_at, :utc_datetime_usec)
     field(:incarnation_id, :string)
+    field(:incarnation_binding_verified, :boolean, default: false)
 
     field(:terminal_reason, Ecto.Enum,
       values: [:room_start_failed, :session_start_failed, :startup_unknown, :api_hangup]

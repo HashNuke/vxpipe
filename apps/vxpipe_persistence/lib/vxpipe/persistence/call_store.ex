@@ -14,6 +14,10 @@ defmodule Vxpipe.Persistence.CallStore do
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredToken
 
   @impl true
+  def bind_call_admission(repo, subject, incarnation),
+    do: Vxpipe.Persistence.CallAdmissionBindingStore.bind(repo, subject, incarnation)
+
+  @impl true
   def request_call_hangup(repo, tenant_key, call_id, requested_at),
     do: Vxpipe.Persistence.CallHangupStore.request(repo, tenant_key, call_id, requested_at)
 
@@ -213,15 +217,16 @@ defmodule Vxpipe.Persistence.CallStore do
 
   @impl true
   def mark_call_started(repo, claim, incarnation_id, started_at) do
-    project_lifecycle(repo, claim, fn
-      %Call{state: :admitting} = call ->
-        repo.update(Call.start_changeset(call, incarnation_id, started_at))
-
-      %Call{state: :running} = call ->
-        {:ok, call}
-
-      _call ->
-        {:error, :call_unavailable}
+    project_lifecycle(repo, claim, fn call ->
+      with :ok <- Vxpipe.Persistence.CallIncarnationBinding.allow_start(call, incarnation_id),
+           {:ok, call} <-
+             Vxpipe.Persistence.CallIncarnationBinding.bind(repo, call, incarnation_id) do
+        case call.state do
+          :admitting -> repo.update(Call.start_changeset(call, incarnation_id, started_at))
+          :running -> {:ok, call}
+          _other -> {:error, :call_unavailable}
+        end
+      end
     end)
   end
 

@@ -444,3 +444,29 @@
 - Existing unscoped API callers remain compatible. This prerequisite alone does
   not finish durable Gateway admission or whole-call hangup. Combined root gates
   will run against the next stable checkpoint with the parallel changes included.
+
+## Durable admission and archive ownership
+
+- Added wrapper-preserving Calls binding for web, incoming and outgoing claims.
+  Persistence validates stored admission/carrier ownership and pinned plan under
+  the call-row lock, then returns admit/cancel without changing lifecycle times.
+  All started projections reject intent and mismatched incarnation.
+- Binding began with 13 expected Persistence failures and a missing memory-port
+  failure, then 13 Persistence/three Calls tests passed. Four local SQL transaction
+  races prove both cancellation/binding and cancellation/token lock orderings.
+- Archive review reproduced six failures: wrong-room acceptance, independent
+  stream anchors, and conflicting legacy history. Both archive streams now share
+  the binding transaction. Three more red regressions caught legacy start paths
+  bypassing archive ownership; all three paths now use the same guard.
+- Rechecking whole history per write would become quadratic. Migration
+  20261015000500 adds a private false-by-default verification flag, set atomically
+  after checking legacy facts and snapshots once. Matching verified writes avoid
+  repeated scans; errors roll back both anchor and flag. Old writers must be
+  drained during rollout because they cannot preserve this new invariant.
+- The final Persistence selection passed 326 tests, including local integration
+  cases. Independent binding/archive reviews found no remaining blockers. Root
+  format, warnings-as-errors compilation, strict Credo and unused dependency
+  checks passed. Combined full-suite acceptance remains a subsequent gate.
+- Binding and archived ownership do not prove shutdown. Incoming gating,
+  acknowledged Gateway cleanup, final usage and reconciled terminal projection
+  remain required by the overall milestone.

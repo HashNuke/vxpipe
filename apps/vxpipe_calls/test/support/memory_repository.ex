@@ -26,6 +26,10 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
   def call_spec_repository(agent), do: {__MODULE__, agent}
   def call_repository(agent), do: {__MODULE__, agent}
 
+  defdelegate bind_call_admission(agent, subject, incarnation),
+    to: Vxpipe.Calls.TestMemoryAdmissionBinding,
+    as: :bind
+
   def create_tenant(agent, tenant) do
     Agent.get_and_update(agent, fn state ->
       if Map.has_key?(state.tenants, tenant.key),

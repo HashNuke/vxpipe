@@ -167,9 +167,20 @@ adding another engine shutdown phase solely to keep the usage reporter alive.
 
 Owner death before binding can leave archive evidence. Establish one shared
 durable archive ownership anchor under the call-row lock, validating the call's
-room and exact incarnation across both facts and snapshots. Current archive
-checks independently choose a first fact or snapshot and do not establish that
-shared guarantee. Do not infer ownership from an arbitrary runtime lookup.
+room and exact incarnation across both facts and snapshots. Archive writes and
+all started projections now use the same binding guard. A private
+`incarnation_binding_verified` flag defaults to false for legacy rows; the first
+successful binding validates both historical streams and sets the flag with the
+anchor in one transaction. Conflicting history fails closed, including when a
+legacy call already has a non-null incarnation. Later matching writes use the
+verified anchor without rescanning growing history. Failed writes roll back both
+the anchor and flag. This flag proves ownership validation, not resource cleanup.
+
+Migration 20261015000500 adds that internal flag. Drain old application writers
+before relying on the new invariant: older start/archive code can bypass these
+checks even with the additive migration installed. Rolling back the migration
+removes only the flag; established incarnation bindings remain intact.
+Do not infer ownership from an arbitrary runtime lookup.
 If restart leaves no
 binding or completion evidence, report bounded unavailable/unknown rather than
 inventing success. A failed/startup-unknown call may still have carrier cleanup

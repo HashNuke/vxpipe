@@ -5,6 +5,11 @@ defmodule Vxpipe.Calls.CallRepository do
 
   @type context :: term()
 
+  @type admission_subject :: AdmissionClaim.t() | TelephonyAdmissionClaim.t() | PreparedCall.t()
+  @doc "Under the call-row lock, bind one immutable runtime incarnation without starting it."
+  @callback bind_call_admission(context(), admission_subject(), String.t()) ::
+              {:ok, :admit | :cancel, admission_subject()} | {:error, term()}
+
   @doc "Under the call-row lock, persist first cancellation intent; end only an unclaimed prepared call. Never lock or revoke token rows from this operation."
   @callback request_call_hangup(context(), String.t(), String.t(), DateTime.t()) ::
               {:ok, PreparedCall.t()} | {:error, term()}

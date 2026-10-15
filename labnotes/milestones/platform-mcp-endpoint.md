@@ -373,6 +373,18 @@ passed. Independent review found no blockers; its test-cleanup suggestion was
 applied and the six join tests rerun successfully. Gateway admission integration
 and whole-call shutdown acceptance remain open.
 
+Durable binding prerequisite: web claims, incoming carrier claims and outgoing
+calls now bind one incarnation under the call-row lock after checking stored
+ownership and pinned plan identity. Canceled/released admissions retain ownership
+for cleanup without starting. All three started projections reject cancellation
+and conflicting ownership. Facts and variable snapshots share this anchor and
+validate the call room; legacy history is validated once using an internal flag.
+Migration 20261015000500 was applied to the test database. Focused red-green tests,
+four separate-connection transaction races and a 326-test Persistence selection
+passed; independent review found no remaining blockers. Root format, compile,
+strict Credo and dependency checks also passed. Runtime reconciliation, incoming
+gating and terminal cleanup proof remain open; binding is not completion evidence.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

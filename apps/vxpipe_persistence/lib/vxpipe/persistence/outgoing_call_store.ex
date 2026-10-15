@@ -13,17 +13,25 @@ defmodule Vxpipe.Persistence.OutgoingCallStore do
   def claim(_repo, _call, _authorize), do: {:error, :invalid_outgoing_call}
 
   def mark_started(repo, expected, incarnation, started) do
-    project(repo, expected, fn
-      %Call{state: :admitting} = call ->
-        if DateTime.compare(started, call.created_at) in [:eq, :gt],
-          do: repo.update(Call.start_changeset(call, incarnation, started)),
-          else: {:error, :outgoing_start_conflict}
+    project(repo, expected, fn call ->
+      with :ok <- Vxpipe.Persistence.CallIncarnationBinding.allow_start(call, incarnation),
+           {:ok, call} <- Vxpipe.Persistence.CallIncarnationBinding.bind(repo, call, incarnation) do
+        case call do
+          %Call{state: :admitting} ->
+            if DateTime.compare(started, call.created_at) in [:eq, :gt],
+              do: repo.update(Call.start_changeset(call, incarnation, started)),
+              else: {:error, :outgoing_start_conflict}
 
-      %Call{state: state, incarnation_id: ^incarnation} = call when state in [:running, :ended] ->
-        {:ok, call}
+          %Call{state: state, incarnation_id: ^incarnation} when state in [:running, :ended] ->
+            {:ok, call}
 
-      _call ->
-        {:error, :outgoing_start_conflict}
+          _other ->
+            {:error, :outgoing_start_conflict}
+        end
+      else
+        {:error, :call_incarnation_mismatch} -> {:error, :outgoing_start_conflict}
+        {:error, _reason} = error -> error
+      end
     end)
   end
 

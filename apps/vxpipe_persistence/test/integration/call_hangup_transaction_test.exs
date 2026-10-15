@@ -88,6 +88,67 @@ defmodule Vxpipe.Persistence.Integration.CallHangupTransactionTest do
     assert Repo.aggregate(from(a in Admission, where: a.call_id == ^stored_id(c)), :count) == 1
   end
 
+  test "committed cancellation wins over a concurrent binding without losing the exact owner",
+       c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+    {writer, monitor} = transaction_barrier(fn -> hangup(c) end)
+    assert_receive {:transaction_locked, ^writer, {:ok, intent}}, 2_000
+    assert intent.state == :admitting
+
+    assert {:error, :blocked} =
+             Repo.transaction(fn ->
+               Repo.query!("SET LOCAL lock_timeout = '100ms'")
+
+               assert {:error, :call_admission_unavailable} =
+                        Calls.bind_call_admission(claim, "owner", c.options)
+
+               Repo.rollback(:blocked)
+             end)
+
+    commit(writer, monitor)
+    assert {:ok, :cancel, bound} = Calls.bind_call_admission(claim, "owner", c.options)
+    assert bound.call == %{intent | incarnation_id: "owner"}
+
+    assert {:error, :call_unavailable} =
+             Calls.mark_call_started(claim, "owner", DateTime.utc_now(), c.options)
+  end
+
+  test "binding wins the row lock once and later cancellation cannot replace its incarnation",
+       c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    {writer, monitor} =
+      transaction_barrier(fn ->
+        Calls.bind_call_admission(claim, "owner", c.options)
+      end)
+
+    assert_receive {:transaction_locked, ^writer, {:ok, :admit, bound}}, 2_000
+
+    for operation <- [
+          fn -> hangup(c) end,
+          fn -> Calls.bind_call_admission(claim, "replacement", c.options) end
+        ] do
+      assert {:error, :blocked} =
+               Repo.transaction(fn ->
+                 Repo.query!("SET LOCAL lock_timeout = '100ms'")
+                 assert {:error, reason} = operation.()
+                 assert reason in [:call_admission_unavailable, :call_hangup_unavailable]
+                 Repo.rollback(:blocked)
+               end)
+    end
+
+    commit(writer, monitor)
+    assert bound.call.started_at == nil
+
+    assert {:error, :call_incarnation_mismatch} =
+             Calls.bind_call_admission(claim, "replacement", c.options)
+
+    assert {:ok, intent} = hangup(c)
+    assert intent.incarnation_id == "owner"
+    assert {:ok, :cancel, canceled} = Calls.bind_call_admission(claim, "owner", c.options)
+    assert canceled.call == intent
+  end
+
   defp assert_row_lock(operation) do
     assert {:error, :blocked} =
              Repo.transaction(fn ->
