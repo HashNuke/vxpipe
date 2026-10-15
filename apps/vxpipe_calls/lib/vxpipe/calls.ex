@@ -118,6 +118,9 @@ defmodule Vxpipe.Calls do
     UsageProjections
   }
 
+  def install_demo_samples(actor, tenant_key, options \\ []),
+    do: Vxpipe.Calls.DemoSamples.install(actor, tenant_key, options)
+
   def ensure_demo_tenant(authority, options \\ []),
     do: DemoSetup.ensure_tenant(authority, options)
 

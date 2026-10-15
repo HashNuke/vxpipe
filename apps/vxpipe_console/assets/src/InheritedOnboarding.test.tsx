@@ -150,6 +150,26 @@ test("unavailable and alternate named bindings cannot make onboarding samples re
   expect(screen.getByRole("button", { name: "Manage services" })).toBeEnabled();
 });
 
+test.each(["openai", "deepseek", "openrouter", "fireworks"])("%s model bindings enable sample installation with the explicit demo tenant", async (provider) => {
+  window.history.replaceState({}, "", "/admin/onboarding");
+  const fetchImpl = vi.fn((url: RequestInfo | URL) => {
+    if (url === "/api/onboarding/demo-tenant") return response({ tenant });
+    if (url === "/api/onboarding/demo-tenant/samples") return response({ samples: [
+      { id: "sample-voice-conversation", name: "Voice conversation", status: "installed" },
+      { id: "sample-agent-handoff", name: "Agent handoff", status: "installed" },
+      { id: "sample-human-handoff", name: "Human handoff", status: "installed" },
+    ] });
+    return response({ tenant, bindings: [binding(provider), binding("deepgram")],
+      model_catalog: modelCatalogFixture, provider_capabilities: { ...providerCapabilities, [provider]: ["credential", "llm"] } });
+  });
+  render(<App csrfToken="csrf" fetchImpl={withSession(fetchImpl)} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Load sample call specs" }));
+  expect(fetchImpl).toHaveBeenCalledWith("/api/onboarding/demo-tenant/samples", expect.objectContaining({
+    method: "POST", headers: expect.objectContaining({ "content-type": "application/json", "x-csrf-token": "csrf" }),
+    body: JSON.stringify({ tenant_key: tenant.key }),
+  }));
+});
+
 function withSession(fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
   return (input: RequestInfo | URL, init?: RequestInit) => String(input) === "/admin/api/session"
     ? response({ user: { id: "owner", email: "owner@example.test", enabled: true, roleId: "super", memberships: [] }, role: { id: "super", name: "Superadmin", kind: "superadmin", grants: [], description: "" } })

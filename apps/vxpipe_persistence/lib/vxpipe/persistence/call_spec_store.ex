@@ -44,6 +44,25 @@ defmodule Vxpipe.Persistence.CallSpecStore do
   end
 
   @impl true
+  def find_by_original_name(repo, tenant_key, name) do
+    ids =
+      repo.all(
+        from(first in StoredRevision,
+          join: spec in assoc(first, :call_spec),
+          join: tenant in assoc(spec, :tenant),
+          where:
+            tenant.key == ^tenant_key and first.revision == 1 and
+              fragment("?->>'name'", first.source) == ^name,
+          order_by: [asc: spec.id],
+          limit: 2,
+          select: type(spec.id, :string)
+        )
+      )
+
+    {:ok, ids}
+  end
+
+  @impl true
   def next_revision(repo, tenant_key, call_spec_id) do
     query =
       from(revision in StoredRevision,

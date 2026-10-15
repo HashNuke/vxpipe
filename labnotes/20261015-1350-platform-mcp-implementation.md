@@ -1224,3 +1224,32 @@ supervision-tree evidence for the new path: parameterized the held-worker draina
 test as well. Final 27 tests pass. The authority exposes the semantic reason while
 the root has its ordinary orderly auto-shutdown outcome. No modeled speech/source
 transitions changed, so Lean is not applicable to this narrow primitive.
+
+### Canonical sample installation
+
+Moved installation orchestration from Console to Calls using the actual browser
+actor and explicit existing demo-tenant key. Both tenant-creation and target
+call-spec write grants are checked before storage; inherited platform services
+also require their existing authoring permission. Save/publication retain the
+actual actor. Installation never creates the demo tenant or issues a machine key.
+The canonical route and legacy alias share session-only, CSRF, host and explicit
+Authorization policy. The UI sends its known tenant and recognizes all six model
+providers supported by the installer.
+
+Replaced the first-directory-page sample search with a tenant-scoped first-revision
+name query returning at most two matches. This preserves identity after rename,
+detects ambiguous/edited samples without overwriting them, and resumes matching
+unpublished drafts. Existing installer concurrency and credential-precedence
+coverage moved from Console to owning Calls/Persistence tests; the old Console
+installer was removed.
+
+Expected red selections: Calls 2/two, Persistence 4/four, Console 8/one and frontend
+8/four. The initial Console green run found a fixture using a disallowed default
+host; the request now targets the existing localhost host contract. Final focused
+selections passed nine Calls, 19 Persistence, eight Console and 41 frontend tests.
+All 768 frontend tests, TypeScript, ESLint, formatting and asset build pass.
+Independent source and documentation reviews approved. Rendered Chrome at desktop
+and mobile verified canonical POST 200, three installed samples, reload/retry
+reuse and no mobile overflow with synthetic Deepgram/OpenAI credential fixtures.
+No provider was invoked; browser and sandbox stopped. Full root gates are running
+against frozen source. Sample call/transfer workflows remain pending.

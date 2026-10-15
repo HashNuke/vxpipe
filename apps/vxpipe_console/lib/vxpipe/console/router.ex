@@ -151,6 +151,10 @@ defmodule Vxpipe.Console.Router do
 
     post "/onboarding/demo-tenant", Vxpipe.Console.AdminOnboardingController, :ensure_demo_tenant,
       metadata: %{console_product_api: true}
+
+    post "/onboarding/demo-tenant/samples",
+         Vxpipe.Console.AdminOnboardingController,
+         :install_samples, metadata: %{console_product_api: true}
   end
 
   scope "/api/tenants/:tenant_key/calls" do
@@ -387,6 +391,10 @@ defmodule Vxpipe.Console.Router do
 
     post "/onboarding/demo-tenant", Vxpipe.Console.AdminOnboardingController, :ensure_demo_tenant
 
+    post "/onboarding/demo-tenant/samples",
+         Vxpipe.Console.AdminOnboardingController,
+         :install_samples
+
     get "/api-keys", Vxpipe.Console.ApiKeyController, :index
     get "/api-keys/tenants", Vxpipe.Console.ApiKeyController, :tenants
     post "/api-keys", Vxpipe.Console.ApiKeyController, :create
@@ -395,10 +403,6 @@ defmodule Vxpipe.Console.Router do
 
   scope "/admin/api" do
     pipe_through :user_api
-
-    post "/onboarding/demo-tenant/samples",
-         Vxpipe.Console.AdminOnboardingController,
-         :install_samples
 
     get "/tenants", Vxpipe.Console.AdminTenantsController, :index
     get "/tenants/:tenant_key/dashboard", Vxpipe.Console.TenantDashboardController, :show

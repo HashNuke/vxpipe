@@ -771,6 +771,19 @@ pass, plus types/lint/build, root non-test gates and independent review. Rendere
 desktop/mobile checks verified canonical requests and persisted tenant reuse.
 Sample installation, sample call/transfer and final parity remain open.
 
+Sample installation cutover: Calls now owns installation using the actual browser
+actor and explicit existing demo tenant. Both required grants and inherited
+platform-service authoring policy precede writes; canonical/legacy routes share
+session/CSRF/header protection. Bounded first-revision identity lookup preserves
+renamed/edited/ambiguous samples and resumes matching drafts. The old Console
+installer is removed, with regression coverage moved to owning applications.
+
+After expected reds, nine Calls, 19 Persistence, eight Console and all 768 frontend
+tests pass, plus types/lint/build and independent review. Rendered desktop/mobile
+checks verified canonical install/retry 200 with three samples using synthetic
+credentials and no provider calls. Sample call/transfer and final parity remain
+open. Full root verification is recorded separately when complete.
+
 ## Checkpoint: parity acceptance and documentation
 
 Depends on all required capability checkpoints and supporting workflows.

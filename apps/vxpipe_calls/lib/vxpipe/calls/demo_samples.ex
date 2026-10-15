@@ -1,7 +1,17 @@
-defmodule Vxpipe.Console.DemoSamples do
+defmodule Vxpipe.Calls.DemoSamples do
   @moduledoc "Checked-in first-call catalog and explicit tenant installer."
 
-  alias Vxpipe.Calls.InstallationOperator
+  alias Vxpipe.Calls.{
+    CallSpecAuthoring,
+    CallSpecs,
+    EffectiveServiceBindings,
+    ProviderAuth,
+    Repositories,
+    Tenant,
+    UserAuthorization
+  }
+
+  alias Vxpipe.Identity.Principal
 
   @catalog_version 1
   @model_providers ["google", "zenmux", "openai", "deepseek", "openrouter", "fireworks"]
@@ -54,73 +64,75 @@ defmodule Vxpipe.Console.DemoSamples do
     ]
   end
 
-  @spec install(InstallationOperator.t(), String.t(), keyword()) ::
-          {:ok, [map()]} | {:error, term()}
-  def install(authority, tenant_key, options \\ [])
+  @spec install(Principal.t(), String.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def install(actor, tenant_key, options \\ [])
 
-  def install(
-        %InstallationOperator{grant: :installation_operator} = authority,
-        tenant_key,
-        options
-      )
-      when is_binary(tenant_key) and is_list(options) do
-    :global.trans({{__MODULE__, tenant_key}, self()}, fn ->
-      install_locked(authority, tenant_key, options)
-    end)
+  def install(%Principal{} = actor, tenant_key, options) when is_list(options) do
+    with :ok <- UserAuthorization.authorize_installation(actor, "tenants.write"),
+         :ok <- ProviderAuth.tenant_key(tenant_key),
+         :ok <- UserAuthorization.authorize_tenant(actor, "call_specs.write", tenant_key),
+         :ok <- existing_demo(tenant_key, options) do
+      :global.trans({{__MODULE__, tenant_key}, self()}, fn ->
+        install_locked(actor, tenant_key, options)
+      end)
+    end
   end
 
-  def install(%InstallationOperator{}, _tenant_key, _options),
-    do: {:error, :installation_operator_required}
+  def install(_actor, _tenant_key, _options), do: {:error, :forbidden}
 
-  def install(_authority, _tenant_key, _options),
-    do: {:error, :installation_operator_required}
+  defp existing_demo(tenant_key, options) do
+    with {:ok, repository} <- Repositories.fetch(options, :demo_tenant_repository),
+         {:ok, %Tenant{key: ^tenant_key}} <- Repositories.call(repository, :fetch, []) do
+      :ok
+    else
+      {:ok, _other} -> {:error, :not_found}
+      error -> error
+    end
+  end
 
-  defp install_locked(authority, tenant_key, options) do
-    with {:ok, directory} <-
-           Vxpipe.Calls.list_operator_service_bindings(authority, tenant_key, options),
+  defp install_locked(actor, tenant_key, options) do
+    with {:ok, directory} <- EffectiveServiceBindings.list(tenant_key, options),
          {:ok, model_provider} <- sample_providers(directory.bindings),
-         {:ok, page} <-
-           Vxpipe.Calls.list_operator_call_specs(
-             authority,
-             tenant_key,
-             Keyword.merge(options, page: 1, limit: 100)
-           ),
-         {:ok, summaries} <- index_original_names(page.call_specs, tenant_key, options) do
+         :ok <- authorize_bindings(actor, directory.bindings, model_provider),
+         {:ok, repository} <- Repositories.fetch(options, :call_spec_repository) do
       results =
-        model_provider
-        |> catalog()
-        |> Enum.map(&install_entry(&1, tenant_key, summaries, options))
+        Enum.map(
+          catalog(model_provider),
+          &install_entry(&1, actor, tenant_key, repository, options)
+        )
 
       {:ok, results}
     end
   end
 
-  # The immutable first revision identifies a sample even after its display name
-  # is edited. Never overwrite a differing source or an ambiguous name match.
-  defp index_original_names(summaries, tenant_key, options) do
-    Enum.reduce_while(summaries, {:ok, %{}}, fn summary, {:ok, index} ->
-      case Vxpipe.Calls.fetch_call_spec(tenant_key, summary.id, 1, options) do
-        {:ok, first} ->
-          {:cont, {:ok, Map.update(index, first.source["name"], [summary], &[summary | &1])}}
+  defp authorize_bindings(actor, bindings, model_provider) do
+    inherited? =
+      Enum.any?(bindings, fn binding ->
+        binding.provider in ["deepgram", model_provider] and binding.name == binding.provider and
+          binding.source == :platform
+      end)
 
-        {:error, _reason} = error ->
-          {:halt, error}
-      end
-    end)
+    if inherited? and not UserAuthorization.platform_authoring_allowed?(actor),
+      do: {:error, :forbidden},
+      else: :ok
   end
 
-  defp install_entry(entry, tenant_key, summaries, options) do
-    case Map.get(summaries, entry.name, []) do
-      [] -> create_entry(entry, tenant_key, options)
-      [summary] -> resume_entry(entry, tenant_key, summary, options)
-      _ambiguous -> %{id: entry.id, name: entry.name, status: :conflict}
+  # Revision one is immutable even when the display name changes. At most two
+  # matches are needed to distinguish a unique sample from an ambiguous name.
+  defp install_entry(entry, actor, tenant_key, repository, options) do
+    case Repositories.call(repository, :find_by_original_name, [tenant_key, entry.name]) do
+      {:ok, []} -> create_entry(entry, actor, tenant_key, options)
+      {:ok, [id]} -> resume_entry(entry, actor, tenant_key, id, repository, options)
+      {:ok, [_first, _second]} -> %{id: entry.id, name: entry.name, status: :conflict}
+      {:error, reason} -> failed(entry, reason)
     end
   end
 
-  defp create_entry(entry, tenant_key, options) do
-    with {:ok, draft} <- Vxpipe.Calls.save_call_spec(tenant_key, entry.source, options),
+  defp create_entry(entry, actor, tenant_key, options) do
+    with {:ok, draft} <- CallSpecAuthoring.save(actor, tenant_key, entry.source, options),
          {:ok, published} <-
-           Vxpipe.Calls.publish_call_spec(
+           CallSpecAuthoring.publish(
+             actor,
              tenant_key,
              draft.call_spec_id,
              draft.revision,
@@ -132,21 +144,47 @@ defmodule Vxpipe.Console.DemoSamples do
     end
   end
 
-  defp resume_entry(entry, tenant_key, summary, options) do
-    with {:ok, latest} <-
-           Vxpipe.Calls.fetch_call_spec(tenant_key, summary.id, summary.latest_revision, options),
-         true <- latest.source_digest == source_digest(entry.source) do
-      if summary.published_revision == latest.revision do
-        installed(entry, latest)
-      else
-        case Vxpipe.Calls.publish_call_spec(tenant_key, summary.id, latest.revision, options) do
-          {:ok, published} -> installed(entry, published)
-          {:error, reason} -> failed(entry, reason)
-        end
-      end
+  defp resume_entry(entry, actor, tenant_key, id, repository, options) do
+    with {:ok, next} <- Repositories.call(repository, :next_revision, [tenant_key, id]),
+         {:ok, latest} <- CallSpecs.fetch(tenant_key, id, next - 1, options),
+         true <- latest.tenant_key == tenant_key and latest.call_spec_id == id,
+         true <- latest.source_digest == source_digest(entry.source),
+         {:ok, published} <- publish_if_needed(actor, tenant_key, latest, repository, options) do
+      installed(entry, published)
     else
       false -> %{id: entry.id, name: entry.name, status: :conflict}
       {:error, reason} -> failed(entry, reason)
+    end
+  end
+
+  defp publish_if_needed(actor, tenant_key, latest, repository, options) do
+    case Repositories.call(repository, :fetch_published_revision, [
+           tenant_key,
+           latest.call_spec_id
+         ]) do
+      {:ok, %{revision: revision}} when revision == latest.revision ->
+        {:ok, latest}
+
+      {:ok, _older} ->
+        CallSpecAuthoring.publish(
+          actor,
+          tenant_key,
+          latest.call_spec_id,
+          latest.revision,
+          options
+        )
+
+      {:error, :call_spec_not_published} ->
+        CallSpecAuthoring.publish(
+          actor,
+          tenant_key,
+          latest.call_spec_id,
+          latest.revision,
+          options
+        )
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

@@ -421,7 +421,7 @@ function SampleSection({
 
       {samples.status === "blocked" ? (
         <p className="mt-4 text-sm text-[var(--admin-muted)]">
-          Sample calls require connected Deepgram and either Google AI Studio or Zenmux credentials.
+          Sample calls require connected Deepgram and a supported model service: Google AI Studio, Zenmux, OpenAI, DeepSeek, OpenRouter, or Fireworks.
         </p>
       ) : null}
       {samples.status === "error" && samples.message ? (

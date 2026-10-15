@@ -3,8 +3,6 @@ defmodule Vxpipe.Console.AdminOnboardingController do
 
   use Phoenix.Controller, formats: [:json]
 
-  alias Vxpipe.Calls.{InstallationOperator, UserAuthorization}
-
   def ensure_demo_tenant(conn, _params) do
     case Vxpipe.Calls.ensure_demo_tenant(conn.assigns.user_principal) do
       {:ok, tenant} ->
@@ -28,21 +26,8 @@ defmodule Vxpipe.Console.AdminOnboardingController do
     end
   end
 
-  # Samples are published with installation authority, so the user must also be allowed
-  # to write call specs in the demo tenant; `tenants.write` alone does not imply that.
-  def install_samples(conn, _params) do
-    authority = InstallationOperator.authority()
-
-    result =
-      with {:ok, tenant} <- Vxpipe.Calls.ensure_demo_tenant(authority),
-           :ok <-
-             UserAuthorization.authorize_tenant(
-               conn.assigns.user_principal,
-               "call_specs.write",
-               tenant.key
-             ) do
-        Vxpipe.Console.DemoSamples.install(authority, tenant.key)
-      end
+  def install_samples(conn, params) do
+    result = Vxpipe.Calls.install_demo_samples(conn.assigns.user_principal, params["tenant_key"])
 
     case result do
       {:ok, results} ->
@@ -52,6 +37,12 @@ defmodule Vxpipe.Console.AdminOnboardingController do
         conn
         |> put_status(403)
         |> json(%{error: %{code: "forbidden"}})
+
+      {:error, :invalid_tenant_key} ->
+        conn |> put_status(422) |> json(%{error: %{code: "invalid_tenant_key"}})
+
+      {:error, :not_found} ->
+        conn |> put_status(404) |> json(%{error: %{code: "demo_tenant_not_found"}})
 
       {:error, :sample_prerequisites_missing} ->
         conn

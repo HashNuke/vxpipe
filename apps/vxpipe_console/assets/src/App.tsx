@@ -1779,7 +1779,7 @@ function samplePrerequisitesMet(providers: OnboardingPageState["providers"]) {
       .filter((provider) => provider.status === "valid")
       .map((provider) => provider.provider),
   );
-  return valid.has("deepgram") && (valid.has("google") || valid.has("zenmux"));
+  return valid.has("deepgram") && (["google", "zenmux", "openai", "deepseek", "openrouter", "fireworks"] as const).some((provider) => valid.has(provider));
 }
 
 async function installOnboardingSamples(
@@ -1796,12 +1796,14 @@ async function installOnboardingSamples(
   }));
 
   try {
-    const response = await fetchImpl("/admin/api/onboarding/demo-tenant/samples", {
+    const response = await fetchImpl("/api/onboarding/demo-tenant/samples", {
       method: "POST",
       headers: {
+        "content-type": "application/json",
         accept: "application/json",
         "x-csrf-token": csrfToken,
       },
+      body: JSON.stringify({ tenant_key: current.tenant.key }),
     });
 
     if (response.status === 401) {

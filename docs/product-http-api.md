@@ -179,6 +179,41 @@ creates no implicit memberships, API keys or call specs. Permission denial retur
 Sample installation remains a separate workflow; ensuring a tenant neither grants
 spec-writing authority nor starts a call.
 
+## Install onboarding samples (Console session only)
+
+```http
+POST /api/onboarding/demo-tenant/samples
+Content-Type: application/json
+
+{"tenant_key":"DEMOabcdefgh1234"}
+```
+
+Use the tenant key returned by demo-tenant setup. Installation requires both
+`tenants.write` and `call_specs.write` for that tenant. It reads the existing demo
+binding and never creates a tenant or chooses one implicitly. The canonical and
+legacy `/admin/api/onboarding/demo-tenant/samples` routes share the actual browser
+actor, session/CSRF protection and host policy. Any Authorization header returns
+401 `session_required`; machine keys have no grant for this operation.
+
+Samples require connected, canonically named Deepgram and one supported model
+service: Google AI Studio, Zenmux, OpenAI, DeepSeek, OpenRouter or Fireworks. Using
+inherited platform services also requires platform-service authoring permission.
+Each save and publication applies the existing call-spec authoring policy.
+Installing compiles and publishes definitions; it does not start calls or invoke
+providers.
+
+Success returns 200 `{samples:[{id,name,status,revision?}]}`. Status is `installed`,
+`conflict` or `failed`; a successful HTTP response can contain individual failures.
+Repeated installation reuses matching samples and resumes unpublished drafts.
+Edited definitions and ambiguous original names report conflicts instead of being
+overwritten. Sample identity uses its first revision, so renaming a definition
+cannot cause a duplicate installation.
+
+Errors use `{error:{code}}`: 403 `forbidden`, 422 `invalid_tenant_key` or
+`sample_prerequisites_missing`, 404 `demo_tenant_not_found`, and 503
+`sample_installation_unavailable`. Per-sample private failure details are omitted
+from the response.
+
 ## List call specs
 
 ```http
@@ -681,8 +716,9 @@ map to 503 `call_spec_authoring_unavailable`, and unexpected controller
 exceptions map to 503 `phone_numbers_unavailable`.
 
 UI consumers now use these canonical routes, including onboarding's service
-binding read. Onboarding demo-tenant/sample mutations remain pending product
-workflows for a separate migration; they are not reclassified as helpers.
+binding read. Demo-tenant setup and sample installation use the canonical
+operations documented above. Sample call/transfer workflows remain pending
+migration; they are not reclassified as helpers.
 
 
 ## Role administration (Console session only)

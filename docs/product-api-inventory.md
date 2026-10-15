@@ -20,8 +20,9 @@ handlers; role directories now paginate full metadata. Tenant creation also uses
 the canonical session-only handler. Call directory/filter/detail, inspection polling
 and artifact downloads now use canonical session-only handlers and shared
 inspection ownership checks. Onboarding demo-tenant creation now uses the actual
-browser actor through its canonical session-only route. Sample installation and
-sample call/transfer workflows still require migration.
+browser actor through its canonical session-only route. Sample installation now
+uses Calls-owned authoring with an explicit existing demo tenant and the actual
+actor. Sample call/transfer workflows still require migration.
 Legacy routes remain available during that work; this inventory does not claim
 their removal or full controller consolidation.
 
@@ -138,14 +139,15 @@ tests in this milestone use a local fake adapter.
 | `POST A/T/telephony-applications` | `POST API/T/telephony-applications` | Calls telephony application create; existing validated definition -> `{application}`, 201 | S `tenant_services.write`; K denied pending service policy; preserve credential ownership |
 | `PATCH A/T/telephony-applications/:service_id` | `PATCH API/T/telephony-applications/:service_id` | Calls telephony application update -> `{application}` | Same write grants; preserve published-route conflicts |
 | `POST A/onboarding/demo-tenant` | `POST API/onboarding/demo-tenant` | Calls authorized ensure-demo-tenant; `{tenant}` | S `tenants.write`; K denied; actual browser actor authorized directly before repository access |
-| `POST A/onboarding/demo-tenant/samples` | `POST API/onboarding/demo-tenant/samples` | Calls sample authoring workflow; installed sample IDs/names/status/revisions | S `tenants.write` **and** target `call_specs.write`; K denied pending sample-install policy; move `Console.DemoSamples` orchestration to owning boundary |
+| `POST A/onboarding/demo-tenant/samples` | `POST API/onboarding/demo-tenant/samples` | Calls sample authoring workflow; installed sample IDs/names/status/revisions | S `tenants.write` **and** target `call_specs.write`; K denied; explicit existing demo tenant, actual-actor Calls authoring, inherited-service permission preserved |
 
 Service/credential/telephony-application routes above and the authoring number
 inventory are implemented under `/api`, with existing handlers shared by their
 legacy aliases. Explicit Authorization is rejected before parsing/session fallback
 on both prefixes. Direct credential validation uses the same write permission as
 HTTP. See [service contracts](product-http-api.md#services-and-provider-credentials-browser-sessions).
-Onboarding creation/sample mutations remain pending product workflows.
+Demo-tenant setup and sample installation now use canonical Calls workflows.
+Sample call/transfer mutations remain pending product workflows.
 
 Service `truncated` results and provider cursors predate this milestone. Document
 their bounds instead of silently labelling them paginated. Required MCP product

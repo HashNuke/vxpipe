@@ -5,5 +5,7 @@ defmodule Vxpipe.Calls.DemoTenantRepository do
 
   @type context :: term()
 
+  @callback fetch(context()) :: {:ok, Tenant.t()} | {:error, term()}
+
   @callback ensure(context(), Tenant.t()) :: {:ok, Tenant.t()} | {:error, term()}
 end
