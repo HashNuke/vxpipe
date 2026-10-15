@@ -91,9 +91,22 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
   end
 
   @impl true
-  def prepare_incoming(agent, service, claim, room, leg) do
-    options = operation(agent, {:activate_incoming, claim.call.id, leg})
-    CallAdmission.prepare_incoming(options, service, claim, room, leg)
+  def identify_incoming(agent, service, claim, room, leg) do
+    CallAdmission.identify_incoming(
+      Agent.get(agent, & &1.runtime_options),
+      service,
+      claim,
+      room,
+      leg
+    )
+  end
+
+  @impl true
+  def prepare_incoming(agent, identity) do
+    options =
+      operation(agent, {:activate_incoming, identity.binding.call_id, identity.binding.leg})
+
+    CallAdmission.prepare_incoming(options, identity)
   end
 
   @impl true

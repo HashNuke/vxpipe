@@ -95,6 +95,16 @@ releasing the gate. Submission acceptance alone does not invent a start event.
 The owner applies usage transitions to its current state, preserving callbacks
 that arrived while the answer request was in flight.
 
+Before binding that room, identify the incoming leg once and retain its initial
+usage attempt. Identification validates the service but issues neither a media
+token nor a carrier command. Answer preparation reuses the retained local leg ID
+and observations. Cancellation before preparation therefore still has an attributed
+attempt and uses that local ID alongside the original authenticated carrier control
+ID. The Leg owns subsequent usage transitions; prepared contexts cannot replace
+newer callback observations. Best-effort room reporting is not final persistence
+evidence, which still requires an acknowledged store operation before cleanup can
+be complete.
+
 Room shutdown requests carrier termination without declaring it complete. A late
 answer queues another end attempt if one is already in flight. Authenticated
 termination and local room cancellation are separate evidence; a failed local

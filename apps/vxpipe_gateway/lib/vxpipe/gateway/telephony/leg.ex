@@ -11,6 +11,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     ConfiguredService,
     IncomingLegActivationResult,
     IncomingLegActivationContext,
+    IncomingLegIdentity,
     IncomingSubmission,
     MediaAdmission,
     IngressIdentity,
@@ -69,6 +70,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
     state = %{
       activation: nil,
+      incoming_identity: nil,
       prepared: nil,
       answer_worker: nil,
       end_worker: nil,
@@ -297,7 +299,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
         # Retain exact room ownership before persistence or answer preparation.
         claim = %{state.claim | call: %{state.claim.call | incarnation_id: room.incarnation_id}}
 
-        bind_call(
+        identify_call(
           %{state | claim: claim, incarnation_id: room.incarnation_id, room_monitor: monitor},
           room
         )
@@ -313,10 +315,25 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     end
   end
 
+  defp identify_call(state, room) do
+    case call_backend(state.backend, :identify_incoming, [
+           state.service,
+           state.claim,
+           room,
+           self()
+         ]) do
+      {:ok, %IncomingLegIdentity{} = identity} ->
+        bind_call(%{state | incoming_identity: identity, usage: identity.usage}, room)
+
+      _failure ->
+        close(state, :identity_preparation_failed)
+    end
+  end
+
   defp bind_call(state, room) do
     case call_backend(state.backend, :bind_incoming, [state.claim, room.incarnation_id]) do
       {:ok, :admit, %TelephonyAdmissionClaim{} = claim} ->
-        prepare_call(%{state | claim: claim}, room)
+        prepare_call(%{state | claim: claim})
 
       {:ok, :cancel, %TelephonyAdmissionClaim{} = claim} ->
         close(%{state | claim: claim}, :admission_cancelled)
@@ -326,8 +343,8 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     end
   end
 
-  defp prepare_call(state, room) do
-    case call_backend(state.backend, :prepare_incoming, [state.service, state.claim, room, self()]) do
+  defp prepare_call(state) do
+    case call_backend(state.backend, :prepare_incoming, [state.incoming_identity]) do
       {:ok, prepared} ->
         activation = prepared_activation(prepared)
 
@@ -335,7 +352,6 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
           state
           | prepared: prepared,
             activation: activation,
-            usage: activation_usage(activation),
             status: :answering
         }
 
@@ -432,7 +448,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
                call_backend(state.backend, :end_incoming, [
                  state.service,
                  state.initial_event,
-                 state.activation,
+                 state.activation || state.incoming_identity,
                  reason
                ])
              end) do
@@ -460,9 +476,6 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     do: {:ok, media_url}
 
   defp activation_result(_custom_activation), do: :ok
-
-  defp activation_usage(%IncomingLegActivationResult{usage: usage}), do: usage
-  defp activation_usage(_custom_activation), do: nil
 
   defp observe_usage(state, event) do
     %{state | usage: LegUsage.observe(state.usage, event)}

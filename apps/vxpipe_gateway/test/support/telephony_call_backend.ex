@@ -9,12 +9,19 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.Calls.{PreparedCall, TelephonyAdmissionClaim}
 
+  alias Vxpipe.Gateway.Telephony.{
+    IncomingLegActivation,
+    IncomingLegActivationResult,
+    IncomingLegIdentity
+  }
+
   def start_link(options) do
     Agent.start_link(fn ->
       %{
         claim: claim(),
         activation: Keyword.get(options, :activation, :test_activation),
         observer: Keyword.fetch!(options, :observer),
+        usage_options: Keyword.take(options, [:usage_reporter, :usage_clock]),
         operations: [],
         activation_failure?: Keyword.get(options, :activation_failure?, false),
         claimed?: Keyword.get(options, :claimed?, false),
@@ -100,8 +107,34 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
   end
 
   @impl true
-  def prepare_incoming(agent, _service, claim, room, leg) do
-    operation(agent, {:activate_incoming, claim.call.id, room.incarnation_id, leg})
+  def identify_incoming(agent, service, claim, room, leg) do
+    case Agent.get(agent, & &1.activation) do
+      %IncomingLegActivationResult{} = activation ->
+        {:ok,
+         %IncomingLegIdentity{
+           binding: activation.binding,
+           service: service,
+           usage: activation.usage
+         }}
+
+      _custom ->
+        # The unit backend uses a fixed claim with a per-test configured service.
+        claim = %{claim | service: service.identity.service_id}
+
+        IncomingLegActivation.identify(
+          service,
+          claim,
+          room.incarnation_id,
+          leg,
+          Agent.get(agent, & &1.usage_options)
+        )
+    end
+  end
+
+  @impl true
+  def prepare_incoming(agent, identity) do
+    binding = identity.binding
+    operation(agent, {:activate_incoming, binding.call_id, binding.incarnation_id, binding.leg})
     {:ok, Agent.get(agent, & &1.activation)}
   end
 

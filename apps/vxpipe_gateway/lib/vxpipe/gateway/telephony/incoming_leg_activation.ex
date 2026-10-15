@@ -9,6 +9,7 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
     ConfiguredService,
     IncomingLegActivationContext,
     IncomingLegActivationResult,
+    IncomingLegIdentity,
     LegUsage,
     MediaAdmission,
     MediaBinding,
@@ -33,6 +34,25 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
     end
   end
 
+  @doc "Allocates the incoming identity and usage without issuing media or carrier commands."
+  @spec identify(ConfiguredService.t(), TelephonyAdmissionClaim.t(), String.t(), pid(), keyword()) ::
+          {:ok, IncomingLegIdentity.t()} | {:error, term()}
+  def identify(service, claim, incarnation_id, leg, options \\ []) do
+    generator = Keyword.get(options, :leg_id, fn -> Id.generate(:telephony_leg) end)
+
+    with :ok <- matching_service(service, claim),
+         {:ok, client_state_leg_id} <- generate_leg_id(generator) do
+      binding = binding(service, claim, incarnation_id, client_state_leg_id, leg)
+
+      {:ok,
+       %IncomingLegIdentity{
+         binding: binding,
+         service: service,
+         usage: LegUsage.start_incoming(binding, options)
+       }}
+    end
+  end
+
   @doc "Prepares media admission and usage without submitting an answer to the carrier."
   @spec prepare(ConfiguredService.t(), TelephonyAdmissionClaim.t(), String.t(), pid(), keyword()) ::
           {:ok, IncomingLegActivationContext.t()} | {:error, term()}
@@ -46,17 +66,23 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
         options
       )
       when is_binary(incarnation_id) and is_pid(leg) do
-    media_admission = Keyword.get(options, :media_admission, MediaAdmission)
-    leg_id = Keyword.get(options, :leg_id, fn -> Id.generate(:telephony_leg) end)
+    with {:ok, identity} <- identify(service, claim, incarnation_id, leg, options) do
+      prepare_identity(identity, options)
+    end
+  end
 
-    with :ok <- matching_service(service, claim),
-         {:ok, client_state_leg_id} <- generate_leg_id(leg_id),
-         binding <- binding(service, claim, incarnation_id, client_state_leg_id, leg),
-         {:ok, token} <-
-           MediaAdmission.issue(media_admission, binding, service.media_token_ttl_ms, service),
-         media_url <- ProviderEndpoint.media_url(service, token),
-         request <- answer_request(binding, media_url) do
-      usage = LegUsage.start_incoming(binding, options)
+  @doc "Prepares media using the original retained identity, without starting another usage attempt."
+  @spec prepare_identity(IncomingLegIdentity.t(), keyword()) ::
+          {:ok, IncomingLegActivationContext.t()} | {:error, term()}
+  def prepare_identity(
+        %IncomingLegIdentity{binding: binding, service: service} = identity,
+        options \\ []
+      ) do
+    media_admission = Keyword.get(options, :media_admission, MediaAdmission)
+
+    with {:ok, token} <-
+           MediaAdmission.issue(media_admission, binding, service.media_token_ttl_ms, service) do
+      media_url = ProviderEndpoint.media_url(service, token)
 
       {:ok,
        %IncomingLegActivationContext{
@@ -64,12 +90,12 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
          service: service,
          media_admission: media_admission,
          media_url: media_url,
-         request: request,
-         usage: usage
+         request: answer_request(binding, media_url),
+         usage: identity.usage
        }}
     else
       {:error, reason} = error ->
-        :ok = MediaAdmission.revoke(media_admission, leg)
+        :ok = MediaAdmission.revoke(media_admission, binding.leg)
         if is_atom(reason) or is_tuple(reason), do: error, else: {:error, :activation_failed}
     end
   end

@@ -35,7 +35,11 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
        context do
     for decision <- [:cancel, :error] do
       backend =
-        start_supervised!({TestTelephonyCallBackend, observer: self(), bind_decision: decision},
+        start_supervised!(
+          {TestTelephonyCallBackend,
+           observer: self(),
+           bind_decision: decision,
+           usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}},
           id: decision
         )
 
@@ -47,6 +51,14 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
       refute Enum.any?(operations, &match?({:activate_incoming, _, _, _}, &1))
       refute Enum.any?(operations, &match?({:mark_incoming_failed, _, _}, &1))
       assert_receive {:incoming_end_requested, "call-control-1", _reason}
+      assert_receive {:test_usage_observations, [started]}
+
+      ended = %{answered_event() | kind: :ended, end_reason: :hangup}
+      assert :ok = handle_event(options, context.service, ended)
+      assert_receive {:test_usage_observations, [terminal]}
+      assert terminal.outcome == :failed
+      assert terminal.attempt_id == started.attempt_id
+      refute_received {:test_usage_observations, _}
       LegSupervisor.stop(context.service.identity, "call-leg-1")
     end
   end

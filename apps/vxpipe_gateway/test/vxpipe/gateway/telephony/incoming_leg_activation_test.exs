@@ -18,6 +18,81 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivationTest do
     %{admission: admission, claim: TestTelephonyCallBackend.claim(backend), leg: leg}
   end
 
+  test "identity retains one usage attempt before media preparation", context do
+    assert {:ok, identity} =
+             IncomingLegActivation.identify(
+               service("accept"),
+               context.claim,
+               "rinc_retained",
+               context.leg,
+               leg_id: fn -> "tleg-retained" end,
+               usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}
+             )
+
+    assert_receive {:test_usage_observations, [started]}
+    assert identity.usage.observations == [started]
+    refute_received {:test_telephony_answer, _}
+
+    assert {:ok, prepared} =
+             IncomingLegActivation.prepare_identity(identity,
+               media_admission: context.admission,
+               leg_id: fn -> flunk("preparation must reuse the retained identity") end
+             )
+
+    assert prepared.binding == identity.binding
+    assert prepared.usage == identity.usage
+    assert prepared.request.leg.leg_id == "tleg-retained"
+    refute_received {:test_usage_observations, _}
+    refute_received {:test_telephony_answer, _}
+  end
+
+  test "cancelling an identified unprepared leg retains its local and carrier identities",
+       context do
+    configured = service("accept")
+
+    assert {:ok, identity} =
+             IncomingLegActivation.identify(configured, context.claim, "rinc_cancel", context.leg,
+               leg_id: fn -> "tleg-cancel-before-answer" end
+             )
+
+    event = %Vxpipe.CallEngine.Telephony.Event{
+      kind: :incoming,
+      provider: context.claim.provider,
+      provider_call_control_id: context.claim.provider_call_control_id,
+      provider_call_leg_id: context.claim.provider_call_leg_id
+    }
+
+    assert {:ok, _submission} =
+             Vxpipe.Gateway.IncomingCallAdmission.end_leg(
+               configured,
+               event,
+               identity,
+               :admission_cancelled
+             )
+
+    assert_receive {:test_telephony_end_leg, request}
+    assert request.leg.leg_id == "tleg-cancel-before-answer"
+    assert request.leg.provider_call_control_id == context.claim.provider_call_control_id
+    refute_received {:test_telephony_answer, _}
+  end
+
+  test "identity rejects a mismatched service before allocating or reporting usage", context do
+    claim = %{context.claim | service: "another-service"}
+
+    assert {:error, :telephony_service_mismatch} =
+             IncomingLegActivation.identify(
+               service("accept"),
+               claim,
+               "rinc_retained",
+               context.leg,
+               leg_id: fn -> flunk("invalid service must not allocate an identity") end,
+               usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}
+             )
+
+    refute_received {:test_usage_observations, _}
+    refute_received {:test_telephony_answer, _}
+  end
+
   test "preparation retains exact answer context without submitting to the carrier", context do
     configured = service("accept")
 

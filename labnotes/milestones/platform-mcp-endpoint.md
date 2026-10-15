@@ -541,6 +541,14 @@ explicit local WebSocket integration cases and local carrier harnesses.
 Independent review approved. These remain opt-in hooks until carrier/final-usage
 ownership and reconciliation enable managed admission.
 
+Incoming identity prerequisite: the Leg now retains one local carrier identity
+and initial usage attempt before admission binding. Cancellation at binding can
+therefore observe terminal usage even without answer preparation; preparation
+reuses the same attempt and original carrier control ID. Four expected red
+regressions preceded the change, and all 55 focused activation/ingress/local
+carrier-harness tests pass; independent review approved. Final durable usage,
+worker drainage, carrier tracker registration and managed admission remain open.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

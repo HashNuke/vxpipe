@@ -5,6 +5,7 @@ defmodule Vxpipe.Gateway.IncomingCallAdmission do
   alias Vxpipe.CallEngine.Telephony.{Adapter, EndLeg, LegReference}
   alias Vxpipe.Gateway.CallAdmission.CallEngineOptions
   alias Vxpipe.Gateway.Telephony.IncomingLegActivationResult
+  alias Vxpipe.Gateway.Telephony.IncomingLegIdentity
 
   def start(options, claim, owner, token) do
     runtime = Keyword.put(CallEngineOptions.build(options), :call_admission, {owner, token})
@@ -70,6 +71,7 @@ defmodule Vxpipe.Gateway.IncomingCallAdmission do
     leg_id =
       case activation do
         %IncomingLegActivationResult{binding: binding} -> binding.client_state_leg_id
+        %IncomingLegIdentity{binding: binding} -> binding.client_state_leg_id
         _unprepared -> event.provider_call_leg_id
       end
 

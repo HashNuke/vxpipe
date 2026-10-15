@@ -132,9 +132,9 @@ defmodule Vxpipe.Gateway.CallAdmission do
     do: Calls.bind_call_admission(claim, incarnation_id, options)
 
   @impl CallIngressBackend
-  def prepare_incoming(options, service, claim, room, leg) do
+  def identify_incoming(options, service, claim, room, leg) do
     with :ok <- matching_incoming_service(service, claim) do
-      IncomingLegActivation.prepare(
+      IncomingLegActivation.identify(
         service,
         claim,
         room.incarnation_id,
@@ -143,6 +143,10 @@ defmodule Vxpipe.Gateway.CallAdmission do
       )
     end
   end
+
+  @impl CallIngressBackend
+  def prepare_incoming(options, identity),
+    do: IncomingLegActivation.prepare_identity(identity, telephony_activation_options(options))
 
   @impl CallIngressBackend
   def submit_incoming(_options, prepared),

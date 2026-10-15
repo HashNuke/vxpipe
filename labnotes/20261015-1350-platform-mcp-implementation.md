@@ -1010,3 +1010,22 @@ Rendered desktop/mobile checks using a synthetic local database verified canonic
 POST 201 and dashboard navigation while GET discovery remained 200. Browser and
 database fixture stopped. Combined root format, compile, Credo and unused-dependency
 checks pass. No live providers or external telephony were used.
+
+### Incoming identity before binding
+
+Incoming usage previously started only during answer preparation, so cancellation
+or failure at the binding step had no retained attempt despite an existing carrier
+leg. Identification now runs once after capturing the gated room and before
+binding. It validates the service and retains a private binding/service/usage seed
+without issuing media tokens or carrier commands. Preparation reuses that exact
+local leg identity and observations. The Leg owns subsequent usage transitions;
+a late answer result cannot overwrite callbacks with the initial seed. Cancellation
+uses the retained local ID and original authenticated carrier control ID.
+
+Three activation regressions and the strengthened cancellation regression failed
+first: 25 tests, four expected failures. The final focused selection passed 55
+tests covering activation, ingress and both local carrier harnesses. The existing
+blocked-answer usage test also verifies connected/terminal observations survive a
+late submission response. This is retention evidence, not durable final usage or
+managed cleanup acceptance; those integrations remain open.
+Independent source/test/design review approved this checkpoint with no blockers.
