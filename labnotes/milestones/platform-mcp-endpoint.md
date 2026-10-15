@@ -332,16 +332,16 @@ completion evidence and recovery. Its review does not complete runtime tasks.
   including denial before runtime lookup and repeated termination.
 - [x] Add a shared application workflow and `POST /api/tenants/:tenant_key/calls/:id/hangup`.
   Resolve room/incarnation server-side; do not expose unscoped engine termination.
-- [ ] Handle prepared calls durably and prevent token issue/redemption afterwards.
+- [x] Handle prepared calls durably and prevent token issue/redemption afterwards.
   Interlock cancellation with admission so a concurrent join/start cannot resurrect
   a cancelled call. Preserve truthful terminal/unknown states through restart.
-- [ ] Request live shutdown from the exact owner/incarnation, with an API-requested
+- [x] Request live shutdown from the exact owner/incarnation, with an API-requested
   reason. Release participant sessions, all carrier legs and owned workers through
   the normal lifecycle; keep usage/archive completion intact.
-- [ ] Return `ending` on durable acceptance and `ended` only with evidence. Already
+- [x] Return `ending` on durable acceptance and `ended` only with evidence. Already
   terminal calls are repeat-safe; missing runtime without terminal evidence is a
   bounded unavailable/unknown outcome. Never terminate a replacement incarnation.
-- [ ] Acceptance: local barriers/monitors prove hangup-versus-admission/dial races,
+- [x] Acceptance: local barriers/monitors prove hangup-versus-admission/dial races,
   retry, stale incarnation, crash/restart, foreign IDs and resource cleanup without
   arbitrary sleeps or real telephony. Add/run relevant Lean verification if the
   implementation changes modeled source/speech transitions.
@@ -748,6 +748,16 @@ on first valid execution, then passed again after cleanup refinement; independen
 review approved. No voice provider or external carrier ran. Final combined gates
 and the complete invariant audit remain separate acceptance work.
 
+Hangup invariant audit: independent review matched the completed tasks to SQL
+transaction lock-order/rollback tests; startup-gate/controller-death tests; managed
+incoming/outgoing/transfer owner and local media-socket tests; exact engine/root
+and semantic ownership tests; completion persistence lost-result/deadline tests;
+reconciler restart/stale-incarnation tests; and all admission-kind archive/completion
+orderings. Together with the persisted connected-WebRTC acceptance above, these
+prove the required local lifecycle contract. No modeled source-cutover or speech
+transition changed, so the conditional Lean gate does not apply. Final root gates
+remain unchecked until their current-source run finishes.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:
@@ -992,16 +1002,16 @@ scenarios, whole-BEAM restart and accelerated expiry also passed. Independent re
 approved. No token redemption/media runs in this SDK lane; active cleanup and
 fault-path log redaction have separate acceptance checks.
 
-- [ ] Verify all 13 required tools and four helpers against the authority matrix,
+- [x] Verify all 13 required tools and four helpers against the authority matrix,
   including direct calls to undiscovered tools, revoked keys, unavailable storage,
   foreign resources, variable initialization, pagination, hangup and user activation.
-- [ ] Verify direct Elixir, UI session HTTP, external key HTTP and MCP parity for
+- [x] Verify direct Elixir, UI session HTTP, external key HTTP and MCP parity for
   each shared capability, comparing equivalent authority and expected differences
   for restricted roles/key scopes. Confirm documented HTTP endpoints are the ones
   exercised by UI network traffic, not merely similarly named domain functions.
-- [ ] Exercise bounded concurrency/session cleanup, malformed/oversized requests,
+- [x] Exercise bounded concurrency/session cleanup, malformed/oversized requests,
   slow clients and log redaction, including passwords and join tokens.
-- [ ] Document client connection via static Bearer headers, signatures, public IDs,
+- [x] Document client connection via static Bearer headers, signatures, public IDs,
   all pagination shapes, prepare-versus-dial behavior, explicit publication,
   variable examples, default participant rules, activation and retry semantics.
   Explain OAuth-only client limitations without adding OAuth to this milestone.
@@ -1013,6 +1023,19 @@ fault-path log redaction have separate acceptance checks.
   fake carrier adapters. No live-provider tests, external telephony or deployments.
 - [ ] Update evidence/index only when every requested capability passes; do not mark
   completion for just the original nine tools. Commit only when authorized.
+
+Final boundary/parity audit (2026-10-15): the per-capability direct/application,
+session HTTP and key HTTP tests plus persisted MCP parity and all17 SDK acceptance
+cover the approved authority matrix, variables, publication, pagination, hangup
+and user activation. Local slow-body acceptance proves overload, timeout, request
+termination and admission recovery. Password-bearing create faults/timeouts and
+generated join-token storage raise/exit/throw faults preserve response/log privacy;
+successful token issuance remains intentionally visible to its authorized caller.
+All three new boundary cases passed, with independent review. Header-read limits
+remain HTTP-server-owned; no TCP-disconnect cancellation claim is added. Existing
+session/revocation/expiry and malformed/oversized checks complement this evidence.
+Public connection, static-secret reference, operation/error/retry and OAuth-client
+limitations are documented. Final combined root gates are running separately.
 
 ## Specification review
 

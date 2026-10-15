@@ -1622,3 +1622,20 @@ Both tests passed initially; no production gap or artificial red was introduced.
 Removed an obvious PID assertion/unused attribute and strengthened the unknown-case
 teardown barrier, then both passed again without warnings. Root and independent
 review approved. Final umbrella gates and remaining boundary evidence still pending.
+
+### Final boundary and invariant acceptance
+
+Added a tagged real loopback slow-body test and two production Handler sensitive
+failure tests. The body case holds one admission lease, observes overload, then
+100ms body timeout/HTTP408, actual request DOWN and successful next admission.
+Password hashing raise/timeout and generated-token storage raise/exit/throw paths
+assert safe diagnostic logs and responses; authorized success returns the token.
+Initial failure was a test-only mismatch of Calls.claim_call's tuple, corrected to
+its actual contract. All three tests then passed, exact formatting passed and root
+plus independent review approved. No new runtime behavior was needed.
+
+Independent audit mapped remaining hangup invariants to existing owning transaction,
+gate, carrier/media, cleanup, persistence and reconciliation tests, plus the new
+persisted connected-web test. Reconciled their milestone checkboxes and the parity/
+public documentation gates. Header socket deadlines and TCP-disconnect cancellation
+are not claimed as application evidence. All source is frozen for final root gates.

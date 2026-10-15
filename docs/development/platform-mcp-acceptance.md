@@ -160,3 +160,26 @@ A second case deliberately loses the tracker and proves that exact shutdown and
 recovery retain unknown cleanup instead of fabricating completion. Both cases
 passed locally. Carrier and transactional race coverage remains in its owning
 Gateway and Persistence suites; this web lane does not substitute for those tests.
+
+## Request bounds and sensitive failures
+
+Gateway's normal MCP tests cover malformed/oversized requests, concurrent admission,
+request-owner death and callback deadlines. The sensitive-failure tests exercise
+password-bearing account creation faults/timeouts and generated join-token storage
+faults, capturing diagnostic logs as well as responses. Successful token issuance
+still returns its token to the authorized caller.
+
+A separate real loopback HTTP check verifies a stalled authenticated request body
+holds admission capacity, times out, terminates its request process and releases
+capacity for the next request:
+
+```sh
+cd apps/vxpipe_gateway
+mix test --include integration test/integration/mcp_slow_body_test.exs \
+  test/vxpipe/gateway/mcp/sensitive_failures_test.exs
+```
+
+All three tests passed locally. The accelerated body deadline verifies application
+behavior; incomplete HTTP headers remain bounded by the HTTP server's own socket
+configuration. This evidence does not claim TCP-disconnect cancellation or universal
+secret-leak detection outside the exercised authentication/tool failure paths.
