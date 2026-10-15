@@ -96,10 +96,21 @@ defmodule Vxpipe.Persistence.UsageStore do
 
   defp deduplicate(stored, observation) do
     case UsageObservationRecord.decode(stored, observation.tenant_id, observation.call_id) do
-      {:ok, ^observation} -> {:ok, stored}
-      {:ok, _different} -> {:error, :usage_observation_conflict}
-      {:error, _reason} = error -> error
+      {:ok, archived} ->
+        if same_observation?(archived, observation),
+          do: {:ok, stored},
+          else: {:error, :usage_observation_conflict}
+
+      {:error, _reason} = error ->
+        error
     end
+  end
+
+  defp same_observation?(archived, observation) do
+    # Ecto expands timestamp precision to microseconds. Retrying the original
+    # millisecond observation is still the same immutable value and instant.
+    DateTime.compare(archived.observed_at, observation.observed_at) == :eq and
+      %{archived | observed_at: observation.observed_at} == observation
   end
 
   defp rebuild_amounts(repo, call, tenant_key) do

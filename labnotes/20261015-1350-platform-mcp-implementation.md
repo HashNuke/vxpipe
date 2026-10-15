@@ -686,3 +686,17 @@
   publication, resource ownership, final usage and reconciliation remain required.
   Before failed-state recovery, check archive queue ordering: the narrow failed
   close exception intentionally does not admit earlier failed-call snapshots.
+
+
+## Immutable usage retry timestamps
+
+- Found a real final-usage retry blocker while reviewing carrier cleanup: the
+  carrier clock creates millisecond timestamps, but Ecto reads microsecond precision.
+  Structural equality rejected an unchanged retry after the first successful write.
+- A focused regression reproduced `usage_observation_conflict`. Deduplication now
+  compares the timestamp instant and requires every other observation field to
+  remain exactly equal. It returns the existing stored row; no usage is counted twice.
+- All five UsageStore tests pass, including one-row retry, changed outcome and
+  changed instant rejection. Independent review found no blockers. This does not
+  implement retained carrier observations or result-bearing final usage flush;
+  those remain necessary before acknowledging carrier cleanup.

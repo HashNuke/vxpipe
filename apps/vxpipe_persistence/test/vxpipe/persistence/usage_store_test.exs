@@ -49,6 +49,27 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
     [call: call, options: options, principal: principal]
   end
 
+  test "immutable usage retry accepts database timestamp precision without accepting changed content",
+       context do
+    source = %{
+      observation("usage-millisecond-retry", "attempt-millisecond-retry", 10, 1, :final)
+      | observed_at: ~U[2026-09-12 09:00:00.000Z]
+    }
+
+    assert {:ok, stored} = Vxpipe.Calls.store_usage_observation(source, context.options)
+    assert {:ok, ^stored} = Vxpipe.Calls.store_usage_observation(source, context.options)
+    assert Repo.aggregate(UsageObservation, :count) == 1
+
+    assert {:error, :usage_observation_conflict} =
+             Vxpipe.Calls.store_usage_observation(%{source | outcome: :failed}, context.options)
+
+    assert {:error, :usage_observation_conflict} =
+             Vxpipe.Calls.store_usage_observation(
+               %{source | observed_at: DateTime.add(source.observed_at, 1, :millisecond)},
+               context.options
+             )
+  end
+
   test "asynchronously stored facts maintain effective amounts and tenant-safe totals", context do
     first = observation("usage-observation-1", "model-attempt-1", 100, 1, :estimate)
     final = observation("usage-observation-2", "model-attempt-1", 160, 2, :final)

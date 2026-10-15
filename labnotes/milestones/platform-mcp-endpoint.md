@@ -457,6 +457,12 @@ reservation/rollback races, and four Calls tests. Independent review found no
 blockers. Gateway does not select managed admission yet; completion persistence,
 resource integration and recovery remain outstanding.
 
+Usage retry prerequisite: a millisecond timestamp survives an immutable usage
+retry after database microsecond normalization. The regression failed with a
+conflict before the fix; all five UsageStore tests now pass, including changed
+content/time rejection, with independent review. Carrier retention and explicit
+persistence acknowledgement remain unimplemented.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:
