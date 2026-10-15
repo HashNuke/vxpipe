@@ -129,7 +129,7 @@ defmodule Vxpipe.Gateway.CallAdmission do
 
   @impl CallIngressBackend
   def bind_incoming(options, claim, incarnation_id),
-    do: Calls.bind_call_admission(claim, incarnation_id, options)
+    do: Vxpipe.Gateway.IncomingCallAdmission.bind(options, claim, incarnation_id)
 
   @impl CallIngressBackend
   def identify_incoming(options, service, claim, room, leg) do

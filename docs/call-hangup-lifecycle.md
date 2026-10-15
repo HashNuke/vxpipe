@@ -448,6 +448,17 @@ decision. If identity allocation fails, still end the original authenticated
 carrier, but do not invent a usage batch or completion acknowledgement. A failure
 to create the room leaves no trusted incarnation to reconstruct later.
 
+Incoming owners now support this sequence behind the private `managed_cleanup`
+option. The backend's managed startup marker is retained before binding, including
+malformed or failed reservation responses. Fresh reservations seed the existing
+carrier owner atomically; existing reservations only look up membership. Identity
+and usage are retained before the admit/cancel/error decision, and media bindings
+carry the exact cleanup identity. Missing identity/usage or a lost command observer
+cannot acknowledge completion. Final storage plus authenticated carrier end,
+authority closure and command drainage gate orderly retirement. The option is not
+yet enabled globally; incoming rooms still require per-call outgoing connector
+scope at rollout so their transfer legs participate too.
+
 Outgoing owners must validate their request and private connector scope, retain
 usage, register with the existing exact tracker and monitor the room before reserving media or dispatching
 a dial. Transfers need this room monitor too: the initial-leg lifecycle currently

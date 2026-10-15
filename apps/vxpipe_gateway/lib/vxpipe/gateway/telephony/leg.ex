@@ -8,6 +8,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   alias Vxpipe.Calls.TelephonyAdmissionClaim
 
   alias Vxpipe.Gateway.Telephony.{
+    CarrierCleanup,
     ConfiguredService,
     IncomingLegActivationResult,
     IncomingLegActivationContext,
@@ -80,6 +81,8 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       end_requested?: false,
       end_retry?: false,
       carrier_ended?: false,
+      managed_cleanup?: false,
+      cleanup: nil,
       token: make_ref(),
       backend: Keyword.fetch!(options, :backend),
       claim: nil,
@@ -297,6 +300,44 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     maybe_retire(state)
   end
 
+  def handle_info(message, %{cleanup: %CarrierCleanup{} = cleanup} = state) do
+    case CarrierCleanup.handle_info(cleanup, message) do
+      {:handled, cleanup} ->
+        state = %{state | cleanup: cleanup}
+
+        state =
+          if CarrierCleanup.status(cleanup) == :unavailable,
+            do: close(state, :cleanup_unavailable),
+            else: state
+
+        maybe_retire(state)
+
+      :unhandled ->
+        {:noreply, state}
+    end
+  end
+
+  def handle_info(_message, state), do: {:noreply, state}
+
+  defp maybe_retire(%{managed_cleanup?: true} = state) do
+    state = store_final(state)
+
+    ready? =
+      state.carrier_ended? and state.room_closed? and state.commands_drained? and
+        is_nil(state.answer_worker) and is_nil(state.end_worker) and not is_nil(state.cleanup) and
+        CarrierCleanup.final_usage_stored?(state.cleanup, state.usage)
+
+    if ready? do
+      case CarrierCleanup.acknowledge(state.cleanup, state.usage, :carrier_ended, true) do
+        {:ok, cleanup} -> {:stop, :normal, %{state | cleanup: cleanup}}
+        {:error, :cleanup_unavailable, cleanup} -> {:stop, :normal, %{state | cleanup: cleanup}}
+        {:error, _reason, cleanup} -> {:noreply, %{state | cleanup: cleanup}}
+      end
+    else
+      {:noreply, state}
+    end
+  end
+
   # A lost observer cannot attest that its separate HTTP operation has drained.
   defp maybe_retire(%{commands_drained?: false} = state), do: {:noreply, state}
 
@@ -345,6 +386,19 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
           room
         )
 
+      {:ok, %RoomSnapshot{} = room, monitor, :managed_cleanup} ->
+        claim = %{state.claim | call: %{state.claim.call | incarnation_id: room.incarnation_id}}
+
+        state = %{
+          state
+          | claim: claim,
+            incarnation_id: room.incarnation_id,
+            room_monitor: monitor,
+            managed_cleanup?: true
+        }
+
+        bind_managed_call(state, room)
+
       {:error, _reason} ->
         _projection =
           call_backend(state.backend, :mark_incoming_failed, [state.claim, :room_start_failed])
@@ -356,7 +410,9 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
     end
   end
 
-  defp identify_call(state, room) do
+  defp identify_call(state, room), do: identify_call(state, room, &bind_call(&1, room))
+
+  defp identify_call(state, room, next) do
     case call_backend(state.backend, :identify_incoming, [
            state.service,
            state.claim,
@@ -364,11 +420,47 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
            self()
          ]) do
       {:ok, %IncomingLegIdentity{} = identity} ->
-        bind_call(%{state | incoming_identity: identity, usage: identity.usage}, room)
+        identity =
+          if state.cleanup,
+            do: %{
+              identity
+              | binding: %{identity.binding | cleanup_binding: state.cleanup.binding}
+            },
+            else: identity
+
+        state = %{state | incoming_identity: identity, usage: identity.usage}
+
+        if state.managed_cleanup? and is_nil(identity.usage),
+          do: close(state, :usage_unavailable),
+          else: next.(state)
 
       _failure ->
         close(state, :identity_preparation_failed)
     end
+  end
+
+  defp bind_managed_call(state, room) do
+    {state, decision} =
+      case call_backend(state.backend, :bind_incoming, [state.claim, room.incarnation_id]) do
+        {:ok, decision, %TelephonyAdmissionClaim{} = claim, %CarrierCleanup{} = cleanup}
+        when decision in [:admit, :cancel] ->
+          {%{state | claim: claim, cleanup: cleanup}, decision}
+
+        {:error, _reason, %TelephonyAdmissionClaim{} = claim, cleanup}
+        when is_nil(cleanup) or is_struct(cleanup, CarrierCleanup) ->
+          {%{state | claim: claim, cleanup: cleanup}, :error}
+
+        _failure ->
+          {state, :error}
+      end
+
+    identify_call(state, room, fn identified ->
+      case decision do
+        :admit -> prepare_call(identified)
+        :cancel -> close(identified, :admission_cancelled)
+        :error -> close(identified, :admission_failed)
+      end
+    end)
   end
 
   defp bind_call(state, room) do
@@ -525,8 +617,19 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   defp activation_result(_custom_activation), do: :ok
 
   defp observe_usage(state, event) do
-    %{state | usage: LegUsage.observe(state.usage, event)}
+    store_final(%{state | usage: LegUsage.observe(state.usage, event)})
   end
+
+  defp store_final(
+         %{cleanup: %CarrierCleanup{}, usage: %LegUsage{attempt: %{terminal?: true}}} = state
+       ) do
+    case CarrierCleanup.begin_final(state.cleanup, state.usage) do
+      {:ok, cleanup} -> %{state | cleanup: cleanup}
+      {:error, _reason, cleanup} -> %{state | cleanup: cleanup}
+    end
+  end
+
+  defp store_final(state), do: state
 
   defp start_time(%Event{occurred_at: %DateTime{} = occurred_at}, _clock), do: occurred_at
   defp start_time(%Event{kind: :media_started}, clock), do: clock.()

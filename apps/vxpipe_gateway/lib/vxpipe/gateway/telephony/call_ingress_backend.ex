@@ -31,9 +31,14 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
               pid(),
               reference()
             ) ::
-              {:ok, RoomSnapshot.t(), reference() | nil} | {:error, term()}
+              {:ok, RoomSnapshot.t(), reference() | nil}
+              | {:error, term()}
+              | {:ok, RoomSnapshot.t(), reference(), :managed_cleanup}
   @callback bind_incoming(context(), TelephonyAdmissionClaim.t(), String.t()) ::
-              {:ok, :admit | :cancel, TelephonyAdmissionClaim.t()} | {:error, term()}
+              {:ok, :admit | :cancel, TelephonyAdmissionClaim.t()}
+              | {:error, term()}
+              | {:ok, :admit | :cancel, TelephonyAdmissionClaim.t(), term()}
+              | {:error, term(), TelephonyAdmissionClaim.t(), term()}
   @callback identify_incoming(
               context(),
               ConfiguredService.t(),

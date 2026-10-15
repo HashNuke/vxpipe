@@ -661,6 +661,16 @@ had seven reds (one also exposed a fixture shape error); final 63 focused tests
 pass, including ten managed cases, with two independent reviews. Production
 admission does not yet pass the private opt-in settings.
 
+Incoming owners now support opt-in managed reservation before identity allocation,
+including atomic seeding of the existing carrier and retained managed state on
+errors. Exact media binding, terminal storage, authenticated carrier end, authority
+closure and drained command workers gate acknowledgement; missing usage and lost
+observers stay unresolved. Six valid missing-contract reds preceded implementation.
+The final owning selection passes 37 tests and eight managed cases pass after a
+fixture teardown barrier; both local carrier harnesses also passed their 30 cases.
+Independent review approved. Global configuration and per-call transfer scope
+wiring remain pending; no external telephony or live provider was used.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

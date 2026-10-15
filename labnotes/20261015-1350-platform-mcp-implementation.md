@@ -1433,3 +1433,29 @@ verified canonical preparation 201, a real one-time claim behind a synthetic med
 boundary, public-ID transfer link, canonical transfer 201 for that call, missing-
 target guidance and no horizontal overflow. No microphone/Connect, media or provider
 ran. Browser fixture/sandbox stopped. Combined root completion gates remain due.
+
+### Incoming managed-owner integration
+
+The opt-in backend startup marker establishes managed ownership before binding,
+so even malformed or failed reservation responses cannot select legacy retirement.
+Fresh exact reservations atomically seed the existing carrier owner; existing
+reservations only attach to known membership. The owner retains the updated claim,
+then allocates identity/usage before interpreting admit/cancel/error. Its media
+binding carries the exact cleanup identity. Authenticated carrier termination,
+authority closure, successful immutable final storage and command-worker DOWN all
+remain required. Missing identity/usage and abnormal observer loss stay unresolved.
+Valid tracker loss retains detached storage; independently completed resources may
+retire without claiming a durable acknowledgement.
+
+Initial red runs exposed fixture setup issues: an empty plan, then a scenario
+requiring providers. A human/web plus human/phone gated fixture removed that
+irrelevant dependency. Six valid missing-contract reds then preceded production
+changes. First owning selection passed 35 tests. Broader selection had 66 of 67
+passing, including all 30 local Telnyx/Twilio harness cases; its only failure was
+an invalid-clock fixture that correctly fell back to real time instead of producing
+nil usage. The fixture now explicitly returns nil usage. Final owning 37 tests
+passed, followed by all eight managed tests after adding a tracker-DOWN teardown
+barrier. Root and independent source review approved. Six paths are formatted and
+frozen. Global enablement and outgoing scope propagation from incoming rooms remain
+pending; no live carrier or provider was invoked. Combined root gates started on
+the frozen runtime snapshot.
