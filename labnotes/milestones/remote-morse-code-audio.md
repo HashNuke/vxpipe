@@ -178,7 +178,7 @@ cases pass (seed 141071). Root regression passes 3,841 tests, zero failures and
   TLS/WSS verification and rollback. No volume or database.
 - [x] Run one base-URL-parameterized smoke command against the local production
   image, including PCM round trip, realtime recognition and shutdown.
-- [ ] Record the verified Go/Vxpipe revisions, image and local outcome; leave
+- [x] Record the verified Go/Vxpipe revisions, image and local outcome; leave
   hosted verification explicitly pending until deployment actually occurs.
 
 The runbook must distinguish Go's Railway variables from Vxpipe's outbound URL.
@@ -202,7 +202,7 @@ and documented UI settings, without an additional infrastructure module.
 - [x] Vxpipe root formatting, warnings-as-errors compile, strict Credo, tests and
   unused dependency checks pass. Run Lean if speech state-machine code changes.
 - [x] Relevant Console changes have focused tests and rendered verification.
-- [ ] Keep labnotes, this checklist and the milestone index accurate.
+- [x] Keep labnotes, this checklist and the milestone index accurate.
 - [ ] Commit small coherent checkpoints in each repository; push Vxpipe when
   implementation and local deployment preparation are complete.
 

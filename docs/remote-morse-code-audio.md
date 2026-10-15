@@ -53,3 +53,41 @@ The earlier Go implementation includes extra compatibility machinery that now
 needs pruning; it must not be expanded simply because it was planned earlier.
 The [scope review](../labnotes/20261015-0057-morse-scope-simplification.md) records
 this change separately from implementation progress.
+
+## Verified local handoff — 2026-10-15
+
+| Item | Verified value |
+| --- | --- |
+| Go source | `HashNuke/morsecode-audio`, revision `1d815f5` |
+| Vxpipe acceptance source | `morsecode-api`, revision `7c9b8a4e` |
+| Production image | `sha256:581f4a5f0395510fffde6f52b70ddbb3fb3d6a24ffe711d4b1e6ecae859bb8cb` |
+| Container check | Read-only, nonroot, 512 MiB, injected `PORT=9876`; HTTP/WS smoke passed and SIGTERM exited 0 |
+| Vxpipe local origin | `http://127.0.0.1:18796`; four provider checks, two configured-room checks and persisted TLS/switch/outage acceptance passed |
+| Regression | 3,841 Vxpipe tests, zero failures; Go vet and 35-test/subtest race lane passed |
+| Hosted origin | `https://morse-audio.definerun.com`; pending the user's Railway deployment |
+
+The temporary test servers, container and fixture database have been retired.
+Start your own local server using any free port; these commands use 8787:
+
+```sh
+# In the Go repository:
+HOST=127.0.0.1 PORT=8787 go run ./cmd/morsecode-audio
+
+# In a second terminal, from the Go repository:
+go run ./cmd/smoke -base-url http://127.0.0.1:8787
+
+# In Vxpipe:
+MORSE_CODE_API_BASE_URL=http://127.0.0.1:8787 bin/dev
+```
+
+Use the ordinary service setup to select `morse_code_api`, enter any nonempty
+compatibility key and select its Morse TTS/STT models in the call spec. Both
+speech directions stream PCM through the existing scoped session machinery.
+
+Follow the Go repository's
+[Railway runbook](https://github.com/HashNuke/morsecode-audio/blob/main/docs/railway-deployment.md)
+to deploy. Run the same smoke command with the generated or custom HTTPS origin,
+then set Vxpipe's runtime URL and restart its existing process after draining
+calls. No credential or call-spec migration is needed. Rollback restores the
+previous verified origin; for localhost, start the Go server there first. No
+hosted deployment or hosted image rollback target exists yet.
