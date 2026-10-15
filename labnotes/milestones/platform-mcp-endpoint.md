@@ -131,9 +131,12 @@ directly, without an HTTP loopback request or controller invocation.
 - [ ] Resolve the dependency's session behavior before product handlers: bind any
   issued sessions to authenticated key identity, bound their count/lifetime, and
   verify DELETE/expiry/restart and timeout/disconnect cleanup truthfully.
-- [ ] Add Calls-owned tenant-independent key authentication through a Persistence
+- [x] Add Calls-owned tenant-independent key authentication through a Persistence
   port: bounded indexed digest lookup, ambiguity rejection, stored scopes and
   revocation. No tenant scan, forced key rotation or client-asserted authority.
+  Evidence: `Calls.authenticate_api_key/2`, bounded indexed digest lookup including
+  revoked duplicates, Settings-platform/legacy provenance, 26 focused Calls and
+  11 Persistence tests passing after red tests and the additive index migration.
 - [ ] Authenticate every HTTP request from one Bearer header. Reject absent,
   invalid/revoked keys and fail closed on unavailable storage. No query/body keys
   or browser-cookie substitute; never retain raw keys in session/process state.

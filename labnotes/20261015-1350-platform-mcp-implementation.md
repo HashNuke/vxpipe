@@ -52,3 +52,21 @@
   protocol revision. Wrong-key reuse deliberately returns 404. Product wrapper
   still needs strict version/method rules, Bearer auth, limits and real mounts.
 - Independent review found no blockers and confirmed the limited evidence scope.
+
+## Tenant-independent key authentication
+
+- Added `Calls.authenticate_api_key/2` to resolve stored tenant/scopes without a
+  tenant argument. Settings platform keys retain installation authority and an
+  explicit platform-key credential kind; legacy operator provenance is separate
+  and its secrets are rejected by the new MCP-facing entry point.
+- Persistence adds a nonunique digest index and a LIMIT 2 lookup. Ambiguous
+  digests, including revoked duplicates, fail closed; old tenant-bound auth is
+  unchanged and keys do not need rotation. No raw secret/digest reaches the actor.
+- Five Calls and three Persistence red tests failed on missing entry/lookup before
+  implementation. Green selections: 26 Calls tests and 11 Persistence tests,
+  including existing tenant/platform/legacy compatibility. Test migration passed.
+- Independent review found no auth blocker. Raised/exited storage failures need
+  HTTP 503 normalization in the forthcoming endpoint (not just returned errors).
+- First full-suite run finished with old compiled modules versus newly written
+  tests during concurrent edits, plus a compactor scheduling failure. It is not
+  a stable-snapshot verification; rerun after the foundation work settles.

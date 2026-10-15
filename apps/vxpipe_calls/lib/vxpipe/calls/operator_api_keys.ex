@@ -18,7 +18,12 @@ defmodule Vxpipe.Calls.OperatorApiKeys do
          {:ok, repository} <- Repositories.fetch(options, :operator_api_key_repository),
          {:ok, %{id: id, revoked_at: nil}} <-
            Repositories.call(repository, :fetch, [:crypto.hash(:sha256, secret)]) do
-      {:ok, %InstallationOperator{grant: :installation_operator, api_key_id: id}}
+      {:ok,
+       %InstallationOperator{
+         grant: :installation_operator,
+         api_key_id: id,
+         credential_kind: :legacy_operator_api_key
+       }}
     else
       false -> {:error, :invalid_api_key}
       {:ok, _revoked} -> {:error, :invalid_api_key}

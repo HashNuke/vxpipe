@@ -24,6 +24,10 @@ defmodule Vxpipe.Calls.CredentialRepository do
               {:ok, api_key_record()} | {:error, term()}
   @callback fetch_api_key(context(), String.t(), binary()) ::
               {:ok, api_key_record()} | {:error, :not_found}
+  @doc "Looks up at most two tenant keys by digest; duplicate digests fail closed."
+  @callback fetch_api_key_by_digest(context(), binary()) ::
+              {:ok, api_key_record()}
+              | {:error, :not_found | :ambiguous_api_key | :repository_unavailable}
   @callback revoke_api_key(context(), String.t(), String.t(), DateTime.t()) ::
               {:ok, api_key_record()} | {:error, :not_found}
 end

@@ -59,7 +59,12 @@ defmodule Vxpipe.Calls.ApiKeyManagement do
          {:ok, repository} <- repository(options),
          {:ok, id} <-
            Repositories.call(repository, :authenticate_platform, [:crypto.hash(:sha256, secret)]) do
-      {:ok, %Vxpipe.Calls.InstallationOperator{grant: :installation_operator, api_key_id: id}}
+      {:ok,
+       %Vxpipe.Calls.InstallationOperator{
+         grant: :installation_operator,
+         api_key_id: id,
+         credential_kind: :platform_api_key
+       }}
     else
       false -> {:error, :invalid_api_key}
       {:error, _} = error -> error

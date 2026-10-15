@@ -199,6 +199,9 @@ defmodule Vxpipe.Calls do
   def authenticate(tenant_key, secret, required_scope, options \\ []),
     do: Administration.authenticate(tenant_key, secret, required_scope, options)
 
+  def authenticate_api_key(secret, options \\ []),
+    do: Vxpipe.Calls.ApiKeyAuthentication.authenticate(secret, options)
+
   def revoke_api_key(tenant_key, api_key_id, options \\ []),
     do: Administration.revoke_api_key(tenant_key, api_key_id, options)
 

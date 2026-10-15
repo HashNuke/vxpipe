@@ -91,6 +91,16 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     end)
   end
 
+  def fetch_api_key_by_digest(agent, digest) do
+    Agent.get(agent, fn state ->
+      case state.keys |> Map.values() |> Enum.filter(&(&1.digest == digest)) |> Enum.take(2) do
+        [] -> {:error, :not_found}
+        [key] -> {:ok, key}
+        [_first, _second] -> {:error, :ambiguous_api_key}
+      end
+    end)
+  end
+
   def allocate_id(agent) do
     Agent.get_and_update(agent, fn state ->
       {{:ok, Integer.to_string(state.next_call_spec_id)},

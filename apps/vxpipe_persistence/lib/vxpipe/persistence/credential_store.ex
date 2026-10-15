@@ -8,6 +8,8 @@ defmodule Vxpipe.Persistence.CredentialStore do
   alias Vxpipe.Calls.Tenant, as: DomainTenant
   alias Vxpipe.Persistence.Schema.{ApiKey, Tenant}
 
+  @private [log: false, telemetry_event: nil]
+
   @impl true
   def create_tenant(repo, %DomainTenant{} = tenant) do
     case insert_tenant(repo, tenant) do
@@ -65,6 +67,27 @@ defmodule Vxpipe.Persistence.CredentialStore do
       nil -> {:error, :not_found}
       {key, key_tenant} -> {:ok, to_key_record(key, key_tenant)}
     end
+  end
+
+  @impl true
+  def fetch_api_key_by_digest(repo, digest) do
+    query =
+      from(key in ApiKey,
+        join: tenant in assoc(key, :tenant),
+        where: key.digest == ^digest,
+        limit: 2,
+        select: {key, tenant.key}
+      )
+
+    # Include revoked records: revocation must not disambiguate a credential that
+    # has been shared by multiple tenants into a different tenant's authority.
+    case repo.all(query, @private) do
+      [] -> {:error, :not_found}
+      [{key, tenant_key}] -> {:ok, to_key_record(key, tenant_key)}
+      [_first, _second] -> {:error, :ambiguous_api_key}
+    end
+  rescue
+    _error in [DBConnection.ConnectionError, Postgrex.Error] -> {:error, :repository_unavailable}
   end
 
   @impl true
