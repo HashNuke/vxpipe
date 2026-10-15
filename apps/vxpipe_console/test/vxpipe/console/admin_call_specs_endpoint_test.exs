@@ -125,9 +125,105 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       ]
 
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, Keyword.merge(settings, options))
+      mount = @endpoint.config(:gateway_mount)
+      on_exit(fn -> Phoenix.Config.put(@endpoint, :gateway_mount, mount) end)
+
+      Phoenix.Config.put(
+        @endpoint,
+        :gateway_mount,
+        Vxpipe.Gateway.HTTP.Mount.init(
+          call_spec_authoring: [
+            enabled: true,
+            browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}
+          ]
+        )
+      )
+
       {:ok, tenant, _} = Vxpipe.Calls.bootstrap_tenant("Editor tenant", [:admin])
       {:ok, other, _} = Vxpipe.Calls.bootstrap_tenant("Other editor tenant", [:admin])
       %{tenant: tenant, other: other, authenticated: authenticate()}
+    end
+
+    test "canonical spec writes share the session and API-key contract", %{
+      tenant: tenant,
+      authenticated: auth
+    } do
+      path = "/api/tenants/#{tenant.key}/call-specs"
+      source = editor_source()
+      {:ok, key} = Vxpipe.Calls.issue_api_key(tenant.key, "canonical writer", [:admin])
+
+      session_result = write(auth, :post, path, %{"source" => source}) |> json_response(201)
+
+      key_result =
+        build_conn()
+        |> Plug.Conn.put_req_header("authorization", "Bearer " <> key.secret)
+        |> post("https://localhost" <> path, %{"source" => source})
+        |> json_response(201)
+
+      for result <- [session_result, key_result] do
+        assert result["call_spec"]["revision"] == 1
+        assert result["call_spec"]["published"] == false
+        refute Map.has_key?(result["call_spec"], "source")
+        id = result["call_spec"]["call_spec_id"]
+        assert {:ok, stored} = Vxpipe.Calls.fetch_call_spec(tenant.key, id, 1)
+        assert stored.source == source
+      end
+    end
+
+    test "canonical browser writes return forbidden for a session without write permission", %{
+      tenant: tenant,
+      authenticated: auth
+    } do
+      previous = Application.fetch_env(:vxpipe_console, :navigation_test_principal)
+
+      on_exit(fn ->
+        case previous do
+          {:ok, value} -> Application.put_env(:vxpipe_console, :navigation_test_principal, value)
+          :error -> Application.delete_env(:vxpipe_console, :navigation_test_principal)
+        end
+      end)
+
+      principal = %{
+        FakeUserIdentity.principal()
+        | grants: MapSet.new(),
+          all_tenant_actions: MapSet.new()
+      }
+
+      Application.put_env(:vxpipe_console, :navigation_test_principal, {:ok, principal})
+
+      Application.put_env(
+        :vxpipe_console,
+        :user_identity_backend,
+        Vxpipe.Console.Test.NavigationIdentity
+      )
+
+      denied =
+        write(auth, :post, "/api/tenants/#{tenant.key}/call-specs", %{"source" => editor_source()})
+
+      assert json_response(denied, 403)["error"]["code"] == "authoring_forbidden"
+    end
+
+    test "canonical browser writes enforce CSRF and explicit credentials never fall back", %{
+      tenant: tenant,
+      authenticated: auth
+    } do
+      path = "/api/tenants/#{tenant.key}/call-specs"
+
+      assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+        auth
+        |> recycle()
+        |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
+        |> Plug.Conn.put_req_header("x-csrf-token", "invalid")
+        |> post("https://localhost" <> path, %{"source" => editor_source()})
+      end
+
+      denied =
+        auth
+        |> recycle()
+        |> Plug.Conn.put_req_header("authorization", "Bearer invalid")
+        |> post("https://localhost" <> path, %{"source" => editor_source()})
+
+      assert json_response(denied, 401)["error"]["code"] == "invalid_api_key"
     end
 
     test "creates, publishes, appends and reads immutable tenant-scoped source revisions", %{

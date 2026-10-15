@@ -70,19 +70,24 @@ Runnable slice: one existing spec-authoring operation is served through a canoni
 documented HTTP handler used by the UI and an API-key client; both invoke the same
 public Elixir operation with their actual authenticated actor.
 
-- [ ] Inventory current UI HTTP requests and machine routes. Classify every route
+- [x] Inventory current UI HTTP requests and machine routes. Classify every route
   as canonical product API, browser authentication/UI helper, or temporary legacy
   alias. Include services, roles and key management even though they are not MCP
   tools. Record canonical route, owner, schema, credential policy and migration.
+  Evidence: [complete route inventory](../../docs/product-api-inventory.md), reviewed
+  against Console/Gateway routes and frontend fetch modules. Non-MCP machine grants
+  remain default-deny until explicitly defined; inventory is not route migration.
 - [ ] Select existing Calls/Identity/application functions as the shared operation
   boundaries; extract controller-owned business checks/projections where necessary.
   Keep functions domain-focused, not a generic dispatcher or unnecessary new app.
 - [ ] Define trusted actor/input/result/error contracts. Shared functions enforce
   authorization, tenant scope, validation, pagination, transactions, idempotency
   and lifecycle behavior even when called without an HTTP/MCP adapter.
-- [ ] Move reusable Identity dependency composition out of Console-only wiring;
+- [x] Move reusable Identity dependency composition out of Console-only wiring;
   preserve umbrella direction through ports and owning-child dependencies. Keep
   runtime orchestration in transport-neutral Gateway application modules.
+  Evidence: `Vxpipe.Identity.dependencies/0`, runtime config under `:vxpipe_identity`,
+  Console delegation; red then 61 Identity and eight Console tests passing, reviewed.
 - [ ] Define one HTTP handler/schema per product operation under `/api`, retaining
   compatible published contracts. UI and external clients receive the same wire
   contract. Legacy `/admin/api` aliases may translate formats but cannot own policy.
@@ -95,6 +100,17 @@ public Elixir operation with their actual authenticated actor.
 - [ ] Acceptance: local browser/network inspection shows that UI flow using the
   documented canonical route and response; a synthetic API-key request uses the
   same handler. No platform key is embedded in or issued just for the browser UI.
+
+First slice evidence (2026-10-15): canonical spec writes now share one Gateway
+handler for browser sessions and keys. The editor uses `/api` for create/update/
+publish; existing metadata responses are preserved. Fourteen Console endpoint
+tests pass, including session/key writes, CSRF, invalid-header precedence and
+restricted-user 403. Five frontend adapter tests and TypeScript/build pass.
+Rendered Chrome inspection at desktop and 390px mobile verified a draft save to
+`PUT /api/tenants/:tenant_key/call-specs/:id` returning 201/revision 2, using a
+local sandbox database and fake login identity. This does not complete the shared
+checkpoint: legacy adapters, full platform-service parity, all shared operation
+contracts and final gates remain outstanding.
 
 ## Checkpoint: authenticated MCP foundation
 

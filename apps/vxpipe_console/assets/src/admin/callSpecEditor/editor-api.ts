@@ -38,9 +38,11 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     return { document, saved: { callSpecId: id, revision: saved.revision, publishedRevision: saved.published_revision } };
   }
   const execute: ExecuteEditorRequest = async (request, signal) => {
+    const writes = `/api/tenants/${encodeURIComponent(tenant)}/call-specs`;
+    const target = request.callSpecId ? `${writes}/${encodeURIComponent(request.callSpecId)}` : writes;
     const path = request.action === "publish"
-      ? `${specPath(request.callSpecId!)}/revisions/${request.revision}/publish`
-      : request.callSpecId ? specPath(request.callSpecId) : `${base}/call-specs`;
+      ? `${target}/revisions/${request.revision}/publish`
+      : target;
     const response = await fetch(path, { ...options(signal), method: request.action === "save" && request.callSpecId ? "PUT" : "POST",
       headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": csrf },
       body: stringifySourceJson(request.action === "publish" ? {} : { source: request.source }) });

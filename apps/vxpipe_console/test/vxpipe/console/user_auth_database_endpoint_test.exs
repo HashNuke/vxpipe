@@ -22,15 +22,15 @@ defmodule Vxpipe.Console.UserAuthDatabaseEndpointTest do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
 
-    original_deps = Application.get_env(:vxpipe_console, :identity_dependencies)
+    original_deps = Application.get_env(:vxpipe_identity, :dependencies)
     original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
 
-    Application.put_env(:vxpipe_console, :identity_dependencies, dependencies())
+    Application.put_env(:vxpipe_identity, :dependencies, dependencies())
     Application.delete_env(:vxpipe_console, :user_identity_backend)
 
     on_exit(fn ->
-      restore(:identity_dependencies, original_deps)
-      restore(:user_identity_backend, original_backend)
+      restore(:vxpipe_identity, :dependencies, original_deps)
+      restore(:vxpipe_console, :user_identity_backend, original_backend)
     end)
 
     :ok
@@ -222,6 +222,6 @@ defmodule Vxpipe.Console.UserAuthDatabaseEndpointTest do
     }
   end
 
-  defp restore(key, nil), do: Application.delete_env(:vxpipe_console, key)
-  defp restore(key, value), do: Application.put_env(:vxpipe_console, key, value)
+  defp restore(app, key, nil), do: Application.delete_env(app, key)
+  defp restore(app, key, value), do: Application.put_env(app, key, value)
 end

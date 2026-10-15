@@ -6,6 +6,7 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
   def init(options),
     do: %{
       enabled: Keyword.get(options, :enabled, false),
+      browser_auth: Keyword.get(options, :browser_auth),
       backend: Keyword.get(options, :backend, {Vxpipe.Gateway.CallSpecAuthoring, []})
     }
 
@@ -29,16 +30,29 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecWrites do
     do: send_resp(conn, 404, "not found")
 
   def handle(conn, options, scope, tenant, operation) do
-    with {:ok, secret} <- bearer(conn),
-         {:ok, author} <- backend(options, :authenticate, [scope, tenant, secret]),
+    with {:ok, conn, author} <- authenticate(conn, options, scope, tenant),
          :ok <- ProviderAuth.tenant_key(tenant),
          {:ok, function, arguments, status} <- input(operation, conn.body_params),
          {:ok, %CallSpecRevision{tenant_key: ^tenant} = revision} <-
            backend(options, function, [author, tenant | arguments]) do
       json(conn, status, %{call_spec: public_revision(revision)})
     else
+      {:halt, conn} -> conn
       {:error, reason} -> error(conn, reason)
       _invalid_result -> error(conn, :authoring_unavailable)
+    end
+  end
+
+  defp authenticate(conn, options, scope, tenant) do
+    case {get_req_header(conn, "authorization"), options.browser_auth} do
+      {[], {module, context}} ->
+        module.authenticate(conn, context)
+
+      _key_request ->
+        with {:ok, secret} <- bearer(conn),
+             {:ok, author} <- backend(options, :authenticate, [scope, tenant, secret]) do
+          {:ok, conn, author}
+        end
     end
   end
 

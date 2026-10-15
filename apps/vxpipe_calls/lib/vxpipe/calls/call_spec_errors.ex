@@ -52,6 +52,7 @@ defmodule Vxpipe.Calls.CallSpecErrors do
 
   def response(reason)
       when reason in [
+             :forbidden,
              :insufficient_scope,
              :tenant_access_forbidden,
              :authoring_authority_required

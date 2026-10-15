@@ -101,9 +101,8 @@ defmodule Vxpipe.Console.UserIdentity do
   def delete_role(actor, id), do: with_dependencies(&Roles.delete_role(&1, actor, id))
 
   defp with_dependencies(callback) do
-    case Application.get_env(:vxpipe_console, :identity_dependencies) do
-      deps when is_map(deps) -> callback.(deps)
-      _ -> {:error, :unavailable}
+    with {:ok, dependencies} <- Vxpipe.Identity.dependencies() do
+      callback.(dependencies)
     end
   end
 end

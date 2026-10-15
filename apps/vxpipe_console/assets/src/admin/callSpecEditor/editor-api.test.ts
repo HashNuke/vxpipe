@@ -25,7 +25,7 @@ test("create, append and publish use exact bodies and CSRF; failures retain fiel
   const signal = new AbortController().signal;
   const request = { id: 1, action: "save" as const, source: editorFixture.source };
   expect(await api.execute(request, signal)).toEqual({ status: 201, callSpecId: "hello", revision: 2 });
-  expect(fetch).toHaveBeenLastCalledWith("/admin/api/tenants/tenant/call-specs", expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "x-csrf-token": "csrf" }), body: JSON.stringify({ source: editorFixture.source }) }));
+  expect(fetch).toHaveBeenLastCalledWith("/api/tenants/tenant/call-specs", expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "x-csrf-token": "csrf" }), body: JSON.stringify({ source: editorFixture.source }) }));
   await api.execute({ ...request, callSpecId: "hello" }, signal);
   expect(fetch).toHaveBeenLastCalledWith(expect.stringContaining("/call-specs/hello"), expect.objectContaining({ method: "PUT" }));
   await api.execute({ ...request, action: "publish", callSpecId: "hello", revision: 2 }, signal);

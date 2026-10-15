@@ -4,14 +4,14 @@ defmodule Vxpipe.Console.UserIdentityTest do
   alias Vxpipe.Console.UserIdentity
 
   test "missing identity storage fails closed for setup, login and session lookup" do
-    original = Application.get_env(:vxpipe_console, :identity_dependencies)
-    Application.delete_env(:vxpipe_console, :identity_dependencies)
+    original = Application.get_env(:vxpipe_identity, :dependencies)
+    Application.delete_env(:vxpipe_identity, :dependencies)
 
     on_exit(fn ->
       if original do
-        Application.put_env(:vxpipe_console, :identity_dependencies, original)
+        Application.put_env(:vxpipe_identity, :dependencies, original)
       else
-        Application.delete_env(:vxpipe_console, :identity_dependencies)
+        Application.delete_env(:vxpipe_identity, :dependencies)
       end
     end)
 
