@@ -6,6 +6,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
   alias Vxpipe.CallEngine.Participant.Snapshot, as: ParticipantSnapshot
   alias Vxpipe.Gateway.Session.Snapshot, as: SessionSnapshot
   alias Vxpipe.Gateway.{CallAdmission, SessionSupervisor}
+  alias Vxpipe.Gateway.CallAdmission.Cleanup
 
   @default_session_ttl_ms 300_000
   @offer_endpoint "/api/rtvi/offer"
@@ -89,11 +90,24 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
         send_live_session(
           conn,
           options,
-          claim,
+          %{claim | call: started},
           room.incarnation_id,
           participant,
           started.started_at
         )
+
+      {:joined, participant, bound} ->
+        send_live_session(
+          conn,
+          options,
+          bound,
+          bound.call.incarnation_id,
+          participant,
+          bound.call.started_at
+        )
+
+      {:transfer_pending, participant, bound} ->
+        send_pending_transfer_session(conn, options, bound, participant)
 
       {:joined, participant} ->
         send_live_session(
@@ -197,32 +211,38 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
   end
 
   defp issue_session(options, claim, incarnation_id, participant) do
-    SessionSupervisor.issue(
-      [
-        tenant_id: participant.tenant_id,
-        actor_id: claim.call.plan.actor_id,
-        room_id: participant.room_id,
-        incarnation_id: incarnation_id,
-        participant_id: participant.participant_id,
-        tool_visibility: claim.call.plan.tool_visibility
-      ],
-      options.session_ttl_ms
-    )
+    with {:ok, cleanup_binding} <- Cleanup.session_binding(claim.call) do
+      SessionSupervisor.issue(
+        [
+          tenant_id: participant.tenant_id,
+          actor_id: claim.call.plan.actor_id,
+          room_id: participant.room_id,
+          incarnation_id: incarnation_id,
+          participant_id: participant.participant_id,
+          tool_visibility: claim.call.plan.tool_visibility,
+          cleanup_binding: cleanup_binding
+        ],
+        options.session_ttl_ms
+      )
+    end
   end
 
   defp issue_pending_transfer_session(options, claim, participant) do
-    SessionSupervisor.issue(
-      [
-        tenant_id: claim.call.tenant_key,
-        actor_id: claim.call.plan.actor_id,
-        room_id: claim.call.room_id,
-        incarnation_id: claim.call.incarnation_id,
-        participant_id: participant.participant_id,
-        tool_visibility: claim.call.plan.tool_visibility,
-        release_admission: fn -> backend(options, :release_admission, [claim]) end
-      ],
-      options.session_ttl_ms
-    )
+    with {:ok, cleanup_binding} <- Cleanup.session_binding(claim.call) do
+      SessionSupervisor.issue(
+        [
+          tenant_id: claim.call.tenant_key,
+          actor_id: claim.call.plan.actor_id,
+          room_id: claim.call.room_id,
+          incarnation_id: claim.call.incarnation_id,
+          participant_id: participant.participant_id,
+          tool_visibility: claim.call.plan.tool_visibility,
+          release_admission: fn -> backend(options, :release_admission, [claim]) end,
+          cleanup_binding: cleanup_binding
+        ],
+        options.session_ttl_ms
+      )
+    end
   end
 
   defp project(options, function, arguments) do

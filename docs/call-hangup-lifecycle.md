@@ -294,9 +294,10 @@ These hooks alone must not enable managed admission. Web calls can initiate
 outgoing transfer legs outside those trees; initial and transfer carriers still
 need registration, remote termination evidence and final-usage acknowledgement.
 The durable reservation and tracker must exist before releasing the startup gate.
-The Session/WebRTC hooks are implemented and locally verified. Production
-admission does not yet supply the private binding; enabling it remains part of
-the complete resource-wiring checkpoint.
+The Session/WebRTC hooks are implemented and locally verified. Managed admission
+now supplies the verified private binding from its refreshed durable claim, for
+both newly started and running-call sessions. Global runtime enablement and the
+complete active-call acceptance check remain separate gates.
 
 Telnyx and Twilio media sockets now also monitor their exact room incarnation.
 They reject startup against an unavailable or stale room and close on room
@@ -318,8 +319,9 @@ of its socket. Tracker loss closes the local media tree and socket. Repeated med
 startup can reuse a root only when the existing session agrees on the complete
 binding, socket owner, stream, tracker and root PID. A duplicate request cannot
 adopt an existing untracked tree or a replacement connection sharing its ID.
-These hooks are opt-in; production carrier/admission paths still need to supply
-the private binding alongside managed reservation and final-usage ownership.
+Managed carrier owners supply this private binding alongside their reservation
+and final-usage ownership. Admission scopes the supported outgoing connector per
+call, including transfers initiated from web or incoming calls.
 
 ### Terminal projection and publication
 
@@ -385,9 +387,9 @@ Only the original Leg can acknowledge its tracker membership, after storage is
 confirmed, the current usage batch still matches, commands are drained, and the
 Leg independently proves carrier termination or no submitted command. Unknown
 usage can be stored without becoming carrier-completion proof. Tracker loss is
-reported unavailable and never creates a replacement tracker. These helper
-contracts are locally tested; connecting both carrier owners and managed admission
-remains a separate integration step.
+reported unavailable and never creates a replacement tracker. Both carrier owners now use these locally tested helper contracts. Managed
+admission supplies their per-call scope; complete active-call acceptance remains
+a separate integration gate.
 
 Owner death before binding can leave archive evidence. Establish one shared
 durable archive ownership anchor under the call-row lock, validating the call's
@@ -419,8 +421,8 @@ both projections; do not invent a start time or weaken normal outgoing ordering.
 
 The cleanup tracker can persist its own completed evidence through
 `Calls.complete_call_cleanup/3`, using one bounded supervised task. This remains
-opt-in through explicit completion options on a fresh managed tracker; admission
-wiring is still pending. The reconciler discovers durable work and requests exact
+opt-in through explicit completion options on a fresh managed tracker; managed
+admission supplies its Calls dependencies through those options. The reconciler discovers durable work and requests exact
 shutdown; it does not reconstruct missing trackers or own their final retirement.
 
 This avoids a recovery gap if an external reconciliation worker commits completion
@@ -442,8 +444,9 @@ if the tracker has retired. The pending scan already includes completed cleanup
 with new cancellation intent; this branch must not require a replacement tracker.
 Tests must cover successful commit followed by a lost task result, immutable
 retry, requester death, and waiting for actual task DOWN before retirement. This
-ownership contract now has focused tracker tests; managed admission and
-reconciliation integration remain pending.
+ownership contract now has focused tracker tests. Managed admission creates a
+tracker only for a fresh durable reservation; an existing reservation must resolve
+an existing open tracker. Runtime rollout and complete integration checks remain.
 
 ## Remaining carrier integration contracts
 
@@ -465,8 +468,8 @@ and usage are retained before the admit/cancel/error decision, and media binding
 carry the exact cleanup identity. Missing identity/usage or a lost command observer
 cannot acknowledge completion. Final storage plus authenticated carrier end,
 authority closure and command drainage gate orderly retirement. The option is not
-yet enabled globally; incoming rooms still require per-call outgoing connector
-scope at rollout so their transfer legs participate too.
+yet enabled globally. Incoming rooms now receive per-call outgoing connector
+scope so their transfer legs participate too.
 
 Outgoing owners must validate their request and private connector scope, retain
 usage, register with the existing exact tracker and monitor the room before reserving media or dispatching
@@ -485,7 +488,7 @@ callbacks, and managed retirement cannot use the legacy unknown-retention timer
 as completion evidence.
 
 The outgoing owner now implements these rules behind private `cleanup_scope` and
-`cleanup_options` connector settings, which remain absent in production admission.
+`cleanup_options` connector settings supplied by managed admission.
 Validation precedes usage allocation and effects. The existing tracker registration
 and exact authority monitor are installed before media reservation or dial,
 including transfer legs. Every reconstructed media binding retains the same exact
@@ -629,7 +632,8 @@ without projecting a generic failed state or issuing a session. The focused
 Gateway selection passed 48 tests after nine expected red failures; independent
 review found no blockers. Incoming activation now has the same gate and retained
 cleanup context. These prerequisites do not yet establish whole-call
-cleanup or expose the HTTP/MCP hangup operation.
+cleanup. The shared HTTP/MCP hangup operation is implemented; complete active-call
+acceptance remains required.
 
 Implement and verify in coherent checkpoints:
 

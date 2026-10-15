@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.OutgoingCallAdmission do
   alias Vxpipe.CallEngine
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{PreparedCall, TelephonyPlanBindings}
-  alias Vxpipe.Gateway.CallAdmission.CallEngineOptions
+  alias Vxpipe.Gateway.CallAdmission.{CallEngineOptions, Cleanup}
   alias Vxpipe.Gateway.Telephony.ServiceRegistry
 
   def authenticate(options, tenant, secret),
@@ -16,12 +16,14 @@ defmodule Vxpipe.Gateway.OutgoingCallAdmission do
   def start(options, %PreparedCall{state: :admitting, plan: %{direction: :outgoing}} = call) do
     token = make_ref()
 
-    runtime =
-      options |> CallEngineOptions.build() |> Keyword.put(:outgoing_admission, {self(), token})
-
     result =
       with :ok <- validate_plan(call.plan, options),
-           do: CallEngine.start_call(call.plan, runtime)
+           {:ok, runtime} <- CallEngineOptions.build(options, call),
+           do:
+             CallEngine.start_call(
+               call.plan,
+               Keyword.put(runtime, :outgoing_admission, {self(), token})
+             )
 
     case result do
       {:ok, room} -> start_room(options, call, room, token)
@@ -55,7 +57,7 @@ defmodule Vxpipe.Gateway.OutgoingCallAdmission do
   end
 
   defp bind_and_release(options, call, room, token, monitor) do
-    with {:ok, :admit, bound} <- Calls.bind_call_admission(call, room.incarnation_id, options),
+    with {:ok, :admit, bound} <- Cleanup.bind(call, room.incarnation_id, options),
          {:ok, started} <-
            Calls.mark_outgoing_call_started(
              bound,

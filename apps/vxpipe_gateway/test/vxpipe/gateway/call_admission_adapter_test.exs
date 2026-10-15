@@ -51,7 +51,12 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
       accepted_at: DateTime.utc_now()
     }
 
-    assert {:joined, participant} = CallAdmission.start_call(binding_options(), claim)
+    assert {:joined, participant} =
+             CallAdmission.start_call(
+               Keyword.put(binding_options(), :managed_cleanup, true),
+               claim
+             )
+
     assert participant.tenant_id == tenant_id
     assert participant.room_id == room_id
     assert participant.incarnation_id == room.incarnation_id
@@ -283,6 +288,195 @@ defmodule Vxpipe.Gateway.CallAdmissionAdapterTest do
              CallEngine.participant_snapshot(tenant, room_id, participant_id)
 
     assert {:ok, _monitor} = CallEngine.monitor_room(tenant, room_id, room.incarnation_id)
+  end
+
+  for tracking <- [:missing, :sealed, :open, :unknown] do
+    @tracking tracking
+    test "managed running join requires existing open ownership: #{tracking}" do
+      tenant = unique_id("tenant")
+      room_id = unique_id("room")
+      participant_id = unique_id("support")
+      plan = resolved_plan(tenant, room_id, participant_id)
+
+      {:ok, command} =
+        CreateRoom.new(
+          tenant_id: tenant,
+          actor_id: plan.actor_id,
+          room_id: room_id,
+          deadline: future_deadline()
+        )
+
+      {:ok, room} = CallEngine.create_room(command)
+
+      call = %{
+        prepared_call(plan, room.incarnation_id, DateTime.utc_now())
+        | gateway_cleanup_required: true
+      }
+
+      claim = %AdmissionClaim{
+        call: call,
+        token_id: unique_id("token"),
+        participant_key: unique_id("route"),
+        participant_ref: "support",
+        participant_id: participant_id,
+        accepted_at: DateTime.utc_now()
+      }
+
+      binding = %{
+        tenant_key: tenant,
+        call_id: call.id,
+        room_id: room_id,
+        incarnation_id: room.incarnation_id
+      }
+
+      tracker =
+        if @tracking != :missing do
+          {:ok, tracker} = Vxpipe.Gateway.CallCleanupSupervisor.start_new(binding)
+          if @tracking == :sealed, do: Vxpipe.Gateway.CallCleanup.seal(tracker)
+
+          if @tracking == :unknown do
+            :ok = Vxpipe.Gateway.CallCleanup.register(tracker, :session, self())
+            :ok = Vxpipe.Gateway.CallCleanup.acknowledge(tracker, self(), :unknown)
+          end
+
+          tracker
+        end
+
+      on_exit(fn ->
+        CallEngine.end_call(tenant, room_id, room.incarnation_id)
+
+        if tracker,
+          do: DynamicSupervisor.terminate_child(Vxpipe.Gateway.CallCleanupSupervisor, tracker)
+      end)
+
+      # Persisted ownership applies even if new admission is disabled after rollout.
+      result = CallAdmission.start_call(binding_options(), claim)
+
+      if @tracking == :open do
+        assert {:joined, participant, refreshed} = result
+        assert participant.participant_id == participant_id
+        assert refreshed.call.gateway_cleanup_required
+      else
+        assert {:join_error, :participant_start_failed} = result
+        assert {:error, _} = CallEngine.participant_snapshot(tenant, room_id, participant_id)
+      end
+    end
+  end
+
+  test "managed incoming startup requires a supported connector and an owned gate" do
+    alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler}
+    media = start_supervised!({MediaAdmission, name: nil})
+
+    scenario =
+      Vxpipe.Gateway.TelephonyCallScenario.build(
+        :telnyx,
+        self(),
+        :binary.copy(<<1>>, 32),
+        media,
+        "managed-start-in",
+        "managed-start-out"
+      )
+
+    old = scenario.plan
+
+    {:ok, spec} =
+      CallSpec.new(
+        %{
+          schema_version: "20260915.01",
+          entry_caller: "caller",
+          entry_receiver: "listener",
+          defaults: %{capabilities: %{}},
+          participants: %{
+            "caller" => %{
+              type: "human",
+              connection: %{
+                service: "primary-phone",
+                mode: "receive",
+                admission: "start_call",
+                number: "+15550001000"
+              }
+            },
+            "listener" => %{
+              type: "human",
+              connection: %{service: "web", mode: "receive", admission: "start_call"}
+            }
+          },
+          limits: %{max_duration_ms: 60_000}
+        },
+        resource_id: old.call_spec_id,
+        revision: 1
+      )
+
+    {:ok, invocation} =
+      CallInvocation.new(
+        %{
+          call_spec: %{id: old.call_spec_id, revision: 1},
+          initial_variables: %{},
+          transport: %{type: "telephony"}
+        },
+        tenant_id: old.tenant_id,
+        actor_id: old.actor_id,
+        call_id: old.call_id,
+        room_id: old.room_id
+      )
+
+    {:ok, plan} = CallSpecCompiler.compile(spec, invocation, %{host_tools: %{}})
+    plan = Vxpipe.Gateway.TestTelephonyServiceRepository.pin_plan(plan, scenario.service_options)
+
+    claim = %{
+      scenario.claim
+      | participant_id: Map.fetch!(plan.participants, "caller").participant_id,
+        call: %{
+          scenario.claim.call
+          | plan: plan,
+            plan_digest: :crypto.hash(:sha256, :erlang.term_to_binary(plan)),
+            entry_receiver: plan.entry_receiver
+        }
+    }
+
+    result =
+      Vxpipe.Gateway.IncomingCallAdmission.start(
+        [
+          managed_cleanup: true,
+          outbound_leg_connector: {Vxpipe.CallEngine.TestOutboundLegConnector, %{owner: self()}}
+        ],
+        claim,
+        self(),
+        make_ref()
+      )
+
+    case result do
+      {:ok, room, _monitor, :managed_cleanup} ->
+        CallEngine.end_call(claim.call.tenant_key, claim.call.room_id, room.incarnation_id)
+
+      _ ->
+        :ok
+    end
+
+    assert result == {:error, :cleanup_connector_unavailable}
+
+    {:ok, service} =
+      Vxpipe.Gateway.Telephony.ConfiguredService.from_snapshot(
+        Vxpipe.Gateway.TestTelephonyServiceRepository.snapshot(scenario.service_options),
+        "https://voice.example.test"
+      )
+
+    unowned =
+      CallAdmission.start_incoming(
+        Keyword.put(scenario.runtime_options, :managed_cleanup, true),
+        claim,
+        service
+      )
+
+    case unowned do
+      {:ok, room} ->
+        CallEngine.end_call(claim.call.tenant_key, claim.call.room_id, room.incarnation_id)
+
+      _ ->
+        :ok
+    end
+
+    assert unowned == {:error, :managed_cleanup_requires_admission_owner}
   end
 
   defp binding_options do

@@ -1545,3 +1545,22 @@ late-answer retry had stopped reattempting a failed local cancellation. One focu
 regression reproduced that gap; restoring close with the retained reason passed
 34 incoming/managed tests. Timed retries remain carrier-command-only. Independent
 review approved the final fix. Exact paths are formatted; no external services ran.
+
+### Managed admission composition
+
+Web/outgoing starts reserve durable cleanup and create their tracker before
+started projection and gate release. Incoming/web/outgoing runtime options scope
+only the supported outgoing connector with trusted call identity; arbitrary custom
+connectors fail closed in managed mode. Legacy runtime options remain compatible.
+Existing reservations cannot reconstruct trackers. Managed running joins require
+open, non-uncertain ownership even if new managed admissions are disabled later.
+HTTP uses the refreshed claim for both live and pending-transfer Session binding.
+The ungated incoming compatibility wrapper rejects managed requests before effects.
+
+Focused expected reds covered absent binding/scoping, unsafe running joins, missing
+Session metadata and unsupported incoming/outgoing connectors. The combined group
+passed 69 tests. A final guard test initially had an invalid fixture participant;
+after correcting it, it reproduced actual unowned startup, then all 12 owning tests
+passed with the guard. Independent review approved final ordering and compatibility.
+Global configuration is a separate checkpoint; active durable lifecycle acceptance
+and final root gates remain outstanding.

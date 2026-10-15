@@ -92,6 +92,93 @@ defmodule Vxpipe.Gateway.WebAdmissionBindingTest do
     refute_received {:test_agent_runtime_model_preparing, _}
   end
 
+  test "managed admission reserves and starts tracking before releasing startup", %{claim: claim} do
+    observer = self()
+
+    callback = fn
+      :bind_managed, [^claim, incarnation] ->
+        assert_pending(claim)
+
+        bound = %{
+          claim
+          | call: %{claim.call | incarnation_id: incarnation, gateway_cleanup_required: true}
+        }
+
+        {:ok, :admit, :new, bound}
+
+      :started, [bound, incarnation, started_at] ->
+        assert_pending(claim)
+
+        binding = %{
+          tenant_key: bound.call.tenant_key,
+          call_id: bound.call.id,
+          room_id: bound.call.room_id,
+          incarnation_id: incarnation
+        }
+
+        assert {:ok, tracker} = Vxpipe.Gateway.CallCleanupSupervisor.lookup(binding)
+        send(observer, {:managed_tracker, tracker})
+        {:ok, %{bound.call | state: :running, started_at: started_at}}
+
+      :complete, [binding, at] ->
+        send(observer, {:cleanup_stored, binding})
+
+        {:ok,
+         %{
+           claim.call
+           | incarnation_id: binding.incarnation_id,
+             gateway_cleanup_required: true,
+             gateway_cleanup_completed_at: at
+         }}
+    end
+
+    configured =
+      Keyword.merge(options(callback), managed_cleanup: true, publication_enabled: false)
+
+    assert {:ok, room, _participant, started} = CallAdmission.start_call(configured, claim)
+    assert started.gateway_cleanup_required
+    assert_receive {:managed_tracker, tracker}
+    tracker_monitor = Process.monitor(tracker)
+    assert_receive {:test_agent_runtime_model_preparing, preparation}, 1_000
+    send(preparation, :release_test_agent_runtime_model)
+    stop(claim, room.incarnation_id)
+    assert_receive {:cleanup_stored, %{incarnation_id: incarnation}}, 1_000
+    assert incarnation == room.incarnation_id
+    assert_receive {:DOWN, ^tracker_monitor, :process, ^tracker, :normal}, 1_000
+  end
+
+  test "managed admission cannot reconstruct an existing reservation with missing tracker", %{
+    claim: claim
+  } do
+    observer = self()
+
+    callback = fn :bind_managed, [^claim, incarnation] ->
+      assert_pending(claim)
+
+      {:ok, monitor} =
+        CallEngine.monitor_room_completion(claim.call.tenant_key, claim.call.room_id, incarnation)
+
+      send(observer, {:completion, monitor})
+
+      bound = %{
+        claim
+        | call: %{claim.call | incarnation_id: incarnation, gateway_cleanup_required: true}
+      }
+
+      {:ok, :admit, :existing, bound}
+    end
+
+    assert {:admission_error, :cleanup_unavailable} =
+             CallAdmission.start_call(
+               Keyword.put(options(callback), :managed_cleanup, true),
+               claim
+             )
+
+    assert_receive {:completion, monitor}
+    assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+    refute_received {:test_agent_runtime_model_preparing, _}
+  end
+
   defp failure_callback(failure, claim) do
     observer = self()
 

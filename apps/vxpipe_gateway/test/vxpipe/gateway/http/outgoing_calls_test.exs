@@ -69,6 +69,14 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     }
   end
 
+  test "managed outgoing startup rejects connectors without cleanup ownership before dialing",
+       c do
+    c = %{c | options: Keyword.put(c.options, :managed_cleanup, true)}
+    response = post(c, %{}, "managed-custom-connector")
+    assert response.status == 503
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
   test "routes before spec writes and returns a private-free 201 after submission", c do
     response =
       post(
@@ -387,6 +395,53 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
 
     assert_receive {:pending_completion, monitor}
     assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  test "managed cancelled outgoing admission reserves cleanup before closing its unopened room",
+       c do
+    {:ok, call} =
+      Calls.claim_outgoing_call(c.principal, c.published.call_spec_id, %{}, nil, c.options)
+
+    observer = self()
+
+    callback = fn
+      :bind_managed, [^call, incarnation] ->
+        send(observer, {:managed_outgoing_bound, incarnation})
+
+        {:ok, :cancel, :new,
+         %{
+           call
+           | incarnation_id: incarnation,
+             gateway_cleanup_required: true,
+             incarnation_binding_verified: true
+         }}
+
+      :complete, [binding, at] ->
+        send(observer, {:managed_outgoing_completed, binding})
+
+        {:ok,
+         %{
+           call
+           | incarnation_id: binding.incarnation_id,
+             gateway_cleanup_required: true,
+             gateway_cleanup_completed_at: at
+         }}
+    end
+
+    options =
+      Keyword.merge(c.options,
+        managed_cleanup: true,
+        publication_enabled: false,
+        call_repository: {Vxpipe.Gateway.TestAdmissionBindingRepository, callback},
+        outbound_leg_connector: {Vxpipe.Gateway.Telephony.OutgoingLegConnector, []}
+      )
+
+    assert {:error, :outgoing_call_start_failed} =
+             Vxpipe.Gateway.OutgoingCallAdmission.start(options, call)
+
+    assert_receive {:managed_outgoing_bound, incarnation}, 1_000
+    assert_receive {:managed_outgoing_completed, %{incarnation_id: ^incarnation}}, 1_000
     refute_received {:test_outbound_leg_connect, _, _, _}
   end
 

@@ -163,7 +163,14 @@ defmodule Vxpipe.Gateway.TestAdmissionBackend do
       do: {:error, :projection_failed},
       else:
         {:ok,
-         %{claim.call | state: :running, started_at: started_at, incarnation_id: incarnation_id}}
+         %{
+           claim.call
+           | state: :running,
+             started_at: started_at,
+             incarnation_id: incarnation_id,
+             gateway_cleanup_required: Map.get(state, :managed_cleanup?, false),
+             incarnation_binding_verified: true
+         }}
   end
 
   def mark_failed(agent, claim, reason) do

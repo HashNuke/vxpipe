@@ -10,9 +10,12 @@ defmodule Vxpipe.Gateway.IncomingCallAdmission do
   alias Vxpipe.Gateway.Telephony.IncomingLegIdentity
 
   def start(options, claim, owner, token) do
-    runtime = Keyword.put(CallEngineOptions.build(options), :call_admission, {owner, token})
-
-    with {:ok, room} <- CallEngine.start_call(claim.call.plan, runtime) do
+    with {:ok, runtime} <- CallEngineOptions.build(options, claim.call),
+         {:ok, room} <-
+           CallEngine.start_call(
+             claim.call.plan,
+             Keyword.put(runtime, :call_admission, {owner, token})
+           ) do
       case CallEngine.monitor_room(claim.call.tenant_key, claim.call.room_id, room.incarnation_id) do
         {:ok, monitor} ->
           if Keyword.get(options, :managed_cleanup, false) == true,

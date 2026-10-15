@@ -199,6 +199,58 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissionTest do
            ] = await_operations(context.backend, 3)
   end
 
+  test "started metadata registers the issued HTTP session with its exact cleanup owner",
+       context do
+    Agent.update(context.backend, &Map.put(&1, :managed_cleanup?, true))
+
+    binding = %{
+      tenant_key: context.room.tenant_id,
+      call_id: TestAdmissionBackend.call_id(),
+      room_id: context.room.room_id,
+      incarnation_id: context.room.incarnation_id
+    }
+
+    {:ok, tracker} = Vxpipe.Gateway.CallCleanupSupervisor.start_new(binding)
+
+    on_exit(fn ->
+      DynamicSupervisor.terminate_child(Vxpipe.Gateway.CallCleanupSupervisor, tracker)
+    end)
+
+    response =
+      :post
+      |> conn(session_path(), JSON.encode!(%{}))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer #{@join_token}")
+      |> Endpoint.call(context.endpoint)
+
+    assert response.status == 201
+    session_id = body(response)["session"]["session_id"]
+    assert {:ok, snapshot} = Vxpipe.Gateway.Session.claim(session_id)
+    assert snapshot.cleanup_binding == binding
+    [{session, _}] = Registry.lookup(Vxpipe.Gateway.SessionRegistry, session_id)
+
+    assert %{resources: %{^session => %{kind: :session}}} =
+             Vxpipe.Gateway.CallCleanup.snapshot(tracker)
+
+    refute response.resp_body =~ "cleanup_binding"
+  end
+
+  test "retains started cleanup ownership and rejects session issuance without its tracker",
+       context do
+    Agent.update(context.backend, &Map.put(&1, :managed_cleanup?, true))
+
+    response =
+      :post
+      |> conn(session_path(), JSON.encode!(%{}))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer #{@join_token}")
+      |> Endpoint.call(context.endpoint)
+
+    assert response.status == 503
+    assert body(response)["error"]["code"] == "session_start_failed"
+    refute response.resp_body =~ "session_id"
+  end
+
   test "does not issue a session or mark failed when synchronous admission persistence fails",
        context do
     incarnation_id = context.room.incarnation_id

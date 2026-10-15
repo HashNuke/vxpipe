@@ -4,6 +4,12 @@ defmodule Vxpipe.Gateway.TestAdmissionBindingRepository do
   def bind_call_admission(callback, claim, incarnation),
     do: callback.(:bind, [claim, incarnation])
 
+  def bind_managed_call_admission(callback, claim, incarnation),
+    do: callback.(:bind_managed, [claim, incarnation])
+
+  def complete_call_cleanup(callback, binding, at),
+    do: callback.(:complete, [binding, at])
+
   def mark_call_started(callback, claim, incarnation, started_at),
     do: callback.(:started, [claim, incarnation, started_at])
 

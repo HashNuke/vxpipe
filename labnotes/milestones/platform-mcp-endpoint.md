@@ -683,6 +683,20 @@ a local-cancellation retry regression, reproduced with a focused red, then fixed
 the final incoming/managed selection passed 34 tests. Independent review approved.
 Global managed rollout and complete lifecycle acceptance remain open.
 
+Managed admission wiring now reserves cleanup and creates the fresh tracker before
+persisting started state or releasing web/outgoing startup gates. Incoming startup
+also receives trusted per-call connector scope. All three paths reject unsupported
+custom connectors in managed mode; the legacy ungated incoming wrapper rejects
+managed requests. Running legacy calls retain compatibility, while managed joins
+require an existing open, non-uncertain tracker even after a rollout flag changes.
+HTTP sessions receive the verified binding from the refreshed durable claim.
+
+Expected focused reds preceded each behavior change. The combined admission
+selection passed 69 tests; a final ungated-incoming regression failed for actual
+unowned startup, then passed with all 12 owning tests. Independent review approved
+ordering, Session metadata and legacy/custom-backend boundaries. Global runtime
+configuration and complete active-call acceptance remain open.
+
 Combined recovery/carrier/sample verification: the frozen umbrella run passed all
 applications except an obsolete Console sample-route permission assertion. That
 assertion now reflects the authenticated gate plus actual-actor domain checks;
