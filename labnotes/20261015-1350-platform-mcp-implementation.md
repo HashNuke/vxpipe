@@ -632,3 +632,15 @@
 - Whole-call hangup remains incomplete: durable cleanup reservation/terminal
   projection, atomic incoming registration and asynchronous admission, actual
   resource/usage acknowledgement, reconciliation and public adapters remain next.
+
+## Atomic initial cleanup membership
+
+- Implemented the reviewed initial-resource interlock. `start_new/2` captures the
+  admission caller before invoking DynamicSupervisor; tracker init installs its
+  existing resource and owner monitors before processing any engine DOWN message.
+  An already-live incoming carrier therefore cannot be omitted during startup.
+- Three focused tests first failed for the missing API, then all 13 cleanup tests
+  passed. They cover immediate engine completion with a live root, lost original
+  acknowledgement ownership and missing exact engine. Independent review found
+  no blockers. Incoming Leg still needs to select this API when managed admission
+  is enabled; missing engines continue to leave cleanup evidence unknown.

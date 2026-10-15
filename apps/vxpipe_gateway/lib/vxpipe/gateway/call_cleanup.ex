@@ -14,8 +14,8 @@ defmodule Vxpipe.Gateway.CallCleanup do
 
   @resource_kinds [:session, :web_rtc, :telephony_media, :incoming_leg, :outgoing_leg]
 
-  def start_link(binding) do
-    GenServer.start_link(__MODULE__, binding, name: name(binding))
+  def start_link({binding, _initial_resource} = options) do
+    GenServer.start_link(__MODULE__, options, name: name(binding))
   end
 
   @doc false
@@ -37,21 +37,23 @@ defmodule Vxpipe.Gateway.CallCleanup do
 
   @impl true
   def init(
-        %{tenant_key: tenant, call_id: call, room_id: room, incarnation_id: incarnation} = binding
+        {%{tenant_key: tenant, call_id: call, room_id: room, incarnation_id: incarnation} =
+           binding, initial_resource}
       )
       when is_binary(tenant) and is_binary(call) and is_binary(room) and is_binary(incarnation) do
     case CallEngine.monitor_room_completion(tenant, room, incarnation) do
       {:ok, monitor} ->
-        {:ok,
-         %{
-           binding: Map.take(binding, [:tenant_key, :call_id, :room_id, :incarnation_id]),
-           sealed?: false,
-           engine_outcome: :pending,
-           resources: %{},
-           monitors: %{monitor => :engine},
-           observers: %{},
-           completed_at: nil
-         }}
+        state = %{
+          binding: Map.take(binding, [:tenant_key, :call_id, :room_id, :incarnation_id]),
+          sealed?: false,
+          engine_outcome: :pending,
+          resources: %{},
+          monitors: %{monitor => :engine},
+          observers: %{},
+          completed_at: nil
+        }
+
+        {:ok, seed_resource(state, initial_resource)}
 
       {:error, :room_unavailable} ->
         {:stop, :room_unavailable}
@@ -100,6 +102,12 @@ defmodule Vxpipe.Gateway.CallCleanup do
   end
 
   def handle_info(_message, state), do: {:noreply, state}
+
+  defp seed_resource(state, nil), do: state
+
+  defp seed_resource(state, {kind, root, owner})
+       when kind in @resource_kinds and is_pid(root) and is_pid(owner),
+       do: add_resource(state, kind, root, owner)
 
   defp add_resource(state, kind, root, owner) do
     resource = %{

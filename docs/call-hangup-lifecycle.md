@@ -150,10 +150,11 @@ do not disappear automatically on completion. Retiring them after durable storag
 registering actual resource owners before effects and persisting cleanup-required
 state are still integration work, not guarantees supplied by this component alone.
 
-Incoming legs need an additional startup interlock when this component is wired:
-the carrier already exists before answering. Seed that resource and its original
-acknowledgement owner atomically during tracker initialization, before an engine
-DOWN can seal empty membership. A missing exact engine must fail tracker startup
+Incoming carriers already exist before answering. The implemented
+`start_new(binding, {kind, root})` captures the admission caller and seeds that
+resource and its original acknowledgement owner atomically during tracker
+initialization, before an engine DOWN can seal empty membership. Incoming Leg must
+use this entry point when tracking is wired. A missing exact engine fails startup
 and leave durable completion unknown while Leg retains its carrier cleanup
 responsibility. Apply the same rule to any adopted resource with existing effects;
 post-start registration is sufficient only when rejection prevents those effects.

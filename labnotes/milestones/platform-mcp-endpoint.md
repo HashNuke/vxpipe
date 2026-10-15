@@ -439,6 +439,13 @@ No production source changed between those runs. Final root format, compile,
 strict Credo and unused-dependency checks pass. The assertion and integration
 design follow-ups were independently reviewed; all findings are resolved.
 
+Atomic incoming-resource prerequisite: tracker startup now accepts one existing
+resource and captures its original admission caller as acknowledgement owner.
+Membership and monitors are installed before engine DOWN can seal the tracker.
+Three missing-API regressions preceded the change; all 13 cleanup tests pass,
+including immediate engine completion, owner loss and missing exact engine.
+Independent review found no blockers. Incoming Leg integration remains open.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

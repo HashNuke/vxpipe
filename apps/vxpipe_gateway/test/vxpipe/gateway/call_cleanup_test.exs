@@ -143,6 +143,66 @@ defmodule Vxpipe.Gateway.CallCleanupTest do
     assert {:error, :not_found} = CallCleanupSupervisor.lookup(stale)
   end
 
+  test "an existing carrier root is tracked from startup before immediate engine completion", c do
+    root = start_supervised!({Task, fn -> receive do: (:finish -> :ok) end})
+    owner = self()
+
+    assert {:ok, tracker} = CallCleanupSupervisor.start_new(c.binding, {:incoming_leg, root})
+
+    assert {:ok, %{resources: %{^root => %{kind: :incoming_leg, owner: ^owner}}}} =
+             CallCleanup.observe(tracker)
+
+    stop_room(c.binding)
+
+    assert_receive {:call_cleanup_changed, ^tracker,
+                    %{engine_outcome: :complete, status: :pending}},
+                   1_000
+
+    assert :ok = CallCleanup.acknowledge(tracker, root, :complete)
+    send(root, :finish)
+    assert_receive {:call_cleanup_changed, ^tracker, %{status: :complete}}, 1_000
+  end
+
+  test "seed ownership belongs to the admission caller and survives as unknown when it dies", c do
+    root = start_supervised!({Task, fn -> receive do: (:finish -> :ok) end})
+    parent = self()
+
+    owner =
+      start_supervised!(
+        {Task,
+         fn ->
+           {:ok, tracker} = CallCleanupSupervisor.start_new(c.binding, {:incoming_leg, root})
+           send(parent, {:tracker_started, tracker})
+           receive do: (:finish -> :ok)
+         end},
+        id: :admission_owner
+      )
+
+    assert_receive {:tracker_started, tracker}
+    assert {:ok, %{resources: %{^root => %{owner: ^owner}}}} = CallCleanup.observe(tracker)
+    assert {:error, :invalid_owner} = CallCleanup.acknowledge(tracker, root, :complete)
+    send(owner, :finish)
+    stop_room(c.binding)
+    send(root, :finish)
+
+    assert_receive {:call_cleanup_changed, ^tracker,
+                    %{
+                      engine_outcome: :complete,
+                      status: :unknown,
+                      resources: %{^root => %{owner_alive?: false, root_outcome: :complete}}
+                    }},
+                   1_000
+  end
+
+  test "seeded startup cannot turn a missing exact engine into completion evidence", c do
+    stale = %{c.binding | incarnation_id: "replacement"}
+
+    assert {:error, :room_unavailable} =
+             CallCleanupSupervisor.start_new(stale, {:incoming_leg, self()})
+
+    assert {:error, :not_found} = CallCleanupSupervisor.lookup(stale)
+  end
+
   for {acknowledgement, expected} <- [pending: :unknown, complete: :complete] do
     test "owner death with #{acknowledgement} acknowledgement retains #{expected} evidence", c do
       {:ok, tracker} = CallCleanupSupervisor.start_new(c.binding)
