@@ -31,19 +31,36 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanup do
     tracker_lost?: false
   ]
 
+  @doc """
+  Registers the original carrier owner with the existing exact tracker.
+
+  Validated attachment failure returns `{:error, :cleanup_unavailable, state}`;
+  that detached state can persist final usage but cannot acknowledge membership.
+  Invalid bindings or options return an error without persistence state.
+  """
   def attach(binding, kind, expected_anchor, options \\ []) do
     with {:ok, anchor} <- exact_anchor(binding, expected_anchor),
          true <- kind in [:incoming_leg, :outgoing_leg],
-         :ok <- valid_options(options),
-         {:ok, tracker} <- CallCleanupSupervisor.lookup(anchor) do
-      register(tracker, kind, anchor, options)
+         :ok <- valid_options(options) do
+      attach_validated(kind, %__MODULE__{
+        owner: self(),
+        binding: anchor,
+        calls_options: Keyword.get(options, :calls_options, []),
+        timeout_ms: Keyword.get(options, :timeout_ms, 5_000),
+        retry_ms: Keyword.get(options, :retry_ms, 250)
+      })
     else
       {:error, :invalid_cleanup_binding} = error -> error
       {:error, :invalid_cleanup_options} = error -> error
       _ -> {:error, :cleanup_unavailable}
     end
-  catch
-    :exit, _ -> {:error, :cleanup_unavailable}
+  end
+
+  @doc "Storage evidence only; does not establish carrier termination or tracker completion."
+  def final_usage_stored?(%__MODULE__{} = state, usage) do
+    owner(state) == :ok and state.persisted? and is_nil(state.task) and is_nil(state.retry) and
+      not is_nil(state.batch) and final_usage(usage, state.binding) == :ok and
+      matching_batch(state.batch, usage) == :ok
   end
 
   def begin_final(%__MODULE__{} = state, usage) do
@@ -61,8 +78,7 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanup do
     with :ok <- owner(state),
          :ok <- tracker_available(state),
          true <- carrier_proof in [:carrier_ended, :not_submitted] and commands_drained? == true,
-         true <- state.persisted? and is_nil(state.task) and is_nil(state.retry),
-         :ok <- matching_batch(state.batch, usage),
+         true <- final_usage_stored?(state, usage),
          :ok <- CallCleanup.acknowledge(state.tracker, self(), :complete) do
       {:ok, %{state | acknowledged?: true}}
     else
@@ -111,28 +127,29 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanup do
 
   defp handle_owned_info(_state, _message), do: :unhandled
 
-  defp register(tracker, kind, anchor, options) do
-    monitor = Process.monitor(tracker)
-    result = register_owner(tracker, kind, anchor)
+  defp attach_validated(kind, state) do
+    case CallCleanupSupervisor.lookup(state.binding) do
+      {:ok, tracker} -> register(tracker, kind, state)
+      _ -> detached(state)
+    end
+  catch
+    :exit, _ -> detached(state)
+  end
 
-    case result do
+  defp register(tracker, kind, state) do
+    monitor = Process.monitor(tracker)
+
+    case register_owner(tracker, kind, state.binding) do
       :ok ->
-        {:ok,
-         %__MODULE__{
-           owner: self(),
-           binding: anchor,
-           tracker: tracker,
-           tracker_monitor: monitor,
-           calls_options: Keyword.get(options, :calls_options, []),
-           timeout_ms: Keyword.get(options, :timeout_ms, 5_000),
-           retry_ms: Keyword.get(options, :retry_ms, 250)
-         }}
+        {:ok, %{state | tracker: tracker, tracker_monitor: monitor}}
 
       _ ->
         Process.demonitor(monitor, [:flush])
-        {:error, :cleanup_unavailable}
+        detached(state)
     end
   end
+
+  defp detached(state), do: {:error, :cleanup_unavailable, %{state | tracker_lost?: true}}
 
   defp register_owner(tracker, kind, anchor) do
     if CallCleanup.snapshot(tracker).binding == anchor,
@@ -217,14 +234,21 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanup do
   defp exact_anchor(_, _), do: {:error, :invalid_cleanup_binding}
 
   defp valid_options(options) when is_list(options) do
-    timeout = Keyword.get(options, :timeout_ms, 5_000)
-    retry = Keyword.get(options, :retry_ms, 250)
-
-    if is_integer(timeout) and timeout in 1..30_000 and is_integer(retry) and retry in 0..5_000 and
-         is_list(Keyword.get(options, :calls_options, [])),
-       do: :ok,
-       else: {:error, :invalid_cleanup_options}
+    if Keyword.keyword?(options),
+      do: validate_options(options),
+      else: {:error, :invalid_cleanup_options}
   end
 
   defp valid_options(_), do: {:error, :invalid_cleanup_options}
+
+  defp validate_options(options) do
+    timeout = Keyword.get(options, :timeout_ms, 5_000)
+    retry = Keyword.get(options, :retry_ms, 250)
+    calls_options = Keyword.get(options, :calls_options, [])
+
+    if is_integer(timeout) and timeout in 1..30_000 and is_integer(retry) and retry in 0..5_000 and
+         is_list(calls_options) and Keyword.keyword?(calls_options),
+       do: :ok,
+       else: {:error, :invalid_cleanup_options}
+  end
 end

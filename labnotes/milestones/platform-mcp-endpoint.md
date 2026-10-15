@@ -630,6 +630,13 @@ all 66 focused usage/binding/completion tests pass with independent source revie
 This removes an accounting retry barrier; it does not prove carrier cleanup or
 complete the pending owner integration.
 
+Carrier attachment failure now preserves validated detached storage context instead
+of losing final accounting. The storage-only query requires the original owner,
+matching immutable terminal batch and actual worker termination; it cannot supply
+carrier proof or acknowledge/recreate tracker membership. Twelve focused tests
+pass after five expected reds, with independent review. Carrier owners still need
+to adopt the helper and enforce their independent retirement conditions.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

@@ -1320,3 +1320,17 @@ Red: ten UsageStore tests with two expected call_not_started failures. Green:
 ten UsageStore tests, then 66 usage/binding/completion tests passing. Independent
 review approved the two-file runtime/test delta. Changed Elixir paths formatted;
 combined root gates remain due after the parallel cleanup/sample slices stabilize.
+
+### Detached carrier accounting
+
+Validated missing/sealed tracker attachment now retains the original owner's exact
+binding and storage options as detached helper state. Invalid bindings/options
+never receive this state. A storage-only query confirms the matching immutable
+terminal batch after successful storage plus actual task DOWN, including after
+tracker loss. It rejects foreign owners, incomplete or changed usage and cannot
+acknowledge or recreate tracker membership. Carrier/room/drainage proof remains
+the integrating owner's responsibility.
+
+Twelve helper tests passed after five expected red failures. Root and independent
+agent reviews approved; malformed top-level and nested options have coverage.
+Changed paths formatted and diff checked. Managed owner integration remains open.

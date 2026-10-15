@@ -448,8 +448,10 @@ as completion evidence.
 
 Keep a private managed-ownership marker even when registration fails, so an owner
 cannot accidentally fall back to legacy retirement. After validating the anchor
-and options, an unavailable tracker should still leave owner-held persistence
-context. That context can store usage but cannot acknowledge or create membership.
+and options, the carrier helper retains owner-held persistence context when the
+tracker is unavailable. That detached context can store usage but cannot
+acknowledge or create membership. Its storage-only query also requires the
+original owner, unchanged final batch and actual storage-worker termination.
 On tracker loss, close the original resources. Once independent carrier end, local
 room closure, command drainage and matching final-storage completion are proven,
 the owner may retire without acknowledgement; the durable call remains unknown.

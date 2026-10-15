@@ -37,8 +37,10 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanupTest do
   end
 
   test "attachment requires existing exact membership and never recreates a missing tracker", c do
-    assert {:error, :cleanup_unavailable} =
+    assert {:error, :cleanup_unavailable, detached} =
              CarrierCleanup.attach(c.binding, :outgoing_leg, c.binding)
+
+    assert CarrierCleanup.status(detached) == :unavailable
 
     assert {:error, :not_found} = CallCleanupSupervisor.lookup(c.binding)
     {:ok, tracker} = CallCleanupSupervisor.start_new(c.binding)
@@ -61,10 +63,65 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanupTest do
     :ok = CallCleanup.seal(tracker)
     assert {:ok, _} = CarrierCleanup.attach(c.binding, :incoming_leg, c.binding)
 
-    assert {:error, :cleanup_unavailable} =
+    assert {:error, :cleanup_unavailable, detached} =
              CarrierCleanup.attach(c.binding, :outgoing_leg, c.binding)
 
+    assert CarrierCleanup.status(detached) == :unavailable
+
     assert map_size(CallCleanup.snapshot(tracker).resources) == 1
+  end
+
+  test "unavailable attachment retains exact final storage without creating membership", c do
+    options = [
+      calls_options: [usage_repository: {TestFinalUsageRepository, {self(), &{:ok, &1}}}]
+    ]
+
+    assert {:error, :cleanup_unavailable, cleanup} =
+             CarrierCleanup.attach(c.binding, :outgoing_leg, c.binding, options)
+
+    final = LegUsage.fail(c.usage, :unknown)
+    refute CarrierCleanup.final_usage_stored?(cleanup, final)
+    assert {:ok, cleanup} = CarrierCleanup.begin_final(cleanup, final)
+    assert_receive {reference, :ok}
+    assert {:handled, cleanup} = CarrierCleanup.handle_info(cleanup, {reference, :ok})
+    refute CarrierCleanup.final_usage_stored?(cleanup, final)
+    assert_receive {:DOWN, ^reference, :process, task, :normal}
+
+    assert {:handled, cleanup} =
+             CarrierCleanup.handle_info(cleanup, {:DOWN, reference, :process, task, :normal})
+
+    assert CarrierCleanup.final_usage_stored?(cleanup, final)
+    assert CarrierCleanup.status(cleanup) == :unavailable
+
+    for observation <- final.observations,
+        do: assert_receive({:stored_carrier_usage, ^observation})
+
+    assert {:error, :cleanup_unavailable, ^cleanup} =
+             CarrierCleanup.acknowledge(cleanup, final, :carrier_ended, true)
+
+    assert {:error, :not_found} = CallCleanupSupervisor.lookup(c.binding)
+  end
+
+  test "invalid attachment never returns detached persistence authority", c do
+    wrong = %{c.binding | room_id: "another-room"}
+
+    assert {:error, :invalid_cleanup_binding} =
+             CarrierCleanup.attach(c.binding, :outgoing_leg, wrong)
+
+    for options <- [
+          [timeout_ms: 0],
+          [calls_options: :invalid],
+          [calls_options: [:malformed]],
+          [:malformed]
+        ] do
+      assert {:error, :invalid_cleanup_options} =
+               CarrierCleanup.attach(c.binding, :outgoing_leg, c.binding, options)
+    end
+
+    assert {:error, :cleanup_unavailable} =
+             CarrierCleanup.attach(c.binding, :unsupported, c.binding)
+
+    refute_received {:stored_carrier_usage, _}
   end
 
   test "unknown usage persists but acknowledgement needs independent proof and actual task DOWN",
@@ -220,6 +277,22 @@ defmodule Vxpipe.Gateway.Telephony.CarrierCleanupTest do
              CarrierCleanup.handle_info(cleanup, {:DOWN, reference, :process, tracker, :killed})
 
     assert CarrierCleanup.status(cleanup) == :unavailable
+    assert CarrierCleanup.final_usage_stored?(cleanup, final)
+    [first | rest] = final.observations
+    changed = %{final | observations: [%{first | delivery_id: "changed"} | rest]}
+    refute CarrierCleanup.final_usage_stored?(cleanup, changed)
+    refute CarrierCleanup.final_usage_stored?(cleanup, nil)
+    refute CarrierCleanup.final_usage_stored?(cleanup, c.usage)
+    observer = self()
+
+    start_supervised!(
+      {Task,
+       fn ->
+         send(observer, {:foreign_stored, CarrierCleanup.final_usage_stored?(cleanup, final)})
+       end}
+    )
+
+    assert_receive {:foreign_stored, false}
 
     assert {:error, :cleanup_unavailable, ^cleanup} =
              CarrierCleanup.acknowledge(cleanup, final, :carrier_ended, true)
