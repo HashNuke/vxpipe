@@ -11,6 +11,9 @@ defmodule Vxpipe.Gateway.TestTelephonyAdapter do
       "reject" ->
         {:error, :command_rejected}
 
+      "unknown" ->
+        {:ok, %Submission{status: :unknown, provider_call_control_id: nil}}
+
       _accepted ->
         {:ok,
          %Submission{

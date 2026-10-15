@@ -412,6 +412,14 @@ races were verified separately; live providers and real telephony stayed exclude
 The overall hangup checkpoint remains unchecked pending incoming admission,
 cleanup ownership/reconciliation, terminal evidence and HTTP/MCP parity.
 
+Incoming activation prerequisite: answer preparation now returns retained carrier
+binding, pinned service, media admission and usage before submission. Rejected
+answers retain finalized context; accepted/unknown results and the existing
+activate wrapper preserve current behavior. Three missing-API red tests preceded
+implementation; all 21 focused activation/admission-adapter/ingress tests passed,
+with independent review. Incoming Leg still needs gated admission and supervised
+submission integration; this does not complete incoming cancellation acceptance.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

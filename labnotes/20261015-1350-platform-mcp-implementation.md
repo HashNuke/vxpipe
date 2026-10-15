@@ -523,3 +523,16 @@
   projection while preserving authenticated answered/media timestamps. Room DOWN
   during a blocked answer must retain original carrier identity for cleanup.
   Cleanup ownership, final usage, reconciliation and exposed hangup remain open.
+
+## Retained incoming answer preparation
+
+- Split incoming activation into prepare and submit. Preparation retains the
+  original carrier binding, pinned service, media admission and usage before any
+  answer request. Rejection returns finalized context for its future lifecycle
+  owner; accepted and unknown submissions retain the existing public result.
+- The existing activate wrapper preserves current callers and Twilio media URLs.
+  Inspect output hides service credentials and media tokens. Incoming Leg still
+  uses the wrapper; asynchronous answer and gated binding remain separate work.
+- Three expected missing-API failures preceded implementation. All 21 focused
+  activation, admission-adapter and ingress tests passed, including the final
+  rerun. Independent review found no blockers. No real carrier calls were made.
