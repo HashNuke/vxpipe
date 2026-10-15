@@ -8,16 +8,17 @@ import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
+import { allTools, callTools, tenantTools, exerciseProducts } from "./product_scenarios.mjs";
 
 const version = "2025-11-25";
 assert.equal(process.argv.length, 2, "Usage: bin/test-platform-mcp");
-const key = "platform-mcp-synthetic";
-const tenant = "MCPFIXTURE000001";
+let key;
 const cache = execFileSync("npm", ["config", "get", "cache"], { encoding: "utf8" }).trim();
 const fixtures = new Set();
 const clients = new Set();
 const temporary = await mkdtemp(path.join(os.tmpdir(), "vxpipe-platform-mcp-"));
 let proxy;
+let stage = "dependency discovery";
 
 async function cachedPackage(name, wanted) {
   for (const entry of await readdir(path.join(cache, "_npx")).catch(() => [])) {
@@ -44,21 +45,27 @@ async function startFixture(port = 0, ttl = 60) {
   });
   fixtures.add(child);
   const exit = once(child, "exit");
-  let logs = "";
+  let failureStage = "startup";
   let pending;
   const ready = new Promise((resolve, reject) => { pending = { resolve, reject }; });
   const lines = createInterface({ input: child.stdout });
-  child.stderr.on("data", chunk => { logs = (logs + chunk).slice(-6000); });
+  const errors = createInterface({ input: child.stderr });
+  errors.on("line", line => {
+    if (/^PLATFORM_MCP_FAILURE [a-z]+$/.test(line)) failureStage = line.slice(21);
+  });
   lines.on("line", line => {
     if (line.startsWith("PLATFORM_MCP ")) {
       const result = JSON.parse(line.slice(13));
       const waiter = pending;
       pending = undefined;
       waiter?.resolve(result);
-    } else logs = (logs + line + "\n").slice(-6000);
+    }
   });
   child.on("error", error => pending?.reject(error));
-  child.on("exit", code => pending?.reject(new Error(`Fixture exited ${code}: ${logs}`)));
+  child.on("exit", code => {
+    if (pending) console.error(`FAIL fixture ${failureStage} (exit ${code})`);
+    pending?.reject(new Error("Fixture exited"));
+  });
   const fixture = {
     child,
     async command(value) {
@@ -73,7 +80,7 @@ async function startFixture(port = 0, ttl = 60) {
       fixtures.delete(child);
     }
   };
-  fixture.addresses = await deadline(ready, "Fixture startup");
+  Object.assign(fixture, await deadline(ready, "Fixture startup"));
   return fixture;
 }
 
@@ -109,12 +116,11 @@ async function officialScenarios(cli, upstream) {
   await once(proxy, "listening");
   for (const scenario of ["server-initialize", "ping", "tools-list"]) {
     const child = spawn(process.execPath, [cli, "server", "--url", `http://127.0.0.1:${proxy.address().port}/mcp`, "--scenario", scenario, "--spec-version", version, "--output-dir", temporary], { stdio: ["ignore", "pipe", "pipe"] });
-    let output = "";
-    child.stdout.on("data", chunk => { output += chunk; });
-    child.stderr.on("data", chunk => { output += chunk; });
+    child.stdout.resume();
+    child.stderr.resume();
     try {
       const [code] = await deadline(once(child, "exit"), scenario);
-      assert.equal(code, 0, output);
+      assert.equal(code, 0, `${scenario} failed (private transcript omitted)`);
     } finally { if (child.exitCode === null) child.kill("SIGKILL"); }
     console.log(`PASS official ${scenario} (synthetic-header proxy)`);
   }
@@ -138,47 +144,58 @@ try {
     return { client, transport };
   }
 
+  stage = "fixture startup";
   const fixture = await startFixture();
+  key = fixture.keys.platform;
   for (const [mount, url] of Object.entries(fixture.addresses)) {
+    stage = `${mount} initialization/catalog`;
     const { client, transport } = await connect(url);
     const catalog = await client.listTools();
-    assert.ok(catalog.tools.some(tool => tool.name === "list_tenants"));
-    const result = await client.callTool({ name: "list_tenants", arguments: {} });
-    assert.equal(result.isError, false);
-    assert.deepEqual(result.structuredContent.items, [{ tenant_key: tenant, name: "Acceptance tenant", created_at: "2026-10-15T00:00:00Z" }]);
-    assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
-    const detail = await client.callTool({ name: "get_tenant", arguments: { tenant_key: tenant } });
-    assert.equal(detail.structuredContent.tenant_key, tenant);
-    const foreign = await client.callTool({ name: "get_tenant", arguments: { tenant_key: "MCPFIXTURE000002" } });
-    assert.equal(foreign.isError, true);
-    assert.equal(foreign.structuredContent.error.code, "tenant_not_found");
-    // SDK 1.30 reports the HTTP error status without decoding the JSON-RPC body.
-    await assert.rejects(
-      client.callTool({ name: "list_tenants", arguments: { page_size: 51 } }),
-      { code: 400 }
-    );
-    const invalid = await rpc(url, transport.sessionId, key, "tools/call", {
-      name: "list_tenants", arguments: { page_size: 51 }
-    });
-    assert.equal(invalid.status, 400);
-    assert.equal(invalid.body.error.code, -32602);
+    assert.deepEqual(catalog.tools.map(tool => tool.name).sort(), allTools);
+    await exerciseProducts(client, { tenant: fixture.tenant, mount, secrets: Object.values(fixture.keys), progress: name => { stage = `${mount} ${name}`; } });
+    stage = `${mount} authority/schema/revocation`;
+
+    for (const [kind, expected] of [["calls", callTools], ["full", tenantTools]]) {
+      const scoped = await connect(url, fixture.keys[kind]);
+      assert.deepEqual((await scoped.client.listTools()).tools.map(tool => tool.name).sort(), expected);
+      const own = await scoped.client.callTool({ name: "list_tenants", arguments: {} });
+      assert.ok(own.structuredContent.items.length === 1 && own.structuredContent.items[0].tenant_key === fixture.tenant);
+      const foreign = await scoped.client.callTool({ name: "get_tenant", arguments: { tenant_key: fixture.foreign } });
+      assert.ok(foreign.isError && foreign.structuredContent.error.code === "tenant_not_found");
+      assert.equal((await rpc(url, scoped.transport.sessionId, fixture.keys[kind], "tools/call", { name: "list_users", arguments: {} })).status, 403);
+      await scoped.transport.terminateSession();
+      await scoped.client.close();
+    }
+    await assert.rejects(client.callTool({ name: "list_tenants", arguments: { page_size: 51 } }), { code: 400 });
+    for (const [name, arguments_] of [
+      ["list_tenants", { page_size: 51 }],
+      ["update_user", { user_id: "11111111-1111-4111-8111-111111111111", enabled: "true", password: "private-sdk-invalid-input" }],
+      ["hangup_call", { tenant_key: fixture.tenant, call_id: "call", incarnation_id: "forged" }]
+    ]) {
+      const invalid = await rpc(url, transport.sessionId, key, "tools/call", { name, arguments: arguments_ });
+      assert.equal(invalid.status, 400);
+      assert.equal(invalid.body.error.code, -32602);
+      assert.ok(!JSON.stringify(invalid.body).includes("private-sdk-invalid-input"));
+    }
     assert.equal((await rpc(url, transport.sessionId, null)).status, 401);
     assert.equal((await rpc(url, transport.sessionId, "invalid-key")).status, 401);
-    assert.equal((await rpc(url, transport.sessionId, "other-synthetic-key")).status, 404);
+    assert.equal((await rpc(url, transport.sessionId, fixture.keys.other)).status, 404);
     const session = transport.sessionId;
     await transport.terminateSession();
     assert.equal((await rpc(url, session)).status, 404);
     await client.close();
 
-    const revoked = await connect(url, "revocable-synthetic-key");
-    await fixture.command({ action: "revoke" });
-    assert.equal((await rpc(url, revoked.transport.sessionId, "revocable-synthetic-key")).status, 401);
+    const issued = await fixture.command({ action: "issue_revocable" });
+    const revoked = await connect(url, issued.secret);
+    await fixture.command({ action: "revoke", id: issued.id });
+    assert.equal((await rpc(url, revoked.transport.sessionId, issued.secret)).status, 401);
     await revoked.client.close();
-    await fixture.command({ action: "reset" });
-    console.log(`PASS SDK ${mount}: tools, scope, arguments, authentication, revocation, DELETE`);
+    console.log(`PASS SDK ${mount}: all 17 tools, actual stores, authority catalogs, schema, redaction, revocation, DELETE`);
   }
+  stage = "official scenarios";
   await officialScenarios(path.join(harness, "dist/index.js"), fixture.addresses.gateway);
 
+  stage = "restart/expiry";
   const retained = await connect(fixture.addresses.gateway);
   const previousSession = retained.transport.sessionId;
   await retained.client.close();
@@ -186,6 +203,8 @@ try {
   await fixture.stop();
   const restarted = await startFixture(port, 1);
   const url = restarted.addresses.gateway;
+  key = restarted.keys.platform;
+  assert.deepEqual(await restarted.command({ action: "session_exists", session: previousSession }), { exists: false });
   assert.equal((await rpc(url, previousSession)).status, 404);
   const expiring = await connect(url);
   const expiredSession = expiring.transport.sessionId;
@@ -198,6 +217,9 @@ try {
   await fresh.client.close();
   await restarted.stop();
   console.log("PASS whole-BEAM restart, accelerated idle expiry, fresh-session recovery");
+} catch {
+  console.error(`FAIL ${stage}; private diagnostics omitted`);
+  process.exitCode = 1;
 } finally {
   await Promise.allSettled([...clients].map(client => deadline(client.close(), "SDK cleanup", 5_000)));
   proxy?.closeAllConnections();

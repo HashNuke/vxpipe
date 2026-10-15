@@ -1590,3 +1590,20 @@ private frontend fetches match the documented compositional helper inventory.
 Updated the tool catalog and route inventory to remove obsolete pending claims.
 Final runtime/client acceptance, request-boundary stress evidence and root gates
 remain unchecked; the milestone index remains incomplete.
+
+### Full reference-client capability acceptance
+
+Expanded the isolated official SDK runner from tenant-only adapters to all 17 tools
+through each actual Gateway, embedded and Console mount. The fixture starts actual
+application trees with shared local SQL sandbox storage, real bootstrap/Settings
+keys and persisted revocation, rolling back data on shutdown. Native listeners and
+background reconciliation remain disabled in this fixture; calls are prepared only.
+
+The catalog expectation first failed against the old fixture. Initial expanded
+runs found fixture-only assumptions about JSON key order and revoke return shape;
+semantic comparison and the real :ok contract corrected them. Final seven groups
+passed: all three mounts, three selected official scenarios, and restart/expiry.
+Each mount verifies all17 operations, scoped catalogs, denied invocation, strict
+arguments, safe result fields, revocation and DELETE. Private failure diagnostics
+are suppressed by the runner. Independent review approved. Active resource cleanup
+and password/token fault-log assertions remain separate; no live services ran.

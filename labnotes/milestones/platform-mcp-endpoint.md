@@ -164,7 +164,7 @@ directly, without an HTTP loopback request or controller invocation.
   as per-tool schemas: required fields, typed defaults, null handling and safe
   projections. Public tenant arguments/memberships use `tenant_key`, not the
   internal `tenant_id`; preserve existing REST/Console wire shapes at adapters.
-- [ ] Acceptance: local wire tests cover initialization, invalid headers, revoked
+- [x] Acceptance: local wire tests cover initialization, invalid headers, revoked
   sessions, wrong-key session reuse, disabled configuration and zero secret leakage.
   Include notifications/discovery/invocation without a repeated credential, a
   session ID without a key, cookie/query/body-only credentials and scope denials.
@@ -970,7 +970,18 @@ Depends on all required capability checkpoints and supporting workflows.
   Evidence: `bin/test-platform-mcp` passed all seven groups using SDK 1.30.0 and
   conformance 0.1.16. The three selected official scenarios use a labeled loopback
   synthetic-header adapter. See [acceptance scope](../../docs/development/platform-mcp-acceptance.md);
-  the SDK currently invokes tenant tools, so full capability parity stays open.
+  the SDK invokes all 17 tools with real stores; active-call parity is verified
+  separately.
+Expanded reference-client evidence (2026-10-15): all 17 tools passed on each of
+the three mounts using actual Calls/Identity/Persistence and Settings-issued keys.
+Checks include calls/full/platform catalogs of 5/12/17 tools, foreign lookup and
+direct account-tool denials, declared variables, idempotent preparation, immutable
+spec revisions/publication, prepared hangup, user partial update/activation,
+argument bounds, safe outputs, real revocation and DELETE. The selected official
+scenarios, whole-BEAM restart and accelerated expiry also passed. Independent review
+approved. No token redemption/media runs in this SDK lane; active cleanup and
+fault-path log redaction have separate acceptance checks.
+
 - [ ] Verify all 13 required tools and four helpers against the authority matrix,
   including direct calls to undiscovered tools, revoked keys, unavailable storage,
   foreign resources, variable initialization, pagination, hangup and user activation.

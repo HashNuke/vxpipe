@@ -7,8 +7,10 @@ the outbound checks in `bin/test-mcp-conformance` establish a different contract
 ## Run locally
 
 Run `bin/setup` first. The runner uses the checkout's test build and Node/npm.
-It never loads live-provider credentials or starts a database, carrier adapter,
-voice provider, or the umbrella application tree.
+The checkout's isolated PostgreSQL test database must be available. Run this lane
+serially with database tests: its shared SQL sandbox owns one transaction for the
+fixture lifetime. It never loads live-provider credentials, calls carriers or
+voice providers, or installs packages during acceptance.
 
 Cache the exact acceptance tools once, if they are not already present:
 
@@ -40,25 +42,41 @@ on dynamically allocated ports:
 - `Vxpipe.Gateway.HTTP.Mount` at `/embedded/mcp`.
 - The actual `Vxpipe.Console.Endpoint` and its configured Gateway mount at `/mcp`.
 
-The fixture starts the required library applications and its own supervised
-listeners, Console endpoint, admission process and synthetic credential state.
-The Console application tree is not started. Authentication and tenant storage
-use the existing explicit adapter ports; the production authentication parser,
-MCP handler, Calls authorization, projections and ExMCP HTTP implementation run
-unchanged. Fixture credentials are deliberately public test strings. Revocation
-is simulated by changing the credential adapter's result; persisted revocation
-is covered separately by Console's normal endpoint tests.
+The fixture starts the actual Console application and its Gateway, Calls, Identity
+and Persistence dependencies. It configures real repository implementations,
+bootstraps a synthetic administrator inside the SQL sandbox, and issues actual
+Settings platform, full-tenant and calls keys. It uses the production application
+composition and authentication, policy, persistence and projection code.
+Revocation updates the real key store; fixture shutdown rolls back its writes.
+The native HTTP listener and managed-cleanup reconciler are disabled so only the
+three isolated listeners serve requests and no background reconciliation scans
+escape the fixture. Existing endpoint tests separately cover normal runtime
+configuration and active-call cleanup.
 
-The pinned official SDK performs the handshake, discovery and real tenant tool
-calls. Each mount checks:
+The pinned official SDK performs the handshake, discovery and all 17 tool calls
+on each mount:
 
-- Negotiated protocol and server-issued session ID.
-- Scoped tenant listing and detail, matching structured/text results, and concealed
-  foreign-tenant lookup.
-- Rejection of invalid tool arguments.
-- Missing/invalid credentials, a different valid key using the session, and a key
-  revoked after initialization.
-- Session DELETE followed by rejection of the obsolete session ID.
+- Tenant listing and detail, with bounded pagination.
+- Spec creation, complete source update, explicit revision publication,
+  historical retrieval and listing; provider and model discovery.
+- Call creation with declared variables, idempotent replay, default-participant
+  join-token issuance, prepared-call hangup and terminal replay.
+- Safe role options, user creation, disabling, partial update preserving omitted
+  fields, reactivation and filtered listing.
+
+Each mount also checks calls/full/platform catalogs of 5/12/17 tools, own-tenant
+scope and concealed foreign lookup, denial of account tools to tenant keys,
+page-size bounds and unknown or wrongly typed arguments. It checks matching
+structured/text results and exclusion of password, credential, resolved-plan and
+digest fields. Join-token issuance intentionally returns its token; subsequent
+outputs must not repeat that secret. Missing/invalid credentials, a different
+valid key using the session, real revocation after initialization and session
+DELETE all reject continued access.
+
+These are prepared calls only: no token redemption, media, provider invocation or
+active runtime teardown occurs. Active hangup, exact-incarnation ownership,
+carrier cleanup and request-owner death remain separate owning integration tests.
+The SDK lane does not claim TCP-disconnect cancellation coverage.
 
 The SDK closes its client transport separately from `terminateSession()`, so
 restart coverage preserves an existing session before stopping the server.
@@ -66,8 +84,10 @@ restart coverage preserves an existing session before stopping the server.
 ## Expiry and restart
 
 After the mount checks, the complete fixture BEAM exits. Its replacement binds
-the same Gateway port. The old session must return HTTP 404; fresh initialization
-must succeed. This proves loss of in-memory sessions across process restart.
+the same Gateway port with fresh sandbox credentials. The fixture first verifies
+that the old ID is absent through the public SessionManager lookup, then checks
+HTTP 404 using a fresh valid key. Fresh initialization must succeed. This proves
+loss of in-memory sessions across process restart independently of key binding.
 
 For accelerated idle expiry, only the replacement fixture uses a one-second
 TTL and 25 ms cleanup interval. Before serving requests, it replaces its own
@@ -94,7 +114,7 @@ proxy. The proxy is solely a harness adapter; it is not deployed.
 | `server-initialize` | Unmodified official scenario through the header proxy |
 | `ping` | Unmodified official scenario through the header proxy |
 | `tools-list` | Unmodified official scenario through the header proxy |
-| `tools-call-*` | Omitted: require special `test_*` tools; actual tenant tools are checked with the SDK |
+| `tools-call-*` | Omitted: require special `test_*` tools; all 17 product tools are checked with the SDK |
 | Resources, prompts, logging, completion, elicitation, SSE | Omitted: outside the enabled product profile |
 | DNS rebinding | Omitted: scenario targets unauthenticated localhost servers; normal endpoint tests cover Host/Origin policy |
 | OAuth | Not implemented or claimed; authentication uses static Bearer headers |
@@ -104,16 +124,20 @@ These are selected interoperability checks, not blanket MCP or OAuth certificati
 
 ## Evidence and cleanup
 
-Verified locally on 2026-10-15: all three SDK mount checks, all three selected
-official scenarios, whole-BEAM restart, accelerated expiry and fresh-session
-recovery passed. The runner emits one concise `PASS` line per group and exits
-nonzero on failure. It bounds startup, commands and conformance subprocesses,
-terminates remaining children on failure, and removes temporary harness results.
-Raw transcripts and session IDs are not committed. Update the milestone and
-checkpoint labnotes with each relevant run's outcome and dependency revision.
+Verified locally on 2026-10-15: all 17 tools passed on each of the three mounts,
+including scoped catalogs and persisted revocation. The three selected official
+scenarios, whole-BEAM restart, accelerated expiry and fresh-session recovery also
+passed.
+
+The runner emits one concise `PASS` line per group and exits nonzero on failure.
+Failures identify the operation or fixture stage without printing private
+transcripts. Credentials, passwords and issued join tokens travel only through
+private local pipes or requests; they are never emitted in runner output. It
+bounds startup, commands and conformance subprocesses, terminates remaining
+children on failure, and removes temporary harness results. Sandbox shutdown
+rolls back fixture data even when the BEAM connection is killed.
 
 The scripts live under `verification/platform_mcp/` and are not discovered by
-`mix test`. They currently exercise read-only tenant tools, not the milestone's
-later call-spec, call-control or user-management capability matrix. Request-owner
-death and admission cleanup have separate focused Gateway tests; this runner does
-not claim TCP disconnect cancellation coverage.
+`mix test`. Record each run's outcome and dependency revision in the milestone
+and checkpoint labnotes. These checks complement the normal persisted authority,
+CSRF, concurrency and lifecycle regression suites rather than replacing them.
