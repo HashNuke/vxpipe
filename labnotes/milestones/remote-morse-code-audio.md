@@ -1,8 +1,8 @@
 # Hosted Morse audio provider
 
 Status: implementation and local Railway preparation complete, 2026-10-15.
-Scope simplified at the user's request. This replaces the earlier goal of complete ElevenLabs speech API
-parity: the service should perform the existing Morse TTS/STT operations over
+Scope simplified at the user's request. This replaces the earlier goal of
+complete ElevenLabs speech API parity: the service performs existing Morse TTS/STT operations over
 the network, using the relevant ElevenLabs request and response conventions.
 
 ## Outcome and boundaries
@@ -25,8 +25,8 @@ the network, using the relevant ElevenLabs request and response conventions.
   Prepare and verify the deployment package locally; actual hosted verification
   follows the user's deployment.
 
-The Go implementation already contains more API features than this requires.
-Simplify those features and their dependencies instead of extending them.
+The earlier Go implementation contained more API features than this requires.
+Those features and their dependencies have been removed.
 Compressed format matrices, timestamp alignment APIs, TTS WebSockets,
 multi-context synthesis, browser tokens, discovery pagination, voice settings,
 URL ingestion, diarization, webhooks and retained jobs are outside this scope.
@@ -59,7 +59,8 @@ do not create a second speech state machine or another room framework.
 
 The explicit PCM profile takes precedence over ElevenLabs' MP3 default.
 Document the supported subset accurately; invalid PCM formats and unsupported
-JSON/WS fields fail clearly. Do not claim arbitrary ElevenLabs SDK calls work unchanged.
+JSON/WS fields fail clearly. Do not claim arbitrary ElevenLabs SDK calls work
+unchanged.
 
 Streaming is required in both directions. TTS renders and flushes PCM chunks
 before the full audio is generated; Vxpipe starts consuming them immediately.
@@ -102,8 +103,7 @@ the hosted endpoint is introduced.
 
 ### A — Small standalone Morse API
 
-The codec, HTTP and realtime speech paths already work. Finish simplifying the
-application around the required contract above.
+The codec, HTTP and realtime speech paths implement the required contract above.
 
 - [x] Implement the Go Morse encoder/decoder and independent interoperability fixtures.
 - [x] Implement authenticated PCM TTS, batch PCM/WAV STT and realtime STT.

@@ -49,8 +49,8 @@ The current implementation has working remote speech and provider integration.
 Historical acceptance is recorded in the
 [STT integration note](../labnotes/20261015-0019-morse-stt-integration.md) and
 [origin/restart note](../labnotes/20261015-0036-morse-origin-restart.md).
-The earlier Go implementation includes extra compatibility machinery that now
-needs pruning; it must not be expanded simply because it was planned earlier.
+The extra compatibility machinery from the earlier Go implementation has been
+removed, including external codecs, token issuance and TTS WebSockets.
 The [scope review](../labnotes/20261015-0057-morse-scope-simplification.md) records
 this change separately from implementation progress.
 
