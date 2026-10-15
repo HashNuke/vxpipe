@@ -204,6 +204,85 @@ defmodule Vxpipe.Persistence.Integration.CallHangupTransactionTest do
              Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
   end
 
+  test "completion holds the exact call lock against cancellation and archive closure", c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    {:ok, :admit, :new, bound} =
+      Calls.bind_managed_call_admission(claim, "cleanup-owner", c.options)
+
+    binding = cleanup_binding(bound.call)
+    time = DateTime.utc_now()
+
+    {:ok, close} =
+      Vxpipe.Calls.CallFact.new(
+        id: "cleanup-close",
+        tenant_key: c.tenant,
+        call_id: bound.call.id,
+        room_id: bound.call.room_id,
+        incarnation_id: "cleanup-owner",
+        occurred_at: time,
+        sequence: 1,
+        kind: :archive_stream_closed,
+        payload: %{},
+        source_policy: %{}
+      )
+
+    {writer, monitor} =
+      transaction_barrier(fn ->
+        Vxpipe.Persistence.CallStore.complete_call_cleanup(Repo, binding, time)
+      end)
+
+    assert_receive {:transaction_locked, ^writer, {:ok, acknowledged}}, 2_000
+    assert acknowledged.ended_at == nil
+
+    assert {:error, :blocked} =
+             Repo.transaction(fn ->
+               Repo.query!("SET LOCAL lock_timeout = '100ms'")
+               assert {:error, :call_hangup_unavailable} = hangup(c)
+               Repo.rollback(:blocked)
+             end)
+
+    assert_row_lock(fn -> Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, close) end)
+    commit(writer, monitor)
+    {:ok, _intent} = hangup(c)
+    assert {:ok, ended} = Calls.complete_call_cleanup(binding, DateTime.utc_now(), c.options)
+    assert ended.terminal_reason == :api_hangup and ended.ended_at == time
+    assert {:ok, ^close} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, close)
+  end
+
+  test "completion rollback retains reservation and permits the original acknowledgement retry",
+       c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    {:ok, :admit, :new, bound} =
+      Calls.bind_managed_call_admission(claim, "cleanup-owner", c.options)
+
+    {:ok, _intent} = hangup(c)
+    binding = cleanup_binding(bound.call)
+    time = DateTime.utc_now()
+
+    assert {:error, :aborted} =
+             Repo.transaction(fn ->
+               assert {:ok, ended} = CallStore.complete_call_cleanup(Repo, binding, time)
+               assert ended.state == :ended
+               Repo.rollback(:aborted)
+             end)
+
+    {:ok, pending} = Calls.fetch_call(c.tenant, c.call.id, c.options)
+    assert pending.gateway_cleanup_required and pending.gateway_cleanup_completed_at == nil
+    assert pending.state == :admitting and pending.ended_at == nil
+    assert {:ok, ended} = Calls.complete_call_cleanup(binding, time, c.options)
+    assert ended.state == :ended and ended.gateway_cleanup_completed_at == time
+  end
+
+  defp cleanup_binding(call),
+    do: %{
+      tenant_key: call.tenant_key,
+      call_id: call.id,
+      room_id: call.room_id,
+      incarnation_id: call.incarnation_id
+    }
+
   defp assert_row_lock(operation) do
     assert {:error, :blocked} =
              Repo.transaction(fn ->

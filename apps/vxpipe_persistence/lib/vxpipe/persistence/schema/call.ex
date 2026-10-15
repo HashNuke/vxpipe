@@ -154,6 +154,23 @@ defmodule Vxpipe.Persistence.Schema.Call do
     |> check_constraint(:terminal_reason, name: :calls_terminal_reason)
   end
 
+  def cleanup_completion_changeset(call, %DateTime{microsecond: {value, _}} = time) do
+    call
+    |> change(gateway_cleanup_completed_at: %{time | microsecond: {value, 6}})
+    |> check_constraint(:gateway_cleanup_completed_at, name: :calls_gateway_cleanup_completion)
+  end
+
+  def cleanup_cancellation_changeset(call) do
+    call
+    |> change(
+      state: :ended,
+      ended_at: call.gateway_cleanup_completed_at,
+      terminal_reason: :api_hangup
+    )
+    |> check_constraint(:state, name: :calls_state)
+    |> check_constraint(:terminal_reason, name: :calls_terminal_reason)
+  end
+
   def end_changeset(call, ended_at) do
     call
     |> change(state: :ended, terminal_reason: nil, ended_at: ended_at)

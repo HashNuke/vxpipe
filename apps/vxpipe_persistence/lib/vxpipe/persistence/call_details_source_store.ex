@@ -11,8 +11,6 @@ defmodule Vxpipe.Persistence.CallDetailsSourceStore do
     UsageStore
   }
 
-  alias Vxpipe.Calls.PreparedCall
-
   alias Vxpipe.Persistence.Schema.{Call, CallSpec, CallSpecRevision, TelephonyLeg, Tenant}
 
   @spec read(module(), String.t(), String.t()) ::
@@ -62,11 +60,7 @@ defmodule Vxpipe.Persistence.CallDetailsSourceStore do
     end
   end
 
-  defp terminal(%PreparedCall{state: state, ended_at: %DateTime{}})
-       when state in [:ended, :failed],
-       do: :ok
-
-  defp terminal(_call), do: {:error, :call_not_ended}
+  defp terminal(call), do: Vxpipe.Persistence.CallPublicationReadiness.check(call)
 
   defp telephony_legs(repo, call_key) do
     repo.all(

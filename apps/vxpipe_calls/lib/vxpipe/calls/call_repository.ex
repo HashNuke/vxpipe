@@ -5,6 +5,9 @@ defmodule Vxpipe.Calls.CallRepository do
 
   @type context :: term()
 
+  @callback complete_call_cleanup(context(), map(), DateTime.t()) ::
+              {:ok, PreparedCall.t()} | {:error, term()}
+
   @type admission_subject :: AdmissionClaim.t() | TelephonyAdmissionClaim.t() | PreparedCall.t()
   @doc "Under the binding row lock, reserve cleanup once for an eligible unstarted admission; never upgrade a running legacy call."
   @callback bind_managed_call_admission(context(), admission_subject(), String.t()) ::

@@ -23,14 +23,13 @@ defmodule Vxpipe.Persistence.OutgoingLifecycleProjection do
          _repo,
          %{
            gateway_cleanup_required: true,
-           gateway_cleanup_completed_at: nil,
            started_at: nil,
            state: state,
            hangup_requested_at: requested
          } = call,
          %{kind: :archive_stream_closed, occurred_at: occurred}
        )
-       when state == :admitting or (state == :failed and not is_nil(requested)) do
+       when state in [:admitting, :ended] or (state == :failed and not is_nil(requested)) do
     if DateTime.compare(occurred, call.created_at) in [:eq, :gt],
       do: {:ok, call},
       else: {:error, :outgoing_lifecycle_conflict}

@@ -484,6 +484,17 @@ the fixes; 45 Gateway and eight Persistence tests pass, with independent review
 finding no blockers. Carrier-owner wiring and
 its separate semantic cleanup acknowledgement remain outstanding.
 
+Durable completion prerequisite: `complete_call_cleanup/3` now stores the first
+exact-owner acknowledgement under the call lock, preserves normal archive timing,
+and projects acknowledged cancellation without inventing startup. Publication
+source/store reject pending managed cleanup and managed nonterminal states;
+successful completion/retries request publication after commit. Initial API/gating
+reds and later ordering/conflicting-close regressions preceded the implementation.
+Final focused verification passed 135 Persistence tests, including separate SQL
+connection races/rollback and legacy compatibility, plus six Calls/finalizer tests.
+Gateway resource wiring/reconciliation and HTTP/MCP hangup remain unimplemented;
+this does not complete the hangup checkpoint.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

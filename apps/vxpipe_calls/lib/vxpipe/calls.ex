@@ -1,6 +1,10 @@
 defmodule Vxpipe.Calls do
   @moduledoc "Database-neutral application workflows for durable call control-plane data."
 
+  @doc "Persists trusted exact-incarnation cleanup acknowledgement; never accepts caller terminal reasons."
+  def complete_call_cleanup(binding, completed_at, options \\ []),
+    do: Vxpipe.Calls.CallCleanupCompletion.complete(binding, completed_at, options)
+
   @doc "Binds an existing admission to one incarnation, returning whether startup may proceed."
   def bind_call_admission(subject, incarnation_id, options \\ []),
     do: Vxpipe.Calls.CallAdmissionBinding.bind(subject, incarnation_id, options)

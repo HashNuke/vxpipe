@@ -137,7 +137,6 @@ defmodule Vxpipe.Persistence.ArchiveStore do
            state: :failed,
            started_at: nil,
            gateway_cleanup_required: true,
-           gateway_cleanup_completed_at: nil,
            hangup_requested_at: %DateTime{}
          },
          %CallFact{kind: :archive_stream_closed}

@@ -2,7 +2,8 @@
 
 Status: implementation design for the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md).
 Durable cancellation intent, exact-supervisor monitoring, the generic engine
-startup gate, runtime binding, and cleanup reservation prerequisites are implemented.
+startup gate, runtime binding, cleanup reservation and completion persistence are
+implemented.
 Incoming gating, resource integration, reconciliation and HTTP/MCP hangup remain
 unfinished; the complete lifecycle below is still the implementation contract.
 
@@ -210,7 +211,6 @@ bounded work, retain context until success, and combine storage acknowledgement
 with independent carrier/resource completion before acknowledging cleanup. That
 integration is still pending.
 
-
 Owner death before binding can leave archive evidence. Establish one shared
 durable archive ownership anchor under the call-row lock, validating the call's
 room and exact incarnation across both facts and snapshots. Archive writes and
@@ -257,15 +257,16 @@ binding and running joins must look up surviving membership. A crash after the
 reservation but before tracker creation leaves unknown evidence. Do not add these
 fields to public create/update inputs or store process identifiers in the database.
 
-The pending result-bearing internal completion operation must lock and validate
-the exact tenant/call/room/incarnation, require managed ownership, and preserve the first
-completion timestamp. It reads cancellation intent under that lock to select the
-API-hangup reason. Without intent, persist the acknowledgement and replay an
+`Calls.complete_call_cleanup(binding, completed_at, options)` now locks and
+validates the exact tenant/call/room/incarnation, requires managed ownership, and
+preserves the first completion timestamp. It reads cancellation intent under that
+lock to select the API-hangup reason. Without intent, persist the acknowledgement and replay an
 already-stored normal archive close, or await a later close. Keep normal archive
 time/conflict rules; only acknowledged cancellation uses the observed cleanup
 time as terminal time. A retry must reevaluate intent, which may arrive after
 cleanup was acknowledged but before normal closure. Schema/reservation and
-terminal-projection deferral must land together before managed admission is enabled. Existing writers must be drained
+terminal-projection deferral are implemented together. Gateway integration must
+land before managed admission is enabled. Existing writers must be drained
 before rollout because they bypass this terminal gate.
 
 Archive closure now commits while cleanup is pending: defer the terminal `ended`
@@ -280,17 +281,22 @@ facts. The archive adapter treats `call_not_started` as terminal discard, so
 rejected earlier snapshots do not block close indefinitely; they remain archive
 quality loss rather than successful writes.
 
-Completion must request publication again after its transaction commits, including retries:
+Completion now requests publication after its transaction commits, including retries:
 the current publication finalizer can consume the earlier archive-close trigger
 while the call is not yet ended. Both publication-source reads and publication
-writes must reject managed calls with pending cleanup, including failed calls.
-Keep a retryable waiting result for managed nonterminal calls whose cleanup is
-already acknowledged but whose normal close has not arrived. Preserve legacy
-nonterminal behavior.
-Use a distinct `call_cleanup_pending` result so the existing finalizer retries:
+writes now reject managed calls with pending cleanup, including failed calls.
+Managed nonterminal calls whose cleanup is already acknowledged but whose normal
+close has not arrived retain a retryable waiting result. Legacy nonterminal
+behavior is preserved. The distinct `call_cleanup_pending` result keeps the
+existing finalizer retrying:
 a completion trigger can encounter an existing finalizer that already read the
 pending state. Returning `call_not_ended` would let that older worker exit and
-lose the wakeup. These completion/publication changes remain implementation work.
+lose the wakeup. An archive close arriving after acknowledgement and cancellation
+but before the completion retry also projects the retained API-cancellation time
+under the archive lock. Normal conflicting close timestamps are rejected even
+while cleanup is pending; completion does not silently select one conflicting
+fact. Successful acknowledgement is persisted evidence only: Gateway resource
+owners and reconciliation still need to supply that evidence and invoke this API.
 
 Final carrier observations must be generated once and retained with their
 immutable IDs for result-bearing usage-store retries. The current best-effort

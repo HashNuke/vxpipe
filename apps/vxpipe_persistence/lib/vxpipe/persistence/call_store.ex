@@ -14,6 +14,10 @@ defmodule Vxpipe.Persistence.CallStore do
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredToken
 
   @impl true
+  def complete_call_cleanup(repo, binding, completed_at),
+    do: Vxpipe.Persistence.CallCleanupCompletionStore.complete(repo, binding, completed_at)
+
+  @impl true
   def bind_managed_call_admission(repo, subject, incarnation),
     do: Vxpipe.Persistence.CallAdmissionBindingStore.bind_managed(repo, subject, incarnation)
 

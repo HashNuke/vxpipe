@@ -793,3 +793,37 @@
   ScopedServicesApp and embedded telephony administration have no production route.
   Their canonical requests have endpoint/component tests, but no rendered coverage
   is claimed. This migration does not redesign or add a production page route.
+
+
+## Durable cleanup completion and publication
+
+- Added the trusted Calls completion operation and Persistence adapter. One row
+  lock checks the exact tenant/call/room/verified incarnation and managed reservation,
+  validates time ordering, and preserves the first acknowledgement on retries.
+  Cancellation chooses the stored cleanup time and API reason without inventing
+  startup; normal completion replays or awaits the normal archive close.
+- Both publication reads and writes gate pending managed cleanup and managed
+  nonterminal calls awaiting normal close. A retryable pending result keeps an
+  existing finalizer alive across overlapping triggers. Successful completion and
+  retry request publication after commit; failed persistence does not trigger it.
+- Initial red selections failed for missing completion and incorrect publication
+  acceptance. Review found ack→intent→archive-before-retry ordering, acknowledged
+  failed pre-start close availability, and conflicting normal closes while pending.
+  Focused red regressions preceded each fix. Both close orders now preserve API
+  cancellation evidence; conflicting normal timestamps roll back instead of
+  silently selecting the first stored close.
+- A test initially supplied a millisecond timestamp to the older hangup-request
+  fixture and hit its existing dump-precision limitation; the fixture now uses its
+  established microsecond timestamp. Completion itself normalizes acknowledged
+  timestamp precision and verifies immutable retries.
+- Final focused verification: 135 Persistence tests including actual SQL locking,
+  rollback, publication and legacy archive compatibility; six Calls/finalizer
+  tests. All owned files formatted, no migration or public DTO fields added.
+  Gateway resource registration, asynchronous incoming admission, acknowledgement
+  scheduling/reconciliation and public HTTP/MCP hangup remain necessary.
+
+Independent final completion review found no remaining blockers. It confirmed
+transactional conflicting-close rejection, the narrow acknowledged-cancellation
+late-close exception, immutable ownership/time, and publication retry gating.
+The combined root verification is still running; focused results above are not
+a claim that Gateway integration or the full hangup checkpoint is complete.
