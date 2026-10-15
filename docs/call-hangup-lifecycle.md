@@ -128,6 +128,28 @@ generation identifier. Reconciliation can reconnect to a surviving owner, but
 must not recreate an empty tracker after membership loss and call that success.
 Missing membership/evidence remains unknown.
 
+The implemented `Gateway.CallCleanup` prerequisite is a temporary supervised
+process keyed by the canonical tenant/call/room/incarnation binding. `start_new`
+is for freshly authorized admission; recovery uses `lookup` only. Application
+integration must enforce that distinction durably; the process API alone cannot
+prevent explicit recreation after lost membership.
+
+Each registered supervision root retains its original semantic acknowledgement
+owner. A different process cannot replace that owner or acknowledge its resource.
+Sealing (also triggered by engine DOWN) closes registration. Completion requires
+orderly exact-engine DOWN, orderly DOWN for every registered resource root, and
+their semantic acknowledgements. Abnormal or `:noproc` exits remain unknown.
+An owner lost before acknowledging also leaves unknown evidence; an already
+accepted acknowledgement survives its owner. A surviving original owner can
+resolve an unknown semantic outcome after orderly resource termination.
+
+`observe` atomically subscribes and returns the current snapshot; change messages
+let reconciliation wake without polling the owner. Callers must separately monitor
+the owner for lost state. The first completion timestamp is retained, and owners
+do not disappear automatically on completion. Retiring them after durable storage,
+registering actual resource owners before effects and persisting cleanup-required
+state are still integration work, not guarantees supplied by this component alone.
+
 For newly managed calls, archive projection must defer `ended` until Gateway
 completion even if archive close wins the race before a hangup request. Keep the
 archive fact writable while terminal projection waits. Preserve the approved

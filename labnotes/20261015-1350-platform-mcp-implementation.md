@@ -559,3 +559,24 @@
 - Independent review caught the SDK fixture's exact old tenant projection. Its
   expected timestamp and HTTP/MCP documentation now agree; review confirmed the
   fix. The inventory records the migrated slice and remaining routes explicitly.
+
+## Exact-incarnation cleanup evidence owner
+
+- Added a temporary supervised owner for immutable call-incarnation cleanup
+  membership. It seals registration, monitors the exact engine and resource roots,
+  and requires the original registering caller's semantic acknowledgement before
+  completion. Abnormal exits or acknowledgement-owner loss remain unknown.
+- Original surviving owners may resolve uncertain semantic outcomes after orderly
+  root exit. Completed timestamps are retained; lookup never creates replacement
+  membership. Atomic observation supplies current state and change notifications
+  for the future reconciler without database/provider calls inside the tracker.
+- Six expected missing-API failures preceded implementation. Independent review
+  found that ancillary binding fields could create duplicate owners; a seventh
+  regression reproduced it before canonicalizing startup and lookup identity.
+  Additional tests verify acknowledgement-owner death before/after confirmation
+  and abnormal engine termination. All ten focused tests pass; follow-up review
+  found no remaining blockers. Root format/compile/Credo/dependency gates pass.
+- This is a prerequisite only: durable fresh-admission authorization, actual
+  resource registration, final usage acknowledgement, reconciler persistence and
+  post-persistence retirement still need wiring. An empty recreated tracker must
+  never be accepted as recovery evidence. Full-suite verification follows.

@@ -15,6 +15,8 @@ defmodule Vxpipe.Gateway.Application do
     children = [
       {Vxpipe.Gateway.MCP.Admission, Keyword.get(settings, :mcp_admission, [])},
       {Task.Supervisor, name: Vxpipe.Gateway.AdmissionTaskSupervisor},
+      {Registry, keys: :unique, name: Vxpipe.Gateway.CallCleanupRegistry},
+      Vxpipe.Gateway.CallCleanupSupervisor,
       {Registry, keys: :unique, name: Vxpipe.Gateway.SessionRegistry},
       SessionSupervisor,
       {Registry, keys: :unique, name: Vxpipe.Gateway.Telephony.LegRegistry},

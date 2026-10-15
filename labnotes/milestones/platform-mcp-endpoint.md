@@ -420,6 +420,16 @@ implementation; all 21 focused activation/admission-adapter/ingress tests passed
 with independent review. Incoming Leg still needs gated admission and supervised
 submission integration; this does not complete incoming cancellation acceptance.
 
+Cleanup-owner prerequisite: a temporary Gateway owner now retains canonical
+incarnation membership, exact-engine/resource monitors and original-owner semantic
+acknowledgements. Sealing rejects new resources; orderly exits plus every required
+acknowledgement establish completion, while abnormal exits and lost owners retain
+unknown evidence. Recovery lookup never creates empty membership. Six missing-API
+red tests preceded implementation; review found a duplicate identity path, fixed
+after a seventh regression. Ten focused tests and the four fast root gates pass;
+follow-up review found no blockers. Durable fresh-owner authorization, resource
+registration, usage persistence, reconciliation and retirement remain unimplemented.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:
