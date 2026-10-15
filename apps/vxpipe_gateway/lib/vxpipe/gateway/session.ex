@@ -25,6 +25,8 @@ defmodule Vxpipe.Gateway.Session do
       [{session, _value}] -> GenServer.call(session, :claim, @claim_timeout)
       [] -> {:error, :not_found}
     end
+  catch
+    :exit, _reason -> {:error, :not_found}
   end
 
   def bind_connection(session_id, connection) when is_pid(connection) do
@@ -35,6 +37,8 @@ defmodule Vxpipe.Gateway.Session do
       [] ->
         {:error, :not_found}
     end
+  catch
+    :exit, _reason -> {:error, :not_found}
   end
 
   def abandon(session_id) do
@@ -70,19 +74,38 @@ defmodule Vxpipe.Gateway.Session do
       admission_owner: if(is_function(release, 0), do: self())
     }
 
-    {:ok,
-     %{
-       expires_after: expires_after,
-       snapshot: snapshot,
-       state: :pending,
-       release_admission: release,
-       claimant: nil,
-       claimant_monitor: nil,
-       connection_monitor: nil
-     }}
+    state = %{
+      expires_after: expires_after,
+      snapshot: snapshot,
+      state: :pending,
+      release_admission: release,
+      claimant: nil,
+      claimant_monitor: nil,
+      connection_monitor: nil,
+      room_monitor: nil
+    }
+
+    case Vxpipe.CallEngine.monitor_room(
+           snapshot.tenant_id,
+           snapshot.room_id,
+           snapshot.incarnation_id
+         ) do
+      {:ok, monitor} ->
+        {:ok, %{state | room_monitor: monitor}}
+
+      {:error, :room_unavailable} when is_function(release, 0) ->
+        send(self(), :release_admission)
+        {:ok, %{state | state: :closing}}
+
+      {:error, :room_unavailable} ->
+        {:stop, :room_unavailable}
+    end
   end
 
   @impl true
+  def handle_call(:snapshot, _from, %{state: :closing} = state),
+    do: {:reply, {:error, :room_unavailable}, state}
+
   def handle_call(:snapshot, _from, state), do: {:reply, state.snapshot, state}
 
   def handle_call(:claim, {claimant, _tag}, state) do
@@ -128,7 +151,8 @@ defmodule Vxpipe.Gateway.Session do
   def handle_info(:expire, state), do: release_later(state)
 
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, state)
-      when monitor == state.claimant_monitor or monitor == state.connection_monitor,
+      when monitor == state.claimant_monitor or monitor == state.connection_monitor or
+             monitor == state.room_monitor,
       do: release_later(state)
 
   def handle_info(:release_admission, state) do

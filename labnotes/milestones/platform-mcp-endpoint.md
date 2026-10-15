@@ -394,6 +394,15 @@ independent review. HTTP success shapes remain compatible, while persistence
 failure cannot issue a session. Incoming gating and complete cleanup/recovery
 acceptance remain outstanding.
 
+Session cleanup prerequisite: issuance now monitors the exact room before
+returning credentials. Missing/stale bindings fail; room termination closes
+normal and transfer sessions, retaining retry ownership when admission release
+fails. Claim/bind shutdown races return safe not-found errors. Twenty-seven
+focused Session/endpoint tests passed after lifecycle/race red tests. Broader
+local WebRTC tests found one test-fixture registry cleanup race, removed from
+this boundary's test and verified in the focused rerun. Independent review found
+no blockers. Session authority death is not whole-call cleanup evidence.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

@@ -4,6 +4,7 @@ defmodule Vxpipe.Gateway.SessionSupervisor do
   use DynamicSupervisor
 
   alias Vxpipe.Gateway.{Id, Session}
+  alias Vxpipe.Gateway.Session.Snapshot
 
   @max_id_attempts 3
 
@@ -26,7 +27,7 @@ defmodule Vxpipe.Gateway.SessionSupervisor do
 
     case DynamicSupervisor.start_child(__MODULE__, {Session, options}) do
       {:ok, session} ->
-        {:ok, Session.snapshot(session)}
+        issued_snapshot(session)
 
       {:error, {:already_started, _pid}} ->
         issue(binding, ttl_ms, attempts_remaining - 1)
@@ -34,5 +35,14 @@ defmodule Vxpipe.Gateway.SessionSupervisor do
       {:error, _reason} ->
         {:error, :session_start_failed}
     end
+  end
+
+  defp issued_snapshot(session) do
+    case Session.snapshot(session) do
+      %Snapshot{} = snapshot -> {:ok, snapshot}
+      {:error, :room_unavailable} -> {:error, :session_start_failed}
+    end
+  catch
+    :exit, _reason -> {:error, :session_start_failed}
   end
 end

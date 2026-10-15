@@ -487,3 +487,21 @@
 - The fixtures now create real rooms so Session's exact monitor can be exercised.
   Incoming admission is deliberately still an open runtime checkpoint; this does
   not claim complete hangup/reconciliation behavior.
+
+## Exact-room session lifetime
+
+- Session installs a monitor for its exact room before successful issuance.
+  Missing/stale bindings fail closed. Room DOWN closes normal, pending and bound
+  sessions; retryable admission release retains a closing supervised owner.
+  Issuance, claim and connection binding normalize concurrent session shutdown.
+- Five lifecycle tests reproduced missing issuance/DOWN cleanup behavior; two
+  synchronized request-versus-shutdown tests reproduced escaped exits. Trace
+  barriers confirmed requests reached the stopping Session, without sleeps.
+- Initial 10 Session tests passed. Broader Session/endpoint/human-only/transfer
+  WebRTC selection ran 101 tests with one failure: a redundant test immediately
+  recreated a room before Registry's asynchronous cleanup. Removed that fixture
+  coupling; replacement isolation remains at the engine boundary. Final 27
+  Session/endpoint tests passed, including all 12 Session cases. No live services.
+- Independent review found no blockers. These monitors revoke credentials and
+  release admission ownership; full resource-tree and carrier cleanup still need
+  the planned cleanup owner and durable reconciliation.
