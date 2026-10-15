@@ -174,7 +174,8 @@ integers and rejected IDs are not echoed; notifications have no JSON-RPC body.
 Remaining domain tools and complete scope/error acceptance remain open. The
 isolated reference-client runner now verifies DELETE, accelerated expiry, full
 BEAM restart on the same port and fresh recovery. Request-owner death/timeout
-cleanup has focused tests; immediate TCP-disconnect cancellation is not claimed. Dependency diagnostics are now pinned to reviewed upstream commit
+cleanup has focused tests; immediate TCP-disconnect cancellation is not claimed.
+Dependency diagnostics are now pinned to reviewed upstream commit
 `5fa760207bb09fc3b19b3049bc481b5e55106095`, which removes raw timeout/error details
 without changing callback or supervision semantics. Application callback fault
 handling remains Vxpipe's responsibility before sensitive tools are enabled.
@@ -254,7 +255,8 @@ initial variables, receive `{call_id}`, then issue/redeem its token locally.
   REST clients keep their response shape; MCP returns the minimal `{call_id}`.
 - [ ] Validate and persist nested `variables` under the existing declared-section,
   type and access rules before admission/dialing. Verify exact values arrive in
-  the runtime; omission preserves defaults. Reject invalid variables before effects.
+  the runtime; omission preserves the existing absent-section (`nil`) behavior.
+  Reject invalid supplied variables before effects; do not inject new defaults.
 - [ ] Resolve web entry from the published spec without a caller-supplied route;
   carrier-only incoming specs return unsupported-entry, not a synthetic webhook.
   Web preparation is not live audio; outgoing acknowledgement is not an answer.

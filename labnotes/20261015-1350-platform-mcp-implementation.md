@@ -189,3 +189,17 @@
 - Syntax/format checks and the complete runner passed after those changes. The
   runner starts no database, provider or umbrella application tree. It currently
   invokes read-only tenant tools; wider capability acceptance remains separate.
+
+## Call-workflow prerequisite review
+
+- Read-only review identified two mistaken design descriptions. Existing token
+  issuance accepts 300–86,400 seconds, default 300; it does not allow one-second
+  tokens. Existing variable validation checks supplied sections without coercion,
+  leaves omitted sections nil, and does not materialize schema defaults. Updated
+  the design to preserve these established behaviors rather than introduce a
+  compatibility change under the MCP adapter.
+- Existing tenant-wide idempotency storage can support web preparation as well as
+  outgoing calls. The shared workflow must replay before selecting a newer
+  publication and must not mint an unused token when creating a prepared call.
+- Implementation remains open. The current full-suite run uses the stable spec
+  snapshot; this review does not change application source during verification.

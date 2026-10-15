@@ -227,11 +227,11 @@ not a blanket restriction on their nested property names.
 | `page`, `page_size` | Optional integers; defaults 1 and 25, page_size maximum 50; no numeric-string coercion in MCP |
 | `revision` | Optional positive integer on get, default latest saved revision; required on explicit publish |
 | `call_spec_definition` | Required complete portable source object on create/update; update is replacement of source in a new immutable revision, not a JSON patch |
-| `variables` | Optional object on create_call, default `{}` before existing declared defaults/validation; missing required variables still fail validation |
+| `variables` | Optional object on create_call, default `{}`; validate supplied sections with existing declared schemas and access rules; omitted sections retain existing `nil` semantics |
 | `to` | Optional E.164 string on outgoing create_call; required for a dynamic destination, rejected for a fixed destination or a web-prepared call |
 | `idempotency_key` | Optional nonblank UTF-8 string, 1–256 bytes, on create_call; client-generated and reused for the same intended creation |
 | `participant_key` | Optional published route key on create_join_token; resolve the pinned eligible web entry if omitted; not a participant's display label |
-| `join_token_ttl_seconds` | Optional integer, default 300, range 1–86,400, using current admission limits |
+| `join_token_ttl_seconds` | Optional integer, default 300, range 300–86,400, preserving current admission limits |
 | `email` | Required on create_user, optional on update_user; existing normalization/uniqueness rules |
 | `password`, `password_confirmation` | Required input-only strings on create_user; existing password policy and matching confirmation; unsupported on update_user |
 | `memberships` | Optional array of `{tenant_key, access}`; default `[]` on create, unchanged if omitted on update; supplied array replaces assignments, `[]` clears them; access is `read` or `read_write`; duplicate tenants rejected |
