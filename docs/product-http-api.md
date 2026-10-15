@@ -511,8 +511,8 @@ the shared `{error: {code, message, retryable, details}}` envelope. These errors
 have `retryable: false`; clients must not automatically repeat mutations.
 
 MCP `hangup_call` invokes this same workflow and returns the same successful
-`{call_id,status}` projection. Complete managed runtime rollout and final lifecycle
-acceptance remain tracked in the [milestone](../labnotes/milestones/platform-mcp-endpoint.md).
+`{call_id,status}` projection. Managed runtime is enabled with durable persistence;
+final milestone acceptance remains tracked in the [milestone](../labnotes/milestones/platform-mcp-endpoint.md).
 
 ## Call inspection and artifacts (Console session only)
 

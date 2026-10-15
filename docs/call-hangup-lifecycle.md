@@ -666,3 +666,12 @@ Use explicit acknowledgements and process monitors rather than sleeps. Run the
 root completion gates, plus Lean verification if implementation changes modeled
 source-cutover or speech transitions. Keep the milestone unchecked until these
 runtime acceptance cases pass.
+
+Active web acceptance now passes through real persisted canonical creation/token
+issuance, managed admission, Session issuance and a connected local WebRTC peer.
+Authorized HTTP hangup drains the Session, WebRTC root and tracker before the test
+observes durable cleanup, archive closure and `ended` with `api_hangup`. Repeated
+hangup is terminal and further tokens are denied. A second case removes the tracker,
+waits for exact engine closure and verifies that recovery preserves unknown cleanup
+without recreating membership. These tests use local human participants, with no
+voice provider or external telephony. See the [acceptance commands](development/platform-mcp-acceptance.md#active-call-lifecycle-acceptance).

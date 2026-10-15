@@ -141,3 +141,22 @@ The scripts live under `verification/platform_mcp/` and are not discovered by
 `mix test`. Record each run's outcome and dependency revision in the milestone
 and checkpoint labnotes. These checks complement the normal persisted authority,
 CSRF, concurrency and lifecycle regression suites rather than replacing them.
+
+## Active-call lifecycle acceptance
+
+The separate local integration lane exercises canonical call creation and token
+issuance, actual managed admission, Session issuance, a connected local WebRTC
+peer, authorized HTTP hangup, and durable archive/cleanup completion:
+
+```sh
+cd apps/vxpipe_console
+mix test --only integration test/integration/managed_web_hangup_test.exs
+```
+
+It uses the isolated PostgreSQL database, human web participants and a local peer
+with no STUN servers or external providers. Process monitors prove Session,
+WebRTC root and tracker termination before checking the durable `ended` projection.
+A second case deliberately loses the tracker and proves that exact shutdown and
+recovery retain unknown cleanup instead of fabricating completion. Both cases
+passed locally. Carrier and transactional race coverage remains in its owning
+Gateway and Persistence suites; this web lane does not substitute for those tests.

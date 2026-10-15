@@ -738,6 +738,16 @@ Console tests, with exact formatting and independent review. Persisted parity
 covers calls/full-tenant/platform credentials and token denial after prepared-call
 cancellation. Managed rollout and complete active-call acceptance remain open.
 
+Active web lifecycle acceptance (2026-10-15): two local persisted integration tests
+passed canonical create/token issuance, actual managed admission and Session,
+connected WebRTC, authorized HTTP hangup, monitored resource/root/tracker drainage,
+archive closure and durable terminal proof. Repeat hangup returns ended and token
+issuance is denied. Deliberate tracker loss retains durable unknown state after
+exact engine shutdown and recovery without fabricating membership. The tests passed
+on first valid execution, then passed again after cleanup refinement; independent
+review approved. No voice provider or external carrier ran. Final combined gates
+and the complete invariant audit remain separate acceptance work.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

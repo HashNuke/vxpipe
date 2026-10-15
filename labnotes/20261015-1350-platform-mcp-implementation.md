@@ -1607,3 +1607,18 @@ Each mount verifies all17 operations, scoped catalogs, denied invocation, strict
 arguments, safe result fields, revocation and DELETE. Private failure diagnostics
 are suppressed by the runner. Independent review approved. Active resource cleanup
 and password/token fault-log assertions remain separate; no live services ran.
+
+### Persisted active web hangup acceptance
+
+Added two explicitly tagged local integration cases, using real PostgreSQL,
+canonical create/token/session HTTP, actual managed admission and a Gateway-owned
+ExWebRTC test peer. The successful case connects locally and observes Session,
+WebRTC root and tracker DOWN before checking archive closure and durable ended
+state with api_hangup, repeat behavior and token denial. The lost-tracker case
+waits for exact engine supervisor DOWN, then verifies durable unknown intent and
+non-reconstruction through recovery. No provider or external carrier is contacted.
+
+Both tests passed initially; no production gap or artificial red was introduced.
+Removed an obvious PID assertion/unused attribute and strengthened the unknown-case
+teardown barrier, then both passed again without warnings. Root and independent
+review approved. Final umbrella gates and remaining boundary evidence still pending.
