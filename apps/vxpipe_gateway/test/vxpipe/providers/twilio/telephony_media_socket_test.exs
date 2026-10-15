@@ -13,9 +13,52 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocketTest do
   setup do
     leg = start_supervised!({TestTelephonyLeg, observer: self()})
     clock = fn -> DateTime.to_unix(~U[2026-09-11 18:00:00Z]) end
-    binding = media_binding(leg)
+    original = media_binding(leg)
+
+    {:ok, command} =
+      Vxpipe.CallEngine.Command.CreateRoom.new(
+        tenant_id: original.tenant_id,
+        actor_id: "socket-test",
+        deadline: DateTime.add(DateTime.utc_now(), 60, :second)
+      )
+
+    {:ok, room} = Vxpipe.CallEngine.create_room(command)
+
+    on_exit(fn ->
+      Vxpipe.CallEngine.end_call(room.tenant_id, room.room_id, room.incarnation_id)
+    end)
+
+    binding = %{original | room_id: room.room_id, incarnation_id: room.incarnation_id}
     assert {:ok, socket} = TelephonyMediaSocket.init(%{binding: binding, clock: clock})
     %{binding: binding, leg: leg, socket: socket}
+  end
+
+  test "closes when its exact room ends while the carrier owner remains", context do
+    binding = context.binding
+
+    assert :ok =
+             Vxpipe.CallEngine.end_call(
+               binding.tenant_id,
+               binding.room_id,
+               binding.incarnation_id
+             )
+
+    assert_receive {:DOWN, monitor, :process, process, reason}, 1_000
+
+    assert {:stop, :normal, {1000, "room ended"}, _socket} =
+             TelephonyMediaSocket.handle_info(
+               {:DOWN, monitor, :process, process, reason},
+               context.socket
+             )
+
+    assert :sys.get_state(binding.leg) == self()
+  end
+
+  test "rejects media startup for a stale room incarnation", context do
+    invalid = %{context.binding | incarnation_id: "stale-room"}
+
+    assert {:stop, :room_unavailable, {1008, "room unavailable"}, _state} =
+             TelephonyMediaSocket.init(%{binding: invalid, clock: fn -> 0 end})
   end
 
   test "pins one start stream and dispatches its media and DTMF", context do

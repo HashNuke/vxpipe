@@ -262,9 +262,24 @@ defmodule Vxpipe.Providers.Twilio.MediaTest do
 
     on_exit(fn -> :telemetry.detach(handler) end)
 
+    {:ok, command} =
+      Vxpipe.CallEngine.Command.CreateRoom.new(
+        tenant_id: context.binding.tenant_id,
+        actor_id: "socket-probe",
+        deadline: DateTime.add(DateTime.utc_now(), 60, :second)
+      )
+
+    {:ok, room} = Vxpipe.CallEngine.create_room(command)
+
+    on_exit(fn ->
+      Vxpipe.CallEngine.end_call(room.tenant_id, room.room_id, room.incarnation_id)
+    end)
+
+    binding = %{context.binding | room_id: room.room_id, incarnation_id: room.incarnation_id}
+
     assert {:ok, socket} =
              Vxpipe.Gateway.TestObservedTelephonySocket.init(%{
-               binding: context.binding,
+               binding: binding,
                clock: context.clock
              })
 

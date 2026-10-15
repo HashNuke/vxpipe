@@ -186,6 +186,14 @@ The Session/WebRTC hooks are implemented and locally verified. Production
 admission does not yet supply the private binding; enabling it remains part of
 the complete resource-wiring checkpoint.
 
+Telnyx and Twilio media sockets now also monitor their exact room incarnation.
+They reject startup against an unavailable or stale room and close on room
+termination independently of the retained carrier owner. A carrier owner may
+remain alive to reconcile an uncertain end command; it must not keep media open
+after the room has stopped. This room-authority monitor controls socket lifetime,
+not whole-supervisor completion or remote carrier termination. Socket and media
+cleanup registration remain part of the resource integration work.
+
 ### Terminal projection and publication
 
 For newly managed calls, archive projection must defer `ended` until Gateway

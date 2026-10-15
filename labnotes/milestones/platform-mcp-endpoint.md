@@ -506,6 +506,13 @@ whole-root orderly DOWN. Four Session and three real-WebRTC reds preceded the
 changes; the final 38-test focused selection passes. Production managed admission
 remains disabled until carrier/media coverage and reconciliation are connected.
 
+Media socket lifetime prerequisite: Telnyx and Twilio now monitor the exact room
+before accepting frames, reject stale/unavailable room startup and close when
+that room ends even if its carrier owner remains for terminal reconciliation.
+Four expected red regressions preceded the changes; all 35 focused socket/HTTP
+tests pass, and independent review found no blockers. This does not yet register
+media/socket cleanup roots or prove carrier termination.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

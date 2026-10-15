@@ -904,3 +904,19 @@ role pages, protected role controls, custom role create/update/delete, selected
 role detail without a full directory scan, preserved membership on save, and
 password reset. Canonical network requests returned the expected 200/201/204.
 Browser and synthetic database fixture stopped; no live services were used.
+
+### Media sockets follow exact room lifetime
+
+Incoming carrier retention exposed a separate transport-lifetime gap: sockets
+only monitored the carrier Leg, which now survives room shutdown until terminal
+evidence arrives. Both provider sockets now monitor their exact room during init,
+reject stale/unavailable rooms, and close on room DOWN independently of Leg DOWN.
+This is prompt media shutdown, not cleanup-tracker completion evidence.
+
+Four regressions failed before implementation. Real-room unit fixtures replace
+the previous fabricated room bindings, including the observed Twilio HTTP socket
+probe. The first green attempt found a test-only mismatch: the fake Twilio Leg's
+state is its observer PID, not a map. Corrected that assertion; all 35 focused
+socket/HTTP tests pass. Independent review approved the lifecycle change without
+blockers. Incoming local carrier harnesses also passed with the socket changes.
+Managed media/socket registration and durable cleanup remain open.
