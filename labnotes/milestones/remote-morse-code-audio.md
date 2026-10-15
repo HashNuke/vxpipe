@@ -208,6 +208,12 @@ MORSE_CODE_API_BASE_URL=https://morse-audio.definerun.com
 The Go listener's `HOST`/`PORT` and Vxpipe's outbound base URL are separate
 settings. If Vxpipe runs in a container, its loopback is not the host Go server:
 document a reachable host/container DNS name and matching Go bind address.
+
+Local HTTP applies to development/test configuration. Production Vxpipe
+uses HTTPS; a production-mode local rehearsal therefore needs the trusted TLS
+fixture in G. The base URL is an origin only: omit `/v1`, voice IDs and socket
+paths, which the adapters append. Railway's internal listener port is not part
+of the public HTTPS origin. Changing Go's `PORT` alone does not redirect Vxpipe.
 Do not replace a developer's selected free port with the example port implicitly.
 
 Configuration handoff:
@@ -217,6 +223,7 @@ Configuration handoff:
 | `HOST` | Go API | `127.0.0.1` for native development | `0.0.0.0` |
 | `PORT` | Go API | `8787`, or another selected free port | Read Railway's injected value |
 | `MORSE_CODE_API_BASE_URL` | Vxpipe | `http://127.0.0.1:8787`, matching the chosen listener | Verified `https://morse-audio.definerun.com` or generated Railway HTTPS origin |
+| Speech socket origin (derived; no separate setting) | Vxpipe | `ws://127.0.0.1:8787` | `wss://morse-audio.definerun.com`, or the same verified generated domain |
 | Compatibility API key | Vxpipe credential configuration; sent to Go API | Any nonempty synthetic value | The same value can remain in use; no Go-side key registration |
 
 The deployment runbook must distinguish the Go service's Railway variables from
@@ -229,6 +236,7 @@ Any later removal of the development override or adoption of a hosted default
 is a separate recorded follow-up after successful cutover, not part of this
 milestone's automatic cleanup. Rollback restores the previous origin and restarts
 Vxpipe; it does not modify call specs or credentials.
+Keep the Vxpipe build unchanged during the switch and rollback checks as well.
 
 Endpoint and deployment acceptance must cover this matrix:
 
@@ -626,6 +634,9 @@ Preparation deliverables in the Go repository:
   origin, smoke command and outcome, unresolved gates, and previous verified
   origin/image for rollback. The record contains no keys or token URLs. Mark
   hosted results pending until the user's deployment has actually been tested.
+  Include the configuration handoff table above with actual nonsecret listener/origin
+  values, where each variable is set, and the restart command for the user's
+  Vxpipe process manager. Verify reachability from that process's network namespace.
 
 Runbook references: Railway detects a root `Dockerfile` automatically; confirm
 the selected builder in build logs. Configure `/readyz` as the deployment check,
@@ -712,3 +723,9 @@ adds a concrete handoff record to I. Local development and packaging can finish
 before deployment; the runtime override survives hosted verification. Existing
 implementation checkboxes are preserved. See the
 [endpoint and deployment planning note](../20261014-2356-morse-deployment-plan.md).
+
+The environment handoff review distinguishes the Go listener from Vxpipe's
+outbound origin, development HTTP from production HTTPS, and internal Railway
+ports from public domains. It preserves G's local TLS/switching gates and I's
+separate hosted gates. See the
+[handoff clarification](../20261015-0024-morse-endpoint-handoff.md).
