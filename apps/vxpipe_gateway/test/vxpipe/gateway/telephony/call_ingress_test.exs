@@ -28,7 +28,188 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
 
     on_exit(fn -> LegSupervisor.stop(service.identity, "call-leg-1") end)
 
-    %{backend: backend, options: options, service: service}
+    %{backend: backend, options: options, service: service, test_observer: self()}
+  end
+
+  test "cancellation and binding errors cancel the owned gate before preparing an answer",
+       context do
+    for decision <- [:cancel, :error] do
+      backend =
+        start_supervised!({TestTelephonyCallBackend, observer: self(), bind_decision: decision},
+          id: decision
+        )
+
+      options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+      assert :ok = handle_event(options, context.service, incoming_event())
+      operations = TestTelephonyCallBackend.operations(backend)
+      assert Enum.any?(operations, &match?({:bind_incoming, _, _}, &1))
+      assert Enum.any?(operations, &match?({:cancel_incoming, _, _, _}, &1))
+      refute Enum.any?(operations, &match?({:activate_incoming, _, _, _}, &1))
+      refute Enum.any?(operations, &match?({:mark_incoming_failed, _, _}, &1))
+      assert_receive {:incoming_end_requested, "call-control-1", _reason}
+      LegSupervisor.stop(context.service.identity, "call-leg-1")
+    end
+  end
+
+  test "answer callbacks remain responsive while carrier submission is blocked", context do
+    backend =
+      start_supervised!({TestTelephonyCallBackend, observer: self(), activation_blocked?: true},
+        id: :blocked
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+
+    _caller =
+      start_supervised!(
+        {Task,
+         fn ->
+           send(
+             context.test_observer,
+             {:incoming_result, handle_event(options, context.service, incoming_event())}
+           )
+         end}
+      )
+
+    assert_receive {:incoming_answer_pending, worker}
+    on_exit(fn -> send(worker, :release_incoming_answer) end)
+    assert {:ok, leg} = LegSupervisor.lookup(context.service.identity, "call-leg-1")
+    assert :ok = Vxpipe.Gateway.Telephony.Leg.dispatch(leg, answered_event(), 200)
+
+    assert Enum.any?(
+             TestTelephonyCallBackend.operations(backend),
+             &match?({:release_incoming, _, _}, &1)
+           )
+
+    send(worker, :release_incoming_answer)
+    assert_receive {:incoming_result, :ok}
+  end
+
+  test "a failed start projection cancels admission without releasing startup", context do
+    backend =
+      start_supervised!({TestTelephonyCallBackend, observer: self(), started_failure?: true},
+        id: :projection
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+    assert :ok = handle_event(options, context.service, incoming_event())
+    assert {:error, :call_unavailable} = handle_event(options, context.service, answered_event())
+    operations = TestTelephonyCallBackend.operations(backend)
+    assert Enum.any?(operations, &match?({:cancel_incoming, _, _, :call_unavailable}, &1))
+    refute Enum.any?(operations, &match?({:release_incoming, _, _}, &1))
+    assert_receive {:incoming_end_requested, "call-control-1", :call_unavailable}
+  end
+
+  test "late authenticated answer queues another end without releasing cancelled startup",
+       context do
+    backend =
+      start_supervised!(
+        {TestTelephonyCallBackend, observer: self(), started_failure?: true, end_blocked?: true},
+        id: :late_answer
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+    assert :ok = handle_event(options, context.service, incoming_event())
+    assert {:error, :call_unavailable} = handle_event(options, context.service, answered_event())
+    assert_receive {:incoming_end_pending, first_end}
+    on_exit(fn -> send(first_end, :release_incoming_end) end)
+    assert :ok = handle_event(options, context.service, answered_event())
+    send(first_end, :release_incoming_end)
+    assert_receive {:incoming_end_pending, retry_end}
+    on_exit(fn -> send(retry_end, :release_incoming_end) end)
+
+    refute Enum.any?(
+             TestTelephonyCallBackend.operations(backend),
+             &match?({:release_incoming, _, _}, &1)
+           )
+
+    send(retry_end, :release_incoming_end)
+    refute_receive {:incoming_end_pending, _}
+  end
+
+  test "authenticated end retries local teardown after an unavailable backend", context do
+    backend =
+      start_supervised!({TestTelephonyCallBackend, observer: self(), end_event_failure?: true},
+        id: :ended_retry
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+    assert :ok = handle_event(options, context.service, incoming_event())
+    assert :ok = handle_event(options, context.service, answered_event())
+    ended = %{answered_event() | kind: :ended, end_reason: :hangup}
+    assert {:error, :room_unavailable} = handle_event(options, context.service, ended)
+    assert :ok = handle_event(options, context.service, ended)
+
+    assert Enum.count(
+             TestTelephonyCallBackend.operations(backend),
+             &match?({:handle_live_event, _, :ended, _}, &1)
+           ) == 2
+
+    refute_receive {:incoming_end_requested, _, _}
+  end
+
+  test "authenticated end retries cancellation when answer preparation never happened", context do
+    backend =
+      start_supervised!(
+        {TestTelephonyCallBackend, observer: self(), bind_decision: :cancel, cancel_failures: 2},
+        id: :unprepared_end_retry
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+    assert :ok = handle_event(options, context.service, incoming_event())
+    ended = %{answered_event() | kind: :ended, end_reason: :hangup}
+    assert {:error, :room_unavailable} = handle_event(options, context.service, ended)
+    assert :ok = handle_event(options, context.service, ended)
+
+    assert Enum.count(
+             TestTelephonyCallBackend.operations(backend),
+             &match?({:cancel_incoming, _, _, _}, &1)
+           ) == 3
+  end
+
+  test "an observed room shutdown completes an unprepared carrier end without cancelling a missing runtime",
+       context do
+    room = start_supervised!({Agent, fn -> :room end}, id: :gated_room)
+
+    backend =
+      start_supervised!(
+        {TestTelephonyCallBackend,
+         observer: self(), bind_decision: :cancel, cancel_failures: 10, room_owner: room},
+        id: :closed_unprepared
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+    assert :ok = handle_event(options, context.service, incoming_event())
+    assert {:ok, leg} = LegSupervisor.lookup(context.service.identity, "call-leg-1")
+    monitor = Process.monitor(leg)
+    stop_supervised!(:gated_room)
+    assert_receive {:incoming_room_cancel_requested, :room_ended}
+    ended = %{answered_event() | kind: :ended, end_reason: :hangup}
+    assert :ok = handle_event(options, context.service, ended)
+    assert_receive {:DOWN, ^monitor, :process, ^leg, :normal}
+
+    assert Enum.count(
+             TestTelephonyCallBackend.operations(backend),
+             &match?({:cancel_incoming, _, _, _}, &1)
+           ) == 2
+  end
+
+  test "a replay with no newly owned effects retires without starting or ending the carrier",
+       context do
+    backend =
+      start_supervised!({TestTelephonyCallBackend, observer: self(), claimed?: true}, id: :replay)
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
+    assert :ok = handle_event(options, context.service, incoming_event())
+    assert {:ok, replay} = LegSupervisor.lookup(context.service.identity, "call-leg-1")
+    monitor = Process.monitor(replay)
+    assert_receive {:DOWN, ^monitor, :process, ^replay, :normal}, 2_000
+
+    refute Enum.any?(
+             TestTelephonyCallBackend.operations(backend),
+             &match?({:start_incoming, _}, &1)
+           )
+
+    refute_receive {:incoming_end_requested, _, _}
   end
 
   test "claims and activates once, then projects the provider answer occurrence", context do
@@ -40,6 +221,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert [
              {:claim_incoming, {:tenant, "AAAAAAAAAAAAAAAA"}, ^service_name, "call-leg-1"},
              {:start_incoming, "30000000-0000-4000-8000-000000000003"},
+             {:bind_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1"},
              {:activate_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1", leg}
            ] = TestTelephonyCallBackend.operations(context.backend)
 
@@ -50,9 +232,11 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert [
              {:claim_incoming, {:tenant, "AAAAAAAAAAAAAAAA"}, ^service_name, "call-leg-1"},
              {:start_incoming, "30000000-0000-4000-8000-000000000003"},
+             {:bind_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1"},
              {:activate_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1", ^leg},
              {:mark_incoming_started, "30000000-0000-4000-8000-000000000003", "rinc_phone-1",
-              answered_at}
+              answered_at},
+             {:release_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1"}
            ] = TestTelephonyCallBackend.operations(context.backend)
 
     assert answered_at == answered.occurred_at
@@ -135,8 +319,9 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert [
              {:mark_incoming_started, "30000000-0000-4000-8000-000000000003", "rinc_phone-1",
               @now},
+             {:release_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1"},
              {:handle_live_event, "30000000-0000-4000-8000-000000000003", :media_started, nil}
-           ] = Enum.take(TestTelephonyCallBackend.operations(context.backend), -2)
+           ] = Enum.take(TestTelephonyCallBackend.operations(context.backend), -3)
 
     assert_receive {:test_live_telephony_event, ^media_started, source}
     assert source == self()
@@ -185,9 +370,10 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert [
              {:claim_incoming, _scope, ^service_name, "call-leg-1"},
              {:start_incoming, "30000000-0000-4000-8000-000000000003"},
+             {:bind_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1"},
              {:activate_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1", leg},
-             {:mark_incoming_failed, "30000000-0000-4000-8000-000000000003",
-              :leg_activation_failed}
+             {:cancel_incoming, "30000000-0000-4000-8000-000000000003", "rinc_phone-1",
+              :answer_submission_failed}
            ] = TestTelephonyCallBackend.operations(backend)
 
     assert is_pid(leg)
@@ -229,12 +415,29 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
       usage: usage
     }
 
-    :ok = TestTelephonyCallBackend.put_activation(context.backend, activation)
+    backend =
+      start_supervised!(
+        {TestTelephonyCallBackend,
+         observer: self(), activation: activation, activation_blocked?: true},
+        id: :usage_backend
+      )
+
+    options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
     assert_receive {:test_usage_observations, [started]}
     assert started.measurement.component == "carrier_legs"
 
-    assert {:ok, "wss://voice.example.test/media"} =
-             handle_event(context.options, context.service, incoming_event())
+    start_supervised!(
+      {Task,
+       fn ->
+         send(
+           context.test_observer,
+           {:usage_incoming_result, handle_event(options, context.service, incoming_event())}
+         )
+       end}
+    )
+
+    assert_receive {:incoming_answer_pending, worker}
+    on_exit(fn -> send(worker, :release_incoming_answer) end)
 
     answered = %{
       answered_event()
@@ -244,6 +447,8 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     assert :ok = handle_event(context.options, context.service, answered)
     assert_receive {:test_usage_observations, [connected]}
     assert connected.delivery_id == answered.provider_event_id
+    send(worker, :release_incoming_answer)
+    assert_receive {:usage_incoming_result, {:ok, "wss://voice.example.test/media"}}
 
     ended = %{
       answered

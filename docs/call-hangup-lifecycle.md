@@ -4,8 +4,9 @@ Status: implementation design for the [platform MCP milestone](../labnotes/miles
 Durable cancellation intent, exact-supervisor monitoring, the generic engine
 startup gate, runtime binding, cleanup reservation and completion persistence are
 implemented.
-Incoming gating, resource integration, reconciliation and HTTP/MCP hangup remain
-unfinished; the complete lifecycle below is still the implementation contract.
+Incoming gating is implemented; managed resource integration, reconciliation and
+HTTP/MCP hangup remain unfinished. The complete lifecycle below is still the
+implementation contract.
 
 ## Decision and ownership
 
@@ -30,8 +31,7 @@ The engine prerequisite is available as `call_admission: {owner_pid, token_ref}`
 on `CallEngine.start_call/2`, with `admit_call/4` and `cancel_call_admission/4`.
 It reuses the existing owner-monitored outgoing gate. Legacy outgoing options,
 APIs and submission acknowledgements remain supported; contradictory options
-are rejected. Web/outgoing admission binds durably before release; incoming
-integration remains.
+are rejected. Web, outgoing and incoming admission bind durably before release.
 
 The call-row lock orders cancellation, token issuance/redemption and admission.
 A prepared call can become ended atomically. Later token operations and admission
@@ -85,6 +85,23 @@ Record and monitor the gated room before answering. Prepare activation context
 before submitting the answer, and retain it on failure or unknown submission so
 late results can be cancelled. Bind failure/cancellation must reject or end the
 original carrier leg even when no activation result exists.
+
+Incoming admission now uses that gate and retains the original authenticated
+event, configured service, exact room and prepared activation before submitting
+an answer. Carrier HTTP requests run as bounded work under the existing admission
+task supervisor, leaving the Leg responsive to callbacks and room termination.
+An authenticated answered/media-start event persists the start projection before
+releasing the gate. Submission acceptance alone does not invent a start event.
+The owner applies usage transitions to its current state, preserving callbacks
+that arrived while the answer request was in flight.
+
+Room shutdown requests carrier termination without declaring it complete. A late
+answer queues another end attempt if one is already in flight. Authenticated
+termination and local room cancellation are separate evidence; a failed local
+stop remains retryable. Duplicate durable admission claims do not adopt or end
+another owner's resources. This incoming slice still uses the legacy binding
+operation; managed reservation, carrier usage acknowledgement and tracker wiring
+must land together before managed admission is enabled.
 
 ## Cleanup and terminal evidence
 
@@ -365,8 +382,8 @@ before releasing their startup gate. Running web joins use the exact bound
 incarnation. Pre-release cancellation/persistence failure closes the owned gate
 without projecting a generic failed state or issuing a session. The focused
 Gateway selection passed 48 tests after nine expected red failures; independent
-review found no blockers. Incoming activation still needs the same gate and
-retained cleanup context. These prerequisites do not yet establish whole-call
+review found no blockers. Incoming activation now has the same gate and retained
+cleanup context. These prerequisites do not yet establish whole-call
 cleanup or expose the HTTP/MCP hangup operation.
 
 Implement and verify in coherent checkpoints:

@@ -24,6 +24,32 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
               pid()
             ) :: {:ok, term()} | {:error, term()}
 
+  @callback start_incoming(
+              context(),
+              TelephonyAdmissionClaim.t(),
+              ConfiguredService.t(),
+              pid(),
+              reference()
+            ) ::
+              {:ok, RoomSnapshot.t(), reference() | nil} | {:error, term()}
+  @callback bind_incoming(context(), TelephonyAdmissionClaim.t(), String.t()) ::
+              {:ok, :admit | :cancel, TelephonyAdmissionClaim.t()} | {:error, term()}
+  @callback prepare_incoming(
+              context(),
+              ConfiguredService.t(),
+              TelephonyAdmissionClaim.t(),
+              RoomSnapshot.t(),
+              pid()
+            ) ::
+              {:ok, term()} | {:error, term()}
+  @callback submit_incoming(context(), term()) ::
+              {:ok, term()} | {:error, term(), term()} | {:error, term()}
+  @callback release_incoming(context(), TelephonyAdmissionClaim.t(), reference()) ::
+              :ok | {:error, term()}
+  @callback cancel_incoming(context(), TelephonyAdmissionClaim.t(), reference(), atom()) ::
+              :ok | {:error, term()}
+  @callback end_incoming(context(), ConfiguredService.t(), Event.t(), term(), atom()) :: term()
+
   @callback mark_incoming_started(
               context(),
               TelephonyAdmissionClaim.t(),

@@ -120,6 +120,47 @@ defmodule Vxpipe.Gateway.CallAdmission do
   end
 
   @impl CallIngressBackend
+  def start_incoming(options, claim, service, owner, token) do
+    with :ok <- matching_incoming_service(service, claim),
+         :ok <- validate_phone_plan(claim.call.plan, options) do
+      Vxpipe.Gateway.IncomingCallAdmission.start(options, claim, owner, token)
+    end
+  end
+
+  @impl CallIngressBackend
+  def bind_incoming(options, claim, incarnation_id),
+    do: Calls.bind_call_admission(claim, incarnation_id, options)
+
+  @impl CallIngressBackend
+  def prepare_incoming(options, service, claim, room, leg) do
+    with :ok <- matching_incoming_service(service, claim) do
+      IncomingLegActivation.prepare(
+        service,
+        claim,
+        room.incarnation_id,
+        leg,
+        telephony_activation_options(options)
+      )
+    end
+  end
+
+  @impl CallIngressBackend
+  def submit_incoming(_options, prepared),
+    do: Vxpipe.Gateway.IncomingCallAdmission.submit(prepared)
+
+  @impl CallIngressBackend
+  def release_incoming(_options, claim, token),
+    do: Vxpipe.Gateway.IncomingCallAdmission.release(claim, token)
+
+  @impl CallIngressBackend
+  def cancel_incoming(_options, claim, token, reason),
+    do: Vxpipe.Gateway.IncomingCallAdmission.cancel(claim, token, reason)
+
+  @impl CallIngressBackend
+  def end_incoming(_options, service, event, activation, reason),
+    do: Vxpipe.Gateway.IncomingCallAdmission.end_leg(service, event, activation, reason)
+
+  @impl CallIngressBackend
   def activate_incoming(
         options,
         %ConfiguredService{} = service,

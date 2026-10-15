@@ -920,3 +920,34 @@ state is its observer PID, not a map. Corrected that assertion; all 35 focused
 socket/HTTP tests pass. Independent review approved the lifecycle change without
 blockers. Incoming local carrier harnesses also passed with the socket changes.
 Managed media/socket registration and durable cleanup remain open.
+
+### Incoming admission gate and responsive carrier cleanup
+
+Incoming admission now binds a gated room before answer preparation/submission.
+The Leg retains the original configured service and authenticated carrier event
+before any activation exists. Answer/end HTTP requests run as bounded supervised
+work, cancelled on owner death, while authenticated callbacks remain responsive.
+Start projection is persisted before gate release and only follows an actual
+answered/media-start event. Usage transitions use the current owner state so a
+late answer response cannot overwrite callbacks received during the request.
+
+Initial regressions failed on missing binding/cancellation and blocked callbacks;
+the first focused selection passed 24 tests after implementation. Local harnesses
+then exposed socket lifetime coupling and old fixtures expecting a started room
+before authenticated answer evidence. The separate socket checkpoint fixes that
+coupling; harness fixtures now inspect the bound incarnation before startup.
+
+Independent review found late-answer cleanup needed a queued retry, local stop
+failure needed to retain retryability after authenticated carrier end, and empty
+duplicate replay owners needed retirement without adopting existing effects.
+Expected red regressions preceded each fix. Final review additionally found the
+unprepared-activation branch discarded cancellation errors; two more reds cover
+error propagation and an already-observed exact room shutdown. The private
+room_closed? fact is set only by the exact room monitor, never by a missing lookup.
+
+All 59 focused ingress, activation compatibility and local Telnyx/Twilio harness
+tests passed with zero warnings. Exact owned files were formatted and independent
+source/documentation review approved. No live provider or carrier was used.
+Production still uses legacy binding; managed reservation/tracker integration,
+final usage acknowledgement and reconciliation remain outstanding. The complete
+root checks started on frozen source after this focused verification.

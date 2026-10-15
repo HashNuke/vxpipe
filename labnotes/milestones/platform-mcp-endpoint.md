@@ -513,6 +513,17 @@ Four expected red regressions preceded the changes; all 35 focused socket/HTTP
 tests pass, and independent review found no blockers. This does not yet register
 media/socket cleanup roots or prove carrier termination.
 
+Incoming gate prerequisite: the incoming Leg now retains its original carrier
+identity, binds the gated exact room before answer submission, and persists an
+authenticated start event before releasing startup. Bounded supervised answer/end
+requests leave callbacks responsive. Late answers trigger cleanup retries; local
+room-stop failure remains retryable independently of carrier-end evidence, and
+duplicate admissions do not adopt prior effects. After initial and review-driven
+red regressions, all 59 focused ingress/activation/local carrier-harness tests
+pass. Independent source/documentation review approved. This slice still uses
+legacy binding; managed carrier/media registration, final usage acknowledgements,
+reconciliation and the actual hangup transports remain open.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:
