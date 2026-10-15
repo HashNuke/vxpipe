@@ -1,8 +1,8 @@
 # Product HTTP API inventory
 
 Source inventory for the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md),
-recorded 2026-10-15. The canonical routes below are implemented; final combined
-acceptance remains tracked in the milestone. The [platform MCP design](platform-mcp.md) owns application
+recorded 2026-10-15. The canonical routes below are implemented and verified;
+combined acceptance evidence is recorded in the milestone. The [platform MCP design](platform-mcp.md) owns application
 boundaries, authentication and the approved MCP tool set. Moving a route does not
 add an MCP tool or automatically grant a machine key permission to use it.
 
@@ -25,7 +25,7 @@ uses Calls-owned authoring with an explicit existing demo tenant and the actual
 actor. Configured sample call/transfer now use canonical actual-actor workflows
 and an explicit call target, without startup authoring or hidden keys. Legacy
 routes remain compatibility surfaces with shared policy and canonical projections
-where their wire contracts agree. Final cross-interface acceptance remains open.
+where their wire contracts agree. Cross-interface acceptance is complete.
 
 ## Classification and migration rules
 

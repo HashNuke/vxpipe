@@ -1,6 +1,6 @@
 # Platform MCP endpoint
 
-Status: approved for implementation, 2026-10-15. Implementation is in progress.
+Status: implemented and locally verified, 2026-10-15.
 The [implementation milestone](../labnotes/milestones/platform-mcp-endpoint.md)
 owns checkpoints and acceptance. This decision records the initial scope and its
 authorization boundaries.
@@ -34,7 +34,7 @@ Settings platform keys additionally see `list_users`, `create_user`, `update_use
 with the canonical HTTP API and preserve transactional authority/audit guards.
 All 17 tools are implemented. The [product HTTP API](product-http-api.md) documents
 the corresponding HTTP operations. Browser product callers use canonical routes;
-final active-call and cross-interface acceptance remain tracked in the milestone.
+active-call and cross-interface acceptance evidence is recorded in the milestone.
 
 ## What exists today
 

@@ -1,7 +1,20 @@
 # Platform MCP endpoint
 
-Status: implementation authorized and started on 2026-10-15. The user approved
-the milestone, incremental commits, subagent reviews and pushnotify updates.
+Status: complete and locally verified on 2026-10-15. All 17 required/supporting
+MCP tools, the shared application/product HTTP API, UI migration and whole-call
+hangup are implemented. The user authorized incremental commits, independent
+reviews and pushnotify updates.
+
+Final verification: all five root gates passed; the default umbrella suite reported
+4,348 tests and zero failures (147 excluded). All 770 frontend tests, types/lint/build
+and recorded desktop/mobile browser checks passed. The reference SDK passed all17
+tools across three real application mounts, selected official conformance checks,
+restart and expiry. Local active-WebRTC hangup and slow-body/sensitive-failure
+acceptance also passed. No live providers, external telephony or deployment ran.
+
+Checkpoint evidence below is chronological. Earlier pending statements describe
+that checkpoint's state; the final acceptance record closes those implementation
+gaps. OAuth and unrelated MCP extensions remain outside the approved scope.
 
 ## Runnable outcome
 
@@ -1017,11 +1030,11 @@ fault-path log redaction have separate acceptance checks.
   Explain OAuth-only client limitations without adding OAuth to this milestone.
   Include secret-reference client configuration and verify it with a local client;
   never describe static API keys as full MCP OAuth authorization conformance.
-- [ ] Run the five common root gates, changed frontend tests/types/build, rendered
+- [x] Run the five common root gates, changed frontend tests/types/build, rendered
   browser verification and relevant model verification for lifecycle changes.
-- [ ] Use only local PostgreSQL, synthetic accounts/keys, Morse/fixture providers and
+- [x] Use only local PostgreSQL, synthetic accounts/keys, Morse/fixture providers and
   fake carrier adapters. No live-provider tests, external telephony or deployments.
-- [ ] Update evidence/index only when every requested capability passes; do not mark
+- [x] Update evidence/index only when every requested capability passes; do not mark
   completion for just the original nine tools. Commit only when authorized.
 
 Final boundary/parity audit (2026-10-15): the per-capability direct/application,
@@ -1065,8 +1078,32 @@ limitations are documented. Final combined root gates are running separately.
   explicit OAuth-only client limitations, per-request authentication and error
   contracts. OAuth is the interoperable standard path and remains separate work.
 - [x] User authorized implementation of the refined signatures/policy (2026-10-15).
-- [ ] Implementation and all acceptance gates completed.
+- [x] Implementation and all acceptance gates completed.
 
 Independent subagent planning review (2026-10-15) confirmed dependency direction
 and scope. Clarified HTTP key-scope denials versus resource/domain tool errors and
-recorded implementation authorization. Runtime acceptance remains outstanding.
+recorded implementation authorization. Final implementation and acceptance reviews
+found no outstanding requirements within the approved scope.
+
+## Final acceptance evidence
+
+The frozen source completed the full default umbrella run with 4,348 tests,
+zero failures and 147 explicitly excluded integration/live tests. Format checking,
+warnings-as-errors compilation, strict Credo and unused dependency checking passed.
+The final non-test gates were captured again after the runner handle was lost
+across a turn; the original test process was monitored to completion and was not
+restarted. No source changed during verification.
+
+Additional selected local lanes passed separately: all17 official-SDK operations
+on each of three real mounts and the selected conformance/restart/expiry groups;
+two persisted connected-WebRTC/unknown-recovery cases; three slow-body and sensitive
+failure cases; and the recorded SQL transaction, local carrier/media and cleanup
+acceptance suites. Frontend source did not change after the 770-test/types/lint/build
+and rendered desktop/mobile checks recorded above. No modeled source/speech state
+transition changed, so Lean verification was not required for this milestone.
+
+Independent final audit verified the nine checkpoints, authority matrix, bounded
+pagination, secret-reference/static-header client compatibility, cleanup invariants,
+UI route inventory and commit hygiene. All changed Markdown file links resolve.
+The milestone and implementation-order index are complete; commits remain on the
+implementation branch for the user's normal integration workflow.

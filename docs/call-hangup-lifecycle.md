@@ -464,7 +464,7 @@ calls still require their existing ownership when joined. Apply the additive
 migrations and drain old application writers before rollout. This configuration
 work does not establish that full active-call acceptance has passed.
 
-## Remaining carrier integration contracts
+## Carrier integration contracts
 
 These are integration requirements identified from the existing owner paths; they
 are not claims that managed admission is enabled.
@@ -675,3 +675,9 @@ hangup is terminal and further tokens are denied. A second case removes the trac
 waits for exact engine closure and verifies that recovery preserves unknown cleanup
 without recreating membership. These tests use local human participants, with no
 voice provider or external telephony. See the [acceptance commands](development/platform-mcp-acceptance.md#active-call-lifecycle-acceptance).
+
+Final milestone acceptance completed on 2026-10-15. The current source passed all
+five root gates, the full default umbrella suite, reference-client parity and the
+selected local lifecycle/boundary lanes. The implementation milestone records the
+requirement-by-requirement evidence and independent review. Deployment still requires
+the migration/writer-drain ordering described above; no deployment was performed.

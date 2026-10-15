@@ -1639,3 +1639,23 @@ gate, carrier/media, cleanup, persistence and reconciliation tests, plus the new
 persisted connected-web test. Reconciled their milestone checkboxes and the parity/
 public documentation gates. Header socket deadlines and TCP-disconnect cancellation
 are not claimed as application evidence. All source is frozen for final root gates.
+
+### Milestone completion
+
+Frozen-source root verification completed: 4,348 default umbrella tests, zero
+failures, 147 excluded. Format check, warnings-as-errors compile, strict Credo and
+unused-dependency check passed. A turn transition lost the original execution
+handle; inspected its still-running OS process/output and monitored that same run
+to completion instead of restarting tests. Repeated only the four quick gates to
+capture an explicit successful exit. The existing unused-default warning in a
+CallEngine test helper also appeared in the earlier baseline; compilation gates
+remain green. No runtime/test source changed during this run.
+
+All17 SDK tool/mount acceptance, two active web cases and three boundary cases
+passed separately. Existing SQL/carrier/media suites, 770 frontend tests,
+types/lint/build and recorded desktop/mobile inspection complete the evidence.
+Final independent audit found no remaining scope requirements or commit-hygiene
+issues. Checked local links in all11 changed Markdown files. Marked milestone and
+index complete and updated public status documentation. No live credentials,
+providers, external carrier calls or deployment were used; no push was requested
+for this implementation goal.
