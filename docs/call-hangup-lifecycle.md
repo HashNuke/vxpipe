@@ -52,11 +52,37 @@ Repeated binding accepts only the same incarnation; it cannot replace ownership.
 Late lifecycle projections must preserve cancellation intent and require that same
 binding; a late started projection must not reopen a cancelled call.
 
+`Calls.bind_call_admission(subject, incarnation_id, options)` preserves the subject
+wrapper (web admission claim, incoming carrier claim or outgoing prepared call)
+and validates its persisted ownership, pinned room and plan. It returns
+`{:ok, :admit | :cancel, updated_subject}` and establishes immutable ownership.
+When Gateway cleanup tracking is connected, the same binding transaction must
+also set cleanup-required state for newly managed admission; it cannot be delayed
+until after release or archive closure. This ownership metadata does not start
+the call or prove cleanup completion.
+The call-row lock establishes order; an unused binding timestamp is unnecessary.
+Binding must not invent `started_at`, activate a durable carrier leg or change
+lifecycle state merely to reserve runtime ownership. Web/outgoing startup then
+synchronously records its started projection before releasing the gate. Incoming
+calls retain their existing answered/media-event start time.
+
+Running web joins also validate the complete, still-active admission claim before
+joining or issuing a pending-transfer session. The engine must check the expected
+incarnation inside the serialized join operation; a snapshot followed by an
+unscoped join can race a replacement. A participant join failure does not terminate
+an otherwise valid whole call.
+
 Web admission must await binding before releasing startup or issuing a session.
 Incoming carrier admission must bind and establish cleanup ownership before
 activation/answer, including cancellation before an activation object exists.
 Outgoing admission retains its existing ownership and submission acknowledgement
 protocol, adding the same cancellation guard.
+
+Incoming Leg retains the claimed carrier identity independently of activation.
+Record and monitor the gated room before answering. Prepare activation context
+before submitting the answer, and retain it on failure or unknown submission so
+late results can be cancelled. Bind failure/cancellation must reject or end the
+original carrier leg even when no activation result exists.
 
 ## Cleanup and terminal evidence
 
@@ -88,10 +114,32 @@ Closing admission must also close owner registration before the final cleanup
 acknowledgement. Neither late registration nor a later archive projection may
 bypass the required Gateway acknowledgements.
 
+Use a dedicated Gateway cleanup owner for each newly managed call incarnation.
+Existing Session, WebRTC, media and carrier supervisors retain their responsibilities.
+The cleanup owner serializes resource registration and sealing; resources register
+before effects, and sealing rejects further registrations. Completion requires
+acknowledged outcomes plus termination of the registered local supervision trees.
+Initial and transfer carrier legs both retain uncertain late-adoption cleanup.
+A successful end command is acceptance, not an authenticated terminal callback.
+
+Persist cleanup-required state with admission before effects, and bind completion
+acknowledgements to that same incarnation. The incarnation is already a sufficient
+generation identifier. Reconciliation can reconnect to a surviving owner, but
+must not recreate an empty tracker after membership loss and call that success.
+Missing membership/evidence remains unknown.
+
+For newly managed calls, archive projection must defer `ended` until Gateway
+completion even if archive close wins the race before a hangup request. Keep the
+archive fact writable while terminal projection waits. Preserve the approved
+already-ended, no-new-effects contract for existing terminal records; do not
+retroactively claim that legacy rows acquired the new resource acknowledgements.
+
 The current room monitor observes RoomAuthority, whose exit can precede subtree
 cleanup. Add trusted exact-supervisor monitoring; a missing registry entry alone
-is not completion evidence. A previously captured trusted PID can be monitored
-after exit, but an absent or unverified lookup cannot justify `ended`.
+is not completion evidence. Monitoring even a previously captured trusted PID
+after it exits produces `:noproc`, which loses the exit reason. Require an
+already-observed orderly `DOWN` or independent durable proof; `:noproc` alone
+cannot justify `ended`.
 
 Supervisor completion can acknowledge cancellation when archiving is disabled or
 failed, provided the supervisor completed orderly shutdown. A killed/crashed
@@ -101,6 +149,21 @@ observed end time and a specific API-hangup terminal reason.
 Later archive close for that same incarnation must still drain successfully even
 if its timestamp differs. Restrict this exception to acknowledged cancellation;
 retain normal conflicting-end protection.
+
+Archive closure also needs reason classification. The subscriber begins draining
+on any source supervisor termination, and a persisted `archive_stream_closed`
+can contain `source_reason: "killed"` with `incomplete: false`. Queued-fact drain
+and archive-quality counters do not prove child cleanup. Accept orderly runtime
+completion evidence; abnormal source termination needs independent proof. Drain
+timeout abandons pending work rather than manufacturing a successful closure.
+
+Final carrier usage cannot rely on a send to an already-dead RoomAuthority.
+Reuse the result-bearing `Calls.store_usage_observation/2` path with exact
+call/room/incarnation validation and its existing immutable-ID deduplication.
+Persist or retry final usage before acknowledging cleanup, while retaining normal
+live-room archive reporting. Extend failed-call acceptance only for the matching
+cancelled incarnation; do not silently discard unknown outgoing usage. This avoids
+adding another engine shutdown phase solely to keep the usage reporter alive.
 
 Owner death before binding can leave archive evidence. Establish one shared
 durable archive ownership anchor under the call-row lock, validating the call's
@@ -144,7 +207,8 @@ return not-found; persistence uses canonical public IDs.
 The generic gate passed 33 focused engine tests and independent review. Tests
 cover web/incoming deferred preparation, exact controller/token/incarnation,
 controller death, cancellation, repeat release and outgoing acknowledgement
-compatibility. The full umbrella run for these combined prerequisites is pending.
+compatibility. All five root completion checks subsequently passed, including
+the complete default umbrella suite with zero failures.
 
 Read-only review confirmed the current web handler projects `mark_started` after
 starting the runtime, incoming activation precedes its started projection, and

@@ -396,3 +396,38 @@
   against frozen source. No source-cutover or speech state machine was changed.
 - Gateway binding, carrier cleanup and recovery are still unfinished. These
   prerequisites do not expose the hangup API or mark its checkpoint complete.
+
+## Admission binding and completion design refinement
+
+- Read-only review during the frozen full suite selected a wrapper-preserving
+  bind operation with no timestamp: the call-row lock orders binding; existing
+  started projections retain actual event times. Incoming answer timing must not
+  be replaced by an invented binding start time.
+- Running web joins require an engine-side exact-incarnation check, not a
+  snapshot followed by an unscoped join. Incoming cancellation must retain original
+  carrier identity and activation context before answer submission can fail.
+- Archive subscriber tests explicitly allow a close marked incomplete=false
+  after a killed supervisor. Archive presence/quality alone cannot prove cleanup.
+  Final carrier usage also currently routes through a potentially dead authority;
+  the existing result-bearing, deduplicating usage persistence port is the minimal
+  path for acknowledged final usage.
+- A narrowly scoped Gateway cleanup owner must seal resource registration before
+  completion, using the existing incarnation as generation. New managed calls
+  defer terminal projection until resource acknowledgements, including when archive
+  close precedes hangup. Lost tracking state stays unknown; no empty reconstruction.
+- These refinements are implementation contracts only. No runtime changes or
+  additional tests ran during this review; the full root suite remains in progress.
+- Final document review clarified that managed cleanup metadata belongs in the
+  binding transaction before release, and a late monitor returning noproc is not
+  orderly termination evidence. Legacy terminal behavior remains explicitly
+  compatible; new ownership guarantees are not retroactively claimed for old rows.
+
+## Stable hangup prerequisite verification
+
+- The combined frozen snapshot passed root format check, warnings-as-errors
+  compilation, strict Credo, the complete default umbrella suite and unused
+  dependency check. Every application reported zero failures; CallEngine reported
+  2,230 tests, Calls 222, Gateway 674, Persistence 297 and Console 335.
+- Tagged SQL race tests were selected separately and passed; live-provider and
+  real telephony lanes stayed excluded. The working implementation remains short
+  of runtime binding/reconciliation and UI cutover; the overall milestone is open.

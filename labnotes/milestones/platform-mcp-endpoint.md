@@ -360,8 +360,9 @@ Engine admission prerequisite: resolved web/incoming/outgoing plans can now use
 one owner-monitored startup gate, released or cancelled only by the exact owner,
 token and incarnation. Legacy outgoing APIs and acknowledgements are preserved.
 Thirty-three focused tests pass after five expected red failures, and independent
-review found no blockers. Root formatting/compile/strict Credo pass; full umbrella
-verification is running. Gateway has not yet connected this gate to durable
+review found no blockers. All five root completion checks passed against frozen
+source, including the full default umbrella suite with zero failures. Gateway
+has not yet connected this gate to durable
 binding, so the admission-versus-hangup acceptance above remains open.
 
 ## Checkpoint: platform-key user administration
