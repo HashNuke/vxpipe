@@ -5,6 +5,16 @@ defmodule Vxpipe.Calls do
   def bind_call_admission(subject, incarnation_id, options \\ []),
     do: Vxpipe.Calls.CallAdmissionBinding.bind(subject, incarnation_id, options)
 
+  @doc """
+  Reserves Gateway cleanup ownership while binding a fresh admission.
+
+  Returns `{:ok, decision, reservation, subject}`. Only `reservation: :new`
+  permits creation of the cleanup tracker; `:existing` must reuse the original
+  tracker and never replace lost cleanup evidence. Binding does not start a call.
+  """
+  def bind_managed_call_admission(subject, incarnation_id, options \\ []),
+    do: Vxpipe.Calls.CallAdmissionBinding.bind_managed(subject, incarnation_id, options)
+
   @doc "Persists cancellation intent; runtime cleanup is a separate workflow."
   def request_call_hangup(actor, tenant_key, call_id, options \\ []),
     do: Vxpipe.Calls.CallHangups.request(actor, tenant_key, call_id, options)

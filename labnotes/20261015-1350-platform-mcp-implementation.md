@@ -663,3 +663,26 @@
   session-only contract and existing fixed-size pagination, without extending
   machine delegation. Other service/role/UI migration remains outstanding.
 - Independent review of canonical and final legacy-alias changes found no blockers.
+
+
+## Durable managed cleanup reservation
+
+- Added a separate managed binding operation preserving legacy callers. It uses
+  the same row lock, stored claim and plan checks, verified incarnation and rollback.
+  Only a fresh eligible admitting/unstarted call receives `:new`; `:existing`
+  never authorizes replacing lost tracker membership. Running legacy calls cannot
+  be upgraded by replay. Private fields are excluded from public write inputs.
+- Migration 20261015000600 was applied to the test database. Constraints require
+  verified incarnation ownership and order completion after creation/start.
+- Archive closure now defers terminal projection for pending managed ownership,
+  while preserving valid outgoing metadata. Additional red tests covered all
+  three transports closing before start without intent and failed close preceding
+  later cancellation. No started/end timestamps are invented by these paths.
+- Expected missing-API and six closure-ordering failures preceded the fixes.
+  Final 104-test Persistence selection passed, including separate-connection SQL
+  reservation/rollback races; four Calls boundary tests passed. Exact files were
+  formatted and independently reviewed with no blockers.
+- This remains dormant until Gateway integration. Completion storage/retriggering
+  publication, resource ownership, final usage and reconciliation remain required.
+  Before failed-state recovery, check archive queue ordering: the narrow failed
+  close exception intentionally does not admit earlier failed-call snapshots.

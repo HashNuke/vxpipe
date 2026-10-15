@@ -6,6 +6,11 @@ defmodule Vxpipe.Calls.CallRepository do
   @type context :: term()
 
   @type admission_subject :: AdmissionClaim.t() | TelephonyAdmissionClaim.t() | PreparedCall.t()
+  @doc "Under the binding row lock, reserve cleanup once for an eligible unstarted admission; never upgrade a running legacy call."
+  @callback bind_managed_call_admission(context(), admission_subject(), String.t()) ::
+              {:ok, :admit | :cancel, :new | :existing, admission_subject()}
+              | {:error, term()}
+
   @doc "Under the call-row lock, bind one immutable runtime incarnation without starting it."
   @callback bind_call_admission(context(), admission_subject(), String.t()) ::
               {:ok, :admit | :cancel, admission_subject()} | {:error, term()}

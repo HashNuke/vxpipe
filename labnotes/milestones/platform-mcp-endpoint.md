@@ -446,6 +446,17 @@ Three missing-API regressions preceded the change; all 13 cleanup tests pass,
 including immediate engine completion, owner loss and missing exact engine.
 Independent review found no blockers. Incoming Leg integration remains open.
 
+Durable cleanup reservation prerequisite: `bind_managed_call_admission/3` now
+returns one-time `:new` or `:existing` ownership under the admission row lock.
+Migration 20261015000600 adds private required/completed fields with binding/time
+constraints. Pending managed archive closure commits without reporting ended and
+preserves valid outgoing metadata; pre-start closure keeps truthful lifecycle
+fields. Initial missing-API tests and six close-ordering regressions failed before
+implementation. The final selection passed 104 Persistence tests, including SQL
+reservation/rollback races, and four Calls tests. Independent review found no
+blockers. Gateway does not select managed admission yet; completion persistence,
+resource integration and recovery remain outstanding.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

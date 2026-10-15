@@ -2,7 +2,10 @@ defmodule Vxpipe.Calls.TestMemoryAdmissionBinding do
   @moduledoc false
   alias Vxpipe.Calls.{AdmissionClaim, PreparedCall, TelephonyAdmissionClaim}
 
-  def bind(agent, subject, incarnation) do
+  def bind(agent, subject, incarnation), do: bind(agent, subject, incarnation, :legacy)
+  def bind_managed(agent, subject, incarnation), do: bind(agent, subject, incarnation, :managed)
+
+  defp bind(agent, subject, incarnation, mode) do
     expected = call(subject)
 
     Agent.get_and_update(agent, fn state ->
@@ -10,14 +13,15 @@ defmodule Vxpipe.Calls.TestMemoryAdmissionBinding do
            true <-
              current.room_id == expected.room_id and current.plan_digest == expected.plan_digest,
            {:ok, eligible?} <- ownership(state, subject),
-           :ok <- same_incarnation(current, incarnation) do
-        updated = %{current | incarnation_id: incarnation}
+           :ok <- same_incarnation(current, incarnation),
+           {:ok, reservation, updated} <- reserve(current, eligible?, mode) do
+        updated = %{updated | incarnation_id: incarnation}
 
         decision =
           if eligible? and current.state in [:admitting, :running] and
                is_nil(current.hangup_requested_at), do: :admit, else: :cancel
 
-        {{:ok, decision, replace_call(subject, updated)},
+        {result(mode, decision, reservation, replace_call(subject, updated)),
          %{state | calls: Map.put(state.calls, {current.tenant_key, current.id}, updated)}}
       else
         :error -> {{:error, :not_found}, state}
@@ -26,6 +30,18 @@ defmodule Vxpipe.Calls.TestMemoryAdmissionBinding do
       end
     end)
   end
+
+  defp result(:legacy, decision, _reservation, subject), do: {:ok, decision, subject}
+  defp result(:managed, decision, reservation, subject), do: {:ok, decision, reservation, subject}
+  defp reserve(call, _eligible, :legacy), do: {:ok, nil, call}
+
+  defp reserve(%{gateway_cleanup_required: true} = call, _eligible, :managed),
+    do: {:ok, :existing, call}
+
+  defp reserve(%{state: :admitting, started_at: nil} = call, true, :managed),
+    do: {:ok, :new, %{call | gateway_cleanup_required: true}}
+
+  defp reserve(_call, _eligible, :managed), do: {:error, :cleanup_reservation_unavailable}
 
   defp ownership(state, %AdmissionClaim{} = subject) do
     case Map.fetch(state.admissions, {subject.call.id, subject.participant_ref, subject.token_id}) do

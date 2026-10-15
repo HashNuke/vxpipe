@@ -3,25 +3,36 @@ defmodule Vxpipe.Calls.CallAdmissionBinding do
 
   alias Vxpipe.Calls.{AdmissionClaim, PreparedCall, Repositories, TelephonyAdmissionClaim}
 
-  def bind(subject, incarnation, options) when is_list(options) do
+  def bind(subject, incarnation, options), do: bind(subject, incarnation, options, :legacy)
+
+  def bind_managed(subject, incarnation, options),
+    do: bind(subject, incarnation, options, :managed)
+
+  defp bind(subject, incarnation, options, mode) when is_list(options) do
     with {:ok, call} <- subject_call(subject),
          true <- valid_identifier?(incarnation, 128) and valid_call?(call) do
-      persist(subject, call, incarnation, options)
+      persist(subject, call, incarnation, options, mode)
     else
       _invalid -> {:error, :invalid_call_admission}
     end
   end
 
-  def bind(_subject, _incarnation, _options), do: {:error, :invalid_call_admission}
+  defp bind(_subject, _incarnation, _options, _mode), do: {:error, :invalid_call_admission}
 
-  defp persist(subject, expected, incarnation, options) do
+  defp persist(subject, expected, incarnation, options, mode) do
     with {:ok, repository} <- Repositories.fetch(options, :call_repository) do
-      case Repositories.call(repository, :bind_call_admission, [subject, incarnation]) do
-        {:ok, decision, updated} when decision in [:admit, :cancel] ->
+      case Repositories.call(repository, operation(mode), [subject, incarnation]) do
+        {:ok, decision, updated} when mode == :legacy and decision in [:admit, :cancel] ->
           validate_result(subject, expected, incarnation, decision, updated)
+
+        {:ok, decision, reservation, updated}
+        when mode == :managed and decision in [:admit, :cancel] and
+               reservation in [:new, :existing] ->
+          validate_managed_result(subject, expected, incarnation, decision, reservation, updated)
 
         {:error, reason}
         when reason in [
+               :cleanup_reservation_unavailable,
                :not_found,
                :call_admission_mismatch,
                :call_incarnation_mismatch,
@@ -42,6 +53,24 @@ defmodule Vxpipe.Calls.CallAdmissionBinding do
     _error -> {:error, :call_admission_unavailable}
   catch
     _kind, _reason -> {:error, :call_admission_unavailable}
+  end
+
+  defp operation(:legacy), do: :bind_call_admission
+  defp operation(:managed), do: :bind_managed_call_admission
+
+  defp validate_managed_result(subject, expected, incarnation, decision, reservation, updated) do
+    with {:ok, ^decision, ^updated} <-
+           validate_result(subject, expected, incarnation, decision, updated),
+         {:ok, call} <- subject_call(updated),
+         true <- call.gateway_cleanup_required,
+         true <-
+           reservation == :existing or
+             (call.state == :admitting and is_nil(call.started_at) and
+                is_nil(call.gateway_cleanup_completed_at)) do
+      {:ok, decision, reservation, updated}
+    else
+      _invalid -> {:error, :call_admission_unavailable}
+    end
   end
 
   defp validate_result(subject, expected, incarnation, decision, updated) do

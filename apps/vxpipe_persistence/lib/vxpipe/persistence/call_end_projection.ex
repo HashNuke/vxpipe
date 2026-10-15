@@ -10,17 +10,36 @@ defmodule Vxpipe.Persistence.CallEndProjection do
       do: {:ok, call}
 
   def apply(
+        _repo,
+        %Call{
+          gateway_cleanup_required: true,
+          gateway_cleanup_completed_at: nil,
+          state: state,
+          started_at: nil,
+          hangup_requested_at: requested
+        } = call,
+        %CallFact{kind: :archive_stream_closed, occurred_at: occurred}
+      )
+      when state == :admitting or (state == :failed and not is_nil(requested)) do
+    if DateTime.compare(occurred, call.created_at) in [:eq, :gt],
+      do: {:ok, call},
+      else: {:error, :call_end_conflict}
+  end
+
+  def apply(
         repo,
         %Call{state: :running, started_at: %DateTime{}} = call,
         %CallFact{kind: :archive_stream_closed, occurred_at: %DateTime{} = ended_at}
       ) do
     if DateTime.compare(ended_at, call.started_at) in [:eq, :gt] do
-      ended_at = microsecond_precision(ended_at)
-
-      call
-      |> Call.end_changeset(ended_at)
-      |> repo.update()
-      |> normalize_update()
+      if call.gateway_cleanup_required and is_nil(call.gateway_cleanup_completed_at) do
+        {:ok, call}
+      else
+        call
+        |> Call.end_changeset(microsecond_precision(ended_at))
+        |> repo.update()
+        |> normalize_update()
+      end
     else
       {:error, :call_end_conflict}
     end

@@ -15,7 +15,7 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   def store_call_fact(repo, %CallFact{} = fact) do
     repo.transaction(fn ->
       with %Call{} = call <- fetch_call(repo, fact, lock: "FOR UPDATE"),
-           :ok <- archive_available(call),
+           :ok <- archive_available(call, fact),
            :ok <- matching_room(call, fact),
            {:ok, call} <- CallIncarnationBinding.bind(repo, call, fact.incarnation_id),
            {:ok, stored} <- insert_or_deduplicate_fact(repo, call, fact),
@@ -57,7 +57,7 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   def store_variable_snapshot(repo, %VariableSnapshot{} = snapshot) do
     repo.transaction(fn ->
       with %Call{} = call <- fetch_call(repo, snapshot, lock: "FOR UPDATE"),
-           :ok <- archive_available(call),
+           :ok <- archive_available(call, snapshot),
            :ok <- matching_room(call, snapshot),
            {:ok, call} <- CallIncarnationBinding.bind(repo, call, snapshot.incarnation_id),
            {:ok, stored} <- insert_or_deduplicate(repo, call, snapshot),
@@ -132,17 +132,30 @@ defmodule Vxpipe.Persistence.ArchiveStore do
     end
   end
 
-  defp archive_available(%Call{state: :failed} = call) do
+  defp archive_available(
+         %Call{
+           state: :failed,
+           started_at: nil,
+           gateway_cleanup_required: true,
+           gateway_cleanup_completed_at: nil,
+           hangup_requested_at: %DateTime{}
+         },
+         %CallFact{kind: :archive_stream_closed}
+       ),
+       do: :ok
+
+  defp archive_available(%Call{state: :failed} = call, _record) do
     case Vxpipe.Persistence.ResolvedPlanCodec.decode(call.resolved_plan) do
       {:ok, %{direction: :outgoing}} -> :ok
       _other -> {:error, :call_not_started}
     end
   end
 
-  defp archive_available(%Call{state: state}) when state in [:admitting, :running, :ended],
-    do: :ok
+  defp archive_available(%Call{state: state}, _record)
+       when state in [:admitting, :running, :ended],
+       do: :ok
 
-  defp archive_available(_call), do: {:error, :call_not_started}
+  defp archive_available(_call, _record), do: {:error, :call_not_started}
 
   defp matching_room(%Call{room_id: room_id}, %{room_id: room_id}), do: :ok
   defp matching_room(%Call{}, _record), do: {:error, :call_room_mismatch}

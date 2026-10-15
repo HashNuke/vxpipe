@@ -6,14 +6,17 @@ defmodule Vxpipe.Persistence.CallAdmissionBindingStore do
   alias Vxpipe.Persistence.{CallIncarnationBinding, PreparedCallRecord}
   alias Vxpipe.Persistence.Schema.{Admission, Call, JoinToken, TelephonyLeg}
 
-  def bind(repo, subject, incarnation) do
+  def bind(repo, subject, incarnation), do: bind(repo, subject, incarnation, :legacy)
+  def bind_managed(repo, subject, incarnation), do: bind(repo, subject, incarnation, :managed)
+
+  defp bind(repo, subject, incarnation, mode) do
     expected = subject_call(subject)
 
     with {:ok, id} when id == expected.id <- Ecto.UUID.cast(expected.id) do
-      result = repo.transaction(fn -> bind_locked(repo, subject, expected, incarnation) end)
+      result = repo.transaction(fn -> bind_locked(repo, subject, expected, incarnation, mode) end)
 
       case result do
-        {:ok, {decision, updated}} -> {:ok, decision, updated}
+        {:ok, {decision, reservation, updated}} -> result(mode, decision, reservation, updated)
         {:error, _reason} = error -> error
       end
     else
@@ -21,7 +24,7 @@ defmodule Vxpipe.Persistence.CallAdmissionBindingStore do
     end
   end
 
-  defp bind_locked(repo, subject, expected, incarnation) do
+  defp bind_locked(repo, subject, expected, incarnation, mode) do
     query =
       from(call in Call,
         join: tenant in assoc(call, :tenant),
@@ -36,18 +39,37 @@ defmodule Vxpipe.Persistence.CallAdmissionBindingStore do
          {:ok, loaded} <- PreparedCallRecord.load(call, selection),
          :ok <- matching_call(loaded, expected),
          {:ok, eligible?} <- ownership(repo, subject, call, loaded),
-         {:ok, changed} <- CallIncarnationBinding.bind(repo, call, incarnation),
+         {:ok, bound} <- CallIncarnationBinding.bind(repo, call, incarnation),
+         {:ok, reservation, changed} <- reserve_cleanup(repo, bound, eligible?, mode),
          {:ok, updated} <- PreparedCallRecord.load(changed, selection) do
       decision =
         if eligible? and changed.state in [:admitting, :running] and
              is_nil(changed.hangup_requested_at), do: :admit, else: :cancel
 
-      {decision, replace_call(subject, updated)}
+      {decision, reservation, replace_call(subject, updated)}
     else
       nil -> repo.rollback(:not_found)
       {:error, reason} -> repo.rollback(reason)
     end
   end
+
+  defp result(:legacy, decision, _reservation, updated), do: {:ok, decision, updated}
+  defp result(:managed, decision, reservation, updated), do: {:ok, decision, reservation, updated}
+
+  defp reserve_cleanup(_repo, call, _eligible, :legacy), do: {:ok, nil, call}
+
+  defp reserve_cleanup(_repo, %Call{gateway_cleanup_required: true} = call, _eligible, :managed),
+    do: {:ok, :existing, call}
+
+  defp reserve_cleanup(repo, %Call{state: :admitting, started_at: nil} = call, true, :managed) do
+    case repo.update(Ecto.Changeset.change(call, gateway_cleanup_required: true)) do
+      {:ok, updated} -> {:ok, :new, updated}
+      {:error, _changeset} -> {:error, :cleanup_reservation_unavailable}
+    end
+  end
+
+  defp reserve_cleanup(_repo, _call, _eligible, :managed),
+    do: {:error, :cleanup_reservation_unavailable}
 
   defp matching_call(call, expected) do
     if call.id == expected.id and call.tenant_key == expected.tenant_key and

@@ -41,6 +41,91 @@ defmodule Vxpipe.Persistence.CallAdmissionBindingStoreTest do
 
   for kind <- [:web, :incoming, :outgoing] do
     @kind kind
+    test "#{kind} managed binding reserves cleanup once and retains it on running joins", c do
+      subject = subject(c, @kind)
+      assert {:ok, :admit, :new, bound} = managed_bind(subject, "managed", c)
+      assert call(bound).gateway_cleanup_required
+      assert call(bound).gateway_cleanup_completed_at == nil
+      assert call(bound).started_at == nil
+      assert {:ok, :admit, :existing, ^bound} = managed_bind(subject, "managed", c)
+      assert {:ok, :admit, ^bound} = bind(subject, "managed", c)
+      assert {:error, :call_incarnation_mismatch} = managed_bind(subject, "replacement", c)
+      assert {:ok, running} = started(bound, "managed", c)
+      assert {:ok, :admit, :existing, joined} = managed_bind(subject, "managed", c)
+      assert call(joined) == call(running)
+    end
+
+    test "#{kind} legacy running admission cannot acquire a new cleanup reservation", c do
+      subject = subject(c, @kind)
+      assert {:ok, running} = started(subject, "legacy", c)
+      assert {:error, :cleanup_reservation_unavailable} = managed_bind(subject, "legacy", c)
+      assert {:ok, stored} = Calls.fetch_call(c.tenant, call(subject).id, c.options)
+      assert stored == call(running)
+      refute stored.gateway_cleanup_required
+    end
+
+    test "#{kind} canceled managed admission archives closure without an invented start", c do
+      subject = subject(c, @kind)
+      {:ok, intent} = Calls.request_call_hangup(c.actor, c.tenant, call(subject).id, c.options)
+      assert {:ok, :cancel, :new, bound} = managed_bind(subject, "canceled", c)
+      assert call(bound).hangup_requested_at == intent.hangup_requested_at
+      assert {:ok, :cancel, :existing, ^bound} = managed_bind(subject, "canceled", c)
+
+      close =
+        archive_fact(call(bound), 1, :archive_stream_closed, %{
+          "source_reason" => ["shutdown", "call_admission_cancelled"]
+        })
+
+      assert {:ok, ^close} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, close)
+      assert {:ok, ^close} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, close)
+      assert {:ok, stored} = Calls.fetch_call(c.tenant, call(subject).id, c.options)
+      assert stored.gateway_cleanup_required
+      assert stored.state == :admitting
+      assert stored.started_at == nil and stored.ended_at == nil
+      assert stored.gateway_cleanup_completed_at == nil
+    end
+
+    test "#{kind} managed pre-start closure commits before cancellation intent", c do
+      subject = subject(c, @kind)
+      {:ok, :admit, :new, bound} = managed_bind(subject, "pending-owner", c)
+      close = archive_fact(call(bound), 1, :archive_stream_closed, %{})
+      assert {:ok, ^close} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, close)
+      assert {:ok, stored} = Calls.fetch_call(c.tenant, call(subject).id, c.options)
+      assert stored == call(bound)
+      assert stored.started_at == nil and stored.ended_at == nil
+      assert stored.hangup_requested_at == nil
+    end
+
+    test "#{kind} canceled managed startup failure can archive without changing failure evidence",
+         c do
+      subject = subject(c, @kind)
+      {:ok, :admit, :new, bound} = managed_bind(subject, "failed-owner", c)
+      {:ok, _failed} = failed(bound, c)
+      later_options = Keyword.put(c.options, :now, DateTime.add(@started, 3, :second))
+
+      {:ok, intent} =
+        Calls.request_call_hangup(c.actor, c.tenant, call(subject).id, later_options)
+
+      assert {:ok, :cancel, :existing, canceled} = managed_bind(subject, "failed-owner", c)
+      close = archive_fact(call(canceled), 1, :archive_stream_closed, %{})
+      assert {:ok, ^close} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, close)
+      assert {:ok, ^intent} = Calls.fetch_call(c.tenant, call(subject).id, c.options)
+      assert intent.state == :failed and intent.started_at == nil
+      assert intent.terminal_reason == :startup_unknown
+    end
+
+    test "#{kind} managed archive closure commits without publishing ended", c do
+      subject = subject(c, @kind)
+      {:ok, :admit, :new, bound} = managed_bind(subject, "managed", c)
+      {:ok, running} = started(bound, "managed", c)
+      close = archive_fact(call(running), 1, :archive_stream_closed, %{})
+      assert {:ok, ^close} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, close)
+      assert {:ok, stored} = Calls.fetch_call(c.tenant, call(subject).id, c.options)
+      assert stored.state == :running
+      assert stored.started_at == @started
+      assert stored.ended_at == nil
+    end
+
     test "#{kind} binding pins one incarnation without inventing lifecycle progress", c do
       subject = subject(c, @kind)
       original = call(subject)
@@ -99,6 +184,7 @@ defmodule Vxpipe.Persistence.CallAdmissionBindingStoreTest do
 
       {:ok, ^fact} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, fact)
       stored = Repo.get_by!(Call, public_id: original.id)
+
       Repo.update!(
         Ecto.Changeset.change(stored, incarnation_id: nil, incarnation_binding_verified: false)
       )
@@ -182,6 +268,88 @@ defmodule Vxpipe.Persistence.CallAdmissionBindingStoreTest do
     assert {:error, :call_admission_unavailable} = bind(subject, "owner", c)
     assert Repo.get_by!(Call, public_id: subject.call.id).incarnation_id == nil
   end
+
+  test "an archive-anchored pending gate can reserve cleanup, but released ownership cannot", c do
+    subject = subject(c, :web)
+    opened = archive_fact(%{subject.call | incarnation_id: "opened"}, 1, :room_opened, %{})
+    {:ok, ^opened} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, opened)
+    assert {:ok, :admit, :new, _bound} = managed_bind(subject, "opened", c)
+
+    released = subject(c, :web)
+    :ok = Calls.release_admission(released, c.options)
+    assert {:error, :cleanup_reservation_unavailable} = managed_bind(released, "released", c)
+    assert {:ok, stored} = Calls.fetch_call(c.tenant, released.call.id, c.options)
+    assert stored.incarnation_id == nil
+    refute stored.gateway_cleanup_required
+  end
+
+  test "managed outgoing closure retains dial metadata while terminal state waits", c do
+    subject = subject(c, :outgoing)
+    {:ok, :admit, :new, bound} = managed_bind(subject, "dialed", c)
+    {:ok, running} = started(bound, "dialed", c)
+    submitted = archive_fact(running, 1, :outgoing_dial_submitted, %{})
+
+    close =
+      archive_fact(running, 2, :archive_stream_closed, %{
+        "source_reason" => ["shutdown", ["outgoing_call", "busy"]]
+      })
+
+    {:ok, ^submitted} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, submitted)
+    assert {:ok, ^close} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, close)
+    assert {:ok, stored} = Calls.fetch_call(c.tenant, running.id, c.options)
+    assert stored.state == :running and stored.ended_at == nil
+    assert stored.outgoing_outcome == :busy
+    assert stored.dial_submitted_at == submitted.occurred_at
+    assert stored.dial_ended_at == close.occurred_at
+  end
+
+  test "managed closure still rejects invalid time ordering", c do
+    subject = subject(c, :outgoing)
+    {:ok, :admit, :new, bound} = managed_bind(subject, "pending", c)
+    close = archive_fact(bound, 1, :archive_stream_closed, %{})
+    before_creation = %{close | occurred_at: DateTime.add(@created, -1, :second)}
+
+    assert {:error, :outgoing_lifecycle_conflict} =
+             Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, before_creation)
+
+    {:ok, running} = started(bound, "pending", c)
+    early = %{close | occurred_at: @created}
+
+    assert {:error, :outgoing_lifecycle_conflict} =
+             Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, early)
+
+    assert {:ok, ^running} = Calls.fetch_call(c.tenant, running.id, c.options)
+  end
+
+  defp failed(%AdmissionClaim{} = subject, c),
+    do: Calls.mark_call_failed(subject, :startup_unknown, c.options)
+
+  defp failed(%PreparedCall{} = subject, c),
+    do: Calls.mark_outgoing_call_failed(subject, :startup_unknown, c.options)
+
+  defp failed(subject, c),
+    do: Calls.mark_incoming_telephony_failed(subject, :startup_unknown, c.options)
+
+  defp archive_fact(call, sequence, kind, payload) do
+    {:ok, fact} =
+      Vxpipe.Calls.CallFact.new(
+        id: "managed-fact-#{sequence}",
+        tenant_key: call.tenant_key,
+        call_id: call.id,
+        room_id: call.room_id,
+        incarnation_id: call.incarnation_id,
+        occurred_at: DateTime.add(@started, sequence, :second),
+        sequence: sequence,
+        kind: kind,
+        payload: payload,
+        source_policy: %{"revision" => 0}
+      )
+
+    fact
+  end
+
+  defp managed_bind(subject, incarnation, c),
+    do: Calls.bind_managed_call_admission(subject, incarnation, c.options)
 
   defp start_mismatch(:web), do: :call_incarnation_mismatch
   defp start_mismatch(:incoming), do: :call_unavailable

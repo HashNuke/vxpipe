@@ -35,6 +35,8 @@ defmodule Vxpipe.Calls.PreparedCall do
   defstruct @enforce_keys ++
               [
                 hangup_requested_at: nil,
+                gateway_cleanup_required: false,
+                gateway_cleanup_completed_at: nil,
                 outgoing_outcome: nil,
                 dial_submitted_at: nil,
                 answered_at: nil,
@@ -62,6 +64,8 @@ defmodule Vxpipe.Calls.PreparedCall do
           plan: ResolvedCallPlan.t(),
           plan_digest: binary(),
           hangup_requested_at: nil | DateTime.t(),
+          gateway_cleanup_required: boolean(),
+          gateway_cleanup_completed_at: nil | DateTime.t(),
           outgoing_outcome: nil | outgoing_outcome(),
           dial_submitted_at: nil | DateTime.t(),
           answered_at: nil | DateTime.t(),

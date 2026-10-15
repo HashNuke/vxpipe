@@ -149,6 +149,61 @@ defmodule Vxpipe.Persistence.Integration.CallHangupTransactionTest do
     assert canceled.call == intent
   end
 
+  test "managed binding reserves once under the call lock even if tracker creation never happens",
+       c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    {writer, monitor} =
+      transaction_barrier(fn ->
+        Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+      end)
+
+    assert_receive {:transaction_locked, ^writer, {:ok, :admit, :new, bound}}, 2_000
+    assert bound.call.gateway_cleanup_required
+
+    assert {:error, :blocked} =
+             Repo.transaction(fn ->
+               Repo.query!("SET LOCAL lock_timeout = '100ms'")
+
+               assert {:error, :call_admission_unavailable} =
+                        Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+
+               Repo.rollback(:blocked)
+             end)
+
+    commit(writer, monitor)
+
+    assert {:ok, :admit, :existing, ^bound} =
+             Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+
+    assert {:ok, intent} = hangup(c)
+
+    assert {:ok, :cancel, :existing, canceled} =
+             Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+
+    assert canceled.call == intent
+  end
+
+  test "rolled-back managed reservation does not consume the fresh binding", c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    assert {:error, :aborted} =
+             Repo.transaction(fn ->
+               assert {:ok, :admit, :new, _bound} =
+                        Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+
+               Repo.rollback(:aborted)
+             end)
+
+    assert {:ok, original} = Calls.fetch_call(c.tenant, c.call.id, c.options)
+    refute original.gateway_cleanup_required
+    assert original.incarnation_id == nil
+    assert original.gateway_cleanup_completed_at == nil
+
+    assert {:ok, :admit, :new, _bound} =
+             Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+  end
+
   defp assert_row_lock(operation) do
     assert {:error, :blocked} =
              Repo.transaction(fn ->

@@ -233,27 +233,32 @@ both projections; do not invent a start time or weaken normal outgoing ordering.
 
 ## Verification and implementation order
 
-The next persistence slice reserves cleanup ownership in the existing admission
-transaction. Add private `gateway_cleanup_required` and
-`gateway_cleanup_completed_at` fields, defaulting existing calls to legacy
-behavior. A managed binding distinguishes a one-time fresh reservation from an
+The managed binding operation now reserves cleanup ownership in the existing
+admission transaction. Migration `20261015000600` adds private
+`gateway_cleanup_required` and `gateway_cleanup_completed_at` fields, defaulting
+existing calls to legacy behavior. A managed binding distinguishes a one-time fresh reservation from an
 existing reservation. Only the fresh admission can create a tracker; repeated
 binding and running joins must look up surviving membership. A crash after the
 reservation but before tracker creation leaves unknown evidence. Do not add these
 fields to public create/update inputs or store process identifiers in the database.
 
-A result-bearing internal completion operation locks and validates the exact
+The pending result-bearing internal completion operation must lock and validate the exact
 tenant/call/room/incarnation, requires managed ownership, and preserves the first
 completion timestamp. It reads cancellation intent under that lock to select the
 API-hangup reason. Schema/reservation and terminal-projection deferral must land
 together before managed admission is enabled. Existing writers must be drained
 before rollout because they bypass this terminal gate.
 
-Archive closure must commit while cleanup is pending: defer the terminal `ended`
+Archive closure now commits while cleanup is pending: defer the terminal `ended`
 state without rejecting the archive fact. Preserve valid outgoing lifecycle
 metadata such as `dial_ended_at` and `outgoing_outcome`; the committed close fact
 may not replay later. Handle cancelled-before-start closure before outgoing
-start-time validation without inventing `started_at`. Completion
+start-time validation without inventing `started_at`. An admitting managed call
+can close before any cancellation intent; a failed pre-start call needs intent
+for the narrow close-fact exception. Closure may precede intent but cannot precede
+creation. This does not generally allow failed web/incoming snapshots or other
+facts; verify archive queue ordering before enabling failed-state recovery.
+Completion
 must request publication again after its transaction commits, including retries:
 the current publication finalizer can consume the earlier archive-close trigger
 while the call is not yet ended.

@@ -59,6 +59,24 @@ defmodule Vxpipe.Calls.CallAdmissionBindingTest do
     assert {:ok, :cancel, ^bound} = Calls.bind_call_admission(c.claim, "owner", c.options)
   end
 
+  test "managed admission reserves once and retains ownership when running", c do
+    assert {:ok, :admit, :new, bound} =
+             Calls.bind_managed_call_admission(c.claim, "owner", c.options)
+
+    assert bound.call.gateway_cleanup_required
+    assert bound.call.gateway_cleanup_completed_at == nil
+
+    assert {:ok, :admit, :existing, ^bound} =
+             Calls.bind_managed_call_admission(c.claim, "owner", c.options)
+
+    assert {:ok, running} = Calls.mark_call_started(bound, "owner", DateTime.utc_now(), c.options)
+
+    assert {:ok, :admit, :existing, joined} =
+             Calls.bind_managed_call_admission(c.claim, "owner", c.options)
+
+    assert joined.call == running
+  end
+
   test "rejects invalid ownership subjects and bounded incarnation identifiers before storage",
        c do
     options = [call_repository: {__MODULE__, :must_not_call}]
