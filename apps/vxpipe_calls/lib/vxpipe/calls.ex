@@ -97,6 +97,12 @@ defmodule Vxpipe.Calls do
   def fetch_tenant_dashboard(principal, key, options \\ []),
     do: Vxpipe.Calls.TenantDashboard.fetch(principal, key, options)
 
+  def authorize_call_specs(authority, action),
+    do: Vxpipe.Calls.CallSpecAuthorization.authorize(authority, action)
+
+  def authorize_call_specs(authority, action, tenant_key),
+    do: Vxpipe.Calls.CallSpecAuthorization.authorize(authority, action, tenant_key)
+
   def list_operator_call_specs(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_call_specs(authority, tenant_key, options)
 

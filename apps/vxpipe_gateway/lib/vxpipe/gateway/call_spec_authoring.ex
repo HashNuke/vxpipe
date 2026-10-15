@@ -5,8 +5,11 @@ defmodule Vxpipe.Gateway.CallSpecAuthoring do
   def authenticate(options, :operator, _tenant, secret),
     do: Calls.authenticate_operator(secret, options)
 
-  def authenticate(options, :tenant, tenant, secret),
-    do: Calls.authenticate(tenant, secret, :admin, options)
+  def authenticate(options, :tenant, tenant, secret) do
+    with {:ok, authority} <- Calls.authenticate_api_key(secret, options),
+         :ok <- Calls.authorize_call_specs(authority, :write, tenant),
+         do: {:ok, authority}
+  end
 
   def providers(options, author, tenant, capability),
     do: Calls.list_providers(author, tenant, capability, options)

@@ -1,15 +1,10 @@
 defmodule Vxpipe.Calls.OperatorCallSpecs do
   @moduledoc "Authorized source reads with current revision and publication metadata."
   alias Vxpipe.Calls.{
+    CallSpecAuthorization,
     CallSpecs,
-    InstallationOperator,
-    Principal,
-    ProviderAuth,
-    Repositories,
-    UserAuthorization
+    Repositories
   }
-
-  alias Vxpipe.Identity.Principal, as: UserPrincipal
 
   def fetch(authority, tenant, id, options) when is_list(options) do
     requested = Keyword.get(options, :revision)
@@ -37,22 +32,12 @@ defmodule Vxpipe.Calls.OperatorCallSpecs do
   def fetch(_authority, _tenant, _id, _options),
     do: {:error, :installation_operator_required}
 
-  defp authorize(%UserPrincipal{} = principal, tenant) do
-    with :ok <- ProviderAuth.tenant_key(tenant),
-         do: UserAuthorization.authorize_tenant(principal, "call_specs.read", tenant)
-  end
-
-  defp authorize(%InstallationOperator{grant: :installation_operator}, tenant),
-    do: ProviderAuth.tenant_key(tenant)
-
-  defp authorize(%Principal{tenant_key: tenant, scopes: %MapSet{} = scopes}, tenant) do
-    with :ok <- ProviderAuth.tenant_key(tenant) do
-      if MapSet.member?(scopes, :admin), do: :ok, else: {:error, :insufficient_scope}
+  defp authorize(authority, tenant) do
+    case CallSpecAuthorization.authorize(authority, :read, tenant) do
+      {:error, :authoring_authority_required} -> {:error, :installation_operator_required}
+      result -> result
     end
   end
-
-  defp authorize(%Principal{}, _tenant), do: {:error, :tenant_access_forbidden}
-  defp authorize(_authority, _tenant), do: {:error, :installation_operator_required}
 
   defp published_revision(repository, tenant, id) do
     case Repositories.call(repository, :fetch_published_revision, [tenant, id]) do

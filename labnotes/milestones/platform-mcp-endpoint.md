@@ -224,7 +224,10 @@ models, save a draft, append a revision and explicitly publish it locally.
   add the missing machine GET routes. Calls-only keys cannot read portable source.
   Domain prerequisite implemented and reviewed: tenant admin source/list reads
   reject calls-only and foreign-tenant actors before storage, share source fetch
-  and retain latest/historical/publication metadata. Transport routes remain open.
+  and retain latest/historical/publication metadata. Shared read/write policy now
+  also preserves Settings platform authority for canonical writes; red regressions
+  and 67 Calls/15 Gateway focused tests passed, independently reviewed. Transport
+  acceptance is recorded below when the complete slice is verified.
 - [ ] Paginate spec summaries and provider/model helpers with the shared envelope;
   preserve existing catalog REST response shape when pagination is not requested.
 - [ ] Implement get by public ID and optional revision, returning portable source

@@ -157,7 +157,7 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
     assert {:error, :tenant_not_found} =
              Vxpipe.Calls.list_operator_call_specs(
                InstallationOperator.authority(),
-               "missing",
+               "BBBBBBBBBBBBBBBB",
                admin_repository: TestAdminRepository.admin_repository(missing)
              )
 
@@ -207,6 +207,28 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
 
     assert {:error, :call_spec_page_unavailable} =
              Vxpipe.Calls.list_operator_call_specs(principal, principal.tenant_key,
+               admin_repository: TestAdminRepository.admin_repository(repository)
+             )
+  end
+
+  test "installation spec listing validates tenant keys and returned ownership" do
+    operator = InstallationOperator.authority()
+
+    assert {:error, :invalid_tenant_key} =
+             Vxpipe.Calls.list_operator_call_specs(operator, "invalid",
+               admin_repository: {__MODULE__, :must_not_call}
+             )
+
+    foreign = %Tenant{
+      key: "BBBBBBBBBBBBBBBB",
+      name: "Other",
+      inserted_at: ~U[2026-10-15 00:00:00Z]
+    }
+
+    repository = start_supervised!({TestAdminRepository, {:ok, {foreign, [], 0}}})
+
+    assert {:error, :call_spec_page_unavailable} =
+             Vxpipe.Calls.list_operator_call_specs(operator, "AAAAAAAAAAAAAAAA",
                admin_repository: TestAdminRepository.admin_repository(repository)
              )
   end

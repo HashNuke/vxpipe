@@ -156,3 +156,19 @@
   Every umbrella application's suite reported zero failures; live/integration
   exclusions stayed enabled. The earlier compactor scheduling failure did not
   recur. No speech/source-cutover state machine changed, so Lean was not required.
+
+## Shared call-spec authority
+
+- Consolidated discovery and tenant resource policy in Calls.CallSpecAuthorization;
+  read/write operations and safe catalogs consult it directly. Existing browser
+  grants, trusted installation callers and tenant-service ownership are preserved.
+- Canonical key authentication previously converted Settings platform authority
+  into a tenant principal. Red tests proved platform-service-backed saves failed
+  with 403. It now retains the authenticated platform actor; tenant keys remain
+  unable to author platform-backed definitions, and legacy operator routes remain.
+- Installation list reads now validate the tenant key and repository tenant
+  agreement before projection. Four policy/list tests failed before the fix;
+  the focused domain selection passed 67 tests and Gateway authority/write checks
+  passed 15. Independent policy review found no remaining blockers.
+- The broader spec HTTP/MCP checkpoint and stable full-suite verification are
+  still in progress; this commit records the independently usable policy fix.
