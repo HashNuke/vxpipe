@@ -34,7 +34,7 @@ export class NavigationApi {
   constructor(private readonly fetchImpl: NavigationFetch = defaultFetch, private readonly csrfToken = "") {}
 
   async createTenant(name: string): Promise<string> {
-    const response = await this.fetchImpl("/admin/api/tenants", {
+    const response = await this.fetchImpl("/api/tenants", {
       method: "POST", credentials: "same-origin", cache: "no-store",
       headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": this.csrfToken },
       body: JSON.stringify({ name }),

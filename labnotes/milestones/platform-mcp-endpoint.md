@@ -672,6 +672,16 @@ create/update/delete, selected-role fetches, membership preservation and passwor
 reset using canonical routes. The synthetic fixture/browser stopped. Tenant
 creation, onboarding/samples, call inspection and final parity remain open.
 
+Tenant creation cutover: canonical `POST /api/tenants` and its legacy alias now
+share the existing controller and actual-actor Calls policy. Both enforce session,
+CSRF and host requirements and reject explicit Authorization before parsing.
+Unsupported direct actors return forbidden; creation adds no implicit keys/grants.
+After expected endpoint/domain/frontend reds, three Calls, 26 Console and 14
+frontend tests pass, plus types/lint/build and independent review. Rendered
+desktop/mobile checks verified canonical POST 201 and dashboard navigation with a
+synthetic local database. Onboarding/samples, call inspection and final parity
+remain open; tenant creation is now migrated.
+
 ## Checkpoint: parity acceptance and documentation
 
 Depends on all required capability checkpoints and supporting workflows.

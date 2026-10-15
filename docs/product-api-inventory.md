@@ -16,8 +16,9 @@ selectors fetch separately authorized full metadata only for their selected role
 through the canonical role detail route. Service/credential administration and authoring phone-number
 inventory now use canonical session-only handlers, including onboarding's service
 binding read. Role administration and password reset use canonical session-only
-handlers; role directories now paginate full metadata. Tenant creation,
-onboarding/samples and call inspection still require migration.
+handlers; role directories now paginate full metadata. Tenant creation also uses
+the canonical session-only handler. Onboarding/samples and call inspection still
+require migration.
 Legacy routes remain available during that work; this inventory does not claim
 their removal or full controller consolidation.
 
@@ -68,7 +69,7 @@ legacy alias; new canonical account input uses `role_id` and membership
 | --- | --- | --- | --- |
 | `GET A/tenants` | `GET API/tenants` | Calls tenant directory; `q`, `page`, `page_size`; safe tenant rows plus pagination | S `tenants.read`; all three K kinds see authorized tenants; migrate `App`, navigation and user membership picker |
 | none | `GET API/T` | Calls tenant lookup; `{tenant_key,name,created_at}` | S visible tenant; all three K kinds within scope; add shared lookup |
-| `POST A/tenants` | `POST API/tenants` | Calls `TenantCreation`; `{name}` -> `{tenant: ...}` | S `tenants.write`; K denied pending policy; migrate navigation tenant creation |
+| `POST A/tenants` | `POST API/tenants` | Calls `TenantCreation`; `{name}` -> `{tenant: ...}` | Implemented: S `tenants.write`, CSRF/host checks; explicit Authorization denied on both aliases; navigation uses canonical POST; no implicit keys or grants |
 | `GET A/T/call-specs` | `GET API/T/call-specs` | Calls spec directory; page inputs -> public ID/name/revision/count rows plus pagination | S `call_specs.read`; Kfull/Kplatform; migrate directory |
 | `GET A/T/call-specs/:id` | `GET API/T/call-specs/:id` | Calls authorized revision read; optional `revision`; `{call_spec: ...}` containing portable `source`, latest/published revisions | S `call_specs.read`; Kfull/Kplatform; move projection out of Console |
 | `POST A/T/call-specs`; `POST API/T/call-specs`; `POST API/P/T/call-specs` | `POST API/T/call-specs` | Calls authorized authoring; exactly `{source}` -> existing `{call_spec: ...}` revision envelope, 201 | S `call_specs.write`; Kfull/Kplatform; preserve installation-service ownership checks and legacy operator alias |

@@ -10,6 +10,9 @@ defmodule Vxpipe.Console.RoutePermission do
           | :unknown
 
   @spec for_request(String.t(), [String.t()]) :: requirement()
+  def for_request("POST", ["api", "tenants"]),
+    do: for_request("POST", ["admin", "api", "tenants"])
+
   def for_request(method, ["api", "api-keys" | rest]),
     do: for_request(method, ["admin", "api", "api-keys" | rest])
 

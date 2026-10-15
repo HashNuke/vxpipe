@@ -6,7 +6,7 @@ This document grows with the [platform MCP milestone](../labnotes/milestones/pla
 it describes tenant and call-spec reads, provider catalogs, spec writes,
 call creation/join-token operations, account administration, and session-only
 API-key management, services, provider credentials, role administration and
-password reset. The complete migration
+password reset and tenant creation. The complete migration
 inventory is in
 [product API inventory](product-api-inventory.md).
 
@@ -127,6 +127,33 @@ Failures have a bounded JSON envelope:
 
 Backend exceptions, credential material and internal database IDs are not returned.
 When the tenant directory feature is disabled, these routes return 404.
+
+## Create a tenant
+
+```http
+POST /api/tenants
+Content-Type: application/json
+
+{"name":"Example tenant"}
+```
+
+Console hosts this session-only operation. It requires a logged-in browser actor
+with installation `tenants.write`, the normal CSRF token and an allowed host.
+Any Authorization header is rejected with 401 `session_required`; machine keys
+have no tenant-creation grant. Standalone Gateway does not host this write.
+
+The name is trimmed and must contain 1–256 characters of valid text, without NUL.
+Success returns 201 with `{tenant:{key,name,dashboard_path,created_at}}`, preserving
+the existing creation response. `key` is the generated public tenant key;
+`created_at` is an ISO 8601 timestamp. Creation issues no API keys and grants no
+implicit membership or resource access to the creator.
+
+Permission denial returns 403 `forbidden`, invalid names return 422
+`invalid_tenant_name`, and storage/identifier failures return 503
+`tenant_creation_unavailable`, using the standard error envelope. The legacy
+`POST /admin/api/tenants` is a compatibility alias with the same handler and
+session, CSRF and host requirements. Tenant discovery remains the separately
+documented session/key GET operation.
 
 ## List call specs
 

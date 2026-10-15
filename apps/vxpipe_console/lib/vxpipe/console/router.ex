@@ -137,6 +137,9 @@ defmodule Vxpipe.Console.Router do
   scope "/api" do
     pipe_through :session_product_api
 
+    post "/tenants", Vxpipe.Console.AdminTenantsController, :create,
+      metadata: %{console_product_api: true}
+
     get "/api-keys", Vxpipe.Console.ApiKeyController, :index,
       metadata: %{console_product_api: true}
 
@@ -238,6 +241,8 @@ defmodule Vxpipe.Console.Router do
   scope "/admin/api" do
     pipe_through :session_product_api
 
+    post "/tenants", Vxpipe.Console.AdminTenantsController, :create
+
     post "/users/:id/reset-password", Vxpipe.Console.UserManagementController, :reset_password
     get "/roles", Vxpipe.Console.RoleManagementController, :index
     get "/roles/:id", Vxpipe.Console.RoleManagementController, :show
@@ -336,7 +341,6 @@ defmodule Vxpipe.Console.Router do
          :install_samples
 
     get "/tenants", Vxpipe.Console.AdminTenantsController, :index
-    post "/tenants", Vxpipe.Console.AdminTenantsController, :create
     get "/tenants/:tenant_key/dashboard", Vxpipe.Console.TenantDashboardController, :show
     get "/tenants/:tenant_key/providers", Vxpipe.Console.AdminProviderCatalogController, :index
 

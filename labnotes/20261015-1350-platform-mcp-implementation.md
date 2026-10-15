@@ -993,3 +993,20 @@ return values. Production admission still does not enable managed cleanup.
 Root format, warnings-as-errors compilation, strict Credo and unused-dependency
 checks pass for this slice. The earlier 4,177-test baseline predates these hooks;
 the final milestone still requires a complete root test run on its final source.
+
+### Tenant creation canonical API
+
+The navigation client now posts to `/api/tenants`. Exact route metadata keeps
+canonical GET discovery in Gateway, while canonical/legacy POST use the same
+Console session handler. Both aliases reject explicit Authorization before body
+parsing and retain CSRF, host and `tenants.write` checks. The shared Calls boundary
+now returns forbidden for unsupported actors rather than raising a function-clause
+error. Creation preserves its 201 response and creates no implicit keys or grants.
+
+Two endpoint, one direct-domain and one frontend regression failed before the
+changes. Final focused verification passed three Calls, 26 Console and 14 frontend
+tests; TypeScript, lint, esbuild and formatting passed. Independent review approved.
+Rendered desktop/mobile checks using a synthetic local database verified canonical
+POST 201 and dashboard navigation while GET discovery remained 200. Browser and
+database fixture stopped. Combined root format, compile, Credo and unused-dependency
+checks pass. No live providers or external telephony were used.
