@@ -1491,3 +1491,21 @@ zero remaining failures and 144 excluded. No live providers or external telephon
 ran. This is checkpoint verification, not completed hangup or final parity.
 Root format, warnings-as-errors compilation, strict Credo and unused-dependency
 checks also passed after the assertion correction.
+
+### Legacy API consolidation
+
+The remaining legacy tenant/spec/catalog and account product aliases now use the
+existing session-product precheck, so an explicit Authorization header cannot fall
+back to a browser session or parse malformed JSON first. Genuine session/navigation,
+dashboard, editor-lookups and own-account helpers keep their existing routing.
+Spec update/publication no longer add a read-permission precondition to shared
+write operations. Account forms translate legacy membership names and full-form
+defaults into AccountInput; shared AccountJSON owns their matching responses.
+
+Red evidence: 53 tests with 17 expected failures. Final focused selection: 58 tests,
+zero failures after exact formatting, independently reviewed. The fake creation
+fixture's short password/non-UUID role was corrected to the already-existing
+production requirements rather than loosening shared validation. Legacy omitted
+enabled/membership defaults and nil email/role no-ops remain covered. Documentation
+records alias compatibility, the completed UI cutover and the retained helper set.
+No UI assets changed; final combined gates remain outstanding.

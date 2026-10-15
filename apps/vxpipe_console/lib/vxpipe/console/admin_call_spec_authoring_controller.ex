@@ -32,7 +32,6 @@ defmodule Vxpipe.Console.AdminCallSpecAuthoringController do
   def update(conn, %{"tenant_key" => tenant, "id" => id}) do
     respond(conn, 201, fn ->
       with {:ok, source} <- source(conn.body_params),
-           {:ok, _existing} <- read(conn.assigns.user_principal, tenant, id, nil),
            {:ok, stored} <-
              Calls.save_authorized_call_spec(conn.assigns.user_principal, tenant, source,
                call_spec_id: id
@@ -46,7 +45,6 @@ defmodule Vxpipe.Console.AdminCallSpecAuthoringController do
     respond(conn, 200, fn ->
       with true <- conn.body_params == %{},
            {:ok, revision} when not is_nil(revision) <- revision(input),
-           {:ok, _existing} <- read(conn.assigns.user_principal, tenant, id, revision),
            {:ok, stored} <-
              Calls.publish_authorized_call_spec(
                conn.assigns.user_principal,

@@ -388,8 +388,13 @@ defmodule Vxpipe.Console.Router do
 
     get "/session", Vxpipe.Console.UserSessionController, :show
     get "/navigation", Vxpipe.Console.NavigationController, :show
-    get "/role-options", Vxpipe.Console.RoleManagementController, :options
     patch "/account", Vxpipe.Console.AccountController, :update
+  end
+
+  scope "/admin/api" do
+    pipe_through :session_product_api
+
+    get "/role-options", Vxpipe.Console.RoleManagementController, :options
     get "/users", Vxpipe.Console.UserManagementController, :index
     get "/users/:id", Vxpipe.Console.UserManagementController, :show
     post "/users", Vxpipe.Console.UserManagementController, :create
@@ -414,17 +419,22 @@ defmodule Vxpipe.Console.Router do
   scope "/admin/api" do
     pipe_through :user_api
 
-    get "/tenants", Vxpipe.Console.AdminTenantsController, :index
     get "/tenants/:tenant_key/dashboard", Vxpipe.Console.TenantDashboardController, :show
+
+    get "/tenants/:tenant_key/call-spec-editor-lookups",
+        Vxpipe.Console.AdminCallSpecLookupsController,
+        :index
+  end
+
+  scope "/admin/api" do
+    pipe_through :session_product_api
+
+    get "/tenants", Vxpipe.Console.AdminTenantsController, :index
     get "/tenants/:tenant_key/providers", Vxpipe.Console.AdminProviderCatalogController, :index
 
     get "/tenants/:tenant_key/providers/:provider/models",
         Vxpipe.Console.AdminProviderCatalogController,
         :models
-
-    get "/tenants/:tenant_key/call-spec-editor-lookups",
-        Vxpipe.Console.AdminCallSpecLookupsController,
-        :index
 
     get "/tenants/:tenant_key/call-specs", Vxpipe.Console.AdminCallSpecsController, :index
 

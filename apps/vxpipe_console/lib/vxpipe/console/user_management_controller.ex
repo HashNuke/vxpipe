@@ -4,6 +4,7 @@ defmodule Vxpipe.Console.UserManagementController do
   use Phoenix.Controller, formats: [:json]
 
   alias Vxpipe.Console.UserManagementPayload
+  alias Vxpipe.Identity.AccountInput
 
   def index(conn, params) do
     with {:ok, page} <- page(Map.get(params, "page", "1")),
@@ -47,15 +48,9 @@ defmodule Vxpipe.Console.UserManagementController do
   end
 
   def create(conn, params) do
-    with {:ok, memberships} <- memberships(Map.get(params, "memberships", [])),
-         {:ok, user} <-
-           backend().create_user(conn.assigns.user_principal, %{
-             email: Map.get(params, "email"),
-             password: Map.get(params, "password"),
-             password_confirmation: Map.get(params, "password_confirmation"),
-             role_public_id: Map.get(params, "role_id"),
-             memberships: memberships
-           }) do
+    with {:ok, input} <- legacy_input(params, :create),
+         {:ok, attrs} <- AccountInput.create(input),
+         {:ok, user} <- backend().create_user(conn.assigns.user_principal, attrs) do
       conn |> put_status(201) |> json(%{user: UserManagementPayload.user(user)})
     else
       error_result -> account_error(conn, error_result)
@@ -63,14 +58,9 @@ defmodule Vxpipe.Console.UserManagementController do
   end
 
   def update(conn, %{"id" => id} = params) do
-    with {:ok, memberships} <- memberships(Map.get(params, "memberships", [])),
-         {:ok, user} <-
-           backend().update_user(conn.assigns.user_principal, id, %{
-             email: Map.get(params, "email"),
-             role_public_id: Map.get(params, "role_id"),
-             disabled: Map.get(params, "enabled") == false,
-             memberships: memberships
-           }) do
+    with {:ok, input} <- legacy_input(params, :update),
+         {:ok, attrs} <- AccountInput.update(input),
+         {:ok, user} <- backend().update_user(conn.assigns.user_principal, id, attrs) do
       json(conn, %{user: UserManagementPayload.user(user)})
     else
       error_result -> account_error(conn, error_result)
@@ -89,22 +79,39 @@ defmodule Vxpipe.Console.UserManagementController do
     end
   end
 
-  defp memberships(entries) when is_list(entries) do
-    Enum.reduce_while(entries, {:ok, %{}}, fn entry, {:ok, acc} ->
-      case entry do
-        %{"tenant_id" => tenant, "access" => access}
-        when is_binary(tenant) and access in ["read", "read_write"] ->
-          if Map.has_key?(acc, tenant),
-            do: {:halt, {:error, :invalid_memberships}},
-            else: {:cont, {:ok, Map.put(acc, tenant, access)}}
+  # Legacy forms replace memberships and default to enabled. Email/role nil
+  # were no-ops in Identity; omit them before strict canonical normalization.
+  defp legacy_input(params, operation) do
+    with {:ok, memberships} <- legacy_memberships(Map.get(params, "memberships", [])) do
+      input =
+        if operation == :create do
+          Map.take(params, ~w(email password password_confirmation role_id))
+        else
+          params
+          |> Map.take(~w(email role_id))
+          |> Map.reject(fn {_key, value} -> is_nil(value) end)
+          |> Map.put("enabled", Map.get(params, "enabled") != false)
+        end
 
-        _ ->
-          {:halt, {:error, :invalid_memberships}}
-      end
-    end)
+      {:ok, Map.put(input, "memberships", memberships)}
+    end
   end
 
-  defp memberships(_), do: {:error, :invalid_memberships}
+  defp legacy_memberships(entries) when is_list(entries) do
+    Enum.reduce_while(entries, {:ok, []}, fn
+      %{"tenant_id" => tenant, "access" => access}, {:ok, acc} ->
+        {:cont, {:ok, [%{"tenant_key" => tenant, "access" => access} | acc]}}
+
+      _, _acc ->
+        {:halt, {:error, :invalid_memberships}}
+    end)
+    |> case do
+      {:ok, translated} -> {:ok, Enum.reverse(translated)}
+      error -> error
+    end
+  end
+
+  defp legacy_memberships(_), do: {:error, :invalid_memberships}
 
   defp account_error(conn, {:error, :forbidden}), do: error(conn, 403, "forbidden")
   defp account_error(conn, {:error, :not_found}), do: error(conn, 404, "not_found")

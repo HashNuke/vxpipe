@@ -154,7 +154,8 @@ legacy aliases. Explicit Authorization is rejected before parsing/session fallba
 on both prefixes. Direct credential validation uses the same write permission as
 HTTP. See [service contracts](product-http-api.md#services-and-provider-credentials-browser-sessions).
 Demo-tenant setup and sample installation now use canonical Calls workflows.
-Sample call/transfer mutations remain pending product workflows.
+Configured sample call/transfer also use canonical Calls workflows with explicit
+call targets and the actual authenticated actor.
 
 Service `truncated` results and provider cursors predate this milestone. Document
 their bounds instead of silently labelling them paginated. Required MCP product
@@ -165,7 +166,7 @@ schemas explicitly where pagination is introduced; keep legacy aliases compatibl
 
 | Existing method/path | Canonical product method/path | Shared owner and schema | Credential policy; migration |
 | --- | --- | --- | --- |
-| `GET A/users` | `GET API/users` | Identity Accounts; query, role filter, page/page_size -> safe users + pagination | S `users.read`; Kplatform; canonical snake_case DTO; move dependency wiring out of Console |
+| `GET A/users` | `GET API/users` | Identity Accounts; query, role filter, page/page_size -> safe users + pagination | S `users.read`; Kplatform; canonical snake_case inputs, compatible camelCase HTTP responses; shared Identity dependency wiring |
 | `GET A/users/:id` | `GET API/users/:id` | Identity authorized account lookup -> `{user}` | Same read authority; keep existence protection |
 | `POST A/users` | `POST API/users` | Identity account create; email/password/confirmation/role/memberships -> `{user}`, 201 | S target-category write policy; Kplatform explicit machine actor; transaction revalidation/audit |
 | `PATCH A/users/:id` | `PATCH API/users/:id` | Identity partial update; email/role/memberships/enabled; omitted fields preserved | Same write authority; preserve last-enabled-Superadmin and membership guards |

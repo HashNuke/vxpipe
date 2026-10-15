@@ -190,6 +190,38 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       %{tenant: tenant, other: other, authenticated: authenticate()}
     end
 
+    for action <- [:update, :publish] do
+      test "legacy #{action} uses shared write authority without an extra read grant", %{
+        tenant: tenant
+      } do
+        source = editor_source()
+
+        assert {:ok, stored} =
+                 Vxpipe.Calls.save_authorized_call_spec(
+                   FakeUserIdentity.principal(),
+                   tenant.key,
+                   source
+                 )
+
+        grants = MapSet.new(["call_specs.write"])
+        writer = %{FakeUserIdentity.principal() | grants: grants, all_tenant_actions: grants}
+        assert {:error, :forbidden} = Vxpipe.Calls.authorize_call_specs(writer, :read, tenant.key)
+        assert :ok = Vxpipe.Calls.authorize_call_specs(writer, :write, tenant.key)
+
+        params = %{"tenant_key" => tenant.key, "id" => stored.call_spec_id, "revision" => "1"}
+        body = if unquote(action) == :update, do: %{"source" => source}, else: %{}
+
+        conn =
+          Plug.Test.conn(:post, "/legacy-spec", body) |> Plug.Conn.assign(:user_principal, writer)
+
+        response =
+          apply(Vxpipe.Console.AdminCallSpecAuthoringController, unquote(action), [conn, params])
+
+        expected = if unquote(action) == :update, do: 201, else: 200
+        assert json_response(response, expected)["call_spec"]["source"] == source
+      end
+    end
+
     test "canonical spec writes share the session and API-key contract", %{
       tenant: tenant,
       authenticated: auth

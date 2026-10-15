@@ -371,9 +371,12 @@ the configured browser session adapter as well as API keys. Browser writes retai
 CSRF protection. See the [authoring contract](operator-api-key-authoring.md) for
 request bodies, publication behavior and compatible installation-authoring routes.
 
-During migration, legacy Console `/admin/api` routes retain their original response
-envelopes. UI callers are migrated in subsequent milestone checkpoints; these API
-additions do not claim that all existing UI requests have migrated yet.
+The UI uses the canonical product routes. Legacy Console `/admin/api` aliases
+retain their documented response envelopes for compatibility. New integrations
+should use `/api`; removing an alias requires a separate documented migration and
+compatibility review. There is no automatic removal date. Session/navigation,
+dashboard and editor-lookup helpers remain Console-specific as recorded in the
+[route inventory](product-api-inventory.md).
 
 ## Create a call
 

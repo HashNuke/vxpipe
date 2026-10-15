@@ -1,31 +1,22 @@
 defmodule Vxpipe.Console.UserManagementPayload do
   @moduledoc "Public account and role response shapes for the Console."
 
+  alias Vxpipe.Gateway.AccountJSON
+
   def user_page(%{users: users, total: total}, page, page_size) do
-    %{
-      users: Enum.map(users, &user/1),
-      pagination: %{
+    AccountJSON.user_page(
+      %{
+        users: users,
         page: page,
         page_size: page_size,
         total: total,
         total_pages: if(total == 0, do: 0, else: div(total + page_size - 1, page_size))
-      }
-    }
+      },
+      :http
+    )
   end
 
-  def user(record) do
-    %{
-      id: record.public_id,
-      email: record.email,
-      roleId: record.role_public_id,
-      enabled: is_nil(record.disabled_at),
-      memberships:
-        record
-        |> Map.get(:memberships, %{})
-        |> Enum.sort_by(fn {tenant, _access} -> tenant end)
-        |> Enum.map(fn {tenant, access} -> %{tenantId: tenant, access: access} end)
-    }
-  end
+  def user(record), do: AccountJSON.user(record, :http)
 
   def role(record) do
     %{

@@ -749,7 +749,7 @@ inventoried session/navigation/authentication helpers remain UI-specific.
   key/session policy preserving current delegation/privileged-account safeguards,
   and user-facing HTTP documentation. Do not quietly classify writes as UI helpers
   to avoid consolidation or assume all actor types share all permissions.
-- [ ] Keep UI helpers few and compositional; helpers reuse authorized application
+- [x] Keep UI helpers few and compositional; helpers reuse authorized application
   reads. Record their purpose/credential contract and do not add a second write API.
 - [ ] Retain needed legacy routes as thin compatibility aliases with a documented
   migration/deprecation policy; retire duplicate controllers and unused policy maps
@@ -887,6 +887,18 @@ explicit selected-call links, missing-target guidance and no overflow using a
 synthetic media-session boundary. No microphone, media or provider was invoked;
 the fixture and sandbox stopped. Combined root gates and complete cross-interface
 acceptance remain open.
+
+Legacy consolidation evidence: remaining product aliases now reject explicit
+Authorization before browser-session fallback and parsing. Spec update/publication
+use the shared write policy without a controller-owned read precondition. Legacy
+account inputs translate explicitly through the shared normalizer, retaining their
+full-form defaults; responses reuse the canonical account projection. The UI fetch
+audit found only the inventoried compositional helpers on private routes.
+
+After 17 expected failures in 53 tests, the final focused Console selection passes
+58 tests. Independent review approved and exact formatting passed. The alias
+retirement/compatibility policy is documented. No UI code changed in this slice;
+combined root verification and final cross-interface acceptance remain due.
 
 ## Checkpoint: parity acceptance and documentation
 
