@@ -525,7 +525,7 @@ account list/detail/create/update and paginated role options now use canonical
 HTTP routes. Tenant list timestamps are shared across HTTP/MCP; account inputs
 use canonical filters and membership tenant keys. Full role-grant reads still
 enrich account selectors through the existing authorized role endpoint until role
-administration migrates. Service/credential/role/key management, password reset,
+administration migrates. Service/credential/role management, password reset,
 tenant creation, onboarding/samples and call inspection remain open.
 
 Nine frontend red failures and a tenant-projection regression preceded the changes.
@@ -536,6 +536,16 @@ membership editing/disable and spec/catalog reads using canonical routes. The
 independent review found an outdated SDK response assertion; it and the public
 docs were corrected, and all seven reference-client groups passed. No live
 providers were used; the synthetic browser fixture and sandbox were stopped.
+
+API-key UI cutover: all four canonical `/api/api-keys` routes now reuse the
+existing controller and Calls delegation policy. Canonical and legacy aliases
+reject explicit Authorization before parsing or session fallback, retain CSRF and
+host restrictions, and do not grant machine-key delegation. After route/client and
+legacy-alias red regressions, 36 focused Console tests and all 760 frontend tests
+passed, together with TypeScript, lint and the asset build. Rendered Chrome verified
+listing/target selection, creation, one-time secret dismissal and revocation.
+The existing table overflows horizontally at 390px; no layout changed in this slice.
+Remaining UI operations and final acceptance stay open.
 
 ## Checkpoint: parity acceptance and documentation
 

@@ -644,3 +644,22 @@
   acknowledgement ownership and missing exact engine. Independent review found
   no blockers. Incoming Leg still needs to select this API when managed admission
   is enabled; missing engines continue to leave cleanup evidence unknown.
+
+## Canonical API-key administration
+
+- Console now explicitly owns four canonical key-management routes. Gateway mount
+  bypass uses router metadata only for those routes; host restrictions remain in
+  force. Canonical and legacy aliases share the existing controller/Calls policy.
+- Session-only authorization is checked before parsing: any Authorization header
+  denies instead of falling back to a cookie. Existing CSRF and delegation limits
+  remain intact, including foreign-tenant and platform issuance restrictions.
+- Missing-route/client tests failed before implementation. A follow-up red proved
+  the legacy alias also needed the pre-parser check. The final focused Console
+  selection passed 36 tests; all 760 frontend tests, TypeScript, lint and build
+  passed. Browser inspection verified list/targets 200, create 201, revoke 204,
+  and dismissing the single-use secret. Synthetic fixture and DB sandbox stopped.
+- Desktop rendering passed; the existing key table overflows at 390px. This URL
+  migration did not change layout. Public HTTP documentation now states the exact
+  session-only contract and existing fixed-size pagination, without extending
+  machine delegation. Other service/role/UI migration remains outstanding.
+- Independent review of canonical and final legacy-alias changes found no blockers.

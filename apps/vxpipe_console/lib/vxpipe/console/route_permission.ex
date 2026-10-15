@@ -10,6 +10,9 @@ defmodule Vxpipe.Console.RoutePermission do
           | :unknown
 
   @spec for_request(String.t(), [String.t()]) :: requirement()
+  def for_request(method, ["api", "api-keys" | rest]),
+    do: for_request(method, ["admin", "api", "api-keys" | rest])
+
   def for_request(method, ["admin", "api", "api-keys" | _rest])
       when method in ["GET", "POST", "DELETE"], do: :authenticated
 

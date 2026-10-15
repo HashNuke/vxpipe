@@ -13,7 +13,8 @@ defmodule Vxpipe.Console.OperatorTraffic do
 
   @impl true
   def call(%Conn{} = conn, _options) do
-    if operator_path?(conn.path_info) and insecure_public?(conn) do
+    if insecure_public?(conn) and
+         (operator_path?(conn.path_info) or Vxpipe.Console.SessionProductAPI.route?(conn)) do
       conn
       |> Conn.put_resp_content_type("text/plain")
       |> Conn.put_resp_header("cache-control", "private, no-store")

@@ -48,6 +48,11 @@ defmodule Vxpipe.Console.Router do
     plug Vxpipe.Console.RequireUserAPI
   end
 
+  pipeline :session_product_api do
+    plug Vxpipe.Console.SessionProductAPI
+    plug :user_api
+  end
+
   pipeline :operator do
     plug Vxpipe.Console.RequireOperator
     plug Vxpipe.Console.RequireTenant
@@ -129,6 +134,22 @@ defmodule Vxpipe.Console.Router do
     post "/recover", Vxpipe.Console.UserAuthController, :recover
   end
 
+  scope "/api" do
+    pipe_through :session_product_api
+
+    get "/api-keys", Vxpipe.Console.ApiKeyController, :index,
+      metadata: %{console_product_api: true}
+
+    get "/api-keys/tenants", Vxpipe.Console.ApiKeyController, :tenants,
+      metadata: %{console_product_api: true}
+
+    post "/api-keys", Vxpipe.Console.ApiKeyController, :create,
+      metadata: %{console_product_api: true}
+
+    delete "/api-keys/:id", Vxpipe.Console.ApiKeyController, :delete,
+      metadata: %{console_product_api: true}
+  end
+
   scope "/admin/api" do
     pipe_through :user_api
 
@@ -149,12 +170,16 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/admin/api" do
-    pipe_through :user_api
+    pipe_through :session_product_api
 
     get "/api-keys", Vxpipe.Console.ApiKeyController, :index
     get "/api-keys/tenants", Vxpipe.Console.ApiKeyController, :tenants
     post "/api-keys", Vxpipe.Console.ApiKeyController, :create
     delete "/api-keys/:id", Vxpipe.Console.ApiKeyController, :delete
+  end
+
+  scope "/admin/api" do
+    pipe_through :user_api
 
     post "/platform/credentials/test", Vxpipe.Console.AdminServicesController, :validate_platform
     post "/platform/credentials", Vxpipe.Console.AdminServicesController, :create_platform

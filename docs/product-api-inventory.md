@@ -8,10 +8,12 @@ add an MCP tool or automatically grant a machine key permission to use it.
 
 Implemented UI cutover (2026-10-15): tenant discovery, spec directory/detail,
 spec writes/publication, provider/model catalogs, account list/detail/create/update
-and paginated role options use the canonical handlers. Tenant list items are
+and paginated role options use the canonical handlers. API-key administration
+also uses canonical Console handlers, with session-only authentication and the
+existing delegation policy. Tenant list items are
 `{tenant_key,name,created_at}`; navigation paths are derived by the UI. Account
 selectors temporarily enrich canonical role options with separately authorized
-legacy role-grant reads. Service/credential/role/key administration, password reset,
+legacy role-grant reads. Service/credential/role administration, password reset,
 tenant creation, onboarding/samples and call inspection still require migration.
 Legacy routes remain available during that work; this inventory does not claim
 their removal or full controller consolidation.
@@ -154,6 +156,12 @@ schemas explicitly where pagination is introduced; keep legacy aliases compatibl
 | `GET A/api-keys/tenants` | `GET API/api-keys/tenants` | Calls key issuance target search; kind/q/page -> authorized tenant options | S issuance ceilings and key-management permissions; K denied pending delegation policy; not an unfiltered tenant picker |
 | `POST A/api-keys` | `POST API/api-keys` | Calls key issuance; `{name,kind,tenant_key}` -> `{key,secret}`, 201 | S existing delegation ceiling; platform issuance Superadmin-only; K denied pending delegation policy; secret returned once |
 | `DELETE A/api-keys/:id` | `DELETE API/api-keys/:id` | Calls key revoke -> 204 | S existing revoke policy; K denied pending delegation policy; revocation effective at next auth |
+
+The four access-key routes above are implemented, documented in the
+[HTTP contract](product-http-api.md#api-key-management-console-session-only), and
+used by the UI. Their legacy aliases invoke the same handlers and reject any
+explicit Authorization header before parsing or session fallback. Machine-key
+delegation remains denied.
 
 Account and role schema consolidation must preserve public user/role IDs. Existing
 Console `tenantId` membership entries actually contain the public tenant key;

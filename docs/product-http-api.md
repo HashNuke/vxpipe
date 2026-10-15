@@ -4,7 +4,8 @@ Canonical product operations live under `/api`. Browser UI clients and external
 clients use the same handlers, application authorization and response schemas.
 This document grows with the [platform MCP milestone](../labnotes/milestones/platform-mcp-endpoint.md);
 it describes tenant and call-spec reads, provider catalogs, spec writes,
-call creation/join-token operations, and account administration. The complete
+call creation/join-token operations, account administration, and session-only
+API-key management. The complete
 migration inventory is in
 [product API inventory](product-api-inventory.md).
 
@@ -21,6 +22,11 @@ It does not need a Vxpipe API key. Supplying Authorization selects key
 authentication: invalid, duplicate or unsupported credentials never fall back to
 the browser session. Standalone Gateway accepts keys only. Keys are not query
 parameters or request body fields. Use HTTPS outside local development.
+
+Operations explicitly documented as session-only are hosted by Console and reject
+any Authorization header with 401 `session_required`, even alongside a valid
+login cookie. API-key management below is one such operation; having a platform
+key does not grant permission to mint or revoke other keys.
 
 The tenant read routes accept Create & Join Calls, Full Tenant Access and Full
 Platform Access keys. A tenant key can discover only its own tenant. A platform
@@ -230,7 +236,6 @@ During migration, legacy Console `/admin/api` routes retain their original respo
 envelopes. UI callers are migrated in subsequent milestone checkpoints; these API
 additions do not claim that all existing UI requests have migrated yet.
 
-
 ## Create a call
 
 ```http
@@ -415,3 +420,46 @@ Account failures use `{error: {code, message, retryable, details}}`: 401
 503 `account_management_unavailable`. Successful machine writes revalidate the
 active platform key inside the transaction and attribute audit to its key ID.
 Deployments must apply migration `20261015000300` before enabling these writes.
+
+## API-key management (Console session only)
+
+```http
+GET /api/api-keys?q=backend&page=1
+GET /api/api-keys/tenants?kind=calls&q=example&page=1
+POST /api/api-keys
+DELETE /api/api-keys/:id
+```
+
+These are the endpoints used by Settings. They require a browser login session;
+mutations also require its CSRF token. They are unavailable on standalone Gateway.
+Canonical and legacy `/admin/api/api-keys` aliases use the same handlers and
+application policy. Any explicit Authorization header is rejected before body
+parsing or session fallback. Neither a tenant nor platform API key can delegate
+credentials through these endpoints.
+
+Lists accept optional `q` (at most 120 characters, trimmed) and `page` (1 through
+1000000, default 1). They use a fixed page size of 25 and the existing pagination
+shape `{page, page_size, total, has_next}`. Key lists return
+`{keys, pagination, creatable_kinds}`. Each key contains `id`, `name`, `kind`,
+`last_four`, `tenant`, `created_at`, and `can_revoke`; `tenant` is null for a
+platform key or `{key, name}` for a tenant key. Neither digests nor secrets appear
+in listings. Legacy tenant keys have kind `legacy_admin` and may have no suffix.
+
+The issuance-target list requires `kind=calls` or `kind=full` and returns
+`{tenants, pagination}` with `{key, name}` tenant rows. Both lists apply the
+current user's visibility and delegation limits before pagination. A target in
+this list is not a grant to issue a broader key.
+
+Creation accepts `{name, kind, tenant_key}`. The trimmed name must be nonempty
+and at most 256 bytes. Kind is `calls`, `full`, or `platform`; tenant kinds require
+the public tenant key, while platform creation uses null or omitted `tenant_key`.
+Existing permissions and delegation ceilings apply; platform-key issuance remains
+Superadmin-only. Success returns 201 `{key, secret}`. Save the secret at this point:
+it is not available from subsequent reads. Revocation returns 204 and affects
+subsequent authentication without deleting the user's login session.
+
+Failures use `{error: {code}}`: 401 `session_required`, 403 `forbidden`, 404
+`not_found`/`tenant_not_found`, 422 `invalid_name`/`invalid_query`/`invalid_key_type`,
+or 503 `api_keys_unavailable`. Public non-HTTPS and carrier-only hosts do not expose
+these routes. Legacy aliases remain for compatibility; new clients should use
+`/api/api-keys`.
