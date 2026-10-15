@@ -111,10 +111,13 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     :exit, _reason -> {:error, :room_unavailable}
   end
 
-  def join_participant(%JoinParticipant{} = command) do
+  def join_participant(%JoinParticipant{} = command, expected_incarnation \\ nil) do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {command.tenant_id, command.room_id}) do
-      [{room_authority, _value}] -> RoomAuthority.join_participant(room_authority, command)
-      [] -> {:error, room_not_found(command.room_id)}
+      [{room_authority, _value}] ->
+        RoomAuthority.join_participant(room_authority, command, expected_incarnation)
+
+      [] ->
+        {:error, room_not_found(command.room_id)}
     end
   catch
     :exit, _reason ->

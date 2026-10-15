@@ -161,9 +161,12 @@ defmodule Vxpipe.CallEngine do
 
   @spec join_participant(JoinParticipant.t()) ::
           {:ok, Vxpipe.CallEngine.Participant.Snapshot.t()} | {:error, Error.t()}
-  def join_participant(%JoinParticipant{} = command) do
+  @spec join_participant(JoinParticipant.t(), String.t() | nil) ::
+          {:ok, Vxpipe.CallEngine.Participant.Snapshot.t()} | {:error, Error.t()}
+  def join_participant(%JoinParticipant{} = command, expected_incarnation \\ nil)
+      when is_nil(expected_incarnation) or is_binary(expected_incarnation) do
     if DateTime.compare(command.deadline, DateTime.utc_now()) == :gt do
-      RoomSupervisor.join_participant(command)
+      RoomSupervisor.join_participant(command, expected_incarnation)
     else
       {:error,
        Error.new(

@@ -365,6 +365,14 @@ source, including the full default umbrella suite with zero failures. Gateway
 has not yet connected this gate to durable
 binding, so the admission-versus-hangup acceptance above remains open.
 
+Exact-incarnation join prerequisite: participant admission now accepts an expected
+incarnation and checks it inside the room authority before any join effects.
+Three new regressions first failed for the absent API, then passed; eight focused
+join/completion tests and the full CallEngine suite (2,233 tests, zero failures)
+passed. Independent review found no blockers; its test-cleanup suggestion was
+applied and the six join tests rerun successfully. Gateway admission integration
+and whole-call shutdown acceptance remain open.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

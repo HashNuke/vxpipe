@@ -431,3 +431,16 @@
 - Tagged SQL race tests were selected separately and passed; live-provider and
   real telephony lanes stayed excluded. The working implementation remains short
   of runtime binding/reconciliation and UI cutover; the overall milestone is open.
+
+## Scoped participant admission
+
+- Added an optional expected incarnation to participant admission. The authority
+  checks it inside serialized handling before participant or archive effects;
+  registry replacement races cannot redirect the join to a new incarnation.
+- Three regression tests failed for the missing API, then eight join/completion
+  tests passed. The full CallEngine suite passed 2,233 tests with zero failures
+  (75 excluded). Review found no blockers and suggested exact room cleanup in
+  test fixtures; added it and reran all six join tests successfully.
+- Existing unscoped API callers remain compatible. This prerequisite alone does
+  not finish durable Gateway admission or whole-call hangup. Combined root gates
+  will run against the next stable checkpoint with the parallel changes included.

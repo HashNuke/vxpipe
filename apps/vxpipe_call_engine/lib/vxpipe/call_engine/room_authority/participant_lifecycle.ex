@@ -14,7 +14,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantLifecycle do
   alias Vxpipe.CallEngine.RoomAuthority.{ParticipantPreparation, State, TextCapability}
 
   @spec join(struct(), State.t()) :: {:reply, {:ok, struct()} | {:error, Error.t()}, State.t()}
-  def join(command, %State{} = state) do
+  @spec join(struct(), State.t(), String.t() | nil) ::
+          {:reply, {:ok, struct()} | {:error, Error.t()}, State.t()}
+  def join(command, state, expected_incarnation \\ nil)
+
+  def join(_command, %State{} = state, expected_incarnation)
+      when not is_nil(expected_incarnation) and
+             expected_incarnation != state.snapshot.incarnation_id do
+    error = Error.new(:room_incarnation_changed, "The room incarnation has changed.")
+    {:reply, {:error, error}, state}
+  end
+
+  def join(command, %State{} = state, _expected_incarnation) do
     if MapSet.member?(state.participant_ids, command.participant_id) do
       {:reply, {:error, already_exists(command.participant_id)}, state}
     else

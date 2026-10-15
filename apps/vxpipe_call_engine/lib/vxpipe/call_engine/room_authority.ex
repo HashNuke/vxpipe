@@ -76,8 +76,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     GenServer.call(room_authority, :readiness_binding, timeout)
   end
 
-  def join_participant(room_authority, %JoinParticipant{} = command) do
-    GenServer.call(room_authority, {:join_participant, command}, @call_timeout)
+  def join_participant(room_authority, %JoinParticipant{} = command, incarnation \\ nil) do
+    GenServer.call(room_authority, {:join_participant, command, incarnation}, @call_timeout)
   end
 
   def attach_connection(
@@ -223,8 +223,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:reply, admission, state}
   end
 
-  def handle_call({:join_participant, command}, _from, state) do
-    ParticipantLifecycle.join(command, state)
+  def handle_call({:join_participant, command, incarnation}, _from, state) do
+    ParticipantLifecycle.join(command, state, incarnation)
   end
 
   def handle_call(

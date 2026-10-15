@@ -84,6 +84,61 @@ defmodule Vxpipe.CallEngine.JoinParticipantTest do
     assert_receive {:DOWN, ^participant_monitor, :process, ^participant_authority, :shutdown}
   end
 
+  test "scoped admission rejects a stale incarnation without creating a participant" do
+    room = create_room(unique_id("room"))
+    command = join_command(room.room_id)
+
+    assert {:error, %Error{code: :room_incarnation_changed}} =
+             CallEngine.join_participant(command, "stale-incarnation")
+
+    assert {:ok, participant} = CallEngine.join_participant(command, room.incarnation_id)
+    assert participant.incarnation_id == room.incarnation_id
+  end
+
+  test "scoped admission cannot join a replacement room using the previous binding" do
+    room = create_room(unique_id("room"))
+    command = join_command(room.room_id)
+
+    assert {:ok, completion} =
+             CallEngine.monitor_room_completion("tenant-demo", room.room_id, room.incarnation_id)
+
+    assert :ok = CallEngine.end_call("tenant-demo", room.room_id, room.incarnation_id)
+    assert_receive {:DOWN, ^completion, :process, _, _}, 1_000
+    replacement = create_room(room.room_id)
+
+    assert {:error, %Error{code: :room_incarnation_changed}} =
+             CallEngine.join_participant(command, room.incarnation_id)
+
+    assert {:ok, participant} = CallEngine.join_participant(command, replacement.incarnation_id)
+    assert participant.incarnation_id == replacement.incarnation_id
+  end
+
+  test "scoped admission preserves command deadline enforcement" do
+    room = create_room(unique_id("room"))
+
+    command = %{
+      join_command(room.room_id)
+      | deadline: DateTime.add(DateTime.utc_now(), -1, :second)
+    }
+
+    assert {:error, %Error{code: :deadline_exceeded}} =
+             CallEngine.join_participant(command, room.incarnation_id)
+  end
+
+  defp join_command(room_id) do
+    assert {:ok, command} =
+             JoinParticipant.new(
+               tenant_id: "tenant-demo",
+               actor_id: "actor-demo",
+               room_id: room_id,
+               participant_id: unique_id("participant"),
+               role: :human,
+               deadline: future_deadline()
+             )
+
+    command
+  end
+
   defp create_room(room_id) do
     assert {:ok, command} =
              CreateRoom.new(
@@ -94,6 +149,8 @@ defmodule Vxpipe.CallEngine.JoinParticipantTest do
              )
 
     assert {:ok, room} = CallEngine.create_room(command)
+
+    on_exit(fn -> CallEngine.end_call("tenant-demo", room_id, room.incarnation_id) end)
     room
   end
 
