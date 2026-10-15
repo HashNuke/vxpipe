@@ -22,9 +22,10 @@ and artifact downloads now use canonical session-only handlers and shared
 inspection ownership checks. Onboarding demo-tenant creation now uses the actual
 browser actor through its canonical session-only route. Sample installation now
 uses Calls-owned authoring with an explicit existing demo tenant and the actual
-actor. Sample call/transfer workflows still require migration.
-Legacy routes remain available during that work; this inventory does not claim
-their removal or full controller consolidation.
+actor. Configured sample call/transfer now use canonical actual-actor workflows
+and an explicit call target, without startup authoring or hidden keys. Legacy
+routes remain compatibility surfaces; final controller/schema consolidation and
+cross-interface acceptance still need verification.
 
 ## Classification and migration rules
 
@@ -83,10 +84,10 @@ legacy alias; new canonical account input uses `role_id` and membership
 | `GET A/T/providers/:provider/models`; corresponding `API/T` route | `GET API/T/providers/:provider/models` | Calls model catalog; capability + provider; `{models: ...}`, voice/options metadata | Same as provider list; preserve provider/model IDs and optional paginated projection |
 | `GET A/T/telephony-services/:service/numbers` | `GET API/T/telephony-services/:service/numbers` | Calls phone-number inventory through provider port; `search`, opaque `page`, optional `call_spec_id`; `{numbers,next_page}` | S `call_specs.write`; K denied pending policy; preserve provider cursor (not product page-number pagination) and assignment visibility |
 
-The existing tenant list also returns `dashboard_path` and `can_setup`. The canonical
-schema must explicitly choose whether to preserve those fields additively or derive
-navigation in the UI. Neither is justification for a private tenant directory.
-`tenant_id` remains an internal database identifier, never a public argument alias.
+The legacy tenant list retains `dashboard_path` and `can_setup` for compatibility.
+The canonical list uses `{tenant_key,name,created_at}`; the UI derives navigation
+and uses its authorized permission context. `tenant_id` remains an internal
+database identifier, never a public argument alias.
 
 ## Calls, admission and artifacts
 
@@ -213,7 +214,6 @@ product operations.
 | `GET A/navigation` | UI navigation helper, Console | Optional selected tenant -> navigation tree built from authorized reads |
 | `GET A/T/dashboard` | UI page aggregate, Console | Tenant overview/recent calls/counts assembled from authorized Calls reads; no separate write behavior |
 | `GET A/T/call-spec-editor-lookups` | UI aggregate, Console | Safe credential names, telephony service labels and MCP integration names; shared read policy and no credential values |
-| `GET A/T/calls/spec-options` | UI search projection, Console + Calls | q/page -> `{options,has_more}` for call-history filter; preserves call-read visibility without granting full spec-source access |
 
 Keep these helper routes explicitly documented as Console-only while product routes
 move. `/account` is a personal credential workflow, whereas user administration is

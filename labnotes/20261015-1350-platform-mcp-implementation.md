@@ -1459,3 +1459,22 @@ barrier. Root and independent source review approved. Six paths are formatted an
 frozen. Global enablement and outgoing scope propagation from incoming rooms remain
 pending; no live carrier or provider was invoked. Combined root gates started on
 the frozen runtime snapshot.
+
+### End-command recovery review during source freeze
+
+Root inspection and independent review found that both incoming and outgoing
+owners discard end-command results and retry only when a late answer sets a
+retry flag. Repeated exact engine stop cannot repair this after the authority is
+already gone. Before managed enablement, add owner-held coalesced timer/backoff for
+failed or uncertain end commands and submission-start failure. Retry only after
+normal observer DOWN establishes command drainage; abnormal observer loss keeps
+sticky uncertainty and suppresses overlap. Keep the original carrier control ID,
+wait for authenticated adoption if absent, never redial, and cancel retries on
+authenticated end. Accepted REST submission alone remains insufficient completion
+proof. This is a reviewed integration requirement, not implemented behavior.
+
+A read-only UI fetch audit found only inventoried session/navigation/dashboard,
+editor-lookups and account-security helpers still using legacy UI paths. Updated
+inventory wording for completed sample migration and canonical tenant projections,
+and removed the stale classification of canonical call-filter options as a retained
+private helper. Final legacy-controller/schema consolidation still needs audit.

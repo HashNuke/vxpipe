@@ -22,7 +22,8 @@ defmodule Vxpipe.Console.SampleAdmissionJSON do
              :participant_admission_pending,
              :call_ended,
              :hangup_requested
-           ], do: {409, "sample_call_unavailable"}
+           ],
+      do: {409, "sample_call_unavailable"}
 
   def error_response(_reason, kind), do: {503, kind <> "_unavailable"}
 

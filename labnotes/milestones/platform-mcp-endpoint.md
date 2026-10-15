@@ -671,6 +671,13 @@ fixture teardown barrier; both local carrier harnesses also passed their 30 case
 Independent review approved. Global configuration and per-call transfer scope
 wiring remain pending; no external telephony or live provider was used.
 
+Pre-rollout review found an additional recovery gap: both carrier owners currently
+ignore failed/uncertain end results and retry only on a late answer. Owner-held
+bounded retry after normal command-observer DOWN is required before enablement;
+abnormal observer loss must suppress overlap and remain unknown. The lifecycle
+design records the reviewed contract. This remains implementation work, not a
+completed recovery acceptance gate.
+
 ## Checkpoint: platform-key user administration
 
 Depends on foundation and pagination; does not require live calls. Runnable slice:

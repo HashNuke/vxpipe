@@ -491,6 +491,18 @@ tracker separately owns the proof that the complete engine supervision tree has
 drained. This conservative retention avoids treating carrier-owner retirement as
 proof about the rest of the call.
 
+Before managed rollout, both carrier owners must retry failed or uncertain end
+commands. Their current result handlers discard those outcomes and retry only
+when a late answer requests another end. Engine-only reconciliation cannot recover
+that failure after the authority is gone. Keep retry ownership inside the original
+Leg: one coalesced timer with capped backoff, no overlapping workers, and only after
+normal observer DOWN proves the previous command task drained. Submission-start
+failure can schedule the same retry. An abnormal observer exit keeps drainage
+unknown and suppresses automatic overlap. Retry the retained original control ID;
+missing outgoing identity waits for authenticated adoption and never redials.
+Authenticated end cancels retries. Accepted end submission alone is not carrier-end
+proof. This recovery refinement is reviewed but not yet implemented.
+
 Keep a private managed-ownership marker even when registration fails, so an owner
 cannot accidentally fall back to legacy retirement. After validating the anchor
 and options, the carrier helper retains owner-held persistence context when the
