@@ -23,7 +23,8 @@ remaining. Percentages estimate effort, not the proportion of checked boxes.
 - Existing Console login plus consent and connected-client revocation.
 - No OIDC/federation, confidential clients, machine OAuth grants or outbound CIMD
   fetching in this slice; document the DCR-only onboarding limitation.
-- Local deterministic tests and reference-client acceptance; no live providers.
+- Local deterministic tests and reference-client acceptance; no live providers or
+  Lean proofs/work, per the user's explicit instruction.
 
 ## Checkpoint 1: prove the protocol and review the plan (10%)
 
@@ -53,6 +54,8 @@ without exposing OAuth routes yet.
   existing invalidation paths including recovery and disable/reactivate. Increment
   in IdentityUserStore's session-invalidation path and IdentityInstallationStore's
   credential recovery; role changes retain the existing role revision mechanism.
+  User version storage/invalidation is implemented and independently reviewed;
+  actual grant comparisons remain pending.
 - [ ] Implement revocation/expiry/cleanup and establish concrete durable quotas.
 - [ ] Verify wrong-client/resource/verifier requests cannot revoke a valid grant.
 - [ ] Independently review, run relevant tests, update evidence and commit.
@@ -129,4 +132,22 @@ those before public HTTP exposure. Research is not implementation acceptance.
   entries. Reproducer: [Boruta probe](../../docs/experiments/boruta-probe.exs), run
   `elixir docs/experiments/boruta-probe.exs` outside Mix. It uses synthetic in-memory
   data and is not evidence of PostgreSQL atomicity or production authorization.
-- No OAuth runtime implementation or browser evidence yet.
+- No exposed OAuth flow or browser evidence yet.
+
+### Foundation implementation
+
+- Input profile: five red failures before implementation; five green checks for
+  public registration, redirect syntax, S256, canonical resource, bounded exchange
+  and revocation inputs. Entire Identity suite: 74 tests passed. Stored redirect
+  equality and durable resource binding are still downstream work.
+- User authorization version: four expected red failures, then four passing
+  focused tests and 59 passing Persistence identity regressions. Covers authority,
+  password/status changes, unchanged reads/email, failed audit rollback, and
+  credential recovery rollback/success. Test database migration passed.
+- Independent code review found no blocking issues. It verified locked atomic
+  updates, preserved rollback and untrusted input exclusion. These foundations do
+  not yet issue or authenticate OAuth credentials; checkpoint 2 remains open.
+- Foundation checks: dev/test migrations, root format, warnings-as-errors compile,
+  strict Credo and unused dependency check passed. Full umbrella tests remain a
+  final acceptance gate; this subcheckpoint ran the focused Identity/Persistence
+  regression suites above.

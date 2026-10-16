@@ -373,6 +373,13 @@ defmodule Vxpipe.Persistence.IdentityUserStore do
           attrs
       end
 
+    # The user row is locked by apply_update/2. Advance the durable delegation
+    # version in the same update and transaction as the authority change.
+    attrs =
+      if invalidates_authorization?(changes),
+        do: Map.put(attrs, :authorization_version, user.authorization_version + 1),
+        else: attrs
+
     case Repo.update(IdentityUser.changeset(user, attrs)) do
       {:ok, updated} ->
         {:ok, updated}
@@ -401,11 +408,7 @@ defmodule Vxpipe.Persistence.IdentityUserStore do
   # so a committed role/membership/status/password change can never leave live
   # sessions behind. Revocation is idempotent; the domain layer may repeat it.
   defp maybe_revoke_user_sessions(user_id, changes) do
-    if Map.has_key?(changes, :role_public_id) or Map.has_key?(changes, "role_public_id") or
-         Map.has_key?(changes, :memberships) or Map.has_key?(changes, "memberships") or
-         Map.has_key?(changes, :disabled_at) or
-         Map.get(changes, :disabled, Map.get(changes, "disabled")) != nil or
-         Map.has_key?(changes, :password_hash) or Map.has_key?(changes, "password_hash") do
+    if invalidates_authorization?(changes) do
       now = IdentityRecord.utc_now()
 
       _ =
@@ -420,6 +423,14 @@ defmodule Vxpipe.Persistence.IdentityUserStore do
     else
       :ok
     end
+  end
+
+  defp invalidates_authorization?(changes) do
+    Map.has_key?(changes, :role_public_id) or Map.has_key?(changes, "role_public_id") or
+      Map.has_key?(changes, :memberships) or Map.has_key?(changes, "memberships") or
+      Map.has_key?(changes, :disabled_at) or
+      Map.get(changes, :disabled, Map.get(changes, "disabled")) != nil or
+      Map.has_key?(changes, :password_hash) or Map.has_key?(changes, "password_hash")
   end
 
   defp validate_page(page) when is_integer(page) and page >= 1, do: {:ok, page}

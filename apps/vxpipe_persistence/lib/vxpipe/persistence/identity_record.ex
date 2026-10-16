@@ -230,6 +230,7 @@ defmodule Vxpipe.Persistence.IdentityRecord do
       role_kind: role_kind(role.kind),
       role_slug: role.slug,
       disabled_at: user.disabled_at,
+      authorization_version: user.authorization_version,
       memberships: memberships
     }
   end

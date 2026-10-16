@@ -34,3 +34,22 @@
 - Independent design review required explicit approve/deny authority semantics,
   disclosure of future tenants for all-tenant grants, and atomic consent-version
   checks. The design/milestone now contain those contracts and version-update sites.
+
+## Input and account-version foundation
+
+- Added a pure OAuth input profile before any routes are exposed. Five tests failed
+  for the missing module, then passed for public-client metadata, safe redirects,
+  S256, canonical resource and token/revocation bounds. All 74 Identity tests pass.
+- Added a positive durable user authorization version, advanced under existing
+  locks in account authority/password changes and recovery. Four focused tests
+  failed before implementation and pass afterward; 59 existing Persistence
+  identity regressions also pass. Grant/version comparison is still future work.
+- Independent code review found no blocking issues, checked transaction rollback,
+  recovery projection and exclusion of caller-supplied version fields.
+- A format invocation initially used root-relative paths from a child directory
+  and found no files. Reran formatting correctly from the umbrella root; this was
+  a command-path error, not a test failure. The child Identity test run passed.
+- User clarified no Lean proofs and no live provider tests; neither is used.
+- Dev/test migrations and root format, compile warnings-as-errors, strict Credo
+  and unused dependency checks passed. Full umbrella tests are still pending for
+  the completed integration; focused regression evidence is recorded above.
