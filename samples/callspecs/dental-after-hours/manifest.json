@@ -16,7 +16,7 @@
         "minLength": 1,
         "maxLength": 256,
         "default": "After-hours dental line",
-        "description": "Call spec name. Installation is idempotent per tenant and name."
+        "description": "Call spec name."
       },
       "clinic_name": {
         "type": "string",

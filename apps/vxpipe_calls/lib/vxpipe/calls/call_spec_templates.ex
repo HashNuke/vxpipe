@@ -7,13 +7,7 @@ defmodule Vxpipe.Calls.CallSpecTemplates do
   against the tenant and stores it through ordinary authoring.
   """
 
-  alias Vxpipe.Calls.{
-    CallSpecAuthoring,
-    CallSpecAuthorization,
-    CallSpecs,
-    CallSpecTemplate,
-    Repositories
-  }
+  alias Vxpipe.Calls.{CallSpecAuthoring, CallSpecAuthorization, CallSpecTemplate}
 
   @spec list(keyword()) :: {:ok, [CallSpecTemplate.t()]} | {:error, term()}
   def list(options \\ []) do
@@ -47,92 +41,43 @@ defmodule Vxpipe.Calls.CallSpecTemplates do
   end
 
   @doc """
-  Renders, validates and saves a template into a tenant. The source `name` identifies
-  the installation: an identical existing source is reused and a different one is a
-  conflict, never overwritten. A rendering that fails the tenant's save-time checks is
-  rejected without being stored. Pass `publish: true` to publish the installed revision.
+  Renders, validates and saves a template as a new call spec in the tenant. Every
+  install creates a separate spec, even for identical inputs. A rendering that fails
+  the tenant's save-time checks is rejected without being stored. Pass `publish: true`
+  to publish the new revision.
   """
   @spec install(term(), String.t(), String.t(), map(), keyword()) ::
           {:ok, map()} | {:error, term()}
   def install(authority, tenant_key, id, inputs, options \\ []) do
-    # Installations locate their target by name only; a supplied ID would append to it.
+    # A supplied ID would append a revision to that spec instead of creating one.
     options = Keyword.delete(options, :call_spec_id)
 
     with :ok <- CallSpecAuthorization.authorize(authority, :write, tenant_key),
          {:ok, source} <- render(id, inputs, options),
-         {:ok, repository} <- Repositories.fetch(options, :call_spec_repository) do
-      :global.trans({{__MODULE__, tenant_key, source["name"]}, self()}, fn ->
-        install_locked(authority, tenant_key, id, source, repository, options)
-      end)
-    end
-  end
-
-  defp install_locked(authority, tenant_key, id, source, repository, options) do
-    case Repositories.call(repository, :find_by_original_name, [tenant_key, source["name"]]) do
-      {:ok, []} ->
-        with {:ok, []} <- CallSpecAuthoring.validate(authority, tenant_key, source, options),
-             {:ok, draft} <- CallSpecAuthoring.save(authority, tenant_key, source, options) do
-          finish(:created, id, draft, authority, repository, options)
-        else
-          {:ok, errors} -> {:error, {:call_spec_template_invalid, errors}}
-          {:error, _reason} = error -> error
-        end
-
-      {:ok, [call_spec_id]} ->
-        with {:ok, latest} <- latest(repository, tenant_key, call_spec_id, options) do
-          if latest.source == source,
-            do: finish(:unchanged, id, latest, authority, repository, options),
-            else: {:error, :call_spec_template_conflict}
-        end
-
-      {:ok, _ambiguous} ->
-        {:error, :call_spec_template_conflict}
-
-      {:error, _reason} = error ->
-        error
-    end
-  end
-
-  defp latest(repository, tenant_key, call_spec_id, options) do
-    with {:ok, next} <- Repositories.call(repository, :next_revision, [tenant_key, call_spec_id]) do
-      CallSpecs.fetch(tenant_key, call_spec_id, next - 1, options)
-    end
-  end
-
-  defp finish(status, id, revision, authority, repository, options) do
-    with {:ok, published?} <- published?(repository, revision),
-         {:ok, published?} <- maybe_publish(published?, revision, authority, options) do
+         {:ok, []} <- CallSpecAuthoring.validate(authority, tenant_key, source, options),
+         {:ok, draft} <- CallSpecAuthoring.save(authority, tenant_key, source, options),
+         {:ok, published?} <- maybe_publish(draft, authority, options) do
       {:ok,
        %{
          template_id: id,
-         status: status,
-         call_spec_id: revision.call_spec_id,
-         revision: revision.revision,
-         published: published?,
-         validation_errors: revision.validation_errors
+         call_spec_id: draft.call_spec_id,
+         revision: draft.revision,
+         published: published?
        }}
-    end
-  end
-
-  defp published?(repository, revision) do
-    case Repositories.call(repository, :fetch_published_revision, [
-           revision.tenant_key,
-           revision.call_spec_id
-         ]) do
-      {:ok, %{revision: published}} -> {:ok, published == revision.revision}
-      {:error, :call_spec_not_published} -> {:ok, false}
+    else
+      {:ok, errors} when is_list(errors) -> {:error, {:call_spec_template_invalid, errors}}
       {:error, _reason} = error -> error
     end
   end
 
-  defp maybe_publish(false, revision, authority, options) do
+  defp maybe_publish(draft, authority, options) do
     if Keyword.get(options, :publish, false) do
       with {:ok, _published} <-
              CallSpecAuthoring.publish(
                authority,
-               revision.tenant_key,
-               revision.call_spec_id,
-               revision.revision,
+               draft.tenant_key,
+               draft.call_spec_id,
+               draft.revision,
                options
              ),
            do: {:ok, true}
@@ -140,8 +85,6 @@ defmodule Vxpipe.Calls.CallSpecTemplates do
       {:ok, false}
     end
   end
-
-  defp maybe_publish(true, _revision, _authority, _options), do: {:ok, true}
 
   defp load_all(paths) do
     Enum.reduce_while(paths, {:ok, []}, fn path, {:ok, templates} ->

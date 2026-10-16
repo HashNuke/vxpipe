@@ -92,3 +92,16 @@ Its findings, and what was done:
   only the touched files were formatted.
 - Red for the round-2 tests was observed: 20 tests, 2 failures, for the expected reasons.
   Green: 36 tests, 0 failures across the template, call_specs and authoring test files.
+
+## Always-create installs
+
+- The user decided sample installs should not be idempotent. Every install creates a new
+  call spec, even with identical inputs.
+- Removed: the name lookup, the `:global` lock, the `:unchanged` status and
+  `:call_spec_template_conflict`. Removing them also removes the reviewer's leftover
+  low-severity issue about stale `validation_errors` on `:unchanged` specs.
+- The result is now `%{template_id, call_spec_id, revision, published}`. Validation still
+  runs before saving, and `call_spec_id` is still dropped from options.
+- The test memory repository's `find_by_original_name` was removed because nothing uses it.
+- Red was observed: the new always-create test failed because the second install reused
+  the first spec. Green: 18 tests, 0 failures.

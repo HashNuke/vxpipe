@@ -28,7 +28,7 @@ make differences between providers easy to hear.
 | `speech_to_speech` | for `speech_to_speech` | Capability selection. `speech_to_text` is optional here |
 | `output_speech_to_text` | no | `speech_to_speech` only: transcribes agent audio when the model provides no output transcript |
 | `telephony` | no | `service`, `inbound_number` and `on_call_number`. When omitted, the caller and the on-call dentist use browser connections |
-| `name` | no | Call spec name, which is the installation key. Defaults to `After-hours dental line` |
+| `name` | no | Call spec name. Defaults to `After-hours dental line` |
 | `clinic_name`, `office_hours` | no | Text the agents speak |
 
 Credential names refer to the tenant's configured credentials, and `telephony.service`
@@ -60,5 +60,5 @@ Calls.install_call_spec_template(
 )
 ```
 
-To compare providers, install the template again under a different `name` with
-different selections.
+Every install creates a new call spec. To compare providers, install it again with
+different selections and a descriptive `name`.

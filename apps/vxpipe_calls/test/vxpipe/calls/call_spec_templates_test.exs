@@ -166,16 +166,13 @@ defmodule Vxpipe.Calls.CallSpecTemplatesTest do
       %{options: options, tenant: tenant.key, author: author}
     end
 
-    test "saves a draft, then converges on repeat installs of the same rendering", context do
+    test "creates a new call spec on every install, even for the same inputs", context do
       %{options: options, tenant: tenant, author: author} = context
 
-      assert {:ok, %{status: :created, call_spec_id: id, revision: 1, published: false}} =
+      assert {:ok, %{call_spec_id: first, revision: 1, published: false}} =
                CallSpecTemplates.install(author, tenant, "dental-after-hours", @cascade, options)
 
-      assert {:ok, %{status: :unchanged, call_spec_id: ^id, revision: 1, published: false}} =
-               CallSpecTemplates.install(author, tenant, "dental-after-hours", @cascade, options)
-
-      assert {:ok, %{status: :unchanged, call_spec_id: ^id, revision: 1, published: true}} =
+      assert {:ok, %{call_spec_id: second, revision: 1, published: true}} =
                CallSpecTemplates.install(
                  author,
                  tenant,
@@ -184,29 +181,14 @@ defmodule Vxpipe.Calls.CallSpecTemplatesTest do
                  Keyword.put(options, :publish, true)
                )
 
-      assert {:ok, stored} = Vxpipe.Calls.CallSpecs.fetch(tenant, id, 1, options)
+      assert first != second
       assert {:ok, rendered} = CallSpecTemplates.render("dental-after-hours", @cascade)
-      assert stored.source == rendered
-    end
 
-    test "never overwrites a same-named call spec with a different rendering", context do
-      %{options: options, tenant: tenant, author: author} = context
-      changed = put_in(@cascade, ["model_inference", "model"], "other-fixture")
-
-      assert {:ok, %{status: :created}} =
-               CallSpecTemplates.install(author, tenant, "dental-after-hours", @cascade, options)
-
-      assert {:error, :call_spec_template_conflict} =
-               CallSpecTemplates.install(author, tenant, "dental-after-hours", changed, options)
-
-      assert {:ok, %{status: :created, revision: 1}} =
-               CallSpecTemplates.install(
-                 author,
-                 tenant,
-                 "dental-after-hours",
-                 Map.put(changed, "name", "Dental line (other model)"),
-                 options
-               )
+      for id <- [first, second] do
+        assert {:ok, stored} = Vxpipe.Calls.CallSpecs.fetch(tenant, id, 1, options)
+        assert stored.source == rendered
+        assert {:error, :not_found} = Vxpipe.Calls.CallSpecs.fetch(tenant, id, 2, options)
+      end
     end
 
     test "stores nothing when the rendering fails tenant validation", context do
@@ -227,7 +209,7 @@ defmodule Vxpipe.Calls.CallSpecTemplatesTest do
       corrected =
         Map.put(silent, "output_speech_to_text", %{"provider" => "morse", "model" => "morse"})
 
-      assert {:ok, %{status: :created, revision: 1, validation_errors: [], published: true}} =
+      assert {:ok, %{revision: 1, published: true}} =
                CallSpecTemplates.install(
                  author,
                  tenant,
@@ -237,51 +219,6 @@ defmodule Vxpipe.Calls.CallSpecTemplatesTest do
                )
     end
 
-    test "never replaces a tenant's later revision, even an invalid one", context do
-      %{options: options, tenant: tenant, author: author} = context
-
-      assert {:ok, %{call_spec_id: id}} =
-               CallSpecTemplates.install(
-                 author,
-                 tenant,
-                 "dental-after-hours",
-                 @cascade,
-                 Keyword.put(options, :publish, true)
-               )
-
-      {:ok, rendered} = CallSpecTemplates.render("dental-after-hours", @cascade)
-
-      edited =
-        put_in(rendered, ["defaults", "capabilities"], %{
-          "speech_to_speech" => %{
-            "provider" => "morse",
-            "model" => "morse",
-            "options" => %{"output_transcript" => false}
-          }
-        })
-
-      assert {:ok, %{revision: 2, validation_errors: [_ | _]}} =
-               Vxpipe.Calls.CallSpecAuthoring.save(
-                 author,
-                 tenant,
-                 edited,
-                 Keyword.put(options, :call_spec_id, id)
-               )
-
-      changed = put_in(@cascade, ["model_inference", "model"], "other-fixture")
-
-      assert {:error, :call_spec_template_conflict} =
-               CallSpecTemplates.install(
-                 author,
-                 tenant,
-                 "dental-after-hours",
-                 changed,
-                 Keyword.put(options, :publish, true)
-               )
-
-      assert {:error, :not_found} = Vxpipe.Calls.CallSpecs.fetch(tenant, id, 3, options)
-    end
-
     test "ignores a caller-supplied call spec ID", context do
       %{options: options, tenant: tenant, author: author} = context
       other = Map.put(@cascade, "name", "Unrelated spec")
@@ -289,7 +226,7 @@ defmodule Vxpipe.Calls.CallSpecTemplatesTest do
       assert {:ok, %{call_spec_id: unrelated}} =
                CallSpecTemplates.install(author, tenant, "dental-after-hours", other, options)
 
-      assert {:ok, %{status: :created, revision: 1, call_spec_id: id}} =
+      assert {:ok, %{revision: 1, call_spec_id: id}} =
                CallSpecTemplates.install(
                  author,
                  tenant,

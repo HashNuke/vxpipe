@@ -46,26 +46,19 @@ exist, happen when the rendered source is saved.
 {:ok, templates} = Vxpipe.Calls.list_call_spec_templates()
 {:ok, source} = Vxpipe.Calls.render_call_spec_template("dental-after-hours", inputs)
 
-{:ok, %{status: :created, call_spec_id: id, revision: 1, published: false}} =
+{:ok, %{call_spec_id: id, revision: 1, published: false}} =
   Vxpipe.Calls.install_call_spec_template(authority, tenant_key, "dental-after-hours", inputs)
 ```
 
 Installation requires call spec write authority for the tenant, the same authority as
-ordinary authoring, and stores the source through `CallSpecAuthoring.save/4`. The
-rendered `name` identifies an installation within the tenant:
+ordinary authoring, and stores the source through `CallSpecAuthoring.save/4`. Every
+install creates a new call spec at revision 1, even for identical inputs, so a sample
+can be installed any number of times. A `call_spec_id` option is ignored, because it
+would append to an existing spec instead.
 
-- No spec with that original name: the rendering is saved as revision 1 (`:created`).
-- A spec whose latest source is identical: it is returned unchanged (`:unchanged`).
-- A different source, or an ambiguous name: `{:error, :call_spec_template_conflict}`.
-  Installations never overwrite. Choose a different `name` input for another
-  variant, for example one per provider combination.
-
-Before saving a new spec, the installer runs the same tenant-aware checks that `save`
-runs, such as plan compilation, credentials and services. A rendering that fails them
-returns `{:error, {:call_spec_template_invalid, errors}}` and stores nothing, so fixing
-the inputs and installing again works without renaming. The result still includes the
-stored revision's `validation_errors`, because an unchanged spec may have become invalid
-after it was installed. A `call_spec_id` option is ignored, because installations find their spec by name.
+Before saving, the installer runs the same tenant-aware checks that `save` runs, such
+as plan compilation, credentials and services. A rendering that fails them returns
+`{:error, {:call_spec_template_invalid, errors}}` and stores nothing.
 
 Pass `publish: true` to also publish the installed revision. Publishing applies the
 normal publication checks, such as phone number ownership and outbound caller ID.
@@ -85,8 +78,9 @@ is not silently left out.
 - **JSON Schema inputs** were chosen over a custom input format. JSV already validates
   call variable schemas here, other clients can validate inputs the same way, and a
   future UI can generate a form from the schema.
-- **Name-keyed, non-overwriting installs** follow the existing demo sample installer.
-  Re-running an install is safe, and edits made in a tenant are never replaced silently.
+- **Always-create installs** were chosen over name-keyed idempotent installs. Samples
+  are for experimenting, so installing one again should give a fresh spec to change,
+  not reuse or refuse the earlier one. Existing specs are never modified.
 
 ## Verification
 
@@ -102,8 +96,8 @@ following:
 - Unknown IDs and path traversal are reported as not found.
 - Templates with unescaped output or forbidden tags fail to load, and undefined
   variables fail to render.
-- Install authorization, idempotent reinstalls, publication and conflicts are checked.
-- A rendering that fails tenant validation stores nothing, a tenant's later revision
-  (even an invalid one) is never replaced, and a supplied `call_spec_id` is ignored.
+- Install authorization, a new spec per install, and publication are checked.
+- A rendering that fails tenant validation stores nothing, and a supplied
+  `call_spec_id` is ignored.
 - Escape checks inside `for`, `if`, `unless`, `case` and `capture` blocks, and a filter
   after `json`, are tested.
