@@ -1,5 +1,5 @@
 defmodule Vxpipe.Gateway.MCP.AccountTools do
-  @moduledoc "Platform-key MCP account operations over shared Identity workflows."
+  @moduledoc "MCP account operations over shared Identity workflows."
 
   alias Vxpipe.Gateway.{AccountErrors, AccountJSON, AccountManagement}
 
@@ -66,12 +66,14 @@ defmodule Vxpipe.Gateway.MCP.AccountTools do
          end)
 
   def names, do: Enum.map(@tools, & &1.name)
-  def list(actor), do: if(AccountManagement.authorize_machine(actor) == :ok, do: @tools, else: [])
+
+  def list(actor),
+    do: Enum.filter(@tools, &(AccountManagement.authorize_tools(actor, action(&1.name)) == :ok))
 
   def authorize(actor, name, arguments) when is_map(arguments) do
     with %{inputSchema: schema} <- Enum.find(@tools, &(&1.name == name)),
          {:ok, validated} <- ExMCP.Server.Tools.Helpers.validate_arguments(arguments, schema) do
-      case AccountManagement.authorize_machine(actor) do
+      case AccountManagement.authorize_tools(actor, action(name)) do
         :ok -> {:ok, validated}
         {:error, _reason} -> {:error, :forbidden}
       end
@@ -117,4 +119,7 @@ defmodule Vxpipe.Gateway.MCP.AccountTools do
     {_status, projected} = AccountErrors.response(reason)
     projected
   end
+
+  defp action(name) when name in ["list_users", "list_role_options"], do: :read
+  defp action(_name), do: :write
 end

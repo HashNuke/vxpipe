@@ -53,3 +53,22 @@
 - Dev/test migrations and root format, compile warnings-as-errors, strict Credo
   and unused dependency checks passed. Full umbrella tests are still pending for
   the completed integration; focused regression evidence is recorded above.
+
+## Delegated authority and tool policy
+
+- Extracted common principal construction from Sessions, retaining browser behavior
+  and adding explicit OAuth user/grant provenance. Consent snapshots carry version
+  checks and a JSON-safe authority ceiling. Account stamping reserves grant fields.
+- Kept current and approved tenant contexts separate. A merged assignment map can
+  leak authority when different actions combine all-tenant and assigned scopes.
+  Directory/discovery checks now apply the same per-action intersection.
+- Extended existing MCP tools to real user permissions, separating reads/writes
+  while preserving key paths and schemas. Transactional OAuth account writes still
+  fail closed pending their persistence integration.
+- Tests were red before implementation; final Identity80, Calls30 and Gateway22
+  checks pass. Initial tenant test fixtures accidentally had 17-character keys;
+  corrected to the required16 before green. Independent code review found no
+  blockers. No live providers or Lean work.
+- Boruta dependency resolution in the umbrella added12 packages and changed no
+  existing locked versions. Dependency and token-store work is a separate pending
+  checkpoint; no OAuth route is exposed by this authority prerequisite.

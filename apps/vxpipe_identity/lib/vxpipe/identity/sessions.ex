@@ -1,7 +1,7 @@
 defmodule Vxpipe.Identity.Sessions do
   @moduledoc "Database-backed opaque sessions with 12-hour absolute expiry."
 
-  alias Vxpipe.Identity.{Email, Permission, RateLimit, Tokens}
+  alias Vxpipe.Identity.{Email, RateLimit, Tokens}
 
   @spec login(map(), String.t(), String.t(), String.t()) ::
           {:ok, %{token: String.t(), session: map(), user: map()}} | {:error, term()}
@@ -105,7 +105,7 @@ defmodule Vxpipe.Identity.Sessions do
          {:ok, user} <- users.fetch_by_public_id(session.user_public_id),
          :ok <- check_enabled(user),
          {:ok, role} <- roles.fetch(user.role_public_id),
-         {:ok, principal} <- Vxpipe.Identity.Principal.new(principal_attrs(user, role, session)) do
+         {:ok, principal} <- Vxpipe.Identity.Principal.for_session(user, role, session) do
       {:ok, principal}
     end
   end
@@ -159,67 +159,4 @@ defmodule Vxpipe.Identity.Sessions do
       _ -> "invalid"
     end
   end
-
-  defp principal_attrs(user, role, session) do
-    %{
-      user_public_id: user.public_id,
-      session_public_id: session.public_id,
-      account_kind: role_kind(role),
-      grants: grants_for(role),
-      assigned_tenants: Map.get(user, :memberships, %{}),
-      all_tenant_actions: all_tenant_actions(role)
-    }
-  end
-
-  defp role_kind(%{kind: kind}) when kind in [:member, :admin, :superadmin], do: kind
-  defp role_kind(_), do: :member
-
-  defp grants_for(%{kind: kind}) when kind in [:superadmin, :admin] do
-    Permission.builtin_grants(kind)
-  end
-
-  defp grants_for(%{grants: grants}) when is_list(grants) do
-    grants
-    |> Enum.map(&grant_permission/1)
-    |> Enum.reject(&is_nil/1)
-    |> MapSet.new()
-  end
-
-  defp grants_for(_), do: MapSet.new()
-
-  defp grant_permission(%{permission: permission}) when is_binary(permission), do: permission
-  defp grant_permission(%{"permission" => permission}) when is_binary(permission), do: permission
-  defp grant_permission(_), do: nil
-
-  defp operational_all_tenant do
-    [
-      "calls.read",
-      "calls.write",
-      "call_specs.read",
-      "call_specs.write",
-      "tenant_services.read",
-      "tenant_services.write",
-      "tenant_api_keys.write",
-      "access_keys.read",
-      "access_keys.write"
-    ]
-  end
-
-  defp all_tenant_actions(%{kind: kind}) when kind in [:superadmin, :admin] do
-    MapSet.new(operational_all_tenant())
-  end
-
-  defp all_tenant_actions(%{grants: grants}) when is_list(grants) do
-    grants
-    |> Enum.filter(&all_tenant_grant?/1)
-    |> Enum.map(&grant_permission/1)
-    |> Enum.reject(&is_nil/1)
-    |> MapSet.new()
-  end
-
-  defp all_tenant_actions(_), do: MapSet.new()
-
-  defp all_tenant_grant?(%{scope: :all_tenants}), do: true
-  defp all_tenant_grant?(%{"scope" => "all_tenants"}), do: true
-  defp all_tenant_grant?(_), do: false
 end

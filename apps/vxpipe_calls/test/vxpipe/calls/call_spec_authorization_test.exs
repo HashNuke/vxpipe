@@ -87,6 +87,8 @@ defmodule Vxpipe.Calls.CallSpecAuthorizationTest do
                @tenant
              )
 
-    assert {:error, :authoring_authority_required} = Calls.authorize_call_specs(writer, :read)
+    assert :ok = Calls.authorize_call_specs(writer, :read)
+    assert :ok = Calls.authorize_call_specs(reader, :read)
+    assert {:error, :forbidden} = Calls.authorize_call_specs(reader, :write)
   end
 end

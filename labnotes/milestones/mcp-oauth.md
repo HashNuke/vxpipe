@@ -65,13 +65,13 @@ without exposing OAuth routes yet.
 Runnable slice: a locally issued OAuth token authenticates as an explicitly
 delegated user and exercises shared operations directly.
 
-- [ ] Red-test browser/OAuth mutually exclusive Principal provenance and stable
+- [x] Red-test browser/OAuth mutually exclusive Principal provenance and stable
   grant identity; extract common trusted principal construction.
-- [ ] Intersect approved/current authority; apply tenant ceiling before built-in
+- [x] Intersect approved/current authority; apply tenant ceiling before built-in
   directory shortcuts. Check read-only, member, Admin and Superadmin behavior.
 - [ ] Revalidate and audit OAuth account writes inside their transaction; reserve
   grant attribution fields against injection and preserve account hierarchy.
-- [ ] Extend per-tool discovery/invocation to real user read/write permissions;
+- [x] Extend per-tool discovery/invocation to real user read/write permissions;
   preserve all 17 schemas/results and shared domain operations.
 - [ ] Verify HTTP API-key and browser regressions; independently review and commit.
 
@@ -151,3 +151,24 @@ those before public HTTP exposure. Research is not implementation acceptance.
   strict Credo and unused dependency check passed. Full umbrella tests remain a
   final acceptance gate; this subcheckpoint ran the focused Identity/Persistence
   regression suites above.
+
+### Delegated authority prerequisite
+
+- Principal construction now distinguishes browser sessions from OAuth grants;
+  common trusted user/role projection is shared. Consent snapshots carry user
+  version and role identity/revision. Pure delegation rejects drift and intersects
+  current and approved grants without fabricating a browser session.
+- Tenant authorization checks current and approved contexts independently per
+  action. Directory scope checks delegation before built-in account shortcuts;
+  approved all-tenant actions still cover future tenants. This avoids leaking
+  access by merging unrelated all-tenant and assigned-tenant grants.
+- MCP discovery/invocation now accepts real user read/write permissions. Account
+  provenance preserves user plus grant ID. Transactional OAuth account mutations
+  remain denied until checkpoint 3's persistence integration is complete.
+- Red/green evidence: five missing-constructor/delegation failures, one attribution
+  failure, four tenant-scope failures, and four user-discovery failures preceded
+  implementation. Final Identity suite: 80 passed; focused Calls: 30 passed;
+  Gateway MCP/account regression: 22 passed. Independent review found no blockers.
+- This enabling work was implemented alongside token persistence because issuance
+  needs the shared principal/snapshot constructor; neither checkpoint 2 nor 3 is
+  marked complete before their remaining persistence and protocol acceptance.

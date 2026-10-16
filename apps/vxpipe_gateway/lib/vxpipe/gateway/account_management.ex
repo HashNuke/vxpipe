@@ -3,7 +3,24 @@ defmodule Vxpipe.Gateway.AccountManagement do
 
   alias Vxpipe.Calls.InstallationOperator
   alias Vxpipe.Identity
-  alias Vxpipe.Identity.{AccountInput, Accounts, ApiKeyActor, Principal, Roles}
+
+  alias Vxpipe.Identity.{
+    AccountAuthority,
+    AccountInput,
+    Accounts,
+    ApiKeyActor,
+    Authorization,
+    Principal,
+    Roles
+  }
+
+  @doc "Checks account tool availability; account operations still authorize the target category."
+  def authorize_tools(%Principal{} = actor, action) when action in [:read, :write] do
+    with :ok <- AccountAuthority.require_identity(actor), do: authorize_action(actor, action)
+  end
+
+  def authorize_tools(actor, action) when action in [:read, :write], do: authorize_machine(actor)
+  def authorize_tools(_actor, _action), do: {:error, :forbidden}
 
   def authorize_machine(%InstallationOperator{} = actor) do
     with {:ok, %ApiKeyActor{}} <- identity_actor(actor), do: :ok
@@ -72,6 +89,19 @@ defmodule Vxpipe.Gateway.AccountManagement do
        do: ApiKeyActor.new(id)
 
   defp identity_actor(_actor), do: {:error, :forbidden}
+
+  defp authorize_action(actor, :read), do: AccountAuthority.require_read(actor)
+
+  defp authorize_action(actor, :write) do
+    grants = AccountAuthority.grants(actor)
+
+    if Enum.any?(
+         [:member, :admin, :superadmin],
+         &(Authorization.require_account_create(grants, &1) == :ok)
+       ),
+       do: :ok,
+       else: {:error, :forbidden}
+  end
 
   defp dependencies(options) do
     case Keyword.fetch(options, :identity_dependencies) do

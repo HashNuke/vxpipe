@@ -8,6 +8,7 @@ defmodule Vxpipe.Calls.UserAuthorization do
   """
 
   alias Vxpipe.Identity.Authorization
+  alias Vxpipe.Identity.Permission
 
   @tenant_actions [
     "calls.read",
@@ -44,13 +45,34 @@ defmodule Vxpipe.Calls.UserAuthorization do
   def context(principal) when is_map(principal) do
     %{
       assigned_tenants: Map.get(principal, :assigned_tenants) || %{},
-      all_tenant_actions: Map.get(principal, :all_tenant_actions) || MapSet.new()
+      all_tenant_actions: Map.get(principal, :all_tenant_actions) || MapSet.new(),
+      delegation: Map.get(principal, :delegation)
     }
+  end
+
+  @doc "Checks whether an action is available in any current and approved tenant scope."
+  def authorize_any_tenant(principal, action) do
+    with {:ok, entry} <- Permission.fetch(action),
+         true <- :assigned_tenants in entry.scopes or :all_tenants in entry.scopes,
+         true <- MapSet.member?(principal.grants, action) do
+      if MapSet.member?(effective_all_tenant_actions(principal), action) or
+           Enum.any?(
+             candidate_tenant_keys(principal),
+             &(authorize_tenant(principal, action, &1) == :ok)
+           ),
+         do: :ok,
+         else: {:error, :forbidden}
+    else
+      _denied -> {:error, :forbidden}
+    end
   end
 
   @spec visible_tenant_scope(map()) :: :all | {:assigned, [String.t()]}
   def visible_tenant_scope(principal) when is_map(principal) do
     cond do
+      is_map(Map.get(principal, :delegation)) ->
+        delegated_tenant_scope(principal)
+
       Map.get(principal, :account_kind) in [:superadmin, :admin] ->
         :all
 
@@ -66,6 +88,43 @@ defmodule Vxpipe.Calls.UserAuthorization do
           {:error, :forbidden} -> {:assigned, []}
         end
     end
+  end
+
+  defp delegated_tenant_scope(principal) do
+    if authorize_installation(principal, "tenants.write") == :ok or
+         Enum.any?(@tenant_actions, fn action ->
+           MapSet.member?(principal.grants, action) and
+             MapSet.member?(effective_all_tenant_actions(principal), action)
+         end) do
+      :all
+    else
+      keys =
+        Enum.filter(candidate_tenant_keys(principal), fn key ->
+          Enum.any?(@tenant_actions, &(authorize_tenant(principal, &1, key) == :ok))
+        end)
+
+      {:assigned, keys}
+    end
+  end
+
+  defp effective_all_tenant_actions(principal) do
+    current = Map.get(principal, :all_tenant_actions) || MapSet.new()
+
+    case Map.get(principal, :delegation) do
+      %{all_tenant_actions: approved} -> MapSet.intersection(current, approved)
+      nil -> current
+      _invalid -> MapSet.new()
+    end
+  end
+
+  defp candidate_tenant_keys(principal) do
+    approved =
+      case Map.get(principal, :delegation) do
+        %{assigned_tenants: assigned} -> Map.keys(assigned)
+        _other -> []
+      end
+
+    (assigned_keys(principal) ++ approved) |> Enum.uniq() |> Enum.sort()
   end
 
   @spec platform_authoring_allowed?(map()) :: boolean()

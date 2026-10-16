@@ -343,7 +343,8 @@ defmodule Vxpipe.Identity.Accounts do
           Map.take(audit_info, [
             :actor_user_public_id,
             :actor_session_public_id,
-            :actor_api_key_public_id
+            :actor_api_key_public_id,
+            :actor_oauth_grant_public_id
           ])
 
         event = Map.drop(audit_info, [:audit, :actor_session_public_id])

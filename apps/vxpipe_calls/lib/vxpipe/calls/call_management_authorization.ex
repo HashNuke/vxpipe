@@ -6,6 +6,9 @@ defmodule Vxpipe.Calls.CallManagementAuthorization do
 
   def authorize(%Principal{tenant_key: tenant} = actor), do: authorize(actor, tenant)
 
+  def authorize(%UserPrincipal{} = actor),
+    do: UserAuthorization.authorize_any_tenant(actor, "calls.write")
+
   def authorize(%InstallationOperator{
         grant: :installation_operator,
         credential_kind: :platform_api_key

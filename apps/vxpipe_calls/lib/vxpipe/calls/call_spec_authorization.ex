@@ -4,9 +4,13 @@ defmodule Vxpipe.Calls.CallSpecAuthorization do
   alias Vxpipe.Calls.{InstallationOperator, Principal, ProviderAuth, UserAuthorization}
   alias Vxpipe.Identity.Principal, as: UserPrincipal
 
-  @doc "Checks tool discovery for verified machine actors; it does not authorize a selected resource."
+  @doc "Checks tool discovery; selected resources still require their own tenant authorization."
   def authorize(%Principal{tenant_key: tenant} = principal, action),
     do: authorize(principal, action, tenant)
+
+  def authorize(%UserPrincipal{} = principal, action) when action in [:read, :write] do
+    UserAuthorization.authorize_any_tenant(principal, permission(action))
+  end
 
   def authorize(
         %InstallationOperator{grant: :installation_operator, credential_kind: :platform_api_key},
@@ -27,8 +31,7 @@ defmodule Vxpipe.Calls.CallSpecAuthorization do
     do: :ok
 
   defp tenant_authority(%UserPrincipal{} = principal, action, tenant) do
-    permission = if action == :read, do: "call_specs.read", else: "call_specs.write"
-    UserAuthorization.authorize_tenant(principal, permission, tenant)
+    UserAuthorization.authorize_tenant(principal, permission(action), tenant)
   end
 
   defp tenant_authority(
@@ -41,4 +44,7 @@ defmodule Vxpipe.Calls.CallSpecAuthorization do
 
   defp tenant_authority(%Principal{}, _action, _tenant), do: {:error, :tenant_access_forbidden}
   defp tenant_authority(_authority, _action, _tenant), do: {:error, :authoring_authority_required}
+
+  defp permission(:read), do: "call_specs.read"
+  defp permission(:write), do: "call_specs.write"
 end
