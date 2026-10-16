@@ -127,6 +127,16 @@ defmodule Vxpipe.Calls do
   def install_demo_samples(actor, tenant_key, options \\ []),
     do: Vxpipe.Calls.DemoSamples.install(actor, tenant_key, options)
 
+  def list_call_spec_templates(options \\ []),
+    do: Vxpipe.Calls.CallSpecTemplates.list(options)
+
+  def render_call_spec_template(template_id, inputs, options \\ []),
+    do: Vxpipe.Calls.CallSpecTemplates.render(template_id, inputs, options)
+
+  def install_call_spec_template(authority, tenant_key, template_id, inputs, options \\ []),
+    do:
+      Vxpipe.Calls.CallSpecTemplates.install(authority, tenant_key, template_id, inputs, options)
+
   def ensure_demo_tenant(authority, options \\ []),
     do: DemoSetup.ensure_tenant(authority, options)
 

@@ -189,6 +189,16 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
          do: fetch_revision(agent, tenant_key, call_spec_id, revision)
   end
 
+  def find_by_original_name(agent, tenant_key, name) do
+    Agent.get(agent, fn state ->
+      ids =
+        for {{^tenant_key, id}, %{1 => %{source: %{"name" => ^name}}}} <- state.call_specs,
+            do: id
+
+      {:ok, ids |> Enum.sort_by(&String.to_integer/1) |> Enum.take(2)}
+    end)
+  end
+
   def fetch_call_by_key(agent, tenant, key), do: fetch_outgoing_by_key(agent, tenant, key)
   def claim_call(agent, call, authorize), do: claim_outgoing_call(agent, call, authorize)
 

@@ -10,6 +10,12 @@ defmodule Vxpipe.Calls.CallSpecAuthoring do
     end
   end
 
+  def validate(authority, tenant_key, source, options) do
+    with {:ok, options} <- authorize(authority, tenant_key, options) do
+      CallSpecs.validate(tenant_key, source, options)
+    end
+  end
+
   def publish(authority, tenant_key, id, revision, options) do
     with {:ok, options} <- authorize(authority, tenant_key, options) do
       CallSpecs.publish(tenant_key, id, revision, options)

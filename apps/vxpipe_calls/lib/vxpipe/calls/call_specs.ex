@@ -22,6 +22,17 @@ defmodule Vxpipe.Calls.CallSpecs do
 
   @maximum_attempts 4
 
+  @doc "Runs the save-time checks without storing; returns the validation errors a revision would carry."
+  @spec validate(String.t(), map(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def validate(tenant_key, source, options \\ []) when is_map(source) do
+    with :ok <- public_source(source),
+         {:ok, source} <- json_safe(source),
+         {:ok, call_spec} <- CallSpec.new(source, resource_id: "validation", revision: 1),
+         :ok <- CallSpecCredentials.check(call_spec, tenant_key, options) do
+      {:ok, validate_support(call_spec, tenant_key, options)}
+    end
+  end
+
   @spec save(String.t(), map(), keyword()) :: {:ok, CallSpecRevision.t()} | {:error, term()}
   def save(tenant_key, source, options \\ [])
 

@@ -150,6 +150,169 @@ defmodule Vxpipe.Calls.CallSpecTemplatesTest do
     end
   end
 
+  describe "install" do
+    setup do
+      alias Vxpipe.Calls.{Administration, Principal, TestMemoryRepository}
+      repository = start_supervised!(TestMemoryRepository)
+
+      options = [
+        credential_repository: {TestMemoryRepository, repository},
+        call_spec_repository: {TestMemoryRepository, repository},
+        registries: %{host_tools: %{}}
+      ]
+
+      {:ok, tenant, _key} = Administration.bootstrap_tenant("Templates", [:admin], options)
+      author = %Principal{tenant_key: tenant.key, api_key_id: "key", scopes: MapSet.new([:admin])}
+      %{options: options, tenant: tenant.key, author: author}
+    end
+
+    test "saves a draft, then converges on repeat installs of the same rendering", context do
+      %{options: options, tenant: tenant, author: author} = context
+
+      assert {:ok, %{status: :created, call_spec_id: id, revision: 1, published: false}} =
+               CallSpecTemplates.install(author, tenant, "dental-after-hours", @cascade, options)
+
+      assert {:ok, %{status: :unchanged, call_spec_id: ^id, revision: 1, published: false}} =
+               CallSpecTemplates.install(author, tenant, "dental-after-hours", @cascade, options)
+
+      assert {:ok, %{status: :unchanged, call_spec_id: ^id, revision: 1, published: true}} =
+               CallSpecTemplates.install(
+                 author,
+                 tenant,
+                 "dental-after-hours",
+                 @cascade,
+                 Keyword.put(options, :publish, true)
+               )
+
+      assert {:ok, stored} = Vxpipe.Calls.CallSpecs.fetch(tenant, id, 1, options)
+      assert {:ok, rendered} = CallSpecTemplates.render("dental-after-hours", @cascade)
+      assert stored.source == rendered
+    end
+
+    test "never overwrites a same-named call spec with a different rendering", context do
+      %{options: options, tenant: tenant, author: author} = context
+      changed = put_in(@cascade, ["model_inference", "model"], "other-fixture")
+
+      assert {:ok, %{status: :created}} =
+               CallSpecTemplates.install(author, tenant, "dental-after-hours", @cascade, options)
+
+      assert {:error, :call_spec_template_conflict} =
+               CallSpecTemplates.install(author, tenant, "dental-after-hours", changed, options)
+
+      assert {:ok, %{status: :created, revision: 1}} =
+               CallSpecTemplates.install(
+                 author,
+                 tenant,
+                 "dental-after-hours",
+                 Map.put(changed, "name", "Dental line (other model)"),
+                 options
+               )
+    end
+
+    test "stores nothing when the rendering fails tenant validation", context do
+      %{options: options, tenant: tenant, author: author} = context
+
+      silent = %{
+        "voice_pipeline" => "speech_to_speech",
+        "speech_to_speech" => %{
+          "provider" => "morse",
+          "model" => "morse",
+          "options" => %{"output_transcript" => false}
+        }
+      }
+
+      assert {:error, {:call_spec_template_invalid, [_ | _]}} =
+               CallSpecTemplates.install(author, tenant, "dental-after-hours", silent, options)
+
+      corrected =
+        Map.put(silent, "output_speech_to_text", %{"provider" => "morse", "model" => "morse"})
+
+      assert {:ok, %{status: :created, revision: 1, validation_errors: [], published: true}} =
+               CallSpecTemplates.install(
+                 author,
+                 tenant,
+                 "dental-after-hours",
+                 corrected,
+                 Keyword.put(options, :publish, true)
+               )
+    end
+
+    test "never replaces a tenant's later revision, even an invalid one", context do
+      %{options: options, tenant: tenant, author: author} = context
+
+      assert {:ok, %{call_spec_id: id}} =
+               CallSpecTemplates.install(
+                 author,
+                 tenant,
+                 "dental-after-hours",
+                 @cascade,
+                 Keyword.put(options, :publish, true)
+               )
+
+      {:ok, rendered} = CallSpecTemplates.render("dental-after-hours", @cascade)
+
+      edited =
+        put_in(rendered, ["defaults", "capabilities"], %{
+          "speech_to_speech" => %{
+            "provider" => "morse",
+            "model" => "morse",
+            "options" => %{"output_transcript" => false}
+          }
+        })
+
+      assert {:ok, %{revision: 2, validation_errors: [_ | _]}} =
+               Vxpipe.Calls.CallSpecAuthoring.save(
+                 author,
+                 tenant,
+                 edited,
+                 Keyword.put(options, :call_spec_id, id)
+               )
+
+      changed = put_in(@cascade, ["model_inference", "model"], "other-fixture")
+
+      assert {:error, :call_spec_template_conflict} =
+               CallSpecTemplates.install(
+                 author,
+                 tenant,
+                 "dental-after-hours",
+                 changed,
+                 Keyword.put(options, :publish, true)
+               )
+
+      assert {:error, :not_found} = Vxpipe.Calls.CallSpecs.fetch(tenant, id, 3, options)
+    end
+
+    test "ignores a caller-supplied call spec ID", context do
+      %{options: options, tenant: tenant, author: author} = context
+      other = Map.put(@cascade, "name", "Unrelated spec")
+
+      assert {:ok, %{call_spec_id: unrelated}} =
+               CallSpecTemplates.install(author, tenant, "dental-after-hours", other, options)
+
+      assert {:ok, %{status: :created, revision: 1, call_spec_id: id}} =
+               CallSpecTemplates.install(
+                 author,
+                 tenant,
+                 "dental-after-hours",
+                 @cascade,
+                 Keyword.put(options, :call_spec_id, unrelated)
+               )
+
+      assert id != unrelated
+    end
+
+    test "requires tenant authoring authority before rendering or storage", context do
+      %{options: options, tenant: tenant, author: author} = context
+      calls_only = %{author | scopes: MapSet.new([:calls])}
+
+      assert {:error, :insufficient_scope} =
+               CallSpecTemplates.install(calls_only, tenant, "missing", %{}, options)
+
+      assert {:error, :authoring_authority_required} =
+               CallSpecTemplates.install(nil, tenant, "dental-after-hours", @cascade, options)
+    end
+  end
+
   test "unknown template IDs are not found" do
     assert {:error, :call_spec_template_not_found} = CallSpecTemplates.render("missing", %{})
     assert {:error, :call_spec_template_not_found} = CallSpecTemplates.render("../x", %{})
