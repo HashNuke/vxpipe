@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "../Button";
 import { PageHeader } from "../PageHeader";
 import { FormField, FormMessage } from "./FormField";
@@ -10,9 +10,11 @@ export function AccountPage({
   user,
   role,
   onSave,
+  connectedClients,
 }: {
   user: User;
   role: Role;
+  connectedClients?: ReactNode;
   onSave: (
     email: string,
     currentPassword: string,
@@ -111,6 +113,7 @@ export function AccountPage({
           {pending ? "Saving…" : "Save changes"}
         </Button>
       </form>
+      {connectedClients}
     </main>
   );
 }

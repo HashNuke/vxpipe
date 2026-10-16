@@ -95,11 +95,13 @@ defmodule Vxpipe.Console.UserAuthController do
 
   defp started(conn, token) do
     return_path = get_session(conn, "vxpipe_return_path")
+    oauth_binding = Vxpipe.Console.OAuth.Browser.browser_binding(conn)
 
     conn
     |> clear_session()
     |> configure_session(renew: true)
     |> UserSession.put(token)
+    |> Vxpipe.Console.OAuth.Browser.restore_binding(oauth_binding)
     |> put_session("vxpipe_return_path", return_path)
     |> json(%{ok: true})
   end

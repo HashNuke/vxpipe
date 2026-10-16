@@ -689,6 +689,25 @@ these routes. Legacy aliases remain for compatibility; new clients should use
 `/api/api-keys`.
 
 
+## Connected MCP clients (browser sessions)
+
+These self-service endpoints require the current browser login session. Explicit
+Authorization headers are rejected, including OAuth tokens and API keys; revocation
+requires CSRF. They are not MCP tools and cannot list or revoke another user's grants.
+
+- `GET /api/account/connections` returns `{connections:[{public_id,client_name,
+  resource,inserted_at,expires_at}]}`. Dates are ISO8601 timestamps. The bounded
+  list contains at most100 current unrevoked/unexpired grants, ordered newest first;
+  this matches the per-user active grant quota and needs no pagination.
+- `DELETE /api/account/connections/:id` revokes an owned grant and returns204.
+  Unknown or unowned IDs return404 `not_found`; storage failures return503
+  `unavailable`. Revocation immediately prevents subsequent MCP requests/refresh.
+
+Only safe metadata is returned. No authorization codes, access tokens, refresh
+tokens or credential digests appear in these responses. Browser logout leaves
+independently approved connections intact; role/membership/password/status changes
+invalidate their authority. See [MCP OAuth](mcp-oauth.md) for consent and expiry.
+
 ## Services and provider credentials (browser sessions)
 
 These Console-owned endpoints accept login sessions only. Explicit Authorization

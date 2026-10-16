@@ -13,6 +13,13 @@ defmodule Vxpipe.Console.Router do
     plug :put_secure_browser_headers
   end
 
+  pipeline :oauth_browser do
+    plug Vxpipe.Console.OAuth.Browser
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+  end
+
   pipeline :operator_pages do
     plug Vxpipe.Console.PrivateNoStore
   end
@@ -76,6 +83,27 @@ defmodule Vxpipe.Console.Router do
     plug :put_secure_browser_headers
     plug Vxpipe.Console.RequireOperator
     plug Vxpipe.Console.RequireTenant
+  end
+
+  scope "/oauth" do
+    pipe_through :oauth_browser
+    get "/authorize", Vxpipe.Console.OAuth.AuthorizationController, :start, log: false
+  end
+
+  scope "/oauth" do
+    pipe_through [:oauth_browser, :user_pages]
+    get "/authorize/:id", Vxpipe.Console.OAuth.AuthorizationController, :show, log: false
+    post "/authorize/:id", Vxpipe.Console.OAuth.AuthorizationController, :decide, log: false
+  end
+
+  scope "/api/account" do
+    pipe_through :session_product_api
+
+    get "/connections", Vxpipe.Console.OAuth.ConnectionsController, :index,
+      metadata: %{console_product_api: true}
+
+    delete "/connections/:id", Vxpipe.Console.OAuth.ConnectionsController, :delete,
+      metadata: %{console_product_api: true}
   end
 
   scope "/admin/samples" do

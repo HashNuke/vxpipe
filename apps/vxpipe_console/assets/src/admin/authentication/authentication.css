@@ -605,3 +605,59 @@
 .access-role-delete > .access-actions {
   padding-top: 0;
 }
+
+/* Consent extends the existing authentication layout. */
+.oauth-consent {
+  width: min(100%, 620px);
+}
+.oauth-destinations {
+  margin: 24px 0;
+  padding: 16px 0;
+  border-block: 1px solid var(--admin-line);
+}
+.oauth-destinations dt {
+  font-weight: 600;
+  margin-top: 12px;
+}
+.oauth-destinations dt:first-child { margin-top: 0; }
+.oauth-destinations dd {
+  margin: 4px 0 0;
+  color: var(--admin-muted);
+  overflow-wrap: anywhere;
+}
+.oauth-permissions {
+  padding-left: 20px;
+  margin: 12px 0 20px;
+  overflow-wrap: anywhere;
+}
+.oauth-permissions li { margin: 4px 0; }
+.oauth-consent button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 550;
+}
+.oauth-approve { background: var(--admin-blue); color: var(--admin-bg); }
+.oauth-deny { background: var(--admin-panel); color: var(--admin-ink); }
+.oauth-consent button:hover { filter: brightness(1.12); }
+.access-connections {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--admin-line);
+}
+.access-connection-list { list-style: none; padding: 0; margin: 16px 0 0; }
+.access-connection-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--admin-row-line);
+}
+.access-connection-list li > div { min-width: 0; flex: 1 1 260px; }
+.access-connection-list h3 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+.access-connection-list p { margin: 4px 0; }
+.access-connection-resource { overflow-wrap: anywhere; }

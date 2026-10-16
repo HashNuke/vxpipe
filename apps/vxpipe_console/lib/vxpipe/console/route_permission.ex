@@ -10,6 +10,9 @@ defmodule Vxpipe.Console.RoutePermission do
           | :unknown
 
   @spec for_request(String.t(), [String.t()]) :: requirement()
+  def for_request("GET", ["api", "account", "connections"]), do: :authenticated
+  def for_request("DELETE", ["api", "account", "connections", _id]), do: :authenticated
+
   def for_request("GET", ["api", "tenants", tenant, "calls" | _rest]),
     do: {:tenant, "calls.read", tenant}
 

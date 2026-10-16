@@ -74,7 +74,7 @@ delegated user and exercises shared operations directly.
   grant attribution fields against injection and preserve account hierarchy.
 - [x] Extend per-tool discovery/invocation to real user read/write permissions;
   preserve all 17 schemas/results and shared domain operations.
-- [ ] Verify HTTP API-key and browser regressions; independently review and commit.
+- [x] Verify HTTP API-key and browser regressions; independently review and commit.
 
 ## Checkpoint 4: discovery, login and consent (25%)
 
@@ -84,17 +84,17 @@ refreshes and revokes using HTTP, while MCP cutover remains gated.
 - [x] Red-test trusted issuer/resource and prefixed metadata construction;
   public discovery routes and bounded DCR/token/revoke routes.
 - [x] Rate-limit and bound records/requests; fail closed on storage/config errors.
-- [ ] Implement browser-bound expiring authorization transactions, login resume,
+- [x] Implement browser-bound expiring authorization transactions, login resume,
   CSRF-protected consent approval/denial and one-time completion. Approve/deny the
   current authority without a new permission editor; approved all-tenant grants
   include future tenants, finite assignments remain a snapshot. Reject/restart on
   user/version/role drift between rendering and approval, checked atomically.
-- [ ] Render concise consent with client/callback and authority; add connected
+- [x] Render concise consent with client/callback and authority; add connected
   clients and revoke action to Account using the existing login/session design.
-- [ ] Test malformed/duplicate params, unsafe redirects, forged/replayed consent,
+- [x] Test malformed/duplicate params, unsafe redirects, forged/replayed consent,
   changed account while consent is pending, untrusted host and no secret logging.
-- [ ] Inspect desktop/mobile rendered consent/account states with agent-browser.
-- [ ] Independently review, update evidence and commit.
+- [x] Inspect desktop/mobile rendered consent/account states with agent-browser.
+- [x] Independently review, update evidence and commit.
 
 ## Checkpoint 5: OAuth-only MCP cutover and acceptance (20%)
 
@@ -225,3 +225,31 @@ those before public HTTP exposure. Research is not implementation acceptance.
 - Safe own-client listing/revocation persistence is ready. HTTP browser routing,
   rendered consent/Account UI, login resume and final MCP cutover remain pending;
   checkpoint4 is not complete merely because its underlying storage exists.
+
+### Browser consent and connected clients
+
+- Console now starts authorization with bounded duplicate-safe parsing, resumes by
+  an opaque path after real login and preserves only the validated browser binding
+  across session renewal. Approval/denial requires CSRF, current browser identity,
+  matching binding and the persisted authority snapshot. Callback query/state is
+  preserved only for the validated registration.
+- Account lists safe metadata for its user's grants and provides session-only,
+  CSRF-protected revocation through the canonical product HTTP API. Existing role
+  and tenant permission checks remain authoritative.
+- Focused backend regressions:66 passed before the final native-form addition;
+  final OAuth endpoint11 passed. Frontend authentication51, TypeScript, scoped
+  ESLint and assets build passed. Independent Console/security and runtime reviews
+  found no remaining blockers after recorded fixes.
+- Actual Chrome at1280x900 and390x844 verified login/resume, consent, token exchange,
+  Account populated/empty views and revoking seven synthetic connections through
+  the UI. No horizontal overflow. All fixture writes rolled back afterward.
+- Browser verification caught a native-form behavior omitted by the scripted
+  client: no-referrer causes Origin:null. Reproduced403, then narrowly allowed it
+  only on consent POST with mandatory CSRF/session/binding validation. Regression
+  checks valid native form, missing CSRF, foreign origin and null-origin GET.
+  The reference client now sends the same header and all seven groups pass.
+- Independent screenshot/source reviewer disposition:ship, no material UI fixes.
+  Detector reported no findings. Keyboard/hover/error/loading states were source
+  reviewed rather than separately captured. Chrome required its no-sandbox launch
+  option in this environment. Browser consent expiry was not shortened for renders.
+- OAuth-only MCP runtime cutover and full umbrella acceptance remain checkpoint5.

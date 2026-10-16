@@ -77,6 +77,7 @@ import { CallSpecEditorRoute } from "./CallSpecEditorRoute";
 import { ScopedServicesApp } from "./ScopedServicesApp";
 import { parseBindingDirectory } from "./admin/serviceBindingsApi";
 import { AccessFrame } from "./admin/authentication/AccessFrame";
+import { ConnectedClients } from "./admin/authentication/ConnectedClients";
 import { AccountPage } from "./admin/authentication/AccountPage";
 import { AuthPage } from "./admin/authentication/AuthPage";
 import { AuthenticationApi, AuthenticationError, isForbidden, isSessionExpired } from "./admin/authentication/authenticationApi";
@@ -353,6 +354,7 @@ function AccountRoute(props: AppProps) {
           key={user.id}
           user={user}
           role={role}
+          connectedClients={<ConnectedClients api={api} onSessionExpired={onSessionExpired} />}
           onSave={async (email, currentPassword, newPassword, confirmation) => {
             try {
               await api.updateAccount(email, currentPassword, newPassword, confirmation);

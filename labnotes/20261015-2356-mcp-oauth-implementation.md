@@ -123,3 +123,25 @@
   command used umbrella paths; subsequent focused runs used the owning child.
 - Gateway OAuth13 and Console address5 tests passed; default-disabled wiring is
   separate from the pending browser controller and OAuth-only MCP runtime cutover.
+
+## Console consent and connected clients
+
+- Implemented safe opaque login resume, protected consent decisions and session-only
+  connected-client listing/revocation. Preserved existing Console styling and shared
+  account API conventions. Backend66 and frontend51 regressions, TypeScript, scoped
+  ESLint and assets build passed; independent source review found no blockers.
+- Actual Chrome exposed a native HTML form Origin:null under no-referrer, despite
+  the SDK's successful synthetic POST. Captured only safe request headers/status,
+  reproduced403 in a focused real-CSRF test, then allowed opaque Origin only on
+  consent POST through CSRF/session/binding validation. Final OAuth11 tests passed;
+  SDK repeats this header and all seven acceptance groups pass.
+- Rendered consent and populated/empty Account views at1280x900 and390x844. Actual
+  login, approval, code exchange and seven own-grant UI revocations succeeded; no
+  horizontal overflow. The disposable SQL sandbox fixture was stopped afterward.
+  Chrome needed no-sandbox because the local Linux sandbox was unavailable.
+- An early browser automation selector did not match; retried using rendered
+  accessibility refs. Another agent accidentally printed disposable synthetic
+  fixture credentials while inspecting its JSON; stopped/recreated that fixture.
+  No real credentials or fixture payloads were committed.
+- Independent visual reviewer returned ship at screenshot/source scope. Detector
+  found no issues. No new design system or permission editor was introduced.

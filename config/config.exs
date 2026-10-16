@@ -24,6 +24,8 @@ config :phoenix, :filter_parameters, [
   "secret",
   "token",
   "code",
+  "state",
+  "browser_binding",
   "values",
   "api_key",
   "account_sid"

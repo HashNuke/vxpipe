@@ -1,5 +1,13 @@
 import type { Grant, Membership, Role, Tenant, User } from "./types";
 
+export type ConnectedClient = {
+  public_id: string;
+  client_name: string;
+  resource: string;
+  inserted_at: string;
+  expires_at: string;
+};
+
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 type PaginatedUsers = {
   users: User[];
@@ -100,6 +108,14 @@ export class AuthenticationApi {
       );
     }
     return data as T;
+  }
+
+  connectedClients() {
+    return this.request<{ connections: ConnectedClient[] }>("/api/account/connections");
+  }
+
+  revokeConnectedClient(id: string) {
+    return this.request<void>(`/api/account/connections/${encodeURIComponent(id)}`, "DELETE");
   }
 
   async logout(): Promise<void> {
