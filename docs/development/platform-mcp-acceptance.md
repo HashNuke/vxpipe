@@ -1,7 +1,7 @@
 # Platform MCP server acceptance
 
 This opt-in runner exercises the production MCP HTTP boundary with the official
-TypeScript client. It complements the normal endpoint and persisted-key tests;
+TypeScript client. It complements the normal endpoint and persisted-OAuth tests;
 the outbound checks in `bin/test-mcp-conformance` establish a different contract.
 
 ## Run locally
@@ -44,10 +44,11 @@ on dynamically allocated ports:
 
 The fixture starts the actual Console application and its Gateway, Calls, Identity
 and Persistence dependencies. It configures real repository implementations,
-bootstraps a synthetic administrator inside the SQL sandbox, and issues actual
-Settings platform, full-tenant and calls keys. It uses the production application
-composition and authentication, policy, persistence and projection code.
-Revocation updates the real key store; fixture shutdown rolls back its writes.
+bootstraps synthetic users, roles and sessions inside the SQL sandbox, and issues
+real Boruta authorization codes and OAuth tokens for each listener's exact resource.
+Separate Settings API keys verify unchanged product HTTP authentication and key
+rejection at MCP. It uses production policy, storage and projection code. Grant
+revocation reaches the real store; fixture shutdown rolls back all writes.
 The native HTTP listener and managed-cleanup reconciler are disabled so only the
 three isolated listeners serve requests and no background reconciliation scans
 escape the fixture. Existing endpoint tests separately cover normal runtime
@@ -64,13 +65,13 @@ on each mount:
 - Safe role options, user creation, disabling, partial update preserving omitted
   fields, reactivation and filtered listing.
 
-Each mount also checks calls/full/platform catalogs of 5/12/17 tools, own-tenant
-scope and concealed foreign lookup, denial of account tools to tenant keys,
+Each mount also checks scoped call/spec/administrator catalogs of 5/12/17 tools, own-tenant
+scope and concealed foreign lookup, denial of account tools to tenant-only users,
 page-size bounds and unknown or wrongly typed arguments. It checks matching
 structured/text results and exclusion of password, credential, resolved-plan and
 digest fields. Join-token issuance intentionally returns its token; subsequent
 outputs must not repeat that secret. Missing/invalid credentials, a different
-valid key using the session, real revocation after initialization and session
+valid grant using the session, real revocation after initialization and session
 DELETE all reject continued access.
 
 These are prepared calls only: no token redemption, media, provider invocation or
@@ -81,13 +82,28 @@ The SDK lane does not claim TCP-disconnect cancellation coverage.
 The SDK closes its client transport separately from `terminateSession()`, so
 restart coverage preserves an existing session before stopping the server.
 
+## OAuth acceptance
+
+Each mount checks real HTTP protected-resource/authorization-server discovery,
+public-client DCR, S256 exchange (wrong verifier first), refresh continuation of an
+existing MCP session, cross-resource rejection and token revocation. Raw HTTP API
+keys are rejected at MCP, while the product HTTP API still accepts them.
+
+The Console mount performs the full HTTP browser flow: initial authorization,
+opaque resume path, login redirect, CSRF-authenticated login, consent render,
+CSRF approval, validated callback, and code exchange. Gateway and embedded Plug
+fixtures use a private authenticated fixture command for consent because those
+Plugs do not own browser pages; their discovery and credential endpoints still
+use actual HTTP. Rendered Chrome desktop/mobile checks complement the scripted
+flow; their evidence is recorded in the OAuth milestone.
+
 ## Expiry and restart
 
 After the mount checks, the complete fixture BEAM exits. Its replacement binds
 the same Gateway port with fresh sandbox credentials. The fixture first verifies
 that the old ID is absent through the public SessionManager lookup, then checks
-HTTP 404 using a fresh valid key. Fresh initialization must succeed. This proves
-loss of in-memory sessions across process restart independently of key binding.
+HTTP 404 using a fresh valid OAuth token. Fresh initialization must succeed. This proves
+loss of in-memory sessions across process restart independently of grant binding.
 
 For accelerated idle expiry, only the replacement fixture uses a one-second
 TTL and 25 ms cleanup interval. Before serving requests, it replaces its own
@@ -117,15 +133,17 @@ proxy. The proxy is solely a harness adapter; it is not deployed.
 | `tools-call-*` | Omitted: require special `test_*` tools; all 17 product tools are checked with the SDK |
 | Resources, prompts, logging, completion, elicitation, SSE | Omitted: outside the enabled product profile |
 | DNS rebinding | Omitted: scenario targets unauthenticated localhost servers; normal endpoint tests cover Host/Origin policy |
-| OAuth | Not implemented or claimed; authentication uses static Bearer headers |
+| OAuth | Focused discovery, DCR, browser consent, PKCE, rotation and revocation flow above; not blanket conformance certification |
 
 See the official [conformance integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md).
 These are selected interoperability checks, not blanket MCP or OAuth certification.
 
 ## Evidence and cleanup
 
-Verified locally on 2026-10-15: all 17 tools passed on each of the three mounts,
-including scoped catalogs and persisted revocation. The three selected official
+Verified locally on 2026-10-16: all 17 tools passed on each of the three mounts,
+including OAuth discovery/exchange, scoped catalogs, refresh continuity and
+persisted revocation. The Console browser flow passed with the native form
+`Origin: null` header and CSRF protection. The three selected official
 scenarios, whole-BEAM restart, accelerated expiry and fresh-session recovery also
 passed.
 

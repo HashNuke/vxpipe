@@ -7,7 +7,8 @@ defmodule Vxpipe.Gateway.MCP.CallToolsTest do
   alias Vxpipe.Calls.{Administration, TestMemoryRepository}
   alias Vxpipe.Gateway.CallAdmission
   alias Vxpipe.Gateway.HTTP.Endpoint
-  alias Vxpipe.Gateway.MCP.{Admission, Authentication}
+  alias Vxpipe.Gateway.MCP.Admission
+  alias Vxpipe.Gateway.Test.MCPOAuth
 
   @version "2025-11-25"
 
@@ -30,16 +31,20 @@ defmodule Vxpipe.Gateway.MCP.CallToolsTest do
       Endpoint.init(
         mcp: [
           enabled: true,
+          issuer: "https://localhost",
+          resource: "https://localhost/mcp",
           allowed_hosts: ["localhost"],
           admission: admission,
-          authentication: {Authentication, options}
+          authentication: {__MODULE__, tenant.key},
+          call_options: options
         ],
         call_admission: [enabled: true, backend: {CallAdmission, options}]
       )
 
     %{
       endpoint: endpoint,
-      secret: key.secret,
+      secret: "calls-oauth-token",
+      http_secret: key.secret,
       tenant: tenant.key,
       spec: revision.call_spec_id,
       options: options
@@ -74,7 +79,7 @@ defmodule Vxpipe.Gateway.MCP.CallToolsTest do
         "/api/tenants/#{c.tenant}/call-specs/#{c.spec}/calls",
         JSON.encode!(%{variables: arguments.variables})
       )
-      |> put_req_header("authorization", "Bearer " <> c.secret)
+      |> put_req_header("authorization", "Bearer " <> c.http_secret)
       |> put_req_header("content-type", "application/json")
       |> put_req_header("idempotency-key", "web-call")
       |> Endpoint.call(c.endpoint)
@@ -102,7 +107,7 @@ defmodule Vxpipe.Gateway.MCP.CallToolsTest do
 
     response =
       conn(:post, "/api/tenants/#{c.tenant}/calls/#{id}/hangup", "{}")
-      |> put_req_header("authorization", "Bearer " <> c.secret)
+      |> put_req_header("authorization", "Bearer " <> c.http_secret)
       |> put_req_header("content-type", "application/json")
       |> Endpoint.call(c.endpoint)
 
@@ -177,15 +182,14 @@ defmodule Vxpipe.Gateway.MCP.CallToolsTest do
     assert foreign["structuredContent"]["error"]["code"] == "not_authorized"
   end
 
-  test "calls scope exposes call tools and admin-only scope cannot invoke them", c do
+  test "calls.write exposes call tools and spec-only grants cannot invoke them", c do
     session = initialize(c)
     catalog = request(c, session, 2, "tools/list", %{}) |> result()
     names = Enum.map(catalog["tools"], & &1["name"])
     assert "create_call" in names and "create_join_token" in names
     refute "create_call_spec" in names
 
-    {:ok, admin} = Administration.issue_api_key(c.tenant, "admin", [:admin], c.options)
-    c = %{c | secret: admin.secret}
+    c = %{c | secret: "specs-oauth-token"}
     session = initialize(c)
 
     names =
@@ -199,6 +203,10 @@ defmodule Vxpipe.Gateway.MCP.CallToolsTest do
     assert invoke(c, session, 3, "create_call", %{tenant_key: c.tenant, call_spec_id: c.spec}).status ==
              403
   end
+
+  def authenticate(tenant, "calls-oauth-token"), do: {:ok, MCPOAuth.actor(tenant, :calls)}
+  def authenticate(tenant, "specs-oauth-token"), do: {:ok, MCPOAuth.actor(tenant, :specs)}
+  def authenticate(_tenant, _token), do: {:error, :invalid_token}
 
   defp source do
     %{

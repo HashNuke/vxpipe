@@ -11,7 +11,7 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
     VXPIPE_RECORDING_S3_BUCKET VXPIPE_RECORDING_S3_REGION VXPIPE_RECORDING_S3_ENDPOINT
     VXPIPE_CALL_DETAILS_S3_BUCKET VXPIPE_CALL_DETAILS_S3_REGION VXPIPE_CALL_DETAILS_S3_ENDPOINT
     VXPIPE_CREDENTIAL_KEY_ID VXPIPE_CREDENTIAL_KEYS VXPIPE_DEV_MODEL_FIXTURE
-    VXPIPE_DEV_SPEECH_PROFILE DEEPGRAM_API_KEY APP_HOST PORT SECRET_KEY_BASE VXPIPE_DEV_TLS)
+    VXPIPE_DEV_SPEECH_PROFILE DEEPGRAM_API_KEY APP_HOST PORT SECRET_KEY_BASE VXPIPE_DEV_TLS VXPIPE_MCP_RESOURCE_URL)
   @settings [
     {:vxpipe_call_engine, Vxpipe.CallEngine.Application},
     {:vxpipe_gateway, Vxpipe.Gateway.Application},
@@ -109,6 +109,7 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
   end
 
   test "an invalid shared endpoint fails safely instead of using a retired destination" do
+    System.put_env("APP_HOST", "console.example.test")
     System.put_env("STORAGE_BUCKET", "shared-artifacts")
     System.put_env("AWS_ENDPOINT", "http://private-user:private-password@objects.example.test")
     seed_retired_settings()
@@ -119,6 +120,7 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
   end
 
   test "runtime wires optional temporary credentials without storing their values in configuration" do
+    System.put_env("APP_HOST", "console.example.test")
     System.put_env("AWS_SESSION_TOKEN", "runtime-session-marker")
     configuration = Config.Reader.read!(@runtime, env: :prod)
     s3 = setting(configuration, :ex_aws, :s3)

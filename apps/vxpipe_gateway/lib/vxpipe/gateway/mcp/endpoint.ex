@@ -5,16 +5,25 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
   import Plug.Conn
 
   alias Vxpipe.Gateway.MCP.{Admission, Authentication, Handler, Protocol, Tools}
+  alias Vxpipe.Gateway.OAuth.Configuration
 
   @impl true
   def init(options) do
+    oauth = Configuration.build(options)
+
     %{
       enabled: Keyword.get(options, :enabled, false),
+      resource_metadata: resource_metadata(oauth),
       allowed_hosts: Keyword.get(options, :allowed_hosts, []),
       allowed_origins: Keyword.get(options, :allowed_origins, []),
       allow_loopback_http: Keyword.get(options, :allow_loopback_http, false),
       admission: Keyword.get(options, :admission, Admission),
-      authentication: Keyword.get(options, :authentication, {Authentication, []}),
+      authentication:
+        Keyword.get(
+          options,
+          :authentication,
+          {Authentication, [resource: Map.get(oauth, :resource)]}
+        ),
       call_options: Keyword.get(options, :call_options, []),
       body_limit: positive_limit!(options, :body_limit, 131_072),
       read_timeout: positive_limit!(options, :read_timeout, 5_000),
@@ -75,12 +84,12 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
 
       {:error, :missing_credentials} ->
         conn
-        |> put_resp_header("www-authenticate", ~s(Bearer realm="vxpipe"))
+        |> put_resp_header("www-authenticate", challenge(options))
         |> error(401, "unauthorized")
 
       {:error, :invalid_credentials} ->
         conn
-        |> put_resp_header("www-authenticate", ~s(Bearer realm="vxpipe", error="invalid_token"))
+        |> put_resp_header("www-authenticate", challenge(options) <> ~s(, error="invalid_token"))
         |> error(401, "unauthorized")
 
       {:error, :malformed_credentials} ->
@@ -90,6 +99,18 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
         error(conn, 503, "unavailable")
     end
   end
+
+  defp challenge(options),
+    do: ~s(Bearer realm="vxpipe", resource_metadata="#{options.resource_metadata}", scope="mcp")
+
+  defp resource_metadata(%{enabled: true, resource: resource}) do
+    uri = URI.parse(resource)
+
+    %{uri | path: "/.well-known/oauth-protected-resource" <> (uri.path || "")}
+    |> URI.to_string()
+  end
+
+  defp resource_metadata(_disabled), do: nil
 
   defp dispatch(%{method: "POST"} = conn, options) do
     case read_body(conn,

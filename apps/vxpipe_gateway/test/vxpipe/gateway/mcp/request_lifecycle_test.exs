@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.MCP.RequestLifecycleTest do
   import Plug.Conn
   import Plug.Test
 
-  alias Vxpipe.Calls.Principal
+  alias Vxpipe.Gateway.Test.MCPOAuth
   alias Vxpipe.Gateway.MCP.{Admission, Endpoint, Protocol}
   alias Vxpipe.Gateway.Test.MCPProbeHandler
 
@@ -15,6 +15,8 @@ defmodule Vxpipe.Gateway.MCP.RequestLifecycleTest do
     options =
       Endpoint.init(
         enabled: true,
+        issuer: "https://localhost",
+        resource: "https://localhost/mcp",
         allowed_hosts: ["localhost"],
         admission: admission,
         authentication: {__MODULE__, :allow}
@@ -77,7 +79,7 @@ defmodule Vxpipe.Gateway.MCP.RequestLifecycleTest do
 
     assert get(options).status == 405
     # Losing a request does not revoke its authenticated MCP session. The next
-    # request can continue with a fresh JSON-RPC ID and the same API key.
+    # request can continue with a fresh JSON-RPC ID and the same OAuth grant.
     assert request(options, "ping", 3, session).status == 200
   end
 
@@ -86,14 +88,7 @@ defmodule Vxpipe.Gateway.MCP.RequestLifecycleTest do
     receive do: (:release -> authenticate(:allow, secret))
   end
 
-  def authenticate(:allow, "synthetic-key") do
-    {:ok,
-     %Principal{
-       tenant_key: "AAAAAAAAAAAAAAAA",
-       api_key_id: "synthetic-key-id",
-       scopes: MapSet.new([:calls])
-     }}
-  end
+  def authenticate(:allow, "synthetic-key"), do: {:ok, MCPOAuth.actor()}
 
   defp request(options, method, id, session \\ nil, params \\ %{}) do
     conn =

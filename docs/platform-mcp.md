@@ -1,66 +1,43 @@
 # Platform MCP endpoint
 
-Status: implemented and locally verified, 2026-10-15.
+Status: tool catalog and OAuth authentication implemented and locally verified,
+2026-10-16. Deployment is separate.
 The [implementation milestone](../labnotes/milestones/platform-mcp-endpoint.md)
 owns checkpoints and acceptance. This decision records the initial scope and its
 authorization boundaries.
 
 ## Intended use
 
-Expose the platform's API-key operations as named MCP tools at `/mcp` on the
-existing application origin. A user configures their MCP client with that URL and
-`Authorization: Bearer <Vxpipe API key>` using a key created in Settings. No second
-key system, browser login, or separate deployment is needed.
+Connect an OAuth-capable MCP client to `https://YOUR-VXPIPE-HOST/mcp`. Vxpipe
+uses its existing Console login to approve access. The client acts as the user,
+within their approved role permissions and tenant access. Public HTTP clients
+continue to use API keys; browser HTTP clients continue to use login sessions.
 
-The user-selected scope includes tenant discovery, call-spec CRUD-style authoring,
-call creation/join/hangup, user administration and paginated lists. This supersedes
-the earlier nine-tool machine-endpoint-only proposal. Several required operations
-need shared machine API/application changes; they remain part of this milestone,
-not deferred Console-only features.
+The [OAuth design](mcp-oauth.md) records discovery, public-client registration,
+PKCE, consent, token lifetimes and revocation. The
+[OAuth milestone](../labnotes/milestones/mcp-oauth.md) tracks cutover acceptance.
 
 ## Implemented tools
 
-The current server advertises tenant discovery and call-spec workflows according
-to key scope: `list_tenants`, `get_tenant`, `list_call_specs`, `get_call_spec`,
-`create_call_spec`, `update_call_spec`, `publish_call_spec_revision`,
-`list_providers`, `list_provider_models`, `create_call`, `create_join_token`, and
-`hangup_call`.
-Calls-only keys see tenant and call tools; full tenant and Settings platform keys
-also see spec/catalog tools. Admin-only tenant keys cannot create calls or tokens. Each call
-independently checks its authority and selected tenant.
+All 17 tools share the existing Elixir application operations:
 
-Settings platform keys additionally see `list_users`, `create_user`, `update_user`,
-`disable_user`, and `list_role_options`. These share Identity account workflows
-with the canonical HTTP API and preserve transactional authority/audit guards.
-All 17 tools are implemented. The [product HTTP API](product-http-api.md) documents
-the corresponding HTTP operations. Browser product callers use canonical routes;
-active-call and cross-interface acceptance evidence is recorded in the milestone.
+- Tenant discovery: `list_tenants`, `get_tenant`.
+- Specs and catalogs: `list_call_specs`, `get_call_spec`, `create_call_spec`,
+  `update_call_spec`, `publish_call_spec_revision`, `list_providers`,
+  `list_provider_models`.
+- Calls: `create_call`, `create_join_token`, `hangup_call`.
+- Accounts: `list_users`, `create_user`, `update_user`, `disable_user`,
+  `list_role_options`.
 
-## What exists today
+Discovery follows the user's effective read/write permissions. Each invocation
+independently checks authority and tenant/resource ownership. Read-only users can
+use the applicable read tools; approval never grants write permissions or access
+to another tenant. Admin cannot manage Admin or Superadmin accounts. The
+[product HTTP API](product-http-api.md) documents corresponding HTTP operations.
 
-- Gateway owns machine HTTP routes and Calls owns their authorization/workflows.
-- Tenant keys become `Vxpipe.Calls.Principal` values with `admin` and/or `calls`
-  scopes. These scopes are independent.
-- Settings issues Create & Join Calls keys (`calls`), Full Tenant Access keys
-  (`admin` + `calls`), and Full Platform Access keys (`platform`). Creation is
-  restricted by the issuing user's permissions. Authentication uses the issued
-  key's current stored scope/revocation state; it does not impersonate the issuer's
-  browser session or dynamically inherit their role.
-- Settings platform keys (`vxpk_`) authenticate as installation operators and can
-  also establish an explicitly tenant-bound `admin` + `calls` principal through
-  `Calls.authenticate/4`. For authoring with platform services, preserve the
-  installation-authority path used by platform HTTP routes.
-- Trusted legacy operator keys (`vxop_`) have platform status/authoring access;
-  they are not interchangeable with Settings platform keys on tenant call routes.
-- `vxpipe_mcp` is an outbound MCP client library. Its existing conformance results
-  do not establish inbound server support.
-
-Evidence: [key contract](api-key-access.md),
-[machine API behavior](operator-api-key-authoring.md),
-[Gateway router](../apps/vxpipe_gateway/lib/vxpipe/gateway/http/router.ex),
-[tenant authentication](../apps/vxpipe_calls/lib/vxpipe/calls/administration.ex),
-[Settings key issuance](../apps/vxpipe_calls/lib/vxpipe/calls/api_key_management.ex),
-[Console router](../apps/vxpipe_console/lib/vxpipe/console/router.ex).
+The outbound `vxpipe_mcp` client library is separate from this inbound server.
+ExMCP remains the server protocol implementation; Boruta processes OAuth through
+Identity and Persistence adapters. No additional deployment is required.
 
 ## Shared application and HTTP API
 
@@ -143,8 +120,9 @@ the owning child rather than relying on transitive access.
 ### Authentication and authority
 
 Browser UI requests use the existing session cookie and CSRF protection for unsafe
-methods. External callers and MCP use API keys; never put a platform key in the
-browser bundle or mint a machine key merely to make the UI use the public API.
+methods. External HTTP callers use API keys; MCP clients use OAuth. Never put a
+platform key in the browser bundle or mint a machine key merely to make the UI use
+the public API.
 
 The shared HTTP boundary obtains an actor from configured authentication adapters.
 Console supplies session authentication/CSRF integration without making Gateway
@@ -153,13 +131,15 @@ authentication. The same HTTP operation implementation serves both deployments.
 Explicit Authorization selects key authentication; an invalid/unsupported header
 does not fall back to a more privileged cookie. Without Authorization, the browser
 session path applies its CSRF/origin protections. Never union key and session grants.
-MCP remains API-key-only even on the Console host.
+MCP accepts OAuth access tokens only, including on the Console host.
 
 Authenticated actors retain their real provenance: browser user/session or machine
 key. Shared policy checks each actor's existing grants/key type, tenant membership
 and ownership. Equivalent authority gives equivalent behavior, not every browser
 user and every API key the same access. Account writes revalidate the appropriate
 actor in the transaction and audit that actor, without fabricated browser sessions.
+OAuth actors retain the real user and grant identity; their browser-session field
+is empty. Current and approved authority are checked independently.
 
 Acceptance must cover the same operation via direct Elixir, browser-session HTTP,
 API-key HTTP and MCP, including denied/foreign resources, initial variables,
@@ -184,17 +164,17 @@ tenant identifier and requires no tenant data migration. Use `get_tenant` for th
 proposed tenant-info tool to match `get_call_spec` naming.
 
 Require `tenant_key` for every tenant-specific operation, even when the credential
-already identifies one tenant. This keeps one client/tool schema for tenant and
-platform keys, makes the intended target visible, and prevents an implicit selected
-tenant from changing the meaning of a call. A tenant key must match that ID; a
-platform key selects it explicitly. Validate every supplied spec/call/participant
+already identifies one tenant. This keeps one client/tool schema for delegated
+users and HTTP keys, makes the intended target visible, and prevents an implicit
+selected tenant from changing the meaning of a call. The actor must have authority
+for that tenant; naming it never grants access. Validate every supplied spec/call/participant
 against the selected tenant as well. Wrong-tenant and unknown resource IDs share
 the not-found response. The argument selects a resource context, never authority.
 `list_tenants` and installation-wide user/role operations do not take `tenant_key`.
 
 | Tool | Arguments | Result and behavior |
 | --- | --- | --- |
-| `list_tenants` | `page`, `page_size` | Paginated `{tenant_key, name, created_at}` records visible to the key |
+| `list_tenants` | `page`, `page_size` | Paginated `{tenant_key, name, created_at}` records visible to the user |
 | `get_tenant` | `tenant_key` | `{tenant_key, name, created_at}` for one visible tenant; no service secrets |
 | `list_call_specs` | `tenant_key`, `page`, `page_size` | Paginated spec summaries with ID, latest revision and published revision |
 | `get_call_spec` | `tenant_key`, `call_spec_id`, optional `revision` | Portable definition, selected/latest/published revision metadata; latest saved revision by default |
@@ -212,7 +192,7 @@ These are JSON object arguments, not positional function calls. Optional fields
 and defaults are defined below; unspecified fields are required. The target
 `call_spec_id` belongs outside the portable definition on updates.
 
-Supporting tools retained/proposed for a complete authoring workflow:
+Supporting tools complete the authoring workflow:
 
 - `publish_call_spec_revision(tenant_key, call_spec_id, revision)`: publication stays
   explicit. Create/update must not silently activate a draft or place calls.
@@ -231,8 +211,7 @@ and consolidation requirement above.
 
 ## Argument and result details
 
-These contracts are proposals for implementation; they do not imply these tools
-already exist. Each tool takes a JSON object with `additionalProperties: false`.
+Each implemented tool takes a JSON object with `additionalProperties: false`.
 The portable spec and variables have their own existing schema/validation rules,
 not a blanket restriction on their nested property names.
 
@@ -309,43 +288,29 @@ MCP `tools/list` has its own protocol cursor rules, separate from product pagina
 
 ## Access levels and shared API extensions
 
-| Operation group | Create & Join Calls key | Full Tenant Access key | Full Platform Access key |
-| --- | --- | --- | --- |
-| Tenant list/info | Own tenant only | Own tenant only | All tenants |
-| Spec list/get/create/update/publish; provider/model discovery | No | Own tenant | Selected tenant |
-| Create call/join token/hangup | Own tenant | Own tenant | Selected tenant |
-| Users and role options | No | No | Installation-wide |
+MCP delegates the signed-in user's existing role. The single `mcp` OAuth scope
+adds no permissions. Current permissions are bounded by the consent snapshot;
+finite tenant assignments stay finite, while approved all-tenant actions include
+future tenants. Changing the user's role, membership, password or enabled status
+invalidates existing grants. Changes to a role's revision also require consent
+again. Logout only ends the browser session.
 
-This is the proposed explicit extension of the existing key types for the requested
-operations. It must be implemented once in application policy and used by both REST
-and MCP. It does not grant a calls-only key access to spec source or a tenant key
-access to the user directory. Installation operations require a Settings Full
-Platform Access key, not just a tenant key issued by an administrator.
+The existing API-key access levels remain available to the product HTTP API:
 
-Tenant writes retain complete-source/transaction-time platform-service ownership
-checks; platform authoring uses installation authority. A calls key can execute an
-already-authorized published spec without gaining authority to edit it. Keep
-legacy admin-only and operator-key behavior intact; the new user-administration
-rights belong to Settings platform keys and must not implicitly elevate legacy keys.
+| HTTP key | Tenant visibility | Spec/catalog operations | Call operations | Account operations |
+| --- | --- | --- | --- | --- |
+| Create & Join Calls | Own tenant | No | Own tenant | No |
+| Full Tenant Access | Own tenant | Own tenant | Own tenant | No |
+| Full Platform Access | All tenants | Selected tenant | Selected tenant | Installation-wide |
 
-For Identity, introduce an explicit authenticated machine actor with API key ID.
-Do not fabricate a browser user/session or accept permission claims in arguments.
-Full Platform Access is issued only by Superadmins today; propose granting its
-machine actor `users.read` and the existing member/admin/superadmin account-write
-permissions. Reuse current/requested role-category checks, membership validation,
-transactional target guards, and the last-enabled-Superadmin invariant. This is a
-new machine policy, not a claim that Identity already accepts API keys.
+All transports use shared policy and transaction-time write guards. OAuth account
+changes audit the user and grant; API-key changes retain key attribution. A user
+cannot expand authority by supplying actor fields or tenant IDs in tool arguments.
 
-Persist audit attribution to the API key, revalidate key validity inside account
-write transactions, and preserve browser actor/session validation unchanged.
-Disable revokes that user's sessions; reactivation does not resurrect old sessions.
-Current keys are independently revocable credentials without issuer binding:
-user disable must not claim to revoke their previously issued API keys automatically.
-Partial `update_user` input preserves omitted fields, especially `enabled`, role
-and memberships; do not reuse the Console controller's default-valued request map.
-Membership inputs use `{tenant_key, access}` entries with existing `read` or
-`read_write` access levels. Password reset is not implicitly added to `update_user`. Creation passwords are
-input-only, never echoed or logged.
+Partial `update_user` preserves omitted `enabled`, role and membership fields.
+Memberships use `{tenant_key, access}`, where access is `read` or `read_write`.
+Reactivation does not restore old sessions or OAuth grants. Password reset is not
+part of `update_user`; creation passwords are input-only and never echoed.
 
 ## Call creation, variables and publication
 
@@ -402,7 +367,7 @@ key so the client can use the existing session endpoint.
 
 Reuse single-use token storage, TTL bounds and ended-call denial. Tokens are
 intentional sensitive results; keep them out of logs, telemetry and audit summaries.
-MCP authenticates with the API key, while token redemption/media negotiation stay
+MCP authenticates with the OAuth access token, while token redemption/media negotiation stay
 on the existing transports. It does not open audio streams itself.
 
 `hangup_call` is a new authorized application workflow. Resolve tenant ownership
@@ -458,7 +423,7 @@ protocol implementation.
 
 Use the repository's existing MCP `2025-11-25` profile. The product boundary
 rejects other revisions even though the dependency supports more versions.
-Local Plug tests demonstrate initialization, notifications, ping, key-bound
+Local Plug tests demonstrate initialization, notifications, ping, grant-bound
 sessions, deletion and request-worker cleanup. The isolated
 [server acceptance runner](development/platform-mcp-acceptance.md) also verifies
 the official SDK against all three mounts and selected official conformance
@@ -466,10 +431,10 @@ scenarios; this is not full protocol or OAuth certification.
 
 Use Streamable HTTP with JSON tool responses, initialization, initialized
 notification, ping, tool discovery and invocation. No unsolicited event stream:
-GET returns 405. If ExMCP issues sessions, bind them to authenticated key identity,
-bound their count/lifetime, and reauthenticate every request. No durable session
-storage or event replay is needed. The implementation probe must settle supported
-session/DELETE behavior and version negotiation before enabling tool handlers.
+GET returns 405. ExMCP sessions are bound to the authenticated OAuth grant identity,
+have bounded count/lifetime, and reauthenticate every request. No durable session
+storage or event replay is needed. Local acceptance covers session deletion and
+version negotiation.
 See the [transport specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 and [lifecycle specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle).
 
@@ -489,143 +454,98 @@ JSON-RPC response body.
 
 The selected ExMCP session manager is node-local and shared: its current defaults
 are 10,000 sessions, 10,000 distinct request IDs per session, a one-hour idle TTL
-and cleanup every 60 seconds. These are dependency defaults, not per-key quotas;
+and cleanup every 60 seconds. These are dependency defaults, not per-grant quotas;
 the isolated runner verifies accelerated idle expiry and full BEAM restart on the
 same port, followed by fresh-session recovery. Request owner death releases
 Gateway admission and terminates the request handler. These checks do not claim
 immediate cancellation on every TCP disconnect. Clients must still supply
-their API key on subsequent requests, and use fresh request IDs within a session.
+their OAuth access token on subsequent requests, and use fresh request IDs within a session.
 
 Advertise tools only: no resources, prompts, subscriptions, sampling, elicitation,
 task extensions, audio streams, or outbound MCP proxy. Provide strict schemas,
 bounded results, structured content plus a text representation, and accurate
 read-only/destructive/idempotency annotations. Protocol-envelope failures are
 JSON-RPC errors; resource visibility and ordinary domain failures are tool results
-with `isError: true`. Credential failures and operation-level key-scope denials
+with `isError: true`. Credential failures and operation-level permission denials
 remain HTTP failures. Pre-dispatch scope checks must use the shared application
 policy, not a second MCP-specific permission matrix. Follow the
 [tool specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
 ## Authentication contract and client compatibility
 
-Recommendation for this API-key milestone: configure the credential in the MCP
-client's HTTP headers. There is no `api_key` tool argument, initialization field,
-login tool or URL parameter. The client supplies the header before initialization
-and on every subsequent request:
+MCP uses OAuth authorization-code flow with S256 PKCE, dynamic public-client
+registration and rotating refresh tokens. Configure the client with the MCP URL;
+it discovers the authorization server and opens the Console login/consent page.
+There is no API-key tool argument, login tool, client secret or cookie fallback.
+Clients requiring Client ID Metadata Documents without a DCR fallback are not
+supported by this initial profile. See [OAuth configuration and limits](mcp-oauth.md).
+
+Every request supplies exactly one credential:
 
 ```http
-Authorization: Bearer <Vxpipe API key>
+Authorization: Bearer <OAuth access token>
 ```
 
-This is a deliberate compatibility choice, not an implementation of MCP OAuth.
-The pinned [MCP authorization profile](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
-makes authorization optional, but recommends that HTTP implementations follow its
-OAuth-based profile. Its interoperable path uses OAuth 2.1, protected-resource and
-authorization-server discovery, PKCE, and resource-bound access tokens. Static
-Vxpipe keys do not implement that flow; an OAuth client ID/client secret is also
-not a substitute for a Vxpipe key.
+Missing credentials return 401 with a Bearer challenge containing the canonical
+`resource_metadata` URL and `scope="mcp"`. Invalid, expired or revoked credentials
+also include `error="invalid_token"`. Duplicate/malformed credentials return 400;
+unavailable authentication storage returns 503. These failures never redirect to
+login or reveal another user's resources. Valid tokens lacking an operation's
+permission receive 403; ordinary domain failures retain safe tool-result mapping.
 
-Our proposed static-key wire contract is:
+Initialization, notifications, ping, discovery, invocation and session deletion
+all reauthenticate. A session ID grants no authority. Refresh preserves its grant
+identity and can continue the MCP session; another grant cannot reuse that session.
+Revocation prevents the next request, including requests on established sessions.
+Already admitted calls keep their existing lifecycle and are not cancelled by
+revoking the OAuth grant.
 
-- Accept exactly one Authorization credential with the Bearer scheme. Reject
-  duplicate/combined or malformed credentials with HTTP 400. Never merge credentials
-  or fall back to a browser cookie, query string, body, or MCP session ID.
-- Missing credentials return HTTP 401 and `WWW-Authenticate: Bearer realm="vxpipe"`.
-  Invalid/revoked credentials return 401 with the same challenge and
-  `error="invalid_token"`. Responses do not reveal key existence or tenant matches.
-- Valid credentials lacking an operation's required authority return HTTP 403;
-  shared authorization failures are mapped before producing successful tool results.
-  Resource visibility/not-found and other domain failures retain their existing
-  safe tool-result mapping. Unavailable authentication storage fails closed with
-  HTTP 503, not a misleading invalid-key response.
-- Authenticate initialization, notifications, ping, discovery, invocation and any
-  supported session cleanup requests. Only after authentication may an unsupported
-  method return 405. A session ID alone grants no access; revocation affects the
-  next request even when the MCP session already exists.
-- Use HTTPS outside loopback development, configure the final endpoint URL, and
-  never forward keys to another origin or upstream provider. Do not add login
-  redirects, fake OAuth discovery metadata, or a `resource_metadata` challenge
-  pointing to an unimplemented authorization server.
+### Client setup and migration
 
-### Client setup
-
-[Claude Code documents HTTP Bearer headers and environment substitution](https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcpjson).
-For example, configure `.mcp.json` with a secret reference:
+For a client supporting discovery and DCR, configure only the server URL:
 
 ```json
 {
   "mcpServers": {
     "vxpipe": {
       "type": "http",
-      "url": "https://YOUR-VXPIPE-HOST/mcp",
-      "headers": {
-        "Authorization": "Bearer ${VXPIPE_API_KEY}"
-      }
+      "url": "https://YOUR-VXPIPE-HOST/mcp"
     }
   }
 }
 ```
 
-Replace the host with the actual installation and supply `VXPIPE_API_KEY` through
-the client's local environment. Never commit its value or put it in a model prompt.
-Use a dedicated Settings key with the narrowest access level needed.
-[VS Code also documents configurable remote headers](https://code.visualstudio.com/docs/agent-customization/mcp-servers)
-and recommends secret inputs or environment files instead of embedded keys.
-These are documented client capabilities, not evidence that the product endpoint
-has passed interoperability tests. Implementation acceptance must exercise
-a real reference client with a locally issued synthetic key.
+Complete its browser login and approve the displayed client/callback/access.
+Keep access and refresh tokens in the client's credential store, outside prompts
+and source control. Revoke a connection from Account when it is no longer needed.
 
-Clients that require OAuth discovery and cannot configure Authorization headers
-are outside this milestone's compatibility promise. If those clients become a
-requirement, add an explicit OAuth authorization-server integration: browser
-consent, bounded grants, token issuance/expiry/revocation, resource/audience checks,
-discovery and PKCE, with client registration chosen for the target clients. Keep
-the same shared application authorization boundary. Do not build an ad hoc API-key
-exchange or treat the Console cookie as an MCP token to simulate OAuth support.
+Existing static-key MCP configurations must remove their Authorization override,
+reconnect and complete OAuth. Existing MCP sessions cannot be reused across this
+cutover. HTTP API keys remain valid on their documented product routes; this
+migration does not rotate or revoke them.
 
 ## Authorization and operational implications
 
-Initialization has no tenant URL. Add a narrow Calls authentication entry point
-that resolves a key's stored identity/scope by digest, using a Persistence port.
-Do not scan tenants or trust a client-provided scope. Existing tenant storage only
-guarantees digest uniqueness within a tenant: use an indexed bounded lookup and
-fail closed on ambiguity. Keep old tenant-specific API authentication working;
-do not force key rotation or expose which tenant matched.
+Issuer and resource come from trusted runtime configuration. The normal Console
+issuer is its configured application origin; its default resource is that origin
+plus `/mcp`. `VXPIPE_MCP_RESOURCE_URL` can select the exact public resource URL for
+an embedding mount. Configure matching host/origin handling and ensure the public
+route reaches that mount. Never derive either URL from incoming Host headers.
 
-Each request authenticates afresh. Each invocation checks its named operation,
-tenant/resource ownership, installation user-administration grants, and enabled backend. Tool discovery is filtered by key
-authority and enabled capabilities, but hiding a tool is not authorization.
-Never retain a raw key in session/process state, use a global current principal,
-accept authority from tool arguments, or reuse another request's principal.
-Revocation denies subsequent requests, including existing MCP sessions. Already
-admitted calls/tokens retain the API's existing lifecycle; revocation does not
-retroactively cancel them.
+Each request loads current authority and applies the approved delegation ceiling.
+Invocation uses shared Calls/Identity policy, and account writes revalidate inside
+their database transaction. Do not retain a raw token in MCP session state, accept
+client-supplied authority or share one request's principal with another request.
 
-Mount exactly `/mcp` through Gateway before generic JSON/browser parsing, both
-standalone and Console-hosted. Preserve embedding defaults and carrier-only host
-restrictions. Require HTTPS in hosted use and allow HTTP only in loopback development.
-Configure explicit trusted host/origin handling, no broad credentialed CORS,
-no query-string keys, bounded bodies/deadlines/concurrency, and `no-store` responses.
-Use sanitized operation/outcome/duration telemetry; never record arguments,
-authorization headers, join tokens, transcript data or credential digests.
+Gateway mounts MCP before generic body parsing; Console supplies the OAuth browser
+flow. HTTPS is required outside loopback development. Discovery/token endpoints
+have bounded bodies, timeouts, quotas and durable rate limits; responses use
+`no-store`. No broad credentialed CORS or query-string bearer credentials are used.
 
-## Alternatives and verification
+## Verification
 
-- A generic HTTP tool hides schemas and side effects; use the finite named catalog.
-- New MCP scopes would drift from existing API access; reuse application authority.
-- Browser session impersonation would misattribute machine operations; the approved
-  capability expansion instead needs explicit shared API policy and machine actors.
-- A new service or server framework is unnecessary while ExMCP's public server API
-  can meet the contract. Investigate concrete gaps before changing dependencies.
-- OAuth, prompt/resource catalogs, realtime events and durable replay are separate
-  features, not prerequisites for the requested API-key tool endpoint.
-
-Planning evidence is source inspection and primary protocol documentation only.
-Implementation acceptance must compare HTTP and MCP outcomes for the same key,
-tenant, resource and input, including denials, revocation, platform service ownership,
-concurrent principals, initial variables, call lifecycle races, user activation and
-consistent pagination. The requested API additions need new parity tests, not just
-wrappers over the smaller pre-existing HTTP surface. Use local synthetic keys, PostgreSQL,
-Morse/fixture providers and fake outgoing adapters. No live provider or telephony
-tests are needed. Pin a local reference client/server-conformance runner and report
-its applicable scenario matrix rather than claiming blanket certification.
+The [server acceptance runner](development/platform-mcp-acceptance.md) uses the
+pinned official SDK, local PostgreSQL and synthetic accounts/calls across all three
+mounts. It does not call voice providers or carriers. The OAuth milestone records
+actual exchange, race, consent, authority, browser and cutover acceptance evidence;
+do not treat a protocol test as blanket OAuth certification.

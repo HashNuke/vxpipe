@@ -5,23 +5,22 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
   import Plug.Test
 
   alias Vxpipe.Calls.{InstallationOperator, Principal}
+  alias Vxpipe.Gateway.Test.MCPOAuth
   alias Vxpipe.Gateway.MCP.{Admission, Endpoint}
 
   @version "2025-11-25"
-  @secret "vxak_local-synthetic-key"
+  @secret "synthetic-oauth-access-token"
 
   setup do
-    actor = %Principal{
-      tenant_key: "AAAAAAAAAAAAAAAA",
-      api_key_id: "key-one",
-      scopes: MapSet.new([:calls])
-    }
+    actor = MCPOAuth.actor()
 
     backend = start_supervised!({Agent, fn -> %{result: {:ok, actor}, calls: 0} end})
     admission = start_supervised!({Admission, name: nil, max_concurrency: 1})
 
     options = [
       enabled: true,
+      issuer: "https://localhost",
+      resource: "https://localhost/mcp",
       allowed_hosts: ["localhost"],
       admission: admission,
       authentication: {__MODULE__, backend}
@@ -57,12 +56,14 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
     assert get_req_header(tools, "authorization") == []
     refute inspect(tools.assigns) =~ @secret
 
-    Agent.update(context.backend, &%{&1 | result: {:error, :invalid_api_key}})
+    Agent.update(context.backend, &%{&1 | result: {:error, :invalid_token}})
     revoked = call(:post, rpc("ping", 3), context.options, @secret, session_id)
     assert revoked.status == 401
 
     assert get_resp_header(revoked, "www-authenticate") ==
-             [~s(Bearer realm="vxpipe", error="invalid_token")]
+             [
+               ~s(Bearer realm="vxpipe", resource_metadata="https://localhost/.well-known/oauth-protected-resource/mcp", scope="mcp", error="invalid_token")
+             ]
   end
 
   test "credentials are required on every HTTP method, with no alternate credential source",
@@ -70,7 +71,10 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
     for method <- [:post, :get, :delete, :options] do
       missing = call(method, initialize(), context.options)
       assert missing.status == 401
-      assert get_resp_header(missing, "www-authenticate") == [~s(Bearer realm="vxpipe")]
+
+      assert get_resp_header(missing, "www-authenticate") == [
+               ~s(Bearer realm="vxpipe", resource_metadata="https://localhost/.well-known/oauth-protected-resource/mcp", scope="mcp")
+             ]
     end
 
     conn =
@@ -114,7 +118,10 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
 
       response = Endpoint.call(conn, Endpoint.init(context.options))
       assert response.status == 401
-      assert get_resp_header(response, "www-authenticate") == [~s(Bearer realm="vxpipe")]
+
+      assert get_resp_header(response, "www-authenticate") == [
+               ~s(Bearer realm="vxpipe", resource_metadata="https://localhost/.well-known/oauth-protected-resource/mcp", scope="mcp")
+             ]
     end
 
     assert Agent.get(context.backend, & &1.calls) == 1
@@ -276,12 +283,66 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
     assert call(:get, nil, context.options, @secret).status == 405
   end
 
+  test "OAuth refresh retains a session while a different grant cannot reuse it", context do
+    initialized = call(:post, initialize(), context.options, @secret)
+    [session] = get_resp_header(initialized, "mcp-session-id")
+    on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
+    refreshed = call(:post, rpc("ping", 2), context.options, "refreshed-oauth-token", session)
+    assert refreshed.status == 200
+    assert refreshed.assigns.mcp_identity == "oauth:22222222-2222-4222-8222-222222222222"
+    other = %{MCPOAuth.actor() | oauth_grant_public_id: "33333333-3333-4333-8333-333333333333"}
+    Agent.update(context.backend, &%{&1 | result: {:ok, other}})
+    assert call(:post, rpc("ping", 3), context.options, @secret, session).status == 404
+  end
+
+  test "API key and browser principals cannot authenticate as OAuth", context do
+    for actor <- [
+          %Principal{
+            tenant_key: "AAAAAAAAAAAAAAAA",
+            api_key_id: "key",
+            scopes: MapSet.new([:calls])
+          },
+          %InstallationOperator{
+            grant: :installation_operator,
+            credential_kind: :platform_api_key,
+            api_key_id: "key"
+          },
+          %{
+            MCPOAuth.actor()
+            | credential_kind: :browser_session,
+              oauth_grant_public_id: nil,
+              session_public_id: "33333333-3333-4333-8333-333333333333"
+          }
+        ] do
+      Agent.update(context.backend, &%{&1 | result: {:ok, actor}})
+      assert call(:post, initialize(), context.options, @secret).status == 401
+    end
+  end
+
+  test "enabled MCP requires trusted OAuth discovery configuration", context do
+    assert_raise ArgumentError, fn ->
+      Endpoint.init(Keyword.delete(context.options, :resource))
+    end
+
+    options = Keyword.put(context.options, :resource, "https://localhost/voice/mcp")
+    response = call(:get, nil, options)
+
+    assert get_resp_header(response, "www-authenticate") ==
+             [
+               ~s(Bearer realm="vxpipe", resource_metadata="https://localhost/.well-known/oauth-protected-resource/voice/mcp", scope="mcp")
+             ]
+  end
+
   def authenticate(:raise, _secret), do: raise("private-backend-detail")
   def authenticate(:exit, _secret), do: exit({:private, "private-backend-detail"})
 
   def authenticate(backend, secret) do
     Agent.get_and_update(backend, fn state ->
-      result = if secret == @secret, do: state.result, else: {:error, :invalid_api_key}
+      result =
+        if secret in [@secret, "refreshed-oauth-token"],
+          do: state.result,
+          else: {:error, :invalid_token}
+
       {result, %{state | calls: state.calls + 1}}
     end)
   end

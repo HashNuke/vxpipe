@@ -4,7 +4,8 @@ defmodule Vxpipe.Gateway.MCP.TenantToolsTest do
   import Plug.Conn
   import Plug.Test
 
-  alias Vxpipe.Calls.{Principal, Tenant}
+  alias Vxpipe.Calls.Tenant
+  alias Vxpipe.Gateway.Test.MCPOAuth
   alias Vxpipe.Gateway.MCP.{Admission, Endpoint}
 
   @key "AAAAAAAAAAAAAAAA"
@@ -12,11 +13,13 @@ defmodule Vxpipe.Gateway.MCP.TenantToolsTest do
   @version "2025-11-25"
 
   setup do
-    actor = %Principal{tenant_key: @key, api_key_id: "fixture", scopes: MapSet.new([:calls])}
+    actor = MCPOAuth.actor(@key)
     admission = start_supervised!({Admission, name: nil})
 
     options = [
       enabled: true,
+      issuer: "https://localhost",
+      resource: "https://localhost/mcp",
       allowed_hosts: ["localhost"],
       admission: admission,
       authentication: {__MODULE__, actor},
@@ -99,7 +102,7 @@ defmodule Vxpipe.Gateway.MCP.TenantToolsTest do
       Keyword.put(
         context.options,
         :authentication,
-        {__MODULE__, %{context.actor | scopes: MapSet.new()}}
+        {__MODULE__, %{context.actor | grants: MapSet.new()}}
       )
 
     session = initialize(options)

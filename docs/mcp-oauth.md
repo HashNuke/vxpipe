@@ -1,12 +1,12 @@
 # MCP OAuth authorization
 
-Status: selected direction; implementation and experiments are tracked in the
-[milestone](../labnotes/milestones/mcp-oauth.md). This document does not claim that
-OAuth is deployed. The existing MCP endpoint still uses API keys until cutover.
+Status: implemented and locally verified, 2026-10-16. The
+[milestone](../labnotes/milestones/mcp-oauth.md) records experiments, reviews and
+acceptance evidence. This document does not claim that OAuth is deployed.
 
 ## Decision
 
-Vxpipe will issue OAuth credentials for its own MCP endpoint. Keep ExMCP for
+Vxpipe issues OAuth credentials for its own MCP endpoint. Keep ExMCP for
 Streamable HTTP, protocol lifecycle and tools. Use Boruta core (Hex package
 `boruta`, pinned stable version 2.3.8) for OAuth protocol processing, with narrow
 Vxpipe persistence adapters. Reuse Console login and Identity permissions.
@@ -65,7 +65,8 @@ consent, even if it would increase permissions. Never approve unseen authority.
 | `/.well-known/oauth-authorization-server` | RFC 8414 issuer/endpoints, `code`, authorization-code/refresh grants, `S256`, `none`, and `mcp`. |
 | `POST /oauth/register` | RFC 7591 public-client registration; server generates UUID client IDs, no client secret. |
 | `GET /oauth/authorize` | Validate request and initiate browser login/consent; never approve on GET. |
-| `POST /oauth/authorize` | CSRF-protected approval/denial of a validated browser-bound transaction. |
+| `GET /oauth/authorize/:id` | Resume an opaque browser-bound request after login and display consent. |
+| `POST /oauth/authorize/:id` | CSRF-protected approval/denial of that transaction. |
 | `POST /oauth/token` | Form-encoded code exchange or refresh; no cookies or browser redirect. |
 | `POST /oauth/revoke` | Revoke the caller's token/grant; unknown tokens succeed without disclosure. |
 | `/mcp` | Existing ExMCP protocol with OAuth-only Bearer authentication. |
@@ -101,15 +102,23 @@ client need rather than adding URL fetching merely for a second onboarding path.
 
 Initial bounds: 60-second codes, 10-minute access tokens, 30-day absolute grants
 and refresh expiry (rotation does not extend the grant). Authorization transactions
-expire after 10 minutes. Registration accepts a 120-character name and at most five
-2,048-byte redirects; forms are bounded to 16 KiB. Rate-limit registration and
-authorization/token attempts, return 429 with Retry-After, and bound retained
-unapproved registrations and expired records. Establish concrete quotas in the
-persistence/HTTP checkpoint and verify they work across processes.
+expire after 10 minutes. Registration accepts a 120-byte name and at most five
+2,048-byte redirects; forms are bounded to 16 KiB. Rate limits return 429 with a
+60-second Retry-After. Fixed one-minute address/global limits are registration
+10/200, authorization 60/600, token 120/2000 and revocation 60/600. The Console resolves client addresses through its existing
+trusted loopback proxy boundary; standalone Gateway defaults to the peer address.
+Address buckets contain hashes and retain at most three windows per operation.
+
+Storage quotas are 10,000 clients, 100 active grants/user, 10,000 token pairs/grant,
+10 active pending requests/browser and 10,000 active pending requests globally.
+Registration and issuance perform bounded cleanup. Clients unused for 24 hours can
+be removed, but live grants or pending consent protect them. Rotation does not
+extend absolute expiry. Quotas fail closed; deployments expecting larger traffic
+must deliberately adjust these bounds and verify admission under contention.
 
 ## Authority and persistence
 
-Extend `Identity.Principal` with explicit OAuth provenance and grant ID. Its
+`Identity.Principal` carries explicit OAuth provenance and grant ID. Its
 browser session field remains nil for OAuth; never invent a browser session or
 convert a delegated user into a platform API-key operator. Use the stable grant ID
 for MCP session ownership, separate from a particular access token.
@@ -133,14 +142,14 @@ revokes its whole grant; this revocation must commit despite returning
 credentials or revoke somebody else's grant. Revocation and code/refresh exchange
 use a consistent lock order and bounded database timeouts.
 
-Add a user authorization version, incremented on the existing password, recovery,
+A user authorization version increments on the existing password, recovery,
 role, membership and status invalidation paths. Grants also capture role identity
 and revision. Every token use and refresh checks the enabled user, current versions,
 grant expiry/revocation and resource; disable/reactivate cannot revive old grants.
 Browser logout ends its own session, not separately consented connections.
 
-MCP tool discovery must follow delegated read/write permissions rather than the
-current machine-key buckets. Invocation independently enforces shared domain
+MCP tool discovery must follow delegated read/write permissions rather than
+machine-key buckets. Invocation independently enforces shared domain
 policy. Tenant listing must apply the delegated ceiling before admin/all-tenant
 shortcuts. Account writes revalidate the grant and current user inside their
 existing transaction and audit user plus grant provenance, without accepting
@@ -169,10 +178,10 @@ Sources: [MCP authorization profile](https://modelcontextprotocol.io/specificati
 
 ## Migration and verification
 
-Do not remove working key authentication until a complete OAuth flow passes local
-acceptance. Intermediate checkpoints keep OAuth unadvertised/disabled. Cutover is
-explicit: invalidate existing MCP sessions, document reconnection, then reject
-API keys at `/mcp`. Public HTTP API keys remain valid on their existing routes.
+The cutover follows local acceptance of the complete OAuth flow. Existing MCP
+sessions cannot be reused after the change: clients must reconnect and authorize
+through OAuth. API keys are rejected at `/mcp`; public HTTP API keys remain valid
+on their existing routes.
 
 Verification covers real Boruta plus local PostgreSQL, concurrent exchange/replay,
 discovery/registration/browser consent, disabled and reduced-permission users, all
@@ -181,3 +190,35 @@ isolation. Use the pinned MCP reference client, synthetic accounts and local cal
 No live provider, external telephony or deployment is necessary. Check the consent
 and connected-client pages in rendered desktop/mobile browsers. Record actual
 experiment and review outcomes in the milestone before marking it complete.
+
+## Runtime configuration
+
+With database-backed Console enabled, the authorization server uses the configured
+application origin (`APP_HOST`, `PORT`, and the existing development TLS setting).
+The canonical resource defaults to that origin plus `/mcp`.
+`VXPIPE_MCP_RESOURCE_URL` overrides the exact resource for an embedding mount;
+it does not create the mount or change the configured allowed hosts. Use the same
+canonical resource on Gateway and Console, including any path prefix. Changing
+it requires client reconnection and new consent; old tokens remain bound to the
+old resource and cannot authenticate against the new one.
+
+Application hosts composing Gateway directly configure both `mcp:` and `oauth:`
+with `enabled`, `issuer`, `resource`, `allowed_hosts`, `allowed_origins` and
+`allow_loopback_http`. Defaults are disabled. Enabled configurations reject
+missing or invalid URLs at startup. The standard Console browser issuer has no
+path prefix; lower-level metadata supports issuer prefixes for hosts supplying
+matching browser routes. The normal deployment needs no separate OAuth issuer
+setting or secret: clients are public and use PKCE.
+
+Identity uses its configured `oauth_store` and `oauth_browser_store` ports; the
+standard runtime selects Persistence implementations when PostgreSQL is enabled.
+Missing or failing storage never falls back to API-key authentication.
+
+Migrate the database before enabling the routes. Reconnect existing MCP clients
+and remove static API-key Authorization overrides. Old MCP sessions use different
+principal identities and cannot continue; product HTTP API keys remain unchanged.
+Account lists connected clients with creation/expiry and a revoke action. Browser
+logout does not revoke these independent grants.
+
+Database-enabled production requires a configured public HTTPS application origin
+(`APP_HOST`); the loopback HTTP exception is for development/test only.

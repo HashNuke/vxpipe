@@ -7,7 +7,7 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
   @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE
     VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE VXPIPE_CREDENTIAL_KEY_ID VXPIPE_CREDENTIAL_KEYS
     STORAGE_BUCKET AWS_SESSION_TOKEN VXPIPE_RECORDING_ENABLED VXPIPE_DEV_TENANT
-    TELEPHONY_HOST APP_HOST PORT SECRET_KEY_BASE VXPIPE_DEV_TLS)
+    TELEPHONY_HOST APP_HOST PORT SECRET_KEY_BASE VXPIPE_DEV_TLS VXPIPE_MCP_RESOURCE_URL)
   @settings [{:vxpipe_gateway, Vxpipe.Gateway.Application}]
 
   @moduletag :tmp_dir
@@ -27,7 +27,7 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
       Map.new(@settings, fn {app, key} -> {{app, key}, Application.fetch_env!(app, key)} end)
 
     Enum.each(@variables, &System.delete_env/1)
-    System.put_env("APP_HOST", "127.0.0.1")
+    System.put_env("APP_HOST", "console.example.test")
     System.put_env("SECRET_KEY_BASE", String.duplicate("runtime-test-secret-", 4))
     development = Config.Reader.read!(@development)
 
@@ -55,6 +55,8 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     System.put_env("VXPIPE_DB_URL", "postgres://localhost/operator_auth_configuration")
 
     for environment <- [:dev, :prod] do
+      configure_host(environment)
+
       http =
         Config.Reader.read!(runtime, env: environment)
         |> Keyword.fetch!(:vxpipe_gateway)
@@ -79,6 +81,7 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     runtime: runtime
   } do
     for environment <- [:dev, :prod] do
+      configure_host(environment)
       System.put_env("VXPIPE_DB_URL", "postgres://localhost/managed_runtime_configuration")
 
       settings =
@@ -148,7 +151,9 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
         if value, do: System.put_env(key, value), else: System.delete_env(key)
       end
 
+      configure_host(:dev)
       assert repo(:dev, runtime) == [url: "postgres://localhost/vxpipe_dev", pool_size: 10]
+      configure_host(:prod)
       assert repo(:prod, runtime) == []
     end
   end
@@ -235,9 +240,118 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     end
   end
 
+  test "durable runtime shares the canonical OAuth issuer and resource across Console and Gateway",
+       %{
+         runtime: runtime
+       } do
+    System.put_env("VXPIPE_DB_URL", "postgres://localhost/oauth_runtime_configuration")
+    configuration = Config.Reader.read!(runtime, env: :prod)
+    oauth = configuration |> Keyword.fetch!(:vxpipe_console) |> Keyword.fetch!(:oauth)
+
+    http =
+      configuration
+      |> Keyword.fetch!(:vxpipe_gateway)
+      |> Keyword.fetch!(Vxpipe.Gateway.Application)
+      |> Keyword.fetch!(:http)
+
+    assert Keyword.fetch!(oauth, :enabled)
+    assert Keyword.fetch!(oauth, :issuer) == "https://console.example.test"
+    assert Keyword.fetch!(oauth, :resource) == "https://console.example.test/mcp"
+    refute Keyword.fetch!(oauth, :allow_loopback_http)
+    assert Keyword.fetch!(http, :oauth) == oauth
+
+    for key <- [:enabled, :issuer, :resource, :allowed_hosts, :allowed_origins] do
+      assert http |> Keyword.fetch!(:mcp) |> Keyword.fetch!(key) == Keyword.fetch!(oauth, key)
+    end
+
+    identity = Keyword.fetch!(configuration, :vxpipe_identity)
+    assert Keyword.fetch!(identity, :oauth_store) == Vxpipe.Persistence.OAuth.Store
+    assert Keyword.fetch!(identity, :oauth_browser_store) == Vxpipe.Persistence.OAuth.Browser
+  end
+
+  test "the resource override preserves the exact mount and does not widen trusted origins", %{
+    runtime: runtime
+  } do
+    System.put_env("VXPIPE_DB_URL", "postgres://localhost/oauth_runtime_configuration")
+    resource = "https://gateway.example.test/embedded/mcp"
+    System.put_env("VXPIPE_MCP_RESOURCE_URL", resource)
+    configuration = Config.Reader.read!(runtime, env: :prod)
+    oauth = configuration |> Keyword.fetch!(:vxpipe_console) |> Keyword.fetch!(:oauth)
+
+    mcp =
+      configuration
+      |> Keyword.fetch!(:vxpipe_gateway)
+      |> Keyword.fetch!(Vxpipe.Gateway.Application)
+      |> Keyword.fetch!(:http)
+      |> Keyword.fetch!(:mcp)
+
+    assert Keyword.fetch!(oauth, :resource) == resource
+    assert Keyword.fetch!(mcp, :resource) == resource
+    assert Keyword.fetch!(oauth, :issuer) == "https://console.example.test"
+    assert Keyword.fetch!(oauth, :allowed_hosts) == ["console.example.test"]
+    assert Keyword.fetch!(oauth, :allowed_origins) == ["https://console.example.test"]
+  end
+
+  test "production OAuth fails closed without HTTPS while development permits local HTTP", %{
+    runtime: runtime
+  } do
+    System.put_env("VXPIPE_DB_URL", "postgres://localhost/oauth_runtime_configuration")
+    System.put_env("PORT", "4567")
+
+    System.delete_env("APP_HOST")
+
+    assert_raise RuntimeError, "APP_HOST is required for the production Console origin", fn ->
+      Config.Reader.read!(runtime, env: :prod)
+    end
+
+    System.put_env("APP_HOST", "127.0.0.1")
+
+    assert_raise ArgumentError, "invalid OAuth endpoint URL", fn ->
+      Config.Reader.read!(runtime, env: :prod)
+    end
+
+    oauth =
+      Config.Reader.read!(runtime, env: :dev)
+      |> Keyword.fetch!(:vxpipe_console)
+      |> Keyword.fetch!(:oauth)
+
+    assert Keyword.fetch!(oauth, :allow_loopback_http)
+    assert Keyword.fetch!(oauth, :issuer) == "http://127.0.0.1:4567"
+    assert Keyword.fetch!(oauth, :resource) == "http://127.0.0.1:4567/mcp"
+
+    System.delete_env("VXPIPE_DB_URL")
+    disabled = Config.Reader.read!(runtime, env: :prod)
+
+    refute disabled
+           |> Keyword.fetch!(:vxpipe_console)
+           |> Keyword.fetch!(:oauth)
+           |> Keyword.fetch!(:enabled)
+  end
+
+  test "invalid production resource overrides fail without exposing their contents", %{
+    runtime: runtime
+  } do
+    System.put_env("VXPIPE_DB_URL", "postgres://localhost/oauth_runtime_configuration")
+
+    for resource <- [
+          "http://gateway.example.test/mcp",
+          "https://private-user:private-password@gateway.example.test/mcp",
+          "https://gateway.example.test/mcp?token=private-marker"
+        ] do
+      System.put_env("VXPIPE_MCP_RESOURCE_URL", resource)
+
+      assert_raise ArgumentError, "invalid OAuth endpoint URL", fn ->
+        Config.Reader.read!(runtime, env: :prod)
+      end
+    end
+  end
+
   defp repo(environment, runtime) do
     Config.Reader.read!(runtime, env: environment)
     |> Keyword.get(:vxpipe_persistence, [])
     |> Keyword.get(Vxpipe.Persistence.Repo, [])
   end
+
+  defp configure_host(:dev), do: System.put_env("APP_HOST", "127.0.0.1")
+  defp configure_host(:prod), do: System.put_env("APP_HOST", "console.example.test")
 end

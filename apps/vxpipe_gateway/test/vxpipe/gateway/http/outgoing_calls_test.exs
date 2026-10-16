@@ -287,6 +287,10 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     refute_received {:test_outbound_leg_connect, _, _, _}
   end
 
+  def authenticate({:mcp, tenant}, "synthetic-mcp-access"),
+    do: {:ok, Vxpipe.Gateway.Test.MCPOAuth.actor(tenant)}
+
+  def authenticate({:mcp, _tenant}, _secret), do: {:error, :invalid_token}
   def authenticate(_conn, :unavailable), do: raise("private-browser-sentinel")
   def authenticate(conn, actor), do: {:ok, conn, actor}
 
@@ -623,9 +627,11 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
 
     mcp = [
       enabled: true,
+      issuer: "https://localhost",
+      resource: "https://localhost/mcp",
       allowed_hosts: ["localhost"],
       admission: admission,
-      authentication: {Vxpipe.Gateway.MCP.Authentication, c.options},
+      authentication: {__MODULE__, {:mcp, c.tenant.key}},
       call_creation_timeout: Keyword.fetch!(options, :call_creation_timeout)
     ]
 
@@ -662,11 +668,11 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
         params: %{name: name, arguments: arguments}
       })
 
-  defp mcp_request(c, configured, session, request) do
+  defp mcp_request(_c, configured, session, request) do
     connection =
       conn(:post, "https://localhost/mcp", JSON.encode!(request))
       |> put_req_header("content-type", "application/json")
-      |> put_req_header("authorization", "Bearer " <> c.key.secret)
+      |> put_req_header("authorization", "Bearer synthetic-mcp-access")
       |> put_req_header("mcp-protocol-version", "2025-11-25")
 
     connection =

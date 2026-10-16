@@ -25,7 +25,12 @@ defmodule Vxpipe.Gateway.HTTP.MountTest do
     options =
       Mount.init(
         path_prefix: "/voice",
-        mcp: [enabled: true, allowed_hosts: ["www.example.com"]]
+        mcp: [
+          enabled: true,
+          issuer: "https://www.example.com",
+          resource: "https://www.example.com/voice/mcp",
+          allowed_hosts: ["www.example.com"]
+        ]
       )
 
     response =

@@ -6,6 +6,7 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
 
   alias Vxpipe.Calls
   alias Vxpipe.Calls.ApiKeyManagement
+  alias Vxpipe.Console.Test.MCPOAuth
   alias Vxpipe.Console.Endpoint
   alias Vxpipe.Gateway.HTTP.Mount
   alias Vxpipe.Identity.{Bootstrap, Sessions}
@@ -28,6 +29,7 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
     if is_nil(Process.whereis(Repo)), do: start_supervised!(Repo)
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
+    MCPOAuth.configure()
     original = Application.fetch_env!(:vxpipe_calls, Calls)
     mount = Endpoint.config(:gateway_mount)
     original_identity = Application.get_env(:vxpipe_identity, :dependencies)
@@ -59,7 +61,12 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
       Endpoint,
       :gateway_mount,
       Mount.init(
-        mcp: [enabled: true, allowed_hosts: ["localhost"]],
+        mcp: [
+          enabled: true,
+          issuer: "https://localhost",
+          resource: MCPOAuth.resource(),
+          allowed_hosts: ["localhost"]
+        ],
         account_management: [
           enabled: true,
           browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}
@@ -103,13 +110,22 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
     {:ok, platform} = ApiKeyManagement.create(actor, "Account acceptance", "platform", nil, [])
     {:ok, tenant, tenant_key} = Calls.bootstrap_tenant("Account membership", [:admin, :calls])
     {:ok, role} = IdentityRoleStore.fetch_by_slug("tenant-manager")
-    %{deps: deps, platform: platform, tenant: tenant, tenant_key: tenant_key, role: role}
+
+    %{
+      deps: deps,
+      platform: platform,
+      tenant: tenant,
+      tenant_key: tenant_key,
+      role: role,
+      oauth: MCPOAuth.issue(actor),
+      tenant_oauth: MCPOAuth.equivalent_to_api_key(tenant_key.secret)
+    }
   end
 
-  test "MCP create and HTTP partial updates preserve account state with key-attributed audit",
+  test "MCP create and HTTP partial updates preserve account state with distinct OAuth and key audit attribution",
        c do
-    session = initialize(c.platform.secret)
-    created = tool(c.platform.secret, session, 2, "create_user", create_params(c))
+    session = initialize(c.oauth.access_token)
+    created = tool(c.oauth.access_token, session, 2, "create_user", create_params(c))
     assert created["isError"] == false
     user = created["structuredContent"]
     assert %{"user_id" => id, "role_id" => role, "enabled" => true} = user
@@ -137,7 +153,7 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
              "memberships" => [%{"tenantId" => c.tenant.key, "access" => "read_write"}]
            }
 
-    enabled = tool(c.platform.secret, session, 3, "update_user", %{user_id: id, enabled: true})
+    enabled = tool(c.oauth.access_token, session, 3, "update_user", %{user_id: id, enabled: true})
     assert enabled["isError"] == false
     assert enabled["structuredContent"]["enabled"] == true
     assert {:error, _} = Sessions.authenticate(c.deps, token)
@@ -173,15 +189,30 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
       )
 
     assert length(events) == 4
-    assert Enum.all?(events, &(&1.actor_api_key_id == key.id and is_nil(&1.actor_user_id)))
+    oauth_events = Enum.filter(events, &(&1.actor_oauth_grant_public_id == c.oauth.grant_id))
+    key_events = Enum.filter(events, &(&1.actor_api_key_id == key.id))
+    assert length(oauth_events) == 2
+    assert length(key_events) == 2
+    actor = Repo.get_by!(IdentityUser, public_id: c.oauth.principal.user_public_id)
+
+    assert Enum.all?(
+             oauth_events,
+             &(&1.actor_user_id == actor.id and is_nil(&1.actor_api_key_id))
+           )
+
+    assert Enum.all?(
+             key_events,
+             &(is_nil(&1.actor_user_id) and is_nil(&1.actor_oauth_grant_public_id))
+           )
+
     refute inspect(events) =~ @password
   end
 
   test "safe account directories share bounded pages and role options across transports", c do
-    session = initialize(c.platform.secret)
+    session = initialize(c.oauth.access_token)
 
     created =
-      tool(c.platform.secret, session, 2, "create_user", create_params(c))["structuredContent"]
+      tool(c.oauth.access_token, session, 2, "create_user", create_params(c))["structuredContent"]
 
     path = "/api/users?query=created-account&role_id=#{c.role.public_id}&page_size=1"
     response = http(c.platform.secret, :get, path)
@@ -189,7 +220,7 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
     http_page = json_response(response, 200)
 
     mcp_page =
-      tool(c.platform.secret, session, 3, "list_users", %{
+      tool(c.oauth.access_token, session, 3, "list_users", %{
         query: "created-account",
         role_id: c.role.public_id,
         page_size: 1
@@ -210,14 +241,14 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
              %{"user" => http_user(created)}
 
     empty =
-      tool(c.platform.secret, session, 4, "list_users", %{query: "absent-account"})[
+      tool(c.oauth.access_token, session, 4, "list_users", %{query: "absent-account"})[
         "structuredContent"
       ]
 
     assert empty["items"] == [] and empty["pagination"]["total_pages"] == 0
     assert http(c.platform.secret, :get, path <> "&page=2").status == 422
 
-    assert tool(c.platform.secret, session, 5, "list_users", %{
+    assert tool(c.oauth.access_token, session, 5, "list_users", %{
              query: "created-account",
              page_size: 1,
              page: 2
@@ -228,7 +259,7 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
     roles = http(c.platform.secret, :get, "/api/role-options?page_size=2") |> json_response(200)
 
     mcp_roles =
-      tool(c.platform.secret, session, 6, "list_role_options", %{page_size: 2})[
+      tool(c.oauth.access_token, session, 6, "list_role_options", %{page_size: 2})[
         "structuredContent"
       ]
 
@@ -243,11 +274,16 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
     refute JSON.encode!(mcp_page) =~ "password"
   end
 
-  test "tenant credentials cannot manage accounts and revoked platform sessions lose access", c do
-    tenant_session = initialize(c.tenant_key.secret)
+  test "tenant authority cannot manage accounts and key versus OAuth revocation remains separate",
+       c do
+    assert request(c.platform.secret, nil, "ping", 1, %{}).status == 401
+    assert request(c.tenant_key.secret, nil, "ping", 1, %{}).status == 401
+    assert http(c.oauth.access_token, :get, "/api/users").status == 401
+    tenant_session = initialize(c.tenant_oauth.access_token)
 
     catalog =
-      request(c.tenant_key.secret, tenant_session, "tools/list", 2, %{}) |> json_response(200)
+      request(c.tenant_oauth.access_token, tenant_session, "tools/list", 2, %{})
+      |> json_response(200)
 
     names = Enum.map(catalog["result"]["tools"], & &1["name"])
 
@@ -265,19 +301,21 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
     assert http(c.tenant_key.secret, :get, "/api/users").status == 403
     assert http(c.tenant_key.secret, :post, "/api/users", create_params(c)).status == 403
 
-    assert request(c.tenant_key.secret, tenant_session, "tools/call", 3, %{
+    assert request(c.tenant_oauth.access_token, tenant_session, "tools/call", 3, %{
              name: "create_user",
              arguments: create_params(c)
            }).status == 403
 
     refute Repo.get_by(IdentityUser, normalized_email: "created-account@example.test")
 
-    session = initialize(c.platform.secret)
+    session = initialize(c.oauth.access_token)
     assert http(c.platform.secret, :get, "/api/users").status == 200
     assert :ok = AccessKeyStore.revoke(Repo, c.platform.key.id, DateTime.utc_now())
     assert http(c.platform.secret, :get, "/api/users").status == 401
+    assert request(c.oauth.access_token, session, "ping", 3, %{}).status == 200
+    assert :ok = MCPOAuth.revoke(c.oauth)
 
-    assert request(c.platform.secret, session, "tools/call", 2, %{
+    assert request(c.oauth.access_token, session, "tools/call", 2, %{
              name: "list_users",
              arguments: %{}
            }).status == 401
@@ -285,10 +323,10 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
 
   test "transport schemas reject null booleans, password updates and authority fields without echoing secrets",
        c do
-    session = initialize(c.platform.secret)
+    session = initialize(c.oauth.access_token)
 
     user =
-      tool(c.platform.secret, session, 2, "create_user", create_params(c))["structuredContent"]
+      tool(c.oauth.access_token, session, 2, "create_user", create_params(c))["structuredContent"]
 
     id = user["user_id"]
 
@@ -308,7 +346,7 @@ defmodule Vxpipe.Console.PlatformMCPAccountsTest do
       refute http.resp_body =~ "private-password-sentinel"
 
       mcp =
-        request(c.platform.secret, session, "tools/call", index, %{
+        request(c.oauth.access_token, session, "tools/call", index, %{
           name: "update_user",
           arguments: Map.put(changes, "user_id", id)
         })

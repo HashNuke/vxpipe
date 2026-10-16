@@ -1,10 +1,17 @@
 defmodule Vxpipe.Gateway.MCP.Authentication do
   @moduledoc false
 
-  alias Vxpipe.Calls
-  alias Vxpipe.Calls.{InstallationOperator, Principal}
+  alias Vxpipe.Identity.{Authorization, OAuth, Principal}
 
-  def authenticate(options, secret), do: Calls.authenticate_api_key(secret, options)
+  def authenticate(options, secret) do
+    case Keyword.fetch(options, :resource) do
+      {:ok, resource} when is_binary(resource) and resource != "" ->
+        OAuth.authenticate(secret, resource)
+
+      _unconfigured ->
+        {:error, :unavailable}
+    end
+  end
 
   def principal_id(conn, _request, _token_info), do: conn.assigns.mcp_identity
 
@@ -32,7 +39,7 @@ defmodule Vxpipe.Gateway.MCP.Authentication do
       {:ok, actor} ->
         {:ok, actor}
 
-      {:error, reason} when reason in [:invalid_api_key, :revoked_api_key, :not_found] ->
+      {:error, reason} when reason in [:invalid_token, :invalid_grant] ->
         {:error, :invalid_credentials}
 
       _unavailable ->
@@ -45,17 +52,11 @@ defmodule Vxpipe.Gateway.MCP.Authentication do
     :throw, _reason -> {:error, :authentication_unavailable}
   end
 
-  defp identity(%Principal{api_key_id: id, tenant_key: tenant})
-       when is_binary(id) and id != "" and is_binary(tenant) and tenant != "",
-       do: {:ok, "tenant:#{tenant}:#{id}"}
-
-  defp identity(%InstallationOperator{
-         grant: :installation_operator,
-         credential_kind: :platform_api_key,
-         api_key_id: id
-       })
-       when is_binary(id) and id != "",
-       do: {:ok, "platform:#{id}"}
+  defp identity(%Principal{credential_kind: :oauth} = actor) do
+    if Authorization.require_actor_identity(actor) == :ok,
+      do: {:ok, "oauth:#{actor.oauth_grant_public_id}"},
+      else: {:error, :invalid_credentials}
+  end
 
   defp identity(_actor), do: {:error, :invalid_credentials}
 end

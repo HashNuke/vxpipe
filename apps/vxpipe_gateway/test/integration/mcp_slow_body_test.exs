@@ -1,7 +1,7 @@
 defmodule Vxpipe.Gateway.MCPSlowBodyTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.Calls.Principal
+  alias Vxpipe.Gateway.Test.MCPOAuth
   alias Vxpipe.Gateway.MCP.{Admission, Endpoint}
 
   @moduletag :integration
@@ -16,6 +16,8 @@ defmodule Vxpipe.Gateway.MCPSlowBodyTest do
          plug:
            {Endpoint,
             enabled: true,
+            issuer: "http://127.0.0.1",
+            resource: "http://127.0.0.1/mcp",
             allowed_hosts: ["127.0.0.1"],
             allow_loopback_http: true,
             admission: admission,
@@ -61,14 +63,7 @@ defmodule Vxpipe.Gateway.MCPSlowBodyTest do
     end
   end
 
-  def authenticate(_observer, "synthetic-key"),
-    do:
-      {:ok,
-       %Principal{
-         tenant_key: "AAAAAAAAAAAAAAAA",
-         api_key_id: "synthetic-key-id",
-         scopes: MapSet.new([:calls])
-       }}
+  def authenticate(_observer, "synthetic-key"), do: {:ok, MCPOAuth.actor()}
 
   defp probe(port),
     do:

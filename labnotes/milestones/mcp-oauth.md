@@ -1,7 +1,7 @@
 # MCP OAuth authorization
 
-Status: durable credentials and delegated authority implemented; browser flow and
-OAuth-only MCP cutover in progress. OAuth is not yet enabled.
+Status: complete and locally verified, 2026-10-16. OAuth replaces MCP API keys;
+public HTTP API keys remain unchanged. Not deployed.
 
 Prerequisites: [Platform MCP endpoint](platform-mcp-endpoint.md),
 [Console authentication](console-authentication-and-user-management.md).
@@ -98,17 +98,17 @@ refreshes and revokes using HTTP, while MCP cutover remains gated.
 
 ## Checkpoint 5: OAuth-only MCP cutover and acceptance (20%)
 
-- [ ] Red-test OAuth Bearer validation/challenge and protected-resource metadata.
-- [ ] Replace MCP key authentication; do not change public HTTP credential modes.
-- [ ] Bind MCP sessions to the grant; refresh keeps a session, another grant cannot
+- [x] Red-test OAuth Bearer validation/challenge and protected-resource metadata.
+- [x] Replace MCP key authentication; do not change public HTTP credential modes.
+- [x] Bind MCP sessions to the grant; refresh keeps a session, another grant cannot
   reuse it, revoked/expired/disabled principals cannot use any session operation.
-- [ ] Run pinned SDK flow across real mounts and representative all-17-tool
+- [x] Run pinned SDK flow across real mounts and representative all-17-tool
   operations with local stores/calls, including denied and read-only cases.
-- [ ] Update configuration/examples/docs and session-reconnection migration notes.
-- [ ] Independent final review; resolve findings with focused red/green evidence.
-- [ ] All root gates pass: format, compile warnings-as-errors, strict Credo,
+- [x] Update configuration/examples/docs and session-reconnection migration notes.
+- [x] Independent final review; resolve findings with focused red/green evidence.
+- [x] All root gates pass: format, compile warnings-as-errors, strict Credo,
   default tests, unused dependencies. Relevant frontend/browser checks pass.
-- [ ] Mark this milestone/index complete only after acceptance; final commit and
+- [x] Mark this milestone/index complete only after acceptance; final commit and
   pushnotify reporting actual completion (0% pending).
 
 ## Specification review
@@ -253,3 +253,49 @@ those before public HTTP exposure. Research is not implementation acceptance.
   reviewed rather than separately captured. Chrome required its no-sandbox launch
   option in this environment. Browser consent expiry was not shortened for renders.
 - OAuth-only MCP runtime cutover and full umbrella acceptance remain checkpoint5.
+
+
+### OAuth-only MCP cutover
+
+- MCP now accepts verified delegated-user OAuth principals only. Missing credentials
+  advertise the configured protected-resource metadata; keys and browser cookies
+  cannot substitute. Storage failures fail closed. Runtime configuration selects
+  the existing application origin and Persistence ports when the database is enabled.
+- Sessions bind to the grant, so refresh preserves continuity while another grant
+  cannot reuse the session. Real persisted tests cover revocation, disabled users,
+  HTTP key independence and correct user/grant audit attribution. All 17 tool
+  schemas and shared operations remain intact.
+- Focused Gateway MCP/mount tests: 49 passed. Console persisted MCP acceptance:
+  13 passed. Local stalled-body network integration: 1 passed. These followed
+  focused red tests for the OAuth-only boundary and resource challenge.
+- Pinned SDK acceptance passed all seven groups: all 17 tools on each of three
+  mounts, selected official initialize/ping/tools-list scenarios, and whole-BEAM
+  restart/accelerated expiry/recovery. Each mount checks real DCR, PKCE, resource
+  binding, refresh continuity and revocation. Console additionally exercises the
+  full login/consent/code flow, including the native form's opaque Origin header.
+- Independent authentication/endpoint, SDK and runtime reviews found no remaining
+  blockers. The final null-origin consent exception was independently reviewed
+  with its real-CSRF regression coverage. No provider or telephony service was used.
+- Root format, warnings-as-errors compilation, strict Credo and unused dependency
+  checks passed. Full default umbrella tests remain the final acceptance gate.
+
+
+### Final acceptance
+
+- Full default umbrella run listed 4,437 tests, with 156 excluded. It found eight
+  legacy test-fixture assumptions and one unrelated WebRTC recovery deadline flake.
+  Fixed the MCP outgoing-call fixtures and production-origin configuration fixtures
+  without weakening their assertions or changing unrelated production code.
+- Focused outgoing-call file: 21 passed. Runtime configuration files: 16 passed,
+  including four added OAuth configuration contracts. Isolated WebRTC recovery:
+  three passed. Final root `mix test --failed`: all nine former failures passed
+  (Gateway four, Console five). This records the initial failures and reruns rather
+  than claiming the first full run was clean. The WebRTC timing flake was not
+  changed or suppressed and passed both its isolated and final failed-test runs.
+- Final root format, warnings-as-errors compile, strict Credo and unused dependency
+  checks passed after the fixture corrections. SDK/browser/frontend and separate
+  database-concurrency acceptance are recorded above. Local documentation links
+  resolve, and independent final reviews approved code, tests and documentation.
+- All acceptance work is complete. No live provider tests, Lean work, push or
+  deployment was performed. Existing MCP clients must reconnect through OAuth;
+  public HTTP API keys retain their documented behavior.

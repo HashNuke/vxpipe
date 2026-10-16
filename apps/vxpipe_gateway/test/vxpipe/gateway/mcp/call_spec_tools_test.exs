@@ -14,6 +14,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
     TestMemoryRepository
   }
 
+  alias Vxpipe.Gateway.Test.MCPOAuth
   alias Vxpipe.Gateway.MCP.{Admission, Endpoint}
 
   @version "2025-11-25"
@@ -30,12 +31,14 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
       registries: %{host_tools: %{}}
     ]
 
-    {:ok, tenant, key} = Administration.bootstrap_tenant("MCP spec", [:admin], calls_options)
-    {:ok, actor} = Calls.authenticate_api_key(key.secret, calls_options)
+    {:ok, tenant, _key} = Administration.bootstrap_tenant("MCP spec", [:admin], calls_options)
+    actor = MCPOAuth.actor(tenant.key, :specs)
     admission = start_supervised!({Admission, name: nil})
 
     endpoint = [
       enabled: true,
+      issuer: "https://localhost",
+      resource: "https://localhost/mcp",
       allowed_hosts: ["localhost"],
       admission: admission,
       authentication: {__MODULE__, actor},
@@ -45,14 +48,11 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
     %{endpoint: endpoint, tenant: tenant, actor: actor, calls_options: calls_options}
   end
 
-  test "only full tenant and Settings platform actors discover and invoke spec tools", ctx do
+  test "tenant authors and delegated installation administrators discover and invoke spec tools",
+       ctx do
     for actor <- [
           ctx.actor,
-          %InstallationOperator{
-            grant: :installation_operator,
-            credential_kind: :platform_api_key,
-            api_key_id: "fixture"
-          }
+          MCPOAuth.actor(ctx.tenant.key, :platform)
         ] do
       endpoint = Keyword.put(ctx.endpoint, :authentication, {__MODULE__, actor})
       session = initialize(endpoint)
@@ -61,7 +61,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
       assert Enum.all?(@spec_tools, &(&1 in names))
     end
 
-    for actor <- [%{ctx.actor | scopes: MapSet.new([:calls])}] do
+    for actor <- [MCPOAuth.actor(ctx.tenant.key, :calls)] do
       endpoint = Keyword.put(ctx.endpoint, :authentication, {__MODULE__, actor})
       session = initialize(endpoint)
       catalog = request(endpoint, session, 2, "tools/list", %{})
@@ -225,6 +225,14 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
 
   test "directory and source errors match canonical HTTP reads without exposing backend details",
        ctx do
+    browser_actor = %{
+      ctx.actor
+      | credential_kind: :browser_session,
+        session_public_id: "33333333-3333-4333-8333-333333333333",
+        oauth_grant_public_id: nil,
+        delegation: nil
+    }
+
     for {name, suffix, arguments, reason, status, code} <- [
           {"list_call_specs", "", %{}, :tenant_not_found, 404, "tenant_not_found"},
           {"list_call_specs", "", %{}, {:private, "storage-sentinel"}, 503,
@@ -243,7 +251,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
         Vxpipe.Gateway.HTTP.Endpoint.init(
           call_spec_reads: [
             enabled: true,
-            browser_auth: {__MODULE__, {:browser, ctx.actor}},
+            browser_auth: {__MODULE__, {:browser, browser_actor}},
             calls_options: options
           ]
         )

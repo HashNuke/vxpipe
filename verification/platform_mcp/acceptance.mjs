@@ -1,5 +1,6 @@
 // Opt-in wire acceptance. All credentials and tenant records are synthetic.
 import assert from "node:assert/strict";
+import { createHash, randomBytes } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
@@ -97,6 +98,111 @@ async function rpc(url, session, secret = key, method = "ping", params = {}) {
   return { status: response.status, body };
 }
 
+async function tokenRequest(url, params) {
+  const response = await fetch(new URL("/oauth/token", url), {
+    method: "POST", body: new URLSearchParams(params), signal: AbortSignal.timeout(10_000)
+  });
+  assert.equal(response.status, 200, "OAuth token exchange");
+  const tokens = await response.json();
+  assert.ok(tokens.access_token && tokens.refresh_token && tokens.expires_in > 0);
+  return tokens;
+}
+
+async function exerciseOAuth(fixture, url, connect) {
+  const endpoint = new URL(url);
+  const resourceResponse = await fetch(new URL(`/.well-known/oauth-protected-resource${endpoint.pathname}`, url));
+  assert.equal(resourceResponse.status, 200);
+  const resource = await resourceResponse.json();
+  assert.equal(resource.resource, url);
+  assert.deepEqual(resource.authorization_servers, [endpoint.origin]);
+  const serverResponse = await fetch(new URL("/.well-known/oauth-authorization-server", url));
+  assert.equal(serverResponse.status, 200);
+  const server = await serverResponse.json();
+  assert.equal(server.issuer, endpoint.origin);
+  assert.deepEqual(server.code_challenge_methods_supported, ["S256"]);
+  const redirect = "http://127.0.0.1:43210/callback";
+  const registered = await fetch(server.registration_endpoint, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ client_name: "Official SDK acceptance", redirect_uris: [redirect] }),
+    signal: AbortSignal.timeout(10_000)
+  });
+  assert.equal(registered.status, 201);
+  const client = await registered.json();
+  assert.ok(client.client_id && !client.client_secret);
+  const verifier = randomBytes(32).toString("base64url");
+  const params = { response_type: "code", client_id: client.client_id, redirect_uri: redirect,
+    scope: "mcp", state: "sdk-pkce-state", resource: url, code_challenge_method: "S256",
+    code_challenge: createHash("sha256").update(verifier).digest("base64url") };
+  const approved = url === fixture.addresses.console
+    ? await browserAuthorize(fixture, server.authorization_endpoint, params)
+    : await fixture.command({ action: "authorize", params, resource: url });
+  assert.equal(approved.state, params.state);
+  const exchange = { grant_type: "authorization_code", client_id: client.client_id,
+    redirect_uri: redirect, resource: url, code: approved.code, code_verifier: verifier };
+  const invalid = await fetch(server.token_endpoint, {
+    method: "POST", body: new URLSearchParams({ ...exchange, code_verifier: randomBytes(32).toString("base64url") }),
+    signal: AbortSignal.timeout(10_000)
+  });
+  assert.equal(invalid.status, 400);
+  const tokens = await tokenRequest(url, exchange);
+  const connected = await connect(url, tokens.access_token);
+  assert.equal((await connected.client.listTools()).tools.length, 17);
+  await connected.transport.terminateSession();
+  await connected.client.close();
+}
+
+async function browserAuthorize(fixture, authorizationUrl, params) {
+  const cookies = new Map();
+  const origin = new URL(authorizationUrl).origin;
+  async function request(path, options = {}) {
+    const target = new URL(path, origin);
+    assert.equal(target.origin, origin, "Browser credentials stay on fixture origin");
+    const response = await fetch(target, {
+      ...options, redirect: "manual", signal: AbortSignal.timeout(10_000),
+      headers: { cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join("; "), ...options.headers }
+    });
+    for (const value of response.headers.getSetCookie()) {
+      const pair = value.split(";", 1)[0];
+      const equals = pair.indexOf("=");
+      cookies.set(pair.slice(0, equals), pair.slice(equals + 1));
+    }
+    return response;
+  }
+  const initial = await request(`${authorizationUrl}?${new URLSearchParams(params)}`);
+  assert.equal(initial.status, 302, "Start browser authorization");
+  const resume = initial.headers.get("location");
+  assert.match(resume, /^\/oauth\/authorize\/[A-Za-z0-9_-]{43}$/);
+  const unauthenticated = await request(resume);
+  assert.equal(unauthenticated.status, 302);
+  assert.equal(unauthenticated.headers.get("location"), "/auth/login");
+  const loginPage = await request("/auth/login");
+  assert.equal(loginPage.status, 200);
+  const loginCsrf = (await loginPage.text()).match(/name="csrf-token" content="([^"]+)"/)?.[1];
+  assert.ok(loginCsrf);
+  const login = await request("/auth/api/login", {
+    method: "POST", headers: { "content-type": "application/json", "x-csrf-token": loginCsrf },
+    body: JSON.stringify(fixture.browser_login)
+  });
+  assert.equal(login.status, 200, "Real browser login");
+  const consent = await request(resume);
+  assert.equal(consent.status, 200, "Resume browser consent after login");
+  const html = await consent.text();
+  assert.ok(html.includes("Official SDK acceptance") && html.includes(params.resource));
+  const csrf = html.match(/name="_csrf_token" value="([^"]+)"/)?.[1];
+  assert.ok(csrf);
+  const decision = await request(resume, {
+    // Native form submission under the consent page's no-referrer policy.
+    method: "POST", headers: { origin: "null" },
+    body: new URLSearchParams({ _csrf_token: csrf, decision: "approve" })
+  });
+  assert.equal(decision.status, 302, "Approve browser consent");
+  const callback = new URL(decision.headers.get("location"));
+  assert.equal(callback.origin + callback.pathname, params.redirect_uri);
+  assert.equal(callback.searchParams.get("state"), params.state);
+  assert.ok(callback.searchParams.get("code"));
+  return Object.fromEntries(callback.searchParams);
+}
+
 async function officialScenarios(cli, upstream) {
   // The pinned CLI has no custom-header option. Forward bytes unchanged and add
   // only our synthetic credential; this is not authentication conformance.
@@ -137,32 +243,36 @@ try {
   async function connect(url, secret = key) {
     const client = new Client({ name: "vxpipe-platform-acceptance", version: "1" });
     clients.add(client);
-    const transport = new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: { Authorization: `Bearer ${secret}` } } });
+    const headers = { Authorization: `Bearer ${secret}` };
+    const transport = new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers } });
     await deadline(client.connect(transport), "SDK initialization");
     assert.equal(transport.protocolVersion, version);
     assert.ok(transport.sessionId);
-    return { client, transport };
+    return { client, transport, headers };
   }
 
   stage = "fixture startup";
   const fixture = await startFixture();
-  key = fixture.keys.platform;
   for (const [mount, url] of Object.entries(fixture.addresses)) {
+    const credentials = fixture.credentials[mount];
+    key = credentials.platform.access_token;
+    stage = `${mount} OAuth discovery and PKCE`;
+    await exerciseOAuth(fixture, url, connect);
     stage = `${mount} initialization/catalog`;
-    const { client, transport } = await connect(url);
+    const { client, transport, headers } = await connect(url);
     const catalog = await client.listTools();
     assert.deepEqual(catalog.tools.map(tool => tool.name).sort(), allTools);
-    await exerciseProducts(client, { tenant: fixture.tenant, mount, secrets: Object.values(fixture.keys), progress: name => { stage = `${mount} ${name}`; } });
+    await exerciseProducts(client, { tenant: fixture.tenant, mount, secrets: [...Object.values(fixture.keys), ...Object.values(credentials).flatMap(value => [value.access_token, value.refresh_token])], progress: name => { stage = `${mount} ${name}`; } });
     stage = `${mount} authority/schema/revocation`;
 
     for (const [kind, expected] of [["calls", callTools], ["full", tenantTools]]) {
-      const scoped = await connect(url, fixture.keys[kind]);
+      const scoped = await connect(url, credentials[kind].access_token);
       assert.deepEqual((await scoped.client.listTools()).tools.map(tool => tool.name).sort(), expected);
       const own = await scoped.client.callTool({ name: "list_tenants", arguments: {} });
       assert.ok(own.structuredContent.items.length === 1 && own.structuredContent.items[0].tenant_key === fixture.tenant);
       const foreign = await scoped.client.callTool({ name: "get_tenant", arguments: { tenant_key: fixture.foreign } });
       assert.ok(foreign.isError && foreign.structuredContent.error.code === "tenant_not_found");
-      assert.equal((await rpc(url, scoped.transport.sessionId, fixture.keys[kind], "tools/call", { name: "list_users", arguments: {} })).status, 403);
+      assert.equal((await rpc(url, scoped.transport.sessionId, credentials[kind].access_token, "tools/call", { name: "list_users", arguments: {} })).status, 403);
       await scoped.transport.terminateSession();
       await scoped.client.close();
     }
@@ -179,20 +289,40 @@ try {
     }
     assert.equal((await rpc(url, transport.sessionId, null)).status, 401);
     assert.equal((await rpc(url, transport.sessionId, "invalid-key")).status, 401);
-    assert.equal((await rpc(url, transport.sessionId, fixture.keys.other)).status, 404);
+    assert.equal((await rpc(url, transport.sessionId, credentials.other.access_token)).status, 404);
+    assert.equal((await rpc(url, transport.sessionId, fixture.keys.platform)).status, 401);
+    const product = await fetch(url.replace(/\/mcp$/, "/api/tenants"), {
+      headers: { authorization: `Bearer ${fixture.keys.platform}` }, signal: AbortSignal.timeout(10_000)
+    });
+    assert.equal(product.status, 200, "Product HTTP API still accepts API keys");
+    const foreignResource = Object.entries(fixture.credentials).find(([name]) => name !== mount)[1];
+    assert.equal((await rpc(url, transport.sessionId, foreignResource.platform.access_token)).status, 401);
+    const refreshed = await tokenRequest(url, {
+      grant_type: "refresh_token", client_id: credentials.platform.client_id,
+      refresh_token: credentials.platform.refresh_token, resource: url
+    });
+    key = refreshed.access_token;
+    headers.Authorization = `Bearer ${key}`;
+    assert.equal((await rpc(url, transport.sessionId)).status, 200);
+    assert.ok((await client.listTools()).tools.length === 17);
     const session = transport.sessionId;
     await transport.terminateSession();
     assert.equal((await rpc(url, session)).status, 404);
     await client.close();
 
-    const issued = await fixture.command({ action: "issue_revocable" });
-    const revoked = await connect(url, issued.secret);
-    await fixture.command({ action: "revoke", id: issued.id });
-    assert.equal((await rpc(url, revoked.transport.sessionId, issued.secret)).status, 401);
+    const issued = await fixture.command({ action: "issue_revocable", resource: url });
+    const revoked = await connect(url, issued.access_token);
+    const revocation = await fetch(new URL("/oauth/revoke", url), {
+      method: "POST", body: new URLSearchParams({ client_id: issued.client_id, token: issued.access_token }),
+      signal: AbortSignal.timeout(10_000)
+    });
+    assert.equal(revocation.status, 200);
+    assert.equal((await rpc(url, revoked.transport.sessionId, issued.access_token)).status, 401);
     await revoked.client.close();
-    console.log(`PASS SDK ${mount}: all 17 tools, actual stores, authority catalogs, schema, redaction, revocation, DELETE`);
+    console.log(`PASS SDK ${mount}: all 17 tools, actual stores, authority catalogs, schema, redaction, refresh continuity, revocation, DELETE`);
   }
   stage = "official scenarios";
+  key = fixture.credentials.gateway.platform.access_token;
   await officialScenarios(path.join(harness, "dist/index.js"), fixture.addresses.gateway);
 
   stage = "restart/expiry";
@@ -203,7 +333,7 @@ try {
   await fixture.stop();
   const restarted = await startFixture(port, 1);
   const url = restarted.addresses.gateway;
-  key = restarted.keys.platform;
+  key = restarted.credentials.gateway.platform.access_token;
   assert.deepEqual(await restarted.command({ action: "session_exists", session: previousSession }), { exists: false });
   assert.equal((await rpc(url, previousSession)).status, 404);
   const expiring = await connect(url);

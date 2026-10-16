@@ -119,6 +119,10 @@ database_enabled? = not is_nil(database_url) or (config_env() == :dev and not is
 if database_enabled? do
   config :vxpipe_persistence, :enabled, true
 
+  config :vxpipe_identity,
+    oauth_store: Vxpipe.Persistence.OAuth.Store,
+    oauth_browser_store: Vxpipe.Persistence.OAuth.Browser
+
   config :vxpipe_identity, :dependencies, %{
     users: Vxpipe.Persistence.IdentityUserStore,
     roles: Vxpipe.Persistence.IdentityRoleStore,
@@ -457,6 +461,21 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
       do: ["localhost", "127.0.0.1", "::1"],
       else: [app_uri.host]
 
+  mcp_resource = nonempty_env.("VXPIPE_MCP_RESOURCE_URL") || app_origin <> "/mcp"
+
+  oauth = [
+    enabled: database_enabled?,
+    issuer: app_origin,
+    resource: mcp_resource,
+    allowed_hosts: mcp_hosts,
+    allowed_origins: [app_origin],
+    allow_loopback_http: config_env() in [:dev, :test]
+  ]
+
+  # Validate configured URLs before exposing either discovery or browser consent.
+  _ = Vxpipe.Gateway.OAuth.Configuration.build(oauth)
+  config :vxpipe_console, :oauth, oauth
+
   call_admission =
     Application.fetch_env!(:vxpipe_gateway, Vxpipe.Gateway.Application)
     |> Keyword.fetch!(:http)
@@ -491,8 +510,11 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
     managed_cleanup: [enabled: database_enabled?],
     http: [
       call_admission: call_admission,
+      oauth: oauth,
       mcp: [
         enabled: database_enabled?,
+        issuer: app_origin,
+        resource: mcp_resource,
         allowed_hosts: mcp_hosts,
         allowed_origins: [app_origin],
         allow_loopback_http: config_env() in [:dev, :test]

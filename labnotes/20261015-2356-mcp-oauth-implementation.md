@@ -145,3 +145,59 @@
   No real credentials or fixture payloads were committed.
 - Independent visual reviewer returned ship at screenshot/source scope. Detector
   found no issues. No new design system or permission editor was introduced.
+
+
+## OAuth-only MCP acceptance
+
+- Replaced MCP API-key authentication with the Identity OAuth facade and explicit
+  delegated-user principals. Challenges point to configured resource metadata;
+  resource configuration is validated at startup. Product HTTP keys remain intact.
+- Migrated fixtures to real OAuth grants while retaining separate HTTP keys for
+  equivalent-authority comparisons. Focused Gateway MCP/mount 49, persisted Console
+  MCP 13 and the loopback stalled-body integration test passed. Refresh retains a
+  session, another grant cannot reuse it, and revocation/disabled users fail on the
+  next request. Audit tests retain the real user and grant provenance.
+- Updated the pinned SDK fixture to exercise actual discovery, DCR, PKCE, rotating
+  refresh, resource binding and revocation across all three mounts. Console runs
+  login and consent over HTTP; standalone/embedded fixtures use a private consent
+  command because they do not own browser pages. All seven SDK/conformance/restart
+  groups passed, including native-form Origin:null with valid CSRF.
+- Independent MCP boundary, SDK and runtime reviews found no blockers. The separate
+  final browser exception review confirmed POST-only scope and mandatory CSRF,
+  session, binding and authority checks. Fixtures stopped before root DB tests.
+- Root format, compile with warnings-as-errors, strict Credo and unused dependency
+  checks passed. Full root tests are running. Updated client setup, configuration,
+  limits and key-to-OAuth reconnection documentation; local links resolve.
+
+- The full default run listed 4,437 tests (156 excluded) and exposed eight legacy
+  fixture assumptions plus one local WebRTC recovery deadline failure. Three
+  outgoing-call MCP fixtures still used API keys and lacked issuer/resource;
+  migrated only their authentication setup, preserving HTTP-key replay and every
+  timeout/idempotency assertion. All 21 tests in that file pass; independent review
+  confirmed the credential paths remain distinct.
+- Five Console DB/storage configuration tests supplied a production loopback HTTP
+  origin. Updated fixtures to a public application host and isolated the resource
+  override environment variable. Added runtime checks for matching issuer/resource,
+  store ports, exact override behavior and safe rejection of invalid configuration.
+  Independent review found no blockers; focused verification is pending below.
+- The unrelated WebRTC failure was a real fail-closed room shutdown after its
+  existing 750 ms recovery deadline, not just the polling helper timing out. No
+  OAuth diff changes that code. An isolated rerun is in progress before deciding
+  whether any further change is warranted; no timeout/assertion was weakened.
+- Isolated WebRTC rerun passed all three generated private-media loss cases,
+  with 66 unrelated cases excluded. No production code, deadline or assertion was
+  changed. The earlier recovery-deadline failure remains an observed timing flake,
+  not a claimed OAuth fix.
+
+- Runtime fixture follow-up initially exposed two test assumptions: development
+  resolves its host as a local listener address, and missing production APP_HOST
+  fails in the preexisting Console origin guard. Kept loopback for development,
+  public host for production, and asserted the actual distinct safe errors.
+  Final two-file run: 16 passed. Independent review approved the final adjustment.
+- Final root failed-test sweep passed all nine former failures: Gateway four and
+  Console five. WebRTC therefore passed both isolated and root failed-test reruns.
+  Root format, warnings-as-errors compilation, strict Credo and unused dependency
+  checks also passed after all test updates. No live provider or Lean work ran.
+- Milestone and index marked complete with initial failures and rerun evidence
+  preserved. Documentation records configuration, limitations and MCP reconnection;
+  this work does not claim deployment. Final checkpoint is ready to commit.

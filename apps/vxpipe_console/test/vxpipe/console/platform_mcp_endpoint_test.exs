@@ -7,6 +7,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
 
   alias Vxpipe.Calls
   alias Vxpipe.Calls.ApiKeyManagement
+  alias Vxpipe.Console.Test.MCPOAuth
   alias Vxpipe.Console.Endpoint
   alias Vxpipe.Gateway.HTTP.Mount
 
@@ -26,6 +27,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
     if is_nil(Process.whereis(Repo)), do: start_supervised!(Repo)
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
+    MCPOAuth.configure()
     original = Application.fetch_env!(:vxpipe_calls, Calls)
     mount = Endpoint.config(:gateway_mount)
 
@@ -51,7 +53,12 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       Endpoint,
       :gateway_mount,
       Mount.init(
-        mcp: [enabled: true, allowed_hosts: ["localhost"]],
+        mcp: [
+          enabled: true,
+          issuer: "https://localhost",
+          resource: MCPOAuth.resource(),
+          allowed_hosts: ["localhost"]
+        ],
         call_admission: [
           enabled: true,
           browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}
@@ -63,27 +70,30 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
     )
 
     {:ok, tenant, key} = Calls.bootstrap_tenant("MCP endpoint fixture", [:calls])
-    %{tenant: tenant, key: key}
+    %{tenant: tenant, key: key, oauth: MCPOAuth.equivalent_to_api_key(key.secret)}
   end
 
-  test "Console serves key-bound MCP sessions and rechecks persisted revocation", data do
-    initialized = request(data.key.secret, "initialize", 1, nil, initialize_params())
+  test "Console serves grant-bound MCP sessions across refresh and persisted revocation", data do
+    initialized = request(data.oauth.access_token, "initialize", 1, nil, initialize_params())
     assert json_response(initialized, 200)["result"]["protocolVersion"] == @version
     assert [session] = get_resp_header(initialized, "mcp-session-id")
     on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
 
-    catalog = request(data.key.secret, "tools/list", 2, session)
+    catalog = request(data.oauth.access_token, "tools/list", 2, session)
 
     assert Enum.map(json_response(catalog, 200)["result"]["tools"], & &1["name"]) ==
              ["list_tenants", "get_tenant", "create_call", "create_join_token", "hangup_call"]
 
     assert get_resp_header(catalog, "cache-control") == ["no-store"]
 
-    {:ok, other} = Calls.issue_api_key(data.tenant.key, "other key", [:calls])
-    assert request(other.secret, "ping", 3, session).status == 404
-
-    {:ok, _revoked} = Calls.revoke_api_key(data.tenant.key, data.key.id)
-    assert request(data.key.secret, "ping", 4, session).status == 401
+    other = MCPOAuth.equivalent_to_api_key(data.key.secret)
+    assert request(other.access_token, "ping", 3, session).status == 404
+    {:ok, refreshed} = MCPOAuth.refresh(data.oauth)
+    assert request(refreshed.access_token, "ping", 4, session).status == 200
+    assert request(data.key.secret, "ping", 5, session).status == 401
+    assert rest(data.key.secret, "/api/tenants").status == 200
+    assert :ok = MCPOAuth.revoke(data.oauth)
+    assert request(refreshed.access_token, "ping", 6, session).status == 401
   end
 
   test "Console does not substitute a browser session or parse unauthenticated MCP JSON" do
@@ -94,7 +104,10 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       |> post("https://localhost/mcp", "invalid-json")
 
     assert response.status == 401
-    assert get_resp_header(response, "www-authenticate") == ["Bearer realm=\"vxpipe\""]
+
+    assert get_resp_header(response, "www-authenticate") == [
+             ~s(Bearer realm="vxpipe", resource_metadata="https://localhost/.well-known/oauth-protected-resource/mcp", scope="mcp")
+           ]
   end
 
   test "HTTP and MCP agree on scoped directory pages and foreign lookup errors", data do
@@ -126,7 +139,8 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
     platform_tenants = Repo.all(Vxpipe.Persistence.Schema.Tenant)
 
     for secret <- [data.key.secret, full.secret, platform.secret] do
-      initialized = request(secret, "initialize", 1, nil, initialize_params())
+      oauth = MCPOAuth.equivalent_to_api_key(secret)
+      initialized = request(oauth.access_token, "initialize", 1, nil, initialize_params())
       [session] = get_resp_header(initialized, "mcp-session-id")
       on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
       expected = if secret == platform.secret, do: platform_tenants, else: [data.tenant]
@@ -139,7 +153,13 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
         for page <- 1..pages, reduce: [] do
           keys ->
             http = rest(secret, "/api/tenants?page=#{page}&page_size=2") |> json_response(200)
-            mcp = tool(secret, session, page + 1, "list_tenants", %{page: page, page_size: 2})
+
+            mcp =
+              tool(oauth.access_token, session, page + 1, "list_tenants", %{
+                page: page,
+                page_size: 2
+              })
+
             assert mcp["structuredContent"] == http
             assert http["pagination"]["total"] == length(expected)
             assert http["pagination"]["total_pages"] == pages
@@ -158,13 +178,20 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       out_of_range =
         rest(secret, "/api/tenants?page=#{pages + 1}&page_size=2") |> json_response(422)
 
-      mcp = tool(secret, session, pages + 2, "list_tenants", %{page: pages + 1, page_size: 2})
+      mcp =
+        tool(oauth.access_token, session, pages + 2, "list_tenants", %{
+          page: pages + 1,
+          page_size: 2
+        })
+
       assert mcp["isError"] == true
       assert mcp["structuredContent"] == out_of_range
 
       detail = rest(secret, "/api/tenants/#{data.tenant.key}") |> json_response(200)
 
-      assert tool(secret, session, pages + 3, "get_tenant", %{tenant_key: data.tenant.key})[
+      assert tool(oauth.access_token, session, pages + 3, "get_tenant", %{
+               tenant_key: data.tenant.key
+             })[
                "structuredContent"
              ] == detail
 
@@ -172,7 +199,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
         foreign = hd(others).key
         error = rest(secret, "/api/tenants/#{foreign}") |> json_response(404)
 
-        assert tool(secret, session, pages + 4, "get_tenant", %{tenant_key: foreign})[
+        assert tool(oauth.access_token, session, pages + 4, "get_tenant", %{tenant_key: foreign})[
                  "structuredContent"
                ] == error
       end
@@ -188,7 +215,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       Keyword.put(configured, :admin_repository, {__MODULE__, :empty})
     )
 
-    initialized = request(data.key.secret, "initialize", 1, nil, initialize_params())
+    initialized = request(data.oauth.access_token, "initialize", 1, nil, initialize_params())
     [session] = get_resp_header(initialized, "mcp-session-id")
     on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
 
@@ -204,11 +231,14 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
              }
            }
 
-    assert tool(data.key.secret, session, 2, "list_tenants", %{})["structuredContent"] == http
+    assert tool(data.oauth.access_token, session, 2, "list_tenants", %{})["structuredContent"] ==
+             http
 
     error = rest(data.key.secret, "/api/tenants?page=2") |> json_response(422)
 
-    assert tool(data.key.secret, session, 3, "list_tenants", %{page: 2})["structuredContent"] ==
+    assert tool(data.oauth.access_token, session, 3, "list_tenants", %{page: 2})[
+             "structuredContent"
+           ] ==
              error
   end
 
@@ -232,12 +262,13 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
     base = "/api/tenants/#{data.tenant.key}/call-specs"
 
     for secret <- [full.secret, platform.secret] do
-      initialized = request(secret, "initialize", 1, nil, initialize_params())
+      oauth = MCPOAuth.equivalent_to_api_key(secret)
+      initialized = request(oauth.access_token, "initialize", 1, nil, initialize_params())
       [session] = get_resp_header(initialized, "mcp-session-id")
       on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
 
       created =
-        tool(secret, session, 2, "create_call_spec", %{
+        tool(oauth.access_token, session, 2, "create_call_spec", %{
           tenant_key: data.tenant.key,
           call_spec_definition: spec_source()
         })
@@ -255,7 +286,10 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       read = rest(secret, base <> "/" <> id) |> json_response(200) |> Map.fetch!("call_spec")
 
       mcp =
-        tool(secret, session, 3, "get_call_spec", %{tenant_key: data.tenant.key, call_spec_id: id})[
+        tool(oauth.access_token, session, 3, "get_call_spec", %{
+          tenant_key: data.tenant.key,
+          call_spec_id: id
+        })[
           "structuredContent"
         ]
 
@@ -268,7 +302,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       assert mcp["published_revision"] == nil
 
       publication =
-        tool(secret, session, 4, "publish_call_spec_revision", %{
+        tool(oauth.access_token, session, 4, "publish_call_spec_revision", %{
           tenant_key: data.tenant.key,
           call_spec_id: id,
           revision: 1
@@ -287,7 +321,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       listed = rest(secret, base) |> json_response(200)
 
       mcp_list =
-        tool(secret, session, 5, "list_call_specs", %{tenant_key: data.tenant.key})[
+        tool(oauth.access_token, session, 5, "list_call_specs", %{tenant_key: data.tenant.key})[
           "structuredContent"
         ]
 
@@ -304,7 +338,15 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
             do: Map.put(args, :call_spec_definition, source),
             else: args
 
-        denied = tool(secret, session, if(name == "get_call_spec", do: 6, else: 7), name, args)
+        denied =
+          tool(
+            oauth.access_token,
+            session,
+            if(name == "get_call_spec", do: 6, else: 7),
+            name,
+            args
+          )
+
         assert denied["isError"] == true
         assert denied["structuredContent"]["error"]["code"] == "call_spec_not_found"
       end
@@ -315,12 +357,12 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
                404
     end
 
-    initialized = request(data.key.secret, "initialize", 1, nil, initialize_params())
+    initialized = request(data.oauth.access_token, "initialize", 1, nil, initialize_params())
     [session] = get_resp_header(initialized, "mcp-session-id")
     on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
     assert rest(data.key.secret, base).status == 403
 
-    assert request(data.key.secret, "tools/call", 2, session, %{
+    assert request(data.oauth.access_token, "tools/call", 2, session, %{
              name: "list_call_specs",
              arguments: %{tenant_key: data.tenant.key}
            }).status == 403
@@ -353,11 +395,12 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
     creation_path = "/api/tenants/#{data.tenant.key}/call-specs/#{draft.call_spec_id}/calls"
 
     for {secret, index} <- Enum.with_index([data.key.secret, full.secret, platform.secret], 1) do
-      session = session(secret)
+      oauth = MCPOAuth.equivalent_to_api_key(secret)
+      session = session(oauth.access_token)
       key = "cross-transport-#{index}"
 
       created =
-        tool(secret, session, 2, "create_call", %{
+        tool(oauth.access_token, session, 2, "create_call", %{
           tenant_key: data.tenant.key,
           call_spec_id: draft.call_spec_id,
           variables: variables,
@@ -390,7 +433,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       http = rest_write(secret, :post, tokens_path, %{}) |> json_response(201)
 
       mcp =
-        tool(secret, session, 3, "create_join_token", %{
+        tool(oauth.access_token, session, 3, "create_join_token", %{
           tenant_key: data.tenant.key,
           call_id: call_id
         })
@@ -417,7 +460,10 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       foreign_http = rest_write(secret, :post, foreign_path, %{}) |> json_response(status)
 
       denied =
-        tool(secret, session, 4, "create_join_token", %{tenant_key: foreign.key, call_id: call_id})
+        tool(oauth.access_token, session, 4, "create_join_token", %{
+          tenant_key: foreign.key,
+          call_id: call_id
+        })
 
       assert denied["isError"] == true
       assert denied["structuredContent"] == foreign_http
@@ -432,7 +478,7 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
 
       ended = rest_write(secret, :post, tokens_path, %{}) |> json_response(409)
 
-      assert tool(secret, session, 5, "create_join_token", %{
+      assert tool(oauth.access_token, session, 5, "create_join_token", %{
                tenant_key: data.tenant.key,
                call_id: call_id
              })["structuredContent"] == ended
@@ -455,10 +501,11 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
     {:ok, _} = Calls.publish_call_spec(data.tenant.key, draft.call_spec_id, draft.revision)
 
     for secret <- [data.key.secret, full.secret, platform.secret] do
-      session = session(secret)
+      oauth = MCPOAuth.equivalent_to_api_key(secret)
+      session = session(oauth.access_token)
 
       created =
-        tool(secret, session, 2, "create_call", %{
+        tool(oauth.access_token, session, 2, "create_call", %{
           tenant_key: data.tenant.key,
           call_spec_id: draft.call_spec_id
         })
@@ -466,11 +513,19 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       id = created["structuredContent"]["call_id"]
 
       token =
-        tool(secret, session, 3, "create_join_token", %{tenant_key: data.tenant.key, call_id: id})[
+        tool(oauth.access_token, session, 3, "create_join_token", %{
+          tenant_key: data.tenant.key,
+          call_id: id
+        })[
           "structuredContent"
         ]
 
-      ended = tool(secret, session, 4, "hangup_call", %{tenant_key: data.tenant.key, call_id: id})
+      ended =
+        tool(oauth.access_token, session, 4, "hangup_call", %{
+          tenant_key: data.tenant.key,
+          call_id: id
+        })
+
       assert ended["isError"] == false
       assert ended["structuredContent"] == %{"call_id" => id, "status" => "ended"}
 
@@ -566,6 +621,37 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
       )
 
     assert json_response(token, 201)["call_id"] == call_id
+  end
+
+  test "disabling the delegated user invalidates existing MCP sessions", data do
+    session = session(data.oauth.access_token)
+
+    {:ok, platform} =
+      ApiKeyManagement.create(
+        Vxpipe.Console.Test.FakeUserIdentity.principal(),
+        "Disable fixture",
+        "platform",
+        nil,
+        []
+      )
+
+    {:ok, actor} = Vxpipe.Identity.ApiKeyActor.new(platform.key.id)
+
+    deps = %{
+      users: Vxpipe.Persistence.IdentityUserStore,
+      roles: Vxpipe.Persistence.IdentityRoleStore,
+      audit: Vxpipe.Persistence.IdentityAuditStore
+    }
+
+    {:ok, _} =
+      Vxpipe.Identity.Accounts.update_user(
+        deps,
+        actor,
+        data.oauth.principal.user_public_id,
+        %{disabled: true}
+      )
+
+    assert request(data.oauth.access_token, "ping", 2, session).status == 401
   end
 
   defp session(secret) do

@@ -6,7 +6,8 @@ defmodule Vxpipe.Gateway.MCP.SensitiveFailuresTest do
   import ExUnit.CaptureLog
 
   alias Vxpipe.Calls
-  alias Vxpipe.Calls.{Administration, InstallationOperator, TestMemoryRepository}
+  alias Vxpipe.Calls.{Administration, TestMemoryRepository}
+  alias Vxpipe.Gateway.Test.MCPOAuth
   alias Vxpipe.Gateway.MCP.{Admission, Endpoint, Protocol}
   alias Vxpipe.Gateway.Test.AccountStore
 
@@ -20,6 +21,8 @@ defmodule Vxpipe.Gateway.MCP.SensitiveFailuresTest do
 
     options = [
       enabled: true,
+      issuer: "https://localhost",
+      resource: "https://localhost/mcp",
       allowed_hosts: ["localhost"],
       admission: admission,
       authentication: {__MODULE__, :platform},
@@ -119,13 +122,7 @@ defmodule Vxpipe.Gateway.MCP.SensitiveFailuresTest do
   end
 
   def authenticate(:platform, "synthetic-key"),
-    do:
-      {:ok,
-       %{
-         InstallationOperator.authority()
-         | credential_kind: :platform_api_key,
-           api_key_id: AccountStore.key_id()
-       }}
+    do: {:ok, MCPOAuth.actor("AAAAAAAAAAAAAAAA", :platform)}
 
   def hash(password) do
     send(__MODULE__, {:hashing, self(), password})
