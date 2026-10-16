@@ -7,24 +7,29 @@ defmodule Vxpipe.Persistence.IdentityAccountActor do
   @private [log: false, telemetry_event: nil]
 
   def revalidate(attrs, permissions, operation) do
-    if machine?(attrs) do
-      with {:ok, actor} <- ApiKeyActor.new(value(attrs, :actor_api_key_public_id)),
-           true <-
-             Enum.all?(
-               [:actor_user_public_id, :actor_session_public_id],
-               &is_nil(value(attrs, &1))
-             ),
-           true <-
-             is_list(permissions) and permissions != [] and
-               Enum.all?(permissions, &AccountAuthority.machine_permission?/1),
-           :ok <- update_fields(actor, attrs, operation),
-           id when is_binary(id) <- lock_platform_key(actor.api_key_id) do
-        :ok
-      else
-        _ -> {:error, :forbidden}
-      end
-    else
-      IdentityRecord.revalidate_actor(attrs, permissions)
+    cond do
+      oauth?(attrs) ->
+        Vxpipe.Persistence.OAuth.AccountActor.revalidate(attrs, permissions)
+
+      machine?(attrs) ->
+        with {:ok, actor} <- ApiKeyActor.new(value(attrs, :actor_api_key_public_id)),
+             true <-
+               Enum.all?(
+                 [:actor_user_public_id, :actor_session_public_id],
+                 &is_nil(value(attrs, &1))
+               ),
+             true <-
+               is_list(permissions) and permissions != [] and
+                 Enum.all?(permissions, &AccountAuthority.machine_permission?/1),
+             :ok <- update_fields(actor, attrs, operation),
+             id when is_binary(id) <- lock_platform_key(actor.api_key_id) do
+          :ok
+        else
+          _ -> {:error, :forbidden}
+        end
+
+      true ->
+        IdentityRecord.revalidate_actor(attrs, permissions)
     end
   end
 
@@ -32,14 +37,24 @@ defmodule Vxpipe.Persistence.IdentityAccountActor do
     event = value(attrs, :audit_event)
 
     cond do
-      machine?(attrs) and not is_map(event) ->
+      (machine?(attrs) or oauth?(attrs)) and not is_map(event) ->
         {:error, :unavailable}
 
       is_map(event) ->
         attribution =
-          if machine?(attrs),
-            do: %{actor_api_key_public_id: value(attrs, :actor_api_key_public_id)},
-            else: %{actor_user_public_id: value(attrs, :actor_user_public_id)}
+          cond do
+            oauth?(attrs) ->
+              %{
+                actor_user_public_id: value(attrs, :actor_user_public_id),
+                actor_oauth_grant_public_id: value(attrs, :actor_oauth_grant_public_id)
+              }
+
+            machine?(attrs) ->
+              %{actor_api_key_public_id: value(attrs, :actor_api_key_public_id)}
+
+            true ->
+              %{actor_user_public_id: value(attrs, :actor_user_public_id)}
+          end
 
         event |> AccountAuthority.stamp(attribution) |> IdentityRecord.insert_audit()
 
@@ -70,6 +85,11 @@ defmodule Vxpipe.Persistence.IdentityAccountActor do
     do:
       Map.has_key?(attrs, :actor_api_key_public_id) or
         Map.has_key?(attrs, "actor_api_key_public_id")
+
+  defp oauth?(attrs),
+    do:
+      Map.has_key?(attrs, :actor_oauth_grant_public_id) or
+        Map.has_key?(attrs, "actor_oauth_grant_public_id")
 
   defp value(attrs, key), do: Map.get(attrs, key, Map.get(attrs, Atom.to_string(key)))
 end

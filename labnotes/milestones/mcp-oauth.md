@@ -1,6 +1,7 @@
 # MCP OAuth authorization
 
-Status: planning and Boruta experiments in progress; runtime OAuth not implemented.
+Status: durable credentials and delegated authority implemented; browser flow and
+OAuth-only MCP cutover in progress. OAuth is not yet enabled.
 
 Prerequisites: [Platform MCP endpoint](platform-mcp-endpoint.md),
 [Console authentication](console-authentication-and-user-management.md).
@@ -44,21 +45,21 @@ remaining. Percentages estimate effort, not the proportion of checked boxes.
 Runnable slice: local code exchange/refresh through real Boruta and PostgreSQL,
 without exposing OAuth routes yet.
 
-- [ ] Red-test public client profile, exact redirects, S256-only, resource binding,
+- [x] Red-test public client profile, exact redirects, S256-only, resource binding,
   unsupported fields/scopes/grants, and secrets absent from persisted rows/errors.
-- [ ] Pin Boruta and configure narrow contexts; no generated full OAuth/OIDC app.
-- [ ] Add bounded client/transaction/grant/code/token persistence and migrations.
-- [ ] Implement code consumption and refresh rotation atomically; red-test racing
+- [x] Pin Boruta and configure narrow contexts; no generated full OAuth/OIDC app.
+- [x] Add bounded client/grant/code/token persistence and migrations.
+- [x] Implement code consumption and refresh rotation atomically; red-test racing
   exchanges, replay-family revocation that commits on error, and rollback on failure.
-- [ ] Add user authorization version and compare role identity/revision; cover all
+- [x] Add user authorization version and compare role identity/revision; cover all
   existing invalidation paths including recovery and disable/reactivate. Increment
   in IdentityUserStore's session-invalidation path and IdentityInstallationStore's
   credential recovery; role changes retain the existing role revision mechanism.
   User version storage/invalidation is implemented and independently reviewed;
-  actual grant comparisons remain pending.
-- [ ] Implement revocation/expiry/cleanup and establish concrete durable quotas.
-- [ ] Verify wrong-client/resource/verifier requests cannot revoke a valid grant.
-- [ ] Independently review, run relevant tests, update evidence and commit.
+  grant comparisons are verified at issuance, exchange, refresh and access.
+- [x] Implement revocation/expiry/cleanup and establish concrete durable quotas.
+- [x] Verify wrong-client/resource/verifier requests cannot revoke a valid grant.
+- [x] Independently review, run relevant tests, update evidence and commit.
 
 ## Checkpoint 3: delegated user authority (20%)
 
@@ -69,7 +70,7 @@ delegated user and exercises shared operations directly.
   grant identity; extract common trusted principal construction.
 - [x] Intersect approved/current authority; apply tenant ceiling before built-in
   directory shortcuts. Check read-only, member, Admin and Superadmin behavior.
-- [ ] Revalidate and audit OAuth account writes inside their transaction; reserve
+- [x] Revalidate and audit OAuth account writes inside their transaction; reserve
   grant attribution fields against injection and preserve account hierarchy.
 - [x] Extend per-tool discovery/invocation to real user read/write permissions;
   preserve all 17 schemas/results and shared domain operations.
@@ -172,3 +173,31 @@ those before public HTTP exposure. Research is not implementation acceptance.
 - This enabling work was implemented alongside token persistence because issuance
   needs the shared principal/snapshot constructor; neither checkpoint 2 nor 3 is
   marked complete before their remaining persistence and protocol acceptance.
+
+### Durable credentials and account mutations
+
+- Real Boruta 2.3.8 now runs through narrow PostgreSQL contexts. Codes and both
+  token types persist only digests, with exact resource/client/redirect/PKCE
+  checks. Refresh rotation preserves the grant and commits family revocation on
+  verified replay; failed issuance rolls back all writes.
+- Separate-connection tests reproduce single-winner code exchange, refresh replay,
+  installation locking and cleanup races. Review caught ignored Ecto lock options;
+  query-level locks now protect OAuth and three existing identity mutation paths.
+  Cleanup locks candidates without waiting and rechecks predicates before deletion,
+  protecting concurrently issued or consumed grants.
+- Account writes revalidate fresh user/grant authority inside the mutation
+  transaction, enforce the existing hierarchy and audit user plus grant. Tests
+  cover revoked/reduced grants and attempted direct-store hierarchy bypass.
+- Quotas: 10,000 registered clients, 100 active grants/user, 10,000 token pairs/grant.
+  Bounded cleanup removes expired/revoked grants and abandoned registrations older
+  than 24 hours. Per-minute address/global rates are registration10/200,
+  authorization60/600, token120/2000 and revocation60/600. Fixed windows persist
+  hashed address buckets; independent-connection tests verify admission ceilings.
+- Independent storage/account and facade reviews completed; identified retention
+  races were reproduced red and fixed green. Identity facade/port tests:5 focused
+  and85 total passed. Store/limiter:17 focused passed; exchange/retention/limiter
+  concurrency:8 passed using distinct database connections. Browser transaction
+  persistence is tracked under checkpoint4 and remains a separate pending commit.
+- Storage checkpoint regression:80 relevant Persistence tests passed. Compile
+  warnings-as-errors, staged-file formatting, strict Credo and unused dependency
+  checks passed; full umbrella acceptance is still pending.

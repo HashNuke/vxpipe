@@ -213,7 +213,9 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
   end
 
   defp lock_installation do
-    case Repo.get(AuthenticationInstallation, "default", lock: "FOR UPDATE") do
+    case Repo.one(
+           from(i in AuthenticationInstallation, where: i.key == "default", lock: "FOR UPDATE")
+         ) do
       nil -> {:error, :missing}
       installation -> {:ok, installation}
     end

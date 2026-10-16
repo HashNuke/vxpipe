@@ -12,6 +12,7 @@ defmodule Vxpipe.Identity.Audit do
       |> Map.take([
         :actor_api_key_public_id,
         :actor_user_public_id,
+        :actor_oauth_grant_public_id,
         :target_user_public_id,
         :target_role_public_id,
         :summary

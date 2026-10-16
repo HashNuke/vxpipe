@@ -151,6 +151,7 @@ defmodule Vxpipe.Persistence.IdentityRecord do
       UserAccessEvent.changeset(%UserAccessEvent{}, %{
         actor_api_key_id: lookup_api_key_id!(Map.get(event, :actor_api_key_public_id)),
         actor_user_id: lookup_user_id(Map.get(event, :actor_user_public_id)),
+        actor_oauth_grant_public_id: Map.get(event, :actor_oauth_grant_public_id),
         target_user_id: lookup_user_id(Map.get(event, :target_user_public_id)),
         target_role_id: lookup_role_id(Map.get(event, :target_role_public_id)),
         action: to_string(Map.get(event, :action, "unknown")),

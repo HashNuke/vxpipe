@@ -7,6 +7,7 @@ defmodule Vxpipe.Persistence.Schema.UserAccessEvent do
   schema "user_access_events" do
     field(:action, :string)
     field(:summary, :map)
+    field(:actor_oauth_grant_public_id, Ecto.UUID)
 
     belongs_to(:actor_user, IdentityUser)
     belongs_to(:actor_api_key, ApiKey)
@@ -21,6 +22,7 @@ defmodule Vxpipe.Persistence.Schema.UserAccessEvent do
     |> cast(attributes, [
       :actor_api_key_id,
       :actor_user_id,
+      :actor_oauth_grant_public_id,
       :target_user_id,
       :target_role_id,
       :action,
@@ -30,6 +32,7 @@ defmodule Vxpipe.Persistence.Schema.UserAccessEvent do
     |> validate_length(:action, min: 1, max: 64)
     |> foreign_key_constraint(:actor_api_key_id)
     |> check_constraint(:actor_api_key_id, name: :user_access_events_single_actor)
+    |> check_constraint(:actor_oauth_grant_public_id, name: :user_access_events_oauth_actor)
     |> foreign_key_constraint(:actor_user_id)
     |> foreign_key_constraint(:target_user_id)
     |> foreign_key_constraint(:target_role_id)

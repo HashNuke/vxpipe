@@ -72,3 +72,32 @@
 - Boruta dependency resolution in the umbrella added12 packages and changed no
   existing locked versions. Dependency and token-store work is a separate pending
   checkpoint; no OAuth route is exposed by this authority prerequisite.
+
+## Durable credentials and transaction review
+
+- Added narrow real-Boruta contexts, opaque credential digests, absolute grant
+  lifetime, current-authority checks and atomic code/refresh exchange. Wrong
+  client/resource/verifier cannot consume or revoke another grant. Verified
+  refresh reuse revokes the family and commits that result despite an OAuth error.
+- Implemented explicit Identity OAuth ports/facade; no default storage fallback.
+  Delegated principals are constructed only from verified user/role/grant records.
+- Account writes revalidate OAuth grants under transaction locks and preserve user
+  plus grant audit attribution. Four focused tests went red then green, including
+  stale/reduced authority and Admin hierarchy. No grant FK on audit history, so
+  deleting expired credentials cannot erase historical attribution.
+- Review caught Ecto Repo.get lock options being ignored. Distinct PostgreSQL
+  connection tests reproduced the failure; moved locks onto queries, including
+  three existing installation mutation helpers. Cleanup review also reproduced
+  stale candidate deletion of newly issued/consumed grants; SKIP LOCKED candidate
+  selection plus fresh predicate checks fixed both races.
+- Added bounded cleanup and quotas plus durable fixed-window address/global limits.
+  Limiter races use separate connections, not a shared sandbox connection. Store
+  and limiter17 tests and concurrency8 tests pass; Identity85 tests pass. No live
+  provider or Lean work was run. Broader umbrella acceptance remains pending.
+- Browser work exposed a later retention dependency: live pending authorization
+  requests must protect their client from cleanup. This belongs with their schema
+  and will land in the browser checkpoint. Expired request quota blocking was
+  independently found, reproduced red and fixed by counting active requests.
+- Final storage checkpoint regression:80 Persistence tests passed; compile with
+  warnings-as-errors, staged-file formatting, strict Credo and unused dependency
+  checks passed. Corrected one migration formatting issue before committing.
