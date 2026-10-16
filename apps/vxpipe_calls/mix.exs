@@ -27,7 +27,9 @@ defmodule Vxpipe.Calls.MixProject do
     [
       {:vxpipe_call_engine, in_umbrella: true},
       {:vxpipe_providers, in_umbrella: true},
-      {:vxpipe_identity, in_umbrella: true}
+      {:vxpipe_identity, in_umbrella: true},
+      {:jsv, "~> 0.22"},
+      {:solid, "~> 1.3"}
     ]
   end
 end
