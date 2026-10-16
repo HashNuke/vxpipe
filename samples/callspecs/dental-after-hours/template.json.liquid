@@ -1,0 +1,113 @@
+{%- comment -%}
+  Every output must end with the json filter. Build longer strings with capture,
+  then emit them through json so quotes and newlines stay valid JSON.
+{%- endcomment -%}
+{%- capture receptionist_prompt -%}
+You are the after-hours phone receptionist for {{ clinic_name }}, a dental clinic. The office is closed. Office hours are {{ office_hours }}.
+
+Keep every reply short and natural for a phone call. Ask one question at a time.
+
+You can help with three things:
+1. Appointment requests. Collect the patient's full name, a callback number, whether this is a new appointment, a reschedule or a cancellation, the preferred day and time, and the reason for the visit. Save each detail to the appointment_request variables as you learn it. Read the details back and confirm them. Explain that the front desk will call back during office hours to confirm the booking. You cannot see the schedule, so never promise a specific slot.
+2. Billing or insurance questions. Transfer to billing.
+3. Dental emergencies: severe pain, facial swelling, bleeding that will not stop, a knocked-out tooth or trauma to the mouth. Tell the caller you are connecting them to the on-call dentist and transfer to on_call_dentist right away. If the caller describes trouble breathing or swallowing, tell them to call emergency services first.
+
+Do not give medical advice or diagnoses. When the caller has nothing else, say goodbye and hang up.
+{%- endcapture -%}
+{%- capture billing_prompt -%}
+You are the billing assistant for {{ clinic_name }}. The office is closed. Office hours are {{ office_hours }}.
+
+Answer general billing and insurance questions briefly: accepted payment methods are cash, card and bank transfer, and the front desk can check insurance coverage during office hours. You cannot see patient accounts or balances, so never quote amounts. Offer to note the question for a callback by transferring back to receptionist. Keep replies short and natural for a phone call. When the caller has nothing else, say goodbye and hang up.
+{%- endcapture -%}
+{%- capture on_call_notice -%}
+An emergency caller from the {{ clinic_name }} after-hours line is being connected to you.
+{%- endcapture -%}
+{
+  "schema_version": "20261004.01",
+  "name": {{ name | json }},
+  "incoming_call": {"caller": "caller", "handled_by": "receptionist"},
+  "defaults": {
+    "capabilities": {
+{%- if voice_pipeline == "cascade" %}
+      "speech_to_text": {{ speech_to_text | json }},
+      "model_inference": {{ model_inference | json }},
+      "text_to_speech": {{ text_to_speech | json }}
+{%- else %}
+{%- if speech_to_text %}
+      "speech_to_text": {{ speech_to_text | json }},
+{%- endif %}
+{%- if output_speech_to_text %}
+      "output_speech_to_text": {{ output_speech_to_text | json }},
+{%- endif %}
+      "speech_to_speech": {{ speech_to_speech | json }}
+{%- endif %}
+    }
+  },
+  "call_variables": {
+    "sections": {
+      "appointment_request": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "patient_name": {"type": "string"},
+            "callback_number": {"type": "string"},
+            "request_type": {"type": "string", "enum": ["new", "reschedule", "cancel"]},
+            "preferred_time": {"type": "string"},
+            "reason": {"type": "string"}
+          }
+        }
+      }
+    }
+  },
+  "participants": {
+    "caller": {
+      "type": "human",
+      "description": "Patient calling the clinic",
+{%- if telephony %}
+      "connection": {
+        "service": {{ telephony.service | json }},
+        "mode": "receive",
+        "admission": "start_call",
+        "number": {{ telephony.inbound_number | json }}
+      }
+{%- else %}
+      "connection": {"service": "web", "mode": "receive", "admission": "start_call"}
+{%- endif %}
+    },
+    "receptionist": {
+      "type": "agent",
+      "prompt": {{ receptionist_prompt | json }},
+      "first_message": {
+        "mode": "fixed",
+        "text": {{ "Thanks for calling " | append: clinic_name | append: ". The office is closed right now, but I can help you book an appointment, answer billing questions or reach the on-call dentist. How can I help?" | json }}
+      },
+      "tools": {"hangup": {"type": "platform", "tool": "hangup"}},
+      "transfers": ["billing", "on_call_dentist"],
+      "variable_permissions": {"appointment_request": ["read", "write"]}
+    },
+    "billing": {
+      "type": "agent",
+      "description": "Billing and insurance questions",
+      "prompt": {{ billing_prompt | json }},
+      "first_message": {"mode": "generated"},
+      "tools": {"hangup": {"type": "platform", "tool": "hangup"}},
+      "transfers": ["receptionist"],
+      "variable_permissions": {"appointment_request": ["read"]}
+    },
+    "on_call_dentist": {
+      "type": "human",
+      "description": "On-call dentist for emergencies",
+      "transfer_notice": {{ on_call_notice | json }},
+{%- if telephony %}
+      "connection": {
+        "service": {{ telephony.service | json }},
+        "mode": "dial",
+        "number": {{ telephony.on_call_number | json }}
+      }
+{%- else %}
+      "connection": {"service": "web", "mode": "receive", "admission": "transfer"}
+{%- endif %}
+    }
+  },
+  "limits": {"max_duration_ms": 900000}
+}

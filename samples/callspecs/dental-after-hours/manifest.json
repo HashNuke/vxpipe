@@ -1,0 +1,240 @@
+{
+  "id": "dental-after-hours",
+  "name": "After-hours dental line",
+  "description": "A receptionist agent books or reschedules appointments, hands billing questions to a billing agent and transfers dental emergencies to an on-call human.",
+  "template_version": 1,
+  "call_spec_schema_version": "20261004.01",
+  "inputs": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "voice_pipeline"
+    ],
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "default": "After-hours dental line",
+        "description": "Call spec name. Installation is idempotent per tenant and name."
+      },
+      "clinic_name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "default": "Bright Smile Dental",
+        "description": "Clinic name spoken by the agents."
+      },
+      "office_hours": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500,
+        "default": "Monday to Friday, 8 AM to 5 PM",
+        "description": "Office hours the receptionist tells callers."
+      },
+      "telephony": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "service",
+          "inbound_number",
+          "on_call_number"
+        ],
+        "description": "Omit to use browser connections for the caller and the on-call human.",
+        "properties": {
+          "service": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$",
+            "not": {
+              "const": "web"
+            },
+            "description": "Configured tenant telephony service name."
+          },
+          "inbound_number": {
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{1,14}$",
+            "description": "E.164 number callers dial."
+          },
+          "on_call_number": {
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{1,14}$",
+            "description": "E.164 number of the on-call dentist."
+          }
+        }
+      },
+      "voice_pipeline": {
+        "enum": [
+          "cascade",
+          "speech_to_speech"
+        ],
+        "description": "cascade uses speech_to_text, model_inference and text_to_speech; speech_to_speech uses one speech model."
+      },
+      "speech_to_text": {
+        "$ref": "#/$defs/selection",
+        "description": "Caller transcription. Required for cascade."
+      },
+      "model_inference": {
+        "$ref": "#/$defs/selection",
+        "description": "Agent language model. Required for cascade."
+      },
+      "text_to_speech": {
+        "$ref": "#/$defs/selection",
+        "description": "Agent voice. Required for cascade."
+      },
+      "speech_to_speech": {
+        "$ref": "#/$defs/selection",
+        "description": "Agent speech model. Required for speech_to_speech."
+      },
+      "output_speech_to_text": {
+        "$ref": "#/$defs/selection",
+        "description": "Transcribes agent audio when the speech_to_speech model provides no output transcript. speech_to_speech only."
+      }
+    },
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "voice_pipeline": {
+              "const": "cascade"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "speech_to_text",
+            "model_inference",
+            "text_to_speech"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "speech_to_speech"
+                ]
+              },
+              {
+                "required": [
+                  "output_speech_to_text"
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "voice_pipeline": {
+              "const": "speech_to_speech"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "speech_to_speech"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "model_inference"
+                ]
+              },
+              {
+                "required": [
+                  "text_to_speech"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "$defs": {
+      "selection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "model"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "credential_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "options": {
+            "type": "object"
+          },
+          "vad": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "voice_pipeline": "cascade",
+      "speech_to_text": {
+        "provider": "morse",
+        "model": "morse"
+      },
+      "model_inference": {
+        "provider": "fixture",
+        "model": "fixture"
+      },
+      "text_to_speech": {
+        "provider": "morse",
+        "model": "morse"
+      }
+    },
+    {
+      "name": "After-hours dental line (phone)",
+      "telephony": {
+        "service": "clinic-phone",
+        "inbound_number": "+15550001000",
+        "on_call_number": "+15550002000"
+      },
+      "voice_pipeline": "cascade",
+      "speech_to_text": {
+        "provider": "deepgram",
+        "model": "flux-general-en",
+        "credential_name": "deepgram",
+        "options": {
+          "encoding": "opus",
+          "sample_rate": 48000
+        }
+      },
+      "model_inference": {
+        "provider": "google",
+        "model": "gemini-2.5-flash",
+        "credential_name": "google"
+      },
+      "text_to_speech": {
+        "provider": "deepgram",
+        "model": "flux",
+        "credential_name": "deepgram",
+        "options": {
+          "voice": "haley"
+        }
+      }
+    },
+    {
+      "name": "After-hours dental line (speech-to-speech)",
+      "voice_pipeline": "speech_to_speech",
+      "speech_to_speech": {
+        "provider": "morse",
+        "model": "morse"
+      }
+    }
+  ]
+}

@@ -15,6 +15,10 @@ config :vxpipe_providers, :morse_code_api,
       if(config_env() == :dev, do: "http://127.0.0.1:8787", else: nil),
   allow_http?: config_env() in [:dev, :test]
 
+if templates = nonempty_env.("VXPIPE_CALL_SPEC_TEMPLATES_DIR") do
+  config :vxpipe_calls, Vxpipe.Calls.CallSpecTemplates, directory: templates
+end
+
 worktree =
   if config_env() in [:dev, :test] do
     {metadata, _bindings} = Code.eval_file(Path.join(__DIR__, "worktree.exs"))

@@ -48,6 +48,10 @@ config :boruta, Boruta.Oauth,
     resource_owners: Vxpipe.Persistence.OAuth.BorutaResourceOwners
   ]
 
+# The checkout's call spec template library; releases set VXPIPE_CALL_SPEC_TEMPLATES_DIR.
+config :vxpipe_calls, Vxpipe.Calls.CallSpecTemplates,
+  directory: Path.expand("../samples/callspecs", __DIR__)
+
 config :vxpipe_calls, Vxpipe.Calls,
   call_details_publication: [
     enabled: false,
