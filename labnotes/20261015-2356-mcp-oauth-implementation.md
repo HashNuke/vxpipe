@@ -101,3 +101,25 @@
 - Final storage checkpoint regression:80 Persistence tests passed; compile with
   warnings-as-errors, staged-file formatting, strict Credo and unused dependency
   checks passed. Corrected one migration formatting issue before committing.
+
+## HTTP and browser transaction prerequisites
+
+- Added public OAuth metadata and bounded registration/token/revoke adapters,
+  disabled by default. Exact configured URL prefixes survive the embedding mount.
+  Duplicate JSON/form fields, over-limit bodies, timeout, bad origins/hosts/schemes
+  and unavailable backends fail safely; cookies never provide token authentication.
+- HTTP review found loopback reverse-proxy clients sharing a quota bucket. Reused
+  Console's existing trusted-loopback address resolver; Gateway defaults to peer
+  IP. Red/green tests prove trusted client isolation and spoofed-XFF rejection.
+- Browser storage tests failed six times before implementation, then passed.
+  A missing Ecto.Query test import was fixed before recording behavior failures.
+  Request IDs/bindings are hashed, displayed snapshots bind the real session,
+  approval/denial consumes the transaction once, and own-grant revoke is scoped.
+- Independent review reproduced expired backlog quota blocking and cleanup deleting
+  live pending consent. Count active requests, preserve live pending clients in
+  both cleanup predicates, and hold a client KEY SHARE while inserting requests.
+  A distinct-connection approve/deny race proves single completion. Final browser9,
+  combined persistence30 and concurrency9 tests passed. An initial agent test
+  command used umbrella paths; subsequent focused runs used the owning child.
+- Gateway OAuth13 and Console address5 tests passed; default-disabled wiring is
+  separate from the pending browser controller and OAuth-only MCP runtime cutover.

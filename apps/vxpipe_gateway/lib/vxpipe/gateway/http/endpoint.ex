@@ -37,6 +37,7 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
       Keyword.put(mcp, :call_options, Keyword.merge(shared, Keyword.get(mcp, :call_options, [])))
 
     %{
+      oauth: Vxpipe.Gateway.OAuth.Endpoint.init(Keyword.get(options, :oauth, [])),
       mcp: Vxpipe.Gateway.MCP.Endpoint.init(mcp),
       cors: options |> Keyword.get(:cors, []) |> Cors.init(),
       parsers:
@@ -55,7 +56,17 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
     Vxpipe.Gateway.MCP.Endpoint.call(conn, options)
   end
 
-  def call(conn, %{cors: cors_options, parsers: parser_options, router: router_options}) do
+  def call(conn, %{oauth: oauth} = options) do
+    if Vxpipe.Gateway.OAuth.Endpoint.route?(conn, oauth),
+      do: Vxpipe.Gateway.OAuth.Endpoint.call(conn, oauth),
+      else: product_request(conn, options)
+  end
+
+  defp product_request(conn, %{
+         cors: cors_options,
+         parsers: parser_options,
+         router: router_options
+       }) do
     GatewayTelemetry.observe_request(conn, fn ->
       conn = Cors.call(conn, cors_options)
 

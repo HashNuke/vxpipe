@@ -28,6 +28,11 @@ defmodule Vxpipe.Persistence.OAuth.Retention do
             fragment(
               "NOT EXISTS (SELECT 1 FROM oauth_grants g WHERE g.client_id = ?)",
               c.public_id
+            ) and
+            fragment(
+              "NOT EXISTS (SELECT 1 FROM oauth_authorization_requests r WHERE r.client_id = ? AND r.expires_at > ?)",
+              c.public_id,
+              ^now
             ),
         order_by: [asc: c.inserted_at, asc: c.public_id],
         limit: ^limit,
@@ -49,6 +54,11 @@ defmodule Vxpipe.Persistence.OAuth.Retention do
               fragment(
                 "NOT EXISTS (SELECT 1 FROM oauth_grants g WHERE g.client_id = ?)",
                 c.public_id
+              ) and
+              fragment(
+                "NOT EXISTS (SELECT 1 FROM oauth_authorization_requests r WHERE r.client_id = ? AND r.expires_at > ?)",
+                c.public_id,
+                ^now
               )
         ),
         Transaction.options()

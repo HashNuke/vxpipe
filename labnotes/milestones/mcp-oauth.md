@@ -81,9 +81,9 @@ delegated user and exercises shared operations directly.
 Runnable slice: a local client discovers, registers, logs in, consents, exchanges,
 refreshes and revokes using HTTP, while MCP cutover remains gated.
 
-- [ ] Red-test trusted issuer/resource and prefixed metadata construction;
+- [x] Red-test trusted issuer/resource and prefixed metadata construction;
   public discovery routes and bounded DCR/token/revoke routes.
-- [ ] Rate-limit and bound records/requests; fail closed on storage/config errors.
+- [x] Rate-limit and bound records/requests; fail closed on storage/config errors.
 - [ ] Implement browser-bound expiring authorization transactions, login resume,
   CSRF-protected consent approval/denial and one-time completion. Approve/deny the
   current authority without a new permission editor; approved all-tenant grants
@@ -201,3 +201,27 @@ those before public HTTP exposure. Research is not implementation acceptance.
 - Storage checkpoint regression:80 relevant Persistence tests passed. Compile
   warnings-as-errors, staged-file formatting, strict Credo and unused dependency
   checks passed; full umbrella acceptance is still pending.
+
+### HTTP adapter and browser transaction prerequisites
+
+- Discovery, registration, token and revoke routes are implemented behind the
+  disabled-by-default OAuth option. Metadata preserves configured issuer/resource
+  prefixes; parsers reject duplicates, oversized bodies and unsupported inputs.
+  Host/scheme/origin checks precede backend work, errors are safe, cookies cannot
+  substitute for credentials, and responses disable caching.
+- Console supplies its existing trusted-proxy address resolver; standalone Gateway
+  uses the peer address. Red/green review fixed shared rate buckets behind Caddy.
+  Gateway OAuth13 tests and Console address5 tests passed; the earlier combined
+  HTTP/MCP boundary regression passed45 tests before those proxy additions.
+- Persisted browser requests have hashed IDs/bindings, ten-minute expiry, an active
+  quota of10 per browser and10,000 globally, and bounded expiry cleanup. Display
+  binds the authenticated session and exact authority snapshot. Completion is
+  atomic and single-use; denial only returns the registered callback and state.
+- Independent review found expired rows blocking quota and unused-client cleanup
+  deleting live consent requests. Both were reproduced red and fixed; client locks
+  and live-request predicates protect pending consent. Browser9 focused tests and
+  the combined30 store/browser/account/limiter tests pass. Nine distinct-connection
+  tests now include concurrent approve/deny with exactly one winner.
+- Safe own-client listing/revocation persistence is ready. HTTP browser routing,
+  rendered consent/Account UI, login resume and final MCP cutover remain pending;
+  checkpoint4 is not complete merely because its underlying storage exists.

@@ -48,6 +48,7 @@ defmodule Vxpipe.Console.Application do
     gateway_settings
     |> Vxpipe.Gateway.Application.http_options()
     |> Keyword.take([
+      :oauth,
       :mcp,
       :account_management,
       :tenant_directory,
@@ -60,6 +61,13 @@ defmodule Vxpipe.Console.Application do
       :telephony,
       :webrtc
     ])
+    |> Keyword.update(
+      :oauth,
+      [client_address_resolver: &Vxpipe.Console.ClientAddress.for_throttling/1],
+      &Keyword.put(&1, :client_address_resolver, fn conn ->
+        Vxpipe.Console.ClientAddress.for_throttling(conn)
+      end)
+    )
     |> Keyword.update!(:call_admission, &configure_recording(&1, recording))
     |> Keyword.update(
       :account_management,

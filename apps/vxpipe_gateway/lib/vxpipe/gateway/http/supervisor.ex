@@ -13,6 +13,7 @@ defmodule Vxpipe.Gateway.HTTP.Supervisor do
   def init(options) do
     endpoint_options =
       Keyword.take(options, [
+        :oauth,
         :mcp,
         :account_management,
         :tenant_directory,
