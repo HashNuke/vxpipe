@@ -9,15 +9,29 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.Calls.{PreparedCall, TelephonyAdmissionClaim}
 
+  alias Vxpipe.Gateway.Telephony.{
+    IncomingLegActivation,
+    IncomingLegActivationResult,
+    IncomingLegIdentity
+  }
+
   def start_link(options) do
     Agent.start_link(fn ->
       %{
         claim: claim(),
         activation: Keyword.get(options, :activation, :test_activation),
         observer: Keyword.fetch!(options, :observer),
+        usage_options: Keyword.take(options, [:usage_reporter, :usage_clock]),
         operations: [],
         activation_failure?: Keyword.get(options, :activation_failure?, false),
-        claimed?: false,
+        claimed?: Keyword.get(options, :claimed?, false),
+        room_owner: Keyword.get(options, :room_owner),
+        cancel_failures: Keyword.get(options, :cancel_failures, 0),
+        end_event_failure?: Keyword.get(options, :end_event_failure?, false),
+        end_blocked?: Keyword.get(options, :end_blocked?, false),
+        activation_blocked?: Keyword.get(options, :activation_blocked?, false),
+        bind_decision: Keyword.get(options, :bind_decision, :admit),
+        started_failure?: Keyword.get(options, :started_failure?, false),
         start_failure?: Keyword.get(options, :start_failure?, false)
       }
     end)
@@ -58,10 +72,126 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
   def activate_incoming(agent, _identity, claim, room, leg) do
     operation(agent, {:activate_incoming, claim.call.id, room.incarnation_id, leg})
 
+    block_answer(agent)
+
     if Agent.get(agent, & &1.activation_failure?) do
       {:error, :command_rejected}
     else
       {:ok, Agent.get(agent, & &1.activation)}
+    end
+  end
+
+  @impl true
+  def start_incoming(agent, claim, service, _owner, _token) do
+    case start_incoming(agent, claim, service) do
+      {:ok, room} ->
+        owner = Agent.get(agent, & &1.room_owner)
+        {:ok, room, if(is_pid(owner), do: Process.monitor(owner), else: nil)}
+
+      error ->
+        error
+    end
+  end
+
+  @impl true
+  def bind_incoming(agent, claim, incarnation) do
+    operation(agent, {:bind_incoming, claim.call.id, incarnation})
+
+    case Agent.get(agent, & &1.bind_decision) do
+      decision when decision in [:admit, :cancel] ->
+        {:ok, decision, %{claim | call: %{claim.call | incarnation_id: incarnation}}}
+
+      :error ->
+        {:error, :call_admission_unavailable}
+    end
+  end
+
+  @impl true
+  def identify_incoming(agent, service, claim, room, leg) do
+    case Agent.get(agent, & &1.activation) do
+      %IncomingLegActivationResult{} = activation ->
+        {:ok,
+         %IncomingLegIdentity{
+           binding: activation.binding,
+           service: service,
+           usage: activation.usage
+         }}
+
+      _custom ->
+        # The unit backend uses a fixed claim with a per-test configured service.
+        claim = %{claim | service: service.identity.service_id}
+
+        IncomingLegActivation.identify(
+          service,
+          claim,
+          room.incarnation_id,
+          leg,
+          Agent.get(agent, & &1.usage_options)
+        )
+    end
+  end
+
+  @impl true
+  def prepare_incoming(agent, identity) do
+    binding = identity.binding
+    operation(agent, {:activate_incoming, binding.call_id, binding.incarnation_id, binding.leg})
+    {:ok, Agent.get(agent, & &1.activation)}
+  end
+
+  @impl true
+  def submit_incoming(agent, prepared) do
+    block_answer(agent)
+
+    if Agent.get(agent, & &1.activation_failure?),
+      do: {:error, :command_rejected, prepared},
+      else: {:ok, prepared}
+  end
+
+  @impl true
+  def release_incoming(agent, claim, _token) do
+    operation(agent, {:release_incoming, claim.call.id, claim.call.incarnation_id})
+    :ok
+  end
+
+  @impl true
+  def cancel_incoming(agent, claim, _token, reason) do
+    operation(agent, {:cancel_incoming, claim.call.id, claim.call.incarnation_id, reason})
+    send(Agent.get(agent, & &1.observer), {:incoming_room_cancel_requested, reason})
+
+    Agent.get_and_update(agent, fn state ->
+      if state.cancel_failures > 0,
+        do: {{:error, :room_unavailable}, %{state | cancel_failures: state.cancel_failures - 1}},
+        else: {:ok, state}
+    end)
+  end
+
+  @impl true
+  def end_incoming(agent, _service, event, _activation, reason) do
+    send(
+      Agent.get(agent, & &1.observer),
+      {:incoming_end_requested, event.provider_call_control_id, reason}
+    )
+
+    if Agent.get(agent, & &1.end_blocked?) do
+      send(Agent.get(agent, & &1.observer), {:incoming_end_pending, self()})
+
+      receive do
+        :release_incoming_end -> {:error, :command_rejected}
+        :unknown_incoming_end -> {:error, :submission_unknown}
+        :accept_incoming_end -> :ok
+      end
+    else
+      :ok
+    end
+  end
+
+  defp block_answer(agent) do
+    if Agent.get(agent, & &1.activation_blocked?) do
+      send(Agent.get(agent, & &1.observer), {:incoming_answer_pending, self()})
+
+      receive do
+        :release_incoming_answer -> :ok
+      end
     end
   end
 
@@ -79,8 +209,12 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
         }
     }
 
-    Agent.update(agent, &%{&1 | claim: started})
-    {:ok, started}
+    if Agent.get(agent, & &1.started_failure?) do
+      {:error, :call_unavailable}
+    else
+      Agent.update(agent, &%{&1 | claim: started})
+      {:ok, started}
+    end
   end
 
   @impl true
@@ -95,7 +229,12 @@ defmodule Vxpipe.Gateway.TestTelephonyCallBackend do
   def handle_live_event(agent, claim, _activation, source, event) do
     operation(agent, {:handle_live_event, claim.call.id, event.kind, event.provider_event_id})
     send(Agent.get(agent, & &1.observer), {:test_live_telephony_event, event, source})
-    :ok
+
+    Agent.get_and_update(agent, fn state ->
+      if event.kind == :ended and state.end_event_failure?,
+        do: {{:error, :room_unavailable}, %{state | end_event_failure?: false}},
+        else: {:ok, state}
+    end)
   end
 
   defp operation(agent, value) do

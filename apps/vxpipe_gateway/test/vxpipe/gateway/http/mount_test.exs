@@ -20,6 +20,34 @@ defmodule Vxpipe.Gateway.HTTP.MountTest do
                    ]
                  )
   @root_mount_options Mount.init([])
+
+  test "MCP mounts at the host prefix and authenticates before generic JSON parsing" do
+    options =
+      Mount.init(
+        path_prefix: "/voice",
+        mcp: [
+          enabled: true,
+          issuer: "https://www.example.com",
+          resource: "https://www.example.com/voice/mcp",
+          allowed_hosts: ["www.example.com"]
+        ]
+      )
+
+    response =
+      conn(:post, "https://www.example.com/voice/mcp", "invalid-json")
+      |> put_req_header("content-type", "application/json")
+      |> Mount.call(options)
+
+    assert response.status == 401
+    assert response.halted
+    assert response.script_name == ["voice"]
+    assert get_resp_header(response, "cache-control") == ["no-store"]
+
+    outside = conn(:post, "https://www.example.com/mcp") |> Mount.call(options)
+    refute outside.halted
+    assert outside.status == nil
+  end
+
   @room_mount_options Mount.init(
                         path_prefix: "/voice",
                         room_creation: [

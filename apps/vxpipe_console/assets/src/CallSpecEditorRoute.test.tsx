@@ -65,7 +65,7 @@ test("new route creates a spec, replaces its URL without losing edits, and publi
   expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("New draft");
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
   await screen.findByText("Published revision 2");
-  expect(fetch).toHaveBeenCalledWith("/admin/api/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf/revisions/2/publish", expect.objectContaining({ body: "{}" }));
+  expect(fetch).toHaveBeenCalledWith("/api/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf/revisions/2/publish", expect.objectContaining({ body: "{}" }));
 });
 
 test("session expiry keeps the source and disables writes without navigating away", async () => {

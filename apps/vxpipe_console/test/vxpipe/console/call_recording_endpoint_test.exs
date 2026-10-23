@@ -16,7 +16,7 @@ defmodule Vxpipe.Console.CallRecordingEndpointTest do
 
   @endpoint Vxpipe.Console.Endpoint
   @tenant_key "tenantkey1234567"
-  @route "/tenants/#{@tenant_key}/calls/call-public-id/recordings/artifact-public-id"
+  @route "/api/tenants/#{@tenant_key}/calls/call-public-id/recordings/artifact-public-id"
 
   setup do
     original_calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
@@ -39,14 +39,19 @@ defmodule Vxpipe.Console.CallRecordingEndpointTest do
   end
 
   test "requires an operator session" do
-    assert redirected_to(https_get(@route), 302) == "/auth/login"
+    assert json_response(https_get(@route), 401)["error"]["code"] == "session_required"
+
+    assert redirected_to(https_get(String.replace_prefix(@route, "/api", "")), 302) ==
+             "/auth/login"
   end
 
   test "streams an exact private WAV from the authorized artifact" do
     payload = <<1, 2, 3, 4, 5, 6, 7, 8>>
     configure_recording({:ok, source(payload)})
 
-    conn = authenticate() |> recycle() |> https_get(@route)
+    conn =
+      authenticate() |> recycle() |> put_req_header("accept", "audio/wav") |> https_get(@route)
+
     body = response(conn, 200)
 
     assert <<"RIFF", _rest::binary>> = body

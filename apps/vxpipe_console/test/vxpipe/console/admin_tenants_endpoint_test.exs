@@ -106,6 +106,52 @@ defmodule Vxpipe.Console.AdminTenantsEndpointTest do
     refute_received {:operator_tenants_requested, _, _}
   end
 
+  test "canonical directory uses the login session and refuses invalid explicit credentials" do
+    mount = @endpoint.config(:gateway_mount)
+    on_exit(fn -> Phoenix.Config.put(@endpoint, :gateway_mount, mount) end)
+
+    Phoenix.Config.put(
+      @endpoint,
+      :gateway_mount,
+      put_in(mount, [:endpoint, :router, :tenant_directory, :enabled], true)
+    )
+
+    tenant = %Tenant{
+      key: "AAAAAAAAAAAAAAAA",
+      name: "Canonical tenant",
+      inserted_at: ~U[2026-10-15 00:00:00Z]
+    }
+
+    configure_admin_repository({:ok, {[tenant], 1}})
+    authenticated = authenticate()
+    response = authenticated |> recycle() |> https_get("/api/tenants")
+
+    assert json_response(response, 200) == %{
+             "items" => [
+               %{
+                 "tenant_key" => tenant.key,
+                 "name" => tenant.name,
+                 "created_at" => DateTime.to_iso8601(tenant.inserted_at)
+               }
+             ],
+             "pagination" => %{"page" => 1, "page_size" => 25, "total" => 1, "total_pages" => 1}
+           }
+
+    assert_received {:operator_tenants_requested, 25, 0}
+
+    denied =
+      authenticated
+      |> recycle()
+      |> Plug.Conn.put_req_header("authorization", "Basic invalid")
+      |> https_get("/api/tenants")
+
+    assert json_response(denied, 401) == %{"error" => %{"code" => "invalid_api_key"}}
+    refute_received {:operator_tenants_requested, _, _}
+
+    assert json_response(https_get("/api/tenants"), 401) ==
+             %{"error" => %{"code" => "session_required"}}
+  end
+
   defp authenticate do
     post(build_conn(), "https://localhost/auth/api/login", %{
       "email" => FakeUserIdentity.email(),

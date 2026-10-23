@@ -69,6 +69,14 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     }
   end
 
+  test "managed outgoing startup rejects connectors without cleanup ownership before dialing",
+       c do
+    c = %{c | options: Keyword.put(c.options, :managed_cleanup, true)}
+    response = post(c, %{}, "managed-custom-connector")
+    assert response.status == 503
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
   test "routes before spec writes and returns a private-free 201 after submission", c do
     response =
       post(
@@ -101,6 +109,190 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     assert stored.incarnation_id == request.incarnation_id
     assert stored.state == :running
   end
+
+  test "MCP outgoing creation has its own bounded deadline and HTTP replay never redials", c do
+    {configured, session} = mcp_endpoint(c, block?: true, call_creation_timeout: 2_000)
+    variables = %{"data" => %{"private" => "mcp-pinned-sentinel"}}
+    tasks = start_supervised!({Task.Supervisor, name: nil})
+
+    task =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        mcp_tool(c, configured, session, 2, "create_call", %{
+          tenant_key: c.tenant.key,
+          call_spec_id: c.published.call_spec_id,
+          variables: variables,
+          idempotency_key: "mcp-dial"
+        })
+      end)
+
+    assert_receive {:test_outbound_leg_connect, worker, request, _}, 1_000
+    {:ok, pinned} = Calls.fetch_call(c.tenant.key, request.call_id, c.options)
+    assert pinned.state == :running
+    assert pinned.plan.call_variables.sections["data"].value == variables["data"]
+    reference = task.ref
+    refute_receive {^reference, _response}, 50
+    send(worker, :release_test_dial)
+    response = Task.await(task, 2_000)
+    id = request.call_id
+    assert response.status == 200
+
+    assert %{
+             "result" => %{
+               "isError" => false,
+               "structuredContent" => %{"call_id" => ^id} = result
+             }
+           } = body(response)
+
+    assert map_size(result) == 1
+    refute response.resp_body =~ "mcp-pinned-sentinel"
+
+    replay = post(c, %{"variables" => variables}, "mcp-dial")
+    assert replay.status == 200
+    assert body(replay)["call"]["id"] == id
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  test "the longer creation deadline does not extend unrelated MCP tools", c do
+    options = Keyword.put(c.options, :admin_repository, {__MODULE__, self()})
+    {configured, session} = mcp_endpoint(%{c | options: options}, call_creation_timeout: 2_000)
+    response = mcp_tool(c, configured, session, 2, "get_tenant", %{tenant_key: c.tenant.key})
+    assert %{"error" => %{"code" => -32603}} = body(response)
+    assert_receive {:directory_blocked, handler}, 1_000
+    monitor = Process.monitor(handler)
+    assert_receive {:DOWN, ^monitor, :process, ^handler, _reason}, 1_000
+  end
+
+  test "an expired MCP creation deadline retains the durable idempotency claim", c do
+    {configured, session} = mcp_endpoint(c, block?: true, call_creation_timeout: 500)
+    tasks = start_supervised!({Task.Supervisor, name: nil})
+
+    task =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        mcp_tool(c, configured, session, 2, "create_call", %{
+          tenant_key: c.tenant.key,
+          call_spec_id: c.published.call_spec_id,
+          idempotency_key: "mcp-timeout"
+        })
+      end)
+
+    assert_receive {:test_outbound_leg_connect, worker, request, _}, 1_000
+    response = Task.await(task, 2_000)
+    assert %{"error" => %{"code" => -32603}} = body(response)
+    # The provider may already have received the submission when a client times out.
+    # Retrying the same durable claim must never issue a second dial.
+    send(worker, :release_test_dial)
+    replay = post(c, %{}, "mcp-timeout")
+    id = request.call_id
+
+    case body(replay) do
+      %{"call" => %{"id" => ^id}} ->
+        assert replay.status == 200
+
+      %{"error" => %{"code" => code}} ->
+        assert replay.status == 503
+        assert code in ["outgoing_call_start_failed", "outgoing_submission_unknown"]
+    end
+
+    {:ok, stored} = Calls.fetch_call(c.tenant.key, request.call_id, c.options)
+    assert stored.idempotency_key == "mcp-timeout"
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  def tenant_candidates(owner, _scope, _limit) do
+    send(owner, {:directory_blocked, self()})
+    receive do: (:release_directory -> {:ok, []})
+  end
+
+  test "a published web spec prepares one call with variables and no token or runtime", c do
+    web =
+      source()
+      |> Map.delete(:outgoing_call)
+      |> Map.put(:incoming_call, %{caller: "callee", handled_by: "assistant"})
+      |> put_in([:participants, "callee", :connection], %{
+        service: "web",
+        mode: "receive",
+        admission: "start_call"
+      })
+
+    {:ok, draft} = Calls.save_call_spec(c.tenant.key, web, c.options)
+    {:ok, _} = Calls.publish_call_spec(c.tenant.key, draft.call_spec_id, 1, c.options)
+
+    c = %{
+      c
+      | options:
+          Keyword.put(c.options, :join_token_generator, fn -> flunk("unexpected token") end)
+    }
+
+    input = %{"variables" => %{"data" => %{"private" => "pinned value"}}}
+    response = post(c, input, "web-retry", spec: draft.call_spec_id)
+    assert response.status == 201
+    assert get_resp_header(response, "cache-control") == ["no-store"]
+    assert %{"call" => %{"id" => id, "state" => "prepared", "revision" => 1}} = body(response)
+    {:ok, stored} = Calls.fetch_call(c.tenant.key, id, c.options)
+    assert stored.initial_variables == input["variables"]
+    assert stored.incarnation_id == nil
+    refute Map.has_key?(body(response), "join_token")
+    refute response.resp_body =~ "pinned value"
+    assert post(c, input, "web-retry", spec: draft.call_spec_id).status == 200
+    assert post(c, %{}, "web-retry", spec: draft.call_spec_id).status == 409
+
+    {:ok, token} =
+      Calls.issue_call_join_token(
+        c.principal,
+        c.tenant.key,
+        id,
+        nil,
+        Keyword.delete(c.options, :join_token_generator)
+      )
+
+    {:ok, claim} =
+      Calls.claim_join_token(
+        token.secret,
+        %{tenant_key: c.tenant.key, call_id: id, participant_key: token.participant_key},
+        c.options
+      )
+
+    {:ok, _} = Calls.mark_call_failed(claim, :startup_unknown, c.options)
+    replay = post(c, input, "web-retry", spec: draft.call_spec_id)
+    assert replay.status == 200
+    assert body(replay)["call"]["state"] == "failed"
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  test "browser call creation uses the same actor policy and explicit keys never fall back", c do
+    browser = %Vxpipe.Identity.Principal{
+      user_public_id: "user",
+      session_public_id: "session",
+      account_kind: :member,
+      grants: MapSet.new(["calls.write"]),
+      assigned_tenants: %{c.tenant.key => :read_write},
+      all_tenant_actions: MapSet.new()
+    }
+
+    configured = endpoint(c, browser_auth: {__MODULE__, browser})
+    assert post(c, %{}, nil, secret: nil, endpoint: configured).status == 201
+    assert_receive {:test_outbound_leg_connect, _, _, _}, 1_000
+    assert post(c, %{}, nil, secret: "invalid", endpoint: configured).status == 401
+    denied = endpoint(c, browser_auth: {__MODULE__, %{browser | grants: MapSet.new()}})
+    assert post(c, %{}, nil, secret: nil, endpoint: denied).status == 403
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  test "browser authentication failure returns a fixed error without private diagnostics", c do
+    configured = endpoint(c, browser_auth: {__MODULE__, :unavailable})
+    response = post(c, %{}, nil, secret: nil, endpoint: configured)
+    assert response.status == 503
+    assert body(response)["error"]["code"] == "call_management_unavailable"
+    refute response.resp_body =~ "private-browser-sentinel"
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  def authenticate({:mcp, tenant}, "synthetic-mcp-access"),
+    do: {:ok, Vxpipe.Gateway.Test.MCPOAuth.actor(tenant)}
+
+  def authenticate({:mcp, _tenant}, _secret), do: {:error, :invalid_token}
+  def authenticate(_conn, :unavailable), do: raise("private-browser-sentinel")
+  def authenticate(conn, actor), do: {:ok, conn, actor}
 
   test "durable start precedes dialing and 201 waits for its acknowledgement", c do
     task = Task.async(fn -> post(c, %{}, nil, block?: true) end)
@@ -175,6 +367,88 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     refute_receive {:test_outbound_leg_connect, _, _, _}, 30
   end
 
+  test "canceled binding closes the pending outgoing room without projecting failure or dialing",
+       c do
+    assert {:ok, call} =
+             Calls.claim_outgoing_call(c.principal, c.published.call_spec_id, %{}, nil, c.options)
+
+    observer = self()
+
+    callback = fn
+      :bind, [^call, incarnation] ->
+        {:ok, monitor} =
+          Vxpipe.CallEngine.monitor_room_completion(call.tenant_key, call.room_id, incarnation)
+
+        send(observer, {:pending_completion, monitor})
+        {:ok, :cancel, %{call | incarnation_id: incarnation}}
+
+      operation, _arguments ->
+        flunk("unexpected persistence operation after cancellation: #{operation}")
+    end
+
+    options =
+      c.options
+      |> Keyword.put(:call_repository, {Vxpipe.Gateway.TestAdmissionBindingRepository, callback})
+      |> Keyword.put(
+        :outbound_leg_connector,
+        {TestOutboundLegConnector, %{owner: self(), observer: self()}}
+      )
+
+    assert {:error, :outgoing_call_start_failed} =
+             Vxpipe.Gateway.OutgoingCallAdmission.start(options, call)
+
+    assert_receive {:pending_completion, monitor}
+    assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
+  test "managed cancelled outgoing admission reserves cleanup before closing its unopened room",
+       c do
+    {:ok, call} =
+      Calls.claim_outgoing_call(c.principal, c.published.call_spec_id, %{}, nil, c.options)
+
+    observer = self()
+
+    callback = fn
+      :bind_managed, [^call, incarnation] ->
+        send(observer, {:managed_outgoing_bound, incarnation})
+
+        {:ok, :cancel, :new,
+         %{
+           call
+           | incarnation_id: incarnation,
+             gateway_cleanup_required: true,
+             incarnation_binding_verified: true
+         }}
+
+      :complete, [binding, at] ->
+        send(observer, {:managed_outgoing_completed, binding})
+
+        {:ok,
+         %{
+           call
+           | incarnation_id: binding.incarnation_id,
+             gateway_cleanup_required: true,
+             gateway_cleanup_completed_at: at
+         }}
+    end
+
+    options =
+      Keyword.merge(c.options,
+        managed_cleanup: true,
+        publication_enabled: false,
+        call_repository: {Vxpipe.Gateway.TestAdmissionBindingRepository, callback},
+        outbound_leg_connector: {Vxpipe.Gateway.Telephony.OutgoingLegConnector, []}
+      )
+
+    assert {:error, :outgoing_call_start_failed} =
+             Vxpipe.Gateway.OutgoingCallAdmission.start(options, call)
+
+    assert_receive {:managed_outgoing_bound, incarnation}, 1_000
+    assert_receive {:managed_outgoing_completed, %{incarnation_id: ^incarnation}}, 1_000
+    refute_received {:test_outbound_leg_connect, _, _, _}
+  end
+
   test "projection failure cancels the unopened room without submitting a dial", c do
     {_module, context} = Keyword.fetch!(c.options, :call_repository)
 
@@ -187,9 +461,7 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
 
     response = post(%{c | options: options}, %{}, "projection-failed")
     assert response.status == 503
-    replay = post(c, %{}, "projection-failed")
-    assert replay.status == 503
-    assert body(replay) == body(response)
+    assert %{"error" => %{"code" => "outgoing_call_start_failed"}} = body(response)
 
     assert {:ok, failed} =
              TestMemoryRepository.fetch_outgoing_by_key(
@@ -200,6 +472,11 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
 
     id = failed.id
     assert {:ok, stored} = Calls.fetch_call(c.tenant.key, id, c.options)
+    assert stored.state == :admitting
+    assert stored.terminal_reason == nil
+    replay = post(c, %{}, "projection-failed")
+    assert replay.status == 200
+    assert %{"call" => %{"id" => ^id, "state" => "admitting"}} = body(replay)
     # Registry cleanup may follow the controller reply. Observe termination
     # rather than requiring the registry's asynchronous removal to win the race.
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {c.tenant.key, stored.room_id}) do
@@ -345,6 +622,65 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
     assert stored.from_number == "+15550001000"
   end
 
+  defp mcp_endpoint(c, options) do
+    admission = start_supervised!({Vxpipe.Gateway.MCP.Admission, name: nil})
+
+    mcp = [
+      enabled: true,
+      issuer: "https://localhost",
+      resource: "https://localhost/mcp",
+      allowed_hosts: ["localhost"],
+      admission: admission,
+      authentication: {__MODULE__, {:mcp, c.tenant.key}},
+      call_creation_timeout: Keyword.fetch!(options, :call_creation_timeout)
+    ]
+
+    configured = endpoint(c, Keyword.put(options, :mcp, mcp))
+
+    initialized =
+      mcp_request(c, configured, nil, %{
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: %{
+          protocolVersion: "2025-11-25",
+          capabilities: %{},
+          clientInfo: %{name: "outgoing-test", version: "1"}
+        }
+      })
+
+    assert initialized.status == 200
+    [session] = get_resp_header(initialized, "mcp-session-id")
+    on_exit(fn -> ExMCP.SessionManager.terminate_session(session) end)
+    # Initialization is not the slow operation under test. Accelerate ordinary
+    # callback deadlines after that handshake while retaining the configured
+    # creation deadline.
+    configured = put_in(configured, [:mcp, :protocol, :handler_call_timeout], 25)
+    {configured, session}
+  end
+
+  defp mcp_tool(c, configured, session, id, name, arguments),
+    do:
+      mcp_request(c, configured, session, %{
+        jsonrpc: "2.0",
+        id: id,
+        method: "tools/call",
+        params: %{name: name, arguments: arguments}
+      })
+
+  defp mcp_request(_c, configured, session, request) do
+    connection =
+      conn(:post, "https://localhost/mcp", JSON.encode!(request))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer synthetic-mcp-access")
+      |> put_req_header("mcp-protocol-version", "2025-11-25")
+
+    connection =
+      if session, do: put_req_header(connection, "mcp-session-id", session), else: connection
+
+    Endpoint.call(connection, configured)
+  end
+
   defp endpoint(c, options) do
     observer = Keyword.get(options, :observer, c.observer)
 
@@ -353,8 +689,10 @@ defmodule Vxpipe.Gateway.HTTP.OutgoingCallsTest do
        Map.new(options) |> Map.merge(%{owner: observer, observer: observer})}
 
     Endpoint.init(
+      mcp: Keyword.get(options, :mcp, []),
       call_admission: [
         enabled: true,
+        browser_auth: Keyword.get(options, :browser_auth),
         backend:
           {CallAdmission,
            Keyword.merge(c.options, [

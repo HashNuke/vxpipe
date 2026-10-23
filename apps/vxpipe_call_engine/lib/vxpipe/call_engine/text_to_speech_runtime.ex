@@ -11,6 +11,9 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
   alias Vxpipe.Providers.ElevenLabs.TTS, as: ElevenLabsTTS
   alias Vxpipe.Providers.ElevenLabs.TTSSession, as: ElevenLabsTTSSession
 
+  alias Vxpipe.Providers.MorseCodeApi.TTS, as: MorseCodeApiTTS
+  alias Vxpipe.Providers.MorseCodeApi.TTSSession, as: MorseCodeApiTTSSession
+
   @derive {Inspect, only: [:maximum_requests, :asset_cache_identity]}
   @enforce_keys [
     :provider,
@@ -96,15 +99,15 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
   def provider({CartesiaTTSSession, %CartesiaTTS{} = config}, settings) do
     with nil <- Keyword.get(settings, :transport),
          nil <- Keyword.get(settings, :transport_options),
-         nil <- Keyword.get(settings, :wire_module),
-         nil <- Keyword.get(settings, :wire_options),
-         request_module when is_atom(request_module) <-
-           Keyword.get(settings, :request_module, Vxpipe.Providers.Cartesia.TTSRequest) do
+         wire_module when is_atom(wire_module) <-
+           Keyword.get(settings, :wire_module, Vxpipe.CallEngine.Speech.ContextTTSSocket),
+         wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
+         true <- Keyword.keyword?(wire_options) do
       public = [model: config.model, voice: config.voice, sample_rate: config.sample_rate]
 
       with {:ok, descriptor} <- CartesiaTTSSession.configure(public) do
-        {:ok, {CartesiaTTSSession, public}, [config: config, request_module: request_module],
-         descriptor}
+        {:ok, {CartesiaTTSSession, public},
+         [config: config, wire_module: wire_module, wire_options: wire_options], descriptor}
       end
     else
       _invalid -> {:error, :invalid_configuration}
@@ -114,15 +117,33 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
   def provider({ElevenLabsTTSSession, %ElevenLabsTTS{} = config}, settings) do
     with nil <- Keyword.get(settings, :transport),
          nil <- Keyword.get(settings, :transport_options),
-         nil <- Keyword.get(settings, :wire_module),
-         nil <- Keyword.get(settings, :wire_options),
-         request_module when is_atom(request_module) <-
-           Keyword.get(settings, :request_module, Vxpipe.Providers.ElevenLabs.TTSRequest) do
+         wire_module when is_atom(wire_module) <-
+           Keyword.get(settings, :wire_module, Vxpipe.CallEngine.Speech.ContextTTSSocket),
+         wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
+         true <- Keyword.keyword?(wire_options) do
       public = [model: config.model, voice: config.voice, sample_rate: config.sample_rate]
 
       with {:ok, descriptor} <- ElevenLabsTTSSession.configure(public) do
-        {:ok, {ElevenLabsTTSSession, public}, [config: config, request_module: request_module],
-         descriptor}
+        {:ok, {ElevenLabsTTSSession, public},
+         [config: config, wire_module: wire_module, wire_options: wire_options], descriptor}
+      end
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
+  def provider({MorseCodeApiTTSSession, %MorseCodeApiTTS{} = config}, settings) do
+    with nil <- Keyword.get(settings, :transport),
+         nil <- Keyword.get(settings, :transport_options),
+         wire_module when is_atom(wire_module) <-
+           Keyword.get(settings, :wire_module, Vxpipe.CallEngine.Speech.ContextTTSSocket),
+         wire_options when is_list(wire_options) <- Keyword.get(settings, :wire_options, []),
+         true <- Keyword.keyword?(wire_options) do
+      public = [model: config.model, voice: config.voice, sample_rate: config.sample_rate]
+
+      with {:ok, descriptor} <- MorseCodeApiTTSSession.configure(public) do
+        {:ok, {MorseCodeApiTTSSession, public},
+         [config: config, wire_module: wire_module, wire_options: wire_options], descriptor}
       end
     else
       _invalid -> {:error, :invalid_configuration}
@@ -141,6 +162,18 @@ defmodule Vxpipe.CallEngine.TextToSpeechRuntime do
       _invalid -> {:error, :invalid_configuration}
     end
   end
+
+  def descriptor_cache_identity(
+        {MorseCodeApiTTSSession, %MorseCodeApiTTS{} = config},
+        descriptor
+      ),
+      do:
+        :crypto.hash(
+          :sha256,
+          :erlang.term_to_binary({descriptor.cache_identity, config.endpoint})
+        )
+
+  def descriptor_cache_identity(_selected, descriptor), do: descriptor.cache_identity
 
   def usage_identity(provider, options) do
     with true <- function_exported?(provider, :configure, 1),

@@ -52,6 +52,10 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   @spec snapshot(pid()) :: {:ok, map()} | {:error, term()}
   def snapshot(session), do: safe_call(session, :snapshot)
 
+  @doc false
+  def reuse(session, binding, socket, stream, root, tracker),
+    do: safe_call(session, {:reuse, binding, socket, stream, root, tracker})
+
   @impl true
   def readiness(session), do: Readiness.readiness(session, :output)
 
@@ -79,11 +83,17 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   def init(options) do
     socket_owner = Keyword.fetch!(options, :socket_owner)
     binding = Keyword.fetch!(options, :binding)
+    tracker = Keyword.fetch!(options, :cleanup_tracker)
 
     monitors = %{
       Process.monitor(socket_owner) => :socket,
       Process.monitor(binding.leg) => :leg
     }
+
+    monitors =
+      if is_pid(tracker),
+        do: Map.put(monitors, Process.monitor(tracker), :cleanup),
+        else: monitors
 
     case MediaSessionSetup.run(options) do
       {:ok, setup} ->
@@ -92,6 +102,8 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
         {:ok,
          Map.merge(setup, %{
            binding: binding,
+           cleanup_root: Keyword.fetch!(options, :cleanup_root),
+           cleanup_tracker: tracker,
            readiness_resource:
              Resource.new(
                :media_connection,
@@ -119,6 +131,16 @@ defmodule Vxpipe.Gateway.Telephony.MediaSession do
   end
 
   @impl true
+  def handle_call({:reuse, binding, socket, stream, root, tracker}, _from, state) do
+    result =
+      if state.binding == binding and state.socket_owner == socket and state.stream_id == stream and
+           state.cleanup_root == root and state.cleanup_tracker == tracker,
+         do: :ok,
+         else: {:error, :media_binding_mismatch}
+
+    {:reply, result, state}
+  end
+
   def handle_call({:speech_to_speech_track, track}, _from, state) do
     case STSInput.prepare(state.attachment, track, state.sts_input, :telephony) do
       {:ok, output, input} -> {:reply, {:ok, output}, %{state | sts_input: input}}

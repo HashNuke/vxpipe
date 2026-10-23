@@ -13,7 +13,8 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
           {:vxpipe_calls, Vxpipe.Calls},
           {:vxpipe_console, :user_identity_backend},
           {:vxpipe_console, :navigation_test_principal},
-          {:vxpipe_console, :navigation_test_status}
+          {:vxpipe_console, :navigation_test_status},
+          {:vxpipe_console, :telephony_host}
         ] do
       previous = Application.fetch_env(app, key)
 
@@ -122,53 +123,111 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     assert conn |> recycle() |> get("/admin/api/api-keys") |> json_response(403)
   end
 
-  test "tenant creation checks page and API permissions and returns a dashboard destination" do
-    member(["tenants.read"], %{})
-    conn = login()
-    assert conn |> recycle() |> get("/tenants/new") |> response(403)
+  for prefix <- ["/api", "/admin/api"] do
+    @tenant_creation_path prefix <> "/tenants"
+    test "tenant creation through #{prefix} checks permissions and returns a dashboard destination" do
+      member(["tenants.read"], %{})
+      conn = login()
+      assert conn |> recycle() |> get("/tenants/new") |> response(403)
 
-    assert conn
-           |> recycle()
-           |> post("/admin/api/tenants", %{"name" => "Support"})
-           |> json_response(403)
+      assert conn
+             |> recycle()
+             |> post(@tenant_creation_path, %{"name" => "Support"})
+             |> json_response(403)
+
+      refute_received {:created_tenant, _}
+
+      member(["tenants.read", "tenants.write"], %{})
+      assert conn |> recycle() |> get("/tenants/new") |> html_response(200) =~ "/assets/admin.js"
+
+      created =
+        conn
+        |> recycle()
+        |> post(@tenant_creation_path, %{"name" => " Support "})
+        |> json_response(201)
+
+      assert created["tenant"]["name"] == "Support"
+      assert created["tenant"]["dashboard_path"] == "/t/#{created["tenant"]["key"]}/dashboard"
+      refute Map.has_key?(created, "api_key")
+      assert_received {:created_tenant, tenant}
+      configure([tenant])
+
+      dashboard =
+        conn |> recycle() |> get(created["tenant"]["dashboard_path"]) |> html_response(200)
+
+      assert dashboard =~ "/assets/admin.js"
+
+      overview =
+        conn
+        |> recycle()
+        |> get("/admin/api/tenants/#{tenant.key}/dashboard")
+        |> json_response(200)
+
+      refute Map.has_key?(overview, "recent_calls")
+
+      assert Enum.all?(overview["tenant"]["capabilities"], fn {_resource, access} ->
+               access == %{"read" => false, "write" => false}
+             end)
+
+      assert conn
+             |> recycle()
+             |> post(@tenant_creation_path, %{"name" => " "})
+             |> json_response(422) ==
+               %{"error" => %{"code" => "invalid_tenant_name"}}
+
+      assert build_conn()
+             |> post("https://localhost" <> @tenant_creation_path, %{"name" => "Support"})
+             |> json_response(401)
+    end
+  end
+
+  test "tenant creation rejects explicit credentials before cookie fallback on both aliases" do
+    member(["tenants.write"])
+    conn = login()
+
+    for path <- ["/api/tenants", "/admin/api/tenants"] do
+      denied =
+        conn
+        |> recycle()
+        |> Plug.Conn.put_req_header("authorization", "Bearer synthetic-key")
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> post(path, "not-json")
+
+      assert json_response(denied, 401) == %{"error" => %{"code" => "session_required"}}
+    end
 
     refute_received {:created_tenant, _}
+  end
 
-    member(["tenants.read", "tenants.write"], %{})
-    assert conn |> recycle() |> get("/tenants/new") |> html_response(200) =~ "/assets/admin.js"
+  test "tenant creation retains CSRF and host constraints on both aliases" do
+    member(["tenants.write"])
+    page = login() |> recycle() |> get("/tenants/new")
+    [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, page.resp_body)
 
-    created =
-      conn
-      |> recycle()
-      |> post("/admin/api/tenants", %{"name" => " Support "})
-      |> json_response(201)
+    for path <- ["/api/tenants", "/admin/api/tenants"] do
+      assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+        page
+        |> recycle()
+        |> Map.update!(:private, &Map.delete(&1, :plug_skip_csrf_protection))
+        |> Plug.Conn.put_req_header("x-csrf-token", "invalid")
+        |> post(path, %{"name" => "Denied"})
+      end
 
-    assert created["tenant"]["name"] == "Support"
-    assert created["tenant"]["dashboard_path"] == "/t/#{created["tenant"]["key"]}/dashboard"
-    refute Map.has_key?(created, "api_key")
-    assert_received {:created_tenant, tenant}
-    configure([tenant])
+      refute_received {:created_tenant, _}
 
-    dashboard =
-      conn |> recycle() |> get(created["tenant"]["dashboard_path"]) |> html_response(200)
+      assert page
+             |> recycle()
+             |> Map.update!(:private, &Map.delete(&1, :plug_skip_csrf_protection))
+             |> Plug.Conn.put_req_header("x-csrf-token", csrf)
+             |> post(path, %{"name" => "CSRF tenant"})
+             |> json_response(201)
 
-    assert dashboard =~ "/assets/admin.js"
+      assert_received {:created_tenant, _}
 
-    overview =
-      conn |> recycle() |> get("/admin/api/tenants/#{tenant.key}/dashboard") |> json_response(200)
-
-    refute Map.has_key?(overview, "recent_calls")
-
-    assert Enum.all?(overview["tenant"]["capabilities"], fn {_resource, access} ->
-             access == %{"read" => false, "write" => false}
-           end)
-
-    assert conn |> recycle() |> post("/admin/api/tenants", %{"name" => " "}) |> json_response(422) ==
-             %{"error" => %{"code" => "invalid_tenant_name"}}
-
-    assert build_conn()
-           |> post("https://localhost/admin/api/tenants", %{"name" => "Support"})
-           |> json_response(401)
+      assert build_conn() |> post("http://public.example" <> path, %{}) |> response(404)
+      Application.put_env(:vxpipe_console, :telephony_host, "carrier.example")
+      assert build_conn() |> post("https://carrier.example" <> path, %{}) |> response(404)
+    end
   end
 
   test "directory Setup capability follows effective service write permission" do

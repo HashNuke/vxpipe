@@ -78,8 +78,14 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   end
 
   def admit_outgoing_call(tenant_id, room_id, incarnation_id, token) do
-    outgoing_admission_control(tenant_id, room_id, incarnation_id, token, :admit_outgoing)
+    admission_control(tenant_id, room_id, incarnation_id, token, :admit_outgoing)
   end
+
+  def admit_call(tenant_id, room_id, incarnation_id, token),
+    do: admission_control(tenant_id, room_id, incarnation_id, token, :admit_call)
+
+  def cancel_call_admission(tenant_id, room_id, incarnation_id, token),
+    do: admission_control(tenant_id, room_id, incarnation_id, token, :cancel_call_admission)
 
   def end_call(tenant_id, room_id, incarnation_id) do
     with {:ok, authority} <- lookup_room(tenant_id, room_id) do
@@ -91,11 +97,21 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     :exit, _reason -> {:error, :room_unavailable}
   end
 
-  def cancel_outgoing_admission(tenant_id, room_id, incarnation_id, token) do
-    outgoing_admission_control(tenant_id, room_id, incarnation_id, token, :cancel_outgoing)
+  def hangup_call(tenant_id, room_id, incarnation_id) do
+    with {:ok, authority} <- lookup_room(tenant_id, room_id) do
+      GenServer.call(authority, {:hangup_call, incarnation_id}, 5_000)
+    else
+      _missing -> {:error, :room_unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :room_unavailable}
   end
 
-  defp outgoing_admission_control(tenant_id, room_id, incarnation_id, token, operation) do
+  def cancel_outgoing_admission(tenant_id, room_id, incarnation_id, token) do
+    admission_control(tenant_id, room_id, incarnation_id, token, :cancel_outgoing)
+  end
+
+  defp admission_control(tenant_id, room_id, incarnation_id, token, operation) do
     with {:ok, authority} <- lookup_room(tenant_id, room_id) do
       GenServer.call(authority, {operation, incarnation_id, token}, 5_000)
     else
@@ -105,10 +121,13 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
     :exit, _reason -> {:error, :room_unavailable}
   end
 
-  def join_participant(%JoinParticipant{} = command) do
+  def join_participant(%JoinParticipant{} = command, expected_incarnation \\ nil) do
     case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {command.tenant_id, command.room_id}) do
-      [{room_authority, _value}] -> RoomAuthority.join_participant(room_authority, command)
-      [] -> {:error, room_not_found(command.room_id)}
+      [{room_authority, _value}] ->
+        RoomAuthority.join_participant(room_authority, command, expected_incarnation)
+
+      [] ->
+        {:error, room_not_found(command.room_id)}
     end
   catch
     :exit, _reason ->
@@ -431,6 +450,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       remote_mcp_protocol_client: Keyword.get(runtime_options, :remote_mcp_protocol_client),
       outbound_leg_connector: Keyword.get(runtime_options, :outbound_leg_connector),
       outgoing_admission: Keyword.get(runtime_options, :outgoing_admission),
+      call_admission: Keyword.get(runtime_options, :call_admission),
       media_policy_ceiling:
         Keyword.get(runtime_options, :media_policy_ceiling, MediaPolicy.inherit())
     ]

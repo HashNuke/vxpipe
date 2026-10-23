@@ -110,7 +110,10 @@ defmodule Vxpipe.Identity.AuthorizationReviewTest do
       grants = MapSet.new([key])
       context = %{assigned_tenants: %{"tenant-a" => :read_write}}
       assert :ok = Authorization.authorize(grants, key, {:tenant, "tenant-a"}, context)
-      assert {:error, :forbidden} = Authorization.authorize(grants, key, {:tenant, "tenant-b"}, context)
+
+      assert {:error, :forbidden} =
+               Authorization.authorize(grants, key, {:tenant, "tenant-b"}, context)
+
       assert {:error, :forbidden} = Authorization.authorize(grants, key, :installation, context)
     end
   end
@@ -274,7 +277,9 @@ defmodule Vxpipe.Identity.AuthorizationReviewTest do
                superadmin_actor(),
                "user-1",
                "another horse 15!!",
-               "another horse 15!!", expected_current_role_public_id: "role-admin")
+               "another horse 15!!",
+               expected_current_role_public_id: "role-admin"
+             )
   end
 
   defmodule AssignedRoleUsers do
@@ -399,7 +404,18 @@ defmodule Vxpipe.Identity.AuthorizationReviewTest do
 
   test "role affected-user count is retrievable" do
     deps = %{roles: Vxpipe.Identity.FakeRoles}
-    assert {:ok, n} = Roles.affected_user_count(deps, "role-member")
+
+    assert {:ok, n} =
+             Roles.affected_user_count(
+               deps,
+               %{
+                 user_public_id: "11111111-1111-4111-8111-111111111111",
+                 session_public_id: "22222222-2222-4222-8222-222222222222",
+                 account_kind: :superadmin
+               },
+               "role-member"
+             )
+
     assert is_integer(n) and n >= 0
   end
 end

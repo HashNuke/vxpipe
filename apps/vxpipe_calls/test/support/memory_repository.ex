@@ -26,6 +26,18 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
   def call_spec_repository(agent), do: {__MODULE__, agent}
   def call_repository(agent), do: {__MODULE__, agent}
 
+  defdelegate request_call_hangup(agent, tenant, id, now),
+    to: Vxpipe.Calls.TestMemoryCallHangup,
+    as: :request
+
+  defdelegate bind_managed_call_admission(agent, subject, incarnation),
+    to: Vxpipe.Calls.TestMemoryAdmissionBinding,
+    as: :bind_managed
+
+  defdelegate bind_call_admission(agent, subject, incarnation),
+    to: Vxpipe.Calls.TestMemoryAdmissionBinding,
+    as: :bind
+
   def create_tenant(agent, tenant) do
     Agent.get_and_update(agent, fn state ->
       if Map.has_key?(state.tenants, tenant.key),
@@ -87,6 +99,16 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
 
         :error ->
           {{:error, :not_found}, state}
+      end
+    end)
+  end
+
+  def fetch_api_key_by_digest(agent, digest) do
+    Agent.get(agent, fn state ->
+      case state.keys |> Map.values() |> Enum.filter(&(&1.digest == digest)) |> Enum.take(2) do
+        [] -> {:error, :not_found}
+        [key] -> {:ok, key}
+        [_first, _second] -> {:error, :ambiguous_api_key}
       end
     end)
   end
@@ -166,6 +188,9 @@ defmodule Vxpipe.Calls.TestMemoryRepository do
     with {:ok, revision} <- selected,
          do: fetch_revision(agent, tenant_key, call_spec_id, revision)
   end
+
+  def fetch_call_by_key(agent, tenant, key), do: fetch_outgoing_by_key(agent, tenant, key)
+  def claim_call(agent, call, authorize), do: claim_outgoing_call(agent, call, authorize)
 
   def fetch_outgoing_by_key(agent, tenant_key, key) do
     Agent.get(agent, fn state ->

@@ -7,7 +7,9 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
 
   alias Vxpipe.Gateway.Telephony.{
     ConfiguredService,
+    IncomingLegActivationContext,
     IncomingLegActivationResult,
+    IncomingLegIdentity,
     LegUsage,
     MediaAdmission,
     MediaBinding,
@@ -24,44 +26,108 @@ defmodule Vxpipe.Gateway.Telephony.IncomingLegActivation do
         options \\ []
       )
       when is_binary(incarnation_id) and is_pid(leg) do
-    media_admission = Keyword.get(options, :media_admission, MediaAdmission)
-    leg_id = Keyword.get(options, :leg_id, fn -> Id.generate(:telephony_leg) end)
+    with {:ok, prepared} <- prepare(service, claim, incarnation_id, leg, options) do
+      case submit(prepared) do
+        {:ok, result} -> {:ok, result}
+        {:error, reason, _retained} -> {:error, reason}
+      end
+    end
+  end
+
+  @doc "Allocates the incoming identity and usage without issuing media or carrier commands."
+  @spec identify(ConfiguredService.t(), TelephonyAdmissionClaim.t(), String.t(), pid(), keyword()) ::
+          {:ok, IncomingLegIdentity.t()} | {:error, term()}
+  def identify(service, claim, incarnation_id, leg, options \\ []) do
+    generator = Keyword.get(options, :leg_id, fn -> Id.generate(:telephony_leg) end)
 
     with :ok <- matching_service(service, claim),
-         {:ok, client_state_leg_id} <- generate_leg_id(leg_id),
-         binding <- binding(service, claim, incarnation_id, client_state_leg_id, leg),
-         {:ok, token} <-
-           MediaAdmission.issue(media_admission, binding, service.media_token_ttl_ms, service),
-         media_url <- ProviderEndpoint.media_url(service, token),
-         request <- answer_request(binding, media_url) do
-      usage = LegUsage.start_incoming(binding, options)
-      submit_answer(service, media_admission, leg, binding, media_url, request, usage)
+         {:ok, client_state_leg_id} <- generate_leg_id(generator) do
+      binding = binding(service, claim, incarnation_id, client_state_leg_id, leg)
+
+      {:ok,
+       %IncomingLegIdentity{
+         binding: binding,
+         service: service,
+         usage: LegUsage.start_incoming(binding, options)
+       }}
+    end
+  end
+
+  @doc "Prepares media admission and usage without submitting an answer to the carrier."
+  @spec prepare(ConfiguredService.t(), TelephonyAdmissionClaim.t(), String.t(), pid(), keyword()) ::
+          {:ok, IncomingLegActivationContext.t()} | {:error, term()}
+  def prepare(service, claim, incarnation_id, leg, options \\ [])
+
+  def prepare(
+        %ConfiguredService{} = service,
+        %TelephonyAdmissionClaim{} = claim,
+        incarnation_id,
+        leg,
+        options
+      )
+      when is_binary(incarnation_id) and is_pid(leg) do
+    with {:ok, identity} <- identify(service, claim, incarnation_id, leg, options) do
+      prepare_identity(identity, options)
+    end
+  end
+
+  @doc "Prepares media using the original retained identity, without starting another usage attempt."
+  @spec prepare_identity(IncomingLegIdentity.t(), keyword()) ::
+          {:ok, IncomingLegActivationContext.t()} | {:error, term()}
+  def prepare_identity(
+        %IncomingLegIdentity{binding: binding, service: service} = identity,
+        options \\ []
+      ) do
+    media_admission = Keyword.get(options, :media_admission, MediaAdmission)
+
+    with {:ok, token} <-
+           MediaAdmission.issue(media_admission, binding, service.media_token_ttl_ms, service) do
+      media_url = ProviderEndpoint.media_url(service, token)
+
+      {:ok,
+       %IncomingLegActivationContext{
+         binding: binding,
+         service: service,
+         media_admission: media_admission,
+         media_url: media_url,
+         request: answer_request(binding, media_url),
+         usage: identity.usage
+       }}
     else
       {:error, reason} = error ->
-        :ok = MediaAdmission.revoke(media_admission, leg)
+        :ok = MediaAdmission.revoke(media_admission, binding.leg)
         if is_atom(reason) or is_tuple(reason), do: error, else: {:error, :activation_failed}
     end
   end
 
-  defp submit_answer(service, media_admission, leg, binding, media_url, request, usage) do
-    case Adapter.answer(service.adapter, service.adapter_options, request) do
+  @doc """
+  Submits a prepared answer. The owner retains the prepared context while this call
+  is in flight. Rejection returns that context with finalized usage; an accepted or
+  unknown submission returns the existing activation result without discarding the
+  original carrier binding.
+  """
+  @spec submit(IncomingLegActivationContext.t()) ::
+          {:ok, IncomingLegActivationResult.t()}
+          | {:error, term(), IncomingLegActivationContext.t()}
+  def submit(%IncomingLegActivationContext{} = prepared) do
+    service = prepared.service
+
+    case Adapter.answer(service.adapter, service.adapter_options, prepared.request) do
       {:ok, submission} ->
         {:ok,
          %IncomingLegActivationResult{
-           binding: binding,
-           media_url: media_url,
+           binding: prepared.binding,
+           media_url: prepared.media_url,
            submission: submission,
            service: service,
-           usage: LegUsage.identify(usage, submission)
+           usage: LegUsage.identify(prepared.usage, submission)
          }}
 
       {:error, reason} ->
-        _usage = LegUsage.fail(usage, :failed)
-        :ok = MediaAdmission.revoke(media_admission, leg)
-
-        if is_atom(reason) or is_tuple(reason),
-          do: {:error, reason},
-          else: {:error, :activation_failed}
+        retained = %{prepared | usage: LegUsage.fail(prepared.usage, :failed)}
+        :ok = MediaAdmission.revoke(prepared.media_admission, prepared.binding.leg)
+        reason = if is_atom(reason) or is_tuple(reason), do: reason, else: :activation_failed
+        {:error, reason, retained}
     end
   end
 

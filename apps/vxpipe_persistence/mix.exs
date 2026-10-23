@@ -28,7 +28,9 @@ defmodule Vxpipe.Persistence.MixProject do
 
   defp deps do
     [
+      {:boruta, "== 2.3.8"},
       {:ecto_sql, "~> 3.13.5"},
+      {:plug, "~> 1.20"},
       {:postgrex, "~> 0.21.1"},
       {:vxpipe_artifacts, in_umbrella: true, runtime: false},
       {:vxpipe_calls, in_umbrella: true},

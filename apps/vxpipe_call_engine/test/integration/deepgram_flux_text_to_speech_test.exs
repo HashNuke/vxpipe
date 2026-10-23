@@ -40,13 +40,16 @@ defmodule Vxpipe.CallEngine.Integration.DeepgramFluxTextToSpeechTest do
 
     assert :ok = Session.ack(session, ready)
 
-    assert {:ok, %{ref: request}} =
+    Vxpipe.CallEngine.LiveTTSCancellation.check(session)
+
+    assert {:ok, %{ref: request} = playback} =
              Session.speak(session, "Hello from the Vxpipe semantic speech test.")
 
     assert {audio_bytes, speech_id} = await_synthesis(session, request, 0, 20_000)
     assert audio_bytes > 0
     assert rem(audio_bytes, 2) == 0
     assert is_binary(speech_id)
+    assert :ok = Session.settle_output(session, playback, 0)
     assert :ok = Session.close(session)
   end
 

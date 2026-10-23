@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const { openTransferConnection } = vi.hoisted(() => ({
   openTransferConnection: vi.fn(),
@@ -9,6 +9,8 @@ vi.mock("./transferConnection", () => ({ openTransferConnection }));
 
 import TransferPage from "./TransferPage";
 
+beforeEach(() => window.history.replaceState({}, "", "/admin/samples/transfer?tenant_key=BBBBBBBBBBBBBBBB&call_id=30000000-0000-4000-8000-000000000003"));
+
 afterEach(() => {
   cleanup();
   openTransferConnection.mockReset();
@@ -17,7 +19,7 @@ afterEach(() => {
 });
 
 test("explains the required setup when the transfer sample is disabled", async () => {
-  const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+  const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({error: {code: "sample_transfer_disabled"}}) });
   vi.stubGlobal("fetch", fetchMock);
   render(<TransferPage />);
 
@@ -32,7 +34,7 @@ test("explains the required setup when the transfer sample is disabled", async (
   expect(fetchMock).toHaveBeenCalledOnce();
 });
 
-test("connects the latest sample destination and activates only after explicit acceptance", async () => {
+test("connects the selected sample destination and activates only after explicit acceptance", async () => {
   const accept = vi.fn();
   const close = vi.fn();
   openTransferConnection.mockImplementation(async (_session, callbacks) => {
@@ -87,10 +89,10 @@ test("connects the latest sample destination and activates only after explicit a
   fireEvent.click(screen.getByRole("button", { name: "Connect transfer desk" }));
 
   await vi.waitFor(() => expect(openTransferConnection).toHaveBeenCalledOnce());
-  expect(fetchMock).toHaveBeenNthCalledWith(1, "/admin/samples/transfers", {
+  expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/samples/transfers", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ tenant_key: "BBBBBBBBBBBBBBBB", call_id: "30000000-0000-4000-8000-000000000003" }),
   });
   expect(fetchMock).toHaveBeenNthCalledWith(
     2,
@@ -161,4 +163,13 @@ test("connects the latest sample destination and activates only after explicit a
 
   expect(screen.getByRole("status")).toHaveTextContent("Main room active");
   expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("vxp_");
+});
+
+test("a transfer page without a call locator never guesses a latest call", () => {
+  window.history.replaceState({}, "", "/admin/samples/transfer");
+  const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
+  render(<TransferPage />);
+  expect(screen.getByRole("button", { name: "Connect transfer desk" })).toBeDisabled();
+  expect(screen.getByRole("alert")).toHaveTextContent("Open the transfer desk from the caller console");
+  expect(fetchMock).not.toHaveBeenCalled();
 });

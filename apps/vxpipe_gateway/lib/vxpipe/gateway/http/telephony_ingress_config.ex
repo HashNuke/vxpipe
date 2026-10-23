@@ -50,6 +50,25 @@ defmodule Vxpipe.Gateway.HTTP.TelephonyIngressConfig do
   end
 
   @doc false
+  def with_managed_cleanup(options, shared) do
+    case Keyword.get(options, :handler, {CallIngress, []}) do
+      {CallIngress, handler} ->
+        case Keyword.get(handler, :backend, {CallAdmission, []}) do
+          {CallAdmission, backend} ->
+            backend = shared |> Keyword.merge(backend) |> Keyword.put(:managed_cleanup, true)
+            handler = Keyword.put(handler, :backend, {CallAdmission, backend})
+            Keyword.put(options, :handler, {CallIngress, handler})
+
+          _custom_backend ->
+            options
+        end
+
+      _custom_handler ->
+        options
+    end
+  end
+
+  @doc false
   @spec system_time_seconds() :: non_neg_integer()
   def system_time_seconds, do: System.system_time(:second)
 

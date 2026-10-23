@@ -1,0 +1,347 @@
+defmodule Vxpipe.Persistence.Integration.CallHangupTransactionTest do
+  use ExUnit.Case, async: false
+  import Ecto.Query
+  alias Ecto.Adapters.SQL.Sandbox
+  alias Vxpipe.Calls
+  alias Vxpipe.Calls.Administration
+  alias Vxpipe.Persistence.{CallSpecStore, CallStore, CredentialStore, Repo}
+  alias Vxpipe.Persistence.Schema.{Admission, Call, JoinToken, Tenant}
+
+  @moduletag :integration
+
+  setup do
+    :ok = Sandbox.checkout(Repo, sandbox: false)
+
+    options = [
+      credential_repository: {CredentialStore, Repo},
+      call_spec_repository: {CallSpecStore, Repo},
+      call_repository: {CallStore, Repo},
+      registries: %{host_tools: %{}}
+    ]
+
+    {:ok, tenant, key} = Administration.bootstrap_tenant("Hangup transaction", [:calls], options)
+
+    on_exit(fn ->
+      :ok = Sandbox.checkout(Repo, sandbox: false)
+      stored = Repo.get_by!(Tenant, key: tenant.key)
+      call_ids = from(c in Call, where: c.tenant_id == ^stored.id, select: c.id)
+      Repo.delete_all(from(a in Admission, where: a.call_id in subquery(call_ids)))
+      Repo.delete_all(from(c in Call, where: c.tenant_id == ^stored.id))
+      Repo.delete!(stored)
+      Sandbox.checkin(Repo)
+    end)
+
+    {:ok, actor} = Calls.authenticate(tenant.key, key.secret, :calls, options)
+    {:ok, draft} = Calls.save_call_spec(tenant.key, source(), options)
+    {:ok, published} = Calls.publish_call_spec(tenant.key, draft.call_spec_id, 1, options)
+
+    {:ok, call} =
+      Calls.claim_call(actor, tenant.key, published.call_spec_id, %{}, nil, nil, options)
+
+    {:ok, token} = Calls.issue_call_join_token(actor, tenant.key, call.id, nil, options)
+    scope = %{tenant_key: tenant.key, call_id: call.id, participant_key: token.participant_key}
+    %{actor: actor, tenant: tenant.key, call: call, token: token, options: options, scope: scope}
+  end
+
+  test "cancellation holds the call lock against token issuance and redemption until commit", c do
+    {writer, monitor} = transaction_barrier(fn -> hangup(c) end)
+    assert_receive {:transaction_locked, ^writer, {:ok, ended}}, 2_000
+    assert ended.state == :ended
+
+    assert_row_lock(fn ->
+      Calls.issue_call_join_token(c.actor, c.tenant, c.call.id, nil, c.options)
+    end)
+
+    assert_row_lock(fn -> Calls.claim_join_token(c.token.secret, c.scope, c.options) end)
+    commit(writer, monitor)
+
+    assert {:error, :call_unavailable} =
+             Calls.issue_call_join_token(c.actor, c.tenant, c.call.id, nil, c.options)
+
+    assert {:error, :call_unavailable} =
+             Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    assert Repo.get_by!(JoinToken, public_id: c.token.id).consumed_at == nil
+    assert Repo.aggregate(from(a in Admission, where: a.call_id == ^stored_id(c)), :count) == 0
+  end
+
+  test "an admission that wins the call lock is retained as admitting when hangup follows", c do
+    {writer, monitor} =
+      transaction_barrier(fn -> Calls.claim_join_token(c.token.secret, c.scope, c.options) end)
+
+    assert_receive {:transaction_locked, ^writer, {:ok, claim}}, 2_000
+    assert claim.call.state == :admitting
+
+    assert {:error, :blocked} =
+             Repo.transaction(fn ->
+               Repo.query!("SET LOCAL lock_timeout = '100ms'")
+               assert {:error, :call_hangup_unavailable} = hangup(c)
+               Repo.rollback(:blocked)
+             end)
+
+    commit(writer, monitor)
+    assert {:ok, intent} = hangup(c)
+    assert intent.state == :admitting
+    assert intent.ended_at == nil and intent.terminal_reason == nil
+    assert %DateTime{} = intent.hangup_requested_at
+    assert %DateTime{} = Repo.get_by!(JoinToken, public_id: c.token.id).consumed_at
+    assert Repo.aggregate(from(a in Admission, where: a.call_id == ^stored_id(c)), :count) == 1
+  end
+
+  test "committed cancellation wins over a concurrent binding without losing the exact owner",
+       c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+    {writer, monitor} = transaction_barrier(fn -> hangup(c) end)
+    assert_receive {:transaction_locked, ^writer, {:ok, intent}}, 2_000
+    assert intent.state == :admitting
+
+    assert {:error, :blocked} =
+             Repo.transaction(fn ->
+               Repo.query!("SET LOCAL lock_timeout = '100ms'")
+
+               assert {:error, :call_admission_unavailable} =
+                        Calls.bind_call_admission(claim, "owner", c.options)
+
+               Repo.rollback(:blocked)
+             end)
+
+    commit(writer, monitor)
+    assert {:ok, :cancel, bound} = Calls.bind_call_admission(claim, "owner", c.options)
+    assert bound.call == %{intent | incarnation_id: "owner"}
+
+    assert {:error, :call_unavailable} =
+             Calls.mark_call_started(claim, "owner", DateTime.utc_now(), c.options)
+  end
+
+  test "binding wins the row lock once and later cancellation cannot replace its incarnation",
+       c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    {writer, monitor} =
+      transaction_barrier(fn ->
+        Calls.bind_call_admission(claim, "owner", c.options)
+      end)
+
+    assert_receive {:transaction_locked, ^writer, {:ok, :admit, bound}}, 2_000
+
+    for operation <- [
+          fn -> hangup(c) end,
+          fn -> Calls.bind_call_admission(claim, "replacement", c.options) end
+        ] do
+      assert {:error, :blocked} =
+               Repo.transaction(fn ->
+                 Repo.query!("SET LOCAL lock_timeout = '100ms'")
+                 assert {:error, reason} = operation.()
+                 assert reason in [:call_admission_unavailable, :call_hangup_unavailable]
+                 Repo.rollback(:blocked)
+               end)
+    end
+
+    commit(writer, monitor)
+    assert bound.call.started_at == nil
+
+    assert {:error, :call_incarnation_mismatch} =
+             Calls.bind_call_admission(claim, "replacement", c.options)
+
+    assert {:ok, intent} = hangup(c)
+    assert intent.incarnation_id == "owner"
+    assert {:ok, :cancel, canceled} = Calls.bind_call_admission(claim, "owner", c.options)
+    assert canceled.call == intent
+  end
+
+  test "managed binding reserves once under the call lock even if tracker creation never happens",
+       c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    {writer, monitor} =
+      transaction_barrier(fn ->
+        Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+      end)
+
+    assert_receive {:transaction_locked, ^writer, {:ok, :admit, :new, bound}}, 2_000
+    assert bound.call.gateway_cleanup_required
+
+    assert {:error, :blocked} =
+             Repo.transaction(fn ->
+               Repo.query!("SET LOCAL lock_timeout = '100ms'")
+
+               assert {:error, :call_admission_unavailable} =
+                        Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+
+               Repo.rollback(:blocked)
+             end)
+
+    commit(writer, monitor)
+
+    assert {:ok, :admit, :existing, ^bound} =
+             Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+
+    assert {:ok, intent} = hangup(c)
+
+    assert {:ok, :cancel, :existing, canceled} =
+             Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+
+    assert canceled.call == intent
+  end
+
+  test "rolled-back managed reservation does not consume the fresh binding", c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    assert {:error, :aborted} =
+             Repo.transaction(fn ->
+               assert {:ok, :admit, :new, _bound} =
+                        Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+
+               Repo.rollback(:aborted)
+             end)
+
+    assert {:ok, original} = Calls.fetch_call(c.tenant, c.call.id, c.options)
+    refute original.gateway_cleanup_required
+    assert original.incarnation_id == nil
+    assert original.gateway_cleanup_completed_at == nil
+
+    assert {:ok, :admit, :new, _bound} =
+             Calls.bind_managed_call_admission(claim, "managed-owner", c.options)
+  end
+
+  test "completion holds the exact call lock against cancellation and archive closure", c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    {:ok, :admit, :new, bound} =
+      Calls.bind_managed_call_admission(claim, "cleanup-owner", c.options)
+
+    binding = cleanup_binding(bound.call)
+    time = DateTime.utc_now()
+
+    {:ok, close} =
+      Vxpipe.Calls.CallFact.new(
+        id: "cleanup-close",
+        tenant_key: c.tenant,
+        call_id: bound.call.id,
+        room_id: bound.call.room_id,
+        incarnation_id: "cleanup-owner",
+        occurred_at: time,
+        sequence: 1,
+        kind: :archive_stream_closed,
+        payload: %{},
+        source_policy: %{}
+      )
+
+    {writer, monitor} =
+      transaction_barrier(fn ->
+        Vxpipe.Persistence.CallStore.complete_call_cleanup(Repo, binding, time)
+      end)
+
+    assert_receive {:transaction_locked, ^writer, {:ok, acknowledged}}, 2_000
+    assert acknowledged.ended_at == nil
+
+    assert {:error, :blocked} =
+             Repo.transaction(fn ->
+               Repo.query!("SET LOCAL lock_timeout = '100ms'")
+               assert {:error, :call_hangup_unavailable} = hangup(c)
+               Repo.rollback(:blocked)
+             end)
+
+    assert_row_lock(fn -> Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, close) end)
+    commit(writer, monitor)
+    {:ok, _intent} = hangup(c)
+    assert {:ok, ended} = Calls.complete_call_cleanup(binding, DateTime.utc_now(), c.options)
+    assert ended.terminal_reason == :api_hangup and ended.ended_at == time
+    assert {:ok, ^close} = Vxpipe.Persistence.ArchiveStore.store_call_fact(Repo, close)
+  end
+
+  test "completion rollback retains reservation and permits the original acknowledgement retry",
+       c do
+    {:ok, claim} = Calls.claim_join_token(c.token.secret, c.scope, c.options)
+
+    {:ok, :admit, :new, bound} =
+      Calls.bind_managed_call_admission(claim, "cleanup-owner", c.options)
+
+    {:ok, _intent} = hangup(c)
+    binding = cleanup_binding(bound.call)
+    time = DateTime.utc_now()
+
+    assert {:error, :aborted} =
+             Repo.transaction(fn ->
+               assert {:ok, ended} = CallStore.complete_call_cleanup(Repo, binding, time)
+               assert ended.state == :ended
+               Repo.rollback(:aborted)
+             end)
+
+    {:ok, pending} = Calls.fetch_call(c.tenant, c.call.id, c.options)
+    assert pending.gateway_cleanup_required and pending.gateway_cleanup_completed_at == nil
+    assert pending.state == :admitting and pending.ended_at == nil
+    assert {:ok, ended} = Calls.complete_call_cleanup(binding, time, c.options)
+    assert ended.state == :ended and ended.gateway_cleanup_completed_at == time
+  end
+
+  defp cleanup_binding(call),
+    do: %{
+      tenant_key: call.tenant_key,
+      call_id: call.id,
+      room_id: call.room_id,
+      incarnation_id: call.incarnation_id
+    }
+
+  defp assert_row_lock(operation) do
+    assert {:error, :blocked} =
+             Repo.transaction(fn ->
+               Repo.query!("SET LOCAL lock_timeout = '100ms'")
+               error = assert_raise Postgrex.Error, operation
+               assert error.postgres.code == :lock_not_available
+               Repo.rollback(:blocked)
+             end)
+  end
+
+  defp transaction_barrier(operation) do
+    observer = self()
+
+    writer =
+      start_supervised!(
+        {Task,
+         fn ->
+           :ok = Sandbox.checkout(Repo, sandbox: false)
+
+           result =
+             Repo.transaction(fn ->
+               result = operation.()
+               send(observer, {:transaction_locked, self(), result})
+
+               receive do
+                 :commit -> :committed
+               after
+                 5_000 -> Repo.rollback(:test_timeout)
+               end
+             end)
+
+           send(observer, {:writer_result, result})
+           Sandbox.checkin(Repo)
+         end}
+      )
+
+    {writer, Process.monitor(writer)}
+  end
+
+  defp commit(writer, monitor) do
+    send(writer, :commit)
+    assert_receive {:writer_result, {:ok, :committed}}, 2_000
+    assert_receive {:DOWN, ^monitor, :process, ^writer, :normal}, 2_000
+  end
+
+  defp stored_id(c), do: Repo.get_by!(Call, public_id: c.call.id).id
+  defp hangup(c), do: Calls.request_call_hangup(c.actor, c.tenant, c.call.id, c.options)
+
+  defp source,
+    do: %{
+      schema_version: "20261004.01",
+      incoming_call: %{caller: "caller", handled_by: "assistant"},
+      defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "test"}}},
+      participants: %{
+        "caller" => %{
+          type: "human",
+          connection: %{service: "web", mode: "receive", admission: "start_call"}
+        },
+        "assistant" => %{type: "agent", prompt: "Help."}
+      }
+    }
+end

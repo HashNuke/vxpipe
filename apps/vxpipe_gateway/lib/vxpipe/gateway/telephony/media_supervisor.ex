@@ -8,6 +8,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSupervisor do
 
   alias Vxpipe.Gateway.Telephony.{
     MediaBinding,
+    MediaCleanup,
     MediaConnectionSupervisor,
     MediaPipelineSet,
     MediaSession
@@ -100,10 +101,26 @@ defmodule Vxpipe.Gateway.Telephony.MediaSupervisor do
       ]
 
       case DynamicSupervisor.start_child(supervisor, {MediaConnectionSupervisor, options}) do
-        {:ok, connection} -> {:ok, connection}
-        {:error, {:already_started, connection}} -> {:ok, connection}
-        {:error, reason} -> {:error, reason}
+        {:ok, connection} ->
+          {:ok, connection}
+
+        {:error, {:already_started, connection}} ->
+          reuse_connection(connection, binding, socket_owner, stream_id)
+
+        :ignore ->
+          {:error, :media_attachment_failed}
+
+        {:error, reason} ->
+          {:error, reason}
       end
+    end
+  end
+
+  defp reuse_connection(connection, binding, socket_owner, stream_id) do
+    with {:ok, tracker} <- MediaCleanup.lookup(binding),
+         {:ok, session} <- lookup(:telephony_media_session, binding.client_state_leg_id),
+         :ok <- MediaSession.reuse(session, binding, socket_owner, stream_id, connection, tracker) do
+      {:ok, connection}
     end
   end
 

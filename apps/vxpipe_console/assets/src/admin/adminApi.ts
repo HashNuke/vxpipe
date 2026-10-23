@@ -84,13 +84,16 @@ export function parseInstalledSamples(value: unknown): OnboardingSample[] {
 export function parseTenantPage(value: unknown): TenantDirectoryPage {
   if (
     !isRecord(value) ||
-    !Array.isArray(value.tenants) ||
+    !Array.isArray(value.items) ||
     !isRecord(value.pagination)
   ) {
     throw invalidResponse();
   }
 
-  const tenants = value.tenants.map(parseTenant);
+  const tenants = value.items.map((item: unknown) => {
+    if (!isRecord(item) || typeof item.tenant_key !== "string") throw invalidResponse();
+    return parseTenant({ ...item, key: item.tenant_key });
+  });
   const {
     page,
     page_size: pageSize,
@@ -335,6 +338,7 @@ function parseCredentialMetadata(value: unknown): CredentialMetadata {
       "fireworks",
       "cartesia",
       "elevenlabs",
+      "morse_code_api",
       "deepgram",
       "rime",
       "telnyx",
@@ -456,6 +460,7 @@ function providerLabel(provider: ServiceProvider) {
     rime: "Rime",
     cartesia: "Cartesia",
     elevenlabs: "ElevenLabs",
+    morse_code_api: "MorseCode API",
     google: "Google AI Studio",
     openai: "OpenAI",
     vertex_ai: "Google Vertex AI",

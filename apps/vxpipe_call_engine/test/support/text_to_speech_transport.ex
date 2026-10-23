@@ -7,6 +7,12 @@ defmodule Vxpipe.CallEngine.TestTextToSpeechTransport do
 
   def send_control(transport, payload), do: GenServer.call(transport, {:send_control, payload})
 
+  def close(transport, nil), do: close(transport)
+
+  def close(transport, goodbye) do
+    with :ok <- send_control(transport, goodbye), do: close(transport)
+  end
+
   def close(transport), do: GenServer.call(transport, :close)
 
   def deliver_control(transport, payload), do: GenServer.cast(transport, {:control, payload})
@@ -31,6 +37,7 @@ defmodule Vxpipe.CallEngine.TestTextToSpeechTransport do
     connection = Keyword.fetch!(options, :connection)
     await_start_permission(transport_options, observer, connection)
     send(observer, {:test_tts_transport_started, self(), connection})
+    if Keyword.has_key?(options, :provider), do: send(owner, {:vxpipe_socket_connected, self()})
 
     if Keyword.get(transport_options, :ready_on_start, false) do
       send(

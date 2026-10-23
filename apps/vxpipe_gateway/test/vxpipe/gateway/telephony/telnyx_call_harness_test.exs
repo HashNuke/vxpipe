@@ -155,26 +155,67 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
     }
   end
 
+  @tag initial_outcome: :ready
+  test "room death during a blocked incoming answer retains the carrier owner until ended",
+       context do
+    TelephonyHarnessBackend.block_answer(context.backend, self())
+    observer = self()
+
+    start_supervised!(
+      {Task,
+       fn ->
+         send(
+           observer,
+           {:incoming_response, post_fixture(context, "call-initiated-incoming").status}
+         )
+       end}
+    )
+
+    assert_receive {:incoming_answer_pending, worker}, 2_000
+    on_exit(fn -> send(worker, :reject_incoming_answer) end)
+    worker_monitor = Process.monitor(worker)
+    assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+    leg_monitor = Process.monitor(leg)
+    claim = TelephonyHarnessBackend.claim(context.backend)
+    refute_received {:test_telephony_answer, _}
+    refute_received {:test_agent_runtime_model_preparing, _}
+
+    assert :ok =
+             Vxpipe.CallEngine.end_call(
+               claim.call.tenant_key,
+               claim.call.room_id,
+               claim.call.incarnation_id
+             )
+
+    assert_receive {:test_telephony_end_leg, request}, 2_000
+    assert request.leg.provider_call_control_id == "inbound-call-control"
+    assert_receive {:incoming_response, 200}
+    refute_received {:DOWN, ^leg_monitor, :process, ^leg, _}
+
+    assert post_fixture(context, "call-hangup-incoming", %{"call_leg_id" => "inbound-call-leg"}).status ==
+             200
+
+    # Carrier termination does not drain a still-pending local command.
+    assert {:ok, ^leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
+    send(worker, :reject_incoming_answer)
+    assert_receive {:DOWN, ^worker_monitor, :process, ^worker, :normal}, 2_000
+    assert_receive {:DOWN, ^leg_monitor, :process, ^leg, :normal}
+    refute_received {:test_telephony_answer, _}
+  end
+
   for stage <- [:before_media, :after_media] do
     @tag initial_outcome: :ready
     @tag carrier_hangup: stage
     test "signed incoming hangup ends its exact room #{stage}", context do
       assert post_fixture(context, "call-initiated-incoming").status == 200
       assert_receive {:test_telephony_answer, answer}, 2_000
-      caller = Map.fetch!(context.plan.participants, context.plan.entry_caller)
-
-      assert {:ok, participant} =
-               Vxpipe.CallEngine.participant_snapshot(
-                 context.plan.tenant_id,
-                 context.plan.room_id,
-                 caller.participant_id
-               )
+      claim = TelephonyHarnessBackend.claim(context.backend)
 
       assert {:ok, monitor} =
                Vxpipe.CallEngine.monitor_room(
                  context.plan.tenant_id,
                  context.plan.room_id,
-                 participant.incarnation_id
+                 claim.call.incarnation_id
                )
 
       if context.carrier_hangup == :after_media do
@@ -325,6 +366,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
          context do
       assert post_fixture(context, "call-initiated-incoming").status == 200
       assert_receive {:test_telephony_answer, _answer}, 2_000
+      assert post_fixture(context, "call-answered-incoming").status == 200
 
       assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, "inbound-call-leg")
 
@@ -343,6 +385,11 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
       assert_receive {:test_telephony_end_leg, request}, 2_000
       assert request.leg.leg_id == @incoming_leg_id
       assert request.reason == :room_ended
+      refute_received {:DOWN, ^monitor, :process, ^leg, _}
+
+      assert post_fixture(context, "call-hangup-incoming", %{"call_leg_id" => "inbound-call-leg"}).status ==
+               200
+
       assert_receive {:DOWN, ^monitor, :process, ^leg, _}, 2_000
       assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _}, 2_000
       refute_receive {:test_telephony_end_leg, _duplicate}
@@ -378,6 +425,7 @@ defmodule Vxpipe.Gateway.Telephony.TelnyxCallHarnessTest do
          context do
       incoming = post_fixture(context, "call-initiated-incoming")
       assert incoming.status == 200
+      assert post_fixture(context, "call-answered-incoming").status == 200
 
       assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 

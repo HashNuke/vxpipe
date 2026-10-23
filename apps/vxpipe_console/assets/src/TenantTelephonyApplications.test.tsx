@@ -15,7 +15,7 @@ afterEach(() => {
   window.history.replaceState({}, "", "/admin");
 });
 const tenant = { key: "AAAAAAAAAAAAAAAA", name: "Phone example" };
-const prefix = `/admin/api/tenants/${tenant.key}/telephony-applications`;
+const prefix = `/api/tenants/${tenant.key}/telephony-applications`;
 const application = {
   id: "5eef6e68-11aa-434a-9a99-abc123def456",
   name: "support",

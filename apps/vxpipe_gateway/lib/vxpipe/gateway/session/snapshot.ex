@@ -13,7 +13,7 @@ defmodule Vxpipe.Gateway.Session.Snapshot do
     :tool_visibility,
     :expires_at
   ]
-  defstruct @enforce_keys ++ [admission_owner: nil]
+  defstruct @enforce_keys ++ [admission_owner: nil, cleanup_binding: nil]
 
   @type t :: %__MODULE__{
           session_id: String.t(),
@@ -24,8 +24,29 @@ defmodule Vxpipe.Gateway.Session.Snapshot do
           participant_id: String.t(),
           tool_visibility: Vxpipe.CallEngine.ResolvedCallPlan.ToolVisibility.t(),
           expires_at: DateTime.t(),
-          admission_owner: pid() | nil
+          admission_owner: pid() | nil,
+          cleanup_binding: map() | nil
         }
+
+  @doc false
+  def cleanup_binding(%__MODULE__{cleanup_binding: nil}), do: {:ok, nil}
+
+  def cleanup_binding(%__MODULE__{
+        tenant_id: tenant,
+        room_id: room,
+        incarnation_id: incarnation,
+        cleanup_binding:
+          %{
+            tenant_key: tenant,
+            call_id: call,
+            room_id: room,
+            incarnation_id: incarnation
+          } = binding
+      })
+      when map_size(binding) == 4 and is_binary(call) and byte_size(call) in 1..128,
+      do: {:ok, binding}
+
+  def cleanup_binding(%__MODULE__{}), do: {:error, :invalid_cleanup_binding}
 
   @spec to_public(t()) :: map()
   def to_public(%__MODULE__{} = snapshot) do

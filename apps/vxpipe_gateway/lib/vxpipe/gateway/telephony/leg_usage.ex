@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.Telephony.LegUsage do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Telephony.{Event, OutboundLegRequest, Submission}
-  alias Vxpipe.CallEngine.Usage.{ProviderContext, TelephonyAttempt}
+  alias Vxpipe.CallEngine.Usage.{Observation, ProviderContext, TelephonyAttempt}
 
   alias Vxpipe.Gateway.Telephony.{
     CallEngineUsageReporter,
@@ -16,12 +16,13 @@ defmodule Vxpipe.Gateway.Telephony.LegUsage do
 
   @derive {Inspect, only: [:attempt]}
   @enforce_keys [:attempt, :clock, :reporter]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [observations: []]
 
   @type t :: %__MODULE__{
           attempt: TelephonyAttempt.t(),
           clock: (-> DateTime.t()),
-          reporter: UsageReporter.reporter()
+          reporter: UsageReporter.reporter(),
+          observations: [Observation.t()]
         }
 
   @spec start_outgoing(
@@ -125,6 +126,44 @@ defmodule Vxpipe.Gateway.Telephony.LegUsage do
 
   def fail(nil, outcome) when outcome in [:failed, :cancelled, :unknown], do: nil
 
+  @doc "Persists retained terminal usage independently of the live room; safe to retry."
+  @spec persist_final(t() | nil, keyword()) ::
+          :ok | {:error, :usage_not_final | :usage_persistence_unavailable}
+  def persist_final(usage, options \\ [])
+
+  def persist_final(%__MODULE__{attempt: %{terminal?: true}} = usage, options)
+      when is_list(options) do
+    if Enum.any?(usage.observations, &(&1.outcome in [:succeeded, :failed, :cancelled, :unknown])) do
+      Enum.reduce_while(usage.observations, :ok, fn observation, :ok ->
+        case persist_observation(observation, options) do
+          :ok -> {:cont, :ok}
+          {:error, _reason} = error -> {:halt, error}
+        end
+      end)
+    else
+      {:error, :usage_not_final}
+    end
+  end
+
+  def persist_final(_usage, _options), do: {:error, :usage_not_final}
+
+  defp persist_observation(observation, options) do
+    case Vxpipe.Calls.store_usage_observation(observation, options) do
+      {:ok, %Observation{observed_at: %DateTime{}} = stored} ->
+        if DateTime.compare(stored.observed_at, observation.observed_at) == :eq and
+             %{stored | observed_at: observation.observed_at} == observation,
+           do: :ok,
+           else: {:error, :usage_persistence_unavailable}
+
+      _unacknowledged ->
+        {:error, :usage_persistence_unavailable}
+    end
+  rescue
+    _exception -> {:error, :usage_persistence_unavailable}
+  catch
+    _kind, _reason -> {:error, :usage_persistence_unavailable}
+  end
+
   defp start(identity, leg_id, {:ok, provider}, options) do
     clock = Keyword.get(options, :usage_clock, fn -> DateTime.utc_now(:millisecond) end)
     reporter = Keyword.get(options, :usage_reporter, @default_reporter)
@@ -132,8 +171,7 @@ defmodule Vxpipe.Gateway.Telephony.LegUsage do
 
     case TelephonyAttempt.start(identity, leg_id, provider, observed_at) do
       {:ok, attempt, observations} ->
-        :ok = UsageReporter.report(reporter, observations)
-        %__MODULE__{attempt: attempt, clock: clock, reporter: reporter}
+        report(%__MODULE__{attempt: attempt, clock: clock, reporter: reporter}, observations)
 
       {:error, :invalid_telephony_usage} ->
         nil
@@ -165,8 +203,7 @@ defmodule Vxpipe.Gateway.Telephony.LegUsage do
   defp identify(%__MODULE__{} = usage, operation_id, session_id, observed_at) do
     case TelephonyAttempt.identify(usage.attempt, operation_id, session_id, observed_at) do
       {:ok, attempt, observations} ->
-        :ok = UsageReporter.report(usage.reporter, observations)
-        %{usage | attempt: attempt}
+        report(%{usage | attempt: attempt}, observations)
 
       {:error, :invalid_telephony_usage} ->
         usage
@@ -181,19 +218,22 @@ defmodule Vxpipe.Gateway.Telephony.LegUsage do
         LegUsageEvent.evidence(event, provenance)
       )
 
-    :ok = UsageReporter.report(usage.reporter, observations)
-    %{usage | attempt: attempt}
+    report(%{usage | attempt: attempt}, observations)
   end
 
   defp finish(%__MODULE__{} = usage, outcome, observed_at, options) do
     case TelephonyAttempt.finish(usage.attempt, outcome, observed_at, options) do
       {attempt, {:ok, observations}} ->
-        :ok = UsageReporter.report(usage.reporter, observations)
-        %{usage | attempt: attempt}
+        report(%{usage | attempt: attempt}, observations)
 
       {_attempt, {:error, :invalid_telephony_usage}} ->
         usage
     end
+  end
+
+  defp report(usage, observations) do
+    :ok = UsageReporter.report(usage.reporter, observations)
+    %{usage | observations: usage.observations ++ observations}
   end
 
   defp connected?(%__MODULE__{attempt: %{connected_at: %DateTime{}}}), do: true

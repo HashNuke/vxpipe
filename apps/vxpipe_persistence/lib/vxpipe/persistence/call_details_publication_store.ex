@@ -6,11 +6,13 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStore do
   import Ecto.Query
 
   alias Vxpipe.Calls.{CallDetailsObject, CallDetailsPublication, CallDetailsSnapshot}
+
   alias Vxpipe.Persistence.{
     CallDetailsPublicationHead,
     CallDetailsPublicationPending,
     CallDetailsPublicationRecord
   }
+
   alias Vxpipe.Persistence.Schema.{Call, Tenant}
   alias Vxpipe.Persistence.Schema.CallDetailsPublication, as: StoredPublication
 
@@ -32,6 +34,7 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStore do
       ) do
     repo.transaction(fn ->
       with %Call{} = call <- fetch_call(repo, tenant_key, call_id, "FOR UPDATE"),
+           :ok <- terminal(call),
            {:ok, stored} <- fetch_publication(repo, call.id, publication_id),
            {:ok, publication} <- CallDetailsPublicationRecord.decode(stored, tenant_key, call_id),
            {:ok, published} <- CallDetailsPublication.publish(publication, object),
@@ -132,10 +135,7 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStore do
     )
   end
 
-  defp terminal(%Call{state: state, ended_at: %DateTime{}}) when state in [:ended, :failed],
-    do: :ok
-
-  defp terminal(_call), do: {:error, :call_not_ended}
+  defp terminal(call), do: Vxpipe.Persistence.CallPublicationReadiness.check(call)
 
   defp persist_delivery(_repo, stored, %CallDetailsPublication{status: :published})
        when stored.status == :published do
@@ -152,5 +152,4 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStore do
     })
     |> repo.update()
   end
-
 end

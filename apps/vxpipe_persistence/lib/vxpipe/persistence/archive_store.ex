@@ -6,7 +6,7 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   import Ecto.Query
 
   alias Vxpipe.Calls.{CallFact, VariableSnapshot, VariableSnapshotHistory}
-  alias Vxpipe.Persistence.{ArchiveRecordCodec, CallEndProjection}
+  alias Vxpipe.Persistence.{ArchiveRecordCodec, CallEndProjection, CallIncarnationBinding}
   alias Vxpipe.Persistence.Schema.{Call, Tenant}
   alias Vxpipe.Persistence.Schema.CallFact, as: StoredFact
   alias Vxpipe.Persistence.Schema.VariableSnapshot, as: StoredSnapshot
@@ -15,8 +15,9 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   def store_call_fact(repo, %CallFact{} = fact) do
     repo.transaction(fn ->
       with %Call{} = call <- fetch_call(repo, fact, lock: "FOR UPDATE"),
-           :ok <- archive_available(call),
-           :ok <- fact_incarnation_matches(repo, call, fact),
+           :ok <- archive_available(call, fact),
+           :ok <- matching_room(call, fact),
+           {:ok, call} <- CallIncarnationBinding.bind(repo, call, fact.incarnation_id),
            {:ok, stored} <- insert_or_deduplicate_fact(repo, call, fact),
            {:ok, call} <- Vxpipe.Persistence.OutgoingLifecycleProjection.apply(repo, call, fact),
            {:ok, _call} <- CallEndProjection.apply(repo, call, fact),
@@ -56,8 +57,9 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   def store_variable_snapshot(repo, %VariableSnapshot{} = snapshot) do
     repo.transaction(fn ->
       with %Call{} = call <- fetch_call(repo, snapshot, lock: "FOR UPDATE"),
-           :ok <- archive_available(call),
-           :ok <- incarnation_matches(repo, call, snapshot),
+           :ok <- archive_available(call, snapshot),
+           :ok <- matching_room(call, snapshot),
+           {:ok, call} <- CallIncarnationBinding.bind(repo, call, snapshot.incarnation_id),
            {:ok, stored} <- insert_or_deduplicate(repo, call, snapshot),
            {:ok, _call} <- advance_latest(repo, call, stored),
            {:ok, archived} <- to_variable_snapshot(stored, snapshot.tenant_key, call.public_id) do
@@ -126,55 +128,36 @@ defmodule Vxpipe.Persistence.ArchiveStore do
   defp with_lock(query, options) do
     case Keyword.get(options, :lock) do
       nil -> query
-      "FOR UPDATE" -> lock(query, "FOR UPDATE")
+      "FOR UPDATE" -> lock(query, "FOR UPDATE OF c0")
     end
   end
 
-  defp archive_available(%Call{state: :failed} = call) do
+  defp archive_available(
+         %Call{
+           state: :failed,
+           started_at: nil,
+           gateway_cleanup_required: true,
+           hangup_requested_at: %DateTime{}
+         },
+         %CallFact{kind: :archive_stream_closed}
+       ),
+       do: :ok
+
+  defp archive_available(%Call{state: :failed} = call, _record) do
     case Vxpipe.Persistence.ResolvedPlanCodec.decode(call.resolved_plan) do
       {:ok, %{direction: :outgoing}} -> :ok
       _other -> {:error, :call_not_started}
     end
   end
 
-  defp archive_available(%Call{state: state}) when state in [:admitting, :running, :ended],
-    do: :ok
+  defp archive_available(%Call{state: state}, _record)
+       when state in [:admitting, :running, :ended],
+       do: :ok
 
-  defp archive_available(_call), do: {:error, :call_not_started}
+  defp archive_available(_call, _record), do: {:error, :call_not_started}
 
-  defp incarnation_matches(repo, call, snapshot) do
-    existing_incarnation =
-      repo.one(
-        from(stored in StoredSnapshot,
-          where: stored.call_id == ^call.id,
-          select: stored.incarnation_id,
-          limit: 1
-        )
-      )
-
-    expected_incarnation = call.incarnation_id || existing_incarnation
-
-    if is_nil(expected_incarnation) or expected_incarnation == snapshot.incarnation_id,
-      do: :ok,
-      else: {:error, :call_incarnation_mismatch}
-  end
-
-  defp fact_incarnation_matches(repo, call, fact) do
-    existing_incarnation =
-      repo.one(
-        from(stored in StoredFact,
-          where: stored.call_id == ^call.id,
-          select: stored.incarnation_id,
-          limit: 1
-        )
-      )
-
-    expected_incarnation = call.incarnation_id || existing_incarnation
-
-    if is_nil(expected_incarnation) or expected_incarnation == fact.incarnation_id,
-      do: :ok,
-      else: {:error, :call_incarnation_mismatch}
-  end
+  defp matching_room(%Call{room_id: room_id}, %{room_id: room_id}), do: :ok
+  defp matching_room(%Call{}, _record), do: {:error, :call_room_mismatch}
 
   defp insert_or_deduplicate_fact(repo, call, fact) do
     case repo.one(

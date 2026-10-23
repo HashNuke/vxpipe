@@ -8,7 +8,8 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
     Attribution,
     Measurement,
     Observation,
-    ProviderContext
+    ProviderContext,
+    TelephonyAttempt
   }
 
   alias Vxpipe.Calls.{Principal, UsageReport}
@@ -47,6 +48,159 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
     }
 
     [call: call, options: options, principal: principal]
+  end
+
+  test "immutable usage retry accepts database timestamp precision without accepting changed content",
+       context do
+    source = %{
+      observation("usage-millisecond-retry", "attempt-millisecond-retry", 10, 1, :final)
+      | observed_at: ~U[2026-09-12 09:00:00.000Z]
+    }
+
+    assert {:ok, stored} = Vxpipe.Calls.store_usage_observation(source, context.options)
+    assert {:ok, ^stored} = Vxpipe.Calls.store_usage_observation(source, context.options)
+    assert Repo.aggregate(UsageObservation, :count) == 1
+
+    assert {:error, :usage_observation_conflict} =
+             Vxpipe.Calls.store_usage_observation(%{source | outcome: :failed}, context.options)
+
+    assert {:error, :usage_observation_conflict} =
+             Vxpipe.Calls.store_usage_observation(
+               %{source | observed_at: DateTime.add(source.observed_at, 1, :millisecond)},
+               context.options
+             )
+  end
+
+  test "managed usage requires the stored room and incarnation", context do
+    context.call
+    |> Ecto.Changeset.change(gateway_cleanup_required: true, incarnation_binding_verified: true)
+    |> Repo.update!()
+
+    source = observation("managed-usage", "managed-attempt", 1, 1, :final)
+    foreign_room = %{source | attribution: %{source.attribution | room_id: "foreign-room"}}
+
+    foreign_incarnation = %{
+      source
+      | attribution: %{source.attribution | incarnation_id: "foreign-incarnation"}
+    }
+
+    assert {:error, :call_room_mismatch} =
+             Vxpipe.Calls.store_usage_observation(foreign_room, context.options)
+
+    assert {:error, :call_incarnation_mismatch} =
+             Vxpipe.Calls.store_usage_observation(foreign_incarnation, context.options)
+
+    assert Repo.aggregate(UsageObservation, :count) == 0
+    assert {:ok, ^source} = Vxpipe.Calls.store_usage_observation(source, context.options)
+  end
+
+  test "cancelled managed failures retain final usage without changing lifecycle evidence",
+       context do
+    failed =
+      context.call
+      |> Ecto.Changeset.change(
+        gateway_cleanup_required: true,
+        incarnation_binding_verified: true,
+        state: :failed,
+        ended_at: @observed_at,
+        terminal_reason: :startup_unknown,
+        hangup_requested_at: @observed_at
+      )
+      |> Repo.update!()
+
+    source = observation("failed-managed-usage", "failed-managed-attempt", 1, 1, :final)
+    assert {:ok, ^source} = Vxpipe.Calls.store_usage_observation(source, context.options)
+    assert {:ok, ^source} = Vxpipe.Calls.store_usage_observation(source, context.options)
+    assert Repo.get!(Call, context.call.id) == failed
+    assert Repo.aggregate(UsageObservation, :count) == 1
+
+    foreign = %{source | attribution: %{source.attribution | incarnation_id: "replacement"}}
+
+    assert {:error, :call_incarnation_mismatch} =
+             Vxpipe.Calls.store_usage_observation(foreign, context.options)
+  end
+
+  for outcome <- [:failed, :unknown] do
+    @terminal_outcome outcome
+    test "managed failures without hangup retain #{outcome} carrier batches without completing cleanup",
+         context do
+      failed =
+        context.call
+        |> Ecto.Changeset.change(
+          gateway_cleanup_required: true,
+          incarnation_binding_verified: true,
+          state: :failed,
+          ended_at: @observed_at,
+          terminal_reason: :startup_unknown
+        )
+        |> Repo.update!()
+
+      {:ok, provider} = ProviderContext.new(name: "carrier-fixture")
+
+      {:ok, attempt, started} =
+        TelephonyAttempt.start(
+          %{
+            tenant_id: @tenant_key,
+            call_id: @call_id,
+            room_id: @room_id,
+            incarnation_id: @incarnation_id,
+            participant_id: "participant-caller"
+          },
+          "failed-managed-carrier",
+          provider,
+          @observed_at
+        )
+
+      {_attempt, {:ok, terminal}} =
+        TelephonyAttempt.finish(attempt, @terminal_outcome, @observed_at,
+          provenance: :locally_measured
+        )
+
+      batch = started ++ terminal
+      assert length(batch) == 2
+
+      for _delivery <- 1..2, source <- batch do
+        assert {:ok, ^source} = Vxpipe.Calls.store_usage_observation(source, context.options)
+      end
+
+      assert Repo.aggregate(UsageObservation, :count) == 2
+      assert Repo.get!(Call, context.call.id) == failed
+      assert failed.hangup_requested_at == nil
+      assert failed.gateway_cleanup_completed_at == nil
+
+      for source <- batch,
+          {field, reason} <- [
+            room_id: :call_room_mismatch,
+            incarnation_id: :call_incarnation_mismatch
+          ] do
+        foreign = %{source | attribution: Map.replace!(source.attribution, field, "replacement")}
+
+        assert {:error, ^reason} =
+                 Vxpipe.Calls.store_usage_observation(foreign, context.options)
+      end
+    end
+  end
+
+  test "legacy failed usage remains unavailable with or without cancellation intent", context do
+    source = observation("unacknowledged-usage", "unacknowledged-attempt", 1, 1, :final)
+
+    for intent <- [nil, @observed_at] do
+      Repo.get!(Call, context.call.id)
+      |> Ecto.Changeset.change(
+        gateway_cleanup_required: false,
+        incarnation_binding_verified: true,
+        state: :failed,
+        ended_at: @observed_at,
+        terminal_reason: :startup_unknown,
+        hangup_requested_at: intent
+      )
+      |> Repo.update!()
+
+      assert {:error, :call_not_started} =
+               Vxpipe.Calls.store_usage_observation(source, context.options)
+    end
+
+    assert Repo.aggregate(UsageObservation, :count) == 0
   end
 
   test "asynchronously stored facts maintain effective amounts and tenant-safe totals", context do

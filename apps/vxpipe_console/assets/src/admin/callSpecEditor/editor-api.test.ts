@@ -16,7 +16,7 @@ test("reads immutable source and historical metadata with scoped, abortable requ
   expect(snapshot.document.source).toEqual(editorFixture.source);
   expect(snapshot.document.readOnly).toBe(true);
   expect(snapshot.saved).toEqual({ callSpecId: "hello", revision: 2, publishedRevision: 1 });
-  expect(fetch).toHaveBeenCalledWith("/admin/api/tenants/tenant%20%2F%20one/call-specs/hello?revision=2", expect.objectContaining({ signal, credentials: "same-origin", cache: "no-store" }));
+  expect(fetch).toHaveBeenCalledWith("/api/tenants/tenant%20%2F%20one/call-specs/hello?revision=2", expect.objectContaining({ signal, credentials: "same-origin", cache: "no-store" }));
 });
 
 test("create, append and publish use exact bodies and CSRF; failures retain field paths", async () => {
@@ -25,7 +25,7 @@ test("create, append and publish use exact bodies and CSRF; failures retain fiel
   const signal = new AbortController().signal;
   const request = { id: 1, action: "save" as const, source: editorFixture.source };
   expect(await api.execute(request, signal)).toEqual({ status: 201, callSpecId: "hello", revision: 2 });
-  expect(fetch).toHaveBeenLastCalledWith("/admin/api/tenants/tenant/call-specs", expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "x-csrf-token": "csrf" }), body: JSON.stringify({ source: editorFixture.source }) }));
+  expect(fetch).toHaveBeenLastCalledWith("/api/tenants/tenant/call-specs", expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "x-csrf-token": "csrf" }), body: JSON.stringify({ source: editorFixture.source }) }));
   await api.execute({ ...request, callSpecId: "hello" }, signal);
   expect(fetch).toHaveBeenLastCalledWith(expect.stringContaining("/call-specs/hello"), expect.objectContaining({ method: "PUT" }));
   await api.execute({ ...request, action: "publish", callSpecId: "hello", revision: 2 }, signal);
@@ -51,6 +51,7 @@ test("loads installed provider/model listings and safe named lookups without liv
   const api = createEditorApi("tenant", "csrf", fetch);
   const signal = new AbortController().signal;
   expect(await api.catalog(signal)).toEqual(Object.fromEntries(catalogCapabilities.map((capability) => [capability, modelCatalogFixture[capability] ?? {}])));
+  expect(fetch.mock.calls.every(([url]) => String(url).startsWith("/api/tenants/tenant/providers"))).toBe(true);
   expect(await api.lookups(signal)).toEqual({ credentialNames: { google: ["primary"] }, telephonyServices: [{ key: "phone", name: "phone" }], mcpIntegrations: ["help"], toolCatalog: { mcpAvailable: true, tools: [{ type: "platform", tool: "hangup", description: "End the call." }] } });
 });
 
@@ -80,5 +81,5 @@ test("phone inventory uses a scoped abortable request with server search, pagina
   const signal = new AbortController().signal;
   const result = await createEditorApi("tenant", "csrf", fetch).phoneNumbers("office / phone", "555", "page-token", signal, "current");
   expect(result).toEqual({ numbers: [{ id: "1", number: "+15550001000", name: "Office", available: false, assignedTo: ["Reception"] }], nextPage: "next" });
-  expect(fetch).toHaveBeenCalledWith("/admin/api/tenants/tenant/telephony-services/office%20%2F%20phone/numbers?search=555&page=page-token&call_spec_id=current", expect.objectContaining({ signal, credentials: "same-origin", cache: "no-store" }));
+  expect(fetch).toHaveBeenCalledWith("/api/tenants/tenant/telephony-services/office%20%2F%20phone/numbers?search=555&page=page-token&call_spec_id=current", expect.objectContaining({ signal, credentials: "same-origin", cache: "no-store" }));
 });

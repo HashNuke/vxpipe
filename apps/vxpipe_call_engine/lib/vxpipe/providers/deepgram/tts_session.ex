@@ -15,11 +15,15 @@ defmodule Vxpipe.Providers.Deepgram.TTSSession do
     :channel,
     :phase,
     :request,
+    :request_timer,
+    :cancel_timer,
     :last_terminal_request,
     :pending_terminal,
     :speech_id,
     :wire,
     :wire_module,
+    request_timeout_ms: 60_000,
+    cancel_timeout_ms: 5_000,
     ready?: false,
     terminal?: false
   ]
@@ -78,10 +82,14 @@ defmodule Vxpipe.Providers.Deepgram.TTSSession do
     config = Keyword.fetch!(private, :config)
     wire_module = Keyword.get(private, :wire_module, TTSSocket)
     wire_options = Keyword.get(private, :wire_options, [])
+    request_timeout = Keyword.get(private, :request_timeout_ms, 60_000)
+    cancel_timeout = Keyword.get(private, :cancel_timeout_ms, 5_000)
 
     with %FluxTextToSpeech{} <- config,
          true <- matching_configuration?(descriptor, config),
          true <- valid_wire?(wire_module, wire_options),
+         true <- is_integer(request_timeout) and request_timeout in 1..60_000,
+         true <- is_integer(cancel_timeout) and cancel_timeout in 1..5_000,
          :ok <- Channel.bind(channel),
          {:ok, wire} <-
            wire_module.start_link(
@@ -93,6 +101,8 @@ defmodule Vxpipe.Providers.Deepgram.TTSSession do
        %__MODULE__{
          channel: channel,
          phase: :idle,
+         request_timeout_ms: request_timeout,
+         cancel_timeout_ms: cancel_timeout,
          wire: wire,
          wire_module: wire_module
        }}
@@ -164,11 +174,14 @@ defmodule Vxpipe.Providers.Deepgram.TTSSession do
 
     if playback.request_played_ms > 0 do
       case send_control(state, FluxTextToSpeech.encode_interrupt(playback.session_played_ms)) do
-        :ok -> {:reply, :ok, %{state | pending_terminal: nil, phase: :interrupting}}
-        _failure -> fail_call(state)
+        :ok ->
+          {:reply, :ok, cancel_deadline(%{state | pending_terminal: nil, phase: :interrupting})}
+
+        _failure ->
+          fail_call(state)
       end
     else
-      {:reply, :ok, %{state | pending_terminal: nil, phase: :discarding}}
+      {:reply, :ok, cancel_deadline(%{state | pending_terminal: nil, phase: :discarding})}
     end
   catch
     :exit, _reason -> fail_call(state)
@@ -242,6 +255,14 @@ defmodule Vxpipe.Providers.Deepgram.TTSSession do
         end
     end
   end
+
+  def handle_info({:request_timeout, request}, %{request: request, request_timer: timer} = state)
+      when is_reference(timer),
+      do: stop_session(state)
+
+  def handle_info({:cancel_timeout, request}, %{request: request, cancel_timer: timer} = state)
+      when is_reference(timer),
+      do: stop_session(state)
 
   def handle_info(_message, state), do: {:noreply, state}
 
@@ -383,7 +404,7 @@ defmodule Vxpipe.Providers.Deepgram.TTSSession do
            request_ref: state.request,
            provider_request_id: provider_id
          ) do
-      :ok -> {:ok, %{state | phase: :completed, terminal?: true}}
+      :ok -> {:ok, %{clear_deadlines(state) | phase: :completed, terminal?: true}}
       _failure -> {:error, :session_failed}
     end
   end
@@ -398,6 +419,8 @@ defmodule Vxpipe.Providers.Deepgram.TTSSession do
   defp associate_speech(_state, _provider_id), do: {:error, :invalid_provider_state}
 
   defp reset_request(state) do
+    state = clear_deadlines(state)
+
     %{
       state
       | awaiting: nil,
@@ -410,6 +433,8 @@ defmodule Vxpipe.Providers.Deepgram.TTSSession do
   end
 
   defp activate_request(state, reference) do
+    timer = Process.send_after(self(), {:request_timeout, reference}, state.request_timeout_ms)
+
     %{
       state
       | awaiting: nil,
@@ -417,9 +442,23 @@ defmodule Vxpipe.Providers.Deepgram.TTSSession do
         pending_terminal: nil,
         phase: :active,
         request: reference,
+        request_timer: timer,
         speech_id: nil,
         terminal?: false
     }
+  end
+
+  defp cancel_deadline(%{cancel_timer: timer} = state) when is_reference(timer), do: state
+
+  defp cancel_deadline(state) do
+    timer = Process.send_after(self(), {:cancel_timeout, state.request}, state.cancel_timeout_ms)
+    %{state | cancel_timer: timer}
+  end
+
+  defp clear_deadlines(state) do
+    if state.request_timer, do: Process.cancel_timer(state.request_timer)
+    if state.cancel_timer, do: Process.cancel_timer(state.cancel_timer)
+    %{state | request_timer: nil, cancel_timer: nil}
   end
 
   defp release_awaiting(%{awaiting: nil} = state), do: state

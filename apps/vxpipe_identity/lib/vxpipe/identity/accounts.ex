@@ -1,7 +1,7 @@
 defmodule Vxpipe.Identity.Accounts do
   @moduledoc "Account administration bounded by the exact category matrix."
 
-  alias Vxpipe.Identity.{Authorization, Email, Password}
+  alias Vxpipe.Identity.{AccountAuthority, AccountPage, Authorization, Email, Password}
 
   @spec create_user(map(), map(), map()) :: {:ok, map()} | {:error, term()}
   def create_user(deps, actor, attrs) do
@@ -11,38 +11,42 @@ defmodule Vxpipe.Identity.Accounts do
     hasher = Map.fetch!(deps, :hasher)
     uuid = Map.get(deps, :uuid, Vxpipe.Identity.Uuid)
 
-    with :ok <- Authorization.require_actor_identity(actor),
+    with :ok <- AccountAuthority.require_identity(actor),
          {:ok, normalized} <- Email.normalize(Map.get(attrs, :email, Map.get(attrs, "email"))),
          :ok <-
            Password.confirm(Map.get(attrs, :password), Map.get(attrs, :password_confirmation)),
          {:ok, role} <-
            roles.fetch(Map.get(attrs, :role_public_id, Map.get(attrs, "role_public_id"))),
          target_kind = role_kind(role),
-         :ok <- Authorization.require_account_create(actor.grants, target_kind),
+         :ok <- Authorization.require_account_create(AccountAuthority.grants(actor), target_kind),
          :ok <- validate_memberships(role, Map.get(attrs, :memberships, %{})),
          {:ok, hash} <- hasher.hash(Map.get(attrs, :password)) do
       public_id = uuid.generate()
 
-      audit_event = %{
-        action: "user_created",
-        actor_user_public_id: actor.user_public_id,
-        target_user_public_id: public_id,
-        summary: %{role: role.public_id}
-      }
+      audit_event =
+        %{
+          action: "user_created",
+          target_user_public_id: public_id,
+          summary: %{role: role.public_id}
+        }
+        |> Map.merge(Map.delete(AccountAuthority.attribution(actor), :actor_session_public_id))
 
       with {:ok, user} <-
-             users.create(%{
-               public_id: public_id,
-               email: String.trim(Map.get(attrs, :email, Map.get(attrs, "email"))),
-               normalized_email: normalized,
-               password_hash: hash,
-               role_public_id: role.public_id,
-               memberships: Map.get(attrs, :memberships, %{}),
-               audit_event: audit_event,
-               audit: audit,
-               actor_user_public_id: actor.user_public_id,
-               actor_session_public_id: actor_session_id(actor)
-             }) do
+             users.create(
+               Map.merge(
+                 %{
+                   public_id: public_id,
+                   email: String.trim(Map.get(attrs, :email, Map.get(attrs, "email"))),
+                   normalized_email: normalized,
+                   password_hash: hash,
+                   role_public_id: role.public_id,
+                   memberships: Map.get(attrs, :memberships, %{}),
+                   audit_event: audit_event,
+                   audit: audit
+                 },
+                 AccountAuthority.attribution(actor)
+               )
+             ) do
         {:ok, sanitize(user)}
       end
     end
@@ -54,12 +58,18 @@ defmodule Vxpipe.Identity.Accounts do
     roles = Map.fetch!(deps, :roles)
     audit = Map.get(deps, :audit, Vxpipe.Identity.Accounts.NoopAudit)
 
-    with :ok <- Authorization.require_actor_identity(actor),
+    with :ok <- AccountAuthority.require_identity(actor),
+         :ok <- AccountAuthority.require_update_fields(actor, changes),
          {:ok, current} <- users.fetch_by_public_id(target_public_id),
          :ok <- check_expected_role(current, changes),
          {:ok, {current_kind, requested_kind, requested_role}} <-
            resolve_kinds(roles, current, changes),
-         :ok <- Authorization.require_account_write(actor.grants, current_kind, requested_kind),
+         :ok <-
+           Authorization.require_account_write(
+             AccountAuthority.grants(actor),
+             current_kind,
+             requested_kind
+           ),
          :ok <- validate_update_fields(changes),
          {:ok, membership_role} <- membership_role(roles, current, requested_role),
          :ok <-
@@ -72,14 +82,21 @@ defmodule Vxpipe.Identity.Accounts do
              )
            ),
          {:ok, updated} <-
-           apply_user_update(users, target_public_id, current, changes, %{
-             action: "user_updated",
-             actor_user_public_id: actor.user_public_id,
-             target_user_public_id: target_public_id,
-             summary: %{},
-             audit: audit,
-             actor_session_public_id: actor_session_id(actor)
-           }) do
+           apply_user_update(
+             users,
+             target_public_id,
+             current,
+             changes,
+             Map.merge(
+               %{
+                 action: "user_updated",
+                 target_user_public_id: target_public_id,
+                 summary: %{},
+                 audit: audit
+               },
+               AccountAuthority.attribution(actor)
+             )
+           ) do
       {:ok, sanitize(updated)}
     else
       {:error, :stale_target} -> {:error, :forbidden}
@@ -218,10 +235,10 @@ defmodule Vxpipe.Identity.Accounts do
   def list_users(deps, actor, filters) do
     users = Map.fetch!(deps, :users)
 
-    if MapSet.member?(actor.grants, "users.read") do
-      users.list(filters)
-    else
-      {:error, :forbidden}
+    with :ok <- AccountAuthority.require_read(actor),
+         {:ok, filters} <- AccountPage.filters(filters),
+         {:ok, result} <- users.list(filters) do
+      AccountPage.result(result, filters)
     end
   end
 
@@ -229,7 +246,7 @@ defmodule Vxpipe.Identity.Accounts do
   def get_user(deps, actor, target_public_id) do
     users = Map.fetch!(deps, :users)
 
-    if MapSet.member?(actor.grants, "users.read") do
+    if AccountAuthority.require_read(actor) == :ok do
       case users.fetch_by_public_id(target_public_id) do
         {:ok, user} -> {:ok, sanitize(user)}
         error -> error
@@ -322,29 +339,22 @@ defmodule Vxpipe.Identity.Accounts do
         {:error, :forbidden}
 
       current_role_id ->
-        stamped = Map.put_new(changes, :expected_current_role_public_id, current_role_id)
+        attribution =
+          Map.take(audit_info, [
+            :actor_user_public_id,
+            :actor_session_public_id,
+            :actor_api_key_public_id,
+            :actor_oauth_grant_public_id
+          ])
+
+        event = Map.drop(audit_info, [:audit, :actor_session_public_id])
 
         stamped =
-          case audit_info do
-            nil ->
-              stamped
-
-            %{audit: audit} = info ->
-              {event, actor_session} = split_audit_info(info)
-
-              stamped
-              |> Map.put(:audit_event, event)
-              |> Map.put(:audit, audit)
-              |> maybe_put_actor_session(actor_session)
-
-            event when is_map(event) ->
-              Map.put(stamped, :audit_event, event)
-          end
-
-        stamped =
-          stamped
-          |> maybe_put_actor_user(audit_info)
-          |> maybe_put_actor_session_from_info(audit_info)
+          changes
+          |> AccountAuthority.stamp(attribution)
+          |> Map.put_new(:expected_current_role_public_id, current_role_id)
+          |> Map.put(:audit_event, event)
+          |> Map.put(:audit, Map.get(audit_info, :audit, Vxpipe.Identity.Accounts.NoopAudit))
 
         case users.apply_update(target_public_id, stamped) do
           {:ok, updated} -> {:ok, updated}
@@ -352,32 +362,6 @@ defmodule Vxpipe.Identity.Accounts do
         end
     end
   end
-
-  defp split_audit_info(%{audit: _audit, actor_session_public_id: session} = info) do
-    {info |> Map.delete(:audit) |> Map.delete(:actor_session_public_id), session}
-  end
-
-  defp split_audit_info(%{audit: _} = info) do
-    {Map.delete(info, :audit), nil}
-  end
-
-  defp maybe_put_actor_session(stamped, nil), do: stamped
-
-  defp maybe_put_actor_session(stamped, session),
-    do: Map.put(stamped, :actor_session_public_id, session)
-
-  defp maybe_put_actor_user(stamped, %{actor_user_public_id: id}) when is_binary(id) do
-    Map.put_new(stamped, :actor_user_public_id, id)
-  end
-
-  defp maybe_put_actor_user(stamped, _), do: stamped
-
-  defp maybe_put_actor_session_from_info(stamped, %{actor_session_public_id: session})
-       when is_binary(session) do
-    Map.put_new(stamped, :actor_session_public_id, session)
-  end
-
-  defp maybe_put_actor_session_from_info(stamped, _), do: stamped
 
   defp actor_session_id(%{session_public_id: id}) when is_binary(id), do: id
   defp actor_session_id(%{"session_public_id" => id}) when is_binary(id), do: id
@@ -431,7 +415,7 @@ defmodule Vxpipe.Identity.Accounts do
 
   defp validate_memberships(_role, memberships) when map_size(memberships) == 0, do: :ok
 
-  defp validate_memberships(role, memberships) do
+  defp validate_memberships(role, memberships) when is_map(memberships) do
     grants = Map.get(role, :grants, [])
 
     assigned? =
@@ -447,6 +431,8 @@ defmodule Vxpipe.Identity.Accounts do
       true -> {:error, :memberships_not_allowed}
     end
   end
+
+  defp validate_memberships(_role, _memberships), do: {:error, :invalid_memberships}
 
   defp validate_levels(memberships) do
     if Enum.all?(memberships, fn {_k, v} -> v in [:read, :read_write, "read", "read_write"] end) do

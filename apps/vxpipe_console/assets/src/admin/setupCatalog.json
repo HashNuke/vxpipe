@@ -30,6 +30,13 @@
       "sampleCapabilities": ["stt", "tts"]
     },
     {
+      "id": "morse_code_api",
+      "name": "MorseCode API",
+      "description": "Generate and recognize Morse tones with one service.",
+      "capabilities": ["stt", "tts"],
+      "sampleCapabilities": ["stt", "tts"]
+    },
+    {
       "id": "google",
       "name": "Google AI Studio",
       "description": "Connect Gemini language, transcription, speech synthesis, and live speech.",

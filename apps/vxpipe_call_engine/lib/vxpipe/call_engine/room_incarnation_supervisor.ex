@@ -19,7 +19,26 @@ defmodule Vxpipe.CallEngine.RoomIncarnationSupervisor do
   alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
   alias Vxpipe.CallEngine.RoomIncarnationSupervisor.RecordingChildren
 
-  def start_link(options), do: Supervisor.start_link(__MODULE__, options)
+  def start_link(options) do
+    identity = Keyword.get(options, :plan) || Keyword.fetch!(options, :command)
+    incarnation = Keyword.fetch!(options, :incarnation_id)
+
+    Supervisor.start_link(__MODULE__, options,
+      name: via(identity.tenant_id, identity.room_id, incarnation)
+    )
+  end
+
+  def monitor(tenant_id, room_id, incarnation_id) do
+    case GenServer.whereis(via(tenant_id, room_id, incarnation_id)) do
+      pid when is_pid(pid) -> {:ok, Process.monitor(pid)}
+      nil -> {:error, :room_unavailable}
+    end
+  end
+
+  defp via(tenant_id, room_id, incarnation_id) do
+    {:via, Registry,
+     {Vxpipe.CallEngine.RoomRegistry, {:room_incarnation, tenant_id, room_id, incarnation_id}}}
+  end
 
   def child_spec(options) do
     %{

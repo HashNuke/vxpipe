@@ -5,15 +5,32 @@ defmodule Vxpipe.Identity.Roles do
 
   @protected_kinds [:superadmin, :admin]
 
-  @spec list_roles(map(), map()) :: {:ok, [map()]} | {:error, :forbidden | term()}
+  @spec list_roles(map(), map()) :: {:ok, [map()]} | {:error, term()}
   def list_roles(deps, actor) do
-    roles = Map.fetch!(deps, :roles)
+    with :ok <- authorize_read(actor), do: deps.roles.list()
+  end
 
-    if actor.account_kind in @protected_kinds do
-      roles.list()
-    else
-      {:error, :forbidden}
+  @doc "Returns one bounded full-role page for a named administrator."
+  def list_roles(deps, actor, filters) do
+    with :ok <- authorize_read(actor),
+         {:ok, filters} <- role_options_page(filters),
+         {:ok, result} <- deps.roles.list_page(filters) do
+      Vxpipe.Identity.AccountPage.result(result, filters)
     end
+  end
+
+  def get_role(deps, actor, id) do
+    with :ok <- authorize_read(actor), do: deps.roles.fetch(id)
+  end
+
+  def affected_user_count(deps, actor, id) do
+    with :ok <- authorize_read(actor), do: deps.roles.count_users(id)
+  end
+
+  defp authorize_read(actor) do
+    with :ok <- Vxpipe.Identity.Authorization.require_actor_identity(actor),
+         :ok <- require_builtin(actor),
+         do: :ok
   end
 
   @spec list_role_options(map(), map()) :: {:ok, [map()]} | {:error, term()}
@@ -29,6 +46,23 @@ defmodule Vxpipe.Identity.Roles do
       {:error, :forbidden}
     end
   end
+
+  @doc "Bounded safe role options for the canonical account API."
+  def list_role_options(deps, actor, filters) do
+    with :ok <- Vxpipe.Identity.AccountAuthority.require_read(actor),
+         {:ok, filters} <- role_options_page(filters),
+         {:ok, result} <- deps.roles.list_options(filters) do
+      Vxpipe.Identity.AccountPage.result(result, filters)
+    end
+  end
+
+  defp role_options_page(filters) when is_map(filters) do
+    if Enum.all?(Map.keys(filters), &(&1 in [:page, :page_size])),
+      do: Vxpipe.Identity.AccountPage.filters(filters),
+      else: {:error, :invalid_pagination}
+  end
+
+  defp role_options_page(_filters), do: {:error, :invalid_pagination}
 
   @spec create_role(map(), map(), map()) :: {:ok, map()} | {:error, term()}
   def create_role(deps, actor, attrs) do
@@ -138,17 +172,6 @@ defmodule Vxpipe.Identity.Roles do
     end
   end
 
-  @spec affected_user_count(map(), String.t()) :: {:ok, non_neg_integer()} | {:error, term()}
-  def affected_user_count(deps, role_public_id) do
-    roles = Map.fetch!(deps, :roles)
-
-    if function_exported?(roles, :count_users, 1) do
-      roles.count_users(role_public_id)
-    else
-      {:ok, 0}
-    end
-  end
-
   defp require_ordinary(%{kind: kind}) when kind in [:member, nil], do: :ok
   defp require_ordinary(%{"kind" => kind}) when kind in [nil, "member"], do: :ok
   defp require_ordinary(%{kind: _}), do: {:error, :protected_role}
@@ -239,7 +262,8 @@ defmodule Vxpipe.Identity.Roles do
 
           {:ok, %{requires_read: required}} ->
             case Map.fetch(scope_by_key, required) do
-              {:ok, read_scope} when read_scope == grant.scope or
+              {:ok, read_scope}
+              when read_scope == grant.scope or
                      (required == "tenant_services.read" and read_scope == :all_tenants and
                         grant.scope == :assigned_tenants) ->
                 {:cont, {:ok, acc}}

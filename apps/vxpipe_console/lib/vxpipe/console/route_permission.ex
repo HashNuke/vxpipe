@@ -10,6 +10,38 @@ defmodule Vxpipe.Console.RoutePermission do
           | :unknown
 
   @spec for_request(String.t(), [String.t()]) :: requirement()
+  def for_request("GET", ["api", "account", "connections"]), do: :authenticated
+  def for_request("DELETE", ["api", "account", "connections", _id]), do: :authenticated
+
+  def for_request("GET", ["api", "tenants", tenant, "calls" | _rest]),
+    do: {:tenant, "calls.read", tenant}
+
+  def for_request("POST", ["api", "tenants"]),
+    do: for_request("POST", ["admin", "api", "tenants"])
+
+  def for_request(method, ["api", "api-keys" | rest]),
+    do: for_request(method, ["admin", "api", "api-keys" | rest])
+
+  def for_request(method, ["api", "platform", resource | rest])
+      when resource in ["services", "credentials"],
+      do: for_request(method, ["admin", "api", "platform", resource | rest])
+
+  def for_request(method, ["api", "tenants", tenant, resource | rest])
+      when resource in [
+             "services",
+             "service-bindings",
+             "credentials",
+             "telephony-applications",
+             "telephony-services"
+           ],
+      do: for_request(method, ["admin", "api", "tenants", tenant, resource | rest])
+
+  def for_request(method, ["api", "roles" | rest]),
+    do: for_request(method, ["admin", "api", "roles" | rest])
+
+  def for_request("POST", ["api", "users", id, "reset-password"]),
+    do: for_request("POST", ["admin", "api", "users", id, "reset-password"])
+
   def for_request(method, ["admin", "api", "api-keys" | _rest])
       when method in ["GET", "POST", "DELETE"], do: :authenticated
 
@@ -41,7 +73,13 @@ defmodule Vxpipe.Console.RoutePermission do
   def for_request("POST", ["admin", "api", "tenants"]), do: {:installation, "tenants.write"}
   def for_request("GET", ["admin", "api", "tenants"]), do: {:directory, "tenants.read"}
 
+  def for_request("POST", ["api", "onboarding", "demo-tenant"]),
+    do: {:installation, "tenants.write"}
+
   def for_request("POST", ["admin", "api", "onboarding", "demo-tenant"]),
+    do: {:installation, "tenants.write"}
+
+  def for_request("POST", ["api", "onboarding", "demo-tenant", "samples"]),
     do: {:installation, "tenants.write"}
 
   def for_request("POST", ["admin", "api", "onboarding", "demo-tenant", "samples"]),
@@ -64,11 +102,9 @@ defmodule Vxpipe.Console.RoutePermission do
     tenant_requirement(method, tenant, rest)
   end
 
-  def for_request("POST", ["admin", "samples", "calls"]),
-    do: {:installation, "tenants.write"}
-
-  def for_request("POST", ["admin", "samples", "transfers"]),
-    do: {:installation, "tenants.write"}
+  def for_request("POST", [prefix, "samples", action])
+      when prefix in ["admin", "api"] and action in ["calls", "transfers"],
+      do: :authenticated
 
   def for_request("GET", ["admin", "diagnostics" | _rest]),
     do: :superadmin

@@ -48,6 +48,9 @@ defmodule Vxpipe.Console.AdminTelephonyApplicationsController do
             ],
        do: conn |> put_status(422) |> json(%{error: %{code: Atom.to_string(reason)}})
 
+  defp failure(conn, :forbidden),
+    do: conn |> put_status(403) |> json(%{error: %{code: "forbidden"}})
+
   defp failure(conn, _reason),
     do: conn |> put_status(503) |> json(%{error: %{code: "telephony_services_unavailable"}})
 end

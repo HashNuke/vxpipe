@@ -252,7 +252,7 @@ defmodule Vxpipe.Persistence.IdentityAuthReviewTest do
     actor = real_actor!()
 
     assert {:ok, 0} = IdentityRoleStore.count_users(member.public_id)
-    assert {:ok, 0} = Vxpipe.Identity.Roles.affected_user_count(deps(), member.public_id)
+    assert {:ok, 0} = Vxpipe.Identity.Roles.affected_user_count(deps(), actor, member.public_id)
 
     {:ok, _} =
       Vxpipe.Identity.Accounts.create_user(deps(), actor, %{
@@ -264,7 +264,7 @@ defmodule Vxpipe.Persistence.IdentityAuthReviewTest do
       })
 
     assert {:ok, 1} = IdentityRoleStore.count_users(member.public_id)
-    assert {:ok, 1} = Vxpipe.Identity.Roles.affected_user_count(deps(), member.public_id)
+    assert {:ok, 1} = Vxpipe.Identity.Roles.affected_user_count(deps(), actor, member.public_id)
   end
 
   test "role definition change revokes member sessions atomically" do

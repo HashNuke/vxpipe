@@ -26,63 +26,89 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
     :ok
   end
 
-  test "creates or resumes DemoTenant through an operator-authenticated CSRF write" do
-    tenant = %Tenant{
-      key: "DEMOabcdefgh1234",
-      name: "DemoTenant",
-      inserted_at: ~U[2026-09-18 05:00:00Z]
-    }
+  for prefix <- ["/api", "/admin/api"] do
+    @ensure_path prefix <> "/onboarding/demo-tenant"
+    test "creates or resumes DemoTenant through #{prefix} with browser authority" do
+      tenant = %Tenant{
+        key: "DEMOabcdefgh1234",
+        name: "DemoTenant",
+        inserted_at: ~U[2026-09-18 05:00:00Z]
+      }
 
-    configure_demo_repository({:ok, tenant})
-    authenticated = authenticate()
-    csrf = admin_csrf(authenticated)
+      configure_demo_repository({:ok, tenant})
+      authenticated = authenticate()
+      csrf = admin_csrf(authenticated)
 
-    response =
-      authenticated
-      |> recycle()
-      |> put_req_header("x-csrf-token", csrf)
-      |> post("https://localhost/admin/api/onboarding/demo-tenant")
+      response =
+        authenticated
+        |> recycle()
+        |> put_req_header("x-csrf-token", csrf)
+        |> post("https://localhost" <> @ensure_path)
 
-    assert json_response(response, 200) == %{
-             "tenant" => %{
-               "key" => tenant.key,
-               "name" => "DemoTenant",
-               "created_at" => "2026-09-18T05:00:00Z"
+      assert json_response(response, 200) == %{
+               "tenant" => %{
+                 "key" => tenant.key,
+                 "name" => "DemoTenant",
+                 "created_at" => "2026-09-18T05:00:00Z"
+               }
              }
-           }
 
-    assert_received {:demo_tenant_requested, %Tenant{name: "Demo"}}
-  end
-
-  test "rejects missing authority or CSRF and reports unavailable storage" do
-    configure_demo_repository({:error, :repository_unavailable})
-
-    anonymous = post(build_conn(), "https://localhost/admin/api/onboarding/demo-tenant")
-    assert json_response(anonymous, 401)["error"]["code"] == "session_required"
-
-    authenticated = authenticate()
-
-    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
-      authenticated
-      |> recycle()
-      |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
-      |> put_req_header("x-csrf-token", "invalid")
-      |> post("https://localhost/admin/api/onboarding/demo-tenant")
+      assert_received {:demo_tenant_requested, %Tenant{name: "Demo"}}
     end
 
-    refute_received {:demo_tenant_requested, _candidate}
+    test "#{prefix} rejects missing authority or CSRF and reports unavailable storage" do
+      configure_demo_repository({:error, :repository_unavailable})
 
-    csrf = admin_csrf(authenticated)
+      anonymous = post(build_conn(), "https://localhost" <> @ensure_path)
+      assert json_response(anonymous, 401)["error"]["code"] == "session_required"
 
-    unavailable =
-      authenticated
-      |> recycle()
-      |> put_req_header("x-csrf-token", csrf)
-      |> post("https://localhost/admin/api/onboarding/demo-tenant")
+      authenticated = authenticate()
 
-    assert json_response(unavailable, 503) == %{
-             "error" => %{"code" => "demo_tenant_unavailable"}
-           }
+      assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+        authenticated
+        |> recycle()
+        |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
+        |> put_req_header("x-csrf-token", "invalid")
+        |> post("https://localhost" <> @ensure_path)
+      end
+
+      refute_received {:demo_tenant_requested, _candidate}
+
+      csrf = admin_csrf(authenticated)
+
+      unavailable =
+        authenticated
+        |> recycle()
+        |> put_req_header("x-csrf-token", csrf)
+        |> post("https://localhost" <> @ensure_path)
+
+      assert json_response(unavailable, 503) == %{
+               "error" => %{"code" => "demo_tenant_unavailable"}
+             }
+    end
+  end
+
+  test "demo ensure rejects explicit Authorization and insufficient actual actor grants" do
+    authenticated = authenticate()
+
+    for path <- ["/api/onboarding/demo-tenant", "/admin/api/onboarding/demo-tenant"] do
+      assert authenticated
+             |> recycle()
+             |> put_req_header("authorization", "Bearer synthetic-key")
+             |> put_req_header("content-type", "application/json")
+             |> post(path, "not-json")
+             |> json_response(401) == %{"error" => %{"code" => "session_required"}}
+    end
+
+    Application.put_env(:vxpipe_console, :user_identity_backend, NavigationIdentity)
+    put_member([], %{})
+
+    for path <- ["/api/onboarding/demo-tenant", "/admin/api/onboarding/demo-tenant"] do
+      assert authenticated |> recycle() |> post(path) |> json_response(403)
+      assert build_conn() |> post("http://public.example" <> path) |> response(404)
+    end
+
+    refute_received {:demo_tenant_requested, _}
   end
 
   test "keeps sample installation blocked until speech and model credentials exist" do
@@ -107,7 +133,9 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
       authenticated
       |> recycle()
       |> put_req_header("x-csrf-token", csrf)
-      |> post("https://localhost/admin/api/onboarding/demo-tenant/samples")
+      |> post("https://localhost/admin/api/onboarding/demo-tenant/samples", %{
+        tenant_key: "DEMOabcdefgh1234"
+      })
 
     assert json_response(response, 422) == %{
              "error" => %{"code" => "sample_prerequisites_missing"}
@@ -142,6 +170,61 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
            }
   end
 
+  test "sample aliases require sessions and an explicit existing demo tenant" do
+    tenant = %Tenant{key: "DEMOabcdefgh1234", name: "Demo", inserted_at: ~U[2026-09-18 05:00:00Z]}
+    configure_demo_repository({:ok, tenant})
+
+    put_calls_repository(
+      :provider_credential_repository,
+      {Vxpipe.Console.Test.OperatorCredentialRepository,
+       {self(), {:ok, %{tenant: %{key: tenant.key, name: tenant.name}, bindings: []}}}}
+    )
+
+    authenticated = authenticate()
+
+    for path <- [
+          "/api/onboarding/demo-tenant/samples",
+          "/admin/api/onboarding/demo-tenant/samples"
+        ] do
+      assert build_conn() |> post("http://public.example" <> path) |> response(404)
+      path = "https://localhost" <> path
+
+      assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+        authenticated
+        |> recycle()
+        |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
+        |> put_req_header("x-csrf-token", "invalid")
+        |> post(path, %{tenant_key: tenant.key})
+      end
+
+      assert build_conn() |> post(path, %{tenant_key: tenant.key}) |> json_response(401)
+
+      assert authenticated
+             |> recycle()
+             |> put_req_header("authorization", "Bearer synthetic-key")
+             |> put_req_header("content-type", "application/json")
+             |> post(path, "not-json")
+             |> json_response(401) == %{"error" => %{"code" => "session_required"}}
+
+      assert authenticated |> recycle() |> post(path, %{}) |> json_response(422) ==
+               %{"error" => %{"code" => "invalid_tenant_key"}}
+
+      assert authenticated
+             |> recycle()
+             |> post(path, %{tenant_key: "OTHERabcdefgh123"})
+             |> json_response(404) ==
+               %{"error" => %{"code" => "demo_tenant_not_found"}}
+
+      assert authenticated
+             |> recycle()
+             |> post(path, %{tenant_key: tenant.key})
+             |> json_response(422) ==
+               %{"error" => %{"code" => "sample_prerequisites_missing"}}
+    end
+
+    refute_received {:demo_tenant_requested, _}
+  end
+
   defp put_member(grants, assignments) do
     principal = %{
       FakeUserIdentity.principal()
@@ -160,7 +243,9 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
     authenticated
     |> recycle()
     |> put_req_header("x-csrf-token", admin_csrf(authenticated))
-    |> post("https://localhost/admin/api/onboarding/demo-tenant/samples")
+    |> post("https://localhost/admin/api/onboarding/demo-tenant/samples", %{
+      tenant_key: "DEMOabcdefgh1234"
+    })
   end
 
   defp authenticate do
@@ -188,5 +273,5 @@ defmodule Vxpipe.Console.AdminOnboardingEndpointTest do
     Application.put_env(:vxpipe_calls, Vxpipe.Calls, Keyword.put(settings, key, repository))
   end
 
-  defp https_get(conn \\ build_conn(), path), do: get(conn, "https://localhost#{path}")
+  defp https_get(conn, path), do: get(conn, "https://localhost#{path}")
 end

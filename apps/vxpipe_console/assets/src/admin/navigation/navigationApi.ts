@@ -34,7 +34,7 @@ export class NavigationApi {
   constructor(private readonly fetchImpl: NavigationFetch = defaultFetch, private readonly csrfToken = "") {}
 
   async createTenant(name: string): Promise<string> {
-    const response = await this.fetchImpl("/admin/api/tenants", {
+    const response = await this.fetchImpl("/api/tenants", {
       method: "POST", credentials: "same-origin", cache: "no-store",
       headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": this.csrfToken },
       body: JSON.stringify({ name }),
@@ -52,7 +52,7 @@ export class NavigationApi {
 
   async tenants(query = "", page = 1, signal?: AbortSignal): Promise<TenantDirectoryPage> {
     const params = new URLSearchParams({ q: query, page: String(page), page_size: "25" });
-    return parseTenantPage(await this.get(`/admin/api/tenants?${params}`, signal));
+    return parseTenantPage(await this.get(`/api/tenants?${params}`, signal));
   }
 
   async dashboard(tenantKey: string, signal?: AbortSignal): Promise<DashboardData> {

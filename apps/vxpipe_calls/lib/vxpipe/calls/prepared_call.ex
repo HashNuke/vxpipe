@@ -34,6 +34,10 @@ defmodule Vxpipe.Calls.PreparedCall do
   ]
   defstruct @enforce_keys ++
               [
+                hangup_requested_at: nil,
+                incarnation_binding_verified: false,
+                gateway_cleanup_required: false,
+                gateway_cleanup_completed_at: nil,
                 outgoing_outcome: nil,
                 dial_submitted_at: nil,
                 answered_at: nil,
@@ -60,6 +64,10 @@ defmodule Vxpipe.Calls.PreparedCall do
           initial_variables: map(),
           plan: ResolvedCallPlan.t(),
           plan_digest: binary(),
+          hangup_requested_at: nil | DateTime.t(),
+          incarnation_binding_verified: boolean(),
+          gateway_cleanup_required: boolean(),
+          gateway_cleanup_completed_at: nil | DateTime.t(),
           outgoing_outcome: nil | outgoing_outcome(),
           dial_submitted_at: nil | DateTime.t(),
           answered_at: nil | DateTime.t(),
@@ -74,6 +82,7 @@ defmodule Vxpipe.Calls.PreparedCall do
           started_at: nil | DateTime.t(),
           ended_at: nil | DateTime.t(),
           incarnation_id: nil | String.t(),
-          terminal_reason: nil | :room_start_failed | :session_start_failed | :startup_unknown
+          terminal_reason:
+            nil | :room_start_failed | :session_start_failed | :startup_unknown | :api_hangup
         }
 end

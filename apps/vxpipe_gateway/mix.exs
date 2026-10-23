@@ -34,6 +34,9 @@ defmodule Vxpipe.Gateway.MixProject do
       {:bandit, "~> 1.12"},
       {:bundlex, "~> 1.2", runtime: false},
       {:cors_plug, "~> 3.0"},
+      {:ex_mcp,
+       git: "https://github.com/HashNuke/ex_mcp.git",
+       ref: "5fa760207bb09fc3b19b3049bc481b5e55106095"},
       {:ex_sctp, "~> 0.1.3"},
       {:ex_webrtc, "~> 0.17.0"},
       {:membrane_opus_plugin, "~> 0.21.0"},
@@ -51,6 +54,7 @@ defmodule Vxpipe.Gateway.MixProject do
       {:websock_adapter, "~> 0.6"},
       {:vxpipe_call_engine, in_umbrella: true},
       {:vxpipe_calls, in_umbrella: true},
+      {:vxpipe_identity, in_umbrella: true},
       {:vxpipe_providers, in_umbrella: true}
     ]
   end

@@ -21,6 +21,7 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
     Agent.start_link(fn ->
       %{
         available?: true,
+        answer_observer: nil,
         claim: Keyword.fetch!(options, :claim),
         claimed?: false,
         operations: [],
@@ -28,6 +29,9 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
       }
     end)
   end
+
+  def block_answer(agent, observer), do: Agent.update(agent, &%{&1 | answer_observer: observer})
+  def claim(agent), do: Agent.get(agent, & &1.claim)
 
   def backend(agent), do: {__MODULE__, agent}
 
@@ -67,6 +71,82 @@ defmodule Vxpipe.Gateway.TelephonyHarnessBackend do
     runtime_options = operation(agent, {:start_incoming, claim.call.id})
     CallAdmission.start_incoming(runtime_options, claim, service)
   end
+
+  @impl true
+  def start_incoming(agent, claim, service, owner, token) do
+    options = operation(agent, {:start_incoming, claim.call.id})
+    CallAdmission.start_incoming(options, claim, service, owner, token)
+  end
+
+  @impl true
+  def bind_incoming(agent, claim, incarnation) do
+    Agent.get_and_update(agent, fn state ->
+      if state.available? do
+        claim = %{claim | call: %{claim.call | incarnation_id: incarnation}}
+        {{:ok, :admit, claim}, %{state | claim: claim}}
+      else
+        {{:error, :repository_unavailable}, state}
+      end
+    end)
+  end
+
+  @impl true
+  def identify_incoming(agent, service, claim, room, leg) do
+    CallAdmission.identify_incoming(
+      Agent.get(agent, & &1.runtime_options),
+      service,
+      claim,
+      room,
+      leg
+    )
+  end
+
+  @impl true
+  def prepare_incoming(agent, identity) do
+    options =
+      operation(agent, {:activate_incoming, identity.binding.call_id, identity.binding.leg})
+
+    CallAdmission.prepare_incoming(options, identity)
+  end
+
+  @impl true
+  def submit_incoming(agent, prepared) do
+    decision =
+      if observer = Agent.get(agent, & &1.answer_observer) do
+        send(observer, {:incoming_answer_pending, self()})
+
+        receive do
+          :release_incoming_answer -> :ok
+          :reject_incoming_answer -> {:error, :command_rejected}
+        end
+      else
+        :ok
+      end
+
+    with :ok <- decision do
+      CallAdmission.submit_incoming(Agent.get(agent, & &1.runtime_options), prepared)
+    end
+  end
+
+  @impl true
+  def release_incoming(agent, claim, token),
+    do: CallAdmission.release_incoming(Agent.get(agent, & &1.runtime_options), claim, token)
+
+  @impl true
+  def cancel_incoming(agent, claim, token, reason),
+    do:
+      CallAdmission.cancel_incoming(Agent.get(agent, & &1.runtime_options), claim, token, reason)
+
+  @impl true
+  def end_incoming(agent, service, event, activation, reason),
+    do:
+      CallAdmission.end_incoming(
+        Agent.get(agent, & &1.runtime_options),
+        service,
+        event,
+        activation,
+        reason
+      )
 
   @impl true
   def activate_incoming(

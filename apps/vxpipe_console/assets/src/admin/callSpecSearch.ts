@@ -13,7 +13,7 @@ export function callSpecSearch(
   return async (query, page, signal) => {
     const params = new URLSearchParams({ q: query, page: String(page) });
     const response = await fetchImpl(
-      `/admin/api/tenants/${encodeURIComponent(tenantKey)}/calls/spec-options?${params}`,
+      `/api/tenants/${encodeURIComponent(tenantKey)}/calls/spec-options?${params}`,
       { signal, headers: { accept: "application/json" } },
     );
     if (response.status === 401) onSessionExpired();

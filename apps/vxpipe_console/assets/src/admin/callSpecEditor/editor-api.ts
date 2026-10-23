@@ -18,7 +18,8 @@ const availableTool = (value: unknown): value is AvailableTool => record(value) 
   typeof value.description === "string" && (value.type !== "mcp" || typeof value.integration === "string");
 
 export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch) {
-  const base = `/admin/api/tenants/${encodeURIComponent(tenant)}`;
+  const base = `/api/tenants/${encodeURIComponent(tenant)}`;
+  const browserBase = `/admin/api/tenants/${encodeURIComponent(tenant)}`;
   const specPath = (id: string) => `${base}/call-specs/${encodeURIComponent(id)}`;
   const options = (signal: AbortSignal): RequestInit => ({ signal, credentials: "same-origin", cache: "no-store", headers: { accept: "application/json" } });
   async function get(path: string, signal: AbortSignal): Promise<Record<string, unknown>> {
@@ -41,9 +42,11 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     return { document, saved: { callSpecId: id, revision: saved.revision, publishedRevision: saved.published_revision } };
   }
   const execute: ExecuteEditorRequest = async (request, signal) => {
+    const writes = `/api/tenants/${encodeURIComponent(tenant)}/call-specs`;
+    const target = request.callSpecId ? `${writes}/${encodeURIComponent(request.callSpecId)}` : writes;
     const path = request.action === "publish"
-      ? `${specPath(request.callSpecId!)}/revisions/${request.revision}/publish`
-      : request.callSpecId ? specPath(request.callSpecId) : `${base}/call-specs`;
+      ? `${target}/revisions/${request.revision}/publish`
+      : target;
     const response = await fetch(path, { ...options(signal), method: request.action === "save" && request.callSpecId ? "PUT" : "POST",
       headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": csrf },
       body: stringifySourceJson(request.action === "publish" ? {} : { source: request.source }) });
@@ -76,7 +79,7 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     return parseModelCatalog(Object.fromEntries(entries));
   }
   async function lookups(signal: AbortSignal): Promise<EditorLookups> {
-    const value = await get(`${base}/call-spec-editor-lookups`, signal);
+    const value = await get(`${browserBase}/call-spec-editor-lookups`, signal);
     if (!record(value.credential_names) || !Object.values(value.credential_names).every(names) || !names(value.mcp_integrations) ||
       !Array.isArray(value.telephony_services) || !value.telephony_services.every((service) => record(service) && typeof service.key === "string" && typeof service.name === "string")) throw new Error("Invalid editor lookups");
     const catalog = value.tool_catalog;

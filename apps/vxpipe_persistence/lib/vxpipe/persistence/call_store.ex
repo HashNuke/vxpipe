@@ -14,6 +14,34 @@ defmodule Vxpipe.Persistence.CallStore do
   alias Vxpipe.Persistence.Schema.JoinToken, as: StoredToken
 
   @impl true
+  def scan_call_cleanup(repo, cursor, limit),
+    do: Vxpipe.Persistence.CallCleanupScanStore.scan(repo, cursor, limit)
+
+  @impl true
+  def complete_call_cleanup(repo, binding, completed_at),
+    do: Vxpipe.Persistence.CallCleanupCompletionStore.complete(repo, binding, completed_at)
+
+  @impl true
+  def bind_managed_call_admission(repo, subject, incarnation),
+    do: Vxpipe.Persistence.CallAdmissionBindingStore.bind_managed(repo, subject, incarnation)
+
+  @impl true
+  def bind_call_admission(repo, subject, incarnation),
+    do: Vxpipe.Persistence.CallAdmissionBindingStore.bind(repo, subject, incarnation)
+
+  @impl true
+  def request_call_hangup(repo, tenant_key, call_id, requested_at),
+    do: Vxpipe.Persistence.CallHangupStore.request(repo, tenant_key, call_id, requested_at)
+
+  @impl true
+  def fetch_call_by_key(repo, tenant_key, key),
+    do: Vxpipe.Persistence.CallClaimStore.fetch_by_key(repo, tenant_key, key)
+
+  @impl true
+  def claim_call(repo, call, authorize),
+    do: Vxpipe.Persistence.CallClaimStore.claim(repo, call, authorize)
+
+  @impl true
   def fetch_outgoing_by_key(repo, tenant_key, key),
     do: Vxpipe.Persistence.OutgoingCallStore.fetch_by_key(repo, tenant_key, key)
 
@@ -201,15 +229,16 @@ defmodule Vxpipe.Persistence.CallStore do
 
   @impl true
   def mark_call_started(repo, claim, incarnation_id, started_at) do
-    project_lifecycle(repo, claim, fn
-      %Call{state: :admitting} = call ->
-        repo.update(Call.start_changeset(call, incarnation_id, started_at))
-
-      %Call{state: :running} = call ->
-        {:ok, call}
-
-      _call ->
-        {:error, :call_unavailable}
+    project_lifecycle(repo, claim, fn call ->
+      with :ok <- Vxpipe.Persistence.CallIncarnationBinding.allow_start(call, incarnation_id),
+           {:ok, call} <-
+             Vxpipe.Persistence.CallIncarnationBinding.bind(repo, call, incarnation_id) do
+        case call.state do
+          :admitting -> repo.update(Call.start_changeset(call, incarnation_id, started_at))
+          :running -> {:ok, call}
+          _other -> {:error, :call_unavailable}
+        end
+      end
     end)
   end
 
@@ -355,6 +384,9 @@ defmodule Vxpipe.Persistence.CallStore do
       do: :ok,
       else: {:error, :token_expired}
   end
+
+  defp admission_available(_repo, %Call{hangup_requested_at: %DateTime{}}, _participant_ref),
+    do: {:error, :call_unavailable}
 
   defp admission_available(repo, call, participant_ref) do
     already_admitted? =

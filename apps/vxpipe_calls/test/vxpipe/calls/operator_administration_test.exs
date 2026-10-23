@@ -123,24 +123,29 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
 
     repository = start_supervised!({TestAdminRepository, {:ok, {tenant, call_specs, 3}}})
 
-    assert {:ok,
-            %CallSpecPage{
-              tenant: ^tenant,
-              call_specs: ^call_specs,
-              page: 2,
-              page_size: 2,
-              total: 3,
-              total_pages: 2
-            }} =
-             Vxpipe.Calls.list_operator_call_specs(
-               InstallationOperator.authority(),
-               tenant.key,
-               page: 2,
-               limit: 2,
-               admin_repository: TestAdminRepository.admin_repository(repository)
-             )
+    for authority <- [
+          InstallationOperator.authority(),
+          %Principal{tenant_key: tenant.key, api_key_id: "key", scopes: MapSet.new([:admin])}
+        ] do
+      assert {:ok,
+              %CallSpecPage{
+                tenant: ^tenant,
+                call_specs: ^call_specs,
+                page: 2,
+                page_size: 2,
+                total: 3,
+                total_pages: 2
+              }} =
+               Vxpipe.Calls.list_operator_call_specs(
+                 authority,
+                 tenant.key,
+                 page: 2,
+                 limit: 2,
+                 admin_repository: TestAdminRepository.admin_repository(repository)
+               )
 
-    assert_received {:admin_repository_list_call_specs, "AAAAAAAAAAAAAAAA", 2, 2}
+      assert_received {:admin_repository_list_call_specs, "AAAAAAAAAAAAAAAA", 2, 2}
+    end
   end
 
   test "keeps missing call spec tenants and unavailable storage distinct" do
@@ -152,7 +157,7 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
     assert {:error, :tenant_not_found} =
              Vxpipe.Calls.list_operator_call_specs(
                InstallationOperator.authority(),
-               "missing",
+               "BBBBBBBBBBBBBBBB",
                admin_repository: TestAdminRepository.admin_repository(missing)
              )
 
@@ -163,7 +168,7 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
                admin_repository: TestAdminRepository.admin_repository(failed)
              )
 
-    assert {:error, :installation_operator_required} =
+    assert {:error, :insufficient_scope} =
              Vxpipe.Calls.list_operator_call_specs(
                %Principal{
                  tenant_key: "AAAAAAAAAAAAAAAA",
@@ -172,6 +177,59 @@ defmodule Vxpipe.Calls.OperatorAdministrationTest do
                },
                "AAAAAAAAAAAAAAAA",
                admin_repository: TestAdminRepository.admin_repository(failed)
+             )
+  end
+
+  test "tenant spec listing rejects calls-only keys and tenant substitution before storage" do
+    principal = %Principal{
+      tenant_key: "AAAAAAAAAAAAAAAA",
+      api_key_id: "key",
+      scopes: MapSet.new([:admin])
+    }
+
+    for {authority, tenant, reason} <- [
+          {principal, "BBBBBBBBBBBBBBBB", :tenant_access_forbidden},
+          {%{principal | scopes: MapSet.new([:calls])}, principal.tenant_key, :insufficient_scope}
+        ] do
+      assert {:error, ^reason} =
+               Vxpipe.Calls.list_operator_call_specs(authority, tenant,
+                 admin_repository: {__MODULE__, :must_not_call}
+               )
+    end
+
+    foreign_tenant = %Tenant{
+      key: "BBBBBBBBBBBBBBBB",
+      name: "Other",
+      inserted_at: ~U[2026-10-15 00:00:00Z]
+    }
+
+    repository = start_supervised!({TestAdminRepository, {:ok, {foreign_tenant, [], 0}}})
+
+    assert {:error, :call_spec_page_unavailable} =
+             Vxpipe.Calls.list_operator_call_specs(principal, principal.tenant_key,
+               admin_repository: TestAdminRepository.admin_repository(repository)
+             )
+  end
+
+  test "installation spec listing validates tenant keys and returned ownership" do
+    operator = InstallationOperator.authority()
+
+    assert {:error, :invalid_tenant_key} =
+             Vxpipe.Calls.list_operator_call_specs(operator, "invalid",
+               admin_repository: {__MODULE__, :must_not_call}
+             )
+
+    foreign = %Tenant{
+      key: "BBBBBBBBBBBBBBBB",
+      name: "Other",
+      inserted_at: ~U[2026-10-15 00:00:00Z]
+    }
+
+    repository = start_supervised!({TestAdminRepository, {:ok, {foreign, [], 0}}})
+
+    assert {:error, :call_spec_page_unavailable} =
+             Vxpipe.Calls.list_operator_call_specs(operator, "AAAAAAAAAAAAAAAA",
+               admin_repository: TestAdminRepository.admin_repository(repository)
              )
   end
 

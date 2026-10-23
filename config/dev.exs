@@ -91,6 +91,15 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
           maximum_age_ms: 2_000,
           maximum_consecutive_overflows: 5
         ]
+      ],
+      Vxpipe.Providers.MorseCodeApi.STTSession => [
+        enabled: true,
+        media_ingress: [
+          maximum_frames: 50,
+          maximum_bytes: 262_144,
+          maximum_age_ms: 2_000,
+          maximum_consecutive_overflows: 5
+        ]
       ]
     }
   ],
@@ -113,6 +122,10 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
         maximum_requests: 4
       ],
       Vxpipe.Providers.ElevenLabs.TTSSession => [
+        enabled: true,
+        maximum_requests: 4
+      ],
+      Vxpipe.Providers.MorseCodeApi.TTSSession => [
         enabled: true,
         maximum_requests: 4
       ],

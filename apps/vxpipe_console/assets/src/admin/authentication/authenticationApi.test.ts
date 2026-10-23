@@ -19,7 +19,7 @@ test("sends chosen credentials only in a CSRF-protected same-origin create reque
   });
 
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/admin/api/users",
+    "/api/users",
     expect.objectContaining({
       method: "POST",
       credentials: "same-origin",
@@ -29,7 +29,7 @@ test("sends chosen credentials only in a CSRF-protected same-origin create reque
         password: "example long password",
         password_confirmation: "example long password",
         role_id: "role-1",
-        memberships: [{ tenant_id: "tenant-1", access: "read" }],
+        memberships: [{ tenant_key: "tenant-1", access: "read" }],
       }),
     }),
   );
@@ -57,7 +57,7 @@ test("passes directory filters to the server before pagination", async () => {
   const api = new AuthenticationApi("csrf-token", fetchImpl);
   await api.users(new URLSearchParams({ q: "member", role: "role-1", page: "2" }));
   expect(fetchImpl.mock.calls[0][0]).toBe(
-    "/admin/api/users?q=member&role=role-1&page=2",
+    "/api/users?query=member&role_id=role-1&page=2",
   );
 });
 
@@ -109,21 +109,19 @@ test("submits a local recovery proof and confirmed replacement password", async 
 });
 
 test("maps minimal role options without granting authority", async () => {
-  const fetchImpl = vi.fn().mockResolvedValue(
-    new Response(
-      JSON.stringify({
-        role_options: [
-          { public_id: "role-1", name: "Superadmin", kind: "superadmin" },
-          { public_id: "role-2", name: "Member", kind: "member" },
-        ],
-      }),
-      { status: 200 },
-    ),
-  );
+  const fetchImpl = vi.fn();
+  fetchImpl.mockResolvedValueOnce(new Response(JSON.stringify({
+    roles: [{ id: "role-1", name: "Superadmin", kind: "superadmin" }],
+    pagination: { page: 1, page_size: 1, total: 2, total_pages: 2 },
+  }))).mockResolvedValueOnce(new Response(JSON.stringify({
+    roles: [{ id: "role-2", name: "Member", kind: null }],
+    pagination: { page: 2, page_size: 1, total: 2, total_pages: 2 },
+  })));
   const api = new AuthenticationApi("csrf-token", fetchImpl);
 
   const { roles } = await api.roleOptions();
 
+  expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual(["/api/role-options?page=1", "/api/role-options?page=2"]);
   expect(roles).toEqual([
     { id: "role-1", name: "Superadmin", kind: "superadmin", grants: [] },
     { id: "role-2", name: "Member", kind: null, grants: [] },
@@ -132,7 +130,7 @@ test("maps minimal role options without granting authority", async () => {
 
 test("maps the tenant directory across pages for tenant assignment", async () => {
   const page = (key: string, pageNumber: number) => ({
-    tenants: [{ key, name: `Tenant ${key}`, created_at: "2026-09-17T01:00:00Z" }],
+    items: [{ tenant_key: key, name: `Tenant ${key}`, created_at: "2026-09-17T01:00:00Z" }],
     pagination: { page: pageNumber, page_size: 1, total: 2, total_pages: 2 },
   });
   const fetchImpl = vi.fn((input: RequestInfo | URL) =>
@@ -159,7 +157,7 @@ test("tenant options follow the whole directory instead of stopping at ten pages
     return Promise.resolve(
       new Response(
         JSON.stringify({
-          tenants: [{ key: `tenant-${pageNumber}`, name: `Tenant ${pageNumber}` }],
+          items: [{ tenant_key: `tenant-${pageNumber}`, name: `Tenant ${pageNumber}` }],
           pagination: { page: pageNumber, page_size: 1, total: totalPages, total_pages: totalPages },
         }),
         { status: 200 },
@@ -231,4 +229,12 @@ test("account email changes omit password fields", async () => {
     email: "owner@example.test",
     current_password: "current passphrase here",
   });
+});
+
+test("full role directories fetch exactly the requested canonical page", async () => {
+  const fetchImpl = vi.fn().mockResolvedValue(Response.json({roles: [], pagination: {page: 1, page_size: 25, total: 0, total_pages: 0}}));
+  const api = new AuthenticationApi("csrf", fetchImpl);
+  expect(await api.roles(1)).toEqual({roles: [], pagination: {page: 1, page_size: 25, total: 0, total_pages: 0}});
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
+  expect(fetchImpl).toHaveBeenCalledWith("/api/roles?page=1", expect.objectContaining({method:"GET"}));
 });

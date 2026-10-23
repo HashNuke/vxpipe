@@ -5,6 +5,7 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocket do
 
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Gateway.Telephony.SocketReadiness
+  alias Vxpipe.Gateway.Telephony.MediaCleanup
   alias Vxpipe.Gateway.Telephony.MediaBinding
   alias Vxpipe.Gateway.Telephony.PlaybackMarks
   alias Vxpipe.Gateway.Telephony.SocketDispatch
@@ -15,19 +16,29 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocket do
   def init(%{binding: %MediaBinding{} = binding} = options) do
     monitor = Process.monitor(binding.leg)
 
-    {:ok,
-     %{
-       binding: binding,
-       media_clock: Map.get(options, :media_clock, fn -> System.monotonic_time(:millisecond) end),
-       source_epoch: make_ref(),
-       source_gate: SourceEpoch.new(),
-       readiness_resource: SocketReadiness.new(binding),
-       decoder_options: decoder_options(binding),
-       leg_monitor: monitor,
-       playback_marks: %PlaybackMarks{},
-       dispatch: SocketDispatch.new(),
-       stream_id: nil
-     }}
+    state = %{
+      binding: binding,
+      room_monitor: nil,
+      cleanup_monitor: nil,
+      media_clock: Map.get(options, :media_clock, fn -> System.monotonic_time(:millisecond) end),
+      source_epoch: make_ref(),
+      source_gate: SourceEpoch.new(),
+      readiness_resource: SocketReadiness.new(binding),
+      decoder_options: decoder_options(binding),
+      leg_monitor: monitor,
+      playback_marks: %PlaybackMarks{},
+      dispatch: SocketDispatch.new(),
+      stream_id: nil
+    }
+
+    case Vxpipe.CallEngine.monitor_room(
+           binding.tenant_id,
+           binding.room_id,
+           binding.incarnation_id
+         ) do
+      {:ok, monitor} -> init_cleanup(%{state | room_monitor: monitor})
+      {:error, :room_unavailable} -> {:stop, :room_unavailable, {1008, "room unavailable"}, state}
+    end
   end
 
   @impl true
@@ -109,6 +120,17 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocket do
     end
   end
 
+  def handle_info({:DOWN, monitor, :process, _room, _reason}, %{room_monitor: monitor} = state) do
+    {:stop, :normal, {1000, "room ended"}, state}
+  end
+
+  def handle_info(
+        {:DOWN, monitor, :process, _tracker, _reason},
+        %{cleanup_monitor: monitor} = state
+      ) do
+    {:stop, :normal, {1000, "cleanup unavailable"}, state}
+  end
+
   def handle_info({:DOWN, monitor, :process, leg, _reason}, state)
       when monitor == state.leg_monitor and leg == state.binding.leg do
     {:stop, :normal, {1000, "leg ended"}, state}
@@ -116,6 +138,14 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocket do
 
   def handle_info(message, state) do
     dispatch_result(SocketDispatch.response(state.dispatch, message), state)
+  end
+
+  defp init_cleanup(state) do
+    case MediaCleanup.register(state.binding, :telephony_socket) do
+      {:ok, nil} -> {:ok, state}
+      {:ok, tracker} -> {:ok, %{state | cleanup_monitor: Process.monitor(tracker)}}
+      {:error, _reason} -> {:stop, :cleanup_unavailable, {1008, "cleanup unavailable"}, state}
+    end
   end
 
   defp dispatch(event, state) do

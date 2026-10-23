@@ -1,5 +1,13 @@
 # Semantic speech provider contract
 
+The 2026-10-15 [persistent speech session requirement](persistent-speech-sessions.md)
+supersedes acceptance of request-per-utterance transports where persistent
+realtime sessions are available. Remote TTS, STT and STS retain a realtime
+transport for their capability allocation, subject to explicit provider
+rotation/resumption and failure policies. Google streaming HTTP TTS remains an
+explicit user-approved exception; it retains streaming audio, credit and scoped
+cancellation.
+
 Status: normative provider contract, synchronized on 2026-09-22. The baseline
 [Simpler speech integrations](../labnotes/milestones/simpler-speech-integrations.md) migration
 has all nine checkpoints accepted. The separate

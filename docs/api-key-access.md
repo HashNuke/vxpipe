@@ -31,12 +31,18 @@ Do not repurpose or rotate trusted bootstrap/operator keys. New platform keys us
 a distinct prefix and existing installation-operator authority on machine APIs.
 The browser session remains independent of machine API credentials.
 
-## MCP direction
+## MCP authentication
 
-Use one /mcp endpoint with credential-derived authorization and tenant parameters
-for cross-tenant operations by platform credentials. MCP server implementation is
-separate from this API-key management slice; existing vxpipe_mcp is outbound.
-No claim of a working inbound MCP endpoint is made by this change.
+The [platform MCP endpoint](platform-mcp.md) exposes tenant/spec/call/user tools
+through the same authorized Elixir operations as the product HTTP API. It uses
+[OAuth](mcp-oauth.md) with Console login and consent, delegating the user's current
+role and tenant access. Configure the client with the `/mcp` URL and complete its
+browser authorization flow. API keys are no longer accepted at MCP.
+
+The browser still calls the documented HTTP API using its login session; external
+HTTP clients still use API keys. Those credential types and routes are unchanged.
+Existing MCP configurations must remove static API-key headers and reconnect.
+Credentials never belong in tool arguments, model prompts or URL parameters.
 
 ## Rejected alternatives
 

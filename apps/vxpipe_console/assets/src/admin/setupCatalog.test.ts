@@ -8,6 +8,22 @@ import {
 
 const installedProviders = (capabilities: Parameters<typeof installedSetupProviders>[0]) => installedSetupProviders(capabilities, modelCatalogFixture);
 
+test("Morse API offers the implemented TTS model without advertising STT or STS", () => {
+  const [provider] = installedProviders({morse_code_api: ["credential", "credential_validation", "tts"]});
+  expect(provider).toMatchObject({id: "morse_code_api", capabilities: ["tts"], defaultModels: {tts: "morse_v1"}});
+  expect(provider?.recommendedModels.tts?.name).toBe("MorseCodeApiTTS");
+  expect(modelRecommendation(provider!, "tts")).toBe("morse_v1 · morse");
+});
+
+test("Morse API offers recognition and synthesis from one service without STS", () => {
+  const [provider] = installedProviders({morse_code_api: ["credential", "credential_validation", "stt", "tts"]});
+  expect(provider).toMatchObject({id: "morse_code_api", capabilities: ["stt", "tts"],
+    defaultModels: {stt: "morse_stt_v1", tts: "morse_v1"}});
+  expect(provider?.recommendedModels.stt?.name).toBe("MorseCodeApiSTT");
+  expect(providersFor("stt", [{provider: "morse_code_api", status: "connected"}], [provider!])).toHaveLength(1);
+  expect(provider?.capabilities).not.toContain("s2s");
+});
+
 const capabilities = {
   cartesia: ["credential", "stt", "tts"],
   elevenlabs: ["credential", "stt", "tts"],

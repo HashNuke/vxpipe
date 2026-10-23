@@ -163,20 +163,13 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
   test "an authenticated bidirectional stop ends the incoming room", context do
     assert post_voice(context).status == 200
     assert_receive {:test_twilio_answer, answer}, 2_000
-    caller = Map.fetch!(context.plan.participants, context.plan.entry_caller)
-
-    assert {:ok, participant} =
-             Vxpipe.CallEngine.participant_snapshot(
-               context.plan.tenant_id,
-               context.plan.room_id,
-               caller.participant_id
-             )
+    claim = TelephonyHarnessBackend.claim(context.backend)
 
     assert {:ok, room_monitor} =
              Vxpipe.CallEngine.monitor_room(
                context.plan.tenant_id,
                context.plan.room_id,
-               participant.incarnation_id
+               claim.call.incarnation_id
              )
 
     assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, @incoming_call_sid)
@@ -219,6 +212,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
       outcome = context.initial_outcome
       assert post_voice(context).status == 200
       assert_receive {:test_twilio_answer, answer}, 2_000
+      assert :ok = incoming_event(context, :answered)
       assert_receive {:test_call_lifecycle_timer_scheduled, maximum_timer, 60_000}
       assert_receive {:test_call_lifecycle_timer_scheduled, readiness_timer, 30_000}
       assert_receive {:test_agent_runtime_model_preparing, preparer}, 2_000
@@ -324,6 +318,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
          context do
       assert post_voice(context).status == 200
       assert_receive {:test_twilio_answer, _answer}, 2_000
+      assert :ok = incoming_event(context, :answered)
 
       assert {:ok, leg} = LegSupervisor.lookup(context.service_identity, @incoming_call_sid)
 
@@ -342,6 +337,8 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
       assert_receive {:test_twilio_end_leg, request}, 2_000
       assert request.leg.leg_id == @incoming_leg_id
       assert request.reason == :room_ended
+      refute_received {:DOWN, ^monitor, :process, ^leg, _}
+      assert :ok = incoming_event(context, :ended)
       assert_receive {:DOWN, ^monitor, :process, ^leg, _}, 2_000
       assert_receive {:DOWN, ^preparation_monitor, :process, ^preparer, _}, 2_000
       refute_receive {:test_twilio_end_leg, _duplicate}
@@ -377,6 +374,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
          context do
       incoming = post_voice(context)
       assert incoming.status == 200
+      assert :ok = incoming_event(context, :answered)
 
       assert_receive {:test_tts_transport_started, source_tts, _connection}, 2_000
 
@@ -568,6 +566,26 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     refute_receive {:DOWN, ^room_monitor, :process, _, _}, 100
     refute_received {:test_twilio_end_leg, _unrelated_or_redundant_hangup}
     Process.demonitor(room_monitor, [:flush])
+  end
+
+  defp incoming_event(context, kind) do
+    claim = TelephonyHarnessBackend.claim(context.backend)
+    {:ok, leg} = LegSupervisor.lookup(context.service_identity, @incoming_call_sid)
+
+    Vxpipe.Gateway.Telephony.Leg.dispatch(
+      leg,
+      %Vxpipe.CallEngine.Telephony.Event{
+        kind: kind,
+        provider: claim.provider,
+        provider_connection_id: claim.provider_connection_id,
+        provider_call_control_id: claim.provider_call_control_id,
+        provider_call_leg_id: claim.provider_call_leg_id,
+        provider_call_session_id: claim.provider_call_session_id,
+        occurred_at: DateTime.utc_now(),
+        end_reason: if(kind == :ended, do: :hangup, else: nil)
+      },
+      5_000
+    )
   end
 
   defp post_voice(context) do

@@ -83,6 +83,31 @@ defmodule Vxpipe.Calls.PublicationFinalizerTest do
     assert_receive {:vxpipe_call_details_published, ^worker, _publication_id, 1}
   end
 
+  test "a managed waiting finalizer survives an overlapping terminal publication request" do
+    observer = self()
+    clock = start_agent(fn -> ~U[2026-09-12 18:00:10.000Z] end)
+    repository = repository(observer)
+    source = source_agent(observer, {:error, :call_cleanup_pending})
+    options = options(observer, repository, source, clock)
+
+    assert {:ok, finalizer, :started} =
+             Vxpipe.Calls.finalize_call_details(@tenant_key, @call_id, options)
+
+    assert_receive {:vxpipe_call_details_finalization_retrying, ^finalizer, :call_cleanup_pending}
+    assert_receive {:publication_timer_scheduled, ^finalizer, token, 5_000}
+    Agent.update(source, &Map.put(&1, :response, {:ok, assessment(:complete)}))
+
+    assert {:ok, ^finalizer, :existing} =
+             Vxpipe.Calls.finalize_call_details(@tenant_key, @call_id, options)
+
+    send(finalizer, {:vxpipe_publication_timer, token})
+
+    assert_receive {:vxpipe_call_details_finalization_submitted, ^finalizer, worker, :started,
+                    :complete}
+
+    assert_receive {:vxpipe_call_details_published, ^worker, _publication_id, 1}
+  end
+
   test "stops cleanly when a refresh reaches a missing or still-live call" do
     for terminal_reason <- [:call_not_found, :call_not_ended] do
       observer = self()

@@ -4,9 +4,11 @@ defmodule Vxpipe.Calls.OperatorAdministration do
   alias Vxpipe.Calls.{
     CallDirectoryPage,
     CallDirectorySummary,
+    CallSpecAuthorization,
     CallSpecPage,
     InstallationOperator,
     OperatorCallContext,
+    Principal,
     ProviderAuth,
     ProviderCredential,
     ProviderCredentialHints,
@@ -92,12 +94,18 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     end
   end
 
-  @spec list_call_specs(InstallationOperator.t() | UserPrincipal.t(), String.t(), keyword()) ::
+  @spec list_call_specs(
+          InstallationOperator.t() | UserPrincipal.t() | Principal.t(),
+          String.t(),
+          keyword()
+        ) ::
           {:ok, CallSpecPage.t()} | {:error, term()}
-  def list_call_specs(%UserPrincipal{} = principal, tenant_key, options)
-      when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
+  def list_call_specs(principal, tenant_key, options)
+      when (is_struct(principal, UserPrincipal) or is_struct(principal, Principal) or
+              is_struct(principal, InstallationOperator)) and
+             is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
     with :ok <- ProviderAuth.tenant_key(tenant_key),
-         :ok <- UserAuthorization.authorize_tenant(principal, "call_specs.read", tenant_key),
+         :ok <- authorize_spec_list(principal, tenant_key),
          {:ok, page} <- positive_integer(options, :page, 1),
          {:ok, limit} <- page_size(options),
          {:ok, repository} <- Repositories.fetch(options, :admin_repository),
@@ -121,36 +129,15 @@ defmodule Vxpipe.Calls.OperatorAdministration do
     end
   end
 
-  def list_call_specs(
-        %InstallationOperator{grant: :installation_operator},
-        tenant_key,
-        options
-      )
-      when is_binary(tenant_key) and byte_size(tenant_key) > 0 and is_list(options) do
-    with {:ok, page} <- positive_integer(options, :page, 1),
-         {:ok, limit} <- page_size(options),
-         {:ok, repository} <- Repositories.fetch(options, :admin_repository),
-         offset = (page - 1) * limit,
-         {:ok, {tenant, call_specs, total}} <-
-           Repositories.call(repository, :list_call_specs, [tenant_key, limit, offset]),
-         {:ok, total_pages} <- page_range(page, total, limit, :call_spec_page_out_of_range) do
-      {:ok,
-       %CallSpecPage{
-         tenant: tenant,
-         call_specs: call_specs,
-         page: page,
-         page_size: limit,
-         total: total,
-         total_pages: total_pages
-       }}
-    end
-  end
-
-  def list_call_specs(%InstallationOperator{}, _tenant_key, _options),
-    do: {:error, :installation_operator_required}
-
   def list_call_specs(_authority, _tenant_key, _options),
     do: {:error, :installation_operator_required}
+
+  defp authorize_spec_list(principal, tenant_key) do
+    case CallSpecAuthorization.authorize(principal, :read, tenant_key) do
+      {:error, :authoring_authority_required} -> {:error, :installation_operator_required}
+      result -> result
+    end
+  end
 
   @spec list_calls(InstallationOperator.t() | UserPrincipal.t(), String.t(), keyword()) ::
           {:ok, CallDirectoryPage.t()} | {:error, term()}
@@ -366,7 +353,7 @@ defmodule Vxpipe.Calls.OperatorAdministration do
         options
       )
       when is_list(options) do
-    with :ok <- UserAuthorization.authorize_credential_read(principal, owner),
+    with :ok <- UserAuthorization.authorize_credential_write(principal, owner),
          :ok <- ProviderAuth.binding(owner, provider, name),
          :ok <- ProviderAuth.validate(provider, auth_kind, payload),
          {:ok, validator} <- Repositories.fetch(options, :provider_credential_validator) do

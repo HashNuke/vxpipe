@@ -53,25 +53,32 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
   @startup_progress [:vxpipe, :call_engine, :startup, :progress]
   @startup_stop [:vxpipe, :call_engine, :startup, :stop]
 
-  test "remote hangup ends only the exact room incarnation while media is still preparing" do
-    plan = compile_plan(60_000, model: "test:blocked", wait_sounds: nil)
-    assert {:ok, room} = start_call(plan)
+  for {operation, reason} <- [end_call: :remote_hangup, hangup_call: :api_hangup] do
+    @operation operation
+    @reason reason
+    test "#{reason} ends only the exact room incarnation while media is still preparing" do
+      plan = compile_plan(60_000, model: "test:blocked", wait_sounds: nil)
+      assert {:ok, room} = start_call(plan)
 
-    assert {:ok, monitor} =
-             CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
+      assert {:ok, monitor} =
+               CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
 
-    assert {:error, :room_unavailable} =
-             CallEngine.end_call("another-tenant", plan.room_id, room.incarnation_id)
+      assert {:error, :room_unavailable} =
+               apply(CallEngine, @operation, ["another-tenant", plan.room_id, room.incarnation_id])
 
-    assert {:error, :room_unavailable} =
-             CallEngine.end_call(plan.tenant_id, plan.room_id, "another-incarnation")
+      assert {:error, :room_unavailable} =
+               apply(CallEngine, @operation, [plan.tenant_id, plan.room_id, "another-incarnation"])
 
-    refute_received {:DOWN, ^monitor, :process, _, _}
-    assert :ok = CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
-    assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, :remote_hangup}}, 1_000
+      refute_received {:DOWN, ^monitor, :process, _, _}
 
-    assert {:error, :room_unavailable} =
-             CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+      assert :ok =
+               apply(CallEngine, @operation, [plan.tenant_id, plan.room_id, room.incarnation_id])
+
+      assert_receive {:DOWN, ^monitor, :process, _, {:shutdown, @reason}}, 1_000
+
+      assert {:error, :room_unavailable} =
+               apply(CallEngine, @operation, [plan.tenant_id, plan.room_id, room.incarnation_id])
+    end
   end
 
   test "monitoring a room selects its exact tenant and incarnation before caller media attaches" do

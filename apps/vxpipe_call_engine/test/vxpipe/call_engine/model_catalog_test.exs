@@ -4,9 +4,9 @@ defmodule Vxpipe.CallEngine.ModelCatalogTest do
   alias Vxpipe.CallEngine.ModelCatalog
 
   @providers %{
-    "speech_to_text" => ~w(cartesia deepgram elevenlabs google morse),
-    "output_speech_to_text" => ~w(cartesia deepgram elevenlabs google morse),
-    "text_to_speech" => ~w(cartesia deepgram elevenlabs google morse rime),
+    "speech_to_text" => ~w(cartesia deepgram elevenlabs google morse morse_code_api),
+    "output_speech_to_text" => ~w(cartesia deepgram elevenlabs google morse morse_code_api),
+    "text_to_speech" => ~w(cartesia deepgram elevenlabs google morse morse_code_api rime),
     "speech_to_speech" => ~w(google morse openai),
     "model_inference" => ~w(deepseek fireworks google openai openrouter zenmux)
   }

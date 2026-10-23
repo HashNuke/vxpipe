@@ -4,6 +4,7 @@ defmodule Vxpipe.Calls.Admissions do
   alias Vxpipe.Calls.{
     AdmissionClaim,
     CallSpecCredentials,
+    CallManagementAuthorization,
     IssuedJoinToken,
     JoinToken,
     PreparedCall,
@@ -84,6 +85,67 @@ defmodule Vxpipe.Calls.Admissions do
       {:error, _reason} = error -> error
     end
   end
+
+  @doc "Issues a token for a pinned web participant; omission selects only the pinned entry caller."
+  def issue_call_token(actor, tenant, call_id, selector, options) when is_list(options) do
+    with :ok <- CallManagementAuthorization.authorize(actor, tenant),
+         :ok <- call_identifier(call_id),
+         {:ok, repository} <- Repositories.fetch(options, :call_repository),
+         {:ok, %PreparedCall{tenant_key: ^tenant, id: ^call_id} = call} <-
+           Repositories.call(repository, :fetch_call, [tenant, call_id]),
+         {:ok, key, participant_ref} <- token_participant(call, selector),
+         {:ok, token_pair} <- build_token(call.plan, key, participant_ref, options),
+         {:ok, _stored_token} <-
+           Repositories.call(repository, :issue_join_token, [
+             tenant,
+             call_id,
+             key,
+             token_pair.stored
+           ]) do
+      {:ok, token_pair.issued}
+    else
+      :error -> {:error, :not_found}
+      {:ok, _invalid} -> {:error, :not_found}
+      error -> error
+    end
+  end
+
+  def issue_call_token(_actor, _tenant, _id, _selector, _options),
+    do: {:error, :invalid_call_preparation}
+
+  defp token_participant(call, nil) do
+    case Enum.filter(call.participant_routes, fn {_key, ref} -> ref == call.entry_caller end) do
+      [{key, _ref}] ->
+        case token_participant(call, key) do
+          {:ok, _key, _ref} = result -> result
+          _invalid -> {:error, :participant_required}
+        end
+
+      _missing_or_ambiguous ->
+        {:error, :participant_required}
+    end
+  end
+
+  defp token_participant(call, key) when is_binary(key) and byte_size(key) in 1..128 do
+    with {:ok, ref} <- Map.fetch(call.participant_routes, key),
+         {:ok, %{connection: %{service: :web, mode: :receive, admission: admission}}} <-
+           Map.fetch(call.plan.participants, ref),
+         true <- admission in [:start_call, :transfer] do
+      {:ok, key, ref}
+    else
+      _invalid -> {:error, :participant_not_found}
+    end
+  end
+
+  defp token_participant(_call, _key), do: {:error, :participant_not_found}
+
+  defp call_identifier(id) when is_binary(id) and byte_size(id) in 1..256 do
+    if String.valid?(id) and not String.contains?(id, [<<0>>, "\n", "\r"]),
+      do: :ok,
+      else: {:error, :not_found}
+  end
+
+  defp call_identifier(_id), do: {:error, :not_found}
 
   @spec claim_token(String.t(), map(), keyword()) ::
           {:ok, Vxpipe.Calls.AdmissionClaim.t()} | {:error, term()}

@@ -37,4 +37,28 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeInputTest do
 
     refute first == second
   end
+
+  test "evicted idle PCM streams once so the wire timeline equals real input" do
+    silence = :binary.copy(<<0, 0>>, 4_096)
+    voice = :binary.copy(<<1, 0>>, 2_048)
+    assert byte_size(silence) == 8_192
+    assert byte_size(voice) == 4_096
+
+    assert {:ok, input, actions} =
+             ScribeInput.push(ScribeInput.new(), silence, List.duplicate(0.1, 8))
+
+    idle = for {:idle, bin} <- actions, do: bin
+    assert IO.iodata_to_binary(idle) == binary_part(silence, 0, byte_size(silence) - 3_072)
+
+    assert {:ok, _input, actions2} = ScribeInput.push(input, voice, List.duplicate(0.8, 4))
+
+    ordered =
+      Enum.flat_map(actions2, fn
+        {:idle, bin} -> [bin]
+        {:audio, _ref, bin} -> [bin]
+        _other -> []
+      end)
+
+    assert IO.iodata_to_binary(idle ++ ordered) == silence <> voice
+  end
 end

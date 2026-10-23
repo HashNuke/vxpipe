@@ -39,6 +39,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     FirstMessage,
     InputTurns,
     OpeningAudio,
+    OutgoingAdmission,
     OutgoingCall,
     ParticipantLifecycle,
     ReadinessBinding,
@@ -75,8 +76,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     GenServer.call(room_authority, :readiness_binding, timeout)
   end
 
-  def join_participant(room_authority, %JoinParticipant{} = command) do
-    GenServer.call(room_authority, {:join_participant, command}, @call_timeout)
+  def join_participant(room_authority, %JoinParticipant{} = command, incarnation \\ nil) do
+    GenServer.call(room_authority, {:join_participant, command, incarnation}, @call_timeout)
   end
 
   def attach_connection(
@@ -186,11 +187,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
           media_policy_monitor: policy_monitor
       }
 
-      case Vxpipe.CallEngine.RoomAuthority.OutgoingAdmission.start_entries(
-             room_source,
-             options,
-             state
-           ) do
+      case OutgoingAdmission.start_entries(room_source, options, state) do
         {:ok, state} ->
           archive_recorder = ArchiveRecorder.room_opened(state.archive_recorder, state.snapshot)
           {:ok, %{state | archive_recorder: archive_recorder}}
@@ -209,18 +206,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_call({:end_call, incarnation}, _from, state),
     do: EndCall.remote_hangup(incarnation, state)
 
-  def handle_call({:admit_outgoing, incarnation, token}, from, state),
-    do: Vxpipe.CallEngine.RoomAuthority.OutgoingAdmission.admit(incarnation, token, from, state)
+  def handle_call({:hangup_call, incarnation}, _from, state),
+    do: EndCall.api_hangup(incarnation, state)
 
-  def handle_call({:cancel_outgoing, incarnation, token}, from, state),
-    do: Vxpipe.CallEngine.RoomAuthority.OutgoingAdmission.cancel(incarnation, token, from, state)
+  def handle_call({operation, _incarnation, _token} = request, from, state)
+      when operation in [:admit_outgoing, :cancel_outgoing, :admit_call, :cancel_call_admission],
+      do: OutgoingAdmission.control(request, from, state)
 
   def handle_call(:readiness_binding, _from, state),
     do: {:reply, ReadinessBinding.capture(state), state}
 
   def handle_call(:input_admission, _from, state) do
     admission =
-      if Vxpipe.CallEngine.RoomAuthority.OutgoingAdmission.pending?(state) or
+      if OutgoingAdmission.pending?(state) or
            (state.startup != nil and not state.startup_ready?),
          do: :opening_audio,
          else: OpeningAudio.admission(state.opening_audio)
@@ -228,8 +226,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:reply, admission, state}
   end
 
-  def handle_call({:join_participant, command}, _from, state) do
-    ParticipantLifecycle.join(command, state)
+  def handle_call({:join_participant, command, incarnation}, _from, state) do
+    ParticipantLifecycle.join(command, state, incarnation)
   end
 
   def handle_call(

@@ -27,6 +27,20 @@ defmodule Vxpipe.Calls.TenantCreationTest do
     end
   end
 
+  test "unknown actors fail closed before repository access" do
+    for actor <- [
+          nil,
+          %{},
+          %Vxpipe.Calls.Principal{
+            tenant_key: "AAAAAAAAAAAAAAAA",
+            api_key_id: "key",
+            scopes: MapSet.new([:admin])
+          }
+        ] do
+      assert {:error, :forbidden} = TenantCreation.create(actor, "Support", [])
+    end
+  end
+
   defp principal(grants),
     do: %Principal{
       user_public_id: "user",

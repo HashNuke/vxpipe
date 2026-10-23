@@ -38,6 +38,16 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       |> Keyword.merge(registry: telephony_events.registry, clock: telephony_events.clock)
 
     %{
+      account_management:
+        options
+        |> Keyword.get(:account_management, [])
+        |> Vxpipe.Gateway.HTTP.AccountManagement.init(),
+      call_spec_reads:
+        options |> Keyword.get(:call_spec_reads, []) |> Vxpipe.Gateway.HTTP.CallSpecReads.init(),
+      tenant_directory:
+        options
+        |> Keyword.get(:tenant_directory, [])
+        |> Vxpipe.Gateway.HTTP.TenantDirectory.init(),
       call_spec_authoring:
         options
         |> Keyword.get(:call_spec_authoring, [])
@@ -45,7 +55,8 @@ defmodule Vxpipe.Gateway.HTTP.Router do
       operator_api:
         options |> Keyword.get(:operator_api, []) |> Vxpipe.Gateway.HTTP.OperatorAPI.init(),
       call_admission: CallAdmissions.init(call_admission),
-      outgoing_calls: Vxpipe.Gateway.HTTP.OutgoingCalls.init(call_admission),
+      call_creation: Vxpipe.Gateway.HTTP.CallCreation.init(call_admission),
+      call_hangup: Vxpipe.Gateway.HTTP.CallHangups.init(call_admission),
       rooms: options |> Keyword.get(:room_creation, []) |> Rooms.init(),
       telephony: telephony_events,
       telnyx_media: Telnyx.Media.init(media_options),
@@ -58,6 +69,24 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   def call(%Plug.Conn{method: "GET", path_info: ["healthz"]} = conn, _options) do
     send_resp(conn, 200, "ok")
   end
+
+  def call(%Plug.Conn{method: "GET", path_info: ["api", "tenants"]} = conn, options),
+    do: Vxpipe.Gateway.HTTP.TenantDirectory.index(conn, options.tenant_directory)
+
+  def call(%Plug.Conn{path_info: ["api", "users" | segments]} = conn, options),
+    do:
+      Vxpipe.Gateway.HTTP.AccountManagement.route(conn, options.account_management, [
+        "users" | segments
+      ])
+
+  def call(%Plug.Conn{path_info: ["api", "role-options"]} = conn, options),
+    do:
+      Vxpipe.Gateway.HTTP.AccountManagement.route(conn, options.account_management, [
+        "role-options"
+      ])
+
+  def call(%Plug.Conn{method: "GET", path_info: ["api", "tenants", tenant]} = conn, options),
+    do: Vxpipe.Gateway.HTTP.TenantDirectory.show(conn, options.tenant_directory, tenant)
 
   def call(
         %Plug.Conn{path_info: ["api", "tenants", tenant, "providers" | segments]} = conn,
@@ -88,12 +117,20 @@ defmodule Vxpipe.Gateway.HTTP.Router do
         options
       ),
       do:
-        Vxpipe.Gateway.HTTP.OutgoingCalls.create(
+        Vxpipe.Gateway.HTTP.CallCreation.create(
           conn,
-          options.outgoing_calls,
+          options.call_creation,
           tenant,
           specification
         )
+
+  def call(
+        %Plug.Conn{method: "GET", path_info: ["api", "tenants", tenant, "call-specs" | segments]} =
+          conn,
+        options
+      ) do
+    Vxpipe.Gateway.HTTP.CallSpecReads.route(conn, options.call_spec_reads, tenant, segments)
+  end
 
   def call(
         %Plug.Conn{path_info: ["api", "tenants", tenant, "call-specs" | segments]} = conn,
@@ -111,6 +148,23 @@ defmodule Vxpipe.Gateway.HTTP.Router do
   def call(%Plug.Conn{method: "GET", path_info: ["api", "platform", "status"]} = conn, options) do
     Vxpipe.Gateway.HTTP.OperatorAPI.status(conn, options.operator_api)
   end
+
+  def call(
+        %Plug.Conn{
+          method: "POST",
+          path_info: ["api", "tenants", tenant, "calls", id, "join-tokens"]
+        } = conn,
+        options
+      ) do
+    Vxpipe.Gateway.HTTP.CallJoinTokens.issue(conn, options.call_admission.join_tokens, tenant, id)
+  end
+
+  def call(
+        %Plug.Conn{method: "POST", path_info: ["api", "tenants", tenant, "calls", id, "hangup"]} =
+          conn,
+        options
+      ),
+      do: Vxpipe.Gateway.HTTP.CallHangups.request(conn, options.call_hangup, tenant, id)
 
   def call(%Plug.Conn{method: "POST", path_info: ["api", "rooms"]} = conn, options) do
     Rooms.create(conn, options.rooms)

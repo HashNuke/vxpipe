@@ -31,7 +31,7 @@ function key(value: unknown): AccessKey {
 export class AccessKeysApi implements AccessKeysClient {
   constructor(private readonly csrf: string, private readonly fetcher: Fetch = (input, init) => window.fetch(input, init), private readonly onFailure?: (status: number) => void) {}
   private async request(path: string, init?: RequestInit): Promise<unknown> {
-    const response = await this.fetcher("/admin/api/api-keys" + path, { credentials: "same-origin", cache: "no-store", ...init,
+    const response = await this.fetcher("/api/api-keys" + path, { credentials: "same-origin", cache: "no-store", ...init,
       headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": this.csrf } });
     if (!response.ok) { this.onFailure?.(response.status); throw new Error("API-key request failed"); }
     return response.status === 204 ? undefined : response.json();

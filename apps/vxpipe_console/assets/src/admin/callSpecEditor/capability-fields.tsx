@@ -19,6 +19,8 @@ type Props = {
   inherited?: CapabilitySelection;
 };
 
+const providerNames: Record<string, string> = { morse: "MorseCode Local", morse_code_api: "MorseCode API" };
+
 /** Public model and voice remain separate; adapters own their wire-format mapping. */
 export function CapabilityFields({ kind, path, value, onChange, catalog, disabled, issues, defaultLabel = "Not configured", defaultDisabled = false, inherited }: Props) {
   const voiceCatalog = useContext(VoiceCatalogContext);
@@ -30,7 +32,7 @@ export function CapabilityFields({ kind, path, value, onChange, catalog, disable
   return <fieldset disabled={disabled} className="grid min-w-0 gap-4 [&_[data-field-path]]:space-y-1.5 [&_[data-slot=label]]:text-xs [&_[data-slot=label]]:text-muted-foreground">
     <div className="grid grid-cols-2 items-start gap-3">
       <ChoiceField label="Provider" path={[...path, "provider"]} issues={issues} disabled={disabled}
-        value={value?.provider ?? ""} choices={[...(inherited ? [] : [{ value: "", label: defaultLabel, disabled: defaultDisabled }]), ...Object.keys(providers).sort().map((provider) => ({ value: provider, label: provider }))]}
+        value={value?.provider ?? ""} choices={[...(inherited ? [] : [{ value: "", label: defaultLabel, disabled: defaultDisabled }]), ...Object.keys(providers).sort().map((provider) => ({ value: provider, label: providerNames[provider] ?? provider }))]}
         onChange={(provider) => {
           if (provider === inherited?.provider) { onChange(undefined); return; }
           const selected = provider ? recommendedSelection(catalog, kind, provider) : undefined;

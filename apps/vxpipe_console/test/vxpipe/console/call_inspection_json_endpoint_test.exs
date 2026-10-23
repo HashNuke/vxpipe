@@ -135,7 +135,7 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
     conn =
       authenticate()
       |> recycle()
-      |> https_get("/admin/api/tenants/other-tenant-key/calls/#{@call_id}")
+      |> https_get("/api/tenants/other-tenant-key/calls/#{@call_id}")
 
     assert json_response(conn, 404) == %{"error" => %{"code" => "call_not_found"}}
   end
@@ -169,7 +169,33 @@ defmodule Vxpipe.Console.CallInspectionJSONEndpointTest do
     assert get_resp_header(conn, "cache-control") == ["private, no-store"]
   end
 
-  defp route, do: "/admin/api/tenants/#{@tenant_key}/calls/#{@call_id}"
+  test "polling shares the detail snapshot without the directory envelope" do
+    configure_backend(successful_responses())
+    conn = authenticate() |> recycle() |> https_get(route() <> "/inspection")
+    result = json_response(conn, 200)
+    assert result["call"]["id"] == @call_id
+    assert result["schema_version"] == 1
+    refute Map.has_key?(result, "inspection")
+    assert get_resp_header(conn, "cache-control") == ["private, no-store"]
+  end
+
+  test "shared detail query validates context and inspection revision agreement" do
+    configure_backend(successful_responses())
+    actor = FakeUserIdentity.principal()
+
+    assert {:ok, context, inspection} =
+             Vxpipe.Console.CallInspectionQuery.fetch(actor, @tenant_key, @call_id)
+
+    assert context.call.call_spec_revision == inspection.call.call_spec_revision
+
+    changed = %{call_directory_summary() | call_spec_revision: 2}
+    configure_admin_repository({:ok, {tenant(), changed}})
+
+    assert {:error, :call_inspection_unavailable} =
+             Vxpipe.Console.CallInspectionQuery.fetch(actor, @tenant_key, @call_id)
+  end
+
+  defp route, do: "/api/tenants/#{@tenant_key}/calls/#{@call_id}"
 
   defp authenticate do
     post(build_conn(), "https://localhost/auth/api/login", %{

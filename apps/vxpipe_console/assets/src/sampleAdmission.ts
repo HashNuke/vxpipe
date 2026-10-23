@@ -27,6 +27,7 @@ export type ManagedAdmission = {
 };
 
 export type RoomConnection = {
+  call?: { tenantKey: string; callId: string };
   incarnationId: string;
   participant: ParticipantSnapshot;
   session: GatewaySession;
@@ -47,6 +48,8 @@ type ManagedSessionResponse = SessionResponse & {
 
 export async function requestSampleAdmission(
   endpoint: string,
+  params: Record<string, string> = {},
+  disabledCode = "durable_sample_disabled",
 ): Promise<ManagedAdmission | undefined> {
   const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
 
@@ -56,11 +59,15 @@ export async function requestSampleAdmission(
       "content-type": "application/json",
       ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
     },
-    body: JSON.stringify({}),
+    body: JSON.stringify(params),
   });
 
   if (response.status === 404) {
-    return undefined;
+    const error: unknown = await response.json();
+    if (error && typeof error === "object" && "error" in error && error.error &&
+        typeof error.error === "object" && "code" in error.error && error.error.code === disabledCode) {
+      return undefined;
+    }
   }
 
   if (!response.ok) {
@@ -92,11 +99,12 @@ export async function claimSampleSession(admission: ManagedAdmission): Promise<R
 
   const payload: unknown = await response.json();
 
-  if (!isManagedSessionResponse(payload)) {
+  if (!isManagedSessionResponse(payload) || payload.call.call_id !== admission.call_id) {
     throw new Error("The gateway returned an invalid participant session.");
   }
 
   return {
+    call: { tenantKey: admission.tenant_key, callId: admission.call_id },
     incarnationId: payload.participant.incarnation_id,
     participant: payload.participant,
     session: payload.session,

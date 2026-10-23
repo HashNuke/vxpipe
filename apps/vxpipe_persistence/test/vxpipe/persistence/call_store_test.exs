@@ -452,13 +452,16 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     assert {:ok, duplicate} =
              Calls.mark_call_started(
                claim,
-               "rinc_not_replacement",
+               "rinc_persisted",
                DateTime.add(started_at, 20, :second),
                context.options
              )
 
     assert duplicate.started_at == started_at
     assert duplicate.incarnation_id == "rinc_persisted"
+
+    assert {:error, :call_incarnation_mismatch} =
+             Calls.mark_call_started(claim, "rinc_not_replacement", started_at, context.options)
   end
 
   test "admits another pinned participant into a running call without resetting its start",
@@ -755,7 +758,7 @@ defmodule Vxpipe.Persistence.CallStoreTest do
              EctoStorage.write(context.options, wrong_incarnation)
 
     invalid_room = %{later | id: "event-invalid-room", room_id: "not-a-uuid"}
-    assert {:discard, :call_fact_insert_failed} = EctoStorage.write(context.options, invalid_room)
+    assert {:discard, :call_room_mismatch} = EctoStorage.write(context.options, invalid_room)
   end
 
   test "EctoStorage stores idempotent terminal recording metadata for one call", context do

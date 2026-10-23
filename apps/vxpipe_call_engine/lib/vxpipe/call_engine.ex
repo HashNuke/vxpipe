@@ -43,6 +43,12 @@ defmodule Vxpipe.CallEngine do
     end
   end
 
+  @doc """
+  Starts a resolved room. With `call_admission: {owner_pid, token_ref}`, entry
+  preparation waits for that owner to call `admit_call/4` after durable binding.
+  Owner death closes a still-pending room. This gate does not itself authorize or
+  persist admission, and does not submit incoming carrier answers.
+  """
   @spec start_call(ResolvedCallPlan.t(), keyword()) ::
           {:ok, Vxpipe.CallEngine.Room.Snapshot.t()} | {:error, Error.t()}
   def start_call(%ResolvedCallPlan{} = plan, options \\ []) when is_list(options) do
@@ -51,6 +57,18 @@ defmodule Vxpipe.CallEngine do
       RoomSupervisor.start_call(plan, runtime_options)
     end
   end
+
+  @doc "Releases a gated resolved call using its controller's exact incarnation and token."
+  def admit_call(tenant_id, room_id, incarnation_id, token)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id) and
+             is_reference(token),
+      do: RoomSupervisor.admit_call(tenant_id, room_id, incarnation_id, token)
+
+  @doc "Cancels a gated resolved call using its controller's exact incarnation and token."
+  def cancel_call_admission(tenant_id, room_id, incarnation_id, token)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id) and
+             is_reference(token),
+      do: RoomSupervisor.cancel_call_admission(tenant_id, room_id, incarnation_id, token)
 
   @doc "Release one outgoing admission after its durable room-start projection commits."
   def admit_outgoing_call(tenant_id, room_id, incarnation_id, token)
@@ -109,11 +127,30 @@ defmodule Vxpipe.CallEngine do
       when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
       do: RoomSupervisor.monitor_room(tenant_id, room_id, incarnation_id)
 
+  @doc """
+  Monitors completion of the exact room's supervision tree, including cleanup
+  after its authority exits. A missing incarnation is unavailable, not evidence
+  of successful termination. Gateway-owned resources require separate completion.
+  Callers must distinguish orderly shutdown from a killed/crashed supervisor;
+  abnormal termination alone does not prove child cleanup completed.
+  """
+  @spec monitor_room_completion(String.t(), String.t(), String.t()) ::
+          {:ok, reference()} | {:error, :room_unavailable}
+  def monitor_room_completion(tenant_id, room_id, incarnation_id)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
+      do: Vxpipe.CallEngine.RoomIncarnationSupervisor.monitor(tenant_id, room_id, incarnation_id)
+
   @doc "Ends one exact room incarnation after a trusted host observes remote hangup."
   @spec end_call(String.t(), String.t(), String.t()) :: :ok | {:error, :room_unavailable}
   def end_call(tenant_id, room_id, incarnation_id)
       when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
       do: RoomSupervisor.end_call(tenant_id, room_id, incarnation_id)
+
+  @doc "Requests API hangup for one trusted exact incarnation; completion requires separate resource evidence."
+  @spec hangup_call(String.t(), String.t(), String.t()) :: :ok | {:error, :room_unavailable}
+  def hangup_call(tenant_id, room_id, incarnation_id)
+      when is_binary(tenant_id) and is_binary(room_id) and is_binary(incarnation_id),
+      do: RoomSupervisor.hangup_call(tenant_id, room_id, incarnation_id)
 
   @spec inspect_live_call(String.t(), String.t()) ::
           {:ok, Vxpipe.CallEngine.LiveInspection.Snapshot.t()} | {:error, :call_not_live}
@@ -130,9 +167,12 @@ defmodule Vxpipe.CallEngine do
 
   @spec join_participant(JoinParticipant.t()) ::
           {:ok, Vxpipe.CallEngine.Participant.Snapshot.t()} | {:error, Error.t()}
-  def join_participant(%JoinParticipant{} = command) do
+  @spec join_participant(JoinParticipant.t(), String.t() | nil) ::
+          {:ok, Vxpipe.CallEngine.Participant.Snapshot.t()} | {:error, Error.t()}
+  def join_participant(%JoinParticipant{} = command, expected_incarnation \\ nil)
+      when is_nil(expected_incarnation) or is_binary(expected_incarnation) do
     if DateTime.compare(command.deadline, DateTime.utc_now()) == :gt do
-      RoomSupervisor.join_participant(command)
+      RoomSupervisor.join_participant(command, expected_incarnation)
     else
       {:error,
        Error.new(

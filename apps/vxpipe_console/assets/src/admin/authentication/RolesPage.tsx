@@ -1,3 +1,4 @@
+import { Pagination } from "../Pagination";
 import { Plus, ChevronRight } from "lucide-react";
 import { Button } from "../Button";
 import { RoleBadge } from "./RoleBadge";
@@ -6,15 +7,19 @@ export function RolesPage({
   roles,
   affectedUsers,
   onNavigate,
+  pagination,
+  onPage,
 }: {
   roles: Role[];
   /**
-   * Authoritative per-role user counts from GET /admin/api/roles/:id. Roles
+   * Authoritative per-role user counts from GET /api/roles/:id. Roles
    * missing from the map render a non-authoritative placeholder instead of
    * a partial-directory count.
    */
   affectedUsers: Record<string, number>;
   onNavigate: Navigate;
+  pagination?: { page: number; page_size: number; total: number; total_pages: number };
+  onPage?: (page: number) => void;
 }) {
   return (
     <main className="access-page">
@@ -54,6 +59,18 @@ export function RolesPage({
           );
         })}
       </div>
+      {pagination ? (
+        <Pagination
+          ariaLabel="Role pagination"
+          pagination={{
+            hasPrevious: pagination.page > 1,
+            hasNext: pagination.page < pagination.total_pages,
+            label: `${pagination.total} roles · Page ${pagination.page} of ${Math.max(1, pagination.total_pages)}`,
+          }}
+          onPrevious={() => onPage?.(pagination.page - 1)}
+          onNext={() => onPage?.(pagination.page + 1)}
+        />
+      ) : null}
     </main>
   );
 }

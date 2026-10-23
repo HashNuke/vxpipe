@@ -68,11 +68,17 @@ PCM and do not advance usage or create turn events.
 
 ## Compatibility and verification
 
-Historical compiled selections missing the common `vad` field retain the previous
-manual adapter: local acoustic boundaries, fresh connections per acoustic turn and
-serialized twenty-second recognition segments. Raw protocol helpers also retain
-manual defaults. Agent-output STT remains on its existing raw-provider path.
-Immutable publications are not rewritten.
+Historical compiled selections missing the common `vad` field retain manual
+endpointing: local acoustic boundaries and serialized twenty-second recognition
+segments. The persistent-session repair reuses the same socket after each
+acknowledged manual commit, including between acoustic turns. It preserves turn
+identity and does not rewrite immutable publications or change them to provider
+VAD. The twenty-second commit budget counts all transmitted PCM, including
+inter-turn silence. Explicit idle commits settle without speech events;
+following audio queues under the same bound until acknowledgement. Actual PCM
+is preserved exactly once, without synthetic silence or a longer local endpoint.
+Raw protocol helpers retain manual defaults. Agent-output STT remains on its
+existing raw-provider path.
 
 Local tests cover continuous input, segment assembly, single-flight draft flushing,
 empty responses, timeout failure, ordinary close and allocation retirement. Hosted

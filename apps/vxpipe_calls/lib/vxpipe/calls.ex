@@ -1,6 +1,60 @@
 defmodule Vxpipe.Calls do
   @moduledoc "Database-neutral application workflows for durable call control-plane data."
 
+  @doc "Internal bounded recovery scan; cursors and cleanup ownership are not public API inputs."
+  def scan_call_cleanup(cursor \\ nil, limit \\ 100, options \\ []),
+    do: Vxpipe.Calls.CallCleanupScan.scan(cursor, limit, options)
+
+  @doc "Persists trusted exact-incarnation cleanup acknowledgement; never accepts caller terminal reasons."
+  def complete_call_cleanup(binding, completed_at, options \\ []),
+    do: Vxpipe.Calls.CallCleanupCompletion.complete(binding, completed_at, options)
+
+  @doc "Binds an existing admission to one incarnation, returning whether startup may proceed."
+  def bind_call_admission(subject, incarnation_id, options \\ []),
+    do: Vxpipe.Calls.CallAdmissionBinding.bind(subject, incarnation_id, options)
+
+  @doc """
+  Reserves Gateway cleanup ownership while binding a fresh admission.
+
+  Returns `{:ok, decision, reservation, subject}`. Only `reservation: :new`
+  permits creation of the cleanup tracker; `:existing` must reuse the original
+  tracker and never replace lost cleanup evidence. Binding does not start a call.
+  """
+  def bind_managed_call_admission(subject, incarnation_id, options \\ []),
+    do: Vxpipe.Calls.CallAdmissionBinding.bind_managed(subject, incarnation_id, options)
+
+  @doc "Persists cancellation intent; runtime cleanup is a separate workflow."
+  def request_call_hangup(actor, tenant_key, call_id, options \\ []),
+    do: Vxpipe.Calls.CallHangups.request(actor, tenant_key, call_id, options)
+
+  def authorize_call_management(actor),
+    do: Vxpipe.Calls.CallManagementAuthorization.authorize(actor)
+
+  def authorize_call_management(actor, tenant_key),
+    do: Vxpipe.Calls.CallManagementAuthorization.authorize(actor, tenant_key)
+
+  def claim_call(actor, tenant_key, call_spec_id, variables, to, idempotency_key, options \\ []),
+    do:
+      Vxpipe.Calls.CallClaims.claim(
+        actor,
+        tenant_key,
+        call_spec_id,
+        variables,
+        to,
+        idempotency_key,
+        options
+      )
+
+  def issue_call_join_token(actor, tenant_key, call_id, participant_key \\ nil, options \\ []),
+    do:
+      Vxpipe.Calls.Admissions.issue_call_token(
+        actor,
+        tenant_key,
+        call_id,
+        participant_key,
+        options
+      )
+
   def mark_outgoing_call_started(call, incarnation_id, started_at, options \\ []),
     do: Vxpipe.Calls.OutgoingCalls.mark_started(call, incarnation_id, started_at, options)
 
@@ -64,6 +118,15 @@ defmodule Vxpipe.Calls do
     UsageProjections
   }
 
+  def prepare_configured_sample(actor, config, options \\ []),
+    do: Vxpipe.Calls.ConfiguredSamples.prepare(actor, config, options)
+
+  def prepare_sample_transfer(actor, config, tenant_key, call_id, options \\ []),
+    do: Vxpipe.Calls.ConfiguredSamples.transfer(actor, config, tenant_key, call_id, options)
+
+  def install_demo_samples(actor, tenant_key, options \\ []),
+    do: Vxpipe.Calls.DemoSamples.install(actor, tenant_key, options)
+
   def ensure_demo_tenant(authority, options \\ []),
     do: DemoSetup.ensure_tenant(authority, options)
 
@@ -85,6 +148,9 @@ defmodule Vxpipe.Calls do
   def search_operator_tenants(principal, options \\ []),
     do: Vxpipe.Calls.TenantDirectory.search(principal, options)
 
+  def authorize_tenant_discovery(principal),
+    do: Vxpipe.Calls.TenantDirectory.authorize(principal)
+
   def tenant_navigation(principal, options \\ []),
     do: Vxpipe.Calls.TenantDirectory.navigation(principal, options)
 
@@ -93,6 +159,12 @@ defmodule Vxpipe.Calls do
 
   def fetch_tenant_dashboard(principal, key, options \\ []),
     do: Vxpipe.Calls.TenantDashboard.fetch(principal, key, options)
+
+  def authorize_call_specs(authority, action),
+    do: Vxpipe.Calls.CallSpecAuthorization.authorize(authority, action)
+
+  def authorize_call_specs(authority, action, tenant_key),
+    do: Vxpipe.Calls.CallSpecAuthorization.authorize(authority, action, tenant_key)
 
   def list_operator_call_specs(authority, tenant_key, options \\ []),
     do: OperatorAdministration.list_call_specs(authority, tenant_key, options)
@@ -198,6 +270,9 @@ defmodule Vxpipe.Calls do
 
   def authenticate(tenant_key, secret, required_scope, options \\ []),
     do: Administration.authenticate(tenant_key, secret, required_scope, options)
+
+  def authenticate_api_key(secret, options \\ []),
+    do: Vxpipe.Calls.ApiKeyAuthentication.authenticate(secret, options)
 
   def revoke_api_key(tenant_key, api_key_id, options \\ []),
     do: Administration.revoke_api_key(tenant_key, api_key_id, options)

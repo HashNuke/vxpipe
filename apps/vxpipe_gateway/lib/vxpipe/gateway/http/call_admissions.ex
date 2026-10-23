@@ -6,12 +6,12 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
   alias Vxpipe.CallEngine.Participant.Snapshot, as: ParticipantSnapshot
   alias Vxpipe.Gateway.Session.Snapshot, as: SessionSnapshot
   alias Vxpipe.Gateway.{CallAdmission, SessionSupervisor}
+  alias Vxpipe.Gateway.CallAdmission.Cleanup
 
   @default_session_ttl_ms 300_000
   @offer_endpoint "/api/rtvi/offer"
   # Clients send `variables`; Calls stores them as the call's initial Call Variables.
   @preparation_fields ["variables", "join_token_ttl_seconds"]
-  @token_fields ["join_token_ttl_seconds"]
 
   def init(options) do
     if Keyword.get(options, :enabled, false) do
@@ -19,6 +19,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
         backend: Keyword.get(options, :backend, {CallAdmission, []}),
         clock: Keyword.get(options, :clock, &DateTime.utc_now/0),
         enabled: true,
+        join_tokens: Vxpipe.Gateway.HTTP.CallJoinTokens.init(options),
         projection_supervisor:
           Keyword.get(
             options,
@@ -28,7 +29,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
         session_ttl_ms: Keyword.get(options, :session_ttl_ms, @default_session_ttl_ms)
       }
     else
-      %{enabled: false}
+      %{enabled: false, join_tokens: Vxpipe.Gateway.HTTP.CallJoinTokens.init(options)}
     end
   end
 
@@ -59,19 +60,13 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
     do: send_resp(conn, 404, "not found")
 
   def issue_token(conn, options, tenant_key, call_id, participant_key) do
-    with {:ok, secret} <- bearer(conn),
-         {:ok, principal} <- backend(options, :authenticate, [tenant_key, secret]),
-         {:ok, ttl_seconds} <- token_input(conn.body_params),
-         {:ok, token} <-
-           backend(options, :issue_token, [principal, call_id, participant_key, ttl_seconds]) do
-      send_json(conn, 201, %{
-        "call_id" => token.call_id,
-        "participant_key" => token.participant_key,
-        "join_token" => token_public(token)
-      })
-    else
-      {:error, reason} -> send_management_error(conn, reason)
-    end
+    Vxpipe.Gateway.HTTP.CallJoinTokens.issue_explicit(
+      conn,
+      options.join_tokens,
+      tenant_key,
+      call_id,
+      participant_key
+    )
   end
 
   def create_session(conn, %{enabled: false}, _tenant_key, _call_id, _participant_key),
@@ -91,10 +86,28 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
 
   defp start_session(conn, options, claim) do
     case backend(options, :start_call, [claim]) do
-      {:ok, room, participant} ->
-        started_at = options.clock.()
-        project(options, :mark_started, [claim, room.incarnation_id, started_at])
-        send_live_session(conn, options, claim, room.incarnation_id, participant, started_at)
+      {:ok, room, participant, started} ->
+        send_live_session(
+          conn,
+          options,
+          %{claim | call: started},
+          room.incarnation_id,
+          participant,
+          started.started_at
+        )
+
+      {:joined, participant, bound} ->
+        send_live_session(
+          conn,
+          options,
+          bound,
+          bound.call.incarnation_id,
+          participant,
+          bound.call.started_at
+        )
+
+      {:transfer_pending, participant, bound} ->
+        send_pending_transfer_session(conn, options, bound, participant)
 
       {:joined, participant} ->
         send_live_session(
@@ -109,10 +122,7 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
       {:transfer_pending, participant} ->
         send_pending_transfer_session(conn, options, claim, participant)
 
-      {:started, room} ->
-        started_at = options.clock.()
-        project(options, :mark_started, [claim, room.incarnation_id, started_at])
-
+      {:started, _room, _started} ->
         send_error(
           conn,
           503,
@@ -131,6 +141,9 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
           "The call could not be started.",
           true
         )
+
+      {:admission_error, _reason} ->
+        send_error(conn, 503, "call_start_failed", "The call could not be started.", true)
 
       {:join_error, _reason} ->
         send_error(
@@ -198,32 +211,38 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
   end
 
   defp issue_session(options, claim, incarnation_id, participant) do
-    SessionSupervisor.issue(
-      [
-        tenant_id: participant.tenant_id,
-        actor_id: claim.call.plan.actor_id,
-        room_id: participant.room_id,
-        incarnation_id: incarnation_id,
-        participant_id: participant.participant_id,
-        tool_visibility: claim.call.plan.tool_visibility
-      ],
-      options.session_ttl_ms
-    )
+    with {:ok, cleanup_binding} <- Cleanup.session_binding(claim.call) do
+      SessionSupervisor.issue(
+        [
+          tenant_id: participant.tenant_id,
+          actor_id: claim.call.plan.actor_id,
+          room_id: participant.room_id,
+          incarnation_id: incarnation_id,
+          participant_id: participant.participant_id,
+          tool_visibility: claim.call.plan.tool_visibility,
+          cleanup_binding: cleanup_binding
+        ],
+        options.session_ttl_ms
+      )
+    end
   end
 
   defp issue_pending_transfer_session(options, claim, participant) do
-    SessionSupervisor.issue(
-      [
-        tenant_id: claim.call.tenant_key,
-        actor_id: claim.call.plan.actor_id,
-        room_id: claim.call.room_id,
-        incarnation_id: claim.call.incarnation_id,
-        participant_id: participant.participant_id,
-        tool_visibility: claim.call.plan.tool_visibility,
-        release_admission: fn -> backend(options, :release_admission, [claim]) end
-      ],
-      options.session_ttl_ms
-    )
+    with {:ok, cleanup_binding} <- Cleanup.session_binding(claim.call) do
+      SessionSupervisor.issue(
+        [
+          tenant_id: claim.call.tenant_key,
+          actor_id: claim.call.plan.actor_id,
+          room_id: claim.call.room_id,
+          incarnation_id: claim.call.incarnation_id,
+          participant_id: participant.participant_id,
+          tool_visibility: claim.call.plan.tool_visibility,
+          release_admission: fn -> backend(options, :release_admission, [claim]) end,
+          cleanup_binding: cleanup_binding
+        ],
+        options.session_ttl_ms
+      )
+    end
   end
 
   defp project(options, function, arguments) do
@@ -253,14 +272,6 @@ defmodule Vxpipe.Gateway.HTTP.CallAdmissions do
   end
 
   defp preparation_input(_invalid), do: {:error, :invalid_request}
-
-  defp token_input(body) when is_map(body) do
-    with :ok <- supported_fields(body, @token_fields) do
-      ttl_seconds(Map.get(body, "join_token_ttl_seconds"))
-    end
-  end
-
-  defp token_input(_invalid), do: {:error, :invalid_request}
 
   defp empty_input(body) when body == %{}, do: :ok
   defp empty_input(_body), do: {:error, :invalid_request}

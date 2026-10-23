@@ -169,7 +169,9 @@ defmodule Vxpipe.Persistence.IdentityInstallationStore do
   end
 
   defp lock_installation do
-    case Repo.get(AuthenticationInstallation, "default", lock: "FOR UPDATE") do
+    case Repo.one(
+           from(i in AuthenticationInstallation, where: i.key == "default", lock: "FOR UPDATE")
+         ) do
       nil -> {:error, :missing}
       installation -> {:ok, installation}
     end
@@ -220,13 +222,13 @@ defmodule Vxpipe.Persistence.IdentityInstallationStore do
     password_hash = Map.get(attrs, :password_hash, Map.get(attrs, "password_hash"))
 
     with {:ok, user} <- lock_superadmin_by_email(normalized),
-         {:ok, _} <- reset_credentials(user, password_hash),
+         {:ok, updated} <- reset_credentials(user, password_hash),
          :ok <- revoke_all_user_sessions(user.id),
          {:ok, _} <- insert_session(user.id, attrs),
          :ok <- append_recovery_audit(attrs, user) do
       {:ok,
        %{
-         user: IdentityRecord.user_port_map(Repo.preload(user, :role), %{}),
+         user: IdentityRecord.user_port_map(Repo.preload(updated, :role), %{}),
          session: %{
            public_id: Map.get(attrs, :session_public_id, Map.get(attrs, "session_public_id"))
          }
@@ -252,10 +254,14 @@ defmodule Vxpipe.Persistence.IdentityInstallationStore do
 
   defp reset_credentials(user, password_hash) when is_binary(password_hash) do
     user
-    |> IdentityUser.changeset(%{password_hash: password_hash, disabled_at: nil})
+    |> IdentityUser.changeset(%{
+      password_hash: password_hash,
+      disabled_at: nil,
+      authorization_version: user.authorization_version + 1
+    })
     |> Repo.update()
     |> case do
-      {:ok, _} -> {:ok, :reset}
+      {:ok, updated} -> {:ok, updated}
       {:error, _} -> {:error, :unavailable}
     end
   end

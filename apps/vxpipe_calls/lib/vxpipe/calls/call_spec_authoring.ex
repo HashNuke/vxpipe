@@ -1,6 +1,6 @@
 defmodule Vxpipe.Calls.CallSpecAuthoring do
   @moduledoc "Principal-aware spec writes; platform runtime inheritance is not a tenant authoring grant."
-  alias Vxpipe.Calls.{CallSpecs, InstallationOperator, Principal, ProviderAuth, UserAuthorization}
+  alias Vxpipe.Calls.{CallSpecAuthorization, CallSpecs, Principal, UserAuthorization}
   alias Vxpipe.Identity.Principal, as: UserPrincipal
 
   def save(authority, tenant_key, source, options) do
@@ -28,29 +28,18 @@ defmodule Vxpipe.Calls.CallSpecAuthoring do
     end
   end
 
-  defp authorize(%InstallationOperator{grant: :installation_operator}, tenant_key, options) do
-    with :ok <- ProviderAuth.tenant_key(tenant_key) do
-      {:ok, Keyword.delete(options, :service_authoring_owner)}
+  defp authorize(authority, tenant_key, options) do
+    with :ok <- CallSpecAuthorization.authorize(authority, :write, tenant_key) do
+      if tenant_services_only?(authority),
+        do: {:ok, Keyword.put(options, :service_authoring_owner, {:tenant, tenant_key})},
+        else: {:ok, Keyword.delete(options, :service_authoring_owner)}
     end
   end
 
-  defp authorize(%UserPrincipal{} = principal, tenant_key, options) when is_binary(tenant_key) do
-    with :ok <- ProviderAuth.tenant_key(tenant_key),
-         :ok <- UserAuthorization.authorize_tenant(principal, "call_specs.write", tenant_key) do
-      if UserAuthorization.platform_authoring_allowed?(principal) do
-        {:ok, Keyword.delete(options, :service_authoring_owner)}
-      else
-        {:ok, Keyword.put(options, :service_authoring_owner, {:tenant, tenant_key})}
-      end
-    end
-  end
+  defp tenant_services_only?(%Principal{}), do: true
 
-  defp authorize(%Principal{tenant_key: tenant_key, scopes: scopes}, tenant_key, options) do
-    if MapSet.member?(scopes, :admin),
-      do: {:ok, Keyword.put(options, :service_authoring_owner, {:tenant, tenant_key})},
-      else: {:error, :insufficient_scope}
-  end
+  defp tenant_services_only?(%UserPrincipal{} = principal),
+    do: not UserAuthorization.platform_authoring_allowed?(principal)
 
-  defp authorize(%Principal{}, _tenant_key, _options), do: {:error, :tenant_access_forbidden}
-  defp authorize(_authority, _tenant_key, _options), do: {:error, :authoring_authority_required}
+  defp tenant_services_only?(_installation), do: false
 end

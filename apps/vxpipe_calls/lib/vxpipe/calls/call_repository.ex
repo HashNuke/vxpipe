@@ -5,6 +5,34 @@ defmodule Vxpipe.Calls.CallRepository do
 
   @type context :: term()
 
+  @doc "Traverses unresolved cleanup in finite keyset cycles; never loads plans or creates runtime ownership."
+  @callback scan_call_cleanup(context(), Vxpipe.Calls.CallCleanupScan.cursor(), pos_integer()) ::
+              {:ok, Vxpipe.Calls.CallCleanupScan.page()} | {:error, term()}
+
+  @callback complete_call_cleanup(context(), map(), DateTime.t()) ::
+              {:ok, PreparedCall.t()} | {:error, term()}
+
+  @type admission_subject :: AdmissionClaim.t() | TelephonyAdmissionClaim.t() | PreparedCall.t()
+  @doc "Under the binding row lock, reserve cleanup once for an eligible unstarted admission; never upgrade a running legacy call."
+  @callback bind_managed_call_admission(context(), admission_subject(), String.t()) ::
+              {:ok, :admit | :cancel, :new | :existing, admission_subject()}
+              | {:error, term()}
+
+  @doc "Under the call-row lock, bind one immutable runtime incarnation without starting it."
+  @callback bind_call_admission(context(), admission_subject(), String.t()) ::
+              {:ok, :admit | :cancel, admission_subject()} | {:error, term()}
+
+  @doc "Under the call-row lock, persist first cancellation intent; end only an unclaimed prepared call. Never lock or revoke token rows from this operation."
+  @callback request_call_hangup(context(), String.t(), String.t(), DateTime.t()) ::
+              {:ok, PreparedCall.t()} | {:error, term()}
+
+  @callback fetch_call_by_key(context(), String.t(), String.t()) ::
+              {:ok, PreparedCall.t()} | {:error, :not_found}
+
+  @doc "Claims one prepared web or admitting outgoing call, with final authorization inside the transaction and shared tenant-wide idempotency recovery."
+  @callback claim_call(context(), PreparedCall.t(), (-> {:ok, :authorized} | {:error, term()})) ::
+              {:ok, PreparedCall.t()} | {:duplicate, PreparedCall.t()} | {:error, term()}
+
   @callback fetch_outgoing_by_key(context(), String.t(), String.t()) ::
               {:ok, PreparedCall.t()} | {:error, :not_found}
 

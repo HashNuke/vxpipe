@@ -70,9 +70,9 @@ test("validates sample installation results without accepting backend reasons", 
 test("validates and maps the tenant directory response", () => {
   expect(
     parseTenantPage({
-      tenants: [
+      items: [
         {
-          key: "AAAAAAAAAAAAAAAA",
+          tenant_key: "AAAAAAAAAAAAAAAA",
           name: "Example tenant",
           created_at: "2026-09-17T01:00:00Z",
         },
@@ -94,8 +94,8 @@ test("validates and maps the tenant directory response", () => {
 test("rejects malformed tenant data instead of rendering a partial response", () => {
   expect(() =>
     parseTenantPage({
-      tenants: [
-        { key: "AAAAAAAAAAAAAAAA", name: 42, created_at: "not-a-date" },
+      items: [
+        { tenant_key: "AAAAAAAAAAAAAAAA", name: 42, created_at: "not-a-date" },
       ],
       pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 },
     }),
@@ -105,21 +105,21 @@ test("rejects malformed tenant data instead of rendering a partial response", ()
 test("rejects pagination metadata that contradicts the returned page", () => {
   for (const response of [
     {
-      tenants: [],
+      items: [],
       pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 },
     },
     {
-      tenants: [],
+      items: [],
       pagination: { page: 1, page_size: 25, total: 0, total_pages: 1 },
     },
     {
-      tenants: [],
+      items: [],
       pagination: { page: 2, page_size: 25, total: 0, total_pages: 0 },
     },
     {
-      tenants: [
+      items: [
         {
-          key: "AAAAAAAAAAAAAAAA",
+          tenant_key: "AAAAAAAAAAAAAAAA",
           name: "Only one tenant",
           created_at: "2026-09-17T01:00:00Z",
         },
@@ -465,7 +465,7 @@ test("maps a created credential response without accepting private response fiel
   ).toThrow("Invalid credential response");
 });
 
-for (const [provider, name] of [["rime", "Rime"], ["cartesia", "Cartesia"], ["elevenlabs", "ElevenLabs"]] as const) {
+for (const [provider, name] of [["rime", "Rime"], ["cartesia", "Cartesia"], ["elevenlabs", "ElevenLabs"], ["morse_code_api", "MorseCode API"]] as const) {
 test(`keeps saved ${name} credentials readable in the tenant service inventory`, () => {
   const directory = parseServiceDirectory({
     tenant: { key: "AAAAAAAAAAAAAAAA", name: "Example tenant" },

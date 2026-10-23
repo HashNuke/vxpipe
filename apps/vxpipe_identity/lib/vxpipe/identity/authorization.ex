@@ -29,6 +29,18 @@ defmodule Vxpipe.Identity.Authorization do
   end
 
   @spec require_actor_identity(map()) :: :ok | {:error, :forbidden}
+  def require_actor_identity(%Vxpipe.Identity.Principal{
+        credential_kind: :oauth,
+        user_public_id: user_id,
+        session_public_id: nil,
+        oauth_grant_public_id: grant_id
+      }) do
+    if uuid_shaped?(user_id) and uuid_shaped?(grant_id), do: :ok, else: {:error, :forbidden}
+  end
+
+  def require_actor_identity(%Vxpipe.Identity.Principal{credential_kind: :oauth}),
+    do: {:error, :forbidden}
+
   def require_actor_identity(actor) when is_map(actor) do
     with {:ok, user_id} <- fetch_actor_id(actor, [:user_public_id, "user_public_id"]),
          {:ok, session_id} <- fetch_actor_id(actor, [:session_public_id, "session_public_id"]),
@@ -83,7 +95,13 @@ defmodule Vxpipe.Identity.Authorization do
         {:error, :unknown_action}
 
       {:ok, entry} ->
-        authorize_entry(grants, entry, resource, context)
+        with :ok <- authorize_entry(grants, entry, resource, context) do
+          case Map.get(context, :delegation) do
+            nil -> :ok
+            approved when is_map(approved) -> authorize_entry(grants, entry, resource, approved)
+            _invalid -> {:error, :forbidden}
+          end
+        end
     end
   end
 

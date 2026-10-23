@@ -23,10 +23,88 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocketTest do
     assert :ok = Vxpipe.Gateway.Telephony.Leg.await(leg, 1_000)
     on_exit(fn -> LegSupervisor.stop(identity.identity, "call-leg-1") end)
 
-    binding = media_binding(leg)
+    original = media_binding(leg)
+
+    {:ok, command} =
+      Vxpipe.CallEngine.Command.CreateRoom.new(
+        tenant_id: original.tenant_id,
+        actor_id: "socket-test",
+        deadline: DateTime.add(DateTime.utc_now(), 60, :second)
+      )
+
+    {:ok, room} = Vxpipe.CallEngine.create_room(command)
+
+    on_exit(fn ->
+      Vxpipe.CallEngine.end_call(room.tenant_id, room.room_id, room.incarnation_id)
+    end)
+
+    binding = %{original | room_id: room.room_id, incarnation_id: room.incarnation_id}
     assert {:ok, socket} = TelephonyMediaSocket.init(%{binding: binding})
 
     %{binding: binding, socket: socket}
+  end
+
+  test "rejects managed media with missing, sealed or mismatched cleanup ownership", context do
+    binding = context.binding
+
+    cleanup = %{
+      tenant_key: binding.tenant_id,
+      call_id: binding.call_id,
+      room_id: binding.room_id,
+      incarnation_id: binding.incarnation_id
+    }
+
+    managed = Map.put(binding, :cleanup_binding, cleanup)
+
+    assert {:stop, :cleanup_unavailable, {1008, _}, _} =
+             TelephonyMediaSocket.init(%{binding: managed, clock: fn -> 0 end})
+
+    {:ok, tracker} = Vxpipe.Gateway.CallCleanupSupervisor.start_new(cleanup)
+
+    on_exit(fn ->
+      DynamicSupervisor.terminate_child(Vxpipe.Gateway.CallCleanupSupervisor, tracker)
+    end)
+
+    mismatched = %{managed | call_id: "different-call"}
+
+    assert {:stop, :cleanup_unavailable, {1008, _}, _} =
+             TelephonyMediaSocket.init(%{binding: mismatched, clock: fn -> 0 end})
+
+    assert :ok = Vxpipe.Gateway.CallCleanup.seal(tracker)
+
+    assert {:stop, :cleanup_unavailable, {1008, _}, _} =
+             TelephonyMediaSocket.init(%{binding: managed, clock: fn -> 0 end})
+
+    assert %{resources: resources} = Vxpipe.Gateway.CallCleanup.snapshot(tracker)
+    assert resources == %{}
+  end
+
+  test "closes when its exact room ends while the carrier owner remains", context do
+    binding = context.binding
+
+    assert :ok =
+             Vxpipe.CallEngine.end_call(
+               binding.tenant_id,
+               binding.room_id,
+               binding.incarnation_id
+             )
+
+    assert_receive {:DOWN, monitor, :process, process, reason}, 1_000
+
+    assert {:stop, :normal, {1000, "room ended"}, _socket} =
+             TelephonyMediaSocket.handle_info(
+               {:DOWN, monitor, :process, process, reason},
+               context.socket
+             )
+
+    assert is_map(:sys.get_state(binding.leg))
+  end
+
+  test "rejects media startup for a stale room incarnation", context do
+    invalid = %{context.binding | incarnation_id: "stale-room"}
+
+    assert {:stop, :room_unavailable, {1008, "room unavailable"}, _state} =
+             TelephonyMediaSocket.init(%{binding: invalid, clock: fn -> 0 end})
   end
 
   test "pins the start frame and dispatches only that stream to the exact leg", context do

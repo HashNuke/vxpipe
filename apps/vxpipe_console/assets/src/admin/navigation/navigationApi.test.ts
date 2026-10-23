@@ -38,12 +38,12 @@ test("does not accept foreign or malformed server destinations/capabilities", as
 
 test("search uses the same bounded paginated directory and URL-encodes literal search", async () => {
   const fetchImpl = vi.fn().mockResolvedValue(response({
-    tenants: [{ key, name: "Acme", created_at: "2026-10-13T00:00:00Z", dashboard_path: tenant.dashboard_path }],
+    items: [{ tenant_key: key, name: "Acme", created_at: "2026-10-13T00:00:00Z", dashboard_path: tenant.dashboard_path }],
     pagination: { page: 2, page_size: 25, total: 26, total_pages: 2, has_next: false },
   }));
   const result = await new NavigationApi(fetchImpl).tenants("100% & _", 2);
   expect(result.pagination.total).toBe(26);
-  expect(fetchImpl).toHaveBeenCalledWith("/admin/api/tenants?q=100%25+%26+_&page=2&page_size=25", expect.anything());
+  expect(fetchImpl).toHaveBeenCalledWith("/api/tenants?q=100%25+%26+_&page=2&page_size=25", expect.anything());
 });
 
 test("dashboard distinguishes unavailable calls from empty and omitted sections", async () => {

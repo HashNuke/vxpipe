@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.SampleCallController do
   alias Vxpipe.Console.{SampleAdmissionJSON, SampleCall}
 
   def create(conn, _params) do
-    case SampleCall.prepare() do
+    case SampleCall.prepare(conn.assigns.user_principal) do
       {:ok, token} ->
         conn
         |> put_status(:created)
@@ -15,10 +15,9 @@ defmodule Vxpipe.Console.SampleCallController do
         |> put_status(:not_found)
         |> json(%{"error" => %{"code" => "durable_sample_disabled"}})
 
-      {:error, :unavailable} ->
-        conn
-        |> put_status(:service_unavailable)
-        |> json(%{"error" => %{"code" => "sample_call_unavailable"}})
+      {:error, reason} ->
+        {status, code} = SampleAdmissionJSON.error_response(reason, "sample_call")
+        conn |> put_status(status) |> json(%{error: %{code: code}})
     end
   end
 end

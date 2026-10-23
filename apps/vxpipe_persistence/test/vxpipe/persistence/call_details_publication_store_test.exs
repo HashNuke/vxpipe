@@ -37,6 +37,39 @@ defmodule Vxpipe.Persistence.CallDetailsPublicationStoreTest do
     [call: call, options: options]
   end
 
+  test "managed pending cleanup and acknowledged nonterminal calls cannot reserve or publish",
+       context do
+    snapshot = snapshot("managed-pending", ~U[2026-09-12 16:01:00.100Z], 1)
+
+    {:ok, reserved, :created} =
+      Calls.reserve_call_details(@tenant_key, @call_id, snapshot, context.options)
+
+    for attrs <- [
+          [state: :failed, gateway_cleanup_completed_at: nil],
+          [state: :running, ended_at: nil, gateway_cleanup_completed_at: @ended_at]
+        ] do
+      context.call
+      |> Ecto.Changeset.change(
+        Keyword.merge(attrs, gateway_cleanup_required: true, incarnation_binding_verified: true)
+      )
+      |> Repo.update!()
+
+      assert {:error, :call_cleanup_pending} =
+               Calls.reserve_call_details(@tenant_key, @call_id, snapshot, context.options)
+
+      assert {:error, :call_cleanup_pending} =
+               Calls.mark_call_details_published(
+                 @tenant_key,
+                 @call_id,
+                 reserved.id,
+                 object(reserved, "managed-etag", @ended_at),
+                 context.options
+               )
+    end
+
+    assert Repo.get_by!(CallDetailsPublication, public_id: reserved.id).status == :pending
+  end
+
   test "reserves immutable revisions, deduplicates a source, and never regresses latest",
        context do
     older = snapshot("publication-old", ~U[2026-09-12 16:01:00.100Z], 1)

@@ -12,8 +12,16 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
   setup do
     original_calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
     original_backend = Application.get_env(:vxpipe_console, :user_identity_backend)
+    mount = @endpoint.config(:gateway_mount)
+
+    Phoenix.Config.put(
+      @endpoint,
+      :gateway_mount,
+      put_in(mount, [:endpoint, :router, :call_spec_reads, :enabled], true)
+    )
 
     on_exit(fn ->
+      Phoenix.Config.put(@endpoint, :gateway_mount, mount)
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, original_calls)
 
       if original_backend,
@@ -110,6 +118,40 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
     assert json_response(anonymous, 401) == %{"error" => %{"code" => "session_required"}}
   end
 
+  test "canonical spec directory shares the browser schema and rejects explicit invalid credentials" do
+    configure_admin_repository(
+      {:ok,
+       {%Tenant{
+          key: @tenant_key,
+          name: "Example",
+          inserted_at: ~U[2026-10-15 00:00:00Z]
+        }, [], 0}}
+    )
+
+    auth = authenticate()
+
+    legacy =
+      auth
+      |> recycle()
+      |> https_get("/admin/api/tenants/#{@tenant_key}/call-specs")
+      |> json_response(200)
+
+    path = "/api/tenants/#{@tenant_key}/call-specs"
+    assert auth |> recycle() |> https_get(path) |> json_response(200) == legacy
+    assert_received {:operator_call_specs_requested, @tenant_key, 25, 0}
+    assert_received {:operator_call_specs_requested, @tenant_key, 25, 0}
+
+    invalid =
+      auth
+      |> recycle()
+      |> Plug.Conn.put_req_header("authorization", "Basic invalid")
+      |> https_get(path)
+
+    assert json_response(invalid, 401)["error"]["code"] == "invalid_api_key"
+    assert json_response(https_get(path), 401)["error"]["code"] == "session_required"
+    refute_received {:operator_call_specs_requested, _, _, _}
+  end
+
   describe "editor authoring" do
     setup do
       alias Vxpipe.Persistence.{Repo, CredentialStore, CallSpecStore}
@@ -125,9 +167,172 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       ]
 
       Application.put_env(:vxpipe_calls, Vxpipe.Calls, Keyword.merge(settings, options))
+      mount = @endpoint.config(:gateway_mount)
+      on_exit(fn -> Phoenix.Config.put(@endpoint, :gateway_mount, mount) end)
+
+      Phoenix.Config.put(
+        @endpoint,
+        :gateway_mount,
+        Vxpipe.Gateway.HTTP.Mount.init(
+          call_spec_reads: [
+            enabled: true,
+            browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}
+          ],
+          call_spec_authoring: [
+            enabled: true,
+            browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}
+          ]
+        )
+      )
+
       {:ok, tenant, _} = Vxpipe.Calls.bootstrap_tenant("Editor tenant", [:admin])
       {:ok, other, _} = Vxpipe.Calls.bootstrap_tenant("Other editor tenant", [:admin])
       %{tenant: tenant, other: other, authenticated: authenticate()}
+    end
+
+    for action <- [:update, :publish] do
+      test "legacy #{action} uses shared write authority without an extra read grant", %{
+        tenant: tenant
+      } do
+        source = editor_source()
+
+        assert {:ok, stored} =
+                 Vxpipe.Calls.save_authorized_call_spec(
+                   FakeUserIdentity.principal(),
+                   tenant.key,
+                   source
+                 )
+
+        grants = MapSet.new(["call_specs.write"])
+        writer = %{FakeUserIdentity.principal() | grants: grants, all_tenant_actions: grants}
+        assert {:error, :forbidden} = Vxpipe.Calls.authorize_call_specs(writer, :read, tenant.key)
+        assert :ok = Vxpipe.Calls.authorize_call_specs(writer, :write, tenant.key)
+
+        params = %{"tenant_key" => tenant.key, "id" => stored.call_spec_id, "revision" => "1"}
+        body = if unquote(action) == :update, do: %{"source" => source}, else: %{}
+
+        conn =
+          Plug.Test.conn(:post, "/legacy-spec", body) |> Plug.Conn.assign(:user_principal, writer)
+
+        response =
+          apply(Vxpipe.Console.AdminCallSpecAuthoringController, unquote(action), [conn, params])
+
+        expected = if unquote(action) == :update, do: 201, else: 200
+        assert json_response(response, expected)["call_spec"]["source"] == source
+      end
+    end
+
+    test "canonical spec writes share the session and API-key contract", %{
+      tenant: tenant,
+      authenticated: auth
+    } do
+      path = "/api/tenants/#{tenant.key}/call-specs"
+      source = editor_source()
+      {:ok, key} = Vxpipe.Calls.issue_api_key(tenant.key, "canonical writer", [:admin])
+
+      session_result = write(auth, :post, path, %{"source" => source}) |> json_response(201)
+
+      key_result =
+        build_conn()
+        |> Plug.Conn.put_req_header("authorization", "Bearer " <> key.secret)
+        |> post("https://localhost" <> path, %{"source" => source})
+        |> json_response(201)
+
+      for result <- [session_result, key_result] do
+        assert result["call_spec"]["revision"] == 1
+        assert result["call_spec"]["published"] == false
+        refute Map.has_key?(result["call_spec"], "source")
+        id = result["call_spec"]["call_spec_id"]
+        assert {:ok, stored} = Vxpipe.Calls.fetch_call_spec(tenant.key, id, 1)
+        assert stored.source == source
+      end
+    end
+
+    test "canonical browser writes return forbidden for a session without write permission", %{
+      tenant: tenant,
+      authenticated: auth
+    } do
+      previous = Application.fetch_env(:vxpipe_console, :navigation_test_principal)
+
+      on_exit(fn ->
+        case previous do
+          {:ok, value} -> Application.put_env(:vxpipe_console, :navigation_test_principal, value)
+          :error -> Application.delete_env(:vxpipe_console, :navigation_test_principal)
+        end
+      end)
+
+      principal = %{
+        FakeUserIdentity.principal()
+        | grants: MapSet.new(),
+          all_tenant_actions: MapSet.new()
+      }
+
+      Application.put_env(:vxpipe_console, :navigation_test_principal, {:ok, principal})
+
+      Application.put_env(
+        :vxpipe_console,
+        :user_identity_backend,
+        Vxpipe.Console.Test.NavigationIdentity
+      )
+
+      denied =
+        write(auth, :post, "/api/tenants/#{tenant.key}/call-specs", %{"source" => editor_source()})
+
+      assert json_response(denied, 403)["error"]["code"] == "authoring_forbidden"
+    end
+
+    test "canonical source reads agree with the editor for session and full tenant credentials",
+         %{
+           tenant: tenant,
+           authenticated: auth
+         } do
+      source = editor_source()
+
+      created =
+        write(auth, :post, "/api/tenants/#{tenant.key}/call-specs", %{"source" => source})
+        |> json_response(201)
+
+      id = created["call_spec"]["call_spec_id"]
+      suffix = "/tenants/#{tenant.key}/call-specs/#{id}?revision=1"
+      legacy = auth |> recycle() |> https_get("/admin/api" <> suffix) |> json_response(200)
+      {:ok, key} = Vxpipe.Calls.issue_api_key(tenant.key, "source reader", [:admin])
+
+      browser = auth |> recycle() |> https_get("/api" <> suffix)
+
+      machine =
+        build_conn()
+        |> Plug.Conn.put_req_header("authorization", "Bearer " <> key.secret)
+        |> https_get("/api" <> suffix)
+
+      assert json_response(browser, 200) == legacy
+      assert json_response(machine, 200) == legacy
+      assert legacy["call_spec"]["source"] == source
+      assert legacy["call_spec"]["latest_revision"] == 1
+      assert legacy["call_spec"]["published_revision"] == nil
+      refute Map.has_key?(created["call_spec"], "source")
+    end
+
+    test "canonical browser writes enforce CSRF and explicit credentials never fall back", %{
+      tenant: tenant,
+      authenticated: auth
+    } do
+      path = "/api/tenants/#{tenant.key}/call-specs"
+
+      assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+        auth
+        |> recycle()
+        |> then(&%{&1 | private: Map.delete(&1.private, :plug_skip_csrf_protection)})
+        |> Plug.Conn.put_req_header("x-csrf-token", "invalid")
+        |> post("https://localhost" <> path, %{"source" => editor_source()})
+      end
+
+      denied =
+        auth
+        |> recycle()
+        |> Plug.Conn.put_req_header("authorization", "Bearer invalid")
+        |> post("https://localhost" <> path, %{"source" => editor_source()})
+
+      assert json_response(denied, 401)["error"]["code"] == "invalid_api_key"
     end
 
     test "creates, publishes, appends and reads immutable tenant-scoped source revisions", %{
@@ -417,7 +622,7 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
                  stored.revision
                )
 
-      path = "/admin/api/tenants/#{tenant.key}/telephony-services/office/numbers"
+      path = "/api/tenants/#{tenant.key}/telephony-services/office/numbers"
       page = auth |> recycle() |> https_get(path) |> json_response(200)
       assert [%{"available" => false, "number" => "+15550001000"}] = page["numbers"]
 

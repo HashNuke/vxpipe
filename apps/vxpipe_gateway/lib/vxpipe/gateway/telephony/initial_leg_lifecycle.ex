@@ -2,14 +2,12 @@ defmodule Vxpipe.Gateway.Telephony.InitialLegLifecycle do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Telephony.{Event, OutboundLegRequest}
-  alias Vxpipe.Gateway.Telephony.{MediaAdmission, OutgoingLegLifecycle}
 
   def new(%OutboundLegRequest{purpose: :initial, room_owner: owner}, service)
       when is_pid(owner) do
     %{
       room_monitor: Process.monitor(owner),
       answered?: false,
-      cancel_pending?: false,
       detection: if(service.answering_machine_detection == :detect, do: :pending, else: :complete)
     }
   end
@@ -52,42 +50,6 @@ defmodule Vxpipe.Gateway.Telephony.InitialLegLifecycle do
 
   def cancellation_reason(%{initial: nil}), do: :transfer_cancelled
   def cancellation_reason(_initial), do: :call_cancelled
-
-  def cancel(%{status: status, initial: %{cancel_pending?: false}} = state)
-      when status in [:starting, :unknown] do
-    Process.send_after(self(), :retire_unknown, state.service.media_token_ttl_ms)
-    {:keep, %{state | initial: %{state.initial | cancel_pending?: true}}}
-  end
-
-  def cancel(%{status: status, initial: initial} = state)
-      when status in [:starting, :unknown] and initial != nil, do: {:keep, state}
-
-  def cancel(%{binding: nil} = state), do: {:stop, state}
-
-  def cancel(state) do
-    OutgoingLegLifecycle.end_attempt(state.binding, state.service, state.leg_id, :call_cancelled)
-    {:stop, state}
-  end
-
-  def adopted(%{initial: %{cancel_pending?: true}} = state, %Event{kind: kind}) do
-    if kind != :ended do
-      OutgoingLegLifecycle.end_attempt(
-        state.binding,
-        state.service,
-        state.leg_id,
-        :call_cancelled
-      )
-    end
-
-    {:stop, state}
-  end
-
-  def adopted(state, _event), do: {:keep, state}
-
-  def retire(state) do
-    MediaAdmission.revoke(state.media_admission, self())
-    state
-  end
 
   defp report(state, event) do
     send(

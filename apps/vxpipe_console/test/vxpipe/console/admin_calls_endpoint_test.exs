@@ -68,7 +68,7 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
     conn =
       authenticate()
       |> recycle()
-      |> get("/admin/api/tenants/#{@tenant_key}/calls?page=2&call_spec_id=delivery-rescheduling")
+      |> get("/api/tenants/#{@tenant_key}/calls?page=2&call_spec_id=delivery-rescheduling")
 
     assert json_response(conn, 200) == %{
              "tenant" => %{"key" => @tenant_key, "name" => "Example tenant"},
@@ -115,7 +115,7 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
       missing =
         authenticate()
         |> recycle()
-        |> https_get("/admin/api/tenants/#{@tenant_key}/calls?call_spec_id=missing")
+        |> https_get("/api/tenants/#{@tenant_key}/calls?call_spec_id=missing")
 
       assert json_response(missing, 404) == %{
                "error" => %{"code" => "call_directory_not_found"}
@@ -125,7 +125,7 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
     configure_admin_repository({:error, :database_unavailable})
 
     unavailable =
-      authenticate() |> recycle() |> https_get("/admin/api/tenants/#{@tenant_key}/calls")
+      authenticate() |> recycle() |> https_get("/api/tenants/#{@tenant_key}/calls")
 
     assert json_response(unavailable, 503) == %{
              "error" => %{"code" => "call_directory_unavailable"}
@@ -134,11 +134,11 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
     invalid =
       authenticate()
       |> recycle()
-      |> get("/admin/api/tenants/#{@tenant_key}/calls?call_spec_id[]=invalid")
+      |> get("/api/tenants/#{@tenant_key}/calls?call_spec_id[]=invalid")
 
     assert json_response(invalid, 422) == %{"error" => %{"code" => "invalid_filter"}}
 
-    anonymous = https_get("/admin/api/tenants/#{@tenant_key}/calls")
+    anonymous = https_get("/api/tenants/#{@tenant_key}/calls")
 
     assert json_response(anonymous, 401) == %{
              "error" => %{"code" => "session_required"}
@@ -151,7 +151,7 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
     conn =
       authenticate()
       |> recycle()
-      |> get("/admin/api/tenants/#{@tenant_key}/calls/spec-options?q=intake&page=2")
+      |> get("/api/tenants/#{@tenant_key}/calls/spec-options?q=intake&page=2")
 
     assert json_response(conn, 200) == %{
              "options" => [%{"id" => "intake", "name" => "Intake"}],
@@ -163,10 +163,10 @@ defmodule Vxpipe.Console.AdminCallsEndpointTest do
     invalid =
       authenticate()
       |> recycle()
-      |> get("/admin/api/tenants/#{@tenant_key}/calls/spec-options?q[]=bad")
+      |> get("/api/tenants/#{@tenant_key}/calls/spec-options?q[]=bad")
 
     assert json_response(invalid, 422)["error"]["code"] == "invalid_search"
-    anonymous = https_get("/admin/api/tenants/#{@tenant_key}/calls/spec-options")
+    anonymous = https_get("/api/tenants/#{@tenant_key}/calls/spec-options")
     assert json_response(anonymous, 401)
   end
 

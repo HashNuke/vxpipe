@@ -6,6 +6,7 @@ defmodule Vxpipe.Persistence.IdentityRecord do
   alias Vxpipe.Persistence.Repo
 
   alias Vxpipe.Persistence.Schema.{
+    ApiKey,
     IdentityMembership,
     IdentityRole,
     IdentityRolePermission,
@@ -148,7 +149,9 @@ defmodule Vxpipe.Persistence.IdentityRecord do
 
     changeset =
       UserAccessEvent.changeset(%UserAccessEvent{}, %{
+        actor_api_key_id: lookup_api_key_id!(Map.get(event, :actor_api_key_public_id)),
         actor_user_id: lookup_user_id(Map.get(event, :actor_user_public_id)),
+        actor_oauth_grant_public_id: Map.get(event, :actor_oauth_grant_public_id),
         target_user_id: lookup_user_id(Map.get(event, :target_user_public_id)),
         target_role_id: lookup_role_id(Map.get(event, :target_role_public_id)),
         action: to_string(Map.get(event, :action, "unknown")),
@@ -159,6 +162,15 @@ defmodule Vxpipe.Persistence.IdentityRecord do
       {:ok, _} -> :ok
       {:error, _} -> {:error, :unavailable}
     end
+  end
+
+  defp lookup_api_key_id!(nil), do: nil
+
+  defp lookup_api_key_id!(public_id) do
+    Repo.one!(from(k in ApiKey, where: k.public_id == ^public_id, select: k.id),
+      log: false,
+      telemetry_event: nil
+    )
   end
 
   defp lookup_user_id(nil), do: nil
@@ -219,6 +231,7 @@ defmodule Vxpipe.Persistence.IdentityRecord do
       role_kind: role_kind(role.kind),
       role_slug: role.slug,
       disabled_at: user.disabled_at,
+      authorization_version: user.authorization_version,
       memberships: memberships
     }
   end

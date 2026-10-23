@@ -189,7 +189,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     assert Keyword.fetch!(public, :voice) == "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"
     assert Keyword.fetch!(public, :sample_rate) == 16_000
 
-    assert [config: config, request_module: Vxpipe.Providers.Cartesia.TTSRequest] =
+    assert [
+             config: config,
+             wire_module: Vxpipe.CallEngine.Speech.ContextTTSSocket,
+             wire_options: []
+           ] =
              startup.text_to_speech.provider_private
 
     assert config.api_key == "synthetic-cartesia-private-marker"
@@ -231,8 +235,13 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     assert {:ok, startup} = PlanStartup.new(cartesia_plan(), cartesia_options())
     {provider, public} = startup.text_to_speech.provider
     private = startup.text_to_speech.provider_private
-    config = %{Keyword.fetch!(private, :config) | endpoint: self()}
-    private = [config: config, request_module: Vxpipe.CallEngine.TestRequestTTS]
+
+    private =
+      Keyword.merge(private,
+        wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+        wire_options: [observer: self()]
+      )
+
     tree = start_supervised!({CapabilityTree, owner: self()})
 
     assert {:ok, session, :starting} =
@@ -243,23 +252,35 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
                usage: true
              )
 
+    assert_receive {:test_tts_transport_started, wire, _connection}, 1_000
     assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :ready} = ready}
     assert :ok = Session.ack(session, ready)
     assert {:ok, %{ref: request} = handle} = Session.speak(session, "Hello")
+
+    assert_receive {:test_tts_control, ^wire, generation}, 500
+
+    assert %{"transcript" => "Hello", "context_id" => context, "continue" => false} =
+             JSON.decode!(generation)
 
     assert_receive {:vxpipe_speech,
                     %Event{request_ref: ^request, kind: :input_submitted} = submitted}
 
     assert :ok = Session.ack(session, submitted)
     assert submitted.usage.input_characters == 5
-    assert_receive {:test_request_tts_started, worker, "Hello"}
     pcm = :binary.copy(<<1, 0>>, 16_000)
-    send(worker, {:audio, pcm})
+
+    wire_reference =
+      Vxpipe.CallEngine.TestTextToSpeechTransport.deliver_audio_with_result(
+        wire,
+        {context, pcm}
+      )
+
     assert_receive {:vxpipe_speech_audio, %Audio{session: ^session, payload: ^pcm} = audio}
     assert :ok = Session.validate_audio(session, audio)
     assert :ok = Session.ack_audio(session, audio)
-    assert_receive {:test_request_tts_audio_consumed, ^worker, :ok}
-    send(worker, :complete)
+    assert_receive {:test_tts_audio_result, ^wire_reference, :ok}
+
+    Vxpipe.CallEngine.TestTextToSpeechTransport.deliver_control(wire, {:final, context})
 
     assert_receive {:vxpipe_speech,
                     %Event{request_ref: ^request, kind: :completed, usage: %TTSUsage{} = usage} =
@@ -615,7 +636,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     assert Keyword.fetch!(public, :voice) == "JBFqnCBsd6RMkjVDRZzb"
     assert Keyword.fetch!(public, :sample_rate) == 16_000
 
-    assert [config: config, request_module: Vxpipe.Providers.ElevenLabs.TTSRequest] =
+    assert [
+             config: config,
+             wire_module: Vxpipe.CallEngine.Speech.ContextTTSSocket,
+             wire_options: []
+           ] =
              startup.text_to_speech.provider_private
 
     assert config.api_key == "synthetic-elevenlabs-private-marker"
@@ -624,34 +649,50 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     refute :erlang.term_to_binary(plan) =~ "synthetic-elevenlabs-private-marker"
     assert_received {:tenant_credential_resolved, "tenant-inline", "elevenlabs", "default"}
 
-    config = %{config | endpoint: self()}
     tree = start_supervised!({CapabilityTree, owner: self()})
 
     assert {:ok, session, :starting} =
              Session.start(CapabilityTree.scope(tree),
                provider: ElevenLabsTTSSession,
                options: public,
-               private: [config: config, request_module: Vxpipe.CallEngine.TestRequestTTS],
+               private:
+                 Keyword.merge(startup.text_to_speech.provider_private,
+                   wire_module: Vxpipe.CallEngine.TestTextToSpeechTransport,
+                   wire_options: [observer: self()]
+                 ),
                usage: true
              )
 
+    assert_receive {:test_tts_transport_started, wire, _connection}, 1_000
     assert_receive {:vxpipe_speech, %Event{kind: :ready} = ready}
     assert :ok = Session.ack(session, ready)
     assert {:ok, %{ref: request} = handle} = Session.speak(session, "Hello")
+
+    assert_receive {:test_tts_control, ^wire, init}, 500
+    assert %{"text" => " ", "context_id" => context} = JSON.decode!(init)
+    assert_receive {:test_tts_control, ^wire, body}, 500
+    assert %{"text" => "Hello", "context_id" => ^context} = JSON.decode!(body)
+    assert_receive {:test_tts_control, ^wire, flush}, 500
+    assert %{"context_id" => ^context, "flush" => true} = JSON.decode!(flush)
 
     assert_receive {:vxpipe_speech,
                     %Event{request_ref: ^request, kind: :input_submitted} = submitted}
 
     assert :ok = Session.ack(session, submitted)
-    assert_receive {:test_request_tts_started, worker, "Hello"}
     pcm = :binary.copy(<<1, 0>>, 16_000)
-    send(worker, {:audio, pcm})
+
+    wire_reference =
+      Vxpipe.CallEngine.TestTextToSpeechTransport.deliver_audio_with_result(
+        wire,
+        {context, pcm}
+      )
+
     assert_receive {:vxpipe_speech_audio, %Audio{session: ^session, payload: ^pcm} = audio}
     assert :ok = Session.validate_audio(session, audio)
-    refute_received {:test_request_tts_audio_consumed, ^worker, :ok}
     assert :ok = Session.ack_audio(session, audio)
-    assert_receive {:test_request_tts_audio_consumed, ^worker, :ok}
-    send(worker, :complete)
+    assert_receive {:test_tts_audio_result, ^wire_reference, :ok}
+
+    Vxpipe.CallEngine.TestTextToSpeechTransport.deliver_control(wire, {:final, context})
 
     assert_receive {:vxpipe_speech,
                     %Event{request_ref: ^request, kind: :completed, usage: %TTSUsage{} = usage} =

@@ -20,9 +20,13 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
 
   @impl true
   def fetch(public_id) do
-    case Repo.one(from(r in IdentityRole, where: r.public_id == ^public_id)) do
-      nil -> {:error, :not_found}
-      role -> {:ok, IdentityRecord.role_port_map(role)}
+    with {:ok, public_id} <- Ecto.UUID.cast(public_id) do
+      case Repo.one(from(r in IdentityRole, where: r.public_id == ^public_id)) do
+        nil -> {:error, :not_found}
+        role -> {:ok, IdentityRecord.role_port_map(role)}
+      end
+    else
+      :error -> {:error, :not_found}
     end
   rescue
     _ -> {:error, :unavailable}
@@ -43,6 +47,54 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
     {:ok,
      Repo.all(from(r in IdentityRole, order_by: [r.id]))
      |> Enum.map(&IdentityRecord.role_port_map/1)}
+  rescue
+    _ -> {:error, :unavailable}
+  end
+
+  @impl true
+  def list_page(filters) do
+    with {:ok, filters} <- Vxpipe.Identity.AccountPage.filters(filters) do
+      query =
+        from(r in IdentityRole,
+          order_by: [asc: r.name, asc: r.public_id],
+          limit: ^filters.page_size,
+          offset: ^((filters.page - 1) * filters.page_size)
+        )
+
+      {:ok,
+       %{
+         roles: Enum.map(Repo.all(query), &IdentityRecord.role_port_map/1),
+         total: Repo.aggregate(IdentityRole, :count)
+       }}
+    end
+  rescue
+    _ -> {:error, :unavailable}
+  end
+
+  @impl true
+  def list_options(filters) do
+    with {:ok, filters} <- Vxpipe.Identity.AccountPage.filters(filters) do
+      query =
+        from(r in IdentityRole,
+          order_by: [asc: r.name, asc: r.public_id],
+          limit: ^filters.page_size,
+          offset: ^((filters.page - 1) * filters.page_size),
+          select: %{public_id: r.public_id, name: r.name, kind: r.kind}
+        )
+
+      roles =
+        Enum.map(Repo.all(query), fn role ->
+          Map.update!(role, :kind, fn kind ->
+            case kind do
+              "admin" -> :admin
+              "superadmin" -> :superadmin
+              _ -> nil
+            end
+          end)
+        end)
+
+      {:ok, %{roles: roles, total: Repo.aggregate(IdentityRole, :count)}}
+    end
   rescue
     _ -> {:error, :unavailable}
   end
@@ -145,19 +197,25 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
 
   @impl true
   def count_users(public_id) do
-    case Repo.one(from(r in IdentityRole, where: r.public_id == ^public_id, select: r.id)) do
-      nil ->
-        {:error, :not_found}
+    with {:ok, public_id} <- Ecto.UUID.cast(public_id) do
+      case Repo.one(from(r in IdentityRole, where: r.public_id == ^public_id, select: r.id)) do
+        nil ->
+          {:error, :not_found}
 
-      role_id ->
-        {:ok, Repo.aggregate(from(u in IdentityUser, where: u.role_id == ^role_id), :count)}
+        role_id ->
+          {:ok, Repo.aggregate(from(u in IdentityUser, where: u.role_id == ^role_id), :count)}
+      end
+    else
+      :error -> {:error, :not_found}
     end
   rescue
     _ -> {:error, :unavailable}
   end
 
   defp lock_installation do
-    case Repo.get(AuthenticationInstallation, "default", lock: "FOR UPDATE") do
+    case Repo.one(
+           from(i in AuthenticationInstallation, where: i.key == "default", lock: "FOR UPDATE")
+         ) do
       nil -> {:error, :missing}
       installation -> {:ok, installation}
     end
@@ -289,7 +347,8 @@ defmodule Vxpipe.Persistence.IdentityRoleStore do
 
           {:ok, %{requires_read: required}} ->
             case Map.fetch(scope_by_key, required) do
-              {:ok, read_scope} when read_scope == grant.scope or
+              {:ok, read_scope}
+              when read_scope == grant.scope or
                      (required == "tenant_services.read" and read_scope == :all_tenants and
                         grant.scope == :assigned_tenants) ->
                 {:cont, {:ok, acc}}

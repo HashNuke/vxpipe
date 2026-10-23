@@ -1,11 +1,25 @@
 defmodule Vxpipe.Calls.TenantDirectoryTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.Calls.{Tenant, TenantDirectory, TestAdminRepository}
+  alias Vxpipe.Calls.{InstallationOperator, Tenant, TenantDirectory, TestAdminRepository}
+  alias Vxpipe.Calls.Principal, as: ApiPrincipal
   alias Vxpipe.Identity.Principal
 
   @key "AAAAAAAAAAAAAAAA"
   @other "BBBBBBBBBBBBBBBB"
+
+  test "discovery policy is available without querying storage for transport authorization" do
+    key = %ApiPrincipal{tenant_key: @key, api_key_id: "key", scopes: MapSet.new([:calls])}
+    assert :ok = Vxpipe.Calls.authorize_tenant_discovery(key)
+
+    assert {:error, :forbidden} =
+             Vxpipe.Calls.authorize_tenant_discovery(%{key | scopes: MapSet.new()})
+
+    assert :ok = Vxpipe.Calls.authorize_tenant_discovery(principal())
+
+    assert {:error, :forbidden} =
+             Vxpipe.Calls.authorize_tenant_discovery(principal(%{grants: MapSet.new()}))
+  end
 
   test "all-tenant authority has precedence and requires no directory query" do
     for user <- [
@@ -134,6 +148,93 @@ defmodule Vxpipe.Calls.TenantDirectoryTest do
     end
   end
 
+  test "tenant API keys discover only their own tenant without widening their scopes" do
+    for scopes <- [[:calls], [:admin], [:admin, :calls]] do
+      actor = api_principal(scopes)
+
+      assert {:ok, %{tenants: [%Tenant{key: @key}], total: 1, page: 1, page_size: 25}} =
+               TenantDirectory.search(actor, repository({:ok, {[tenant(@key)], 1}}))
+
+      assert_received {:tenant_search, {:keys, [@key]}, "", 25, 0}
+
+      assert {:ok, %Tenant{key: @key}} =
+               TenantDirectory.fetch(actor, @key, repository({:ok, [tenant(@key)]}))
+
+      assert_received {:tenant_candidates, {:keys, [@key]}, 1}
+      assert {:error, :tenant_not_found} = TenantDirectory.fetch(actor, @other, [])
+
+      assert {:error, :tenant_not_found} =
+               TenantDirectory.fetch(actor, @key, repository({:ok, []}))
+    end
+  end
+
+  test "Settings platform API keys use the shared bounded directory and lookup" do
+    assert {:ok, %{tenants: [%Tenant{key: @other}], total: 3, total_pages: 2, page: 2}} =
+             TenantDirectory.search(
+               platform_actor(),
+               repository({:ok, {[tenant(@other)], 3}}) ++
+                 [page: 2, limit: 2, query: "  Tenant  "]
+             )
+
+    assert_received {:tenant_search, :all, "Tenant", 2, 2}
+
+    assert {:ok, %Tenant{key: @other}} =
+             TenantDirectory.fetch(platform_actor(), @other, repository({:ok, [tenant(@other)]}))
+
+    assert_received {:tenant_candidates, {:keys, [@other]}, 1}
+  end
+
+  test "unknown, unscoped and legacy operator actors cannot discover tenants" do
+    for actor <- [
+          nil,
+          %{grant: :installation_operator, credential_kind: :platform_api_key},
+          api_principal([]),
+          api_principal([:unknown]),
+          %{api_principal([:calls]) | tenant_key: "invalid"},
+          %{platform_actor() | credential_kind: :legacy_operator_api_key},
+          %{platform_actor() | api_key_id: nil},
+          InstallationOperator.authority()
+        ] do
+      assert {:error, :forbidden} = TenantDirectory.search(actor, [])
+      assert {:error, :tenant_not_found} = TenantDirectory.fetch(actor, @key, [])
+    end
+  end
+
+  test "API key discovery uses consistent empty pages, bounds and storage failures" do
+    for actor <- [api_principal([:calls]), platform_actor()] do
+      assert {:ok, %{tenants: [], total: 0, total_pages: 0}} =
+               TenantDirectory.search(actor, repository({:ok, {[], 0}}))
+
+      assert {:error, :tenant_page_out_of_range} =
+               TenantDirectory.search(actor, repository({:ok, {[], 0}}) ++ [page: 2])
+
+      assert {:error, :invalid_tenant_page_request} =
+               TenantDirectory.search(actor, limit: 51)
+
+      assert {:error, :repository_unavailable} =
+               TenantDirectory.search(actor, repository({:error, :repository_unavailable}))
+
+      assert {:error, :repository_unavailable} =
+               TenantDirectory.fetch(actor, @key, repository({:error, :repository_unavailable}))
+    end
+  end
+
+  test "API key discovery rejects repository rows outside scope or beyond the requested page" do
+    actor = api_principal([:calls])
+
+    assert {:error, :tenant_page_unavailable} =
+             TenantDirectory.search(actor, repository({:ok, {[tenant(@other)], 1}}))
+
+    assert {:error, :tenant_page_unavailable} =
+             TenantDirectory.fetch(actor, @key, repository({:ok, [tenant(@other)]}))
+
+    assert {:error, :tenant_page_unavailable} =
+             TenantDirectory.search(
+               platform_actor(),
+               repository({:ok, {[tenant(@key), tenant(@other)], 2}}) ++ [limit: 1]
+             )
+  end
+
   test "dashboard omits unauthorized recent calls and treats failed calls as a partial failure" do
     opts = [
       admin_repository: {Vxpipe.Calls.TestDashboardRepository, {self(), tenant(@key), {:ok, []}}}
@@ -179,6 +280,16 @@ defmodule Vxpipe.Calls.TenantDirectoryTest do
   end
 
   defp tenant(key), do: %Tenant{key: key, name: "Tenant", inserted_at: ~U[2026-10-13 00:00:00Z]}
+
+  defp api_principal(scopes),
+    do: %ApiPrincipal{tenant_key: @key, api_key_id: "synthetic-key", scopes: MapSet.new(scopes)}
+
+  defp platform_actor,
+    do: %InstallationOperator{
+      grant: :installation_operator,
+      api_key_id: "synthetic-platform-key",
+      credential_kind: :platform_api_key
+    }
 
   defp repository(result) do
     pid = start_supervised!({TestAdminRepository, result}, id: make_ref())

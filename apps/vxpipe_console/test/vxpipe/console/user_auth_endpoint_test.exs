@@ -108,6 +108,19 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
            }
          ]}
 
+    def list_roles(actor, filters) do
+      with {:ok, roles} <- list_roles(actor) do
+        {:ok,
+         %{
+           roles: roles,
+           total: length(roles),
+           page: filters.page,
+           page_size: filters.page_size,
+           total_pages: 1
+         }}
+      end
+    end
+
     def list_role_options(_actor),
       do: {:ok, [%{public_id: "role-member", name: "Tenant Member", kind: :member}]}
 
@@ -254,6 +267,41 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
     refute response.resp_body =~ "wrong-password"
   end
 
+  for {method, path} <- [
+        {:get, "/admin/api/users"},
+        {:get, "/admin/api/users/00000000-0000-4000-8000-000000000001"},
+        {:post, "/admin/api/users"},
+        {:patch, "/admin/api/users/00000000-0000-4000-8000-000000000001"},
+        {:get, "/admin/api/role-options"},
+        {:get, "/admin/api/tenants"},
+        {:get, "/admin/api/tenants/AAAAAAAAAAAAAAAA/providers"},
+        {:get, "/admin/api/tenants/AAAAAAAAAAAAAAAA/providers/google/models"},
+        {:get, "/admin/api/tenants/AAAAAAAAAAAAAAAA/call-specs"},
+        {:get, "/admin/api/tenants/AAAAAAAAAAAAAAAA/call-specs/example"},
+        {:post, "/admin/api/tenants/AAAAAAAAAAAAAAAA/call-specs"},
+        {:put, "/admin/api/tenants/AAAAAAAAAAAAAAAA/call-specs/example"},
+        {:post, "/admin/api/tenants/AAAAAAAAAAAAAAAA/call-specs/example/revisions/1/publish"}
+      ] do
+    test "legacy product alias #{method} #{path} rejects explicit credentials before parsing" do
+      signed_in =
+        post(build_conn(), "https://localhost/auth/api/login", %{
+          "email" => "owner@example.test",
+          "password" => "long-password"
+        })
+
+      for authorization <- ["Basic invalid", "Bearer revoked-key"] do
+        response =
+          signed_in
+          |> recycle()
+          |> Plug.Conn.put_req_header("authorization", authorization)
+          |> Plug.Conn.put_req_header("content-type", "application/json")
+          |> dispatch(@endpoint, unquote(method), "https://localhost" <> unquote(path), "{")
+
+        assert json_response(response, 401) == %{"error" => %{"code" => "session_required"}}
+      end
+    end
+  end
+
   test "a named session reads the server-paginated user directory" do
     signed_in =
       post(build_conn(), "https://localhost/auth/api/login", %{
@@ -315,9 +363,9 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
       |> recycle()
       |> post("https://localhost/admin/api/users", %{
         "email" => "new@example.test",
-        "password" => "some password",
-        "password_confirmation" => "some password",
-        "role_id" => "role-member",
+        "password" => "some long password",
+        "password_confirmation" => "some long password",
+        "role_id" => "00000000-0000-4000-8000-000000000001",
         "memberships" => []
       })
 

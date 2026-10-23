@@ -1,14 +1,27 @@
 defmodule Vxpipe.Calls.TenantDirectory do
-  @moduledoc "Visible tenant lookup, search and bounded post-login selection for user principals."
+  @moduledoc "Authorized tenant lookup/search and bounded browser post-login selection."
 
-  alias Vxpipe.Calls.{ProviderAuth, Repositories, Tenant, TenantPage, UserAuthorization}
+  alias Vxpipe.Calls.{
+    InstallationOperator,
+    ProviderAuth,
+    Repositories,
+    Tenant,
+    TenantPage,
+    UserAuthorization
+  }
+
+  alias Vxpipe.Calls.Principal, as: ApiPrincipal
   alias Vxpipe.Identity.Principal
+
+  def authorize(principal) do
+    with {:ok, _scope} <- directory_scope(principal), do: :ok
+  end
 
   def navigation(%Principal{} = principal, options) do
     scope = UserAuthorization.visible_tenant_scope(principal)
     directory_access = UserAuthorization.authorize_tenant_directory(principal) == :ok
 
-    with {:ok, candidates} <- landing_candidates(scope, principal, options) do
+    with {:ok, candidates} <- landing_candidates(scope, options) do
       {:ok,
        %{
          scope: if(scope == :all, do: :all, else: :assigned),
@@ -22,10 +35,11 @@ defmodule Vxpipe.Calls.TenantDirectory do
     end
   end
 
-  def fetch(%Principal{} = principal, key, options) do
-    with :ok <- ProviderAuth.tenant_key(key),
-         true <- visible?(principal, key),
-         {:ok, tenants} <- candidates(principal, {:keys, [key]}, 1, options) do
+  def fetch(principal, key, options) do
+    with {:ok, scope} <- actor_scope(principal),
+         :ok <- ProviderAuth.tenant_key(key),
+         true <- visible?(scope, key),
+         {:ok, tenants} <- candidates(scope, {:keys, [key]}, 1, options) do
       case tenants do
         [%Tenant{key: ^key} = tenant] -> {:ok, tenant}
         [] -> {:error, :tenant_not_found}
@@ -33,16 +47,17 @@ defmodule Vxpipe.Calls.TenantDirectory do
       end
     else
       false -> {:error, :tenant_not_found}
+      {:error, :forbidden} -> {:error, :tenant_not_found}
       {:error, :invalid_tenant_key} -> {:error, :tenant_not_found}
       error -> error
     end
   end
 
-  def search(%Principal{} = principal, options) do
-    with :ok <- UserAuthorization.authorize_tenant_directory(principal),
+  def search(principal, options) do
+    with {:ok, scope} <- directory_scope(principal),
          {:ok, query, page, limit} <- search_options(options),
-         {:ok, {tenants, total}} <- search_rows(principal, query, page, limit, options),
-         :ok <- validate_rows(tenants, principal, limit),
+         {:ok, {tenants, total}} <- search_rows(scope, query, page, limit, options),
+         :ok <- validate_rows(tenants, scope, limit),
          true <- is_integer(total) and total >= length(tenants) do
       pages = if total == 0, do: 0, else: div(total + limit - 1, limit)
 
@@ -65,22 +80,50 @@ defmodule Vxpipe.Calls.TenantDirectory do
     end
   end
 
-  defp landing_candidates(:all, _principal, _options), do: {:ok, []}
-  defp landing_candidates({:assigned, []}, _principal, _options), do: {:ok, []}
+  defp directory_scope(%Principal{} = principal) do
+    with :ok <- UserAuthorization.authorize_tenant_directory(principal),
+         do: actor_scope(principal)
+  end
 
-  defp landing_candidates({:assigned, keys}, principal, options),
-    do: candidates(principal, {:keys, keys}, 2, options)
+  defp directory_scope(principal), do: actor_scope(principal)
 
-  defp candidates(principal, scope, limit, options) do
+  defp actor_scope(%Principal{} = principal),
+    do: {:ok, UserAuthorization.visible_tenant_scope(principal)}
+
+  defp actor_scope(%ApiPrincipal{tenant_key: key, api_key_id: id, scopes: %MapSet{} = scopes})
+       when is_binary(id) and byte_size(id) > 0 do
+    if ProviderAuth.tenant_key(key) == :ok and
+         (MapSet.member?(scopes, :calls) or MapSet.member?(scopes, :admin)),
+       do: {:ok, {:assigned, [key]}},
+       else: {:error, :forbidden}
+  end
+
+  defp actor_scope(%InstallationOperator{
+         grant: :installation_operator,
+         credential_kind: :platform_api_key,
+         api_key_id: id
+       })
+       when is_binary(id) and byte_size(id) > 0,
+       do: {:ok, :all}
+
+  defp actor_scope(_principal), do: {:error, :forbidden}
+
+  defp landing_candidates(:all, _options), do: {:ok, []}
+  defp landing_candidates({:assigned, []}, _options), do: {:ok, []}
+
+  defp landing_candidates({:assigned, keys} = scope, options),
+    do: candidates(scope, {:keys, keys}, 2, options)
+
+  defp candidates(actor_scope, storage_scope, limit, options) do
     with {:ok, repository} <- Repositories.fetch(options, :admin_repository),
-         {:ok, tenants} <- invoke(repository, :tenant_candidates, [scope, limit]),
-         :ok <- validate_rows(tenants, principal, limit) do
+         {:ok, tenants} <- invoke(repository, :tenant_candidates, [storage_scope, limit]),
+         :ok <- validate_rows(tenants, actor_scope, limit) do
       {:ok, tenants}
     end
   end
 
-  defp search_rows(principal, query, page, limit, options) do
-    case UserAuthorization.visible_tenant_scope(principal) do
+  defp search_rows(actor_scope, query, page, limit, options) do
+    case actor_scope do
       {:assigned, []} ->
         {:ok, {[], 0}}
 
@@ -97,20 +140,20 @@ defmodule Vxpipe.Calls.TenantDirectory do
     end
   end
 
-  defp validate_rows(tenants, principal, limit) when is_list(tenants) do
-    if length(tenants) <= limit and Enum.all?(tenants, &match?(%Tenant{}, &1)),
-      do: UserAuthorization.validate_listed_tenants(tenants, principal),
-      else: {:error, :tenant_page_unavailable}
+  defp validate_rows(tenants, scope, limit) when is_list(tenants) do
+    if length(tenants) <= limit and
+         Enum.all?(tenants, fn
+           %Tenant{key: key} -> visible?(scope, key)
+           _invalid -> false
+         end),
+       do: :ok,
+       else: {:error, :tenant_page_unavailable}
   end
 
   defp validate_rows(_tenants, _principal, _limit), do: {:error, :tenant_page_unavailable}
 
-  defp visible?(principal, key) do
-    case UserAuthorization.visible_tenant_scope(principal) do
-      :all -> true
-      {:assigned, keys} -> key in keys
-    end
-  end
+  defp visible?(:all, _key), do: true
+  defp visible?({:assigned, keys}, key), do: key in keys
 
   defp search_options(options) do
     query = Keyword.get(options, :query, "")

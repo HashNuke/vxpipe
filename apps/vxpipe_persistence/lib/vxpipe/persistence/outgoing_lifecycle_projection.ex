@@ -19,6 +19,22 @@ defmodule Vxpipe.Persistence.OutgoingLifecycleProjection do
     end
   end
 
+  defp project(
+         _repo,
+         %{
+           gateway_cleanup_required: true,
+           started_at: nil,
+           state: state,
+           hangup_requested_at: requested
+         } = call,
+         %{kind: :archive_stream_closed, occurred_at: occurred}
+       )
+       when state in [:admitting, :ended] or (state == :failed and not is_nil(requested)) do
+    if DateTime.compare(occurred, call.created_at) in [:eq, :gt],
+      do: {:ok, call},
+      else: {:error, :outgoing_lifecycle_conflict}
+  end
+
   defp project(repo, call, fact) do
     with :ok <- after_start(call, fact.occurred_at),
          {:ok, changes} <- changes(call, fact) do

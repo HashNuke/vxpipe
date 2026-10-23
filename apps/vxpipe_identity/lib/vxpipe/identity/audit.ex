@@ -9,7 +9,14 @@ defmodule Vxpipe.Identity.Audit do
   def event(action, attrs) when action in @actions and is_map(attrs) do
     safe =
       attrs
-      |> Map.take([:actor_user_public_id, :target_user_public_id, :target_role_public_id, :summary])
+      |> Map.take([
+        :actor_api_key_public_id,
+        :actor_user_public_id,
+        :actor_oauth_grant_public_id,
+        :target_user_public_id,
+        :target_role_public_id,
+        :summary
+      ])
       |> Map.put(:action, Atom.to_string(action))
 
     {:ok, Map.put_new(safe, :summary, %{})}
@@ -19,8 +26,9 @@ defmodule Vxpipe.Identity.Audit do
 
   @spec sanitize_summary(map()) :: map()
   def sanitize_summary(summary) when is_map(summary) do
-    drop = ~w(password password_confirmation current_password hash password_hash token bearer_token secret)a ++
-      ~w(password password_confirmation current_password hash password_hash token bearer_token secret)
+    drop =
+      ~w(password password_confirmation current_password hash password_hash token bearer_token secret)a ++
+        ~w(password password_confirmation current_password hash password_hash token bearer_token secret)
 
     Map.drop(summary, drop)
   end

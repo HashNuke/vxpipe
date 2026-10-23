@@ -137,7 +137,8 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
   for {implementation, label} <- [
         {RimeTTS, :rime},
         {CartesiaTTS, :cartesia},
-        {ElevenLabsTTS, :elevenlabs}
+        {ElevenLabsTTS, :elevenlabs},
+        {Vxpipe.Providers.MorseCodeApi.TTSSession, :morse_code_api}
       ] do
     @tag tts_implementation: implementation, tts_label: label
     test "attributes #{label} synthesis and failure to the declared provider", %{
@@ -169,7 +170,8 @@ defmodule Vxpipe.CallEngine.TelemetryTest do
 
   for {implementation, label} <- [
         {Vxpipe.Providers.Cartesia.STTSession, :cartesia},
-        {Vxpipe.Providers.ElevenLabs.STTSession, :elevenlabs}
+        {Vxpipe.Providers.ElevenLabs.STTSession, :elevenlabs},
+        {Vxpipe.Providers.MorseCodeApi.STTSession, :morse_code_api}
       ] do
     @tag stt_implementation: implementation, stt_label: label
     test "attributes #{label} recognition failure to the declared provider", %{

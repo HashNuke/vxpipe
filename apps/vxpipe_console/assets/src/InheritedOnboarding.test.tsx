@@ -41,7 +41,7 @@ afterEach(() => {
 test("an unavailable optional service does not block sample readiness or progress", async () => {
   window.history.replaceState({}, "", "/admin/onboarding");
   const fetchImpl = vi.fn((url: RequestInfo | URL) =>
-    url === "/admin/api/onboarding/demo-tenant"
+    url === "/api/onboarding/demo-tenant"
       ? response({ tenant })
       : response({
           tenant,
@@ -68,7 +68,7 @@ test("retries a failed effective directory read without treating it as empty set
   window.history.replaceState({}, "", "/admin/onboarding");
   let available = false;
   const fetchImpl = vi.fn((url: RequestInfo | URL) => {
-    if (url === "/admin/api/onboarding/demo-tenant")
+    if (url === "/api/onboarding/demo-tenant")
       return response({ tenant });
     return available
       ? response({ tenant, bindings: [binding("google"), binding("deepgram")], model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities })
@@ -90,7 +90,7 @@ test("retries a failed effective directory read without treating it as empty set
 test("onboarding counts inherited services and opens the tenant service inventory", async () => {
   window.history.replaceState({}, "", "/admin/onboarding");
   const fetchImpl = vi.fn((url: RequestInfo | URL) => {
-    if (url === "/admin/api/onboarding/demo-tenant")
+    if (url === "/api/onboarding/demo-tenant")
       return response({ tenant });
     if (String(url).endsWith("/service-bindings"))
       return response({
@@ -130,7 +130,7 @@ test("onboarding counts inherited services and opens the tenant service inventor
 test("unavailable and alternate named bindings cannot make onboarding samples ready", async () => {
   window.history.replaceState({}, "", "/admin/onboarding");
   const fetchImpl = vi.fn((url: RequestInfo | URL) =>
-    url === "/admin/api/onboarding/demo-tenant"
+    url === "/api/onboarding/demo-tenant"
       ? response({ tenant })
       : response({
           tenant,
@@ -148,6 +148,26 @@ test("unavailable and alternate named bindings cannot make onboarding samples re
     screen.queryByRole("button", { name: "Load sample call specs" }),
   ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Manage services" })).toBeEnabled();
+});
+
+test.each(["openai", "deepseek", "openrouter", "fireworks"])("%s model bindings enable sample installation with the explicit demo tenant", async (provider) => {
+  window.history.replaceState({}, "", "/admin/onboarding");
+  const fetchImpl = vi.fn((url: RequestInfo | URL) => {
+    if (url === "/api/onboarding/demo-tenant") return response({ tenant });
+    if (url === "/api/onboarding/demo-tenant/samples") return response({ samples: [
+      { id: "sample-voice-conversation", name: "Voice conversation", status: "installed" },
+      { id: "sample-agent-handoff", name: "Agent handoff", status: "installed" },
+      { id: "sample-human-handoff", name: "Human handoff", status: "installed" },
+    ] });
+    return response({ tenant, bindings: [binding(provider), binding("deepgram")],
+      model_catalog: modelCatalogFixture, provider_capabilities: { ...providerCapabilities, [provider]: ["credential", "llm"] } });
+  });
+  render(<App csrfToken="csrf" fetchImpl={withSession(fetchImpl)} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Load sample call specs" }));
+  expect(fetchImpl).toHaveBeenCalledWith("/api/onboarding/demo-tenant/samples", expect.objectContaining({
+    method: "POST", headers: expect.objectContaining({ "content-type": "application/json", "x-csrf-token": "csrf" }),
+    body: JSON.stringify({ tenant_key: tenant.key }),
+  }));
 });
 
 function withSession(fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {

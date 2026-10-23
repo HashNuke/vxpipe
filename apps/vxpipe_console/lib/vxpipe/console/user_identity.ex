@@ -76,23 +76,14 @@ defmodule Vxpipe.Console.UserIdentity do
         )
       )
 
-  def list_roles(actor), do: with_dependencies(&Roles.list_roles(&1, actor))
-
-  def get_role(actor, id) do
-    case list_roles(actor) do
-      {:ok, roles} ->
-        case Enum.find(roles, &(&1.public_id == id)) do
-          nil -> {:error, :not_found}
-          role -> {:ok, role}
-        end
-
-      error ->
-        error
-    end
-  end
+  def list_roles(actor, filters), do: with_dependencies(&Roles.list_roles(&1, actor, filters))
+  def get_role(actor, id), do: with_dependencies(&Roles.get_role(&1, actor, id))
 
   def list_role_options(actor), do: with_dependencies(&Roles.list_role_options(&1, actor))
-  def affected_user_count(_actor, id), do: with_dependencies(&Roles.affected_user_count(&1, id))
+
+  def affected_user_count(actor, id),
+    do: with_dependencies(&Roles.affected_user_count(&1, actor, id))
+
   def create_role(actor, attrs), do: with_dependencies(&Roles.create_role(&1, actor, attrs))
 
   def update_role(actor, id, attrs),
@@ -101,9 +92,8 @@ defmodule Vxpipe.Console.UserIdentity do
   def delete_role(actor, id), do: with_dependencies(&Roles.delete_role(&1, actor, id))
 
   defp with_dependencies(callback) do
-    case Application.get_env(:vxpipe_console, :identity_dependencies) do
-      deps when is_map(deps) -> callback.(deps)
-      _ -> {:error, :unavailable}
+    with {:ok, dependencies} <- Vxpipe.Identity.dependencies() do
+      callback.(dependencies)
     end
   end
 end

@@ -17,6 +17,11 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
     options =
       Keyword.validate!(options,
         path_prefix: "/",
+        oauth: [],
+        mcp: [],
+        account_management: [],
+        tenant_directory: [],
+        call_spec_reads: [],
         operator_api: [],
         call_spec_authoring: [],
         call_admission: [],
@@ -29,6 +34,11 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
     %{
       endpoint:
         Endpoint.init(
+          oauth: Keyword.fetch!(options, :oauth),
+          mcp: Keyword.fetch!(options, :mcp),
+          account_management: Keyword.fetch!(options, :account_management),
+          tenant_directory: Keyword.fetch!(options, :tenant_directory),
+          call_spec_reads: Keyword.fetch!(options, :call_spec_reads),
           call_spec_authoring: Keyword.fetch!(options, :call_spec_authoring),
           operator_api: Keyword.fetch!(options, :operator_api),
           cors: Keyword.fetch!(options, :cors),
@@ -43,6 +53,14 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
 
   @impl true
   def call(%Conn{} = conn, %{endpoint: endpoint, path_prefix: path_prefix}) do
+    if Vxpipe.Gateway.OAuth.Endpoint.route?(conn, endpoint.oauth) do
+      conn |> Endpoint.call(endpoint) |> Conn.halt()
+    else
+      gateway_request(conn, endpoint, path_prefix)
+    end
+  end
+
+  defp gateway_request(%Conn{} = conn, endpoint, path_prefix) do
     with {:ok, gateway_path} <- strip_prefix(conn.path_info, path_prefix),
          true <- gateway_path?(gateway_path) do
       %Conn{
@@ -88,6 +106,7 @@ defmodule Vxpipe.Gateway.HTTP.Mount do
   end
 
   defp gateway_path?(["healthz"]), do: true
+  defp gateway_path?(["mcp"]), do: true
   defp gateway_path?(["api" | _rest]), do: true
   defp gateway_path?(["webhooks", "platform", "telnyx"]), do: true
   defp gateway_path?(["webhooks", "tenants", _tenant, "telnyx"]), do: true

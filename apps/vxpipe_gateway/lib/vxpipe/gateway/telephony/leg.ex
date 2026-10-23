@@ -4,12 +4,18 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   use GenServer
 
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
-  alias Vxpipe.CallEngine.Telephony.{Adapter, EndLeg, Event, LegReference}
+  alias Vxpipe.CallEngine.Telephony.{Event, Submission}
   alias Vxpipe.Calls.TelephonyAdmissionClaim
 
   alias Vxpipe.Gateway.Telephony.{
+    CarrierCleanup,
     ConfiguredService,
+    EndCommandRetry,
     IncomingLegActivationResult,
+    IncomingLegActivationContext,
+    IncomingLegIdentity,
+    IncomingSubmission,
+    MediaAdmission,
     IngressIdentity,
     IngressRegistration,
     LegUsage
@@ -66,6 +72,22 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
     state = %{
       activation: nil,
+      incoming_identity: nil,
+      prepared: nil,
+      answer_worker: nil,
+      answer_result_received?: false,
+      commands_drained?: true,
+      retire?: false,
+      end_worker: nil,
+      end_requested?: false,
+      end_retry?: false,
+      end_accepted?: false,
+      end_reason: nil,
+      end_command_retry: %EndCommandRetry{},
+      carrier_ended?: false,
+      managed_cleanup?: false,
+      cleanup: nil,
+      token: make_ref(),
       backend: Keyword.fetch!(options, :backend),
       claim: nil,
       clock: Keyword.fetch!(options, :clock),
@@ -74,6 +96,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       initial_event: Keyword.fetch!(options, :event),
       incarnation_id: nil,
       room_monitor: nil,
+      room_closed?: false,
       result: nil,
       status: :starting,
       usage: nil,
@@ -85,28 +108,7 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
   @impl true
   def handle_continue(:admit, state) do
-    {status, claim, activation, incarnation_id, result} = admit(state)
-    Enum.each(state.waiters, &GenServer.reply(&1, result))
-
-    state = %{
-      state
-      | activation: activation,
-        claim: claim,
-        incarnation_id: incarnation_id,
-        result: result,
-        status: status,
-        usage: activation_usage(activation),
-        waiters: []
-    }
-
-    if status in [:failed, :unclaimed] do
-      Process.send_after(self(), :retire, 1_000)
-    end
-
-    case monitor_room(state) do
-      {:ok, state} -> {:noreply, state}
-      {:error, :room_unavailable} -> {:stop, :normal, end_room_leg(state)}
-    end
+    {:noreply, admit(state)}
   end
 
   @impl true
@@ -142,14 +144,34 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
       )
       when kind in [:answered, :media_started] do
     with :ok <- matching_event(state.claim, event) do
-      state = state |> observe_usage(event) |> project_started(event)
+      state = observe_usage(state, event)
 
-      case dispatch_start_event(state, source, event) do
-        :ok -> {:reply, :ok, state}
-        {:error, reason} -> {:reply, {:error, reason}, state}
+      case project_started(state, event) do
+        {:ok, state} ->
+          case dispatch_start_event(state, source, event) do
+            :ok -> {:reply, :ok, state}
+            {:error, reason} -> {:reply, {:error, reason}, state}
+          end
+
+        {:error, reason, state} ->
+          {:reply, {:error, reason}, close(state, reason)}
       end
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:event, %Event{kind: kind} = event}, _from, %{status: :closing} = state)
+      when kind in [:answered, :media_started] do
+    case matching_event(state.claim, event) do
+      :ok ->
+        state =
+          if state.carrier_ended?, do: state, else: state |> observe_usage(event) |> retry_end()
+
+        {:reply, :ok, state}
+
+      error ->
+        {:reply, error, state}
     end
   end
 
@@ -161,19 +183,34 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   end
 
   def handle_call({:event, %Event{kind: :ended} = event}, {source, _tag}, state)
-      when state.status in [:answering, :running] do
+      when state.status in [:answering, :running, :closing, :failed] do
     with :ok <- matching_event(state.claim, event) do
-      state = observe_usage(state, event)
+      state = state |> observe_usage(event) |> revoke_media()
 
-      case call_backend(state.backend, :handle_live_event, [
-             state.claim,
-             state.activation,
-             source,
-             event
-           ]) do
-        :ok -> {:reply, :ok, %{state | status: :ended}}
-        {:error, reason} -> {:reply, {:error, reason}, state}
-      end
+      result =
+        if state.activation do
+          call_backend(state.backend, :handle_live_event, [
+            state.claim,
+            state.activation,
+            source,
+            event
+          ])
+        else
+          if state.incarnation_id && not state.room_closed? do
+            call_backend(state.backend, :cancel_incoming, [
+              state.claim,
+              state.token,
+              :carrier_ended
+            ])
+          else
+            :ok
+          end
+        end
+
+      status = if result == :ok, do: :ended, else: :closing
+      state = reply_waiters(terminal_end(%{state | status: status, carrier_ended?: true}), :ok)
+      if status == :ended and is_nil(state.room_monitor), do: send(self(), :retire)
+      {:reply, result, state}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -208,135 +245,410 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
   end
 
   @impl true
-  def handle_info(:retire, %{status: status} = state) when status in [:failed, :unclaimed],
-    do: {:stop, :normal, state}
-
-  def handle_info(:retire, state), do: {:noreply, state}
+  def handle_info(:retire, state), do: maybe_retire(%{state | retire?: true})
 
   def handle_info(
-        {:DOWN, monitor, :process, _room, _reason},
-        %{room_monitor: monitor, status: :ended} = state
+        {:incoming_submission, :answer, worker, result},
+        %{answer_worker: {worker, _monitor}} = state
+      ) do
+    state = answer_result(%{state | answer_result_received?: true}, result)
+    maybe_retire(state)
+  end
+
+  def handle_info(
+        {:incoming_submission, :end, worker, result},
+        %{end_worker: {worker, _monitor}} = state
       ),
-      do: {:stop, :normal, state}
+      do: {:noreply, %{state | end_accepted?: EndCommandRetry.accepted?(result)}}
 
-  def handle_info({:DOWN, monitor, :process, _room, _reason}, %{room_monitor: monitor} = state),
-    do: {:stop, :normal, end_room_leg(state)}
+  def handle_info(
+        {:DOWN, monitor, :process, worker, reason},
+        %{answer_worker: {worker, monitor}} = state
+      ) do
+    state = %{
+      state
+      | answer_worker: nil,
+        commands_drained?: state.commands_drained? and reason == :normal
+    }
 
-  defp monitor_room(
-         %{activation: %IncomingLegActivationResult{service: %ConfiguredService{}}} = state
-       ) do
-    binding = state.activation.binding
+    state =
+      if state.answer_result_received?,
+        do: state,
+        else: answer_result(state, {:error, :submission_unknown})
 
-    case Vxpipe.CallEngine.monitor_room(
-           binding.tenant_id,
-           binding.room_id,
-           binding.incarnation_id
-         ) do
-      {:ok, monitor} -> {:ok, %{state | room_monitor: monitor}}
-      {:error, :room_unavailable} = error -> error
+    maybe_retire(state)
+  end
+
+  def handle_info(
+        {:DOWN, monitor, :process, worker, reason},
+        %{end_worker: {worker, monitor}} = state
+      ) do
+    state = %{
+      state
+      | end_worker: nil,
+        commands_drained?: state.commands_drained? and reason == :normal
+    }
+
+    state =
+      cond do
+        not state.commands_drained? or state.carrier_ended? -> terminal_end(state)
+        state.end_retry? -> retry_end(%{state | end_retry?: false})
+        not state.end_accepted? -> schedule_end(state)
+        true -> state
+      end
+
+    maybe_retire(state)
+  end
+
+  def handle_info({:retry_carrier_end, token}, state) do
+    state =
+      case EndCommandRetry.take(state.end_command_retry, token) do
+        {:ok, retry} -> request_end(%{state | end_command_retry: retry, end_requested?: false})
+        :stale -> state
+      end
+
+    maybe_retire(state)
+  end
+
+  def handle_info({:DOWN, monitor, :process, _room, _reason}, %{room_monitor: monitor} = state) do
+    state = %{state | room_monitor: nil, room_closed?: true}
+
+    state =
+      if state.carrier_ended?,
+        do: %{state | status: :ended, retire?: true},
+        else: close(state, :room_ended)
+
+    maybe_retire(state)
+  end
+
+  def handle_info(message, %{cleanup: %CarrierCleanup{} = cleanup} = state) do
+    case CarrierCleanup.handle_info(cleanup, message) do
+      {:handled, cleanup} ->
+        state = %{state | cleanup: cleanup}
+
+        state =
+          if CarrierCleanup.status(cleanup) == :unavailable,
+            do: close(state, :cleanup_unavailable),
+            else: state
+
+        maybe_retire(state)
+
+      :unhandled ->
+        {:noreply, state}
     end
   end
 
-  defp monitor_room(state), do: {:ok, state}
+  def handle_info(_message, state), do: {:noreply, state}
 
-  defp end_room_leg(state) do
-    binding = state.activation.binding
-    service = state.activation.service
+  defp maybe_retire(%{managed_cleanup?: true} = state) do
+    state = store_final(state)
 
-    _result =
-      Adapter.end_leg(service.adapter, service.adapter_options, %EndLeg{
-        leg: %LegReference{
-          leg_id: binding.client_state_leg_id,
-          provider_call_control_id: binding.provider_call_control_id
-        },
-        reason: :room_ended
-      })
+    ready? =
+      state.carrier_ended? and state.room_closed? and state.commands_drained? and
+        is_nil(state.answer_worker) and is_nil(state.end_worker) and not is_nil(state.cleanup) and
+        CarrierCleanup.final_usage_stored?(state.cleanup, state.usage)
 
-    %{state | usage: LegUsage.fail(state.usage, :cancelled)}
+    if ready? do
+      case CarrierCleanup.acknowledge(state.cleanup, state.usage, :carrier_ended, true) do
+        {:ok, cleanup} -> {:stop, :normal, %{state | cleanup: cleanup}}
+        {:error, :cleanup_unavailable, cleanup} -> {:stop, :normal, %{state | cleanup: cleanup}}
+        {:error, _reason, cleanup} -> {:noreply, %{state | cleanup: cleanup}}
+      end
+    else
+      {:noreply, state}
+    end
   end
+
+  # A lost observer cannot attest that its separate HTTP operation has drained.
+  defp maybe_retire(%{commands_drained?: false} = state), do: {:noreply, state}
+
+  defp maybe_retire(%{retire?: true, answer_worker: nil, end_worker: nil, status: status} = state)
+       when status in [:ended, :unclaimed, :replay],
+       do: {:stop, :normal, state}
+
+  defp maybe_retire(state), do: {:noreply, state}
 
   defp admit(state) do
     case call_backend(state.backend, :claim_incoming, [state.identity, state.initial_event]) do
       {:ok, %TelephonyAdmissionClaim{} = claim} ->
         start_call(%{state | claim: claim})
 
-      {:duplicate, %TelephonyAdmissionClaim{call: %{state: :running}} = claim} ->
-        {:failed, claim, nil, claim.call.incarnation_id, :ok}
-
-      {:duplicate, %TelephonyAdmissionClaim{call: %{state: :failed}} = claim} ->
-        {:failed, claim, nil, nil, :ok}
-
-      {:duplicate, %TelephonyAdmissionClaim{call: %{state: :admitting}} = claim} ->
-        case call_backend(state.backend, :mark_incoming_failed, [claim, :startup_unknown]) do
-          {:ok, failed} -> {:failed, failed, nil, nil, :ok}
-          {:error, _reason} -> {:failed, claim, nil, nil, :ok}
-        end
+      {:duplicate, %TelephonyAdmissionClaim{} = claim} ->
+        # A replay cannot establish ownership of a prior admission's effects.
+        Process.send_after(self(), :retire, 1_000)
+        reply_waiters(%{state | claim: claim, status: :replay}, :ok)
 
       {:error, reason} ->
-        {:unclaimed, nil, nil, nil, {:error, reason}}
+        unclaimed(state, reason)
 
       _invalid ->
-        {:unclaimed, nil, nil, nil, {:error, :invalid_telephony_call_backend_response}}
+        unclaimed(state, :invalid_telephony_call_backend_response)
     end
+  end
+
+  defp unclaimed(state, reason) do
+    Process.send_after(self(), :retire, 1_000)
+    reply_waiters(%{state | status: :unclaimed}, {:error, reason})
   end
 
   defp start_call(state) do
-    case call_backend(state.backend, :start_incoming, [state.claim, state.service]) do
-      {:ok, %RoomSnapshot{} = room} ->
-        activate_call(state, room)
+    case call_backend(state.backend, :start_incoming, [
+           state.claim,
+           state.service,
+           self(),
+           state.token
+         ]) do
+      {:ok, %RoomSnapshot{} = room, monitor} ->
+        # Retain exact room ownership before persistence or answer preparation.
+        claim = %{state.claim | call: %{state.claim.call | incarnation_id: room.incarnation_id}}
+
+        identify_call(
+          %{state | claim: claim, incarnation_id: room.incarnation_id, room_monitor: monitor},
+          room
+        )
+
+      {:ok, %RoomSnapshot{} = room, monitor, :managed_cleanup} ->
+        claim = %{state.claim | call: %{state.claim.call | incarnation_id: room.incarnation_id}}
+
+        state = %{
+          state
+          | claim: claim,
+            incarnation_id: room.incarnation_id,
+            room_monitor: monitor,
+            managed_cleanup?: true
+        }
+
+        bind_managed_call(state, room)
 
       {:error, _reason} ->
-        case call_backend(state.backend, :mark_incoming_failed, [
-               state.claim,
-               :room_start_failed
-             ]) do
-          {:ok, claim} -> {:failed, claim, nil, nil, :ok}
-          _projection_outcome -> {:failed, state.claim, nil, nil, :ok}
-        end
+        _projection =
+          call_backend(state.backend, :mark_incoming_failed, [state.claim, :room_start_failed])
+
+        close(state, :room_start_failed)
 
       _invalid ->
-        {:unclaimed, nil, nil, nil, {:error, :invalid_telephony_call_backend_response}}
+        close(state, :invalid_telephony_call_backend_response)
     end
   end
 
-  defp activate_call(state, %RoomSnapshot{incarnation_id: incarnation_id} = room) do
-    case call_backend(state.backend, :activate_incoming, [
+  defp identify_call(state, room), do: identify_call(state, room, &bind_call(&1, room))
+
+  defp identify_call(state, room, next) do
+    case call_backend(state.backend, :identify_incoming, [
            state.service,
            state.claim,
            room,
            self()
          ]) do
-      {:ok, activation} ->
-        {:answering, state.claim, activation, incarnation_id, activation_result(activation)}
+      {:ok, %IncomingLegIdentity{} = identity} ->
+        identity =
+          if state.cleanup,
+            do: %{
+              identity
+              | binding: %{identity.binding | cleanup_binding: state.cleanup.binding}
+            },
+            else: identity
 
-      {:error, _reason} ->
-        case call_backend(state.backend, :mark_incoming_failed, [
-               state.claim,
-               :leg_activation_failed
-             ]) do
-          {:ok, claim} -> {:failed, claim, nil, nil, :ok}
-          _projection_outcome -> {:failed, state.claim, nil, nil, :ok}
-        end
+        state = %{state | incoming_identity: identity, usage: identity.usage}
 
-      _invalid ->
-        {:unclaimed, nil, nil, nil, {:error, :invalid_telephony_call_backend_response}}
+        if state.managed_cleanup? and is_nil(identity.usage),
+          do: close(state, :usage_unavailable),
+          else: next.(state)
+
+      _failure ->
+        close(state, :identity_preparation_failed)
     end
   end
 
-  defp project_started(state, event) do
-    started_at = start_time(event, state.clock)
+  defp bind_managed_call(state, room) do
+    {state, decision} =
+      case call_backend(state.backend, :bind_incoming, [state.claim, room.incarnation_id]) do
+        {:ok, decision, %TelephonyAdmissionClaim{} = claim, %CarrierCleanup{} = cleanup}
+        when decision in [:admit, :cancel] ->
+          {%{state | claim: claim, cleanup: cleanup}, decision}
 
-    claim =
-      case call_backend(state.backend, :mark_incoming_started, [
-             state.claim,
-             state.incarnation_id,
-             started_at
-           ]) do
-        {:ok, claim} -> claim
-        _projection_outcome -> state.claim
+        {:error, _reason, %TelephonyAdmissionClaim{} = claim, cleanup}
+        when is_nil(cleanup) or is_struct(cleanup, CarrierCleanup) ->
+          {%{state | claim: claim, cleanup: cleanup}, :error}
+
+        _failure ->
+          {state, :error}
       end
 
-    %{state | claim: claim, status: :running}
+    identify_call(state, room, fn identified ->
+      case decision do
+        :admit -> prepare_call(identified)
+        :cancel -> close(identified, :admission_cancelled)
+        :error -> close(identified, :admission_failed)
+      end
+    end)
+  end
+
+  defp bind_call(state, room) do
+    case call_backend(state.backend, :bind_incoming, [state.claim, room.incarnation_id]) do
+      {:ok, :admit, %TelephonyAdmissionClaim{} = claim} ->
+        prepare_call(%{state | claim: claim})
+
+      {:ok, :cancel, %TelephonyAdmissionClaim{} = claim} ->
+        close(%{state | claim: claim}, :admission_cancelled)
+
+      _failure ->
+        close(state, :admission_failed)
+    end
+  end
+
+  defp prepare_call(state) do
+    case call_backend(state.backend, :prepare_incoming, [state.incoming_identity]) do
+      {:ok, prepared} ->
+        activation = prepared_activation(prepared)
+
+        state = %{
+          state
+          | prepared: prepared,
+            activation: activation,
+            status: :answering
+        }
+
+        case IncomingSubmission.start(self(), :answer, fn ->
+               call_backend(state.backend, :submit_incoming, [prepared])
+             end) do
+          {:ok, worker, monitor} -> %{state | answer_worker: {worker, monitor}}
+          _failure -> close(state, :answer_submission_failed)
+        end
+
+      _failure ->
+        close(state, :answer_preparation_failed)
+    end
+  end
+
+  defp prepared_activation(%IncomingLegActivationContext{} = prepared) do
+    %IncomingLegActivationResult{
+      binding: prepared.binding,
+      media_url: prepared.media_url,
+      service: prepared.service,
+      usage: prepared.usage,
+      submission: %Submission{
+        status: :unknown,
+        provider_call_control_id: prepared.binding.provider_call_control_id
+      }
+    }
+  end
+
+  defp prepared_activation(custom), do: custom
+
+  defp answer_result(%{carrier_ended?: true} = state, _result),
+    do: reply_waiters(state, :ok)
+
+  defp answer_result(state, {:ok, activation}) do
+    usage = identify_submission(state.usage, activation)
+    state = %{state | usage: usage}
+
+    if state.status in [:answering, :running] do
+      reply_waiters(%{state | activation: activation}, activation_result(activation))
+    else
+      # An answer accepted after cancellation still belongs to this carrier leg.
+      retry_end(reply_waiters(state, :ok))
+    end
+  end
+
+  defp answer_result(%{status: :running} = state, _failure),
+    do: reply_waiters(state, activation_result(state.activation))
+
+  defp answer_result(%{status: :closing} = state, _failure),
+    do: retry_end(reply_waiters(state, :ok))
+
+  defp answer_result(state, _failure), do: close(state, :answer_submission_failed)
+
+  defp identify_submission(usage, %IncomingLegActivationResult{submission: submission}),
+    do: LegUsage.identify(usage, submission)
+
+  defp identify_submission(usage, _custom), do: usage
+
+  defp project_started(state, event) do
+    with {:ok, claim} <-
+           call_backend(state.backend, :mark_incoming_started, [
+             state.claim,
+             state.incarnation_id,
+             start_time(event, state.clock)
+           ]),
+         :ok <- call_backend(state.backend, :release_incoming, [claim, state.token]) do
+      {:ok, %{state | claim: claim, status: :running}}
+    else
+      {:error, reason} -> {:error, reason, state}
+      _invalid -> {:error, :invalid_telephony_call_backend_response, state}
+    end
+  end
+
+  defp retry_end(%{commands_drained?: false} = state), do: terminal_end(state)
+  defp retry_end(%{carrier_ended?: true} = state), do: terminal_end(state)
+
+  defp retry_end(%{end_worker: worker} = state) when not is_nil(worker),
+    do: %{state | end_retry?: true}
+
+  defp retry_end(state),
+    do: close(%{state | end_requested?: false}, state.end_reason || :admission_cancelled)
+
+  defp close(%{status: :ended} = state, _reason), do: reply_waiters(state, :ok)
+
+  defp close(state, reason) do
+    state = revoke_media(state)
+
+    if state.incarnation_id do
+      _cancel = call_backend(state.backend, :cancel_incoming, [state.claim, state.token, reason])
+    end
+
+    state = %{state | status: :closing, end_reason: state.end_reason || reason}
+    state |> request_end() |> reply_waiters(:ok)
+  end
+
+  defp request_end(%{commands_drained?: false} = state), do: terminal_end(state)
+  defp request_end(%{carrier_ended?: true} = state), do: terminal_end(state)
+  defp request_end(%{end_worker: worker} = state) when not is_nil(worker), do: state
+  defp request_end(%{end_requested?: true} = state), do: state
+
+  defp request_end(state) do
+    state = %{state | end_command_retry: EndCommandRetry.cancel(state.end_command_retry)}
+
+    case IncomingSubmission.start(self(), :end, fn ->
+           call_backend(state.backend, :end_incoming, [
+             state.service,
+             state.initial_event,
+             state.activation || state.incoming_identity,
+             state.end_reason
+           ])
+         end) do
+      {:ok, worker, monitor} ->
+        %{state | end_worker: {worker, monitor}, end_requested?: true, end_accepted?: false}
+
+      _failure ->
+        schedule_end(state)
+    end
+  end
+
+  defp schedule_end(state),
+    do: %{
+      state
+      | end_requested?: true,
+        end_command_retry: EndCommandRetry.schedule(state.end_command_retry)
+    }
+
+  defp terminal_end(state),
+    do: %{
+      state
+      | end_command_retry: EndCommandRetry.cancel(state.end_command_retry),
+        end_retry?: false
+    }
+
+  defp revoke_media(%{prepared: %IncomingLegActivationContext{} = prepared} = state) do
+    MediaAdmission.revoke(prepared.media_admission, self())
+    state
+  end
+
+  defp revoke_media(state), do: state
+
+  defp reply_waiters(state, result) do
+    Enum.each(state.waiters, &GenServer.reply(&1, result))
+    %{state | result: result, waiters: []}
   end
 
   defp activation_result(%IncomingLegActivationResult{media_url: media_url}),
@@ -344,12 +656,20 @@ defmodule Vxpipe.Gateway.Telephony.Leg do
 
   defp activation_result(_custom_activation), do: :ok
 
-  defp activation_usage(%IncomingLegActivationResult{usage: usage}), do: usage
-  defp activation_usage(_custom_activation), do: nil
-
   defp observe_usage(state, event) do
-    %{state | usage: LegUsage.observe(state.usage, event)}
+    store_final(%{state | usage: LegUsage.observe(state.usage, event)})
   end
+
+  defp store_final(
+         %{cleanup: %CarrierCleanup{}, usage: %LegUsage{attempt: %{terminal?: true}}} = state
+       ) do
+    case CarrierCleanup.begin_final(state.cleanup, state.usage) do
+      {:ok, cleanup} -> %{state | cleanup: cleanup}
+      {:error, _reason, cleanup} -> %{state | cleanup: cleanup}
+    end
+  end
+
+  defp store_final(state), do: state
 
   defp start_time(%Event{occurred_at: %DateTime{} = occurred_at}, _clock), do: occurred_at
   defp start_time(%Event{kind: :media_started}, clock), do: clock.()

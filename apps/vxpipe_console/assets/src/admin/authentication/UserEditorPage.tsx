@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, KeyRound } from "lucide-react";
 import { Button } from "../Button";
 import { PageHeader } from "../PageHeader";
@@ -23,6 +23,7 @@ export function UserEditorPage({
   user,
   onSave,
   onNavigate,
+  loadRole,
 }: {
   actorRole: Role;
   roles: Role[];
@@ -30,10 +31,11 @@ export function UserEditorPage({
   user?: User;
   onSave: (draft: UserDraft, password?: string) => Promise<SaveResult>;
   onNavigate: Navigate;
+  loadRole?: (id: string) => Promise<Role | null>;
 }) {
   const [email, setEmail] = useState(user?.email ?? "");
   const [roleId, setRoleId] = useState(
-    user?.roleId ?? roles.find((role) => hasAssignedGrants(role))?.id ?? "",
+    user?.roleId ?? roles.find((role) => hasAssignedGrants(role))?.id ?? roles.find((role) => !role.kind)?.id ?? roles.find((role) => canManageUser(actorRole, role))?.id ?? "",
   );
   const [memberships, setMemberships] = useState<Membership[]>(
     user?.memberships ?? [],
@@ -44,13 +46,39 @@ export function UserEditorPage({
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [pending, setPending] = useState(false);
-  const role = roles.find((item) => item.id === roleId);
+  const [roleRead, setRoleRead] = useState<{
+    id: string;
+    phase: "loading" | "ready" | "unavailable";
+    role: Role | null;
+  }>({ id: roleId, phase: loadRole ? "loading" : "ready", role: null });
+  const [roleRetry, setRoleRetry] = useState(0);
+  const successfulRole = useRef(roleId);
+  useEffect(() => {
+    if (!loadRole) return;
+    let active = true;
+    loadRole(roleId).then((detail) => {
+      if (!active) return;
+      if (detail && detail.id !== roleId) throw new Error("Invalid role response");
+      if (detail && successfulRole.current !== roleId) {
+        setMemberships(roleId === user?.roleId ? user.memberships : []);
+      }
+      successfulRole.current = roleId;
+      setRoleRead({ id: roleId, phase: "ready", role: detail });
+    }).catch(() => {
+      if (active) setRoleRead({ id: roleId, phase: "unavailable", role: null });
+    });
+    return () => { active = false; };
+  }, [loadRole, roleId, roleRetry, user]);
+  const currentRead = roleRead.id === roleId ? roleRead : null;
+  const roleReady = !loadRole || currentRead?.phase === "ready";
+  const limitedRole = !!loadRole && !currentRead?.role;
+  const role = currentRead?.role ?? roles.find((item) => item.id === roleId);
   const original = roles.find((item) => item.id === user?.roleId) ?? role;
   const editable = !!role && !!original && canManageUser(actorRole, original, role);
   async function submit(event: FormEvent) {
     event.preventDefault();
     setNotice(undefined);
-    if (!editable || !role) return;
+    if (!editable || !role || !roleReady) return;
     const problem = !user
       ? validatePassword(password, confirmation)
       : undefined;
@@ -65,7 +93,7 @@ export function UserEditorPage({
           email: email.trim(),
           roleId,
           enabled,
-          memberships: hasAssignedGrants(role) ? memberships : [],
+          memberships: limitedRole ? user?.memberships ?? [] : hasAssignedGrants(role) ? memberships : [],
         },
         user ? undefined : password,
       );
@@ -137,7 +165,7 @@ export function UserEditorPage({
               value={roleId}
               onChange={(value) => {
                 setRoleId(value);
-                setMemberships([]);
+                if (!loadRole) setMemberships([]);
                 setNotice("Role changed. Review tenant access before saving.");
               }}
               readOnly={!editable}
@@ -167,8 +195,19 @@ export function UserEditorPage({
             tenants={tenants}
             value={memberships}
             onChange={setMemberships}
-            readOnly={!editable}
+            readOnly={!editable || !roleReady || limitedRole}
           />
+          {loadRole && !roleReady ? (
+            currentRead?.phase === "unavailable" ? (
+              <FormMessage error>
+                The selected role could not be loaded. Retry before saving.
+                <Button type="button" onClick={() => {
+                  setRoleRead({ id: roleId, phase: "loading", role: null });
+                  setRoleRetry(value => value + 1);
+                }}>Retry role details</Button>
+              </FormMessage>
+            ) : <p role="status">Loading role details…</p>
+          ) : null}
           {notice ? <FormMessage>{notice}</FormMessage> : null}
           {error ? <FormMessage error>{error}</FormMessage> : null}
           {editable ? (
@@ -176,7 +215,7 @@ export function UserEditorPage({
               <Button
                 type="submit"
                 className="access-primary"
-                disabled={pending}
+                disabled={pending || !roleReady}
               >
                 {pending ? "Saving…" : user ? "Save changes" : "Create user"}
               </Button>

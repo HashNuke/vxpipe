@@ -88,7 +88,7 @@ test("fetches the authenticated inspection resource without caching it", async (
 
   expect(snapshot.call.id).toBe("call/with spaces");
   expect(fetchMock).toHaveBeenCalledWith(
-    "/tenants/tenant%2Fwith%20spaces/calls/call%2Fwith%20spaces/inspection",
+    "/api/tenants/tenant%2Fwith%20spaces/calls/call%2Fwith%20spaces/inspection",
     expect.objectContaining({
       credentials: "same-origin",
       cache: "no-store",

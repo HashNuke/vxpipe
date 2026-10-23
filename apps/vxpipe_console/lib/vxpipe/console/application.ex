@@ -6,7 +6,6 @@ defmodule Vxpipe.Console.Application do
   alias Vxpipe.Console.Endpoint
   alias Vxpipe.Console.LiveMountLog
   alias Vxpipe.Console.RecordingConfiguration
-  alias Vxpipe.Console.SampleCall
   alias Vxpipe.Console.TelemetryReporter
   alias Vxpipe.Gateway.CallAdmission
   alias Vxpipe.Gateway.HTTP.Mount
@@ -15,26 +14,17 @@ defmodule Vxpipe.Console.Application do
   def start(_type, _args) do
     :ok = LiveMountLog.install()
     diagnostics = Application.fetch_env!(:vxpipe_console, :diagnostics)
-    sample_call = Application.fetch_env!(:vxpipe_console, :sample_call)
 
     children =
       [
         {Phoenix.PubSub, name: Vxpipe.Console.PubSub},
         {TelemetryReporter, max_pending_events: Keyword.fetch!(diagnostics, :max_pending_events)}
-      ] ++ sample_call_children(sample_call) ++ [{Endpoint, gateway_mount: gateway_mount()}]
+      ] ++ [{Endpoint, gateway_mount: gateway_mount()}]
 
     Supervisor.start_link(children,
       strategy: :one_for_one,
       name: Vxpipe.Console.Supervisor
     )
-  end
-
-  defp sample_call_children(settings) do
-    if Keyword.get(settings, :enabled, false) do
-      [{SampleCall, Keyword.delete(settings, :enabled)}]
-    else
-      []
-    end
   end
 
   @impl true
@@ -56,8 +46,13 @@ defmodule Vxpipe.Console.Application do
       end
 
     gateway_settings
-    |> Keyword.fetch!(:http)
+    |> Vxpipe.Gateway.Application.http_options()
     |> Keyword.take([
+      :oauth,
+      :mcp,
+      :account_management,
+      :tenant_directory,
+      :call_spec_reads,
       :operator_api,
       :call_spec_authoring,
       :call_admission,
@@ -66,7 +61,35 @@ defmodule Vxpipe.Console.Application do
       :telephony,
       :webrtc
     ])
+    |> Keyword.update(
+      :oauth,
+      [client_address_resolver: &Vxpipe.Console.ClientAddress.for_throttling/1],
+      &Keyword.put(&1, :client_address_resolver, fn conn ->
+        Vxpipe.Console.ClientAddress.for_throttling(conn)
+      end)
+    )
     |> Keyword.update!(:call_admission, &configure_recording(&1, recording))
+    |> Keyword.update(
+      :account_management,
+      [browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}],
+      &Keyword.put(&1, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
+    )
+    |> Keyword.update!(:call_admission, fn options ->
+      Keyword.put(options, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
+    end)
+    |> Keyword.update!(:call_spec_authoring, fn options ->
+      Keyword.put(options, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
+    end)
+    |> Keyword.update(
+      :call_spec_reads,
+      [browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}],
+      &Keyword.put(&1, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
+    )
+    |> Keyword.update(
+      :tenant_directory,
+      [browser_auth: {Vxpipe.Console.ProductAPIAuthentication, []}],
+      &Keyword.put(&1, :browser_auth, {Vxpipe.Console.ProductAPIAuthentication, []})
+    )
     |> Keyword.put(:path_prefix, "/")
     |> Mount.init()
   end

@@ -3,6 +3,7 @@ defmodule Vxpipe.Gateway.Session do
 
   use GenServer
 
+  alias Vxpipe.Gateway.{CallCleanup, CallCleanupSupervisor}
   alias Vxpipe.Gateway.Session.Snapshot
 
   @claim_timeout 5_000
@@ -25,6 +26,8 @@ defmodule Vxpipe.Gateway.Session do
       [{session, _value}] -> GenServer.call(session, :claim, @claim_timeout)
       [] -> {:error, :not_found}
     end
+  catch
+    :exit, _reason -> {:error, :not_found}
   end
 
   def bind_connection(session_id, connection) when is_pid(connection) do
@@ -35,6 +38,8 @@ defmodule Vxpipe.Gateway.Session do
       [] ->
         {:error, :not_found}
     end
+  catch
+    :exit, _reason -> {:error, :not_found}
   end
 
   def abandon(session_id) do
@@ -57,6 +62,7 @@ defmodule Vxpipe.Gateway.Session do
     _timer = Process.send_after(self(), :expire, ttl_ms)
 
     release = Keyword.get(options, :release_admission)
+    cleanup_binding = Keyword.get(options, :cleanup_binding)
 
     snapshot = %Snapshot{
       session_id: Keyword.fetch!(options, :session_id),
@@ -67,22 +73,34 @@ defmodule Vxpipe.Gateway.Session do
       participant_id: Keyword.fetch!(options, :participant_id),
       tool_visibility: Keyword.fetch!(options, :tool_visibility),
       expires_at: expires_at,
-      admission_owner: if(is_function(release, 0), do: self())
+      admission_owner: if(is_function(release, 0) or not is_nil(cleanup_binding), do: self()),
+      cleanup_binding: cleanup_binding
     }
 
-    {:ok,
-     %{
-       expires_after: expires_after,
-       snapshot: snapshot,
-       state: :pending,
-       release_admission: release,
-       claimant: nil,
-       claimant_monitor: nil,
-       connection_monitor: nil
-     }}
+    state = %{
+      expires_after: expires_after,
+      snapshot: snapshot,
+      state: :pending,
+      release_admission: release,
+      admission_released?: false,
+      cleanup_tracker: nil,
+      cleanup_monitor: nil,
+      claimant: nil,
+      claimant_monitor: nil,
+      connection_monitor: nil,
+      room_monitor: nil
+    }
+
+    case register_cleanup(state) do
+      {:ok, registered} -> monitor_room(registered)
+      {:error, _reason} -> failed_start(state)
+    end
   end
 
   @impl true
+  def handle_call(:snapshot, _from, %{state: :closing} = state),
+    do: {:reply, {:error, :room_unavailable}, state}
+
   def handle_call(:snapshot, _from, state), do: {:reply, state.snapshot, state}
 
   def handle_call(:claim, {claimant, _tag}, state) do
@@ -95,7 +113,7 @@ defmodule Vxpipe.Gateway.Session do
         {:reply, {:error, :expired}, %{state | state: :closing}}
 
       true ->
-        monitor = if state.release_admission, do: Process.monitor(claimant)
+        monitor = if state.snapshot.admission_owner, do: Process.monitor(claimant)
 
         {:reply, {:ok, state.snapshot},
          %{state | state: :claimed, claimant: claimant, claimant_monitor: monitor}}
@@ -108,7 +126,7 @@ defmodule Vxpipe.Gateway.Session do
         %{state: :claimed, claimant: claimant, connection_monitor: nil} = state
       ) do
     if state.claimant_monitor, do: Process.demonitor(state.claimant_monitor, [:flush])
-    monitor = if state.release_admission, do: Process.monitor(connection)
+    monitor = if state.snapshot.admission_owner, do: Process.monitor(connection)
     {:reply, :ok, %{state | claimant_monitor: nil, connection_monitor: monitor}}
   end
 
@@ -127,12 +145,19 @@ defmodule Vxpipe.Gateway.Session do
 
   def handle_info(:expire, state), do: release_later(state)
 
+  def handle_info({:DOWN, monitor, :process, _pid, _reason}, %{cleanup_monitor: monitor} = state),
+    do: release_later(%{state | cleanup_tracker: nil, cleanup_monitor: nil})
+
   def handle_info({:DOWN, monitor, :process, _pid, _reason}, state)
-      when monitor == state.claimant_monitor or monitor == state.connection_monitor,
+      when monitor == state.claimant_monitor or monitor == state.connection_monitor or
+             monitor == state.room_monitor,
       do: release_later(state)
 
   def handle_info(:release_admission, state) do
-    if release_admission(state.release_admission) == :ok do
+    released? = state.admission_released? or release_admission(state.release_admission) == :ok
+    state = %{state | admission_released?: released?}
+
+    if released? and acknowledge_cleanup(state.cleanup_tracker) == :ok do
       {:stop, :normal, state}
     else
       Process.send_after(self(), :release_admission, 1_000)
@@ -145,6 +170,54 @@ defmodule Vxpipe.Gateway.Session do
   @impl true
   def format_status(status),
     do: %{status | state: Map.take(status.state, [:state, :expires_after])}
+
+  defp register_cleanup(state) do
+    case Snapshot.cleanup_binding(state.snapshot) do
+      {:ok, nil} ->
+        {:ok, state}
+
+      {:ok, binding} ->
+        with {:ok, tracker} <- CallCleanupSupervisor.lookup(binding),
+             :ok <- CallCleanup.register(tracker, :session, self()) do
+          {:ok, %{state | cleanup_tracker: tracker, cleanup_monitor: Process.monitor(tracker)}}
+        end
+
+      {:error, _reason} = error ->
+        error
+    end
+  catch
+    :exit, _reason -> {:error, :cleanup_unavailable}
+  end
+
+  defp monitor_room(state) do
+    snapshot = state.snapshot
+
+    case Vxpipe.CallEngine.monitor_room(
+           snapshot.tenant_id,
+           snapshot.room_id,
+           snapshot.incarnation_id
+         ) do
+      {:ok, monitor} -> {:ok, %{state | room_monitor: monitor}}
+      {:error, :room_unavailable} -> failed_start(state)
+    end
+  end
+
+  defp failed_start(state) do
+    if state.snapshot.admission_owner do
+      send(self(), :release_admission)
+      {:ok, %{state | state: :closing}}
+    else
+      {:stop, :room_unavailable}
+    end
+  end
+
+  defp acknowledge_cleanup(nil), do: :ok
+
+  defp acknowledge_cleanup(tracker) do
+    CallCleanup.acknowledge(tracker, self(), :complete)
+  catch
+    :exit, _reason -> {:error, :cleanup_unavailable}
+  end
 
   defp release_later(state) do
     send(self(), :release_admission)

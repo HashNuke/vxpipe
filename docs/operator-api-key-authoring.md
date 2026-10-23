@@ -50,6 +50,25 @@ separate from this bounded authoring flow.
 
 ## Verification
 
+### Canonical browser and machine writes
+
+The Console editor now sends create, update and publish requests to the same
+`/api/tenants/:tenant_key/call-specs` routes as external clients. JSON bodies and
+revision-metadata responses are identical. Browser requests authenticate through
+the login session and require the normal CSRF token for writes; no API key is
+stored in the browser. Standalone Gateway hosting remains Bearer-only.
+
+When an Authorization header is supplied, it selects key authentication even if
+a session cookie is present. An invalid key cannot fall back to session authority.
+Both actors enter the same Calls authoring operation, including tenant checks and
+service-ownership enforcement. Missing browser write permission returns 403.
+Legacy `/admin/api` reads/writes remain during the broader product API migration;
+see the [route inventory](product-api-inventory.md). Platform-service authoring
+through a platform key still uses the existing `/api/platform/tenants/...` route
+until canonical platform-principal preservation is implemented.
+
+### Original acceptance
+
 - [x] Prove bootstrap, replacement rollback, revocation and hash-only storage using
   PostgreSQL; repeated bootstrap never emits a second secret.
 - [x] Prove protected output, failed-output recovery and secret-safe errors.

@@ -45,7 +45,7 @@ export function TenantTelephonyApplications({
   const saving = useRef<AbortController | null>(null);
   const trigger = useRef<HTMLElement | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
-  const url = `/admin/api/tenants/${encodeURIComponent(tenantKey)}/telephony-applications`;
+  const url = `/api/tenants/${encodeURIComponent(tenantKey)}/telephony-applications`;
   const credentialReady =
     credentialsLoaded &&
     binding?.status === "connected" &&

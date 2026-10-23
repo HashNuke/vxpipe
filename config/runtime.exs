@@ -7,6 +7,14 @@ nonempty_env = fn name ->
   end
 end
 
+# Kept private to provider startup; saved services and call specs contain no origin.
+# Missing hosted configuration is reported only when the Morse API is selected.
+config :vxpipe_providers, :morse_code_api,
+  base_url:
+    System.get_env("MORSE_CODE_API_BASE_URL") ||
+      if(config_env() == :dev, do: "http://127.0.0.1:8787", else: nil),
+  allow_http?: config_env() in [:dev, :test]
+
 worktree =
   if config_env() in [:dev, :test] do
     {metadata, _bindings} = Code.eval_file(Path.join(__DIR__, "worktree.exs"))
@@ -111,7 +119,11 @@ database_enabled? = not is_nil(database_url) or (config_env() == :dev and not is
 if database_enabled? do
   config :vxpipe_persistence, :enabled, true
 
-  config :vxpipe_console, :identity_dependencies, %{
+  config :vxpipe_identity,
+    oauth_store: Vxpipe.Persistence.OAuth.Store,
+    oauth_browser_store: Vxpipe.Persistence.OAuth.Browser
+
+  config :vxpipe_identity, :dependencies, %{
     users: Vxpipe.Persistence.IdentityUserStore,
     roles: Vxpipe.Persistence.IdentityRoleStore,
     sessions: Vxpipe.Persistence.IdentitySessionStore,
@@ -287,25 +299,6 @@ if config_env() == :dev do
     |> Keyword.put(:port, port)
     |> Keyword.update!(:cors, &Keyword.put(&1, :allowed_origins, allowed_origins))
 
-  gateway_http =
-    if database_enabled? do
-      archive = [
-        enabled: true,
-        writer: {Vxpipe.Persistence.EctoStorage, []},
-        maximum_pending_facts: 256,
-        retry_delay_ms: 250,
-        drain_timeout_ms: 5_000,
-        source_policy: %{"revision" => 0}
-      ]
-
-      Keyword.put(gateway_http, :call_admission,
-        enabled: true,
-        backend: {Vxpipe.Gateway.CallAdmission, [archive: archive]}
-      )
-    else
-      gateway_http
-    end
-
   config :vxpipe_gateway, Vxpipe.Gateway.Application, http: gateway_http
 
   if database_enabled? do
@@ -454,9 +447,82 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
   telephony_public_base_url =
     if URI.parse(service_public_origin).scheme == "https", do: service_public_origin
 
+  {:ok, app_origin} =
+    Vxpipe.Gateway.HTTP.PublicOrigin.resolve(
+      host: nonempty_env.("APP_HOST"),
+      port: nonempty_env.("PORT"),
+      tls: if(config_env() == :dev, do: nonempty_env.("VXPIPE_DEV_TLS"))
+    )
+
+  app_uri = URI.parse(app_origin)
+
+  mcp_hosts =
+    if app_uri.host in ["localhost", "127.0.0.1", "::1"],
+      do: ["localhost", "127.0.0.1", "::1"],
+      else: [app_uri.host]
+
+  mcp_resource = nonempty_env.("VXPIPE_MCP_RESOURCE_URL") || app_origin <> "/mcp"
+
+  oauth = [
+    enabled: database_enabled?,
+    issuer: app_origin,
+    resource: mcp_resource,
+    allowed_hosts: mcp_hosts,
+    allowed_origins: [app_origin],
+    allow_loopback_http: config_env() in [:dev, :test]
+  ]
+
+  # Validate configured URLs before exposing either discovery or browser consent.
+  _ = Vxpipe.Gateway.OAuth.Configuration.build(oauth)
+  config :vxpipe_console, :oauth, oauth
+
+  call_admission =
+    Application.fetch_env!(:vxpipe_gateway, Vxpipe.Gateway.Application)
+    |> Keyword.fetch!(:http)
+    |> Keyword.get(:call_admission, [])
+
+  call_admission =
+    if database_enabled? do
+      archive = [
+        enabled: true,
+        writer: {Vxpipe.Persistence.EctoStorage, []},
+        maximum_pending_facts: 256,
+        retry_delay_ms: 250,
+        drain_timeout_ms: 5_000,
+        source_policy: %{"revision" => 0}
+      ]
+
+      backend =
+        case Keyword.get(call_admission, :backend, {Vxpipe.Gateway.CallAdmission, []}) do
+          {Vxpipe.Gateway.CallAdmission, options} ->
+            {Vxpipe.Gateway.CallAdmission, Keyword.put_new(options, :archive, archive)}
+
+          custom ->
+            custom
+        end
+
+      call_admission |> Keyword.put(:enabled, true) |> Keyword.put(:backend, backend)
+    else
+      call_admission
+    end
+
   config :vxpipe_gateway, Vxpipe.Gateway.Application,
+    managed_cleanup: [enabled: database_enabled?],
     http: [
+      call_admission: call_admission,
+      oauth: oauth,
+      mcp: [
+        enabled: database_enabled?,
+        issuer: app_origin,
+        resource: mcp_resource,
+        allowed_hosts: mcp_hosts,
+        allowed_origins: [app_origin],
+        allow_loopback_http: config_env() in [:dev, :test]
+      ],
       operator_api: [enabled: database_enabled?],
+      account_management: [enabled: database_enabled?],
+      tenant_directory: [enabled: database_enabled?],
+      call_spec_reads: [enabled: database_enabled?],
       call_spec_authoring: [enabled: database_enabled?],
       telephony: [
         enabled: not is_nil(telephony_public_base_url),

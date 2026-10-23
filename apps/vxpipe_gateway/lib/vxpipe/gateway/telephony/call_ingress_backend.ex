@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
   alias Vxpipe.CallEngine.Room.Snapshot, as: RoomSnapshot
   alias Vxpipe.CallEngine.Telephony.Event
   alias Vxpipe.Calls.TelephonyAdmissionClaim
-  alias Vxpipe.Gateway.Telephony.{ConfiguredService, IngressIdentity}
+  alias Vxpipe.Gateway.Telephony.{ConfiguredService, IncomingLegIdentity, IngressIdentity}
 
   @type context :: term()
 
@@ -23,6 +23,39 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressBackend do
               RoomSnapshot.t(),
               pid()
             ) :: {:ok, term()} | {:error, term()}
+
+  @callback start_incoming(
+              context(),
+              TelephonyAdmissionClaim.t(),
+              ConfiguredService.t(),
+              pid(),
+              reference()
+            ) ::
+              {:ok, RoomSnapshot.t(), reference() | nil}
+              | {:error, term()}
+              | {:ok, RoomSnapshot.t(), reference(), :managed_cleanup}
+  @callback bind_incoming(context(), TelephonyAdmissionClaim.t(), String.t()) ::
+              {:ok, :admit | :cancel, TelephonyAdmissionClaim.t()}
+              | {:error, term()}
+              | {:ok, :admit | :cancel, TelephonyAdmissionClaim.t(), term()}
+              | {:error, term(), TelephonyAdmissionClaim.t(), term()}
+  @callback identify_incoming(
+              context(),
+              ConfiguredService.t(),
+              TelephonyAdmissionClaim.t(),
+              RoomSnapshot.t(),
+              pid()
+            ) ::
+              {:ok, IncomingLegIdentity.t()} | {:error, term()}
+  @callback prepare_incoming(context(), IncomingLegIdentity.t()) ::
+              {:ok, term()} | {:error, term()}
+  @callback submit_incoming(context(), term()) ::
+              {:ok, term()} | {:error, term(), term()} | {:error, term()}
+  @callback release_incoming(context(), TelephonyAdmissionClaim.t(), reference()) ::
+              :ok | {:error, term()}
+  @callback cancel_incoming(context(), TelephonyAdmissionClaim.t(), reference(), atom()) ::
+              :ok | {:error, term()}
+  @callback end_incoming(context(), ConfiguredService.t(), Event.t(), term(), atom()) :: term()
 
   @callback mark_incoming_started(
               context(),

@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Integration.CartesiaTextToSpeechTest do
 
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session}
   alias Vxpipe.Providers.Cartesia.{TTS, TTSSession}
+  alias Vxpipe.CallEngine.LiveContextTTSSocket
   alias Vxpipe.Providers.LiveModels
 
   @moduletag :live_providers
@@ -10,7 +11,7 @@ defmodule Vxpipe.CallEngine.Integration.CartesiaTextToSpeechTest do
   @moduletag :capture_log
   @moduletag timeout: 60_000
 
-  test "one short phrase completes with credited raw PCM and measured provider identity" do
+  test "successive phrases reuse one live socket with credited PCM" do
     {:ok, config} =
       TTS.new(
         api_key: System.fetch_env!("CARTESIA_API_KEY"),
@@ -29,7 +30,11 @@ defmodule Vxpipe.CallEngine.Integration.CartesiaTextToSpeechTest do
                  voice: config.voice,
                  sample_rate: config.sample_rate
                ],
-               private: [config: config]
+               private: [
+                 config: config,
+                 wire_module: LiveContextTTSSocket,
+                 wire_options: [observer: self()]
+               ]
              )
 
     assert_receive {:vxpipe_speech,
@@ -37,6 +42,8 @@ defmodule Vxpipe.CallEngine.Integration.CartesiaTextToSpeechTest do
                    5_000
 
     assert :ok = Session.ack(session, ready)
+    assert_receive {:live_tts_socket, wire}, 1_000
+    monitor = Process.monitor(wire)
 
     assert {:ok, descriptor} = TTSSession.configure(model: config.model, voice: config.voice)
 
@@ -46,11 +53,18 @@ defmodule Vxpipe.CallEngine.Integration.CartesiaTextToSpeechTest do
              provenance: :locally_measured
            }
 
-    assert {:ok, %{ref: request} = playback} = Session.speak(session, "Hello from Vxpipe.")
-    deadline = System.monotonic_time(:millisecond) + 30_000
-    bytes = await_completion(session, request, deadline, 0)
-    assert bytes > 0
-    assert :ok = Session.settle_output(session, playback, div(bytes, 48))
+    Vxpipe.CallEngine.LiveTTSCancellation.check(session)
+
+    for phrase <- ["Hello from Vxpipe.", "One more phrase."] do
+      assert {:ok, %{ref: request} = playback} = Session.speak(session, phrase)
+      deadline = System.monotonic_time(:millisecond) + 30_000
+      bytes = await_completion(session, request, deadline, 0)
+      assert bytes > 0
+      assert :ok = Session.settle_output(session, playback, div(bytes, 48))
+    end
+
+    refute_received {:live_tts_socket, _replacement}
+    refute_received {:DOWN, ^monitor, :process, ^wire, _reason}
     assert :ok = Session.close(session)
   end
 

@@ -13,6 +13,13 @@ defmodule Vxpipe.Console.Router do
     plug :put_secure_browser_headers
   end
 
+  pipeline :oauth_browser do
+    plug Vxpipe.Console.OAuth.Browser
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+  end
+
   pipeline :operator_pages do
     plug Vxpipe.Console.PrivateNoStore
   end
@@ -48,6 +55,23 @@ defmodule Vxpipe.Console.Router do
     plug Vxpipe.Console.RequireUserAPI
   end
 
+  pipeline :session_product_api do
+    plug Vxpipe.Console.SessionProductAPI
+    plug :user_api
+  end
+
+  pipeline :session_product_artifact do
+    plug Vxpipe.Console.SessionProductAPI
+    plug :fetch_session
+    plug :put_secure_browser_headers
+    plug Vxpipe.Console.PrivateNoStore
+    plug Vxpipe.Console.RequireUserAPI
+  end
+
+  pipeline :session_product_precheck do
+    plug Vxpipe.Console.SessionProductAPI
+  end
+
   pipeline :operator do
     plug Vxpipe.Console.RequireOperator
     plug Vxpipe.Console.RequireTenant
@@ -61,6 +85,27 @@ defmodule Vxpipe.Console.Router do
     plug Vxpipe.Console.RequireTenant
   end
 
+  scope "/oauth" do
+    pipe_through :oauth_browser
+    get "/authorize", Vxpipe.Console.OAuth.AuthorizationController, :start, log: false
+  end
+
+  scope "/oauth" do
+    pipe_through [:oauth_browser, :user_pages]
+    get "/authorize/:id", Vxpipe.Console.OAuth.AuthorizationController, :show, log: false
+    post "/authorize/:id", Vxpipe.Console.OAuth.AuthorizationController, :decide, log: false
+  end
+
+  scope "/api/account" do
+    pipe_through :session_product_api
+
+    get "/connections", Vxpipe.Console.OAuth.ConnectionsController, :index,
+      metadata: %{console_product_api: true}
+
+    delete "/connections/:id", Vxpipe.Console.OAuth.ConnectionsController, :delete,
+      metadata: %{console_product_api: true}
+  end
+
   scope "/admin/samples" do
     pipe_through [:browser, :operator_pages, :user_pages]
 
@@ -69,7 +114,7 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/admin/samples" do
-    pipe_through :user_api
+    pipe_through :session_product_api
 
     post "/calls", Vxpipe.Console.SampleCallController, :create
     post "/transfers", Vxpipe.Console.SampleTransferController, :create
@@ -129,17 +174,177 @@ defmodule Vxpipe.Console.Router do
     post "/recover", Vxpipe.Console.UserAuthController, :recover
   end
 
-  scope "/admin/api" do
-    pipe_through :user_api
+  scope "/api/samples" do
+    pipe_through :session_product_api
 
-    get "/session", Vxpipe.Console.UserSessionController, :show
-    get "/navigation", Vxpipe.Console.NavigationController, :show
-    get "/role-options", Vxpipe.Console.RoleManagementController, :options
-    patch "/account", Vxpipe.Console.AccountController, :update
-    get "/users", Vxpipe.Console.UserManagementController, :index
-    get "/users/:id", Vxpipe.Console.UserManagementController, :show
-    post "/users", Vxpipe.Console.UserManagementController, :create
-    patch "/users/:id", Vxpipe.Console.UserManagementController, :update
+    post "/calls", Vxpipe.Console.SampleCallController, :create,
+      metadata: %{console_product_api: true}
+
+    post "/transfers", Vxpipe.Console.SampleTransferController, :create,
+      metadata: %{console_product_api: true}
+  end
+
+  scope "/api" do
+    pipe_through :session_product_api
+
+    post "/onboarding/demo-tenant", Vxpipe.Console.AdminOnboardingController, :ensure_demo_tenant,
+      metadata: %{console_product_api: true}
+
+    post "/onboarding/demo-tenant/samples",
+         Vxpipe.Console.AdminOnboardingController,
+         :install_samples, metadata: %{console_product_api: true}
+  end
+
+  scope "/api/tenants/:tenant_key/calls" do
+    pipe_through :session_product_api
+
+    get "/", Vxpipe.Console.AdminCallsController, :index, metadata: %{console_product_api: true}
+
+    get "/spec-options", Vxpipe.Console.AdminCallsController, :spec_options,
+      metadata: %{console_product_api: true}
+
+    get "/:call_id", Vxpipe.Console.AdminCallDetailsController, :show,
+      metadata: %{console_product_api: true}
+  end
+
+  scope "/api/tenants/:tenant_key/calls" do
+    pipe_through [:session_product_api, :user_call_access]
+
+    get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show,
+      metadata: %{console_product_api: true}
+  end
+
+  scope "/api/tenants/:tenant_key/calls" do
+    pipe_through [:session_product_artifact, :user_call_access]
+
+    get "/:call_id/details/:publication_id", Vxpipe.Console.CallDetailsController, :show,
+      metadata: %{console_product_api: true}
+
+    get "/:call_id/recordings/:artifact_id", Vxpipe.Console.CallRecordingController, :show,
+      metadata: %{console_product_api: true}
+  end
+
+  scope "/admin/api" do
+    pipe_through :session_product_api
+
+    get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index
+
+    get "/tenants/:tenant_key/calls/spec-options",
+        Vxpipe.Console.AdminCallsController,
+        :spec_options
+
+    get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
+  end
+
+  scope "/api" do
+    pipe_through :session_product_api
+
+    post "/tenants", Vxpipe.Console.AdminTenantsController, :create,
+      metadata: %{console_product_api: true}
+
+    get "/api-keys", Vxpipe.Console.ApiKeyController, :index,
+      metadata: %{console_product_api: true}
+
+    get "/api-keys/tenants", Vxpipe.Console.ApiKeyController, :tenants,
+      metadata: %{console_product_api: true}
+
+    post "/api-keys", Vxpipe.Console.ApiKeyController, :create,
+      metadata: %{console_product_api: true}
+
+    delete "/api-keys/:id", Vxpipe.Console.ApiKeyController, :delete,
+      metadata: %{console_product_api: true}
+  end
+
+  scope "/api" do
+    pipe_through :session_product_api
+
+    post "/platform/credentials/test", Vxpipe.Console.AdminServicesController, :validate_platform,
+      metadata: %{console_product_api: true}
+
+    post "/platform/credentials", Vxpipe.Console.AdminServicesController, :create_platform,
+      metadata: %{console_product_api: true}
+
+    get "/platform/services", Vxpipe.Console.AdminServicesController, :platform_index,
+      metadata: %{console_product_api: true}
+
+    patch "/platform/credentials/:credential_id",
+          Vxpipe.Console.AdminServicesController,
+          :update_platform, metadata: %{console_product_api: true}
+
+    get "/tenants/:tenant_key/telephony-services/:service/numbers",
+        Vxpipe.Console.AdminPhoneNumbersController,
+        :index, metadata: %{console_product_api: true}
+
+    get "/tenants/:tenant_key/services", Vxpipe.Console.AdminServicesController, :index,
+      metadata: %{console_product_api: true}
+
+    get "/tenants/:tenant_key/telephony-applications",
+        Vxpipe.Console.AdminTelephonyApplicationsController,
+        :index, metadata: %{console_product_api: true}
+
+    post "/tenants/:tenant_key/telephony-applications",
+         Vxpipe.Console.AdminTelephonyApplicationsController,
+         :create, metadata: %{console_product_api: true}
+
+    patch "/tenants/:tenant_key/telephony-applications/:service_id",
+          Vxpipe.Console.AdminTelephonyApplicationsController,
+          :update, metadata: %{console_product_api: true}
+
+    get "/tenants/:tenant_key/service-bindings",
+        Vxpipe.Console.AdminServicesController,
+        :tenant_bindings, metadata: %{console_product_api: true}
+
+    get "/tenants/:tenant_key/credentials",
+        Vxpipe.Console.AdminServicesController,
+        :index_credentials, metadata: %{console_product_api: true}
+
+    post "/tenants/:tenant_key/credentials/test",
+         Vxpipe.Console.AdminServicesController,
+         :validate, metadata: %{console_product_api: true}
+
+    post "/tenants/:tenant_key/credentials", Vxpipe.Console.AdminServicesController, :create,
+      metadata: %{console_product_api: true}
+
+    delete "/tenants/:tenant_key/credentials/:credential_id",
+           Vxpipe.Console.AdminServicesController,
+           :delete, metadata: %{console_product_api: true}
+
+    delete "/platform/credentials/:credential_id",
+           Vxpipe.Console.AdminServicesController,
+           :delete_platform, metadata: %{console_product_api: true}
+
+    patch "/tenants/:tenant_key/credentials/:credential_id",
+          Vxpipe.Console.AdminServicesController,
+          :update, metadata: %{console_product_api: true}
+  end
+
+  scope "/api" do
+    pipe_through :session_product_api
+
+    post "/users/:id/reset-password", Vxpipe.Console.UserManagementController, :reset_password,
+      metadata: %{console_product_api: true}
+
+    get "/roles", Vxpipe.Console.RoleManagementController, :index,
+      metadata: %{console_product_api: true}
+
+    get "/roles/:id", Vxpipe.Console.RoleManagementController, :show,
+      metadata: %{console_product_api: true}
+
+    post "/roles", Vxpipe.Console.RoleManagementController, :create,
+      metadata: %{console_product_api: true}
+
+    patch "/roles/:id", Vxpipe.Console.RoleManagementController, :update,
+      metadata: %{console_product_api: true}
+
+    delete "/roles/:id", Vxpipe.Console.RoleManagementController, :delete,
+      metadata: %{console_product_api: true}
+  end
+
+  scope "/admin/api" do
+    pipe_through :session_product_api
+
+    post "/tenants", Vxpipe.Console.AdminTenantsController, :create
+
     post "/users/:id/reset-password", Vxpipe.Console.UserManagementController, :reset_password
     get "/roles", Vxpipe.Console.RoleManagementController, :index
     get "/roles/:id", Vxpipe.Console.RoleManagementController, :show
@@ -149,69 +354,22 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/admin/api" do
-    pipe_through :user_api
-
-    get "/api-keys", Vxpipe.Console.ApiKeyController, :index
-    get "/api-keys/tenants", Vxpipe.Console.ApiKeyController, :tenants
-    post "/api-keys", Vxpipe.Console.ApiKeyController, :create
-    delete "/api-keys/:id", Vxpipe.Console.ApiKeyController, :delete
+    pipe_through :session_product_api
 
     post "/platform/credentials/test", Vxpipe.Console.AdminServicesController, :validate_platform
+
     post "/platform/credentials", Vxpipe.Console.AdminServicesController, :create_platform
+
     get "/platform/services", Vxpipe.Console.AdminServicesController, :platform_index
 
     patch "/platform/credentials/:credential_id",
           Vxpipe.Console.AdminServicesController,
           :update_platform
 
-    post "/onboarding/demo-tenant", Vxpipe.Console.AdminOnboardingController, :ensure_demo_tenant
-
-    post "/onboarding/demo-tenant/samples",
-         Vxpipe.Console.AdminOnboardingController,
-         :install_samples
-
-    get "/tenants", Vxpipe.Console.AdminTenantsController, :index
-    post "/tenants", Vxpipe.Console.AdminTenantsController, :create
-    get "/tenants/:tenant_key/dashboard", Vxpipe.Console.TenantDashboardController, :show
-    get "/tenants/:tenant_key/providers", Vxpipe.Console.AdminProviderCatalogController, :index
-
-    get "/tenants/:tenant_key/providers/:provider/models",
-        Vxpipe.Console.AdminProviderCatalogController,
-        :models
-
-    get "/tenants/:tenant_key/call-spec-editor-lookups",
-        Vxpipe.Console.AdminCallSpecLookupsController,
-        :index
-
     get "/tenants/:tenant_key/telephony-services/:service/numbers",
         Vxpipe.Console.AdminPhoneNumbersController,
         :index
 
-    get "/tenants/:tenant_key/call-specs", Vxpipe.Console.AdminCallSpecsController, :index
-
-    get "/tenants/:tenant_key/call-specs/:id",
-        Vxpipe.Console.AdminCallSpecAuthoringController,
-        :show
-
-    post "/tenants/:tenant_key/call-specs",
-         Vxpipe.Console.AdminCallSpecAuthoringController,
-         :create
-
-    put "/tenants/:tenant_key/call-specs/:id",
-        Vxpipe.Console.AdminCallSpecAuthoringController,
-        :update
-
-    post "/tenants/:tenant_key/call-specs/:id/revisions/:revision/publish",
-         Vxpipe.Console.AdminCallSpecAuthoringController,
-         :publish
-
-    get "/tenants/:tenant_key/calls", Vxpipe.Console.AdminCallsController, :index
-
-    get "/tenants/:tenant_key/calls/spec-options",
-        Vxpipe.Console.AdminCallsController,
-        :spec_options
-
-    get "/tenants/:tenant_key/calls/:call_id", Vxpipe.Console.AdminCallDetailsController, :show
     get "/tenants/:tenant_key/services", Vxpipe.Console.AdminServicesController, :index
 
     get "/tenants/:tenant_key/telephony-applications",
@@ -253,6 +411,78 @@ defmodule Vxpipe.Console.Router do
           :update
   end
 
+  scope "/admin/api" do
+    pipe_through :user_api
+
+    get "/session", Vxpipe.Console.UserSessionController, :show
+    get "/navigation", Vxpipe.Console.NavigationController, :show
+    patch "/account", Vxpipe.Console.AccountController, :update
+  end
+
+  scope "/admin/api" do
+    pipe_through :session_product_api
+
+    get "/role-options", Vxpipe.Console.RoleManagementController, :options
+    get "/users", Vxpipe.Console.UserManagementController, :index
+    get "/users/:id", Vxpipe.Console.UserManagementController, :show
+    post "/users", Vxpipe.Console.UserManagementController, :create
+    patch "/users/:id", Vxpipe.Console.UserManagementController, :update
+  end
+
+  scope "/admin/api" do
+    pipe_through :session_product_api
+
+    post "/onboarding/demo-tenant", Vxpipe.Console.AdminOnboardingController, :ensure_demo_tenant
+
+    post "/onboarding/demo-tenant/samples",
+         Vxpipe.Console.AdminOnboardingController,
+         :install_samples
+
+    get "/api-keys", Vxpipe.Console.ApiKeyController, :index
+    get "/api-keys/tenants", Vxpipe.Console.ApiKeyController, :tenants
+    post "/api-keys", Vxpipe.Console.ApiKeyController, :create
+    delete "/api-keys/:id", Vxpipe.Console.ApiKeyController, :delete
+  end
+
+  scope "/admin/api" do
+    pipe_through :user_api
+
+    get "/tenants/:tenant_key/dashboard", Vxpipe.Console.TenantDashboardController, :show
+
+    get "/tenants/:tenant_key/call-spec-editor-lookups",
+        Vxpipe.Console.AdminCallSpecLookupsController,
+        :index
+  end
+
+  scope "/admin/api" do
+    pipe_through :session_product_api
+
+    get "/tenants", Vxpipe.Console.AdminTenantsController, :index
+    get "/tenants/:tenant_key/providers", Vxpipe.Console.AdminProviderCatalogController, :index
+
+    get "/tenants/:tenant_key/providers/:provider/models",
+        Vxpipe.Console.AdminProviderCatalogController,
+        :models
+
+    get "/tenants/:tenant_key/call-specs", Vxpipe.Console.AdminCallSpecsController, :index
+
+    get "/tenants/:tenant_key/call-specs/:id",
+        Vxpipe.Console.AdminCallSpecAuthoringController,
+        :show
+
+    post "/tenants/:tenant_key/call-specs",
+         Vxpipe.Console.AdminCallSpecAuthoringController,
+         :create
+
+    put "/tenants/:tenant_key/call-specs/:id",
+        Vxpipe.Console.AdminCallSpecAuthoringController,
+        :update
+
+    post "/tenants/:tenant_key/call-specs/:id/revisions/:revision/publish",
+         Vxpipe.Console.AdminCallSpecAuthoringController,
+         :publish
+  end
+
   scope "/tenants/:tenant_key/calls" do
     pipe_through [:browser, :operator_pages, :user_pages]
 
@@ -263,6 +493,7 @@ defmodule Vxpipe.Console.Router do
 
   scope "/tenants/:tenant_key/calls" do
     pipe_through [
+      :session_product_precheck,
       :browser,
       :operator_pages,
       :user_pages,
@@ -274,7 +505,7 @@ defmodule Vxpipe.Console.Router do
   end
 
   scope "/tenants/:tenant_key/calls" do
-    pipe_through [:user_api, :user_call_access]
+    pipe_through [:session_product_api, :user_call_access]
 
     get "/:call_id/inspection", Vxpipe.Console.CallInspectionController, :show
   end

@@ -39,7 +39,10 @@ defmodule Vxpipe.Persistence.DemoTenantStore do
   defp resume_after_conflict({:error, :setup_conflict}, repo), do: fetch(repo)
   defp resume_after_conflict(result, _repo), do: result
 
-  defp fetch(repo) do
+  @impl true
+  def fetch(repo), do: repository_result(fn -> fetch_binding(repo) end)
+
+  defp fetch_binding(repo) do
     query =
       from(setup in InstallationSetup,
         join: tenant in assoc(setup, :demo_tenant),

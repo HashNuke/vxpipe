@@ -119,8 +119,8 @@ defmodule Vxpipe.Console.Test.FakeUserIdentity do
   def update_account(_actor, _current_password, _email, _password, _confirmation),
     do: {:error, :invalid_credentials}
 
-  @spec list_roles(map()) :: {:error, :forbidden}
-  def list_roles(_actor), do: {:error, :forbidden}
+  @spec list_roles(map(), map()) :: {:error, :forbidden}
+  def list_roles(_actor, _filters), do: {:error, :forbidden}
 
   @spec get_role(map(), String.t()) :: {:error, :forbidden}
   def get_role(_actor, _id), do: {:error, :forbidden}

@@ -34,6 +34,13 @@ defmodule Vxpipe.Console.RequireUser do
     end
   end
 
+  def allowed_path?(_principal, "/oauth/" <> rest) do
+    case String.split(rest, "/") do
+      ["authorize", id] -> Vxpipe.Console.OAuth.Browser.opaque?(id)
+      _invalid -> false
+    end
+  end
+
   def allowed_path?(principal, path) when is_binary(path) do
     uri = URI.parse(path)
 
@@ -55,6 +62,9 @@ defmodule Vxpipe.Console.RequireUser do
 
     if query == "", do: "", else: "?" <> query
   end
+
+  defp permitted?(_principal, ["oauth", "authorize", id]),
+    do: Vxpipe.Console.OAuth.Browser.opaque?(id)
 
   defp permitted?(principal, ["api-keys" | rest]) when rest in [[], ["new"]],
     do: Vxpipe.Calls.ApiKeyAccess.visible?(principal)

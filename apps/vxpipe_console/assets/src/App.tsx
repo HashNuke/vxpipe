@@ -77,6 +77,7 @@ import { CallSpecEditorRoute } from "./CallSpecEditorRoute";
 import { ScopedServicesApp } from "./ScopedServicesApp";
 import { parseBindingDirectory } from "./admin/serviceBindingsApi";
 import { AccessFrame } from "./admin/authentication/AccessFrame";
+import { ConnectedClients } from "./admin/authentication/ConnectedClients";
 import { AccountPage } from "./admin/authentication/AccountPage";
 import { AuthPage } from "./admin/authentication/AuthPage";
 import { AuthenticationApi, AuthenticationError, isForbidden, isSessionExpired } from "./admin/authentication/authenticationApi";
@@ -353,6 +354,7 @@ function AccountRoute(props: AppProps) {
           key={user.id}
           user={user}
           role={role}
+          connectedClients={<ConnectedClients api={api} onSessionExpired={onSessionExpired} />}
           onSave={async (email, currentPassword, newPassword, confirmation) => {
             try {
               await api.updateAccount(email, currentPassword, newPassword, confirmation);
@@ -383,6 +385,7 @@ function UserNewRoute(props: AppProps) {
   const api = useAuthenticationApi(props);
   const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
   const navigate = useNavigate();
+  const loadRole = useRoleReader(api, onSessionExpired);
   const { session, sessionState } = useAccessSession(api, onSessionExpired);
   const { roles, rolesState } = useAccessRoles(api, sessionState === "ready", onSessionExpired);
   const tenants = useTenantOptions(api, sessionState === "ready", onSessionExpired);
@@ -426,6 +429,7 @@ function UserNewRoute(props: AppProps) {
           <UserEditorPage
             actorRole={current.role}
             roles={roles}
+            loadRole={loadRole}
             tenants={tenants}
             onNavigate={navigate}
             onSave={async (draft, password) => {
@@ -455,9 +459,10 @@ function UserDetailRoute(props: AppProps) {
   const api = useAuthenticationApi(props);
   const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
   const navigate = useNavigate();
+  const loadRole = useRoleReader(api, onSessionExpired);
   const { id = "" } = useParams();
   const { session, sessionState } = useAccessSession(api, onSessionExpired);
-  const { roles, rolesLimited, rolesState } = useAccessRoles(api, sessionState === "ready", onSessionExpired);
+  const { roles, rolesState } = useAccessRoles(api, sessionState === "ready", onSessionExpired);
   const tenants = useTenantOptions(api, sessionState === "ready", onSessionExpired);
   const [target, setTarget] = useState<AccessUser | null>(null);
   const [detail, setDetail] = useState<AccessLoadState | "missing" | "denied">("loading");
@@ -535,6 +540,7 @@ function UserDetailRoute(props: AppProps) {
             key={target.id}
             actorRole={current.role}
             roles={roles}
+            loadRole={loadRole}
             tenants={tenants}
             user={target}
             onNavigate={navigate}
@@ -544,7 +550,7 @@ function UserDetailRoute(props: AppProps) {
                   email: draft.email,
                   roleId: draft.roleId,
                   enabled: draft.enabled,
-                  memberships: rolesLimited ? target.memberships : draft.memberships,
+                  memberships: draft.memberships,
                 });
                 setTarget(updated);
                 return {};
@@ -651,6 +657,9 @@ function RolesRoute(props: AppProps) {
   const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
   const navigate = useNavigate();
   const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const [query, setQuery] = useSearchParams();
+  const page = readPage(query);
+  const [pagination, setPagination] = useState<{page:number;page_size:number;total:number;total_pages:number}>();
   const [roles, setRoles] = useState<AccessRole[]>([]);
   const [affectedUsers, setAffectedUsers] = useState<Record<string, number>>({});
   const [directoryState, setDirectoryState] = useState<AccessLoadState | "denied">("loading");
@@ -660,9 +669,11 @@ function RolesRoute(props: AppProps) {
     let active = true;
     setDirectoryState("loading");
     (async () => {
-      const { roles: directory } = await api.roles();
+      const { roles: directory, pagination: nextPagination } = await api.roles(page);
       if (!active) return;
       setRoles(directory);
+      setPagination(nextPagination);
+      setAffectedUsers({});
       // Counts come from the authoritative per-role endpoint; a bounded
       // user-directory scan would present partial counts as authoritative.
       const counts: Record<string, number> = {};
@@ -683,11 +694,15 @@ function RolesRoute(props: AppProps) {
           onSessionExpired();
           return;
         }
+        if (error instanceof AuthenticationError && error.status === 422 && error.code === "page_out_of_range" && page !== 1) {
+          setQuery({}, {replace:true});
+          return;
+        }
         setDirectoryState(isForbidden(error) ? "denied" : "unavailable");
       },
     );
     return () => { active = false; };
-  }, [api, sessionState, onSessionExpired]);
+  }, [api, sessionState, onSessionExpired, page, setQuery]);
 
   return (
     <AccessShell
@@ -725,7 +740,7 @@ function RolesRoute(props: AppProps) {
             </main>
           );
         }
-        return <RolesPage roles={roles} affectedUsers={affectedUsers} onNavigate={navigate} />;
+        return <RolesPage roles={roles} affectedUsers={affectedUsers} onNavigate={navigate} pagination={pagination} onPage={(next) => setQuery(next === 1 ? {} : {page:String(next)})} />;
       }}
     </AccessShell>
   );
@@ -925,6 +940,17 @@ function useAccessSession(api: AuthenticationApi, onSessionExpired: () => void) 
   return { session, sessionState };
 }
 
+function useRoleReader(api: AuthenticationApi, onSessionExpired: () => void) {
+  return useCallback(async (id: string) => {
+    try { return (await api.role(id)).role; }
+    catch (error: unknown) {
+      if (isForbidden(error)) return null;
+      if (isSessionExpired(error)) onSessionExpired();
+      throw error;
+    }
+  }, [api, onSessionExpired]);
+}
+
 function useAccessRoles(
   api: AuthenticationApi,
   ready: boolean,
@@ -937,33 +963,15 @@ function useAccessRoles(
   useEffect(() => {
     if (!ready) return;
     let active = true;
-    api.roles().then(({ roles: directory }) => {
+    api.roleOptions().then(({ roles: options }) => {
       if (!active) return;
-      setRoles(directory);
-      setRolesLimited(false);
+      setRoles(options);
+      setRolesLimited(true);
       setRolesState("ready");
     }).catch((error: unknown) => {
       if (!active) return;
-      if (isSessionExpired(error)) {
-        onSessionExpired();
-        return;
-      }
-      if (!isForbidden(error)) {
-        setRolesState("unavailable");
-        return;
-      }
-      // `users.read` viewers cannot list full roles; minimal option
-      // metadata still drives filters, badges and read-only display.
-      api.roleOptions().then(({ roles: directory }) => {
-        if (!active) return;
-        setRoles(directory);
-        setRolesLimited(true);
-        setRolesState("ready");
-      }).catch((fallback: unknown) => {
-        if (!active) return;
-        if (isSessionExpired(fallback)) onSessionExpired();
-        else setRolesState("unavailable");
-      });
+      if (isSessionExpired(error)) onSessionExpired();
+      else setRolesState("unavailable");
     });
     return () => { active = false; };
   }, [api, ready, onSessionExpired]);
@@ -1613,7 +1621,7 @@ function RoutedApp({
         }
         onTestCredential={(draft) =>
           testCredentialRequest(
-            `/admin/api/tenants/${encodeURIComponent(route.tenantKey)}/credentials/test`,
+            `/api/tenants/${encodeURIComponent(route.tenantKey)}/credentials/test`,
             draft,
             undefined,
             csrfToken,
@@ -1669,7 +1677,7 @@ async function loadTenants(
   isCurrent: () => boolean,
   recoverFirstPage: () => void,
 ): Promise<TenantsPageState | undefined> {
-  const response = await fetchImpl(`/admin/api/tenants?page=${selected.page}`, {
+  const response = await fetchImpl(`/api/tenants?page=${selected.page}`, {
     headers: { accept: "application/json" },
     signal,
   });
@@ -1704,7 +1712,7 @@ async function loadOnboarding(
   onSessionExpired: () => void,
   isCurrent: () => boolean,
 ): Promise<OnboardingPageState | undefined> {
-  const tenantResponse = await fetchImpl("/admin/api/onboarding/demo-tenant", {
+  const tenantResponse = await fetchImpl("/api/onboarding/demo-tenant", {
     method: "POST",
     headers: {
       accept: "application/json",
@@ -1722,7 +1730,7 @@ async function loadOnboarding(
   const tenant = parseDemoTenant(await tenantResponse.json());
 
   const serviceResponse = await fetchImpl(
-    `/admin/api/tenants/${encodeURIComponent(tenant.key)}/service-bindings`,
+    `/api/tenants/${encodeURIComponent(tenant.key)}/service-bindings`,
     { headers: { accept: "application/json" }, signal },
   );
 
@@ -1773,7 +1781,7 @@ function samplePrerequisitesMet(providers: OnboardingPageState["providers"]) {
       .filter((provider) => provider.status === "valid")
       .map((provider) => provider.provider),
   );
-  return valid.has("deepgram") && (valid.has("google") || valid.has("zenmux"));
+  return valid.has("deepgram") && (["google", "zenmux", "openai", "deepseek", "openrouter", "fireworks"] as const).some((provider) => valid.has(provider));
 }
 
 async function installOnboardingSamples(
@@ -1790,12 +1798,14 @@ async function installOnboardingSamples(
   }));
 
   try {
-    const response = await fetchImpl("/admin/api/onboarding/demo-tenant/samples", {
+    const response = await fetchImpl("/api/onboarding/demo-tenant/samples", {
       method: "POST",
       headers: {
+        "content-type": "application/json",
         accept: "application/json",
         "x-csrf-token": csrfToken,
       },
+      body: JSON.stringify({ tenant_key: current.tenant.key }),
     });
 
     if (response.status === 401) {
@@ -1842,7 +1852,7 @@ async function loadCallSpecs(
 ): Promise<TenantCallSpecsPageState | undefined> {
   const encodedTenant = encodeURIComponent(selected.tenantKey);
   const response = await fetchImpl(
-    `/admin/api/tenants/${encodedTenant}/call-specs?page=${selected.page}`,
+    `/api/tenants/${encodedTenant}/call-specs?page=${selected.page}`,
     { headers: { accept: "application/json" }, signal },
   );
 
@@ -1892,7 +1902,7 @@ async function loadCalls(
   if (selected.callSpecId) query.set("call_spec_id", selected.callSpecId);
 
   const response = await fetchImpl(
-    `/admin/api/tenants/${encodedTenant}/calls?${query.toString()}`,
+    `/api/tenants/${encodedTenant}/calls?${query.toString()}`,
     { headers: { accept: "application/json" }, signal },
   );
 
@@ -1946,7 +1956,7 @@ async function loadServices(
   isCurrent: () => boolean,
 ): Promise<TenantServicesPageState | undefined> {
   const encodedTenant = encodeURIComponent(selected.tenantKey);
-  const response = await fetchImpl(`/admin/api/tenants/${encodedTenant}/services`, {
+  const response = await fetchImpl(`/api/tenants/${encodedTenant}/services`, {
     headers: { accept: "application/json" },
     signal,
   });
@@ -2071,7 +2081,7 @@ async function requestCallDetails(
   fetchImpl: Fetch,
 ) {
   const response = await fetchImpl(
-    `/admin/api/tenants/${encodeURIComponent(selected.tenantKey)}/calls/${encodeURIComponent(selected.callId)}`,
+    `/api/tenants/${encodeURIComponent(selected.tenantKey)}/calls/${encodeURIComponent(selected.callId)}`,
     { headers: { accept: "application/json" }, signal },
   );
 
@@ -2144,7 +2154,7 @@ async function saveCredential(
     const credentialPath = existing
       ? `/credentials/${encodeURIComponent(existing.credentialId)}`
       : "/credentials";
-    const response = await fetchImpl(`/admin/api/tenants/${encodedTenant}${credentialPath}`, {
+    const response = await fetchImpl(`/api/tenants/${encodedTenant}${credentialPath}`, {
       method: existing ? "PATCH" : "POST",
       headers: {
         accept: "application/json",

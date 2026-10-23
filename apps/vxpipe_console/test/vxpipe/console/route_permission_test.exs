@@ -73,8 +73,9 @@ defmodule Vxpipe.Console.RoutePermissionTest do
   test "does not grant unknown or sample routes by a prefix" do
     assert RoutePermission.for_request("POST", ["admin", "api", "users", "guess"]) == :unknown
 
+    # The configured sample workflow checks the actual actor's call/spec authority.
     assert RoutePermission.for_request("POST", ["admin", "samples", "calls"]) ==
-             {:installation, "tenants.write"}
+             :authenticated
 
     assert RoutePermission.for_request("POST", ["admin", "samples", "calls", "guess"]) ==
              :unknown

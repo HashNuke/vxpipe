@@ -3,13 +3,17 @@ defmodule Vxpipe.Calls.TenantCreation do
   alias Vxpipe.Calls.{PublicId, Repositories, Tenant, UserAuthorization}
   alias Vxpipe.Identity.Principal
 
-  def create(%Principal{} = principal, name, options \\ []) do
+  def create(principal, name, options \\ [])
+
+  def create(%Principal{} = principal, name, options) do
     with :ok <- UserAuthorization.authorize_installation(principal, "tenants.write"),
          {:ok, name} <- normalize_name(name),
          {:ok, repository} <- Repositories.fetch(options, :credential_repository) do
       insert(repository, name, 4)
     end
   end
+
+  def create(_principal, _name, _options), do: {:error, :forbidden}
 
   defp normalize_name(name) when is_binary(name) do
     if String.valid?(name) and String.length(String.trim(name)) in 1..256 and

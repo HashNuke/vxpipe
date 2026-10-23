@@ -224,7 +224,12 @@ test("the browser unload guard clears after saving and is absent for historical 
   rename("New name");
   const dirty = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(dirty); expect(dirty.defaultPrevented).toBe(true);
   saveDraft(); await screen.findByText("Saved as revision 4");
-  const saved = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(saved); expect(saved.defaultPrevented).toBe(false);
+  // The saved status can render before the effect removes the unload listener.
+  await waitFor(() => {
+    const saved = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(saved);
+    expect(saved.defaultPrevented).toBe(false);
+  });
   view.unmount(); render(<CallSpecEditor {...properties()} snapshot={{ document: { ...snapshot.document, readOnly: true } }} />);
   const historical = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(historical); expect(historical.defaultPrevented).toBe(false);
 });

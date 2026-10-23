@@ -24,6 +24,8 @@ config :phoenix, :filter_parameters, [
   "secret",
   "token",
   "code",
+  "state",
+  "browser_binding",
   "values",
   "api_key",
   "account_sid"
@@ -36,6 +38,15 @@ config :vxpipe_persistence,
 config :vxpipe_persistence, :call_details_publication_recovery, enabled: false
 
 config :vxpipe_persistence, Vxpipe.Persistence.Repo, log: false
+
+config :boruta, Boruta.Oauth,
+  contexts: [
+    clients: Vxpipe.Persistence.OAuth.BorutaClients,
+    codes: Vxpipe.Persistence.OAuth.BorutaCodes,
+    access_tokens: Vxpipe.Persistence.OAuth.BorutaTokens,
+    scopes: Vxpipe.Persistence.OAuth.BorutaResourceOwners,
+    resource_owners: Vxpipe.Persistence.OAuth.BorutaResourceOwners
+  ]
 
 config :vxpipe_calls, Vxpipe.Calls,
   call_details_publication: [

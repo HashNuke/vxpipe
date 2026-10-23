@@ -11,6 +11,10 @@ defmodule Vxpipe.Console.GatewayMount do
 
   @impl true
   def call(conn, _options) do
-    Mount.call(conn, Endpoint.config(:gateway_mount))
+    if Vxpipe.Console.SessionProductAPI.route?(conn) do
+      conn
+    else
+      Mount.call(conn, Endpoint.config(:gateway_mount))
+    end
   end
 end

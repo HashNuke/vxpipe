@@ -14,6 +14,7 @@ defmodule Vxpipe.Persistence.EctoStorage do
   @terminal_errors [
     :ambiguous_cumulative_order,
     :call_incarnation_mismatch,
+    :call_room_mismatch,
     :call_fact_conflict,
     :call_fact_insert_failed,
     :call_fact_sequence_conflict,

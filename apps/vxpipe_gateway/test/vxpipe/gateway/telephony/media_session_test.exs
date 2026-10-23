@@ -497,6 +497,128 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
              )
   end
 
+  test "managed media registers its entire root before attachment and waits for root shutdown" do
+    c = managed_media_context()
+    assert {:ok, connection} = start_managed_media(c)
+    assert %{resources: resources} = Vxpipe.Gateway.CallCleanup.snapshot(c.tracker)
+
+    assert %{
+             kind: :telephony_media,
+             owner: ^connection,
+             acknowledgement: :complete,
+             root_outcome: :pending
+           } = Map.fetch!(resources, connection)
+
+    assert {:ok, _} = Vxpipe.Gateway.CallCleanup.observe(c.tracker)
+    monitor = Process.monitor(connection)
+
+    assert :ok =
+             CallEngine.end_call(c.binding.tenant_id, c.binding.room_id, c.binding.incarnation_id)
+
+    assert_receive {:DOWN, ^monitor, :process, ^connection, :shutdown}, 2_000
+    assert_receive {:call_cleanup_changed, tracker, %{status: :complete}}, 2_000
+    assert tracker == c.tracker
+  end
+
+  test "managed media rejects missing, sealed and mismatched cleanup ownership" do
+    c = managed_media_context()
+    different = %{c.cleanup | call_id: "another-call"}
+    {:ok, other_tracker} = Vxpipe.Gateway.CallCleanupSupervisor.start_new(different)
+
+    on_exit(fn ->
+      DynamicSupervisor.terminate_child(Vxpipe.Gateway.CallCleanupSupervisor, other_tracker)
+    end)
+
+    invalid = Map.put(c.binding, :cleanup_binding, different)
+    assert {:error, _} = start_managed_media(%{c | binding: invalid})
+    assert DynamicSupervisor.which_children(c.supervisor) == []
+    assert :ok = Vxpipe.Gateway.CallCleanup.seal(c.tracker)
+    assert {:error, _} = start_managed_media(c)
+    assert DynamicSupervisor.which_children(c.supervisor) == []
+
+    assert :ok =
+             DynamicSupervisor.terminate_child(Vxpipe.Gateway.CallCleanupSupervisor, c.tracker)
+
+    assert {:error, _} = start_managed_media(c)
+    assert DynamicSupervisor.which_children(c.supervisor) == []
+  end
+
+  test "tracker loss stops the media tree even while its socket remains" do
+    c = managed_media_context()
+    assert {:ok, connection} = start_managed_media(c)
+    monitor = Process.monitor(connection)
+    socket_monitor = Process.monitor(c.socket)
+
+    assert :ok =
+             DynamicSupervisor.terminate_child(Vxpipe.Gateway.CallCleanupSupervisor, c.tracker)
+
+    assert_receive {:DOWN, ^monitor, :process, ^connection, :shutdown}, 2_000
+    refute_received {:DOWN, ^socket_monitor, :process, _, _}
+    assert {:error, :not_found} = Vxpipe.Gateway.CallCleanupSupervisor.lookup(c.cleanup)
+  end
+
+  test "managed media reuses only the same registered root and exact socket binding" do
+    c = managed_media_context()
+    assert {:ok, connection} = start_managed_media(c)
+    assert {:ok, ^connection} = start_managed_media(c)
+    assert {:error, _} = start_managed_media(%{c | socket: self()})
+    changed = %{c.binding | provider_call_control_id: "another-control"}
+    assert {:error, _} = start_managed_media(%{c | binding: changed})
+    assert [{_, ^connection, :supervisor, _}] = DynamicSupervisor.which_children(c.supervisor)
+  end
+
+  test "managed media cannot adopt a previously untracked connection" do
+    c = managed_media_context()
+    unmanaged = Map.put(c.binding, :cleanup_binding, nil)
+    assert {:ok, connection} = start_managed_media(%{c | binding: unmanaged})
+    assert {:error, _} = start_managed_media(c)
+    assert %{resources: resources} = Vxpipe.Gateway.CallCleanup.snapshot(c.tracker)
+    refute Map.has_key?(resources, connection)
+  end
+
+  defp start_managed_media(c) do
+    MediaSupervisor.start_session(c.supervisor, c.claim, c.binding, c.socket, "stream-1")
+  end
+
+  defp managed_media_context do
+    plan = compile_plan()
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    assert {:ok, room} = CallEngine.start_call(plan)
+    leg = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end}, id: :managed_leg)
+    binding = binding(plan, room.incarnation_id, caller.participant_id, leg)
+
+    cleanup = %{
+      tenant_key: plan.tenant_id,
+      call_id: plan.call_id,
+      room_id: plan.room_id,
+      incarnation_id: room.incarnation_id
+    }
+
+    {:ok, tracker} = Vxpipe.Gateway.CallCleanupSupervisor.start_new(cleanup)
+    binding = Map.put(binding, :cleanup_binding, cleanup)
+
+    on_exit(fn ->
+      CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+
+      case Vxpipe.Gateway.CallCleanupSupervisor.lookup(cleanup) do
+        {:ok, owner} ->
+          DynamicSupervisor.terminate_child(Vxpipe.Gateway.CallCleanupSupervisor, owner)
+
+        {:error, :not_found} ->
+          :ok
+      end
+    end)
+
+    %{
+      binding: binding,
+      cleanup: cleanup,
+      tracker: tracker,
+      socket: socket(self(), binding),
+      claim: claim(plan, room.incarnation_id, caller.participant_id),
+      supervisor: start_supervised!({MediaSupervisor, name: nil})
+    }
+  end
+
   defp compile_plan(options \\ []) do
     call_spec_input = %{
       schema_version: "20260915.01",

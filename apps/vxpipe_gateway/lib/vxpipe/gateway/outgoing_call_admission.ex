@@ -4,7 +4,7 @@ defmodule Vxpipe.Gateway.OutgoingCallAdmission do
   alias Vxpipe.CallEngine
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{PreparedCall, TelephonyPlanBindings}
-  alias Vxpipe.Gateway.CallAdmission.CallEngineOptions
+  alias Vxpipe.Gateway.CallAdmission.{CallEngineOptions, Cleanup}
   alias Vxpipe.Gateway.Telephony.ServiceRegistry
 
   def authenticate(options, tenant, secret),
@@ -16,12 +16,14 @@ defmodule Vxpipe.Gateway.OutgoingCallAdmission do
   def start(options, %PreparedCall{state: :admitting, plan: %{direction: :outgoing}} = call) do
     token = make_ref()
 
-    runtime =
-      options |> CallEngineOptions.build() |> Keyword.put(:outgoing_admission, {self(), token})
-
     result =
       with :ok <- validate_plan(call.plan, options),
-           do: CallEngine.start_call(call.plan, runtime)
+           {:ok, runtime} <- CallEngineOptions.build(options, call),
+           do:
+             CallEngine.start_call(
+               call.plan,
+               Keyword.put(runtime, :outgoing_admission, {self(), token})
+             )
 
     case result do
       {:ok, room} -> start_room(options, call, room, token)
@@ -34,47 +36,69 @@ defmodule Vxpipe.Gateway.OutgoingCallAdmission do
   defp start_room(options, call, room, token) do
     case CallEngine.monitor_room(call.tenant_key, call.room_id, room.incarnation_id) do
       {:ok, monitor} ->
-        result =
-          with {:ok, started} <-
-                 Calls.mark_outgoing_call_started(
-                   call,
-                   room.incarnation_id,
-                   DateTime.utc_now(),
-                   options
-                 ),
-               :ok <-
-                 CallEngine.admit_outgoing_call(
-                   call.tenant_key,
-                   call.room_id,
-                   room.incarnation_id,
-                   token
-                 ),
-               do: await_submission(options, started, monitor, token)
-
-        Process.demonitor(monitor, [:flush])
-
-        case result do
-          {:ok, _call} = success ->
-            success
-
-          {:error, reason} ->
-            CallEngine.cancel_outgoing_admission(
-              call.tenant_key,
-              call.room_id,
-              room.incarnation_id,
-              token
-            )
-
-            fail(
-              options,
-              call,
-              if(reason == :startup_unknown, do: :startup_unknown, else: :room_start_failed)
-            )
+        try do
+          bind_and_release(options, call, room, token, monitor)
+        after
+          Process.demonitor(monitor, [:flush])
         end
 
       {:error, _unavailable} ->
-        fail(options, call, :room_start_failed)
+        cancel_admission(call, room, token)
+        {:error, :outgoing_call_start_failed}
     end
+  rescue
+    exception ->
+      cancel_admission(call, room, token)
+      reraise exception, __STACKTRACE__
+  catch
+    kind, reason ->
+      cancel_admission(call, room, token)
+      :erlang.raise(kind, reason, __STACKTRACE__)
+  end
+
+  defp bind_and_release(options, call, room, token, monitor) do
+    with {:ok, :admit, bound} <- Cleanup.bind(call, room.incarnation_id, options),
+         {:ok, started} <-
+           Calls.mark_outgoing_call_started(
+             bound,
+             room.incarnation_id,
+             DateTime.utc_now(),
+             options
+           ),
+         :ok <-
+           CallEngine.admit_outgoing_call(
+             call.tenant_key,
+             call.room_id,
+             room.incarnation_id,
+             token
+           ) do
+      case await_submission(options, started, monitor, token) do
+        {:ok, _call} = success ->
+          success
+
+        {:error, reason} ->
+          cancel_admission(call, room, token)
+
+          fail(
+            options,
+            started,
+            if(reason == :startup_unknown, do: :startup_unknown, else: :room_start_failed)
+          )
+      end
+    else
+      _not_admitted ->
+        cancel_admission(call, room, token)
+        {:error, :outgoing_call_start_failed}
+    end
+  end
+
+  defp cancel_admission(call, room, token) do
+    CallEngine.cancel_outgoing_admission(
+      call.tenant_key,
+      call.room_id,
+      room.incarnation_id,
+      token
+    )
   end
 
   defp await_submission(options, call, monitor, token) do

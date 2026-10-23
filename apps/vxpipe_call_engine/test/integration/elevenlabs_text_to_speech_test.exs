@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsTextToSpeechTest do
 
   alias Vxpipe.CallEngine.Speech.{Audio, CapabilityTree, Event, Session, TTSUsage}
   alias Vxpipe.Providers.ElevenLabs.{TTS, TTSSession}
+  alias Vxpipe.CallEngine.LiveContextTTSSocket
   alias Vxpipe.Providers.LiveModels
 
   @moduletag :live_providers
@@ -12,7 +13,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsTextToSpeechTest do
   @phrase "Hello from Vxpipe."
   @sample_rate 16_000
 
-  test "one short phrase streams credited raw PCM and measured generation usage" do
+  test "successive phrases reuse one live socket with credited PCM and usage" do
     assert {:ok, config} =
              TTS.new(
                api_key: System.fetch_env!("ELEVENLABS_API_KEY"),
@@ -31,7 +32,11 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsTextToSpeechTest do
                  voice: config.voice,
                  sample_rate: config.sample_rate
                ],
-               private: [config: config],
+               private: [
+                 config: config,
+                 wire_module: LiveContextTTSSocket,
+                 wire_options: [observer: self()]
+               ],
                usage: true
              )
 
@@ -40,23 +45,40 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsTextToSpeechTest do
                    5_000
 
     assert :ok = Session.ack(session, ready)
-    assert {:ok, %{ref: request} = playback} = Session.speak(session, @phrase)
-    deadline = System.monotonic_time(:millisecond) + 30_000
-    {bytes, usage} = await_completion(session, request, deadline, 0)
-    assert bytes > 0
-    assert usage.input_characters == String.length(@phrase)
-    assert usage.generated_bytes == bytes
-    assert usage.generation == :completed
-    assert usage.provenance == :locally_measured
+    assert_receive {:live_tts_socket, wire}, 1_000
+    monitor = Process.monitor(wire)
 
-    assert usage.usage_identity == %{
-             provider: :elevenlabs,
-             model: config.model,
-             provenance: :locally_measured
-           }
+    # Exercise the first provider keepalive before any utterance exists.
+    receive do
+      {:vxpipe_speech_closed, ^session, _reason} -> flunk("idle TTS session closed")
+    after
+      16_000 -> :ok
+    end
 
-    # This consumer checks generation/credit, with no audible output device.
-    assert :ok = Session.settle_output(session, playback, 0)
+    Vxpipe.CallEngine.LiveTTSCancellation.check(session)
+
+    for phrase <- [@phrase, "Two.", "Three.", "Four.", "Five.", "Six."] do
+      assert {:ok, %{ref: request} = playback} = Session.speak(session, phrase)
+      deadline = System.monotonic_time(:millisecond) + 30_000
+      {bytes, usage} = await_completion(session, request, deadline, 0)
+      assert bytes > 0
+      assert usage.input_characters == String.length(phrase)
+      assert usage.generated_bytes == bytes
+      assert usage.generation == :completed
+      assert usage.provenance == :locally_measured
+
+      assert usage.usage_identity == %{
+               provider: :elevenlabs,
+               model: config.model,
+               provenance: :locally_measured
+             }
+
+      # This consumer checks generation/credit, with no audible output device.
+      assert :ok = Session.settle_output(session, playback, 0)
+    end
+
+    refute_received {:live_tts_socket, _replacement}
+    refute_received {:DOWN, ^monitor, :process, ^wire, _reason}
     assert :ok = Session.close(session)
   end
 

@@ -28,6 +28,9 @@ defmodule Vxpipe.Console.AdminServicesController do
       {:error, reason} when reason in [:invalid_tenant_key, :invalid_provider_credential_id] ->
         conn |> put_status(422) |> json(%{error: %{code: "invalid_credential"}})
 
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: %{code: "forbidden"}})
+
       {:error, _reason} ->
         conn |> put_status(503) |> json(%{error: %{code: "credential_store_unavailable"}})
     end
@@ -54,6 +57,9 @@ defmodule Vxpipe.Console.AdminServicesController do
       {:error, :tenant_not_found} ->
         conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})
 
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: %{code: "forbidden"}})
+
       {:error, _reason} ->
         conn |> put_status(503) |> json(%{error: %{code: "service_directory_unavailable"}})
     end
@@ -71,6 +77,9 @@ defmodule Vxpipe.Console.AdminServicesController do
 
       {:error, :tenant_not_found} ->
         conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})
+
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: %{code: "forbidden"}})
 
       {:error, _reason} ->
         conn
@@ -90,6 +99,9 @@ defmodule Vxpipe.Console.AdminServicesController do
 
       {:error, :tenant_not_found} ->
         conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})
+
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: %{code: "forbidden"}})
 
       {:error, _reason} ->
         conn |> put_status(503) |> json(%{error: %{code: "service_directory_unavailable"}})
@@ -153,6 +165,9 @@ defmodule Vxpipe.Console.AdminServicesController do
         |> put_status(501)
         |> json(%{error: %{code: "credential_validation_unsupported"}})
 
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: %{code: "forbidden"}})
+
       {:error, _reason} ->
         conn
         |> put_status(503)
@@ -182,6 +197,9 @@ defmodule Vxpipe.Console.AdminServicesController do
       {:error, reason}
       when reason in [:invalid_provider_auth, :invalid_credential_name, :invalid_tenant_key] ->
         conn |> put_status(422) |> json(%{error: %{code: "invalid_credential"}})
+
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: %{code: "forbidden"}})
 
       {:error, _reason} ->
         conn |> put_status(503) |> json(%{error: %{code: "credential_store_unavailable"}})
@@ -224,6 +242,9 @@ defmodule Vxpipe.Console.AdminServicesController do
              :invalid_provider_credential_id
            ] ->
         conn |> put_status(422) |> json(%{error: %{code: "invalid_credential"}})
+
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: %{code: "forbidden"}})
 
       {:error, _reason} ->
         conn |> put_status(503) |> json(%{error: %{code: "credential_store_unavailable"}})

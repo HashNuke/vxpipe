@@ -10,7 +10,35 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
 
   @impl true
   def init(options) do
+    router =
+      Router.init(
+        account_management: Keyword.get(options, :account_management, []),
+        call_spec_reads: Keyword.get(options, :call_spec_reads, []),
+        tenant_directory: Keyword.get(options, :tenant_directory, []),
+        call_spec_authoring: Keyword.get(options, :call_spec_authoring, []),
+        operator_api: Keyword.get(options, :operator_api, []),
+        call_admission: Keyword.get(options, :call_admission, []),
+        room_creation: Keyword.get(options, :room_creation, []),
+        telephony: Keyword.get(options, :telephony, []),
+        webrtc: Keyword.get(options, :webrtc, [])
+      )
+
+    mcp = Keyword.get(options, :mcp, [])
+
+    runtime =
+      case router.call_creation.backend do
+        {Vxpipe.Gateway.CallCreation, context} -> context
+        _custom -> []
+      end
+
+    shared = Keyword.merge(runtime, router.account_management.identity_options)
+
+    mcp =
+      Keyword.put(mcp, :call_options, Keyword.merge(shared, Keyword.get(mcp, :call_options, [])))
+
     %{
+      oauth: Vxpipe.Gateway.OAuth.Endpoint.init(Keyword.get(options, :oauth, [])),
+      mcp: Vxpipe.Gateway.MCP.Endpoint.init(mcp),
       cors: options |> Keyword.get(:cors, []) |> Cors.init(),
       parsers:
         Plug.Parsers.init(
@@ -19,20 +47,26 @@ defmodule Vxpipe.Gateway.HTTP.Endpoint do
           json_decoder: JSON,
           length: 131_072
         ),
-      router:
-        Router.init(
-          call_spec_authoring: Keyword.get(options, :call_spec_authoring, []),
-          operator_api: Keyword.get(options, :operator_api, []),
-          call_admission: Keyword.get(options, :call_admission, []),
-          room_creation: Keyword.get(options, :room_creation, []),
-          telephony: Keyword.get(options, :telephony, []),
-          webrtc: Keyword.get(options, :webrtc, [])
-        )
+      router: router
     }
   end
 
   @impl true
-  def call(conn, %{cors: cors_options, parsers: parser_options, router: router_options}) do
+  def call(%Plug.Conn{path_info: ["mcp"]} = conn, %{mcp: options}) do
+    Vxpipe.Gateway.MCP.Endpoint.call(conn, options)
+  end
+
+  def call(conn, %{oauth: oauth} = options) do
+    if Vxpipe.Gateway.OAuth.Endpoint.route?(conn, oauth),
+      do: Vxpipe.Gateway.OAuth.Endpoint.call(conn, oauth),
+      else: product_request(conn, options)
+  end
+
+  defp product_request(conn, %{
+         cors: cors_options,
+         parsers: parser_options,
+         router: router_options
+       }) do
     GatewayTelemetry.observe_request(conn, fn ->
       conn = Cors.call(conn, cors_options)
 

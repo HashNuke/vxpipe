@@ -15,5 +15,11 @@ defmodule Vxpipe.Calls.TestDemoTenantRepository do
     end)
   end
 
+  def fetch(agent),
+    do:
+      Agent.get(agent, fn %{tenant: tenant} ->
+        if tenant, do: {:ok, tenant}, else: {:error, :not_found}
+      end)
+
   def candidates(agent), do: Agent.get(agent, &Enum.reverse(&1.candidates))
 end
