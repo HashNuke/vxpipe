@@ -29,7 +29,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
              Provider.new(
                api_key: "runtime-secret",
                model: "google:gemini-3.5-flash-lite",
-               generation_options: [temperature: 0.2, max_tokens: 256],
+               generation_options: [max_tokens: 256],
                streaming: false
              )
 

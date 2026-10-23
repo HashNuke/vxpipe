@@ -29,7 +29,7 @@ defmodule Vxpipe.AgentRuntime.MixProject do
       {:jsv, "~> 0.22"},
       {:plug, "~> 1.20", only: :test},
       {:llm_db, "~> 2026.9"},
-      {:req_llm, "~> 1.22"}
+      {:req_llm, "~> 1.29"}
     ]
   end
 

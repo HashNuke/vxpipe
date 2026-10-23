@@ -43,7 +43,7 @@ defmodule Vxpipe.CallEngine.MixProject do
        git: "https://github.com/elixir-nx/ortex.git",
        ref: "450dbe6ec6cc96e4e5509a746937ccde25de0144"},
       {:req, "~> 0.7.4"},
-      {:req_llm, "~> 1.22"},
+      {:req_llm, "~> 1.29"},
       {:telemetry, "~> 1.3"},
       {:vxpipe_agent_runtime, in_umbrella: true},
       {:vxpipe_mcp, in_umbrella: true},
