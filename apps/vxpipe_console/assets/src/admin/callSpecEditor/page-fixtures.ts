@@ -1,5 +1,5 @@
 import { modelCatalogFixture } from "../modelCatalogFixtures";
-import { editorFixture } from "./editorFixtures";
+import { editorStoryFixture as editorFixture } from "./editorFixtures";
 import type { EditorSnapshot } from "./editor-state";
 import { newCallSpec } from "./seed";
 import { parseSource } from "./source";

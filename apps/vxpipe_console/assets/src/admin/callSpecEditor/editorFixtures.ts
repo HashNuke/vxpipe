@@ -14,3 +14,9 @@ export const editorFixture: SourceDocument = {
     call_variables: { sections: { appointment: { schema: { type: "object", properties: { date: { type: "string" } } } } } },
   },
 };
+
+/** Storybook uses installed built-ins; host test doubles stay in unit-test fixtures. */
+export const editorStoryFixture = structuredClone(editorFixture);
+if (editorStoryFixture.source.participants.intake?.type === "agent") {
+  editorStoryFixture.source.participants.intake.tools = { get_current_time: { type: "platform", tool: "get_current_time" } };
+}

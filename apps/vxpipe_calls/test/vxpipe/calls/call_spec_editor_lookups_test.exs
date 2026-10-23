@@ -198,6 +198,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookupsTest do
            end)
 
     assert lookups.mcp_integrations == []
+    assert Enum.any?(lookups.tool_catalog.tools, &(&1.tool == "hangup" and &1.type == "platform"))
     assert lookups.truncated == false
 
     dumped = inspect(lookups) <> :erlang.term_to_binary(lookups)

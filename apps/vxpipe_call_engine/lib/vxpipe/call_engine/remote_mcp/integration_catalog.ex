@@ -66,6 +66,25 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog do
     end
   end
 
+  @doc "Lists usable tool names and descriptions for one tenant, without private connection data."
+  @spec tools(t(), String.t()) :: [map()]
+  def tools(%__MODULE__{} = catalog, tenant_id) when is_binary(tenant_id) do
+    catalog.application
+    |> Map.merge(Map.get(catalog.tenants, tenant_id, %{}))
+    |> Enum.flat_map(fn {id, integration} ->
+      Enum.flat_map(integration.allowed_tools, fn name ->
+        case resolve(catalog, tenant_id, id, name) do
+          {:ok, resolved} ->
+            [%{integration: id, tool: name, description: resolved.description}]
+
+          {:error, _reason} ->
+            []
+        end
+      end)
+    end)
+    |> Enum.sort_by(&{&1.integration, &1.tool})
+  end
+
   defp scoped_integration(catalog, %ResolvedTool{
          scope: :application,
          integration_id: integration_id

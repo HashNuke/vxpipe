@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import { EditorTheme } from "./EditorTheme";
 import { FlowLevelInspector, type CallSettingsTab } from "./flow-level-inspector";
-import { editorFixture } from "./editorFixtures";
+import { editorStoryFixture as editorFixture } from "./editorFixtures";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
 import { validateSource } from "./validation";
 import type { SourceDocument } from "./types";

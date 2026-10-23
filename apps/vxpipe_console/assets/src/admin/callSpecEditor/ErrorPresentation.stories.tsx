@@ -8,7 +8,7 @@ import { EditorTheme } from "./EditorTheme";
 import { FlowEditorHeader } from "./editor-header";
 import { EditorToast } from "./editor-toast";
 import { actionOutcome, locateIssue, type ActionFeedback, type ActionResult } from "./errorPresentation";
-import { editorFixture } from "./editorFixtures";
+import { editorStoryFixture as editorFixture } from "./editorFixtures";
 import { backendIssue, mergeIssues, retainBackendIssue } from "./issues";
 import { IssuesDrawer } from "./issues-drawer";
 import type { IssueRequest } from "./issue-context";

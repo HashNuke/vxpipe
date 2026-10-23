@@ -32,7 +32,7 @@ export function VariablesPanel(props: InspectorProps) {
   const modal = { ...props, returnFocus: () => (trigger.current?.isConnected ? trigger.current : addTrigger.current)?.focus(), onClose: () => { setEditing(null); setDismissedRequest(request?.id); } };
   return <div className="space-y-3">
     <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Call variables</h3><Button ref={addTrigger} variant="outline" size="sm" disabled={document.readOnly} onClick={(event) => { trigger.current = event.currentTarget; setEditing({ kind: "section" }); }}><Plus />Add section</Button></div>
-    <p className="text-xs text-muted-foreground">Group the information your agents collect. Set section access in each agent’s Variables tab.</p>
+    <p className="text-xs text-muted-foreground">This is the information your agents collect. Configure access in each agent’s Variables tab.</p>
     {!Object.keys(sections).length && <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">Add a section to define the information agents can collect and share.</p>}
     {Object.entries(sections).map(([key, section]) => <section key={key} aria-label={`Section ${key}`} className="min-w-0 rounded-md border border-border bg-card">
       <IssueAnchor path={["call_variables", "sections", key]} issues={issues} className="rounded-t-md border-b border-border bg-muted/70 px-2 py-1">

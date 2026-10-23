@@ -19,7 +19,7 @@ function transport() {
       user: { id: "owner", email: "owner@example.test", roleId: "admin", enabled: true, memberships: [] },
       role: { id: "admin", name: "Admin", description: "", kind: "admin", grants: [] },
     });
-    if (url.pathname.endsWith("/call-spec-editor-lookups")) return reply({ credential_names: {}, telephony_services: [], mcp_integrations: [] });
+    if (url.pathname.endsWith("/call-spec-editor-lookups")) return reply({ credential_names: {}, telephony_services: [], mcp_integrations: [], tool_catalog: { tools: [], mcp_available: true } });
     if (url.pathname.includes("/providers")) {
       const models = modelCatalogFixture[url.searchParams.get("capability") as CatalogCapability] ?? {};
       return url.pathname.endsWith("/models") ? reply({ models: models[url.pathname.split("/").at(-2)!] }) : reply({ providers: Object.keys(models).map((id) => ({ id })) });
@@ -195,7 +195,7 @@ test("outgoing creation requires a phone service and saves the chosen direction"
   window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/new");
   const fetch = transport(); const good = fetch.getMockImplementation()!;
   fetch.mockImplementation((input, init) => String(input).endsWith("/call-spec-editor-lookups")
-    ? reply({ credential_names: {}, telephony_services: [{ key: "office", name: "Office phone" }], mcp_integrations: [] }) : good(input, init));
+    ? reply({ credential_names: {}, telephony_services: [{ key: "office", name: "Office phone" }], mcp_integrations: [], tool_catalog: { tools: [], mcp_available: true } }) : good(input, init));
   render(<App csrfToken="csrf" fetchImpl={fetch} />);
   fireEvent.click(await screen.findByRole("radio", { name: /Outgoing call/ }));
   expect(screen.getByRole("button", { name: "Create call spec" })).toBeDisabled();

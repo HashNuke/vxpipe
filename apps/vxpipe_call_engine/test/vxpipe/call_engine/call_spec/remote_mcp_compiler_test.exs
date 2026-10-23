@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.CallSpec.RemoteMCPCompilerTest do
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.MCP.Catalog
 
-  test "pins a tenant MCP descriptor without its private connection configuration" do
+  test "keeps the qualified registration name through compilation while preserving the remote tool name" do
     private_value = "private-authorization-sentinel"
 
     {:ok, integration} =
@@ -62,7 +62,7 @@ defmodule Vxpipe.CallEngine.CallSpec.RemoteMCPCompilerTest do
              )
 
     assert %ToolBinding{
-             name: "customer_lookup",
+             name: "records__lookup_customer",
              type: :mcp,
              conversation_mode: :non_blocking,
              remote: %ResolvedTool{
@@ -82,7 +82,16 @@ defmodule Vxpipe.CallEngine.CallSpec.RemoteMCPCompilerTest do
                invocation_deadline_ms: 12_000,
                maximum_result_bytes: 65_536
              }
-           } = plan.participants["reception"].tools["customer_lookup"]
+           } = plan.participants["reception"].tools["records__lookup_customer"]
+
+    tools = plan.participants["reception"].tools
+
+    assert {:ok, [descriptor]} =
+             Vxpipe.CallEngine.AgentRuntime.ToolDescriptors.compile(tools, nil, self())
+
+    assert descriptor.name == "records__lookup_customer"
+    assert descriptor.binding.name == descriptor.name
+    assert tools[descriptor.name].remote.remote_name == "lookup_customer"
 
     refute inspect(plan) =~ private_value
     refute inspect(plan) =~ "authorization"
@@ -126,9 +135,9 @@ defmodule Vxpipe.CallEngine.CallSpec.RemoteMCPCompilerTest do
         },
         "reception" => %{
           type: "agent",
-          prompt: "Answer clearly.",
+          prompt: "Use records__lookup_customer to look up the customer.",
           tools: %{
-            "customer_lookup" => %{
+            "records__lookup_customer" => %{
               type: "mcp",
               integration: "records",
               conversation_mode: "non_blocking",

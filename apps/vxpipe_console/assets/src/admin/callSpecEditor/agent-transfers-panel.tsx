@@ -39,7 +39,7 @@ export function AgentTransfersPanel({ document, onChange, issues, participantKey
       {transfers.map((key, index) => {
         const destination = Object.hasOwn(document.source.participants, key) ? document.source.participants[key] : undefined;
         return <IssueAnchor key={`${key}:${index}`} className="rounded-md border border-border/70 bg-card p-3" path={[...path, "transfers", String(index)]} issues={issues}>
-          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="wrap-anywhere text-sm font-semibold">{key}</p><p className="mt-1 wrap-anywhere text-xs text-muted-foreground">{destination ? destination.type === "agent" ? "Agent" : "Human destination" : "Missing participant"}</p></div>
+          <div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="wrap-anywhere text-sm font-semibold">{key}</p>{!destination && <p className="mt-1 wrap-anywhere text-xs text-muted-foreground">Missing participant</p>}</div>
             <Button variant="ghost" size="icon-sm" disabled={document.readOnly} aria-label={`Remove transfer to ${key}`} onClick={() => onChange(setTransfer(document, participantKey, key, false))}><Trash2 className="h-4 w-4" /></Button>
           </div>
         </IssueAnchor>;

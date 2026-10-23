@@ -7,7 +7,7 @@ import { EditorTheme } from "./EditorTheme";
 import { HumanInspector } from "./human-inspector";
 import { InboundInspector } from "./inbound-inspector";
 import type { HumanInspectorTab } from "./human-inspector-tabs";
-import { editorFixture } from "./editorFixtures";
+import { editorStoryFixture as editorFixture } from "./editorFixtures";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
 import type { SourceDocument } from "./types";
 import { validateSource } from "./validation";

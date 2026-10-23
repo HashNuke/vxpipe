@@ -2,7 +2,7 @@ import { parseSourceJson, stringifySourceJson } from "./source-json";
 import { catalogCapabilities, parseModelCatalog, type ModelCatalog } from "../modelCatalog";
 import type { EditorSnapshot } from "./editor-state";
 import type { AuthoringError } from "./errorPresentation";
-import type { EditorLookups, PhoneNumberPage } from "./inspectorTypes";
+import type { AvailableTool, EditorLookups, PhoneNumberPage } from "./inspectorTypes";
 import { parseSource } from "./source";
 import type { ExecuteEditorRequest } from "./use-editor";
 import { record } from "./validationFields";
@@ -13,6 +13,9 @@ export class EditorReadError extends Error {
 }
 const revision = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) > 0;
 const names = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
+const availableTool = (value: unknown): value is AvailableTool => record(value) &&
+  ["host", "platform", "mcp"].includes(value.type as string) && typeof value.tool === "string" &&
+  typeof value.description === "string" && (value.type !== "mcp" || typeof value.integration === "string");
 
 export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch) {
   const base = `/admin/api/tenants/${encodeURIComponent(tenant)}`;
@@ -76,7 +79,10 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     const value = await get(`${base}/call-spec-editor-lookups`, signal);
     if (!record(value.credential_names) || !Object.values(value.credential_names).every(names) || !names(value.mcp_integrations) ||
       !Array.isArray(value.telephony_services) || !value.telephony_services.every((service) => record(service) && typeof service.key === "string" && typeof service.name === "string")) throw new Error("Invalid editor lookups");
-    return { credentialNames: value.credential_names as Record<string, string[]>, telephonyServices: value.telephony_services, mcpIntegrations: value.mcp_integrations };
+    const catalog = value.tool_catalog;
+    if (!record(catalog) || !Array.isArray(catalog.tools) || !catalog.tools.every(availableTool) || typeof catalog.mcp_available !== "boolean") throw new Error("Invalid tool catalog");
+    return { credentialNames: value.credential_names as Record<string, string[]>, telephonyServices: value.telephony_services, mcpIntegrations: value.mcp_integrations,
+      toolCatalog: { tools: catalog.tools, mcpAvailable: catalog.mcp_available } };
   }
   async function phoneNumbers(service: string, search: string, page: string | null, signal: AbortSignal, callSpecId?: string): Promise<PhoneNumberPage> {
     const query = new URLSearchParams({ search });

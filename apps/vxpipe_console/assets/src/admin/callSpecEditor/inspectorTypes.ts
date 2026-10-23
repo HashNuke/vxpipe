@@ -1,5 +1,5 @@
 import type { IssueRequest } from "./issue-context";
-import type { SourceDocument, SourceIssue } from "./types";
+import type { SourceDocument, SourceIssue, ToolSelection } from "./types";
 export type InspectorProps = {
   document: SourceDocument;
   onChange: (document: SourceDocument) => void;
@@ -15,4 +15,7 @@ export type EditorLookups = {
   telephonyServices: NamedService[];
   credentialNames: Record<string, string[]>;
   mcpIntegrations: string[];
+  toolCatalog?: ToolCatalog;
 };
+export type AvailableTool = Pick<ToolSelection, "type" | "tool" | "integration"> & { description: string };
+export type ToolCatalog = { tools: AvailableTool[]; mcpAvailable: boolean };

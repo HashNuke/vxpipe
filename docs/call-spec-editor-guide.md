@@ -146,6 +146,55 @@ The compiler rejects missing fallback STT in that mode and duplicate STT when th
 provider already supplies transcripts. See Google's [Live API transcription](https://ai.google.dev/gemini-api/docs/live-api/capabilities)
 and OpenAI's [GPT-Live transcript events](https://developers.openai.com/api/docs/guides/live-conversations).
 
+**Agent settings → Tools → Add tool** opens a searchable list grouped into
+built-in tools, registered host tools (when available), and MCP integrations.
+The first screen lists MCP names, not their individual tools. Selecting an MCP
+opens its searchable checklist. Check individual tools or **Include all tools**,
+then add the selection together. Include all captures the currently available
+tools, including those hidden by search; it saves each name explicitly and never
+saves a wildcard. Tools added to the MCP later remain excluded. Already enabled
+tools are marked **Added** and stay enabled when the new selection is cleared.
+
+Each selected MCP tool has its own **Non-blocking** checkbox. Unchecked means
+blocking: the conversation waits for the result. Checked lets the conversation
+continue while that tool runs. There is no shared mode control in the checklist.
+Built-in and host tools go directly to their individual options.
+Cancel discards the selection. Both lists scroll inside a modal whose dimensions
+stay stable between screens. On short screens, the options area can also scroll
+while the footer remains available.
+
+MCP entries in the picker show the integration name and available tool count
+on one line, for example `calendar (18)`.
+
+New tools use their registered names, without a separate editable alias:
+built-in and host names remain unchanged, and MCP names use
+`<integration>__<tool>`, for example `calendar__find_slots`. No `mcp__` prefix
+is needed: the integration already identifies the source. The add-tool modal
+shows the original tool names; after saving, the agent's enabled-tools list shows
+the qualified name to use in prompts. The
+[MCP protocol recommends names unique within a server](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#tool-names)
+but does not prescribe a cross-server prefix. Double underscores also fit the
+installed ReqLLM function-name rules, which exclude dots. New MCP registrations
+must fit ReqLLM's 64-character combined-name limit and start with a letter or
+underscore; later characters may be letters, digits, underscores, or single
+hyphens between segments. The editor rejects incompatible names and collisions
+instead of shortening names or adding unpredictable suffixes. The compiler
+exposes the qualified name to the model and retains the original tool name when
+calling the MCP server.
+
+The enabled-tools list shows each source and registered name on one row, with
+edit and delete controls on the right. A clock icon beside a blocking tool has a
+**Blocking** tooltip, available on hover or keyboard focus. Non-blocking tools
+have no clock icon.
+
+**Edit tool** opens a compact dialog that changes only the conversation mode.
+For MCP tools, its description uses `calendar · find_slots` to identify the
+integration and original tool name.
+It preserves the saved name, tool selection and visibility overrides; replacing
+a tool requires removing it and adding another. Existing saved aliases are not
+silently migrated, avoiding broken prompt references. Tools missing from the
+current catalog still allow conversation-mode edits.
+
 **First message** offers **Wait for input**, **Generated**, and **Fixed text**.
 It shows the effective choice directly: incoming agents wait for input, while the
 initial outgoing agent generates an introduction by default. Selecting the
@@ -203,7 +252,7 @@ require the Console CSRF token. Responses are private and not cached.
 | `POST /call-specs` with `{ "source": ... }` | New spec, revision 1 |
 | `PUT /call-specs/:id` with `{ "source": ... }` | Append an immutable revision |
 | `POST /call-specs/:id/revisions/:revision/publish` with `{}` | Publish the specified saved revision |
-| `GET /call-spec-editor-lookups` | Effective credential names, telephony services and MCP integration names |
+| `GET /call-spec-editor-lookups` | Effective credential names, telephony services, MCP integration names and available tool descriptors |
 | `GET /providers?capability=...` | Installed providers and credential availability |
 | `GET /providers/:provider/models?capability=...` | Public models, recommended defaults and voice descriptors |
 
@@ -213,8 +262,12 @@ Read/write responses wrap a `call_spec` object. It includes `call_spec_id`,
 include `latest_revision` and `published_revision`. Error responses use
 `{ "error": { "code": ..., "path": [...], "reason": ... } }` when a field path
 and safe reason are available. Another tenant's spec ID is not found. Lookups
-never return credential values or perform remote MCP tool discovery; MCP tool
-names remain explicit text fields.
+never return credential values or perform remote MCP tool discovery. The
+`tool_catalog` contains `tools` (type, tool name, description and, for MCP tools,
+integration name) and `mcp_available`. MCP choices come from the published
+catalog snapshot, respecting tenant overrides, allowed tools and supported input
+schemas. An unavailable MCP store leaves built-in and registered host tools
+usable, with an explicit unavailable state for MCPs.
 
 ## Timing inputs and Entry identity
 

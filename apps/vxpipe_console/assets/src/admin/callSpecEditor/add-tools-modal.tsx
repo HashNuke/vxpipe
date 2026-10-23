@@ -1,61 +1,78 @@
 import { useState } from "react";
-import { ArrowLeft, KeyRound } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { Checkbox } from "../components/ui/checkbox";
 import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { ChoiceField, TextField } from "./editor-fields";
+import { ChoiceField } from "./editor-fields";
 import { agent } from "./edits";
-import type { InspectorProps } from "./inspectorTypes";
+import type { AvailableTool, InspectorProps, ToolCatalog } from "./inspectorTypes";
 import { IssueAnchor } from "./issue-anchor";
-import { useIssueRequest } from "./issue-context";
-import { setTool } from "./tool-edits";
+import { addTools, registeredToolName, registeredToolNameIssue, toolIdentity } from "./tool-edits";
+import { McpToolChecklist, ToolPicker, ToolSearch } from "./tool-picker";
 import type { ToolSelection } from "./types";
 import { useActionFailure } from "./action-failure-context";
 
-export function AddToolsModal({ document, onChange, issues, participantKey, previousName, integrations, onClose }: InspectorProps & { participantKey: string; previousName?: string; integrations: string[]; onClose: () => void }) {
+const emptyCatalog: ToolCatalog = { tools: [], mcpAvailable: false };
+export function AddToolsModal({ document, onChange, issues, participantKey, integrations, catalog = emptyCatalog, onClose }: InspectorProps & { participantKey: string; integrations: string[]; catalog?: ToolCatalog; onClose: () => void }) {
   const tools = agent(document.source, participantKey).tools ?? {};
-  const saved = previousName !== undefined && Object.hasOwn(tools, previousName) ? tools[previousName] : undefined;
-  const requestedField = useIssueRequest()?.path.at(-1);
-  const [step, setStep] = useState(saved ? requestedField === "tool" || requestedField === "integration" ? 1 : requestedField === "type" ? 0 : 2 : 0);
-  const [type, setType] = useState<ToolSelection["type"]>(saved?.type ?? "host");
-  const [tool, setToolName] = useState(saved?.tool ?? "");
-  const [integration, setIntegration] = useState(saved?.integration ?? "");
-  const [name, setName] = useState(previousName ?? "");
-  const [mode, setMode] = useState(saved?.conversation_mode ?? "");
+  const [selected, setSelected] = useState<AvailableTool[]>([]);
+  const [integration, setIntegration] = useState<string>();
+  const [search, setSearch] = useState("");
+  const [toolModes, setToolModes] = useState<Record<string, "blocking" | "non_blocking">>({});
   const [error, setError] = useState("");
   const reportFailure = useActionFailure();
-  const path = ["participants", participantKey, "tools", previousName ?? name];
-  function chooseSource(type: ToolSelection["type"]) {
-    setType(type); setToolName(""); setIntegration(""); setName(""); setError(""); setStep(1);
+  const path = ["participants", participantKey, "tools", ""];
+  const single = integration === undefined ? selected[0] : undefined;
+  const toolMode = (tool: AvailableTool) => toolModes[toolIdentity(tool)] ?? "blocking";
+  function unavailable(tool: AvailableTool) {
+    if (Object.values(tools).some((entry) => toolIdentity(entry) === toolIdentity(tool))) return "Added";
+    const name = registeredToolName(tool);
+    const issue = tool.type === "mcp" ? registeredToolNameIssue(name) : undefined;
+    if (issue) return issue;
+    if (Object.hasOwn(tools, name)) return "Name in use";
+  }
+  function reset() { setSelected([]); setIntegration(undefined); setSearch(""); setError(""); }
+  function toggle(tool: AvailableTool) {
+    setSelected((current) => current.some((entry) => toolIdentity(entry) === toolIdentity(tool)) ? current.filter((entry) => toolIdentity(entry) !== toolIdentity(tool)) : [...current, tool]);
+    setError("");
   }
   function submit() {
     try {
-      const selection: ToolSelection = { type, tool, ...(type === "mcp" ? { integration } : {}), ...(mode ? { conversation_mode: mode as ToolSelection["conversation_mode"] } : {}) };
-      onChange(setTool(document, participantKey, previousName, type === "host" ? tool : name, selection)); onClose();
-    } catch (error) { setError(error instanceof Error ? error.message : "This tool could not be saved."); reportFailure("Couldn't save this tool. Check its name and options."); }
+      const selections: ToolSelection[] = selected.map((entry) => ({ type: entry.type, tool: entry.tool, ...(entry.type === "mcp" ? { integration: entry.integration } : {}), ...(toolMode(entry) === "non_blocking" ? { conversation_mode: "non_blocking" as const } : {}) }));
+      if (!selections.length) return;
+      onChange(addTools(document, participantKey, selections));
+      onClose();
+    } catch (error) { setError(error instanceof Error ? error.message : "These tools could not be saved."); reportFailure("Couldn't save these tools. Your selection is still here."); }
   }
-  return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}><DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
-    <DialogHeader><DialogTitle>{saved ? "Edit tool" : "Add tool"}</DialogTitle><DialogDescription>Choose a source, name its tool, then set how this agent uses it.</DialogDescription></DialogHeader>
-    <div className="min-h-72 space-y-4">
-      <div className="flex items-center gap-3">{step > 0 && <Button variant="ghost" size="sm" onClick={() => { setStep(step - 1); setError(""); }}><ArrowLeft className="h-4 w-4" />Back</Button>}<h3 className="text-sm font-semibold">{["1 · Source", "2 · Tool", "3 · Options"][step]}</h3></div>
-      {step === 0 ? <IssueAnchor path={[...path, "type"]} issues={issues} className="space-y-2">{([
-        ["host", "Host", "A tool registered by this Vxpipe installation."],
-        ["mcp", "MCP", "A remote tool from a configured integration."],
-        ["platform", "Platform", "A built-in Vxpipe tool."],
-      ] as const).map(([type, title, description]) => <Button key={type} variant="outline" aria-label={title} disabled={document.readOnly} className="h-auto w-full justify-start gap-3 p-3 text-left" onClick={() => chooseSource(type)}>
-        <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="min-w-0 whitespace-normal"><span className="block text-sm font-semibold">{title}</span><span className="mt-1 block text-xs font-normal text-muted-foreground">{description}</span></span>
-      </Button>)}</IssueAnchor> : step === 1 ? <fieldset disabled={document.readOnly} className="space-y-4">
-        {type === "mcp" && <ChoiceField label="MCP integration" path={[...path, "integration"]} issues={issues} disabled={document.readOnly} value={integration} choices={[{ value: "", label: "Choose an integration" }, ...integrations.map((name) => ({ value: name, label: name }))]} onChange={setIntegration} />}
-        {type === "mcp" && !integrations.length && <p className="text-xs text-muted-foreground">Configure an MCP integration before adding a remote tool.</p>}
-        <TextField label="Tool name" path={[...path, "tool"]} issues={issues} disabled={document.readOnly} value={tool} onChange={setToolName}
-          hint={type === "mcp" ? "Enter the tool name exposed by this integration." : type === "host" ? "Enter the registered host Action name." : "Enter the name of a built-in platform tool."} />
-      </fieldset> : <fieldset disabled={document.readOnly} className="space-y-4">
-        <p className="wrap-anywhere text-sm text-muted-foreground">{type}{type === "mcp" ? ` · ${integration}` : ""} · {tool}</p>
-        <TextField label="Local tool key" path={path} issues={issues} disabled={document.readOnly || type === "host"} value={type === "host" ? tool : name} onChange={setName} hint={type === "host" ? "Host tools keep their registered name." : "The name this agent uses to call the tool. It must be unique for this agent."} />
-        <ChoiceField label="Conversation mode" path={[...path, "conversation_mode"]} issues={issues} disabled={document.readOnly} value={mode || "blocking"} choices={[{ value: "blocking", label: "Blocking" }, { value: "non_blocking", label: "Non-blocking" }]} onChange={(value) => setMode(value === "blocking" ? "" : value)}
-          hint="Blocking waits for the result before continuing. Non-blocking lets the conversation continue while the tool runs." />
-      </fieldset>}
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+  const mcpTools = catalog.tools.filter((tool) => tool.type === "mcp" && tool.integration === integration);
+  const enabled = mcpTools.filter((tool) => unavailable(tool) === "Added");
+  const addable = mcpTools.filter((tool) => !unavailable(tool));
+  const included = enabled.length + selected.length;
+  const allChecked = enabled.length + addable.length > 0 && addable.every((tool) => selected.some((entry) => toolIdentity(entry) === toolIdentity(tool)));
+  const action = integration ? selected.length ? `Add ${selected.length} ${selected.length === 1 ? "tool" : "tools"}` : "Add tools" : "Add tool";
+  return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}><DialogContent className="flex h-[min(44rem,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+    <DialogHeader className="shrink-0 px-5 pt-5 pb-4 text-left sm:px-6">
+      <div className="flex min-h-8 items-center gap-2 pr-6">{(integration || single) && <Button variant="ghost" size="icon-sm" aria-label="All tools and MCPs" onClick={reset}><ArrowLeft className="size-4" /></Button>}<DialogTitle className="min-w-0 wrap-anywhere">{integration ? `Tools from ${integration}` : "Add tool"}</DialogTitle></div>
+      <DialogDescription className="min-h-10 sm:min-h-5">{integration ? "Check the tools you want this agent to use." : "Choose a tool or explore an MCP integration."}</DialogDescription>
+    </DialogHeader>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pb-4 sm:px-6">
+      <IssueAnchor path={path} issues={issues} className="flex min-h-64 flex-1 flex-col gap-3 outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {single ? <div className="min-h-0 flex-1 space-y-2 overflow-y-auto"><h3 className="wrap-anywhere text-sm font-medium">{single.tool}</h3><p className="wrap-anywhere text-xs text-muted-foreground">{single.integration ? `${single.integration} · MCP` : single.type === "platform" ? "Built-in tool" : "Host tool"}</p><p className="wrap-anywhere text-sm text-muted-foreground">{single.description}</p></div> : <>
+          <div className="shrink-0"><ToolSearch key={integration ?? "catalog"} label={integration ? `Search ${integration} tools` : "Search tools and MCPs"} value={search} onChange={setSearch} /></div>
+          {integration ? <>
+            <div className="flex shrink-0 items-center justify-between gap-3 text-xs text-muted-foreground">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground"><Checkbox aria-label="Include all tools" disabled={document.readOnly || !addable.length} checked={allChecked ? true : included > 0 ? "indeterminate" : false} onCheckedChange={() => { setSelected(allChecked ? [] : addable); setError(""); }} />Include all tools</label>
+              <span role="status" className="shrink-0">{selected.length} selected</span>
+            </div>
+            <p className="shrink-0 text-xs text-muted-foreground">Includes the tools available now. Future tools stay excluded.</p>
+            {!catalog.mcpAvailable && <p role="status" className="shrink-0 text-sm text-muted-foreground">The MCP catalog is unavailable. Reload the editor to try again.</p>}
+            <McpToolChecklist tools={mcpTools} search={search} selected={selected} unavailable={unavailable} disabled={document.readOnly} onToggle={toggle} nonBlocking={(tool) => toolMode(tool) === "non_blocking"} onNonBlocking={(tool, checked) => setToolModes((current) => ({ ...current, [toolIdentity(tool)]: checked ? "non_blocking" : "blocking" }))} />
+          </> : <ToolPicker catalog={catalog} integrations={integrations} search={search} disabled={document.readOnly} unavailable={unavailable} onTool={(tool) => { setSelected([tool]); setError(""); }} onMcp={(name) => { setIntegration(name); setSelected([]); setSearch(""); setError(""); }} />}
+        </>}
+      </IssueAnchor>
+      {single && <div className="shrink-0 border-t border-border pt-3"><ChoiceField label="Conversation mode" path={[...path, "conversation_mode"]} issues={issues} disabled={document.readOnly} value={toolMode(single)} choices={[{ value: "blocking", label: "Blocking" }, { value: "non_blocking", label: "Non-blocking" }]} onChange={(value) => setToolModes((current) => ({ ...current, [toolIdentity(single)]: value === "non_blocking" ? "non_blocking" : "blocking" }))} hint="Blocking waits for the result. Non-blocking lets the conversation continue while the tool runs." /></div>}
+      {error && <p role="alert" className="shrink-0 text-sm text-destructive">{error}</p>}
     </div>
-    <DialogFooter><Button variant="outline" onClick={onClose}>Cancel</Button>{step === 1 ? <Button disabled={document.readOnly || !tool || (type === "mcp" && !integration)} onClick={() => { if (!name || type === "host") setName(tool); setStep(2); }}>Next</Button> : step === 2 && <Button disabled={document.readOnly} onClick={submit}>{saved ? "Save tool" : "Add tool"}</Button>}</DialogFooter>
+    <DialogFooter className="shrink-0 flex-row justify-end border-t border-border px-5 py-4 sm:px-6"><Button variant="outline" onClick={onClose}>Cancel</Button><Button className="min-w-28" disabled={document.readOnly || !selected.length} onClick={submit}>{action}</Button></DialogFooter>
   </DialogContent></Dialog>;
 }

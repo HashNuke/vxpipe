@@ -1,3 +1,4 @@
+import { toolCatalogFixture } from "./toolCatalogFixture";
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
@@ -15,7 +16,7 @@ function Harness({ initial = editorFixture, initialTab = "prompt" }: { initial?:
   const [participantKey, onRenamed] = useState("intake");
   const [tab, onTabChange] = useState(initialTab);
   return <>{Object.hasOwn(document.source.participants, participantKey) && <AgentInspector document={document} onChange={onChange} participantKey={participantKey} onRenamed={onRenamed} tab={tab} onTabChange={onTabChange}
-    issues={validateSource(document.source)} catalog={modelCatalogFixture} lookups={{ telephonyServices: [], credentialNames: {}, mcpIntegrations: ["calendar"] }} />}
+    issues={validateSource(document.source)} catalog={modelCatalogFixture} lookups={{ telephonyServices: [], credentialNames: {}, mcpIntegrations: ["calendar"], toolCatalog: { ...toolCatalogFixture, tools: [...toolCatalogFixture.tools, { type: "host" as const, tool: "availability", description: "Test availability action." }, { type: "host" as const, tool: "lookup", description: "Test lookup action." }] } }} />}
     <output data-testid="source">{JSON.stringify(document.source)}</output><output data-testid="edges">{JSON.stringify(projectGraph(document).edges)}</output></>;
 }
 const saved = () => JSON.parse(screen.getByTestId("source").textContent!);
@@ -153,6 +154,7 @@ test("transfer search adds only eligible destinations and keeps the graph projec
   initial.source.participants.visitor = { type: "human", connection: { service: "web", mode: "receive", admission: "start_call" } };
   render(<Harness initial={initial} initialTab="transfers" />);
   expect(screen.queryByText("Appointment specialist")).not.toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "Allowed destinations" })).queryByText("Human destination")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Add destination" }));
   expect(screen.queryByRole("button", { name: "Add caller" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Add visitor" })).not.toBeInTheDocument();
@@ -162,6 +164,7 @@ test("transfer search adds only eligible destinations and keeps the graph projec
   fill("Search destinations", "review");
   fireEvent.click(screen.getByRole("button", { name: "Add reviewer" }));
   expect(screen.queryByText("Billing specialist")).not.toBeInTheDocument();
+  expect(within(screen.getByRole("region", { name: "Allowed destinations" })).queryByText("Agent")).not.toBeInTheDocument();
   expect(saved().participants.intake.transfers).toEqual(["specialist", "reviewer"]);
   expect(JSON.parse(screen.getByTestId("edges").textContent!)).toContainEqual({ id: "transfer:intake:reviewer", source: "intake", target: "reviewer", locked: false });
   fireEvent.click(screen.getByRole("button", { name: "Remove transfer to specialist" }));
@@ -181,50 +184,51 @@ test("transfer history preserves saved null until edited and clears turn count w
   await choose("Transfer history", "Fresh");
   expect(saved().participants.intake).not.toHaveProperty("transfer_history");
 });
-test("the source-tool-options flow adds an MCP tool and cancellation leaves source untouched", async () => {
+test("MCP tools are picked with individual modes and integration-qualified names", () => {
   render(<Harness initialTab="tools" />);
   fireEvent.click(screen.getByRole("button", { name: "Add tool" }));
-  fireEvent.click(screen.getByRole("button", { name: "MCP" }));
-  await choose("MCP integration", "calendar"); fill("Tool name", "find_slots");
-  fireEvent.click(screen.getByRole("button", { name: "Next" }));
-  fill("Local tool key", "calendar_slots"); await choose("Conversation mode", "Non-blocking");
-  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add tool" }));
-  expect(saved().participants.intake.tools.calendar_slots).toEqual({ type: "mcp", integration: "calendar", tool: "find_slots", conversation_mode: "non_blocking" });
+  fireEvent.click(screen.getByRole("button", { name: "calendar" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "find_slots" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Non-blocking find_slots" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add 1 tool" }));
+  expect(saved().participants.intake.tools.calendar__find_slots).toEqual({ type: "mcp", integration: "calendar", tool: "find_slots", conversation_mode: "non_blocking" });
   const before = saved();
   fireEvent.click(screen.getByRole("button", { name: "Add tool" }));
-  fireEvent.click(screen.getByRole("button", { name: "Platform" })); fill("Tool name", "hangup");
+  fireEvent.click(screen.getByRole("button", { name: "hangup" }));
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(saved()).toEqual(before);
 });
-test("tool editing renames visibility atomically, removes obsolete integration, and removal clears visibility", async () => {
+test("editing a tool changes only its conversation mode and preserves its name and visibility", async () => {
   const initial = structuredClone(editorFixture);
   const intake = initial.source.participants.intake!;
-  if (intake.type === "agent") intake.tools = { remote: { type: "mcp", tool: "old", integration: "calendar" } };
+  if (intake.type === "agent") intake.tools = { remote: { type: "mcp", tool: "old", integration: "calendar" }, hangup: { type: "platform", tool: "hangup" } };
   initial.source.tool_visibility_overrides = { intake: { remote: "metadata" } };
   render(<Harness initial={initial} initialTab="tools" />);
   fireEvent.click(screen.getByRole("button", { name: "Edit remote" }));
-  fireEvent.click(screen.getByRole("button", { name: "Back" }));
-  fireEvent.click(screen.getByRole("button", { name: "Back" }));
-  fireEvent.click(screen.getByRole("button", { name: "Platform" })); fill("Tool name", "hangup");
-  fireEvent.click(screen.getByRole("button", { name: "Next" })); fill("Local tool key", "finish");
+  const dialog = within(screen.getByRole("dialog"));
+  expect(dialog.queryByRole("button", { name: "Change tool" })).not.toBeInTheDocument();
+  expect(dialog.queryByRole("searchbox")).not.toBeInTheDocument();
+  expect(dialog.getAllByRole("combobox")).toHaveLength(1);
+  await choose("Conversation mode", "Non-blocking");
   fireEvent.click(screen.getByRole("button", { name: "Save tool" }));
-  expect(saved().participants.intake.tools).toEqual({ finish: { type: "platform", tool: "hangup" } });
-  expect(saved().tool_visibility_overrides.intake).toEqual({ finish: "metadata" });
-  fireEvent.click(screen.getByRole("button", { name: "Remove finish" }));
+  const expected = structuredClone(initial.source);
+  if (expected.participants.intake?.type === "agent") expected.participants.intake.tools!.remote!.conversation_mode = "non_blocking";
+  expect(saved()).toEqual(expected);
+  expect(Object.keys(saved().participants.intake.tools)).toEqual(["remote", "hangup"]);
+  fireEvent.click(screen.getByRole("button", { name: "Edit remote" }));
+  await choose("Conversation mode", "Blocking");
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(saved()).toEqual(expected);
+  fireEvent.click(screen.getByRole("button", { name: "Remove remote" }));
   expect(saved().tool_visibility_overrides.intake).toEqual({});
 });
-test("reserved tool keys cannot be added, and host tools keep their registered key", () => {
+test("host tools keep their registered names without exposing a key field", () => {
   render(<Harness initialTab="tools" />);
   fireEvent.click(screen.getByRole("button", { name: "Add tool" }));
-  fireEvent.click(screen.getByRole("button", { name: "Platform" })); fill("Tool name", "hangup");
-  fireEvent.click(screen.getByRole("button", { name: "Next" })); fill("Local tool key", "transfer");
-  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add tool" }));
-  expect(screen.getByRole("alert")).toHaveTextContent("reserved");
-  expect(saved()).toEqual(editorFixture.source);
-  fireEvent.click(screen.getByRole("button", { name: "Back" })); fireEvent.click(screen.getByRole("button", { name: "Back" }));
-  fireEvent.click(screen.getByRole("button", { name: "Host" })); fill("Tool name", "lookup");
-  fireEvent.click(screen.getByRole("button", { name: "Next" }));
-  expect(screen.getByRole("textbox", { name: "Local tool key" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "transfer" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "availability" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "lookup" }));
+  expect(screen.queryByLabelText("Local tool key")).not.toBeInTheDocument();
   fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add tool" }));
   expect(saved().participants.intake.tools.lookup).toEqual({ type: "host", tool: "lookup" });
 });
@@ -246,4 +250,27 @@ test("agent variables retain saved grants for missing sections so they can be cl
   expect(screen.getByRole("combobox", { name: "contact access for intake" })).toHaveTextContent("Read");
   await choose("contact access for intake", "No access");
   expect(saved().participants.intake.variable_permissions).toEqual({});
+});
+
+
+test("enabled tools show one source and name row with a tooltip only for blocking tools", async () => {
+  const initial = structuredClone(editorFixture);
+  initial.source.participants.intake = { type: "agent", prompt: "help", tools: {
+    hangup: { type: "platform", tool: "hangup" },
+    calendar__find_slots: { type: "mcp", integration: "calendar", tool: "find_slots", conversation_mode: "blocking" },
+    calendar__book_slot: { type: "mcp", integration: "calendar", tool: "book_slot", conversation_mode: "non_blocking" },
+  } };
+  render(<Harness initial={initial} initialTab="tools" />);
+  expect(screen.getByText("mcp · calendar__find_slots")).toBeVisible();
+  expect(within(screen.getByRole("tabpanel", { name: "Tools" })).getAllByText(/hangup/)).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Edit hangup" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Remove hangup" })).toBeEnabled();
+  const indicator = screen.getByRole("button", { name: "hangup: Blocking" });
+  expect(screen.getByRole("button", { name: "calendar__find_slots: Blocking" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "calendar__book_slot: Blocking" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Blocking")).not.toBeInTheDocument();
+  expect(screen.queryByText("Non-blocking")).not.toBeInTheDocument();
+  fireEvent.focus(indicator);
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Blocking");
+  expect(saved()).toEqual(initial.source);
 });

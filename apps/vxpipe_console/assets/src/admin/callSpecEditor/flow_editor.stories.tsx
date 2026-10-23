@@ -1,3 +1,4 @@
+import { toolCatalogFixture } from "./toolCatalogFixture";
 import { storyPhoneNumbers } from "./phone-number-fixtures";
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
@@ -29,7 +30,7 @@ function FlowEditorStory({ theme, scenario, outcome, pageStatus }: Props) {
     <Button variant="outline" onClick={() => setDestination(undefined)}>Return to editor</Button>
   </main> : pageStatus && !retried ? <EditorPageState status={pageStatus === "loading" ? "loading" : "error"} resource={pageStatus === "catalog-error" ? "catalog" : "spec"} backHref="#call-specs" onRetry={() => setRetried(true)} />
     : scenario === "new" && !created ? <NewCallSpec catalog={modelCatalogFixture} services={[{ key: "office-phone", name: "Office phone", provider: "telnyx" as const }]} servicesHref="#services" onCreate={setCreated} onCancel={() => setDestination("#call-specs")} />
-    : <CallSpecEditor key={scenario} snapshot={snapshot} catalog={modelCatalogFixture} lookups={{ phoneNumbers: storyPhoneNumbers, telephonyServices: [{ key: "office-phone", name: "Office phone", provider: "telnyx" as const }], credentialNames: { google: ["primary"] }, mcpIntegrations: ["calendar"] }}
+    : <CallSpecEditor key={scenario} snapshot={snapshot} catalog={modelCatalogFixture} lookups={{ phoneNumbers: storyPhoneNumbers, telephonyServices: [{ key: "office-phone", name: "Office phone", provider: "telnyx" as const }], credentialNames: { google: ["primary"] }, mcpIntegrations: ["calendar"], toolCatalog: toolCatalogFixture }}
       backHref="#call-specs" servicesHref="#services" onNavigate={setDestination} onReload={async () => ({ ...pageSnapshot("default"), saved: { callSpecId: "appointments", revision: revision + 1, publishedRevision: null } })}
       execute={async (request) => {
         if (outcome) return outcome;

@@ -10,7 +10,7 @@ import { AdvancedPanel } from "./advanced-panel";
 import { DefaultsPanel } from "./defaults-panel";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
 import type { ModelCatalog } from "../modelCatalog";
-import { editorFixture } from "./editorFixtures";
+import { editorStoryFixture as editorFixture } from "./editorFixtures";
 import { validateSource } from "./validation";
 import type { SourceDocument } from "./types";
 import "../admin.css";

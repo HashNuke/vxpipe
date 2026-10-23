@@ -1,3 +1,4 @@
+import { toolCatalogFixture } from "./toolCatalogFixture";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
@@ -16,7 +17,7 @@ vi.mock("./flow-canvas", () => ({ FlowCanvas: (props: FlowCanvasProps) => <div>
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const snapshot: EditorSnapshot = { document: structuredClone(editorFixture), saved: { callSpecId: "appointments", revision: 3, publishedRevision: null } };
 snapshot.document.source.defaults = { capabilities: { model_inference: { provider: "google", model: "gemini-2.5-flash" } } };
-const properties = () => ({ snapshot, catalog: modelCatalogFixture, lookups: { telephonyServices: [], credentialNames: {}, mcpIntegrations: [] },
+const properties = () => ({ snapshot, catalog: modelCatalogFixture, lookups: { telephonyServices: [], credentialNames: {}, mcpIntegrations: [], toolCatalog: { ...toolCatalogFixture, tools: [...toolCatalogFixture.tools, { type: "host" as const, tool: "availability", description: "Test availability action." }, { type: "host" as const, tool: "lookup", description: "Test lookup action." }] } },
   backHref: "/specs", servicesHref: "/services", onNavigate: vi.fn(), onReload: vi.fn(async () => snapshot),
   execute: vi.fn<ExecuteEditorRequest>(async () => ({ status: 201, revision: 4 })) });
 const click = (name: string) => fireEvent.click(screen.getByRole("button", { name }));
@@ -246,14 +247,13 @@ test("an unmapped backend error opens the issues drawer through Show", async () 
   expect(drawer).toBeVisible();
 });
 
-test("tool action failures keep the modal draft and use the editor notification", () => {
+test("the tool picker prevents adding an already enabled host tool", () => {
   render(<CallSpecEditor {...properties()} />); click("Select intake");
-  fireEvent.mouseDown(screen.getByRole("tab", { name: "Tools" }), { button: 0 }); click("Add tool"); click("Host");
-  fill("Tool name", "availability"); click("Next");
-  fireEvent.click(within(screen.getByRole("dialog", { name: "Add tool" })).getByRole("button", { name: "Add tool" }));
-  expect(screen.getByRole("dialog", { name: "Add tool" })).toBeVisible();
-  expect(screen.getByRole("textbox", { name: "Local tool key" })).toHaveValue("availability");
-  expect(screen.getByLabelText("Notification")).toHaveTextContent("Couldn't save this tool");
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Tools" }), { button: 0 }); click("Add tool");
+  const dialog = screen.getByRole("dialog", { name: "Add tool" });
+  expect(within(dialog).getByRole("button", { name: "availability" })).toBeDisabled();
+  expect(within(dialog).getByText("Added")).toBeVisible();
+  expect(within(dialog).queryByLabelText("Local tool key")).not.toBeInTheDocument();
 });
 
 test("an old recovery action cannot reload while a new save is pending", async () => {

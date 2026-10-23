@@ -50,7 +50,7 @@ export function ConnectionFields({ document, onChange, issues, participantKey, s
         })} />}
       {numberSource === "fixed" && !incoming && <TextField label="Phone number" path={[...path, "number"]} value={connection.number ?? ""} issues={issues} disabled={document.readOnly} hint="Use the full international number, for example +15550001000."
         onChange={(number) => change((next) => { next.number = number; })} />}
-      {numberSource === "request" && <p className="text-xs text-muted-foreground">Each outgoing call request must supply its destination in to.</p>}
+      {numberSource === "request" && <p className="text-xs text-muted-foreground">Each outgoing call request must supply its destination.</p>}
       {numberSource === "variable" && <>
         <ChoiceField label="Variable section" path={[...path, "number_from_variable", "section"]} value={reference?.section ?? ""} issues={issues} disabled={document.readOnly}
           choices={[{ value: "", label: "Choose a section" }, ...Object.keys(sections).map((key) => ({ value: key, label: key }))]}

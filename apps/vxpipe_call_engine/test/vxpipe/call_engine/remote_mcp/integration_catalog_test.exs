@@ -4,6 +4,38 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationCatalogTest do
   alias Vxpipe.CallEngine.RemoteMCP.{Integration, IntegrationCatalog}
   alias Vxpipe.MCP.Catalog
 
+  test "lists only usable allowed tools with whole-record tenant precedence and no private config" do
+    {:ok, descriptors} =
+      Catalog.new([
+        %{
+          "name" => "allowed",
+          "description" => "Visible tool",
+          "inputSchema" => %{"type" => "object"}
+        },
+        %{"name" => "denied", "inputSchema" => %{"type" => "object"}},
+        %{"name" => "unsupported", "inputSchema" => %{"$ref" => "external"}}
+      ])
+
+    tenant =
+      integration!("records", "allowed", "tenant-secret",
+        catalog: descriptors,
+        allowed_tools: ["allowed", "unsupported"]
+      )
+
+    {:ok, catalog} =
+      IntegrationCatalog.new(
+        application: %{"records" => integration!("records", "application_only", "app-secret")},
+        tenants: %{
+          "tenant-demo" => %{"records" => tenant},
+          "other" => %{"private" => integration!("private", "foreign", "foreign-secret")}
+        }
+      )
+
+    assert IntegrationCatalog.tools(catalog, "tenant-demo") == [
+             %{integration: "records", tool: "allowed", description: "Visible tool"}
+           ]
+  end
+
   test "uses the application record only when the tenant record is absent" do
     application = integration!("records", "application_lookup", "application-secret")
 

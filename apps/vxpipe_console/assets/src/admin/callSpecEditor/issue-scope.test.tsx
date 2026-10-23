@@ -48,7 +48,7 @@ test("inspector badges count hidden-tab errors while inline messages follow the 
   expect(screen.queryByText("Choose a handler")).not.toBeInTheDocument();
 });
 
-test.each([["tool", "Tool name"], ["slots", "Local tool key"]])("Show reveals a tool dialog at its named field: %s", async (field, label) => {
+test.each(["tool", "slots"])("Show reveals a tool dialog at its selection: %s", async (field) => {
   const { AgentInspector } = await import("./agent-inspector");
   const { editorFixture } = await import("./editorFixtures");
   const { modelCatalogFixture } = await import("../modelCatalogFixtures");
@@ -57,8 +57,8 @@ test.each([["tool", "Tool name"], ["slots", "Local tool key"]])("Show reveals a 
   const problem = { ...issue, path: field === "slots" ? ["participants", "intake", "tools", "slots"] : ["participants", "intake", "tools", "slots", field], reason: "Tool not found" };
   render(<AgentInspector document={document} onChange={vi.fn()} participantKey="intake" tab="tools" catalog={modelCatalogFixture} lookups={{ telephonyServices: [], credentialNames: {}, mcpIntegrations: ["calendar"] }} issues={[problem]} focusRequest={{ id: 1, path: problem.path }} />);
   expect(await screen.findByRole("dialog", { name: "Edit tool" })).toBeInTheDocument();
-  expect(screen.getByRole("textbox", { name: label })).toHaveFocus();
-  expect(screen.getByRole("textbox", { name: label })).toHaveAccessibleDescription(expect.stringContaining("Tool not found"));
+  expect(screen.getByText("Tool not found")).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "Conversation mode" })).toHaveFocus();
 });
 test("Show focuses hidden variable constraint errors with JSON editing guidance", async () => {
   const { FlowLevelInspector } = await import("./flow-level-inspector");

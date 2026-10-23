@@ -44,14 +44,14 @@ test("loads installed provider/model listings and safe named lookups without liv
     const url = new URL(String(input), "https://console.test");
     const capability = url.searchParams.get("capability") as typeof catalogCapabilities[number];
     const providers = modelCatalogFixture[capability] ?? {};
-    if (url.pathname.endsWith("/call-spec-editor-lookups")) return reply({ credential_names: { google: ["primary"] }, telephony_services: [{ key: "phone", name: "phone" }], mcp_integrations: ["help"] });
+    if (url.pathname.endsWith("/call-spec-editor-lookups")) return reply({ credential_names: { google: ["primary"] }, telephony_services: [{ key: "phone", name: "phone" }], mcp_integrations: ["help"], tool_catalog: { mcp_available: true, tools: [{ type: "platform", tool: "hangup", description: "End the call." }] } });
     if (url.pathname.endsWith("/models")) return reply({ models: providers[url.pathname.split("/").at(-2)!] });
     return reply({ providers: Object.keys(providers).map((id) => ({ id })) });
   });
   const api = createEditorApi("tenant", "csrf", fetch);
   const signal = new AbortController().signal;
   expect(await api.catalog(signal)).toEqual(Object.fromEntries(catalogCapabilities.map((capability) => [capability, modelCatalogFixture[capability] ?? {}])));
-  expect(await api.lookups(signal)).toEqual({ credentialNames: { google: ["primary"] }, telephonyServices: [{ key: "phone", name: "phone" }], mcpIntegrations: ["help"] });
+  expect(await api.lookups(signal)).toEqual({ credentialNames: { google: ["primary"] }, telephonyServices: [{ key: "phone", name: "phone" }], mcpIntegrations: ["help"], toolCatalog: { mcpAvailable: true, tools: [{ type: "platform", tool: "hangup", description: "End the call." }] } });
 });
 
 test("a no-op editor save preserves an API-authored integer enum beyond Number precision", async () => {

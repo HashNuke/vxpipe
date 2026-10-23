@@ -4,7 +4,7 @@ import { expect, userEvent, within } from "storybook/test";
 import { ReactFlow } from "@xyflow/react";
 import { FlowNode } from "./flow-node";
 import { canvasGraph } from "./flow-layout";
-import { editorFixture } from "./editorFixtures";
+import { editorStoryFixture as editorFixture } from "./editorFixtures";
 import { FlowEditorLayout } from "./flow-editor-layout";
 import { addParticipant, setTransfer } from "./participants";
 import { EditorTheme } from "./EditorTheme";

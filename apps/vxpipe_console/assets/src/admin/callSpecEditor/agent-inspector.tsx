@@ -44,7 +44,7 @@ export function AgentInspector({ catalog, lookups, participantKey, onRenamed, on
           : id === "voice" ? <AgentModelsPanel {...props} participantKey={participantKey} catalog={catalog} />
           : id === "variables" ? <SectionPermissionMatrix {...props} agentKey={participantKey} />
           : id === "transfers" ? <AgentTransfersPanel {...props} participantKey={participantKey} />
-          : id === "tools" ? <AgentToolsPanel {...props} participantKey={participantKey} integrations={lookups.mcpIntegrations} />
+          : id === "tools" ? <AgentToolsPanel {...props} participantKey={participantKey} integrations={lookups.mcpIntegrations} catalog={lookups.toolCatalog} />
           : <MediaPolicyFields {...props} participantKey={participantKey} />}
       </TabsContent>)}
     </Tabs>

@@ -3,6 +3,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
   alias Vxpipe.CallEngine.RemoteMCP.ConfiguredNames
 
   alias Vxpipe.Calls.{
+    EditorToolCatalog,
     EffectiveServiceBindings,
     InstallationOperator,
     OperatorAdministration,
@@ -50,6 +51,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
            |> Enum.uniq_by(& &1.key)
            |> Enum.sort_by(& &1.name),
          mcp_integrations: integrations,
+         tool_catalog: EditorToolCatalog.list(tenant, options),
          truncated: telephony.truncated or applications.truncated
        }}
     else
@@ -84,6 +86,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
            |> Enum.uniq_by(& &1.key)
            |> Enum.sort_by(& &1.name),
          mcp_integrations: integrations,
+         tool_catalog: EditorToolCatalog.list(tenant, options),
          truncated: telephony.truncated or applications.truncated
        }}
     end
