@@ -90,14 +90,17 @@ test("read-only policy fields cannot mutate a historical source", () => {
 });
 
 
-test("an explicit empty route map means nobody, and remains explicit after another edit", async () => {
+test.each([null, "intake"])("media edits preserve explicit empty route maps for %s", async (participantKey) => {
   const initial = structuredClone(editorFixture);
-  initial.source.participants.intake!.while_present = { audio_routes: {} };
-  render(<Harness panel="media" participantKey="intake" initial={initial} />);
-  expect(screen.getByRole("combobox", { name: "Audio routing" })).toHaveTextContent("Restricted");
-  expect(screen.getByRole("combobox", { name: "Audio from intake" })).toHaveTextContent("Nobody");
+  const policy = { audio_routes: {}, transcript_routes: {} };
+  if (participantKey === null) initial.source.media_policy = policy;
+  else initial.source.participants[participantKey]!.while_present = policy;
+  render(<Harness panel="media" participantKey={participantKey} initial={initial} />);
+  expect(screen.queryByRole("combobox", { name: /routing/ })).not.toBeInTheDocument();
   await choose("Record audio", "Deny");
-  expect(saved().participants.intake.while_present.audio_routes).toEqual({});
+  const updated = saved();
+  expect(participantKey === null ? updated.media_policy : updated.participants[participantKey].while_present)
+    .toEqual({ ...policy, record_audio: false });
 });
 
 test("whole-policy silence is displayed and preserved for unedited wait slots", async () => {
@@ -110,10 +113,9 @@ test("whole-policy silence is displayed and preserved for unedited wait slots", 
 test("prototype-shaped participant identifiers remain ordinary route keys", async () => {
   const source = structuredClone(editorFixture.source);
   source.participants = { ...source.participants, ["constructor"]: { type: "human" as const, connection: { service: "web", mode: "receive" as const, admission: "transfer" as const } } };
-  source.participants.intake!.while_present = { audio_routes: {} };
+  source.participants.intake!.while_present = { audio_routes: { ["constructor"]: ["caller"] } };
   render(<Harness panel="media" participantKey="intake" initial={{ ...editorFixture, source }} />);
-  expect(screen.getByRole("combobox", { name: "Audio from constructor" })).toHaveTextContent("Nobody");
-  fireEvent.click(screen.getByRole("checkbox", { name: "Audio from constructor to caller" }));
+  await choose("Record audio", "Deny");
   expect(saved().participants.intake.while_present.audio_routes.constructor).toEqual(["caller"]);
 });
 
@@ -158,23 +160,38 @@ test("omitted tool visibility displays Hidden and can restore the call-wide leve
   expect(saved()).not.toHaveProperty("tool_visibility");
 });
 
-test.each(["intake", "specialist"])("both routing controls edit only participant %s", async (participantKey) => {
+test.each([null, "caller", "intake", "specialist"])("Media exposes storage permissions and preserves saved routes for %s", async (participantKey) => {
   const initial = structuredClone(editorFixture);
   initial.source.media_policy = { audio_routes: { intake: ["caller"] }, transcript_routes: { caller: ["intake"] } };
+  if (participantKey !== null) initial.source.participants[participantKey]!.while_present = {
+    audio_routes: { caller: ["specialist"] }, transcript_routes: { specialist: ["caller"] },
+  };
   render(<Harness panel="media" participantKey={participantKey} initial={initial} />);
-  for (const label of ["Audio routing", "Transcript routing"]) {
-    expect(screen.getByRole("combobox", { name: label })).toHaveTextContent("Inherit");
-    await choose(label, "Restricted");
+  expect(screen.getAllByRole("combobox")).toHaveLength(2);
+  expect(screen.getByRole("combobox", { name: "Record audio" })).toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "Save transcripts" })).toBeInTheDocument();
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  expect(saved()).toEqual(initial.source);
+
+  await choose("Record audio", "Deny");
+  await choose("Save transcripts", "Deny");
+  const expected = structuredClone(initial.source);
+  const policy = participantKey === null ? expected.media_policy! : expected.participants[participantKey]!.while_present!;
+  policy.record_audio = false;
+  policy.save_transcripts = false;
+  expect(saved()).toEqual(expected);
+
+  const reset = participantKey === null ? "Allow" : "Inherit";
+  await choose("Record audio", reset);
+  await choose("Save transcripts", reset);
+  if (participantKey === null) {
+    policy.record_audio = true;
+    policy.save_transcripts = true;
+  } else {
+    delete policy.record_audio;
+    delete policy.save_transcripts;
   }
-  await choose("Audio from intake", "All other participants");
-  await choose("Transcripts from caller", "All other participants");
-  expect(saved().participants[participantKey].while_present).toEqual({
-    audio_routes: { intake: ["caller", "specialist"] },
-    transcript_routes: { caller: ["intake", "specialist"] }
-  });
-  expect(saved().media_policy).toEqual(initial.source.media_policy);
-  const otherKey = participantKey === "intake" ? "specialist" : "intake";
-  expect(saved().participants[otherKey]).toEqual(initial.source.participants[otherKey]);
+  expect(saved()).toEqual(expected);
 });
 
 

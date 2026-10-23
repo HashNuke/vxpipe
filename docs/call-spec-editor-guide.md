@@ -60,9 +60,11 @@ speech model; **LLM + Text-to-Speech** shows a language model and a voice model.
 Changing type removes incompatible selections and supplies missing selections
 from the installed catalog's recommendations. Other agents keep their effective
 models. Human participants' **Models** tab contains only **Speech to text**.
-Audio and transcript routing are configured in each participant’s **Media** tab.
-**Call settings → Media** contains only recording and transcript-saving permissions.
-Existing call-wide routing values are preserved in JSON.
+**Call settings → Media** and the participant and entry **Media** tabs contain
+only **Record audio** and **Save transcripts** permissions. Labels and dropdowns
+share a row on desktop and stack on narrow screens. Existing call-wide and
+participant audio/transcript routing rules remain in the saved JSON and are
+preserved when recording or transcript-saving permissions change.
 
 **Advanced** exposes one call-wide tool visibility setting. Per-agent and per-tool
 visibility controls are not shown; existing overrides remain in the saved JSON.
