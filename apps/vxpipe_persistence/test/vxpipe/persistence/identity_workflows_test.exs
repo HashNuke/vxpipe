@@ -10,6 +10,8 @@ defmodule Vxpipe.Persistence.IdentityWorkflowsTest do
     IdentityUserStore
   }
 
+  alias Vxpipe.Persistence.Schema.AuthenticationInstallation
+
   defp deps do
     %{
       users: IdentityUserStore,
@@ -130,8 +132,13 @@ defmodule Vxpipe.Persistence.IdentityWorkflowsTest do
                "correct horse 15!"
              )
 
+    # Proofs apply to upgraded installations; fresh databases start in first-run mode.
+    Repo.get!(AuthenticationInstallation, "default")
+    |> AuthenticationInstallation.changeset(%{bootstrap_mode: "operator_required"})
+    |> Repo.update!()
+
     # Different account is not throttled; invalid proof is recorded for throttling.
-    assert {:error, _} =
+    assert {:error, :invalid_proof} =
              Vxpipe.Identity.Bootstrap.complete_with_proof(
                params,
                "bogus-proof",
