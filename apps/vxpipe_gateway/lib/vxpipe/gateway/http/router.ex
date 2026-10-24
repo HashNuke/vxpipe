@@ -310,6 +310,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
     validate_options!(options, [
       :enabled,
       :public_base_url,
+      :public_url_provider,
       :provider_credential_repository,
       :telephony_service_repository,
       :adapters,
@@ -328,6 +329,7 @@ defmodule Vxpipe.Gateway.HTTP.Router do
     Keyword.take(telephony, [
       :enabled,
       :public_base_url,
+      :public_url_provider,
       :provider_credential_repository,
       :telephony_service_repository,
       :adapters,

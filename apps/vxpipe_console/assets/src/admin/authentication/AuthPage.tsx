@@ -19,7 +19,7 @@ export function AuthPage({
   unavailable?: boolean;
   completed?: boolean;
   proofRequired?: boolean;
-  /** Opt-in until the installation URL workflow has passed Storybook review. */
+  /** URL step for first-run setup; other authentication modes ignore this option. */
   configureUrl?: boolean;
 }) {
   const [email, setEmail] = useState("");

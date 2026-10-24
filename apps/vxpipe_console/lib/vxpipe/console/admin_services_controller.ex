@@ -37,23 +37,26 @@ defmodule Vxpipe.Console.AdminServicesController do
   end
 
   defp bindings(conn, scope) do
-    case Vxpipe.Calls.list_operator_service_bindings(conn.assigns.user_principal, scope) do
-      {:ok, directory} ->
-        origin = Application.fetch_env!(:vxpipe_console, :service_public_origin)
+    with {:ok, directory} <-
+           Vxpipe.Calls.list_operator_service_bindings(conn.assigns.user_principal, scope),
+         {:ok, origin} <-
+           Vxpipe.Gateway.HTTP.PublicOrigin.current(
+             Application.fetch_env!(:vxpipe_console, :service_public_origin),
+             Application.get_env(:vxpipe_console, :service_public_url_provider)
+           ) do
+      urls = %{
+        platform: PublicEndpoint.scoped_event_url(origin, :platform),
+        tenant:
+          if(is_binary(scope), do: PublicEndpoint.scoped_event_url(origin, {:tenant, scope}))
+      }
 
-        urls = %{
-          platform: PublicEndpoint.scoped_event_url(origin, :platform),
-          tenant:
-            if(is_binary(scope), do: PublicEndpoint.scoped_event_url(origin, {:tenant, scope}))
-        }
-
-        json(
-          conn,
-          directory
-          |> Map.put(:webhook_urls, urls)
-          |> Map.put(:provider_capabilities, Registry.catalog())
-        )
-
+      json(
+        conn,
+        directory
+        |> Map.put(:webhook_urls, urls)
+        |> Map.put(:provider_capabilities, Registry.catalog())
+      )
+    else
       {:error, :tenant_not_found} ->
         conn |> put_status(404) |> json(%{error: %{code: "tenant_not_found"}})
 

@@ -121,6 +121,7 @@ defmodule Vxpipe.Console.SecurityAuditLoginTest do
       end
 
     credentials = %{
+      "public_url" => "https://calls.example.test",
       "email" => @email,
       "password" => @password,
       "password_confirmation" => @password

@@ -2,7 +2,7 @@ defmodule Vxpipe.Providers.Telnyx.WebhookSelection do
   @moduledoc false
 
   alias Vxpipe.Calls.{ProviderAuth, ProviderCredential, ProviderCredentials, TelephonyServices}
-  alias Vxpipe.Gateway.Telephony.{ConfiguredService, WebhookService}
+  alias Vxpipe.Gateway.Telephony.{ConfiguredService, ServiceRegistry, WebhookService}
   alias Vxpipe.Providers.Telnyx.WebhookVerifier
 
   @derive {Inspect, only: [:scope, :owner]}
@@ -43,11 +43,7 @@ defmodule Vxpipe.Providers.Telnyx.WebhookSelection do
            ),
          :ok <- matching_selection(selection, candidate, snapshot),
          {:ok, service} <-
-           ConfiguredService.from_snapshot(
-             snapshot,
-             selection.registry.public_base_url,
-             selection.registry.adapters
-           ),
+           ServiceRegistry.configure(selection.registry, snapshot),
          :ok <- WebhookVerifier.verify(webhook, service.verifier_options) do
       {:ok, service, nil}
     else

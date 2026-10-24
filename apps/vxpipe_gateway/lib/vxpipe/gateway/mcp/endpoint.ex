@@ -12,6 +12,7 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
     oauth = Configuration.build(options)
 
     %{
+      oauth: oauth,
       enabled: Keyword.get(options, :enabled, false),
       resource_metadata: resource_metadata(oauth),
       allowed_hosts: Keyword.get(options, :allowed_hosts, []),
@@ -49,6 +50,39 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
   def call(conn, options) do
     conn = put_resp_header(conn, "cache-control", "no-store")
 
+    case Configuration.resolve(options.oauth) do
+      {:ok, current} -> call_current(conn, current_options(options, current))
+      {:error, _reason} -> error(conn, 503, "unavailable")
+    end
+  end
+
+  defp current_options(options, oauth) do
+    admission = if oauth.resource_override, do: options.oauth, else: oauth
+
+    authentication =
+      case options.authentication do
+        {Authentication, auth_options} ->
+          {Authentication, Keyword.put(auth_options, :resource, Map.get(oauth, :resource))}
+
+        custom ->
+          custom
+      end
+
+    %{
+      options
+      | resource_metadata: resource_metadata(oauth),
+        authentication: authentication,
+        allowed_hosts: admission.allowed_hosts,
+        allowed_origins: admission.allowed_origins,
+        protocol:
+          Map.merge(options.protocol, %{
+            allowed_hosts: admission.allowed_hosts,
+            allowed_origins: admission.allowed_origins
+          })
+    }
+  end
+
+  defp call_current(conn, options) do
     cond do
       not options.enabled or conn.path_info != ["mcp"] -> error(conn, 404, "not_found")
       conn.host not in options.allowed_hosts -> error(conn, 421, "host_not_allowed")

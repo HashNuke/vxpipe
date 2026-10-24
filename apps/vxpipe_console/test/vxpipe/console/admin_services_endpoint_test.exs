@@ -556,6 +556,35 @@ defmodule Vxpipe.Console.AdminServicesEndpointTest do
     refute_received {:operator_bindings_requested, _}
   end
 
+  test "webhook copy addresses read the saved origin and preserve the explicit override" do
+    previous = Application.get_env(:vxpipe_console, :service_public_url_provider)
+    Application.put_env(:vxpipe_console, :service_public_url_provider, __MODULE__)
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_console, :service_public_url_provider, previous)
+    end)
+
+    configure_credential_repository({:ok, %{tenant: nil, bindings: []}})
+    auth = authenticate()
+
+    for origin <- ["https://first.example.test:8443", "https://second.example.test"] do
+      Process.put(:installation_test_origin, {:ok, origin})
+      response = auth |> recycle() |> https_get("/api/platform/services") |> json_response(200)
+      assert response["webhook_urls"]["platform"] == origin <> "/webhooks/platform/telnyx"
+    end
+
+    Process.put(:installation_test_origin, {:error, :unavailable})
+    assert auth |> recycle() |> https_get("/api/platform/services") |> json_response(503)
+    Application.put_env(:vxpipe_console, :service_public_url_provider, nil)
+    response = auth |> recycle() |> https_get("/api/platform/services") |> json_response(200)
+
+    assert response["webhook_urls"]["platform"] ==
+             Application.fetch_env!(:vxpipe_console, :service_public_origin) <>
+               "/webhooks/platform/telnyx"
+  end
+
+  def public_url, do: Process.get(:installation_test_origin)
+
   test "platform replacement requires CSRF and preserves exact credential identity" do
     credential = %ProviderCredential{
       id: "shared-id",

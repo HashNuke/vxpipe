@@ -44,13 +44,15 @@ defmodule Vxpipe.Identity.Bootstrap do
     # Durable audit lives inside the atomic installation transaction
     # (IdentityInstallationStore appends setup_completed before commit), so no
     # outer append here: an outer failure must never mask a committed setup.
-    with {:ok, normalized} <- Email.normalize(email),
+    with {:ok, public_url} <- setup_public_url(opts),
+         {:ok, normalized} <- Email.normalize(email),
          :ok <- check_bootstrap_rate(attempts, normalized, address, now),
          :ok <- Password.confirm(password, confirmation),
          {:ok, hash} <- hasher.hash(password),
          {:ok, %{token: token, digest: digest}} <- tokens.generate(),
          {:ok, result} <-
            installations.complete_first_run(%{
+             public_url: public_url,
              email: String.trim(email),
              normalized_email: normalized,
              password_hash: hash,
@@ -59,6 +61,7 @@ defmodule Vxpipe.Identity.Bootstrap do
              session_digest: digest,
              session_expires_at: Vxpipe.Identity.Tokens.expiry(now)
            }) do
+      :ok = Vxpipe.Identity.InstallationSettings.invalidate_public_url(deps)
       {:ok, %{token: token, user: Map.drop(result.user, [:password_hash])}}
     else
       {:error, :invalid_proof} = error ->
@@ -95,13 +98,15 @@ defmodule Vxpipe.Identity.Bootstrap do
     address = client_address(opts)
 
     # Atomic store operation audits setup completion; no outer append.
-    with {:ok, normalized} <- Email.normalize(email),
+    with {:ok, public_url} <- setup_public_url(opts),
+         {:ok, normalized} <- Email.normalize(email),
          :ok <- check_bootstrap_rate(attempts, normalized, address, now),
          :ok <- Password.confirm(password, confirmation),
          {:ok, hash} <- hasher.hash(password),
          {:ok, %{token: token, digest: digest}} <- tokens.generate(),
          {:ok, result} <-
            installations.consume_setup_proof(proof, %{
+             public_url: public_url,
              email: String.trim(email),
              normalized_email: normalized,
              password_hash: hash,
@@ -110,6 +115,7 @@ defmodule Vxpipe.Identity.Bootstrap do
              session_digest: digest,
              session_expires_at: Vxpipe.Identity.Tokens.expiry(now)
            }) do
+      :ok = Vxpipe.Identity.InstallationSettings.invalidate_public_url(deps)
       {:ok, %{token: token, user: Map.drop(result.user, [:password_hash])}}
     else
       {:error, :invalid_proof} = error ->
@@ -189,6 +195,12 @@ defmodule Vxpipe.Identity.Bootstrap do
       error ->
         error
     end
+  end
+
+  # Legacy embedded callers may complete setup without an origin, then configure it later.
+  defp setup_public_url(opts) do
+    value = if is_map(opts), do: Map.get(opts, :public_url), else: Keyword.get(opts, :public_url)
+    if is_nil(value), do: {:ok, nil}, else: Vxpipe.Identity.InstallationURL.normalize(value)
   end
 
   defp client_address(opts) when is_map(opts) do

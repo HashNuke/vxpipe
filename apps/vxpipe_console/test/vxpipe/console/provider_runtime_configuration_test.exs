@@ -126,7 +126,8 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
 
     assert Keyword.fetch!(http, :telephony) == [
              enabled: true,
-             public_base_url: "https://voice.example.test/voice"
+             public_base_url: "https://voice.example.test/voice",
+             public_url_provider: nil
            ]
 
     assert configuration
@@ -143,7 +144,11 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
       |> Keyword.fetch!(Vxpipe.Gateway.Application)
       |> Keyword.fetch!(:http)
 
-    assert Keyword.fetch!(http, :telephony) == [enabled: false, public_base_url: nil]
+    assert Keyword.fetch!(http, :telephony) == [
+             enabled: true,
+             public_base_url: nil,
+             public_url_provider: Vxpipe.Identity.InstallationSettings
+           ]
 
     assert configuration
            |> Keyword.fetch!(:vxpipe_console)
@@ -169,7 +174,8 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
 
     assert Keyword.fetch!(http, :telephony) == [
              enabled: true,
-             public_base_url: "https://192.0.2.15"
+             public_base_url: "https://192.0.2.15",
+             public_url_provider: Vxpipe.Identity.InstallationSettings
            ]
   end
 

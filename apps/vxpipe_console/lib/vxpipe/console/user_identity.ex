@@ -15,15 +15,24 @@ defmodule Vxpipe.Console.UserIdentity do
         })
       )
 
-  def setup(email, password, confirmation, proof \\ nil, client_address \\ "local") do
+  def setup(
+        email,
+        password,
+        confirmation,
+        proof \\ nil,
+        client_address \\ "local",
+        public_url \\ nil
+      ) do
     with_dependencies(fn deps ->
       if is_binary(proof) and proof != "" do
         Bootstrap.complete_with_proof(deps, proof, email, password, confirmation, %{
-          client_address: client_address
+          client_address: client_address,
+          public_url: public_url
         })
       else
         Bootstrap.complete_first_run(deps, email, password, confirmation, %{
-          client_address: client_address
+          client_address: client_address,
+          public_url: public_url
         })
       end
     end)
@@ -31,6 +40,12 @@ defmodule Vxpipe.Console.UserIdentity do
 
   def login(email, password, client_address),
     do: with_dependencies(&Sessions.login(&1, email, password, client_address))
+
+  def installation(actor),
+    do: with_dependencies(&Vxpipe.Identity.InstallationSettings.fetch(&1, actor))
+
+  def update_installation(actor, url, revision),
+    do: with_dependencies(&Vxpipe.Identity.InstallationSettings.update(&1, actor, url, revision))
 
   def authenticate(token), do: with_dependencies(&Sessions.authenticate(&1, token))
   def logout(token), do: with_dependencies(&Sessions.logout(&1, token))

@@ -85,6 +85,8 @@ defmodule Vxpipe.Console.Router do
     plug Vxpipe.Console.RequireTenant
   end
 
+  get "/oauth/client-metadata.json", Vxpipe.Console.MCPClientMetadataController, :show, log: false
+
   scope "/oauth" do
     pipe_through :oauth_browser
     get "/authorize", Vxpipe.Console.OAuth.AuthorizationController, :start, log: false
@@ -150,6 +152,7 @@ defmodule Vxpipe.Console.Router do
     get "/api-keys", Vxpipe.Console.CanonicalPageController, :index
     get "/api-keys/new", Vxpipe.Console.CanonicalPageController, :index
     get "/platform/services", Vxpipe.Console.CanonicalPageController, :index
+    get "/platform/installation", Vxpipe.Console.InstallationController, :page
     get "/t/:tenant_key/dashboard", Vxpipe.Console.CanonicalPageController, :index
     get "/t/:tenant_key/calls", Vxpipe.Console.CanonicalPageController, :index
     get "/t/:tenant_key/call-specs", Vxpipe.Console.CanonicalPageController, :index
@@ -186,6 +189,12 @@ defmodule Vxpipe.Console.Router do
 
   scope "/api" do
     pipe_through :session_product_api
+
+    get "/installation", Vxpipe.Console.InstallationController, :show,
+      metadata: %{console_product_api: true}
+
+    patch "/installation", Vxpipe.Console.InstallationController, :update,
+      metadata: %{console_product_api: true}
 
     post "/onboarding/demo-tenant", Vxpipe.Console.AdminOnboardingController, :ensure_demo_tenant,
       metadata: %{console_product_api: true}

@@ -35,6 +35,8 @@ defmodule Vxpipe.Persistence.IdentityInstallationStore do
          %{
            mode: bootstrap_mode(mode),
            setup_completed_at: row.setup_completed_at,
+           public_url: row.public_url,
+           public_url_revision: row.public_url_revision,
            initial_superadmin_public_id: initial_superadmin_public_id(row)
          }}
 
@@ -43,6 +45,50 @@ defmodule Vxpipe.Persistence.IdentityInstallationStore do
     end
   rescue
     _ -> {:error, :unavailable}
+  end
+
+  @impl true
+  def update_public_url(actor, url, revision) do
+    Repo.transaction(fn ->
+      with :ok <- Vxpipe.Identity.InstallationSettings.authorize(actor),
+           :ok <-
+             IdentityRecord.revalidate_actor(
+               Vxpipe.Identity.AccountAuthority.attribution(actor),
+               ["users.superadmins.write"]
+             ),
+           {:ok, ^url} <- Vxpipe.Identity.InstallationURL.normalize(url),
+           {:ok, installation} <- lock_installation(),
+           :ok <- require_complete(installation),
+           true <- installation.public_url_revision == revision,
+           {:ok, updated} <- change_public_url(installation, actor, url) do
+        %{public_url: updated.public_url, revision: updated.public_url_revision}
+      else
+        false -> Repo.rollback(:conflict)
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  rescue
+    _ -> {:error, :unavailable}
+  end
+
+  defp change_public_url(%{public_url: url} = installation, _actor, url), do: {:ok, installation}
+
+  defp change_public_url(installation, actor, url) do
+    with {:ok, updated} <-
+           installation
+           |> AuthenticationInstallation.changeset(%{
+             public_url: url,
+             public_url_revision: installation.public_url_revision + 1
+           })
+           |> Repo.update(),
+         :ok <-
+           IdentityAuditStore.append(%{
+             action: "installation_url_updated",
+             actor_user_public_id: actor.user_public_id,
+             summary: %{revision: updated.public_url_revision}
+           }) do
+      {:ok, updated}
+    end
   end
 
   @impl true
@@ -283,7 +329,7 @@ defmodule Vxpipe.Persistence.IdentityInstallationStore do
   defp insert_initial_superadmin(installation, attrs) do
     with {:ok, role} <- lock_superadmin_role(),
          {:ok, user} <- insert_user(attrs, role.id),
-         {:ok, _} <- complete_installation(installation, user.id),
+         {:ok, _} <- complete_installation(installation, user.id, Map.get(attrs, :public_url)),
          {:ok, _} <- insert_session(user.id, attrs),
          :ok <- append_setup_audit(attrs, installation, user) do
       {:ok,
@@ -320,11 +366,13 @@ defmodule Vxpipe.Persistence.IdentityInstallationStore do
     end
   end
 
-  defp complete_installation(installation, user_id) do
+  defp complete_installation(installation, user_id, public_url) do
     installation
     |> AuthenticationInstallation.changeset(%{
       setup_completed_at: IdentityRecord.utc_now(),
-      initial_superadmin_user_id: user_id
+      initial_superadmin_user_id: user_id,
+      public_url: public_url,
+      public_url_revision: if(is_nil(public_url), do: 0, else: 1)
     })
     |> Repo.update()
     |> case do

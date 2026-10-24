@@ -17,6 +17,7 @@ defmodule Vxpipe.Console.OAuth.Browser do
     options = Configuration.build(Application.get_env(:vxpipe_console, :oauth, []))
 
     with true <- options.enabled,
+         {:ok, options} <- Configuration.resolve(options),
          :ok <- trusted_request(conn, options),
          :ok <- options.backend.rate_limit(:authorize, ClientAddress.for_throttling(conn)),
          {:ok, params, conn} <- input(conn, options.resource) do

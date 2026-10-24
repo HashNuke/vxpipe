@@ -44,6 +44,9 @@ defmodule Vxpipe.Console.Test.FakeUserIdentity do
   @spec status() :: {:ok, :complete}
   def status, do: {:ok, :complete}
 
+  def setup(email, password, confirmation, proof, address, _public_url),
+    do: setup(email, password, confirmation, proof, address)
+
   @spec setup(String.t(), String.t(), String.t(), term(), String.t()) ::
           {:ok, map()} | {:error, term()}
   def setup(@email, @password, @password, _proof, _address),

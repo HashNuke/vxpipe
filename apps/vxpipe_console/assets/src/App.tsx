@@ -18,6 +18,8 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
+import { InstallationSettingsPage } from "./admin/authentication/InstallationSettingsPage";
+import type { InstallationSettings } from "./admin/authentication/authenticationApi";
 import {
   createBrowserRouter,
   createRoutesFromElements,
@@ -162,6 +164,7 @@ export function App(props: AppProps) {
         <Route path="/api-keys" element={<ConfiguredRoute render={props => <ApiKeysRoute {...props} />} />} />
         <Route path="/api-keys/new" element={<ConfiguredRoute render={props => <ApiKeysRoute {...props} />} />} />
         <Route path="/platform/services" element={<ConfiguredRoute render={(props) => <ScopedServicesRoute {...props} platform />} />} />
+        <Route path="/platform/installation" element={<ConfiguredRoute render={(props) => <InstallationRoute {...props} />} />} />
         <Route path="/" element={<WorkspaceDirectory />} />
         <Route path="/tenants" element={<WorkspaceDirectory />} />
         <Route path="/tenants/new" element={<TenantCreationPage />} />
@@ -222,12 +225,13 @@ function AuthenticationRoute(props: AppProps & { mode: "setup" | "login" | "reco
           ) : null}
           <AuthPage
           mode={props.mode}
+          configureUrl
           completed={completed && props.mode === "setup"}
           proofRequired={proofRequired}
           unavailable={status === "unavailable"}
-          onSubmit={async (email, password, proof) => {
+          onSubmit={async (email, password, proof, publicUrl) => {
             try {
-              if (props.mode === "setup") await api.setup(email, password, password, proof);
+              if (props.mode === "setup") await api.setup(email, password, password, proof, publicUrl);
               else if (props.mode === "recover") await api.recover(proof ?? "", email, password, password);
               else await api.login(email, password);
               // Session renewal replaces CSRF state; load a fresh document before writes.
@@ -241,6 +245,41 @@ function AuthenticationRoute(props: AppProps & { mode: "setup" | "login" | "reco
         </>}
     </AccessFrame>
   );
+}
+
+function InstallationRoute(props: AppProps) {
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+  const [settings, setSettings] = useState<InstallationSettings>();
+  const [state, setState] = useState<AccessLoadState>("loading");
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (sessionState !== "ready" || session?.role.kind !== "superadmin") return;
+    let active = true;
+    api.installation().then(value => {
+      if (active) { setSettings(value); setState("ready"); }
+    }).catch((error: unknown) => {
+      if (!active) return;
+      if (isSessionExpired(error)) onSessionExpired();
+      setState("unavailable");
+    });
+    return () => { active = false; };
+  }, [api, sessionState, session?.role.kind, onSessionExpired, retry]);
+  if (!session) return <div className="access-ui"><main className="access-page" role="status">{sessionState === "unavailable" ? "Installation settings could not be loaded." : "Loading installation settings…"}</main></div>;
+  return <div className="access-ui"><InstallationSettingsPage key={state === "ready" ? "ready" : state}
+    roleKind={session.role.kind} publicUrl={settings?.public_url ?? ""} state={state}
+    onRetry={() => { setState("loading"); setRetry(value => value + 1); }}
+    onSave={async url => {
+      try {
+        const updated = await api.updateInstallation(url, settings!.revision);
+        setSettings(updated);
+        return {};
+      } catch (error) {
+        if (isSessionExpired(error)) onSessionExpired();
+        return { error: error instanceof Error ? error.message : "Unable to save the Installation URL." };
+      }
+    }} /></div>;
 }
 
 function UsersRoute(props: AppProps) {

@@ -3,6 +3,21 @@ defmodule Vxpipe.Gateway.HTTP.PublicOrigin do
 
   alias Vxpipe.Gateway.Telephony.ConfiguredService
 
+  @doc "Reads the installation origin, retaining the runtime fallback only before configuration."
+  def current(fallback, nil), do: {:ok, fallback}
+
+  def current(fallback, provider) do
+    case provider.public_url() do
+      {:ok, nil} -> {:ok, fallback}
+      {:ok, url} -> Vxpipe.Identity.InstallationURL.normalize(url)
+      _error -> {:error, :unavailable}
+    end
+  rescue
+    _error -> {:error, :unavailable}
+  catch
+    _kind, _reason -> {:error, :unavailable}
+  end
+
   @spec resolve(keyword()) :: {:ok, String.t()} | {:error, :invalid_public_origin}
   def resolve(options) do
     case Keyword.get(options, :override) do

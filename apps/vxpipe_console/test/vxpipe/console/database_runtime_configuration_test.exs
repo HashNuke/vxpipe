@@ -259,12 +259,21 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     assert Keyword.fetch!(oauth, :resource) == "https://console.example.test/mcp"
     refute Keyword.fetch!(oauth, :allow_loopback_http)
     assert Keyword.fetch!(http, :oauth) == oauth
+    assert Keyword.fetch!(oauth, :public_url_provider) == Vxpipe.Identity.InstallationSettings
+    refute Keyword.fetch!(oauth, :resource_override)
+
+    assert http |> Keyword.fetch!(:telephony) |> Keyword.fetch!(:public_url_provider) ==
+             Vxpipe.Identity.InstallationSettings
 
     for key <- [:enabled, :issuer, :resource, :allowed_hosts, :allowed_origins] do
       assert http |> Keyword.fetch!(:mcp) |> Keyword.fetch!(key) == Keyword.fetch!(oauth, key)
     end
 
     identity = Keyword.fetch!(configuration, :vxpipe_identity)
+
+    assert identity |> Keyword.fetch!(:dependencies) |> Map.fetch!(:installation_url_cache) ==
+             Vxpipe.Identity.InstallationURLCache
+
     assert Keyword.fetch!(identity, :oauth_store) == Vxpipe.Persistence.OAuth.Store
     assert Keyword.fetch!(identity, :oauth_browser_store) == Vxpipe.Persistence.OAuth.Browser
   end
@@ -286,6 +295,7 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
       |> Keyword.fetch!(:mcp)
 
     assert Keyword.fetch!(oauth, :resource) == resource
+    assert Keyword.fetch!(oauth, :resource_override)
     assert Keyword.fetch!(mcp, :resource) == resource
     assert Keyword.fetch!(oauth, :issuer) == "https://console.example.test"
     assert Keyword.fetch!(oauth, :allowed_hosts) == ["console.example.test"]

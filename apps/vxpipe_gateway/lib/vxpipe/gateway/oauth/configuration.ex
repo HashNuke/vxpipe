@@ -4,6 +4,8 @@ defmodule Vxpipe.Gateway.OAuth.Configuration do
   def build(options) do
     base = %{
       enabled: Keyword.get(options, :enabled, false),
+      public_url_provider: Keyword.get(options, :public_url_provider),
+      resource_override: Keyword.get(options, :resource_override, false),
       allowed_hosts: Keyword.get(options, :allowed_hosts, []),
       allowed_origins: Keyword.get(options, :allowed_origins, []),
       allow_loopback_http: Keyword.get(options, :allow_loopback_http, false),
@@ -35,6 +37,37 @@ defmodule Vxpipe.Gateway.OAuth.Configuration do
       base
     end
   end
+
+  @doc "Resolves current installation URLs without caching an earlier installation revision."
+  def resolve(%{enabled: true, public_url_provider: provider} = options)
+      when not is_nil(provider) do
+    with {:ok, issuer} <- Vxpipe.Gateway.HTTP.PublicOrigin.current(options.issuer, provider) do
+      if issuer == options.issuer do
+        {:ok, options}
+      else
+        resource = if options.resource_override, do: options.resource, else: issuer <> "/mcp"
+
+        updated =
+          options
+          |> Map.to_list()
+          |> Keyword.merge(
+            issuer: issuer,
+            resource: resource,
+            allowed_hosts: [URI.parse(issuer).host],
+            allowed_origins: [issuer]
+          )
+          |> build()
+
+        {:ok, updated}
+      end
+    else
+      _error -> {:error, :unavailable}
+    end
+  rescue
+    _error -> {:error, :unavailable}
+  end
+
+  def resolve(options), do: {:ok, options}
 
   def metadata(:resource_metadata, options),
     do: %{

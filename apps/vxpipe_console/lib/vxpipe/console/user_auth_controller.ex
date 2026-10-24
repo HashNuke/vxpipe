@@ -15,13 +15,20 @@ defmodule Vxpipe.Console.UserAuthController do
   def setup(conn, params) do
     address = ClientAddress.for_throttling(conn)
 
-    case backend().setup(
-           Map.get(params, "email"),
-           Map.get(params, "password"),
-           Map.get(params, "password_confirmation"),
-           Map.get(params, "proof"),
-           address
-         ) do
+    result =
+      with {:ok, public_url} <-
+             Vxpipe.Identity.InstallationURL.normalize(Map.get(params, "public_url")) do
+        backend().setup(
+          Map.get(params, "email"),
+          Map.get(params, "password"),
+          Map.get(params, "password_confirmation"),
+          Map.get(params, "proof"),
+          address,
+          public_url
+        )
+      end
+
+    case result do
       {:ok, %{token: token}} -> started(conn, token)
       {:error, :already_complete} -> error(conn, 409, "already_complete")
       {:error, :already_completed} -> error(conn, 409, "already_complete")
@@ -29,6 +36,7 @@ defmodule Vxpipe.Console.UserAuthController do
       {:error, :invalid_proof} -> error(conn, 403, "invalid_proof")
       {:error, :rate_limited} -> error(conn, 429, "rate_limited")
       {:error, :unavailable} -> error(conn, 503, "unavailable")
+      {:error, :invalid_public_url} -> error(conn, 422, "invalid_public_url")
       {:error, _} -> error(conn, 422, "invalid_setup")
     end
   end

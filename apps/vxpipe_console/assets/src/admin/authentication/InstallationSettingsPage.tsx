@@ -5,7 +5,7 @@ import { FormField, FormMessage } from "./FormField";
 import { normalizeInstanceUrl } from "./instanceUrl";
 import type { PageState, SaveResult, SystemKind } from "./types";
 
-/** Presentation only. Persistence follows Storybook review. */
+/** Shared presentation for persisted settings and interactive Storybook fixtures. */
 export function InstallationSettingsPage({ roleKind, publicUrl, onSave, state = "ready", onRetry }: {
   roleKind: SystemKind; publicUrl: string; onSave: (url: string) => Promise<SaveResult>;
   state?: PageState; onRetry?: () => void;
@@ -64,7 +64,7 @@ export function InstallationSettingsPage({ roleKind, publicUrl, onSave, state = 
           <div><dt>Current URL</dt><dd>{savedUrl}</dd></div>
           <div><dt>New URL</dt><dd>{proposedUrl}</dd></div>
         </dl>
-        <p className="access-muted">MCP connections using OAuth may need to be reconnected after this change. Connections using API keys are unaffected.</p>
+        <p className="access-muted">Update phone-provider webhooks that use this installation’s address. MCP clients may need to reconnect with OAuth. Keep the old address reachable until existing calls end.</p>
         {error ? <FormMessage error>{error}</FormMessage> : null}
         <div className="access-actions">
           <Button type="button" disabled={pending} onClick={() => { setProposedUrl(undefined); setError(undefined); }}>Cancel</Button>

@@ -70,7 +70,9 @@ defmodule Vxpipe.Console.NavigationProjection do
        %{id: "roles", label: "Roles", path: "/roles"}},
       {installed?(principal, "users.read"), %{id: "users", label: "Users", path: "/users"}},
       {installed?(principal, "platform_services.read"),
-       %{id: "services", label: "Services", path: "/platform/services"}}
+       %{id: "services", label: "Services", path: "/platform/services"}},
+      {principal.account_kind == :superadmin,
+       %{id: "installation", label: "Installation", path: "/platform/installation"}}
     ]
     |> Enum.flat_map(fn {allowed, destination} -> if allowed, do: [destination], else: [] end)
   end

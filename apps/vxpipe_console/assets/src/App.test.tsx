@@ -59,7 +59,9 @@ test("first-run setup submits credentials and opens the Console", async () => {
   const authenticated = vi.fn();
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} onAuthenticated={authenticated} />);
 
-  expect(await screen.findByRole("heading", { name: "Set up your installation" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Setup your Installation URL" })).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Installation URL"), { target: { value: "https://calls.example.test/setup" } });
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.test" } });
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: "an example passphrase" } });
   fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "an example passphrase" } });

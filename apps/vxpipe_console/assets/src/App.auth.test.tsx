@@ -19,6 +19,38 @@ const response = (body: unknown, status = 200) =>
 
 const noContent = () => Promise.resolve(new Response(null, { status: 204 }));
 
+test("production setup submits the normalized installation URL with the first account", async () => {
+  window.history.replaceState({}, "", "/auth/setup");
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => String(input) === "/auth/api/status" ? response({ status: "pending_first_run" }) : response({ ok: true }));
+  const authenticated = vi.fn();
+  render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} onAuthenticated={authenticated} />);
+  fireEvent.change(await screen.findByLabelText("Installation URL"), { target: { value: "https://calls.example.test:8443/setup" } });
+  fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.test" } });
+  fireEvent.change(screen.getByLabelText("Password"), { target: { value: "example long password" } });
+  fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "example long password" } });
+  fireEvent.click(screen.getByRole("button", { name: /Create Superadmin/ }));
+  await waitFor(() => expect(authenticated).toHaveBeenCalledOnce());
+  expect(fetchImpl).toHaveBeenCalledWith("/auth/api/setup", expect.objectContaining({ body: JSON.stringify({ email: "owner@example.test", password: "example long password", password_confirmation: "example long password", public_url: "https://calls.example.test:8443" }) }));
+});
+
+test("production Installation settings load and save through the session API with a revision", async () => {
+  window.history.replaceState({}, "", "/platform/installation");
+  const base = sessionFetch();
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === "/api/installation") return response(init?.method === "PATCH" ? { public_url: "https://new.example.test", revision: 3 } : { public_url: "https://old.example.test", revision: 2 });
+    return base(input, init);
+  });
+  render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
+  const input = await screen.findByLabelText("Vxpipe URL");
+  await waitFor(() => expect(input).toHaveValue("https://old.example.test"));
+  fireEvent.change(input, { target: { value: "https://new.example.test/admin" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  fireEvent.click(screen.getByRole("button", { name: "Change URL" }));
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Vxpipe URL updated"));
+  expect(fetchImpl).toHaveBeenCalledWith("/api/installation", expect.objectContaining({ method: "PATCH", headers: expect.objectContaining({ "x-csrf-token": "csrf-token" }), body: JSON.stringify({ public_url: "https://new.example.test", revision: 2 }) }));
+});
+
 test("local Superadmin recovery signs in after a valid proof", async () => {
   window.history.replaceState({}, "", "/auth/recover");
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {

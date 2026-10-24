@@ -29,6 +29,18 @@ defmodule Vxpipe.Gateway.OAuth.Endpoint do
 
   @impl true
   def call(conn, options) do
+    case Configuration.resolve(options) do
+      {:ok, current} ->
+        call_current(conn, current)
+
+      {:error, _reason} ->
+        conn
+        |> put_resp_header("cache-control", "no-store")
+        |> error(503, "temporarily_unavailable")
+    end
+  end
+
+  defp call_current(conn, options) do
     conn =
       conn
       |> put_resp_header("cache-control", "no-store")

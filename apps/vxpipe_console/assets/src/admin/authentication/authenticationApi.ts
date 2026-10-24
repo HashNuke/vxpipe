@@ -8,6 +8,8 @@ export type ConnectedClient = {
   expires_at: string;
 };
 
+export type InstallationSettings = { public_url: string | null; revision: number };
+
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 type PaginatedUsers = {
   users: User[];
@@ -43,6 +45,7 @@ export function isForbidden(error: unknown): boolean {
 }
 
 function errorMessage(status: number, code: unknown): string {
+  if (status === 422 && code === "invalid_public_url") return "Enter a valid HTTPS URL. HTTP is allowed for localhost.";
   if (status === 403) return "Your role does not allow this action.";
   if (status === 401 && code === "invalid_credentials")
     return "Email or password is incorrect.";
@@ -136,17 +139,24 @@ export class AuthenticationApi {
     }
   }
 
-  setup(email: string, password: string, confirmation: string, proof?: string) {
+  setup(email: string, password: string, confirmation: string, proof?: string, publicUrl?: string) {
     return this.request<void>("/auth/api/setup", "POST", {
       email,
       password,
       password_confirmation: confirmation,
+      public_url: publicUrl,
       ...(proof ? { proof } : {}),
     });
   }
 
   login(email: string, password: string) {
     return this.request<void>("/auth/api/login", "POST", { email, password });
+  }
+
+  installation() { return this.request<InstallationSettings>("/api/installation"); }
+
+  updateInstallation(publicUrl: string, revision: number) {
+    return this.request<InstallationSettings>("/api/installation", "PATCH", { public_url: publicUrl, revision });
   }
 
   recover(proof: string, email: string, password: string, confirmation: string) {

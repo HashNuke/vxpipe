@@ -19,11 +19,24 @@ defmodule Vxpipe.Persistence.Application do
         Application.get_env(:vxpipe_persistence, :call_details_publication_recovery, [])
 
       case Vxpipe.Persistence.PublicationRecoveryConfiguration.children(recovery_settings) do
-        {:ok, recovery_children} -> [Vxpipe.Persistence.Repo | recovery_children]
-        {:error, reason} -> raise ArgumentError, "invalid publication recovery: #{reason}"
+        {:ok, recovery_children} ->
+          [Vxpipe.Persistence.Repo] ++ installation_cache_children() ++ recovery_children
+
+        {:error, reason} ->
+          raise ArgumentError, "invalid publication recovery: #{reason}"
       end
     else
       []
     end
+  end
+
+  defp installation_cache_children do
+    [
+      {Task.Supervisor, name: Vxpipe.Identity.InstallationURLCache.Tasks},
+      {Vxpipe.Identity.InstallationURLCache,
+       name: Vxpipe.Identity.InstallationURLCache,
+       task_supervisor: Vxpipe.Identity.InstallationURLCache.Tasks,
+       loader: &Vxpipe.Persistence.IdentityInstallationStore.fetch/0}
+    ]
   end
 end

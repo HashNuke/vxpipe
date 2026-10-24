@@ -128,6 +128,7 @@ if database_enabled? do
     roles: Vxpipe.Persistence.IdentityRoleStore,
     sessions: Vxpipe.Persistence.IdentitySessionStore,
     installations: Vxpipe.Persistence.IdentityInstallationStore,
+    installation_url_cache: Vxpipe.Identity.InstallationURLCache,
     attempts: Vxpipe.Persistence.IdentityAttemptStore,
     audit: Vxpipe.Persistence.IdentityAuditStore,
     hasher: Vxpipe.Identity.Argon2Hasher
@@ -436,6 +437,10 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
 
   config :vxpipe_console, :service_public_origin, service_public_origin
 
+  public_url_provider = if database_enabled?, do: Vxpipe.Identity.InstallationSettings
+  telephony_url_provider = if is_nil(nonempty_env.("TELEPHONY_HOST")), do: public_url_provider
+  config :vxpipe_console, :service_public_url_provider, telephony_url_provider
+
   telephony_host =
     case nonempty_env.("TELEPHONY_HOST") do
       nil -> nil
@@ -467,6 +472,8 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
     enabled: database_enabled?,
     issuer: app_origin,
     resource: mcp_resource,
+    public_url_provider: public_url_provider,
+    resource_override: not is_nil(nonempty_env.("VXPIPE_MCP_RESOURCE_URL")),
     allowed_hosts: mcp_hosts,
     allowed_origins: [app_origin],
     allow_loopback_http: config_env() in [:dev, :test]
@@ -515,6 +522,8 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
         enabled: database_enabled?,
         issuer: app_origin,
         resource: mcp_resource,
+        public_url_provider: public_url_provider,
+        resource_override: not is_nil(nonempty_env.("VXPIPE_MCP_RESOURCE_URL")),
         allowed_hosts: mcp_hosts,
         allowed_origins: [app_origin],
         allow_loopback_http: config_env() in [:dev, :test]
@@ -525,8 +534,9 @@ if Code.ensure_loaded?(Vxpipe.Gateway.HTTP.PublicOrigin) do
       call_spec_reads: [enabled: database_enabled?],
       call_spec_authoring: [enabled: database_enabled?],
       telephony: [
-        enabled: not is_nil(telephony_public_base_url),
-        public_base_url: telephony_public_base_url
+        enabled: not is_nil(telephony_public_base_url) or not is_nil(telephony_url_provider),
+        public_base_url: telephony_public_base_url,
+        public_url_provider: telephony_url_provider
       ]
     ]
 end

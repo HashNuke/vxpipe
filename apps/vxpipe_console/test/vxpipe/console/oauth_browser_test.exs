@@ -72,6 +72,34 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
     end
   end
 
+  test "authorization uses the current installation host and resource" do
+    options = Application.fetch_env!(:vxpipe_console, :oauth)
+
+    Application.put_env(
+      :vxpipe_console,
+      :oauth,
+      Keyword.put(options, :public_url_provider, __MODULE__)
+    )
+
+    for origin <- ["https://first.example.test", "https://second.example.test"] do
+      Process.put(:installation_origin, {:ok, origin})
+
+      url =
+        String.replace(authorization_url(), "https://localhost", origin)
+        |> String.replace(URI.encode_www_form(@resource), URI.encode_www_form(origin <> "/mcp"))
+
+      assert build_conn() |> get(url) |> redirected_to() == "/oauth/authorize/#{@id}"
+      assert_received {:begin, _, resource, _}
+      assert resource == origin <> "/mcp"
+    end
+
+    assert build_conn() |> get(authorization_url()) |> response(403)
+    Process.put(:installation_origin, {:error, :unavailable})
+    assert build_conn() |> get(authorization_url()) |> response(503)
+  end
+
+  def public_url, do: Process.get(:installation_origin)
+
   test "approval and denial preserve registered callback query and state" do
     for {decision, expected} <- [
           {"approve", %{"code" => "secret-code"}},

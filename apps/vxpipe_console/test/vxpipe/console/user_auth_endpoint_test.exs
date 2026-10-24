@@ -20,6 +20,9 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
       {:error, :rate_limited}
     end
 
+    def setup(email, password, confirmation, proof, address, _public_url),
+      do: setup(email, password, confirmation, proof, address)
+
     def setup(email, password, confirmation, proof, _address),
       do: setup(email, password, confirmation, proof)
 
@@ -206,6 +209,7 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
   test "successful setup starts an opaque user session" do
     response =
       post(build_conn(), "https://localhost/auth/api/setup", %{
+        "public_url" => "https://calls.example.test",
         "email" => "owner@example.test",
         "password" => "long-password",
         "password_confirmation" => "long-password"
@@ -234,6 +238,7 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
       build_conn()
       |> Map.put(:remote_ip, {192, 0, 2, 18})
       |> post("https://localhost/auth/api/setup", %{
+        "public_url" => "https://calls.example.test",
         "email" => "limited@example.test",
         "password" => "long-password",
         "password_confirmation" => "long-password"
@@ -498,6 +503,7 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
     log =
       capture_log(fn ->
         post(build_conn(), "https://localhost/auth/api/setup", %{
+          "public_url" => "https://calls.example.test",
           "email" => "owner@example.test",
           "password" => "wrong",
           "password_confirmation" => "wrong",

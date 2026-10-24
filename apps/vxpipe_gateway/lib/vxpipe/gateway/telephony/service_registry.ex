@@ -7,11 +7,12 @@ defmodule Vxpipe.Gateway.Telephony.ServiceRegistry do
 
   @derive {Inspect, only: [:enabled?]}
   @enforce_keys [:enabled?, :public_base_url, :repository_options, :adapters]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [public_url_provider: nil]
 
   @type t :: %__MODULE__{
           enabled?: boolean(),
           public_base_url: String.t() | nil,
+          public_url_provider: module() | nil,
           repository_options: keyword(),
           adapters: map()
         }
@@ -21,6 +22,7 @@ defmodule Vxpipe.Gateway.Telephony.ServiceRegistry do
       validate_options!(options,
         enabled: false,
         public_base_url: nil,
+        public_url_provider: nil,
         provider_credential_repository: nil,
         telephony_service_repository: nil,
         adapters: %{}
@@ -34,6 +36,7 @@ defmodule Vxpipe.Gateway.Telephony.ServiceRegistry do
     %__MODULE__{
       enabled?: Keyword.fetch!(options, :enabled),
       public_base_url: Keyword.fetch!(options, :public_base_url),
+      public_url_provider: Keyword.fetch!(options, :public_url_provider),
       repository_options: repository_options,
       adapters: Keyword.fetch!(options, :adapters)
     }
@@ -110,8 +113,14 @@ defmodule Vxpipe.Gateway.Telephony.ServiceRegistry do
   defp same_binding?(resolved, candidate),
     do: TelephonyServices.reference(resolved) == TelephonyServices.reference(candidate)
 
-  defp configure(registry, snapshot) do
-    ConfiguredService.from_snapshot(snapshot, registry.public_base_url, registry.adapters)
+  def configure(registry, snapshot) do
+    with {:ok, origin} <-
+           Vxpipe.Gateway.HTTP.PublicOrigin.current(
+             registry.public_base_url,
+             registry.public_url_provider
+           ) do
+      ConfiguredService.from_snapshot(snapshot, origin, registry.adapters)
+    end
   end
 
   defp validate_options!(options, allowed) do

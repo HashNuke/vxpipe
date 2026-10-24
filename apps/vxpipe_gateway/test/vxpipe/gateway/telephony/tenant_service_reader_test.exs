@@ -9,6 +9,33 @@ defmodule Vxpipe.Gateway.Telephony.TenantServiceReaderTest do
   @other_tenant "BBBBBBBBBBBBBBBB"
   @origin "https://voice.example.test/voice"
 
+  test "new services follow the Installation URL while an existing service retains its callbacks" do
+    origin = Vxpipe.Gateway.TestInstallationOrigin
+    options = service(:twilio, @tenant, "own-ingress", "private-key")
+
+    registry =
+      ServiceRegistry.init!(
+        [enabled: true, public_url_provider: origin] ++ Repository.options([options])
+      )
+
+    Process.put(origin, {:ok, "https://first.example.test:8443"})
+    assert {:ok, first} = ServiceRegistry.fetch(registry, "own-ingress")
+    Process.put(origin, {:ok, "https://second.example.test"})
+    assert {:ok, second} = ServiceRegistry.fetch(registry, "own-ingress")
+
+    assert Vxpipe.Gateway.Telephony.ProviderEndpoint.event_url(first, "leg") =~
+             "https://first.example.test:8443/"
+
+    assert Vxpipe.Gateway.Telephony.ProviderEndpoint.media_url(first, "token") =~
+             "wss://first.example.test:8443/"
+
+    assert Vxpipe.Gateway.Telephony.ProviderEndpoint.event_url(second, "leg") =~
+             "https://second.example.test/"
+
+    Process.put(origin, {:error, :unavailable})
+    assert {:error, :service_not_found} = ServiceRegistry.fetch(registry, "own-ingress")
+  end
+
   test "an unscoped Telnyx binding is rejected before constructing a live carrier client" do
     original = Repository.snapshot(service(:telnyx, @tenant, "old-ingress", "private-key"))
 

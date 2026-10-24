@@ -47,6 +47,96 @@ defmodule Vxpipe.Console.UserAuthDatabaseEndpointTest do
     assert json_response(replay, 409) == %{"error" => %{"code" => "already_complete"}}
   end
 
+  test "setup requires an explicit installation URL and settings preserve revision conflicts" do
+    invalid =
+      post(build_conn(), "https://localhost/auth/api/setup", %{
+        "email" => "ignored@example.test",
+        "password" => "Correct horse battery 15!",
+        "password_confirmation" => "Correct horse battery 15!"
+      })
+
+    assert json_response(invalid, 422) == %{"error" => %{"code" => "invalid_public_url"}}
+    {setup, _} = setup_superadmin()
+
+    settings =
+      setup |> recycle() |> get("https://localhost/api/installation") |> json_response(200)
+
+    assert settings == %{"public_url" => "https://calls.example.test:8443", "revision" => 1}
+
+    updated =
+      setup
+      |> recycle()
+      |> patch("https://localhost/api/installation", %{
+        "public_url" => "https://new.example.test/path?x=1",
+        "revision" => 1
+      })
+
+    assert json_response(updated, 200) == %{
+             "public_url" => "https://new.example.test",
+             "revision" => 2
+           }
+
+    stale =
+      setup
+      |> recycle()
+      |> patch("https://localhost/api/installation", %{
+        "public_url" => "https://stale.example.test",
+        "revision" => 1
+      })
+
+    assert json_response(stale, 409) == %{"error" => %{"code" => "conflict"}}
+    anonymous = get(build_conn(), "https://localhost/api/installation")
+    assert json_response(anonymous, 401)["error"]["code"] == "session_required"
+
+    assert setup
+           |> recycle()
+           |> get("https://localhost/platform/installation")
+           |> html_response(200) =~ "admin-root"
+  end
+
+  test "public MCP client metadata follows saved settings without trusting the request Host" do
+    {setup, _} = setup_superadmin()
+
+    metadata =
+      build_conn()
+      |> get("https://untrusted.example.test/oauth/client-metadata.json")
+      |> json_response(200)
+
+    assert metadata["client_id"] == "https://calls.example.test:8443/oauth/client-metadata.json"
+    assert metadata["redirect_uris"] == ["https://calls.example.test:8443/oauth/mcp/callback"]
+
+    updated =
+      setup
+      |> recycle()
+      |> patch("https://localhost/api/installation", %{
+        "public_url" => "https://new.example.test",
+        "revision" => 1
+      })
+
+    assert updated.status == 200
+
+    next =
+      build_conn()
+      |> get("https://untrusted.example.test/oauth/client-metadata.json")
+      |> json_response(200)
+
+    assert next["client_id"] == "https://new.example.test/oauth/client-metadata.json"
+
+    local =
+      setup
+      |> recycle()
+      |> patch("https://localhost/api/installation", %{
+        "public_url" => "http://localhost:4000",
+        "revision" => 2
+      })
+
+    assert local.status == 200
+
+    assert build_conn()
+           |> get("https://localhost/oauth/client-metadata.json")
+           |> json_response(503) == %{"error" => %{"code" => "installation_url_required"}}
+  end
+
   test "self-service password change revokes the old session and accepts the new password" do
     {setup, _credentials} = setup_superadmin()
 
@@ -146,6 +236,19 @@ defmodule Vxpipe.Console.UserAuthDatabaseEndpointTest do
 
     assert json_response(admin_session, 200) == %{"ok" => true}
 
+    assert admin_session
+           |> recycle()
+           |> get("https://localhost/api/installation")
+           |> json_response(403) == %{"error" => %{"code" => "forbidden"}}
+
+    assert admin_session
+           |> recycle()
+           |> patch("https://localhost/api/installation", %{
+             "public_url" => "https://wrong.example.test",
+             "revision" => 1
+           })
+           |> json_response(403) == %{"error" => %{"code" => "forbidden"}}
+
     assert %{"user" => %{"id" => ^admin_id}} =
              admin_session
              |> recycle()
@@ -201,6 +304,7 @@ defmodule Vxpipe.Console.UserAuthDatabaseEndpointTest do
       end
 
     credentials = %{
+      "public_url" => "https://CALLS.example.test:8443/setup?initial=1",
       "email" => "superadmin@example.test",
       "password" => "Correct horse battery 15!",
       "password_confirmation" => "Correct horse battery 15!"

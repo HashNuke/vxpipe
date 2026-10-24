@@ -1,9 +1,10 @@
 # Installation URL workflow review
 
-This is a Storybook prototype. The user requested review before backend work.
-No persisted installation setting, metadata endpoint, OAuth registration, token
-refresh or domain migration is implemented by this checkpoint. Production setup
-keeps its existing form; only Storybook opts into the URL step.
+These stories began as a prototype for user review. The approved URL workflow now
+has a [backend implementation](../installation-url.md): atomic setup persistence,
+Superadmin settings, CIMD metadata and shared telephony/MCP origins. Storybook
+retains deterministic fixtures. Outbound OAuth connection/token flows remain out
+of scope.
 
 ## Review routes
 
@@ -22,7 +23,7 @@ The Installation group also provides saving, not-configured, loading,
 unavailable/retry, ordinary-member-denied and light-theme stories. No real
 credentials or external requests are used. Reloading resets the fixture.
 
-## Proposed URL contract
+## URL contract
 
 Use the setup field name **Installation URL**. Store one canonical origin (scheme,
 hostname, optional port), rather than a bare FQDN or a list of aliases. Existing
@@ -31,11 +32,9 @@ fragments from pasted URLs and rejects credentials; HTTP is limited to
 localhost/loopback development.
 Choosing a URL does not configure DNS, HTTPS or reverse proxies.
 
-Future implementation should save the URL and first account atomically and enforce
-Superadmin authority on the server, independent of the UI. Existing installations
-without a saved URL should be able to configure it in Settings. The canonical URL
-should supply both CIMD metadata and DCR callback metadata, without trusting an
-arbitrary inbound Host header. These are design notes, not completed backend work.
+The backend saves the URL/account atomically, enforces Superadmin authority and
+allows existing installations to configure a missing URL in Settings. It supplies
+CIMD and DCR metadata without trusting an arbitrary inbound Host header.
 
 ## Changing the URL and existing MCP authorizations
 
@@ -61,7 +60,8 @@ New client IDs cannot inherit another client's refresh tokens. Future migration
 handling must retain the original registration identity and distinguish pending
 reconnection from successful migration; do not simply relabel old credentials.
 Outbound OAuth connection storage and migration execution remain outside this
-prototype. Vxpipe's inbound OAuth issuer is a separate configuration concern.
+workflow. Vxpipe's inbound OAuth issuer now also follows the saved Installation URL;
+its explicit resource override remains supported.
 
 Verification evidence is recorded in the [checkpoint labnote](../../labnotes/20261024-1756-instance-url-setup.md)
 and the [URL and copy refinement labnote](../../labnotes/20261024-1835-setup-url-refinement.md).
