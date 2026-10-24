@@ -3,6 +3,13 @@ import { roles, tenants, users } from "../authentication/fixtures";
 import { landingPath, visibleTenants, navigationItems } from "./navigationPolicy";
 import type { Role } from "../authentication/types";
 
+test("only Superadmins see Installation in the Settings prototype", () => {
+  expect(navigationItems(roles[0], users[0]).platform).toContainEqual({ label: "Installation", href: "/platform/installation" });
+  for (const role of roles.slice(1)) {
+    expect(navigationItems(role, users[1]).platform.some(item => item.href === "/platform/installation")).toBe(false);
+  }
+});
+
 test("landing uses permission scope before tenant count, then zero/one/many visible tenants", () => {
   expect(landingPath(roles[0], users[0], tenants.slice(0, 1))).toBe("/tenants");
   expect(landingPath(roles[2], users[3], tenants)).toBe(`/t/${tenants[2].key}/dashboard`);

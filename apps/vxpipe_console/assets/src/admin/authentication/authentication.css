@@ -2,6 +2,35 @@
   font-size: 14px;
   line-height: 1.55;
 }
+.access-setup-steps {
+  display: flex;
+  gap: 24px;
+  padding: 0 0 16px;
+  margin: 24px 0 0;
+  list-style: none;
+  border-bottom: 1px solid var(--admin-line);
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+.access-setup-steps [aria-current="step"] {
+  color: var(--admin-ink);
+  font-weight: 600;
+}
+.access-setup-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.access-setup-actions .access-primary { flex: 1; }
+.installation-settings > .access-form { margin-top: 32px; }
+.installation-url-confirm { display: flex; flex-direction: column; gap: 20px; }
+.installation-url-confirm dl { display: flex; flex-direction: column; gap: 14px; }
+.installation-url-confirm dt { color: var(--admin-muted); font-size: 12px; margin-bottom: 4px; }
+.installation-url-confirm dd { overflow-wrap: anywhere; }
+.installation-url-confirm .access-actions { justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 380px) {
+  .access-setup-actions { flex-direction: column-reverse; align-items: stretch; }
+}
 .access-ui h1 {
   font-size: 24px;
   font-weight: 650;

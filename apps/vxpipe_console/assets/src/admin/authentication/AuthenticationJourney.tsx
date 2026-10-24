@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AccessFrame } from "./AccessFrame";
 import { AccountPage } from "./AccountPage";
 import { AuthPage } from "./AuthPage";
+import { InstallationSettingsPage } from "./InstallationSettingsPage";
 import { FormMessage } from "./FormField";
 import { ResetPasswordPage } from "./ResetPasswordPage";
 import { RoleEditorPage } from "./RoleEditorPage";
@@ -21,6 +22,7 @@ export function AuthenticationJourney({
   state = "ready",
   saveBehavior = "success",
   followLocation = true,
+  initialPublicUrl = "https://calls.example.test",
   renderFrame,
 }: {
   actor?: Actor;
@@ -29,6 +31,7 @@ export function AuthenticationJourney({
   state?: PageState;
   saveBehavior?: "success" | "failure" | "pending";
   followLocation?: boolean;
+  initialPublicUrl?: string;
   renderFrame?: (children: ReactNode, path: string, session: { user?: User; role?: Role; navigate: (path: string) => void; logout: () => void }) => ReactNode;
 }) {
   const [roles, setRoles] = useState<Role[]>(structuredClone(seedRoles));
@@ -44,6 +47,8 @@ export function AuthenticationJourney({
       : initialPath,
   );
   const [notice, setNotice] = useState<string>();
+  const [publicUrl, setPublicUrl] = useState(initialPublicUrl);
+  const [installationState, setInstallationState] = useState(state);
   useEffect(() => {
     const update = () => {
       if (window.location.hash.startsWith("#/"))
@@ -96,9 +101,10 @@ export function AuthenticationJourney({
       <AuthPage
         key={setup ? "setup" : recover ? "recover" : "login"}
         mode={setup ? "setup" : recover ? "recover" : "login"}
+        configureUrl
         completed={setup && users.length > 0}
         unavailable={state === "unavailable"}
-        onSubmit={async (email, password) => {
+        onSubmit={async (email, password, _proof, url) => {
           const error = await result();
           if (error) return { error };
           if (!password) return { error: "Enter your password." };
@@ -112,6 +118,7 @@ export function AuthenticationJourney({
             };
             setUsers([owner]);
             setActorId(owner.id);
+            setPublicUrl(url ?? "");
           } else {
             const user = users.find(
               (item) =>
@@ -121,11 +128,19 @@ export function AuthenticationJourney({
             if (!user) return { error: "Email or password is incorrect." };
             setActorId(user.id);
           }
-          navigate("/account");
+          navigate(setup ? "/platform/installation" : "/account");
           return {};
         }}
       />
     );
+  } else if (path === "/platform/installation") {
+    page = <InstallationSettingsPage roleKind={currentRole.kind} publicUrl={publicUrl} state={installationState}
+      onRetry={() => setInstallationState("ready")} onSave={async url => {
+        const error = await result();
+        if (error) return { error };
+        setPublicUrl(url);
+        return {};
+      }} />;
   } else if (path === "/account") {
     page = (
       <AccountPage

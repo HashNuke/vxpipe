@@ -8,7 +8,7 @@ import type { Role, Tenant, Theme, User } from "../authentication/types";
 import { navigationItems, type NavigationItem } from "./navigationPolicy";
 import { TenantPicker } from "./TenantPicker";
 import "./navigation.css";
-const icons = { "API Keys": KeyRound, Calls: Phone, "Call Specs": FileCode2, Services: Plug, Tenants: Building2, Roles: ShieldCheck, Users };
+const icons = { "API Keys": KeyRound, Calls: Phone, "Call Specs": FileCode2, Services: Plug, Tenants: Building2, Roles: ShieldCheck, Users, Installation: Settings };
 export function NavigationShell({ children, role, user, tenants, selected, path, onNavigate, onLogout, theme, pickerState, onRetry, projectedItems, directoryPath, picker, realLinks = false, email, external = false }: {
   children: ReactNode; role?: Role; user?: User; tenants: Tenant[]; selected?: Tenant; path: string;
   onNavigate: (path: string) => void; onLogout: () => void; theme: Theme;

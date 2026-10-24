@@ -23,7 +23,7 @@ export function StoryWorkspace({ children, path, tenant, theme = "dark", user, r
     ? [{ ...tenant, id: tenant.key }, ...tenantOptions] : tenantOptions;
   const navigate = (next: string) => {
     if (onWorkspaceNavigate?.(next)) return;
-    if (onNavigate && /^\/(users|roles|account)(\/|$)/.test(next)) onNavigate(next);
+    if (onNavigate && (/^\/(users|roles|account)(\/|$)/.test(next) || next === "/platform/installation")) onNavigate(next);
     else setDestination(next);
   };
   if (destination) return <NavigationJourney key={destination} initialPath={destination} initialTenantKeys={initialTenantKeys} initialTenants={tenants} identity={{ user: actor, role: authority }} theme={theme} />;

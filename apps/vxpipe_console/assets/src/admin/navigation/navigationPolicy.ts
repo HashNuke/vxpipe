@@ -32,6 +32,7 @@ export function navigationItems(role: Role, user: User, tenant?: Tenant): { tena
       ...(role.kind ? [{ label: "Roles", href: "/roles" }] : []),
       ...(allowed("users.read") ? [{ label: "Users", href: "/users" }] : []),
       ...(allowed("platform_services.read") ? [{ label: "Services", href: "/platform/services" }] : []),
+      ...(role.kind === "superadmin" ? [{ label: "Installation", href: "/platform/installation" }] : []),
     ],
   };
 }

@@ -21,7 +21,7 @@ test("workspace exposes one Settings entry and settings replaces tenant navigati
   expect(screen.queryByRole("combobox", { name: "Switch tenant" })).not.toBeInTheDocument();
   expect(screen.queryByRole("navigation", { name: "Tenant" })).not.toBeInTheDocument();
   const settings = screen.getByRole("navigation", { name: "Settings" });
-  expect(within(settings).getAllByRole("link").map(link => link.textContent)).toEqual(["API Keys", "Roles", "Users", "Services"]);
+  expect(within(settings).getAllByRole("link").map(link => link.textContent)).toEqual(["API Keys", "Roles", "Users", "Services", "Installation"]);
   fireEvent.click(within(settings).getByRole("link", { name: "Users" }));
   expect(within(settings).getByRole("link", { name: "Users" })).toHaveAttribute("aria-current", "page");
   fireEvent.click(screen.getByRole("link", { name: "Back to tenants" }));
