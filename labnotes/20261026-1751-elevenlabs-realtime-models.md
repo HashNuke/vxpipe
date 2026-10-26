@@ -148,3 +148,7 @@ The [milestone](milestones/elevenlabs-realtime-models.md) tracks remaining work.
   ownership, bounded output admission and tools, lifetime-pinned authorization,
   deadlines and cancellation. Include the synthetic boundary harness and 19
   session regressions plus configuration/codec coverage. No local VAD is started.
+- Checkpoint: publish Mini/Max in the provider/catalog/runtime paths, reuse
+  tenant/platform API-key resolution, and expose the editable voice in Console.
+  Include the ten compiled-room regressions and browser/configured-service
+  evidence with the durable integration decision and author guide.

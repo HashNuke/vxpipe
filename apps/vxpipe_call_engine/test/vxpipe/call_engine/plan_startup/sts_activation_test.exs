@@ -6,6 +6,132 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
   alias Vxpipe.Providers.MorseCode.DuplexSTSSession
   alias Vxpipe.Providers.OpenAI.GPTLiveSession
   alias Vxpipe.CallEngine.TestTenantCredentialSource
+  alias Vxpipe.Providers.ElevenLabs.RealtimeSession
+
+  for model <- ["eleven_realtime_v1_mini", "eleven_realtime_v1_max"] do
+    test "ElevenLabs #{model} starts with native turn detection and no local STT or VAD" do
+      model = unquote(model)
+
+      plan =
+        compile_plan(%{
+          speech_to_speech: %{provider: "elevenlabs", model: model, options: %{}}
+        })
+
+      bindings =
+        %{{"tenant-sts", "elevenlabs", "default"} => %{"api_key" => "elevenlabs-tenant-marker"}}
+
+      settings = [
+        credential_source: {TestTenantCredentialSource, {self(), bindings}},
+        speech_to_text: [providers: %{}],
+        text_to_speech: [providers: %{}],
+        speech_to_speech: [providers: %{RealtimeSession => [enabled: true]}]
+      ]
+
+      assert :ok = PlanStartup.validate(plan, settings)
+      assert {:ok, startup} = PlanStartup.new(plan, settings)
+      assert {RealtimeSession, public} = startup.speech_to_speech.provider
+      assert public == [model: model, voice: "brian", turn_control: "provider"]
+      assert startup.agent_activation == nil
+      assert startup.text_to_speech == nil
+      assert Enum.all?(startup.speech_to_text_runtimes, fn {_key, runtime} -> is_nil(runtime) end)
+      assert startup.speech_to_speech.output_speech_to_text == nil
+      assert startup.speech_to_speech.usage_provider.name == "elevenlabs"
+      assert startup.speech_to_speech.usage_provider.model == model
+
+      assert {:ok, descriptor} = RealtimeSession.configure(public)
+
+      assert descriptor.settings == %{
+               model: model,
+               voice: "brian",
+               turn_control: "provider",
+               input_sample_rate: 24_000,
+               output_sample_rate: 24_000
+             }
+
+      assert descriptor.input_format.sample_rate == 24_000
+      assert descriptor.format.sample_rate == 24_000
+      assert descriptor.endpointing == :provider_semantic
+      assert descriptor.speech_start?
+      assert descriptor.turn_control_supported == ["provider"]
+      assert descriptor.response_start?
+      assert descriptor.input_transcript?
+      assert descriptor.output_transcript?
+      assert descriptor.output_shape == :turns
+      assert descriptor.output_settlement == :transcript_end
+      assert descriptor.barge_in == :room
+      assert descriptor.continuity == :none
+      assert descriptor.hold == :stop
+      assert descriptor.tool_cancellation?
+      refute descriptor.history_reconciliation?
+
+      refute Vxpipe.CallEngine.Speech.STSInput.supported?(descriptor, %{
+               operation: {:input_activity, :started}
+             })
+
+      config = Keyword.fetch!(startup.speech_to_speech.provider_private, :config)
+      assert config.api_key == "elevenlabs-tenant-marker"
+      assert config.system_prompt == "Answer briefly."
+      assert config.tools == []
+      refute inspect(startup) =~ "tenant-marker"
+
+      for provider_settings <- [[enabled: false], [enabled: true, vad: true]] do
+        disabled =
+          Keyword.put(settings, :speech_to_speech,
+            providers: %{RealtimeSession => provider_settings}
+          )
+
+        assert {:error, _error} = PlanStartup.validate(plan, disabled)
+      end
+    end
+  end
+
+  test "ElevenLabs STS rejects external turn control, local VAD and private public options" do
+    for public <- [
+          %{turn_control: "external"},
+          %{turn_control: "hybrid"},
+          %{vad: true},
+          %{silero: true},
+          %{api_key: "private-marker"},
+          %{system_prompt: "override"},
+          %{tools: []},
+          %{input_sample_rate: 16_000},
+          %{wire_module: "unsupported"}
+        ] do
+      assert {:error, _error} =
+               compile_result(%{
+                 speech_to_speech: %{
+                   provider: "elevenlabs",
+                   model: "eleven_realtime_v1_mini",
+                   options: public
+                 }
+               })
+    end
+
+    for selection <- [
+          %{provider: "elevenlabs", model: "unknown"},
+          %{provider: "elevenlabs", model: "eleven_realtime_v1_mini", vad: true},
+          %{
+            provider: "elevenlabs",
+            model: "eleven_realtime_v1_mini",
+            provider_options: %{vad: true}
+          }
+        ] do
+      assert {:error, _error} = compile_result(%{speech_to_speech: selection})
+    end
+  end
+
+  test "ElevenLabs STS is enabled in the configured application provider registry" do
+    settings =
+      Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+      |> Keyword.fetch!(:speech_to_speech)
+
+    assert {:ok, [enabled: true]} =
+             Vxpipe.CallEngine.CapabilityCatalog.provider_settings(
+               settings,
+               RealtimeSession,
+               :speech_to_speech
+             )
+  end
 
   test "Gemini Live starts from the saved Google key with validated public speech options" do
     plan =

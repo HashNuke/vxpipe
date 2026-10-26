@@ -7,6 +7,63 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
   alias Vxpipe.CallEngine.STSContextTool
   alias Vxpipe.Providers.Google.{STS, STSSession}
   alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
+  alias Vxpipe.Providers.ElevenLabs.RealtimeSession
+
+  test "ElevenLabs activation privately binds the saved key, prompt and authorized tools" do
+    options = [api_key: "synthetic-elevenlabs-secret"]
+    assert {:ok, ^options} = SpeechToSpeechRuntime.configure(RealtimeSession, options)
+    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant(), [])
+
+    assert {:ok, {RealtimeSession, public}, private} =
+             SpeechToSpeechRuntime.provider({RealtimeSession, options}, [], activation)
+
+    assert public == [model: "eleven_realtime_v1_mini", voice: "brian", turn_control: "provider"]
+    assert {:ok, descriptor} = RealtimeSession.configure(public)
+    assert descriptor.response_start?
+    config = Keyword.fetch!(private, :config)
+    assert config.api_key == "synthetic-elevenlabs-secret"
+    assert config.system_prompt == "private-prompt-marker"
+    assert config.tools == [declaration()]
+
+    for visible <- [public, descriptor, activation, private, config] do
+      refute inspect(visible) =~ "synthetic-elevenlabs-secret"
+      refute inspect(visible) =~ "private-prompt-marker"
+      refute inspect(visible) =~ "Return public invocation identity"
+    end
+
+    refute :erlang.term_to_binary(public) =~ "api_key"
+    refute :erlang.term_to_binary(config.tools) =~ "compiled_schema"
+  end
+
+  test "ElevenLabs rejects private overrides and transport settings outside private startup" do
+    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant(), [])
+
+    for options <- [
+          [api_key: ""],
+          [api_key: "synthetic", turn_control: "external"],
+          [api_key: "synthetic", vad: true]
+        ] do
+      assert {:error, :invalid_configuration} =
+               SpeechToSpeechRuntime.configure(RealtimeSession, options)
+    end
+
+    for options <- [
+          [api_key: "synthetic", tools: []],
+          [api_key: "synthetic", system_prompt: "override"]
+        ] do
+      assert {:error, :invalid_configuration} =
+               SpeechToSpeechRuntime.provider({RealtimeSession, options}, [], activation)
+    end
+
+    for settings <- [[wire_module: :unsupported], [transport: :unsupported]] do
+      assert {:error, :invalid_configuration} =
+               SpeechToSpeechRuntime.provider(
+                 {RealtimeSession, [api_key: "synthetic"]},
+                 settings,
+                 activation
+               )
+    end
+  end
 
   test "OpenAI activation keeps tenant auth, prompt and tools private" do
     options = [api_key: "synthetic-openai-secret", backend_model: "gpt-5.6-luna"]

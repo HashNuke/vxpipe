@@ -116,6 +116,28 @@
     ]
   },
   "speech_to_speech": {
+    "elevenlabs": [
+      {
+        "id": "eleven_realtime_v1_mini",
+        "name": "Eleven Realtime v1 Mini",
+        "default": true,
+        "voices": {
+          "type": "free_text",
+          "default": "brian",
+          "parameter": "voice"
+        }
+      },
+      {
+        "id": "eleven_realtime_v1_max",
+        "name": "Eleven Realtime v1 Max",
+        "default": false,
+        "voices": {
+          "type": "free_text",
+          "default": "brian",
+          "parameter": "voice"
+        }
+      }
+    ],
     "google": [
       {
         "default": true,

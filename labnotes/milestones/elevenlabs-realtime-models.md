@@ -132,5 +132,5 @@ sign-off; this list tracks persistence of that reviewed work in dependency order
 - [x] Model configuration and private authentication.
 - [x] Allocation-bound input cutover and acknowledged socket delivery.
 - [x] Scoped native speech runtime and protocol/lifecycle regressions.
-- [ ] Provider registration, configured credentials, room acceptance and catalog UI.
+- [x] Provider registration, configured credentials, room acceptance and catalog UI.
 - [ ] Narrow live lane and final acceptance evidence.

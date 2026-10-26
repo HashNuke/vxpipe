@@ -5,6 +5,7 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
   alias Vxpipe.CallEngine.PlanStartup.SpeechToSpeechActivation
   alias Vxpipe.Providers.Google.{STS, STSSession}
   alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
+  alias Vxpipe.Providers.ElevenLabs.{Realtime, RealtimeSession}
 
   @derive {Inspect, only: [:call_id, :participant_id, :activation_id, :usage_provider]}
   @enforce_keys [
@@ -34,6 +35,10 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
 
   def configure(GPTLiveSession, options) do
     with {:ok, _config} <- GPTLive.new(options), do: {:ok, options}
+  end
+
+  def configure(RealtimeSession, options) do
+    with {:ok, _config} <- Realtime.new(options), do: {:ok, options}
   end
 
   def configure(provider, options) do
@@ -105,6 +110,30 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
            output_sample_rate: config.output_sample_rate
          ],
          {:ok, selected, []} <- provider({GPTLiveSession, public}, settings) do
+      {:ok, selected, [config: config]}
+    else
+      _invalid -> {:error, :invalid_configuration}
+    end
+  rescue
+    _exception -> {:error, :invalid_configuration}
+  end
+
+  def provider({RealtimeSession, options}, settings, %SpeechToSpeechActivation{} = activation) do
+    tools =
+      Enum.map(activation.tools, fn tool ->
+        %{
+          "name" => tool.name,
+          "description" => tool.description,
+          "parametersJsonSchema" => tool.input_schema
+        }
+      end)
+
+    with true <- Keyword.keyword?(options),
+         false <- Keyword.has_key?(options, :system_prompt) or Keyword.has_key?(options, :tools),
+         {:ok, config} <-
+           Realtime.new(options ++ [system_prompt: activation.system_prompt, tools: tools]),
+         public = [model: config.model, voice: config.voice, turn_control: "provider"],
+         {:ok, selected, []} <- provider({RealtimeSession, public}, settings) do
       {:ok, selected, [config: config]}
     else
       _invalid -> {:error, :invalid_configuration}

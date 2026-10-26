@@ -80,6 +80,36 @@ defmodule Vxpipe.Console.AdminProviderCatalogEndpointTest do
            }
   end
 
+  test "ElevenLabs STS catalog exposes Mini and Max with public voice metadata" do
+    configure_repository({:ok, %{tenant: %{key: @tenant_key, name: "Example"}, bindings: []}})
+    path = "/admin/api/tenants/#{@tenant_key}/providers"
+    response = authenticate() |> recycle() |> https_get(path <> "?capability=speech_to_speech")
+
+    assert Enum.any?(json_response(response, 200)["providers"], fn provider ->
+             provider["id"] == "elevenlabs" and provider["credential_required"] and
+               not provider["credential_available"]
+           end)
+
+    response =
+      authenticate()
+      |> recycle()
+      |> https_get(path <> "/elevenlabs/models?capability=speech_to_speech")
+
+    models = json_response(response, 200)["models"]
+    assert Enum.map(models, & &1["id"]) == ["eleven_realtime_v1_mini", "eleven_realtime_v1_max"]
+    assert Enum.find(models, & &1["default"])["id"] == "eleven_realtime_v1_mini"
+
+    for model <- models do
+      assert model["voices"] == %{
+               "type" => "free_text",
+               "default" => "brian",
+               "parameter" => "voice"
+             }
+    end
+
+    refute response.resp_body =~ "api_key"
+  end
+
   test "anonymous requests cannot query a tenant catalog" do
     response = https_get("/admin/api/tenants/#{@tenant_key}/providers?capability=text_to_speech")
     assert json_response(response, 401) == %{"error" => %{"code" => "session_required"}}

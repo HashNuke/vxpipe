@@ -94,6 +94,15 @@ test("ElevenLabs offers realtime Scribe and synthesis through one configured ser
   expect(provider?.capabilities).not.toContain("s2s");
 });
 
+test("ElevenLabs offers native realtime speech with Mini and Brian when STS is installed", () => {
+  const [provider] = installedProviders({elevenlabs: ["credential", "sts", "stt", "tts"]});
+  expect(provider).toMatchObject({id: "elevenlabs", capabilities: ["stt", "tts", "s2s"],
+    defaultModels: {s2s: "eleven_realtime_v1_mini"}});
+  expect(modelRecommendation(provider!, "s2s")).toBe("eleven_realtime_v1_mini · brian");
+  expect(provider?.recommendedModels.s2s?.voices).toEqual({type: "free_text", default: "brian", parameter: "voice"});
+  expect(modelCatalogFixture.speech_to_speech?.elevenlabs?.map(model => model.id)).toEqual(["eleven_realtime_v1_mini", "eleven_realtime_v1_max"]);
+});
+
 test("Cartesia offers Ink transcription and Sonic synthesis from one service", () => {
   const [provider] = installedProviders({cartesia: ["credential", "stt", "tts"]});
   expect(provider).toMatchObject({id: "cartesia", capabilities: ["stt", "tts"],
