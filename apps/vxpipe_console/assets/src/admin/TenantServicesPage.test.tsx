@@ -30,7 +30,7 @@ test("shows safe credential previews and compact update times", () => {
     screen
       .getByRole("img", { name: "Google AI Studio service logo" })
       .querySelector("img"),
-  ).toHaveAttribute("src", expect.stringContaining("google.png"));
+  ).toHaveAttribute("src", expect.stringContaining("google-ai-studio.png"));
   expect(
     screen.getByRole("img", { name: "Google Vertex AI service logo" }),
   ).toHaveAttribute("data-logo-source", "official");
