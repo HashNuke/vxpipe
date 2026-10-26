@@ -1,52 +1,37 @@
-import GoogleColor from "@lobehub/icons/es/Google/components/Color";
-import ZenMuxMono from "@lobehub/icons/es/ZenMux/components/Mono";
+import { Plug } from "lucide-react";
 import { useState } from "react";
 
-import googleLogo from "./assets/icons/google.png";
-import telnyxLogo from "./assets/icons/telnyx-green.png";
-import vertexAiLogo from "./assets/icons/vertex-ai.svg";
+import cartesiaIcon from "./assets/icons/cartesia.svg";
+import deepgramIcon from "./assets/icons/deepgram.ico";
+import deepseekIcon from "./assets/icons/deepseek.ico";
+import elevenlabsIcon from "./assets/icons/elevenlabs.svg";
+import fireworksIcon from "./assets/icons/fireworks.svg";
+import googleIcon from "./assets/icons/google-ai-studio.png";
+import openaiIcon from "./assets/icons/openai.svg";
+import openrouterIcon from "./assets/icons/openrouter.png";
+import rimeIcon from "./assets/icons/rime.png";
+import telnyxIcon from "./assets/icons/telnyx.png";
+import twilioIcon from "./assets/icons/twilio.png";
+import vertexAiIcon from "./assets/icons/vertex-ai.png";
+import zenmuxIcon from "./assets/icons/zenmux.svg";
 import type { ServiceProvider } from "./serviceTypes";
 
-const serviceMarks: Record<ServiceProvider, string> = {
-  cartesia: "C",
-  elevenlabs: "E",
-  morse_code_api: "M",
-  rime: "R",
-  google: "G",
-  openai: "O",
-  vertex_ai: "V",
-  zenmux: "Z",
-  deepseek: "D",
-  openrouter: "O",
-  fireworks: "F",
-  deepgram: "D",
-  telnyx: "T",
-  twilio: "T",
-};
-
-type LogoSource = "lobehub" | "official" | "avatar";
-
-const logoSources: Record<ServiceProvider, LogoSource> = {
-  cartesia: "avatar",
-  elevenlabs: "avatar",
-  morse_code_api: "avatar",
-  rime: "avatar",
-  google: "official",
-  openai: "avatar",
-  vertex_ai: "official",
-  zenmux: "lobehub",
-  deepseek: "avatar",
-  openrouter: "avatar",
-  fireworks: "avatar",
-  deepgram: "avatar",
-  telnyx: "official",
-  twilio: "avatar",
-};
-
-const officialIconAssets: Partial<Record<ServiceProvider, string>> = {
-  google: googleLogo,
-  vertex_ai: vertexAiLogo,
-  telnyx: telnyxLogo,
+// Keep built-in integrations available without fetching icons from a directory.
+const serviceFavicons: Record<ServiceProvider, string | null> = {
+  cartesia: cartesiaIcon,
+  deepgram: deepgramIcon,
+  deepseek: deepseekIcon,
+  elevenlabs: elevenlabsIcon,
+  fireworks: fireworksIcon,
+  google: googleIcon,
+  morse_code_api: null,
+  openai: openaiIcon,
+  openrouter: openrouterIcon,
+  rime: rimeIcon,
+  telnyx: telnyxIcon,
+  twilio: twilioIcon,
+  vertex_ai: vertexAiIcon,
+  zenmux: zenmuxIcon,
 };
 
 export function ServiceLogo({
@@ -56,34 +41,27 @@ export function ServiceLogo({
   name: string;
   provider: ServiceProvider;
 }) {
-  const [logoFailed, setLogoFailed] = useState(false);
-  const source = logoSources[provider];
-  const lobeLogo =
-    source === "lobehub" ? (
-      provider === "google" ? (
-        <GoogleColor size="2rem" />
-      ) : provider === "zenmux" ? (
-        <ZenMuxMono size="2rem" />
-      ) : null
-    ) : null;
-  const officialLogo =
-    source === "official" && !logoFailed && officialIconAssets[provider] ? (
-      <img
-        alt=""
-        className="service-logo-image service-logo-image--official"
-        onError={() => setLogoFailed(true)}
-        src={officialIconAssets[provider]}
-      />
-    ) : null;
+  const [failedIcon, setFailedIcon] = useState<string | null>(null);
+  const favicon = serviceFavicons[provider];
+  const showFavicon = favicon !== null && failedIcon !== favicon;
 
   return (
     <span
       aria-label={`${name} service logo`}
       className={`service-logo service-logo--${provider}`}
-      data-logo-source={source}
+      data-logo-source={showFavicon ? "official" : "placeholder"}
       role="img"
     >
-      {lobeLogo ?? officialLogo ?? serviceMarks[provider]}
+      {showFavicon ? (
+        <img
+          alt=""
+          className="service-logo-image"
+          onError={() => setFailedIcon(favicon)}
+          src={favicon}
+        />
+      ) : (
+        <Plug aria-hidden="true" size={20} strokeWidth={1.5} />
+      )}
     </span>
   );
 }
