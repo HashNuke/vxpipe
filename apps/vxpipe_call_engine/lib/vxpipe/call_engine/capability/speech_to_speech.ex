@@ -23,7 +23,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     only: [
       admit_reply: 3,
       admit_response: 4,
-      retire_stale_pending: 1,
       handle_audio: 2,
       complete_playback: 3,
       notify_output_stt_unavailable: 2,
@@ -350,28 +349,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   def handle_call({:release, epoch}, _from, state) when is_reference(epoch),
     do: Hold.release(state, epoch)
 
-  def handle_call({:apply_policy, policy}, _from, state) do
-    state = %{
-      state
-      | policy: policy,
-        policy_revision: state.policy_revision + 1,
-        origin_policy_revision: state.origin_policy_revision + 1
-    }
-
-    case retire_stale_pending(state) do
-      {:ok, state} ->
-        if audio_route_permitted?(state, state.human_id, state.agent_id) and
-             audio_route_permitted?(state, state.agent_id, state.human_id) do
-          {:reply, :ok, state}
-        else
-          {_played, state} = fence_output(state)
-          {:reply, :ok, state}
-        end
-
-      {:error, _reason} ->
-        stop_unavailable(:provider_failed, state)
-    end
-  end
+  def handle_call({:apply_policy, policy}, _from, state), do: Policy.apply_direct(state, policy)
 
   def handle_call({:vxpipe_apply_media_policy, %Snapshot{} = snapshot}, _from, state) do
     Policy.apply(state, snapshot)

@@ -130,7 +130,7 @@ All five checkpoints were implemented and verified before final independent
 sign-off; this list tracks persistence of that reviewed work in dependency order.
 
 - [x] Model configuration and private authentication.
-- [ ] Allocation-bound input cutover and acknowledged socket delivery.
+- [x] Allocation-bound input cutover and acknowledged socket delivery.
 - [ ] Scoped native speech runtime and protocol/lifecycle regressions.
 - [ ] Provider registration, configured credentials, room acceptance and catalog UI.
 - [ ] Narrow live lane and final acceptance evidence.

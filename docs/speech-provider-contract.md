@@ -124,6 +124,17 @@ The allocation, conversation, and admitted tool calls survive a mute hold;
 output is fenced until release. Providers declaring `hold: :stop` retain the
 existing stop and quiescence contract.
 
+An STS descriptor may additionally declare `input_cutover: :close` with
+`hold: :stop` when its native protocol cannot prove complete input consumption.
+The capability fences active playback and closes at hold, a release that changes
+an already-bound input epoch, direct policy replacement, or a relevant
+snapshot audio/transcript interval or caller/agent presence change. It must not
+wait for fresh input to reject the old origin: delayed caller evidence can arrive
+first. The default `nil` retains existing provider behavior. ElevenLabs Realtime
+uses this contract and requires a fresh allocation after these boundaries.
+An initial release may bind an unused allocation; repeating its existing epoch
+is idempotent and does not change the lifecycle revision.
+
 An STS descriptor with `continuity: :history_reseed` also requires
 `append_history(pid, {:caller | :agent, text})`. The speech channel routes
 `Session.append_history/2` only from the allocation's consumer. The room

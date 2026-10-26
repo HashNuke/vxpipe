@@ -140,3 +140,7 @@ The [milestone](milestones/elevenlabs-realtime-models.md) tracks remaining work.
 - Checkpoint: persist pure model/session configuration, bounded wire codec,
   redacted ephemeral connection/authentication and focused synthetic HTTP tests.
   No hosted-agent provisioning or local VAD is introduced.
+- Checkpoint: persist the opt-in allocation-bound input contract and safe
+  hold/release/policy closure, including playback fencing. Keep direct policy in
+  its owning Policy module. Add acknowledged Realtime socket handoff and its
+  loopback burst regression; descriptor validation rejects unsupported contracts.
