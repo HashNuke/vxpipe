@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "directory_id": "example-directory",
+  "revision": "2026-10-25.1",
+  "resource": "integrations",
+  "query": {
+    "category": null,
+    "q": "google",
+    "scope": "tenant"
+  },
+  "items": [
+    {
+      "id": "provider-google",
+      "revision": 1,
+      "kind": "provider",
+      "minimum_vxpipe_version": "0.1.0",
+      "name": "Google AI Studio",
+      "category_ids": [
+        "ai"
+      ],
+      "documentation_url": "https://directory.example.test/providers/google",
+      "availability": "available",
+      "connection": {
+        "type": "builtin",
+        "provider_id": "google"
+      }
+    },
+    {
+      "id": "google-calendar",
+      "revision": 1,
+      "name": "Google Calendar",
+      "summary": "Calendars and events",
+      "category_ids": [
+        "calendar"
+      ],
+      "documentation_url": "https://developers.google.com/workspace/calendar/api/guides/configure-mcp-server",
+      "availability": "available",
+      "connection": {
+        "type": "mcp",
+        "transport": "streamable_http",
+        "endpoint": "https://calendarmcp.googleapis.com/mcp/v1",
+        "authentication": {
+          "type": "oauth2",
+          "registration": "preregistered"
+        }
+      },
+      "kind": "mcp",
+      "minimum_vxpipe_version": "0.1.0"
+    }
+  ],
+  "pagination": {
+    "limit": 20,
+    "total_items": 2,
+    "start_index": 1,
+    "end_index": 2,
+    "next_cursor": null,
+    "previous_cursor": null
+  },
+  "installation_version": "0.1.0"
+}

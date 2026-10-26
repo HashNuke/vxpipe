@@ -1,0 +1,546 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:vxpipe:integrations-directory:v1",
+  "title": "Vxpipe paginated, version-filtered integrations API v1",
+  "oneOf": [
+    {
+      "$ref": "#/definitions/categoriesPage"
+    },
+    {
+      "$ref": "#/definitions/integrationsPage"
+    }
+  ],
+  "definitions": {
+    "category": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "not": {
+            "enum": [
+              "connected",
+              "ai",
+              "telephony",
+              "search"
+            ]
+          }
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "integration_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "order",
+        "integration_count"
+      ]
+    },
+    "integration": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/mcpIntegration"
+        },
+        {
+          "$ref": "#/definitions/providerIntegration"
+        }
+      ]
+    },
+    "pagination": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "total_items": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "start_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "previous_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "limit",
+        "total_items",
+        "start_index",
+        "end_index",
+        "next_cursor",
+        "previous_cursor"
+      ]
+    },
+    "categoriesPage": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "directory_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "resource": {
+          "const": "categories"
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/definitions/category"
+          }
+        },
+        "pagination": {
+          "$ref": "#/definitions/pagination"
+        },
+        "installation_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "schema_version",
+        "resource",
+        "directory_id",
+        "revision",
+        "items",
+        "pagination",
+        "installation_version"
+      ]
+    },
+    "integrationsPage": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "directory_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "resource": {
+          "const": "integrations"
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/definitions/integration"
+          }
+        },
+        "pagination": {
+          "$ref": "#/definitions/pagination"
+        },
+        "query": {
+          "type": "object",
+          "properties": {
+            "category": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[a-z][a-z0-9-]{0,63}$"
+            },
+            "q": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "scope": {
+              "enum": [
+                "tenant",
+                "platform"
+              ]
+            }
+          },
+          "required": [
+            "category",
+            "q",
+            "scope"
+          ],
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "q": {
+                    "minLength": 1
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "category": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "installation_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "schema_version",
+        "resource",
+        "directory_id",
+        "revision",
+        "items",
+        "pagination",
+        "query",
+        "installation_version"
+      ]
+    },
+    "mcpIntegration": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "logo_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "category_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,63}$",
+            "not": {
+              "enum": [
+                "connected",
+                "ai",
+                "telephony",
+                "search"
+              ]
+            }
+          }
+        },
+        "documentation_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "availability": {
+          "enum": [
+            "available",
+            "preview",
+            "retired"
+          ]
+        },
+        "connection": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "mcp"
+            },
+            "transport": {
+              "const": "streamable_http"
+            },
+            "endpoint": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://[^/?#@]+(?:/[^?#]*)?$",
+              "maxLength": 2048
+            },
+            "authentication": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "oauth2"
+                    },
+                    "registration": {
+                      "enum": [
+                        "discover",
+                        "cimd",
+                        "dcr",
+                        "preregistered"
+                      ]
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "maxItems": 64,
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "registration"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "bearer"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "basic"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "none"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "const": "api_key"
+                    },
+                    "header_name": {
+                      "type": "string",
+                      "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$",
+                      "maxLength": 128
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "header_name"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "transport",
+            "endpoint",
+            "authentication"
+          ]
+        },
+        "kind": {
+          "const": "mcp"
+        },
+        "minimum_vxpipe_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+          "maxLength": 128
+        },
+        "maximum_vxpipe_version_exclusive": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+          "maxLength": 128
+        },
+        "setup_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "setup_notes": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "name",
+        "category_ids",
+        "availability",
+        "connection",
+        "kind"
+      ]
+    },
+    "providerIntegration": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "logo_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "category_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "ai",
+              "telephony"
+            ]
+          }
+        },
+        "documentation_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "availability": {
+          "enum": [
+            "available",
+            "preview",
+            "retired"
+          ]
+        },
+        "connection": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "builtin"
+            },
+            "provider_id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+            }
+          },
+          "required": [
+            "type",
+            "provider_id"
+          ]
+        },
+        "kind": {
+          "const": "provider"
+        },
+        "minimum_vxpipe_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+          "maxLength": 128
+        },
+        "maximum_vxpipe_version_exclusive": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+          "maxLength": 128
+        },
+        "setup_notes": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "setup_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "name",
+        "category_ids",
+        "documentation_url",
+        "availability",
+        "connection",
+        "kind"
+      ]
+    }
+  }
+}

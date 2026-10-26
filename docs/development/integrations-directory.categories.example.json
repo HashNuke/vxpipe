@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "directory_id": "example-directory",
+  "revision": "2026-10-25.1",
+  "resource": "categories",
+  "items": [
+    {
+      "id": "calendar",
+      "name": "Calendar",
+      "order": 10,
+      "integration_count": 2
+    }
+  ],
+  "pagination": {
+    "limit": 100,
+    "total_items": 1,
+    "start_index": 1,
+    "end_index": 1,
+    "next_cursor": null,
+    "previous_cursor": null
+  },
+  "installation_version": "0.1.0"
+}

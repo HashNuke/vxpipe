@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "directory_id": "example-directory",
+  "revision": "2026-10-25.1",
+  "resource": "integrations",
+  "query": {
+    "category": "calendar",
+    "q": "",
+    "scope": "tenant"
+  },
+  "items": [
+    {
+      "id": "example-calendar",
+      "revision": 1,
+      "name": "Example Calendar",
+      "summary": "Appointment availability and bookings",
+      "logo_url": "https://directory.example.test/logos/example-calendar.png",
+      "category_ids": [
+        "calendar"
+      ],
+      "documentation_url": "https://calendar.example.test/docs/mcp",
+      "availability": "available",
+      "connection": {
+        "type": "mcp",
+        "transport": "streamable_http",
+        "endpoint": "https://calendar.example.test/mcp",
+        "authentication": {
+          "type": "oauth2",
+          "registration": "discover"
+        }
+      },
+      "kind": "mcp",
+      "minimum_vxpipe_version": "0.1.0"
+    }
+  ],
+  "pagination": {
+    "limit": 1,
+    "total_items": 2,
+    "start_index": 1,
+    "end_index": 1,
+    "next_cursor": "example-forward-cursor",
+    "previous_cursor": null
+  },
+  "installation_version": "0.1.0"
+}
