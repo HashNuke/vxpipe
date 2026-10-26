@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 53 milestone specifications: 41 complete and 12 incomplete. Milestone 17, Telnyx calls and
+Status: 53 milestone specifications: 42 complete and 11 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -181,7 +181,7 @@ progress without claiming the entire milestone is complete.
 48. [x] [Persistent speech sessions](persistent-speech-sessions.md) — Complete: capability-owned persistent MorseCodeApi, ElevenLabs and Cartesia TTS, same-socket manual Scribe STT with exact PCM accounting, and bounded Deepgram cancellation. Google streaming HTTP TTS remains the approved exception. Focused live providers, root checks, Lean and final CallEngine rerun pass; Go v0.1.4 is deployed and released.
 49. [x] [Platform MCP endpoint](platform-mcp-endpoint.md) — All 17 tools share authorized Elixir/product HTTP operations with the UI. Scoped Settings-key authentication, pagination, call variables/tokens, durable whole-call hangup and account administration are implemented and independently reviewed. All five root gates passed (4,348 tests, zero failures); 770 frontend tests and rendered checks passed. Real-store SDK acceptance covers three mounts, with local active-WebRTC, recovery, request-boundary and privacy acceptance. No live services or deployment were used.
 50. [x] [MCP OAuth authorization](mcp-oauth.md) — Delegated user OAuth replaces MCP API keys using Boruta and existing ExMCP. Token lifecycle, discovery/consent, current permissions and local client interoperability verified; public HTTP API keys remain supported.
-51. [ ] [ElevenLabs Realtime speech-to-speech](elevenlabs-realtime-models.md) — Standalone Mini/Max STS with provider-native turn detection and no local VAD. Implementation, bounded live checks, common gates and final independent review pass; checkpoint commits remain in progress.
+51. [x] [ElevenLabs Realtime speech-to-speech](elevenlabs-realtime-models.md) — Standalone Mini/Max STS with provider-native turn detection and no local VAD. Complete: Mini/Max native live checks, ten compiled room regressions, all common gates and clean independent GPT-6 Astra xhigh review pass. Five coherent checkpoints record the implementation and evidence.
 52. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 53. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 

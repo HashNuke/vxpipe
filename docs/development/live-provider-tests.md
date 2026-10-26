@@ -355,6 +355,26 @@ Even a passing short VAD case would not prove long-input turn boundaries,
 speech-start notification, finite-input drain or conversational room support.
 See [native VAD assessment](../../labnotes/20260930-1119-elevenlabs-turn-ownership.md#realtime-scope-and-native-vad-first).
 
+### ElevenLabs Realtime speech-to-speech
+
+Run only the standalone Mini/Max STS tests with:
+
+```shell
+bin/livetests run --only live_elevenlabs \
+  apps/vxpipe_call_engine/test/integration/elevenlabs_realtime_test.exs
+```
+
+These tests require only `ELEVENLABS_API_KEY`. They use committed 24 kHz PCM,
+ElevenLabs native turn detection and the normal scoped STS output-credit contract.
+They do not generate fixtures with another provider, provision hosted agents,
+run local VAD, or start telephony. Each test opens one bounded Realtime session
+with no automatic retry. Select a single test location for a targeted diagnosis.
+The separate `elevenlabs_realtime_socket_test.exs` uses a local WebSocket peer and
+is tagged `integration`, not `live_elevenlabs`.
+
+See the [adapter decision and verification record](../elevenlabs-realtime-models.md)
+for protocol differences, current evidence and limitations.
+
 ### Historical ElevenLabs hosted-agent protocol
 
 Hosted-agent STS is deferred by the 2026-10-01 scope decision. These previously

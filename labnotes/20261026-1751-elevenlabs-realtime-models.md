@@ -152,3 +152,7 @@ The [milestone](milestones/elevenlabs-realtime-models.md) tracks remaining work.
   tenant/platform API-key resolution, and expose the editable voice in Console.
   Include the ten compiled-room regressions and browser/configured-service
   evidence with the durable integration decision and author guide.
+- Checkpoint: persist the narrowly selectable ElevenLabs live lane, including
+  two Mini turns on one connection and one Max turn. Synchronize the completed
+  milestone/index and final gate/review evidence. Staged diffs were inspected for
+  each checkpoint; no implementation changed after final source sign-off.

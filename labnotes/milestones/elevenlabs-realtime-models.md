@@ -1,8 +1,8 @@
 # ElevenLabs Realtime speech-to-speech
 
-Status: implementation and focused checks pass. Mini passed two native turns on one
-connection after the fixes; Max passed one native turn. Independent source review
-is clean; all common gates pass. Final independent sign-off is clean; checkpoint commits are in progress.
+Status: complete. Mini passed two native turns on one connection after the fixes;
+Max passed one native turn. All common gates and final independent review pass.
+The reviewed implementation is recorded in five coherent checkpoint commits.
 
 ## Outcome and constraints
 
@@ -53,13 +53,13 @@ existing recorded audio and the provider test runner; no real telephony.
     a concrete defect fix requires a targeted rerun; record actual requests/results.
   - [x] Refresh Mini acceptance after review fixes with two native turns on one connection.
   - [x] Document the narrow command and any account/API limitations.
-- [ ] E — Verification, independent review and small commits
+- [x] E — Verification, independent review and small commits
   - [x] Format, compile with warnings as errors, strict Credo, full default tests,
     dependency unlock check and Lean speech-state verification pass.
   - [x] Initial independent GPT-6 Astra xhigh review of code, tests and contract claims.
   - [x] Resolve findings and receive a clean final independent review.
-  - [ ] Inspect staged diffs and commit coherent checkpoints with their evidence.
-  - [ ] Synchronize this checklist and the milestone index with final evidence.
+  - [x] Inspect staged diffs and commit coherent checkpoints with their evidence.
+  - [x] Synchronize this checklist and the milestone index with final evidence.
 
 ## Design review (separate from implementation)
 
@@ -70,7 +70,7 @@ the working adapter, not an advertised configuration-only stub. Provider-native
 VAD satisfies the no-local-detector requirement. Authentication and event
 compatibility require hosted evidence; documentation alone is insufficient.
 Independent GPT-6 Astra xhigh design/code review identified the issues below;
-follow-up review is in progress. The reviewed design now pins one authorization
+follow-up review verified the fixes and is clean. The design pins one authorization
 context per allocation; source/policy/hold cutover requires a fresh allocation
 because the API does not prove complete input-buffer consumption.
 
@@ -78,7 +78,7 @@ because the API does not prove complete input-buffer consumption.
 
 Initial GPT-6 Astra xhigh review identified eight issues; none are waived:
 
-- [x] R1: exclude simultaneous explicit/native candidates when responses lack metadata.
+- [x] R1: prevent metadata-free responses from borrowing another authorization origin.
 - [x] R2: older caller completion must not clear later accepted audio obligations.
 - [x] R3: tool-only responses must not create empty playback turns.
 - [x] R4: allocate response ordinals when output is announced, not when queued.
@@ -103,7 +103,7 @@ Follow-up corrections:
   despite trailing PCM.
 - [x] Require input transcription and exact audio/native-turn settings at readiness.
 
-Verification so far: 102 focused adapter/descriptor/capability tests pass,
+Final verification: 102 focused adapter/descriptor/capability tests pass,
 including 19 scoped session cases and ten compiled room cases. Six additional
 configuration/codec/auth cases and the local socket burst test pass. The direct
 policy handler was moved into the existing Policy module to satisfy the 800-line
@@ -120,7 +120,8 @@ compilation, strict Credo, full default tests (4,491 cases, zero failures,
 oracle replay). The final local WebSocket burst test passes as well.
 
 Independent GPT-6 Astra xhigh source review found no remaining actionable code or
-test findings after the corrections and policy-module refactor. Final independent review verified the completed gate evidence and current
+test findings after the corrections and policy-module refactor. Final independent
+review verified the completed gate evidence and current
 documentation and gave clean sign-off: no remaining actionable code, test,
 security, lifecycle or documentation findings in the reviewed scope.
 
@@ -133,4 +134,4 @@ sign-off; this list tracks persistence of that reviewed work in dependency order
 - [x] Allocation-bound input cutover and acknowledged socket delivery.
 - [x] Scoped native speech runtime and protocol/lifecycle regressions.
 - [x] Provider registration, configured credentials, room acceptance and catalog UI.
-- [ ] Narrow live lane and final acceptance evidence.
+- [x] Narrow live lane and final acceptance evidence.
