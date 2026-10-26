@@ -1,4 +1,5 @@
 interface ImportMetaEnv {
+  readonly STORYBOOK_VXPIPE_VERSION: string;
   readonly STORYBOOK_APP_ORIGIN?: string;
 }
 

@@ -4,7 +4,7 @@ defmodule Vxpipe.MixProject do
   def project do
     [
       apps_path: "apps",
-      version: "0.1.0",
+      version: File.read!(Path.join(__DIR__, "VERSION")) |> String.trim(),
       start_permanent: Mix.env() == :prod,
       listeners: [Phoenix.CodeReloader],
       deps: deps(),

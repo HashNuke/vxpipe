@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import type { StorybookConfig } from "@storybook/react-vite";
@@ -31,6 +32,7 @@ const config: StorybookConfig = {
     ...config,
     define: {
       ...config.define,
+      "import.meta.env.STORYBOOK_VXPIPE_VERSION": JSON.stringify(readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim()),
       "import.meta.env.STORYBOOK_APP_ORIGIN": JSON.stringify(publicOrigin),
     },
     plugins: [...(config.plugins ?? []), tailwindcss()],
