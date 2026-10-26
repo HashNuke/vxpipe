@@ -144,3 +144,7 @@ The [milestone](milestones/elevenlabs-realtime-models.md) tracks remaining work.
   hold/release/policy closure, including playback fencing. Keep direct policy in
   its owning Policy module. Add acknowledged Realtime socket handoff and its
   loopback burst regression; descriptor validation rejects unsupported contracts.
+- Checkpoint: persist the supervised STS runtime, native caller/response
+  ownership, bounded output admission and tools, lifetime-pinned authorization,
+  deadlines and cancellation. Include the synthetic boundary harness and 19
+  session regressions plus configuration/codec coverage. No local VAD is started.
