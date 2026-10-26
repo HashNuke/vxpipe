@@ -19,6 +19,7 @@ export function SetupServiceCard({
   busy = false,
   removing = false,
   readOnly = false,
+  layout = "card",
 }: {
   provider: SetupProvider;
   connection?: SetupConnection;
@@ -29,6 +30,7 @@ export function SetupServiceCard({
   busy?: boolean;
   removing?: boolean;
   readOnly?: boolean;
+  layout?: "card" | "row";
 }) {
   const issue = connection?.status === "invalid"
     ? "Credentials need attention"
@@ -38,22 +40,8 @@ export function SetupServiceCard({
   const connected = connection?.status === "connected";
   const needsPublicKey =
     provider.id === "telnyx" && !connection?.telephonyPublicKeyConfigured;
-  const source = platform
-    ? null
-    : connection?.source === "platform"
-      ? "Inherited from platform"
-      : overridesPlatform
-        ? "Tenant override"
-        : null;
-  return (
-    <article
-      aria-label={provider.name}
-      aria-busy={removing || undefined}
-      className="setup-service-card setup-saved-service"
-    >
-      <div className="setup-service-card-heading">
-        <ServiceLogo name={provider.name} provider={provider.id} />
-        <h3>{provider.name}</h3>
+  const source = !platform && overridesPlatform ? "Tenant override" : null;
+  const actions = (
         <div className="setup-service-card-actions">
           {issue ? (
             <TooltipProvider>
@@ -88,7 +76,7 @@ export function SetupServiceCard({
               type="button"
               variant="ghost"
             >
-              <Pencil aria-hidden="true" size={16} />
+              {layout === "row" ? "Manage" : <Pencil aria-hidden="true" size={16} />}
             </Button>
             {onRemoveCredentials ? (
               <Popover.Root>
@@ -126,10 +114,8 @@ export function SetupServiceCard({
             ) : null}
           </div> : null}
         </div>
-      </div>
-      {source ? <p className="setup-service-source">{source}</p> : null}
-      {removing ? <p role="status">Removing credentials…</p> : null}
-      <div className="setup-service-card-footer">
+  );
+  const tags = (
         <div className="setup-tags">
           {provider.capabilities.map((capability) => (
             <span key={capability}>
@@ -146,6 +132,32 @@ export function SetupServiceCard({
             </span>
           ))}
         </div>
+  );
+  if (layout === "row") return <article aria-label={provider.name} aria-busy={removing || undefined} className="service-directory-row connected-provider-row">
+    <ServiceLogo name={provider.name} provider={provider.id} />
+    <div className="service-directory-name">
+      <h3>{provider.name}</h3>
+      {source && <p>{source}</p>}
+      {removing && <p role="status">Removing credentials…</p>}
+      {tags}
+    </div>
+    {actions}
+  </article>;
+  return (
+    <article
+      aria-label={provider.name}
+      aria-busy={removing || undefined}
+      className="setup-service-card setup-saved-service"
+    >
+      <div className="setup-service-card-heading">
+        <ServiceLogo name={provider.name} provider={provider.id} />
+        <h3>{provider.name}</h3>
+        {actions}
+      </div>
+      {source ? <p className="setup-service-source">{source}</p> : null}
+      {removing ? <p role="status">Removing credentials…</p> : null}
+      <div className="setup-service-card-footer">
+        {tags}
       </div>
     </article>
   );

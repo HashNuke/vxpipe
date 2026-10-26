@@ -22,13 +22,13 @@ test("multi-tenant directory and search show only allowed tenants, selection ope
   fireEvent.change(screen.getByRole("combobox", { name: "Search tenants" }), { target: { value: "Northwind" } });
   fireEvent.click(await screen.findByRole("option", { name: /Northwind/ }));
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "Northwind dashboard" })).toHaveAttribute("href", "#/t/northwind_000001/dashboard");
+  expect(screen.getByRole("link", { name: "Northwind" })).toHaveAttribute("href", "#/t/northwind_000001/dashboard");
 });
 test("platform and tenant services have distinct titles and correct active groups", () => {
   render(<NavigationJourney initialPath="/platform/services" />);
-  expect(screen.getByRole("heading", { name: "Platform Services" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Platform Integrations" })).toBeVisible();
   const platform = screen.getByRole("navigation", { name: "Settings" });
-  expect(within(platform).getByRole("link", { name: "Services" })).toHaveAttribute("aria-current", "page");
+  expect(within(platform).getByRole("link", { name: "Platform Integrations" })).toHaveAttribute("aria-current", "page");
 });
 test("logout removes the private navigation and shows login", () => {
   render(<NavigationJourney />);
@@ -46,7 +46,7 @@ test("direct platform and API key URLs do not bypass the member presentation pol
 });
 test("legacy service content keeps the sidebar as its only workspace navigation", () => {
   render(<NavigationJourney initialPath="/t/acme_demo_000001/legacy-services" />);
-  expect(screen.getByRole("heading", { name: "Services" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Integrations" })).toBeVisible();
   expect(screen.queryByRole("navigation", { name: "Tenant workspace" })).not.toBeInTheDocument();
   expect(screen.getAllByRole("link", { name: "Vxpipe" })).toHaveLength(1);
 });
@@ -65,12 +65,12 @@ test("tenant creation is retained for an authorized platform operator", () => {
 });
 test("platform read access hides credential mutation controls", () => {
   render(<NavigationJourney persona="platform-reader" initialPath="/platform/services" />);
-  expect(screen.getByRole("heading", { name: "Platform Services" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Platform Integrations" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
 });
 test("tenant service read access does not grant API-key management", () => {
   render(<NavigationJourney persona="service-reader" initialPath="/t/acme_demo_000001/services" />);
-  expect(screen.getByRole("heading", { name: "Services" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Integrations" })).toBeVisible();
   expect(screen.queryByRole("link", { name: "API Keys" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
 });
@@ -87,10 +87,11 @@ test("workspace API keys remain available before voice readiness", () => {
   fireEvent.click(screen.getByRole("link", { name: "Settings" }));
   expect(screen.getByRole("heading", { name: "API Keys" })).toBeVisible();
 });
-test("legacy service read permission includes masked credential metadata", () => {
+test("legacy service read permission shows connected integrations without mutation controls", () => {
   render(<NavigationJourney persona="service-reader" initialPath="/t/acme_demo_000001/legacy-services" />);
-  expect(screen.getByText("Credentials")).toBeVisible();
-  expect(screen.getAllByText(/\*{4}/).length).toBeGreaterThan(0);
+  fireEvent.change(screen.getByLabelText("Category"), { target: { value: "connected" } });
+  expect(screen.getByRole("article", { name: "Deepgram" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Manage Deepgram" })).not.toBeInTheDocument();
 });
 
 test("tenant selection needs no review hint", () => {
@@ -120,7 +121,7 @@ test("dashboard has no duplicate resource buttons or retry action", () => {
 test("API Keys moves from tenant navigation into Settings", async () => {
   render(<NavigationJourney initialPath="/t/acme_demo_000001/services" />);
   const links = within(screen.getByRole("navigation", { name: "Tenant" })).getAllByRole("link");
-  expect(links.map(link => link.textContent)).toEqual(["Calls", "Call Specs", "Services"]);
+  expect(links.map(link => link.textContent)).toEqual(["Calls", "Call Specs", "Integrations"]);
   fireEvent.click(screen.getByRole("link", { name: "Settings" }));
   expect(screen.getByRole("link", { name: "API Keys" })).toHaveAttribute("aria-current", "page");
   expect(await screen.findByRole("table", { name: "API keys" })).toBeVisible();

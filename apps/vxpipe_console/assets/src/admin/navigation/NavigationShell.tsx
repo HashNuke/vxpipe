@@ -8,8 +8,9 @@ import type { Role, Tenant, Theme, User } from "../authentication/types";
 import { navigationItems, type NavigationItem } from "./navigationPolicy";
 import { TenantPicker } from "./TenantPicker";
 import "./navigation.css";
-const icons = { "API Keys": KeyRound, Calls: Phone, "Call Specs": FileCode2, Services: Plug, Tenants: Building2, Roles: ShieldCheck, Users, Installation: Settings };
-export function NavigationShell({ children, role, user, tenants, selected, path, onNavigate, onLogout, theme, pickerState, onRetry, projectedItems, directoryPath, picker, realLinks = false, email, external = false }: {
+const icons = { "API Keys": KeyRound, Calls: Phone, "Call Specs": FileCode2, Services: Plug, Integrations: Plug, "Platform Integrations": Plug, Tenants: Building2, Roles: ShieldCheck, Users, Installation: Settings };
+export function NavigationShell({ children, role, user, tenants, selected, path, onNavigate, onLogout, theme, pickerState, onRetry, projectedItems, directoryPath, picker, realLinks = false, email, external = false, previewIntegrations = false }: {
+  previewIntegrations?: boolean;
   children: ReactNode; role?: Role; user?: User; tenants: Tenant[]; selected?: Tenant; path: string;
   onNavigate: (path: string) => void; onLogout: () => void; theme: Theme;
   projectedItems?: { tenant: NavigationItem[]; platform: NavigationItem[] }; directoryPath?: string; picker?: ReactNode; realLinks?: boolean; email?: string; external?: boolean;
@@ -35,7 +36,7 @@ export function NavigationShell({ children, role, user, tenants, selected, path,
       {!settings ? <nav aria-label="Tenants"><a href={href("/tenants")} aria-current={path === "/tenants" || path.startsWith("/tenants/") ? "page" : undefined} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); navigate("/tenants"); }}><Building2 size={17} aria-hidden />Tenants</a></nav> : null}
       {(settings ? items.platform : items.tenant).length ? <nav aria-label={settings ? "Settings" : "Tenant"}>
         {!settings ? <h2>Tenant</h2> : null}
-        {(settings ? items.platform : items.tenant).map(item => { const Icon = icons[item.label as keyof typeof icons]; return <a key={item.href} href={href(item.href)} aria-current={path === item.href || path.startsWith(`${item.href}/`) ? "page" : undefined} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); navigate(item.href); }}><Icon size={17} aria-hidden />{item.label}</a>; })}
+        {(settings ? items.platform : items.tenant).map(item => { const Icon = icons[item.label as keyof typeof icons]; return <a key={item.href} href={href(item.href)} aria-current={path === item.href || path.startsWith(`${item.href}/`) ? "page" : undefined} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); navigate(item.href); }}><Icon size={17} aria-hidden />{previewIntegrations && item.href.endsWith("/services") ? (settings ? "Platform Integrations" : "Integrations") : item.label}</a>; })}
       </nav> : null}
       {!settings && items.platform.length ? <nav aria-label="Workspace settings"><a href={href(items.platform[0].href)} onClick={event => { if (!shouldInterceptNavigation(event)) return; event.preventDefault(); navigate(items.platform[0].href); }}><Settings size={17} aria-hidden />Settings</a></nav> : null}
     </div>

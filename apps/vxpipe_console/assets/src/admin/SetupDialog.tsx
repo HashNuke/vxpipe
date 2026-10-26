@@ -17,6 +17,7 @@ export function SetupDialog({
   onClose,
   busy = false,
   anchorTop = false,
+  initialFocusSelector,
 }: {
   title: string;
   headerContent?: ReactNode;
@@ -24,6 +25,7 @@ export function SetupDialog({
   onClose: () => void;
   busy?: boolean;
   anchorTop?: boolean;
+  initialFocusSelector?: string;
 }) {
   const setOverlay = useContext(AdminOverlayContext);
   useEffect(() => { setOverlay(true); return () => setOverlay(false); }, [setOverlay]);
@@ -36,6 +38,7 @@ export function SetupDialog({
         : null;
     const dialog = dialogRef.current;
     (
+      (initialFocusSelector ? dialog?.querySelector<HTMLElement>(initialFocusSelector) : null) ??
       dialog?.querySelector<HTMLElement>(
         "input:not([disabled]), select:not([disabled])",
       ) ??

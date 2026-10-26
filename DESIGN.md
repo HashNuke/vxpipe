@@ -374,14 +374,82 @@ sidebar while retaining local media controls. Diagnostics keeps its LiveView
 content independent of the React navigation island; its system dashboard retains
 its own dependency-owned interface.
 
-Call details opens in a new tab as a standalone inspector. Its console-injected
-top bar retains the Vxpipe brand and `Tenants › tenant › call spec` breadcrumb
-context. Each breadcrumb is a working return link; do not
-add sibling workspace tabs or a redundant Call details label. Keep call ID, version,
+Tenant-scoped pages use `Tenant name › Section › Page` breadcrumbs above the
+page content. Installation-wide pages use Settings as their root. Ancestors are
+working return links and the current page is plain text. Do not duplicate this
+navigation with a top-of-content Back button; keep required Cancel or return
+actions alongside the form's actions below its content. Sidebar navigation and
+Back controls between modal steps retain their separate roles. These changes
+are currently previewed in Storybook; live navigation retains its prior behavior.
+
+Tenant Integrations and Platform Integrations combine their connected inventory
+and directory. Both default to Connected integrations. The category sidebar lists
+Connected integrations, a separator, AI models and Telephony; tenant pages add a
+separator, Calendar, CRM and Office suite. Each category has a distinct URL and
+appears in the breadcrumb. Mobile category selection navigates to the same URLs.
+Connected rows use the directory list style, grouped into AI services, Telephony
+and tenant-only MCPs. Platform Integrations never exposes MCPs.
+Built-in service identities use locally bundled favicons from their official landing
+HTML: scalable SVG first, otherwise the highest-resolution declared favicon.
+Neutral frames preserve original colors in both themes; missing or failed images
+use the same Plug placeholder rather than initials or invented brand styling.
+
+The header places title, search and the tenant-only Connect other MCP action in
+that order on one desktop row. Narrow layouts stack these controls. The
+Integrations breadcrumb returns to Connected integrations. Directory rows resolve
+local saved state first: Connect when absent, Edit with a double checkmark when
+connected, or Edit with an attention marker when reconnection is needed. Inherited
+AI/telephony rows omit inherited-source labels. Inherited connection management
+requires platform_services.write; tenant-owned connections follow tenant permissions.
+Do not show Connect while connection status is unknown or unavailable.
+
+AI/telephony category identities, adapters and credential forms belong to the
+installed app. The API-consumption Storybook proposal uses hosted pages for native
+and MCP listings; tenant MCP categories also come from that directory. On failure,
+show installed AI/telephony rows, local connected inventory and tenant custom MCP
+setup. Put the outage notice in a compact, softly tinted Fault Coral card with a
+thin border below the category navigation, with “Showing built-in
+AI and telephony services” underneath; on mobile it follows the category selector.
+Keep recovery compact and retain the query on retry. Loading uses row/category
+skeletons only for pending content; local connected inventory and built-in categories
+remain usable. The loading preview resolves rather than staying permanently busy.
+Preserve category URLs; names are display text and permanent IDs own identity.
+The older cached-directory alternative is retained only for discussion. Current
+behavior is documented in `docs/development/integrations-directory-consumption.md`;
+production fetching, persistence and outbound OAuth remain unimplemented. Custom
+MCP forms have no editable connection name. Listed MCPs use directory names,
+endpoints and auth recipes; only required credentials or authorization are shown.
+Custom MCPs retain URL/auth settings and use server-reported names. CIMD/DCR manage
+callback metadata invisibly; show the callback only for manual client registration.
+MCP management uses left-aligned Authentication and Tools tabs in a stable-height
+dialog capped to the viewport. Name and close share the first header row;
+account/workspace and the authentication-method tooltip occupy the second row. Edit credentials or
+reconnect directly in Authentication, with Reconnect and Save changes inside that
+tab content. Keep Disconnect and Close in a consistent modal footer across tabs.
+Put refresh opposite Available tools, disable it and spin its icon while refreshing
+(respecting reduced motion), then restore it without an extra success message.
+Collapse it to an icon on mobile and scroll the tool list independently. Omit tenant scope
+and tool-enablement explanations here. Optional directory setup notes appear above
+a row of Setup and Documentation links in connect/authentication content; each
+value is independent and missing values create no empty rows. Generated callback
+URLs use a muted read-only surface while retaining text selection and copying.
+Existing Console tokens and dialog patterns apply.
+
+Integration search opens a distinct Search results URL and spans all categories:
+MCPs, AI and telephony for tenants, AI and telephony for platform settings. Category
+navigation exits search. Remote results use Previous/Next, an explicit range and
+server-issued cursors retained in the URL. Keep current rows during page loading
+or failure and provide retry without discarding the query. The directory filters
+unsupported integrations using the installation version before counting and
+paging; it never offers unsupported native adapters as downloadable integrations.
+
+Call details opens in a new tab as a standalone inspector. Its Storybook top bar
+uses `Tenant name › Calls › Call spec › Call details`; omit the call-spec segment
+when it is unavailable. Do not add sibling workspace tabs. Keep call ID, version,
 partial-history warning and live controls in the console's existing toolbar.
-Retain this context on mobile and in loading/error states. The injected bar has
-no bottom rule; keep the workbench boundary and active-view underline without
-a full-width tab divider. Breadcrumb labels are capped at 24ch and can shrink
+Retain the breadcrumbs on mobile and in loading/error states. The injected bar
+has no bottom rule; keep the workbench boundary and active-view underline without
+a full-width tab divider. Breadcrumb labels are capped at 38ch and can shrink
 further on narrow screens; preserve the full label in the DOM and `title`.
 
 - **Call workbench desktop:** Uppercase 12px mono tabs sit in a muted segmented track; the

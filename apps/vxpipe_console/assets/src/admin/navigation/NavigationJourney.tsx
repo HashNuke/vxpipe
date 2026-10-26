@@ -1,7 +1,8 @@
 import { ApiKeysPage } from "../apiKeys/ApiKeysPage";
 import { apiKeysFixture } from "../apiKeys/apiKeysFixtures";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Building2 } from "lucide-react";
+import { StoryPageBreadcrumbs } from "../stories/StoryPageBreadcrumbs";
+import { StoryNavigationContext, storyNavigation, storyPathCrumbs } from "../stories/storyNavigation";
 import { AuthenticationJourney } from "../authentication/AuthenticationJourney";
 import { AccountPage } from "../authentication/AccountPage";
 import { AuthPage } from "../authentication/AuthPage";
@@ -11,7 +12,7 @@ import { AdminShell } from "../AdminShell";
 import { DirectorySkeleton, TenantDirectoryView } from "./TenantDirectoryView";
 import { Pagination } from "../Pagination";
 import { TenantCreationForm } from "./TenantCreationPage";
-import { canCreateTenants } from "../authentication/access";
+import { canCreateTenants, canWritePlatformServices } from "../authentication/access";
 import { Button } from "../Button";
 import { CallList } from "../CallList";
 import { CallSpecList } from "../CallSpecList";
@@ -60,20 +61,21 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
     const resolved = next === "/" ? landing : next;
     setPath(resolved.split("?")[0]); setQuery(""); setFilter(new URLSearchParams(resolved.split("?")[1]).get("call_spec_id"));
     window.history.pushState({}, "", `#${resolved}`);
+    window.dispatchEvent(new Event("storynavigate"));
     window.scrollTo({ top: 0, behavior: "instant" });
   }
   const link = (href: string, label: ReactNode, className?: string) => <a className={className} href={`#${href}`} onClick={event => { event.preventDefault(); navigate(href); }}>{label}</a>;
-  const shell = (content: ReactNode, activePath = path) => <NavigationShell role={role} user={user} tenants={visible} selected={tenant} path={activePath} onNavigate={navigate} onLogout={() => { setSignedOut(true); setSelection(undefined); }} theme={theme} pickerState={pickerPhase} onRetry={() => setPickerPhase("ready")}>{content}</NavigationShell>;
+  const shell = (content: ReactNode, activePath = path) => <NavigationShell previewIntegrations role={role} user={user} tenants={visible} selected={tenant} path={activePath} onNavigate={navigate} onLogout={() => { setSignedOut(true); setSelection(undefined); }} theme={theme} pickerState={pickerPhase} onRetry={() => setPickerPhase("ready")}><StoryNavigationContext value={storyNavigation(activePath, navigate, tenant)}>{/^\/(users|roles|account|tenants|platform\/installation)(\/|$)/.test(activePath) && <StoryPageBreadcrumbs items={storyPathCrumbs(activePath)} />}{content}</StoryNavigationContext></NavigationShell>;
   const heading = (title: string, description?: string, action?: ReactNode) => <div className="navigation-heading"><div><h1>{title}</h1>{description ? <p>{description}</p> : null}</div>{action}</div>;
-  const context = tenant ? <div className="navigation-context"><Building2 size={15} aria-hidden />{link(`/t/${tenant.key}/dashboard`, <span aria-label={`${tenant.name} dashboard`}>{tenant.name}</span>)}</div> : null;
+  const context = tenant ? <StoryPageBreadcrumbs items={storyPathCrumbs(path)} /> : null;
   const empty = (title: string, detail: string) => <div className="navigation-empty"><h2>{title}</h2><p>{detail}</p></div>;
   if (signedOut || path.startsWith("/auth/")) return <AdminShell theme={theme} showHeader={false}><div className="access-ui"><AuthPage mode={path === "/auth/setup" ? "setup" : path === "/auth/recover" ? "recover" : "login"} onSubmit={async () => { setSignedOut(false); navigate("/"); return {}; }} /></div></AdminShell>;
   if (/^\/(users|roles)(\/|$)/.test(path) || path === "/platform/installation") return <AuthenticationJourney key={`${persona}-${path}`} actor={role.kind === "superadmin" ? "superadmin" : role.kind === "admin" ? "admin" : "member"} initialPath={path} theme={theme} followLocation={false} renderFrame={(content, authPath) => shell(content, authPath.replace(/^\/admin/, ""))} />;
   if (path === "/account") return shell(<div className="access-ui"><AccountPage user={user} role={role} onSave={async () => ({})} /></div>);
-  if (path.endsWith("/editor") && tenant && tenantAccess(role, user, tenant, "call_specs") !== "none") return <NavigationEditor readOnly={tenantAccess(role, user, tenant, "call_specs") !== "write"} theme={theme} backPath={`/t/${tenant.key}/call-specs`} onNavigate={navigate} />;
+  if (path.endsWith("/editor") && tenant && tenantAccess(role, user, tenant, "call_specs") !== "none") return <NavigationEditor tenant={tenant} readOnly={tenantAccess(role, user, tenant, "call_specs") !== "write"} theme={theme} backPath={`/t/${tenant.key}/call-specs`} onNavigate={navigate} />;
   if (/\/calls\/[^/]+$/.test(path)) return <CallDetailsStory scenario={tenant && tenantAccess(role, user, tenant, "calls") !== "none" ? "ended" : "unavailable"} theme={theme} />;
-  if (path === "/platform/services" && !navigationItems(role, user).platform.some(item => item.href === path)) return shell(<main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow this action.")}</main>);
-  if (path === "/platform/services") return shell(<NavigationServices tenant={tenants[0]} platform readOnly={!role.kind && !role.grants.some(grant => grant.permission === "platform_services.write" && grant.scope === "installation")} onNavigate={navigate} />);
+  if (/^\/platform\/services(?:\/|$)/.test(path) && !navigationItems(role, user).platform.some(item => item.href === "/platform/services")) return shell(<main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow this action.")}</main>);
+  if (/^\/platform\/services(?:\/|$)/.test(path)) return shell(<NavigationServices tenant={tenants[0]} platform canManagePlatform={canWritePlatformServices(role)} readOnly={!canWritePlatformServices(role)} onNavigate={navigate} />);
   if (["/getting-started", "/samples/voice", "/samples/transfer"].includes(path) && !canCreateTenants(role)) return shell(<main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow platform sample setup.")}</main>);
   if (path === "/diagnostics" && !role.kind && !role.grants.some(grant => grant.permission === "diagnostics.read")) return shell(<main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow diagnostics.")}</main>);
   if (["/diagnostics", "/samples/voice", "/samples/transfer"].includes(path)) return shell(<main>{heading(path === "/diagnostics" ? "Diagnostics" : path === "/samples/voice" ? "Voice console" : "Human transfer desk")}
@@ -110,10 +112,10 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   const list = callsForTenant().filter(call => !filter || call.callSpecId === filter);
   const callHref = (id: string) => `?id=vxpipe-console-calls-history--ended&viewMode=story#/t/${tenant.key}/calls/${id}`;
   const calls = leaf === "dashboard" ? <RecentCalls calls={list.slice(0, 5)} callHref={callHref} /> : <CallList calls={list} tenant={tenant} callHref={callHref} />;
-  if (leaf !== "dashboard" && !["api-keys", "samples", "legacy-services"].includes(leaf) && !nav.some(item => item.href === path)) return shell(<main>{context}{heading("Access unavailable")}{empty("Permission required", "Your role does not allow this action for this tenant.")}</main>);
-  if (leaf === "services") return shell(<main>{context}<NavigationServices key={tenant.key} tenant={tenant} canReadKeys={tenantAccess(role, user, tenant, "tenant_api_keys") !== "none"} readOnly={tenantAccess(role, user, tenant, "tenant_api_keys") !== "write"} onNavigate={navigate} /></main>);
+  if (leaf !== "dashboard" && !["api-keys", "samples", "legacy-services"].includes(leaf) && !nav.some(item => item.href === path || (leaf === "services" && path.startsWith(`${item.href}/`)))) return shell(<main>{context}{heading("Access unavailable")}{empty("Permission required", "Your role does not allow this action for this tenant.")}</main>);
+  if (leaf === "services") return shell(<main><NavigationServices key={tenant.key} tenant={tenant} canManagePlatform={canWritePlatformServices(role)} canReadKeys={tenantAccess(role, user, tenant, "tenant_api_keys") !== "none"} readOnly={tenantAccess(role, user, tenant, "tenant_services") !== "write"} onNavigate={navigate} /></main>);
   if ((leaf === "legacy-services" && tenantAccess(role, user, tenant, "tenant_services") === "none") || (leaf === "api-keys" && tenantAccess(role, user, tenant, "tenant_api_keys") === "none") || (leaf === "samples" && (!canCreateTenants(role) || tenantAccess(role, user, tenant, "call_specs") !== "write"))) return shell(<main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow this action.")}</main>);
-  if (["api-keys", "samples", "legacy-services"].includes(leaf)) return shell(<>{leaf !== "api-keys" ? context : null}<NavigationAuxiliary keys={tenantKeys[tenant.key] ?? []} onKeysChange={keys => setTenantKeys(current => ({ ...current, [tenant.key]: keys }))} canReadKeys={tenantAccess(role, user, tenant, "tenant_api_keys") !== "none"} readOnly={tenantAccess(role, user, tenant, "tenant_api_keys") !== "write"} key={`${tenant.key}-${leaf}`} page={leaf} tenant={tenant} onNavigate={navigate} /></>);
+  if (["api-keys", "samples", "legacy-services"].includes(leaf)) return shell(<>{!["api-keys", "legacy-services"].includes(leaf) ? context : null}<NavigationAuxiliary keys={tenantKeys[tenant.key] ?? []} onKeysChange={keys => setTenantKeys(current => ({ ...current, [tenant.key]: keys }))} canReadKeys={tenantAccess(role, user, tenant, "tenant_api_keys") !== "none"} readOnly={tenantAccess(role, user, tenant, "tenant_services") !== "write"} key={`${tenant.key}-${leaf}`} page={leaf} tenant={tenant} onNavigate={navigate} /></>);
   const title = leaf === "dashboard" ? "Dashboard" : leaf === "calls" ? "Calls" : "Call Specs";
   return shell(<main>{context}{heading(title, undefined,
     leaf === "call-specs" && tenantAccess(role, user, tenant, "call_specs") === "write" ? <Button onClick={() => window.open("?id=vxpipe-console-call-spec-editor-page--new-spec&viewMode=story", "_blank", "noopener")}>New call spec</Button> : undefined)}

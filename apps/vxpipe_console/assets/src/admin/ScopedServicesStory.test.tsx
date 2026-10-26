@@ -7,14 +7,21 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
+import type { ReactElement } from "react";
 import { OnboardingStory } from "./OnboardingStory";
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState({}, "", "/");
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
+function openConnected() {
+  const category = screen.queryByRole("combobox", { name: "Category" });
+  if (category) fireEvent.change(category, { target: { value: "connected" } });
+}
+function renderConnected(ui: ReactElement) { const view = render(ui); openConnected(); return view; }
 function manageTelnyx() {
   fireEvent.click(screen.getByRole("button", { name: "Manage Telnyx" }));
 }
@@ -24,10 +31,11 @@ function saveKey() {
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
+  openConnected();
 }
 
 test("tenant connect and edit display an encoded tenant webhook using the supplied application origin", () => {
-  const view = render(
+  const view = renderConnected(
     <OnboardingStory
       scenario="telnyx-credentials"
       theme="dark"
@@ -40,7 +48,7 @@ test("tenant connect and edit display an encoded tenant webhook using the suppli
   expect(screen.getByLabelText("Webhook URL")).toHaveAttribute("readonly");
   fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
   view.unmount();
-  render(
+  renderConnected(
     <OnboardingStory
       scenario="telnyx-connected"
       theme="dark"
@@ -55,7 +63,7 @@ test("tenant connect and edit display an encoded tenant webhook using the suppli
 
 test("platform connect and edit display the platform webhook without tenant steps", () => {
   vi.useFakeTimers();
-  render(
+  renderConnected(
     <OnboardingStory
       scenario="platform-telnyx"
       theme="dark"
@@ -70,7 +78,7 @@ test("platform connect and edit display the platform webhook without tenant step
   ).not.toBeInTheDocument();
   saveKey();
   expect(
-    screen.getByRole("heading", { name: "Platform services", level: 1 }),
+    screen.getByRole("heading", { name: "Platform Integrations", level: 1 }),
   ).toBeVisible();
   manageTelnyx();
   expect(screen.getByRole("dialog", { name: "Manage Telnyx" })).toBeVisible();
@@ -81,7 +89,7 @@ test("platform connect and edit display the platform webhook without tenant step
 
 test("inherited services count toward readiness and Telnyx overrides use an independent public key", () => {
   vi.useFakeTimers();
-  render(<OnboardingStory scenario="inherited-services" theme="dark" />);
+  renderConnected(<OnboardingStory scenario="inherited-services" theme="dark" />);
   expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
   manageTelnyx();
   expect(screen.getByLabelText("Webhook URL")).toHaveValue(
@@ -101,12 +109,12 @@ test("inherited services count toward readiness and Telnyx overrides use an inde
   expect(telephony.getByText("Public key needed")).toBeVisible();
   manageTelnyx();
   fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
-  expect(telephony.getByText("Inherited from platform")).toBeVisible();
+  expect(telephony.queryByText("Inherited from platform")).not.toBeInTheDocument();
   expect(telephony.getByText("Connected")).toBeVisible();
 });
 
 test("inherited services have no disable or remove control", () => {
-  render(<OnboardingStory scenario="inherited-services" theme="dark" />);
+  renderConnected(<OnboardingStory scenario="inherited-services" theme="dark" />);
   const card = screen.getByRole("article", { name: "Deepgram" });
   expect(
     within(card).queryByRole("button", { name: "More actions for Deepgram" }),
@@ -121,7 +129,7 @@ test("inherited services have no disable or remove control", () => {
 });
 
 test("a failed tenant override never uses platform readiness", () => {
-  render(<OnboardingStory scenario="tenant-override-error" theme="dark" />);
+  renderConnected(<OnboardingStory scenario="tenant-override-error" theme="dark" />);
   expect(screen.getByLabelText("Credentials need attention")).toBeVisible();
   expect(screen.queryByText("Credentials need attention")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
@@ -129,11 +137,9 @@ test("a failed tenant override never uses platform readiness", () => {
 
 test("platform saves become available to a newly created tenant", () => {
   vi.useFakeTimers();
-  render(<OnboardingStory scenario="platform-services" theme="dark" />);
-  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
-  fireEvent.change(screen.getByLabelText("Service"), {
-    target: { value: "deepgram" },
-  });
+  renderConnected(<OnboardingStory scenario="platform-services" theme="dark" />);
+  fireEvent.change(screen.getByLabelText("Category"), { target: { value: "ai" } });
+  fireEvent.click(screen.getByRole("button", { name: "Connect Deepgram" }));
   saveKey();
   fireEvent.click(screen.getByRole("button", { name: "Tenants" }));
   fireEvent.click(screen.getByRole("link", { name: "New tenant" }));
@@ -142,7 +148,8 @@ test("platform saves become available to a newly created tenant", () => {
   });
   fireEvent.click(screen.getByRole("button", { name: "Create tenant" }));
   act(() => vi.advanceTimersByTime(1000));
-  expect(screen.getByText("Inherited from platform")).toBeVisible();
+  openConnected();
+  expect(screen.queryByText("Inherited from platform")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Manage Deepgram" })).toBeVisible();
 });
 
@@ -152,7 +159,7 @@ test("webhook copy gives success and usable failure feedback", async () => {
     configurable: true,
     value: { writeText },
   });
-  render(<OnboardingStory scenario="telnyx-credentials" theme="dark" />);
+  renderConnected(<OnboardingStory scenario="telnyx-credentials" theme="dark" />);
   fireEvent.click(screen.getByRole("button", { name: "Copy webhook URL" }));
   expect(await screen.findByText("Webhook URL copied.")).toBeVisible();
   expect(writeText).toHaveBeenCalledWith(

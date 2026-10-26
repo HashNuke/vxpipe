@@ -7,7 +7,7 @@ vi.mock("@vxpipe/react", () => ({ CallConsole: () => <div>Call inspector</div> }
 vi.mock("../callSpecEditor/flow-canvas", () => ({ FlowCanvas: () => <div>Editor canvas</div> }));
 beforeEach(() => { vi.spyOn(window, "scrollTo").mockImplementation(() => undefined); });
 afterEach(() => { cleanup(); window.history.replaceState({}, "", "/"); });
-test.each([["Calls", calls], ["Call Specs", specs], ["Services", services]] as const)("%s page states use the shared sidebar", (title, meta) => {
+test.each([["Calls", calls], ["Call Specs", specs], ["Integrations", services]] as const)("%s page states use the shared sidebar", (title, meta) => {
   const Story = meta.render;
   render(<Story scenario="populated" theme="dark" />);
   expect(screen.getAllByRole("complementary", { name: "Console navigation" })).toHaveLength(1);

@@ -1,5 +1,5 @@
 import { modelCatalogFixture } from "./modelCatalogFixtures";
-import { ArrowUpRight, Building2 } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { AdminShell } from "./AdminShell";
@@ -16,10 +16,12 @@ import {
 } from "./CreateTenantModal";
 import { RecipeDiagram } from "./RecipeDiagram";
 import { SampleRecipesPage } from "./SampleRecipesPage";
-import { ServiceSetupModal, type ServiceModalState } from "./ServiceSetupModal";
+import type { ServiceModalState } from "./ServiceSetupModal";
+import { ServiceConnectionsPreview } from "./mcpStories/ServiceConnectionsPreview";
+import { StoryProviderDialog } from "./mcpStories/StoryProviderDialog";
 import { SetupDialog } from "./SetupDialog";
 import { TenantSetupOverview } from "./TenantSetupOverview";
-import { TenantSetupPage } from "./TenantSetupPage";
+import { ConnectedProviders } from "./mcpStories/ConnectedProviders";
 import {
   capabilityLabels,
   effectiveSetupConnections,
@@ -362,7 +364,7 @@ export function OnboardingStory({
     }, 650);
   }
 
-  function submitCredential(draft: CredentialDraft) {
+  function submitCredential(draft: CredentialDraft, onSaved: () => void) {
     const provider = draft.provider;
     setModal((current) => ({ ...current, provider, status: "submitting" }));
     // Storybook simulates validation; credential values are never retained or sent.
@@ -391,6 +393,7 @@ export function OnboardingStory({
       )
         setModelProvider(provider);
       setModal(null);
+      onSaved();
     }, 650);
   }
 
@@ -447,13 +450,11 @@ export function OnboardingStory({
   }
 
   const overlayOpen =
-    modal !== null || selectedRecipe !== null || creationStatus !== null;
+    selectedRecipe !== null || creationStatus !== null;
   const content = (
     <AdminShell
       breadcrumbs={
-        page === "platform"
-          ? [{ label: "Platform" }, { label: "Services" }]
-          : page === "tenants"
+        ["services", "platform", "tenants"].includes(page)
             ? undefined
             : [
                 {
@@ -470,7 +471,7 @@ export function OnboardingStory({
           variant="ghost"
           onClick={() => navigatePage(platformPage ? "tenants" : "platform")}
         >
-          {platformPage ? "Tenants" : "Platform services"}
+          {platformPage ? "Tenants" : "Platform Integrations"}
         </Button>
       }
       headerInert={overlayOpen || keyPending}
@@ -481,9 +482,6 @@ export function OnboardingStory({
         className="tenant-setup"
         inert={overlayOpen ? true : undefined}
       >
-        {renderFrame && page !== "tenants" && page !== "keys" && !platformPage ? (
-          <div className="navigation-context"><Building2 size={15} aria-hidden />{tenant.name}</div>
-        ) : null}
         {!renderFrame && page !== "tenants" && !platformPage ? (
           <nav aria-label="Tenant setup" className="setup-steps">
             {steps.map((step, index) => (
@@ -500,27 +498,63 @@ export function OnboardingStory({
           </nav>
         ) : null}
         {page === "services" || platformPage ? (
-          <TenantSetupPage
-            presentation={renderFrame ? "workspace" : "setup"}
-            connections={platformPage ? platformConnections : connections}
-            platform={platformPage}
-            platformConnections={platformConnections}
-            creating={scenario === "creating-tenant"}
-            providers={providers}
-            onBrowse={() =>
-              setModal({ provider: null, status: "idle" })
-            }
-            onConnect={(provider) =>
-              setModal({ provider, status: "idle" })
-            }
-            onRemoveCredentials={(provider) => {
-              const update = platformPage ? setPlatformConnections : setConnections;
-              update((current) => current.filter((item) => item.provider !== provider));
-            }}
-            onRetry={() => setUnavailable(false)}
-            onApiKeys={() => navigatePage("keys")}
+          <ServiceConnectionsPreview
+            embedded
+            key={`${platformPage}-${tenant.key}`}
             tenant={tenant}
-            unavailable={unavailable}
+            platform={platformPage}
+            canManagePlatform
+            initialCategory={scenario === "service-picker" ? "ai" : "connected"}
+            connectionLoadState={unavailable ? "unavailable" : scenario === "creating-tenant" ? "loading" : "ready"}
+            onRetryConnectionStatus={() => setUnavailable(false)}
+            providerConnections={platformPage ? platformConnections : connections}
+            initialProvider={modal?.provider}
+            renderInventory={({ query, onConnect }) => <>
+              {!platformPage && !renderFrame && <p className="mcp-hint">Tenant created: {tenant.name}</p>}
+              {unavailable ? <div role="alert"><h2>{platformPage ? "Platform integrations unavailable" : "Setup is temporarily unavailable"}</h2><Button onClick={() => setUnavailable(false)}>{platformPage ? "Retry integrations" : "Retry setup"}</Button></div>
+                : scenario === "creating-tenant" ? <p role="status">Creating {tenant.name}</p>
+                : <ConnectedProviders query={query} connections={platformPage ? platformConnections : connections}
+                    providers={providers} platform={platformPage} platformConnections={platformConnections} canManagePlatform
+                    onManage={provider => { setModal({ provider, status: "idle" }); onConnect(provider); }}
+                    onRemove={provider => {
+                      const update = platformPage ? setPlatformConnections : setConnections;
+                      update(current => current.filter(item => item.provider !== provider));
+                    }} />}
+              {!platformPage && !renderFrame && <footer className="setup-footer"><Button className="setup-primary" disabled={!voiceSetupReady(connections, providers)} onClick={() => navigatePage("keys")}>Continue</Button></footer>}
+            </>}
+            renderProviderDialog={({ providerId, editing, onClose, onConnected }) => (
+        <StoryProviderDialog
+          providers={providers}
+          connections={editing ? (platformPage ? platformConnections : connections) : []}
+          platformConnections={platformConnections}
+          publicOrigin={publicOrigin}
+          scope={
+            platformPage
+              ? { kind: "platform" }
+              : {
+                  kind: "tenant",
+                  tenantKey: tenant.key,
+                  tenantName: tenant.name,
+                }
+          }
+          onOverride={() =>
+            setModal((current) =>
+              ({ provider: providerId, status: "idle", ...current, overriding: true }),
+            )
+          }
+          onUsePlatform={(provider) => {
+            setConnections((current) =>
+              current.filter((item) => item.provider !== provider),
+            );
+            setModal(null);
+            onConnected();
+          }}
+          onClose={() => { setModal(null); onClose(); }}
+          onSubmit={draft => submitCredential(draft, onConnected)}
+          onTest={async () => ({ status: "valid" })}
+          state={modal?.provider === providerId ? modal : { provider: providerId, status: "idle" }}
+        />
+            )}
           />
         ) : null}
         {page === "keys" ? (
@@ -581,46 +615,6 @@ export function OnboardingStory({
           onClose={() => setCreationStatus(null)}
           onSubmit={createTenant}
           status={creationStatus}
-        />
-      ) : null}
-      {modal ? (
-        <ServiceSetupModal
-          providers={providers}
-          connections={platformPage ? platformConnections : connections}
-          platformConnections={platformConnections}
-          publicOrigin={publicOrigin}
-          scope={
-            platformPage
-              ? { kind: "platform" }
-              : {
-                  kind: "tenant",
-                  tenantKey: tenant.key,
-                  tenantName: tenant.name,
-                }
-          }
-          onOverride={() =>
-            setModal((current) =>
-              current ? { ...current, overriding: true } : current,
-            )
-          }
-          onUsePlatform={(provider) => {
-            setConnections((current) =>
-              current.filter((item) => item.provider !== provider),
-            );
-            setModal(null);
-          }}
-          onSelect={(provider) =>
-            setModal((current) => ({
-              ...current,
-              provider,
-              status: "idle",
-              overriding: false,
-            }))
-          }
-          onClose={() => setModal(null)}
-          onSubmit={submitCredential}
-          onTest={async () => ({ status: "valid" })}
-          state={modal}
         />
       ) : null}
       {selectedRecipe ? (
