@@ -137,7 +137,7 @@ test("the individual story return links load working admin previews", () => {
   render(<CallDetailsStory scenario="ongoing" theme="dark" />);
   expect(screen.getByText("Delivery rescheduling")).toBeVisible();
   for (const [name, path] of [
-    ["Tenants", "/admin"],
+    ["Calls", "/admin/tenants/tn_demo_01/calls"],
     ["Demo workspace", "/admin/tenants/tn_demo_01/call-specs"],
     ["Delivery rescheduling", "/admin/tenants/tn_demo_01/calls?call_spec_id=delivery-rescheduling"],
   ]) {

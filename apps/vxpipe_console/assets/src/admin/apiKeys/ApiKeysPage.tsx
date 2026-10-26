@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { StoryNavigationContext } from "../stories/storyNavigation";
+import { StoryPageBreadcrumbs } from "../stories/StoryPageBreadcrumbs";
+import { useContext, useEffect, useState } from "react";
 import { Check, ChevronRight, Copy, Plus, Search } from "lucide-react";
 import { Button } from "../Button";
 import { Pagination } from "../Pagination";
@@ -11,6 +13,7 @@ import { keyLabels, type AccessKey, type AccessKeysClient, type KeyKind, type Ke
 export function ApiKeysPage({ api, initialCreating = false, initialKind = "calls", authority, onCreatingChange }: {
   api: AccessKeysClient; authority?: unknown; initialCreating?: boolean; initialKind?: KeyKind; onCreatingChange?: (value: boolean) => void;
 }) {
+  const storyNavigation = useContext(StoryNavigationContext);
   const [creating, setCreating] = useState(initialCreating);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -56,7 +59,7 @@ export function ApiKeysPage({ api, initialCreating = false, initialKind = "calls
     finally { setBusy(false); }
   }
   return <main className="tenant-setup">
-    {showForm ? <nav aria-label="Breadcrumb" className="navigation-context"><button disabled={busy} onClick={() => changeCreating(false)}>API Keys</button><ChevronRight size={14} aria-hidden /><span aria-current="page">New API Key</span></nav> : null}
+    {storyNavigation ? <StoryPageBreadcrumbs disabled={busy} items={showForm ? [{ label: "API Keys", onSelect: () => changeCreating(false) }, { label: "New API Key" }] : [{ label: "API Keys" }]} /> : showForm ? <nav aria-label="Breadcrumb" className="navigation-context"><button disabled={busy} onClick={() => changeCreating(false)}>API Keys</button><ChevronRight size={14} aria-hidden /><span aria-current="page">New API Key</span></nav> : null}
     <header className="setup-section-heading"><h1>{showForm ? "New API Key" : "API Keys"}</h1>
       {!creating && !reveal && !!result?.kinds.length ? <Button onClick={() => changeCreating(true)}><Plus size={16} aria-hidden />Create API key</Button> : null}
     </header>

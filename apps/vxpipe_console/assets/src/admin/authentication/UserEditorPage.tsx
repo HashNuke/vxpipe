@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { StoryNavigationContext } from "../stories/storyNavigation";
+import { useEffect, useRef, useContext, useState, type FormEvent } from "react";
 import { ArrowLeft, KeyRound } from "lucide-react";
 import { Button } from "../Button";
 import { PageHeader } from "../PageHeader";
@@ -33,6 +34,7 @@ export function UserEditorPage({
   onNavigate: Navigate;
   loadRole?: (id: string) => Promise<Role | null>;
 }) {
+  const storyNavigation = useContext(StoryNavigationContext);
   const [email, setEmail] = useState(user?.email ?? "");
   const [roleId, setRoleId] = useState(
     user?.roleId ?? roles.find((role) => hasAssignedGrants(role))?.id ?? roles.find((role) => !role.kind)?.id ?? roles.find((role) => canManageUser(actorRole, role))?.id ?? "",
@@ -114,7 +116,7 @@ export function UserEditorPage({
   }
   return (
     <main className="access-page access-editor">
-      <a
+      {!storyNavigation && <a
         className="access-back"
         href="/users"
         onClick={(event) => {
@@ -124,7 +126,7 @@ export function UserEditorPage({
       >
         <ArrowLeft size={16} aria-hidden />
         Back to users
-      </a>
+      </a>}
       <PageHeader
         title={user ? "User details" : "Create user"}
         description={

@@ -1,3 +1,6 @@
+import { StoryNavigationContext, storyNavigation } from "../stories/storyNavigation";
+import { StoryPageBreadcrumbs } from "../stories/StoryPageBreadcrumbs";
+import { demoTenant } from "../callSpecFixtures";
 import { toolCatalogFixture } from "./toolCatalogFixture";
 import { storyPhoneNumbers } from "./phone-number-fixtures";
 import { useState } from "react";
@@ -24,12 +27,12 @@ function FlowEditorStory({ theme, scenario, outcome, pageStatus }: Props) {
   const [retried, setRetried] = useState(false);
   const [revision, setRevision] = useState(() => pageSnapshot(scenario).saved?.revision ?? 0);
   const snapshot = scenario === "new" && created ? { document: created } : pageSnapshot(scenario);
-  return <EditorTheme theme={theme}>{destination ? <main className="grid min-h-dvh place-content-center gap-4 bg-background p-6">
-    <h1 className="text-lg font-semibold">{destination === "#services" ? "Tenant services" : "Call specs"}</h1>
+  return <StoryNavigationContext value={storyNavigation(`/t/${demoTenant.key}/editor`, setDestination, demoTenant)}><EditorTheme theme={theme}>{destination ? <main className="grid min-h-dvh place-content-center gap-4 bg-background p-6">
+    <h1 className="text-lg font-semibold">{destination.endsWith("/dashboard") ? "Dashboard" : destination === "#services" ? "Tenant services" : "Call specs"}</h1>
     <p className="text-sm text-muted-foreground">Navigation confirmed. Return to the editor to continue the prototype.</p>
     <Button variant="outline" onClick={() => setDestination(undefined)}>Return to editor</Button>
   </main> : pageStatus && !retried ? <EditorPageState status={pageStatus === "loading" ? "loading" : "error"} resource={pageStatus === "catalog-error" ? "catalog" : "spec"} backHref="#call-specs" onRetry={() => setRetried(true)} />
-    : scenario === "new" && !created ? <NewCallSpec catalog={modelCatalogFixture} services={[{ key: "office-phone", name: "Office phone", provider: "telnyx" as const }]} servicesHref="#services" onCreate={setCreated} onCancel={() => setDestination("#call-specs")} />
+    : scenario === "new" && !created ? <><div className="px-4 pt-4 sm:px-6"><StoryPageBreadcrumbs items={[{ label: "Call Specs", href: "#call-specs" }, { label: "New call spec" }]} /></div><NewCallSpec catalog={modelCatalogFixture} services={[{ key: "office-phone", name: "Office phone", provider: "telnyx" as const }]} servicesHref="#services" onCreate={setCreated} onCancel={() => setDestination("#call-specs")} /></>
     : <CallSpecEditor key={scenario} snapshot={snapshot} catalog={modelCatalogFixture} lookups={{ phoneNumbers: storyPhoneNumbers, telephonyServices: [{ key: "office-phone", name: "Office phone", provider: "telnyx" as const }], credentialNames: { google: ["primary"] }, mcpIntegrations: ["calendar"], toolCatalog: toolCatalogFixture }}
       backHref="#call-specs" servicesHref="#services" onNavigate={setDestination} onReload={async () => ({ ...pageSnapshot("default"), saved: { callSpecId: "appointments", revision: revision + 1, publishedRevision: null } })}
       execute={async (request) => {
@@ -37,7 +40,7 @@ function FlowEditorStory({ theme, scenario, outcome, pageStatus }: Props) {
         if (request.action === "publish") return { status: 200, revision: request.revision };
         const next = revision + 1; setRevision(next);
         return { status: 201, revision: next, callSpecId: "appointments" };
-      }} />}</EditorTheme>;
+      }} />}</EditorTheme></StoryNavigationContext>;
 }
 const meta = { title: "Vxpipe/Console/Call spec editor/Page", component: FlowEditorStory, decorators: [Story => <VoiceCatalogContext.Provider value={storyVoiceCatalog}><Story /></VoiceCatalogContext.Provider>], parameters: { layout: "fullscreen" }, args: { theme: "dark", scenario: "default" } } satisfies Meta<typeof FlowEditorStory>;
 export default meta;

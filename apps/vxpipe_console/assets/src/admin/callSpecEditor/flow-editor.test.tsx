@@ -1,4 +1,5 @@
 import { toolCatalogFixture } from "./toolCatalogFixture";
+import { StoryNavigationContext, storyNavigation } from "../stories/storyNavigation";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
@@ -40,6 +41,17 @@ const rename = (value: string) => {
   fireEvent.change(within(screen.getByRole("dialog", { name: "Edit call spec name" })).getByRole("textbox", { name: "Call spec name" }), { target: { value } });
   click("Save name");
 };
+
+test("Storybook breadcrumb navigation preserves the unsaved-changes confirmation", () => {
+  const props = properties();
+  render(<StoryNavigationContext value={storyNavigation("/t/demo/editor", props.onNavigate, { key: "demo", name: "Demo" })}><CallSpecEditor {...props} /></StoryNavigationContext>);
+  rename("Unsaved title");
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("link", { name: "Demo" }));
+  expect(props.onNavigate).not.toHaveBeenCalled();
+  click("Leave page");
+  expect(props.onNavigate).toHaveBeenCalledWith("/t/demo/dashboard");
+  expect(screen.queryByRole("link", { name: "Back to call specs" })).not.toBeInTheDocument();
+});
 
 test("new agents require a user-written prompt before saving", async () => {
   const props = properties();

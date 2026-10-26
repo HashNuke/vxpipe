@@ -118,7 +118,7 @@ test("does not substitute the default call spec for an unknown call route", () =
   expect(screen.queryByText(/revision r0/i)).not.toBeInTheDocument();
 
   expect(screen.getByText("Demo workspace")).toBeVisible();
-  expect(screen.getByRole("link", { name: "Tenants" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Calls" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Demo workspace" })).toBeVisible();
 });
 

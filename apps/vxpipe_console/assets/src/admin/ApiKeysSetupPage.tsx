@@ -1,5 +1,7 @@
+import { StoryNavigationContext } from "./stories/storyNavigation";
+import { StoryPageBreadcrumbs } from "./stories/StoryPageBreadcrumbs";
 import { Building2, ChevronRight, Check, Copy, Plus } from "lucide-react";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { formatAdminRelativeTime } from "./formatAdminRelativeTime";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 import { Button } from "./Button";
@@ -30,6 +32,7 @@ export function ApiKeysSetupPage({
   initialCreating?: boolean;
   readOnly?: boolean;
 }) {
+  const storyNavigation = useContext(StoryNavigationContext);
   const [name, setName] = useState("Application");
   const [kind, setKind] = useState(initialKind);
   const [adding, setAdding] = useState(initialCreating);
@@ -39,7 +42,7 @@ export function ApiKeysSetupPage({
   const busy = creation.status === "submitting";
   return (
     <>
-      {showForm ? (
+      {storyNavigation ? <StoryPageBreadcrumbs disabled={busy} items={showForm ? [{ label: "API Keys", onSelect: () => setAdding(false) }, { label: "New API Key" }] : [{ label: "API Keys" }]} /> : showForm ? (
         <nav aria-label="Breadcrumb" className="navigation-context setup-key-breadcrumbs">
           <ol>
             <li><Building2 aria-hidden size={15} />{onSelectTenant ? <button type="button" disabled={busy} onClick={onSelectTenant}>{tenantName}</button> : <span>{tenantName}</span>}</li>

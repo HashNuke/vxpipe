@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { CallConsole } from "@vxpipe/react";
 import { AlertTriangle } from "lucide-react";
 
@@ -12,15 +13,17 @@ export function CallDetailsPage({
   state,
   theme = "dark",
   contextHref = (path) => path,
+  renderNavigationHeader,
 }: {
   state: CallDetailsPageState;
   theme?: "dark" | "light";
   contextHref?: (path: string) => string;
+  renderNavigationHeader?: (state: CallDetailsPageState) => ReactNode;
 }) {
   const callSpecLabel = state.callSpec
     ? state.callSpec.name ?? state.callSpec.id
     : null;
-  const header = (
+  const header = renderNavigationHeader?.(state) ?? (
     <CallDetailsConsoleHeader
       breadcrumbs={[
         { label: "Tenants", href: contextHref("/admin") },

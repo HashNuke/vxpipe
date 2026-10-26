@@ -349,6 +349,7 @@ test("superadmin edits save through PATCH and the reset route posts a replacemen
     "href",
     "/users/user-2/reset-password",
   );
+  await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   await waitFor(() =>
     expect(fetchImpl).toHaveBeenCalledWith(

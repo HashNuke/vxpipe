@@ -1,4 +1,6 @@
-import { useRef, type FormEventHandler, type ReactNode } from "react"
+import { StoryNavigationContext } from "../stories/storyNavigation";
+import { StoryPageBreadcrumbs } from "../stories/StoryPageBreadcrumbs";
+import { useContext, useRef, type FormEventHandler, type ReactNode } from "react"
 import { ArrowLeft, CircleAlert, Code, EllipsisVertical, LoaderCircle, Pencil, Rocket, Save } from "lucide-react"
 
 import { TextField } from "./editor-fields"
@@ -12,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 export type EditorHeaderProps = {
   backHref: string;
   onBack?: () => void;
+  onBreadcrumbNavigate?: (href: string) => void;
   flowName?: string | null;
   revision?: number;
   publishedRevision?: number;
@@ -37,6 +40,7 @@ export type EditorHeaderProps = {
 export function FlowEditorHeader({
   backHref,
   onBack,
+  onBreadcrumbNavigate,
   flowName,
   saving,
   publishing = false,
@@ -58,6 +62,7 @@ export function FlowEditorHeader({
   authoringDisabled = false,
   toolbar,
 }: EditorHeaderProps) {
+  const storyNavigation = useContext(StoryNavigationContext);
   const busy = saving || loading || publishing;
   const disabled = busy || readOnly;
   const draftDisabled = disabled || saveDisabled || authoringDisabled;
@@ -72,11 +77,15 @@ export function FlowEditorHeader({
           : "absolute left-4 right-4 top-2 lg:right-[calc(34rem+0.75rem)] lg:left-3 lg:top-3"
       ].join(" ")}
     >
+      {storyNavigation && <div className="story-editor-breadcrumbs"><StoryPageBreadcrumbs disabled={busy} onNavigate={onBreadcrumbNavigate} items={[
+        { label: "Call Specs", href: backHref, onSelect: onBack },
+        { label: flowName || "New call spec" },
+      ]} /></div>}
       <div className="flex min-h-10 items-stretch">
-      <a href={backHref} aria-label="Back to call specs" className="flex w-10 shrink-0 items-center justify-center rounded-l-md border-r border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      {!storyNavigation && <a href={backHref} aria-label="Back to call specs" className="flex w-10 shrink-0 items-center justify-center rounded-l-md border-r border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={onBack ? (event) => { event.preventDefault(); onBack(); } : undefined}>
         <ArrowLeft className="h-4 w-4" />
-      </a>
+      </a>}
       <div className="flex min-w-0 flex-1 flex-wrap items-stretch">
         <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 px-2 py-1">
           <div className="min-w-0 max-w-full sm:max-w-64">

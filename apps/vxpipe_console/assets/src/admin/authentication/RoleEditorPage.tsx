@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { StoryNavigationContext } from "../stories/storyNavigation";
+import { useContext, useState, type FormEvent } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "../Button";
 import { PageHeader } from "../PageHeader";
@@ -21,6 +22,7 @@ export function RoleEditorPage({
   onDelete?: () => Promise<SaveResult>;
   onNavigate: Navigate;
 }) {
+  const storyNavigation = useContext(StoryNavigationContext);
   const [name, setName] = useState(role?.name ?? "");
   const [grants, setGrants] = useState<Grant[]>(
     role?.kind
@@ -63,7 +65,7 @@ export function RoleEditorPage({
   }
   return (
     <main className="access-page access-editor">
-      <a
+      {!storyNavigation && <a
         className="access-back"
         href="/roles"
         onClick={(event) => {
@@ -73,7 +75,7 @@ export function RoleEditorPage({
       >
         <ArrowLeft size={16} aria-hidden />
         Back to roles
-      </a>
+      </a>}
       <PageHeader
         title={role ? role.name : "Create role"}
         description={

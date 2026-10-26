@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { StoryNavigationContext } from "../stories/storyNavigation";
+import { useContext, useState, type FormEvent } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "../Button";
 import { PageHeader } from "../PageHeader";
@@ -19,6 +20,7 @@ export function ResetPasswordPage({
   onReset: (password: string) => Promise<SaveResult>;
   onNavigate: Navigate;
 }) {
+  const storyNavigation = useContext(StoryNavigationContext);
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string>();
@@ -56,7 +58,7 @@ export function ResetPasswordPage({
   }
   return (
     <main className="access-page access-narrow">
-      <a
+      {!storyNavigation && <a
         className="access-back"
         href={`/users/${user.id}`}
         onClick={(event) => {
@@ -66,7 +68,7 @@ export function ResetPasswordPage({
       >
         <ArrowLeft size={16} aria-hidden />
         Back to user
-      </a>
+      </a>}
       <PageHeader
         title="Reset password"
         description={`Set a new password for ${user.email}.`}

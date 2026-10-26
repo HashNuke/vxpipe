@@ -1,3 +1,4 @@
+import { StoryCallBreadcrumbs } from "./stories/StoryCallBreadcrumbs";
 import {
   callContext,
   callFixture,
@@ -72,6 +73,7 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
     if (!pendingCallContext || !selectedCall) {
       return (
         <CallDetailsPage
+          renderNavigationHeader={state => <StoryCallBreadcrumbs state={state} theme={theme} />}
           contextHref={(path) => adminStoryHref(path, theme)}
           state={{
             status: "unavailable",
@@ -88,6 +90,7 @@ export function AdminJourneyStory({ theme }: { theme: "dark" | "light" }) {
 
     return (
       <CallDetailsPage
+        renderNavigationHeader={state => <StoryCallBreadcrumbs state={state} theme={theme} />}
         contextHref={(path) => adminStoryHref(path, theme)}
         state={callDetailsFixtureForCall(
           selectedCall,

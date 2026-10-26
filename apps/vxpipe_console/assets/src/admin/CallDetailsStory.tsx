@@ -1,3 +1,4 @@
+import { StoryCallBreadcrumbs } from "./stories/StoryCallBreadcrumbs";
 import { AdminJourneyStory } from "./AdminJourneyStory";
 import { adminStoryRoute } from "./adminStoryRoute";
 import { useMemo } from "react";
@@ -20,6 +21,7 @@ export function CallDetailsStory({
   if (adminStoryRoute(window.location.hash).page === "call-details") return <AdminJourneyStory theme={theme} />;
   return (
     <CallDetailsPage
+      renderNavigationHeader={state => <StoryCallBreadcrumbs state={state} theme={theme} />}
       contextHref={(path) => adminStoryHref(path, theme)}
       state={state}
       theme={theme}
