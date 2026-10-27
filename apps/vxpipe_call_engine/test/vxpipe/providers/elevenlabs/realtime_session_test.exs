@@ -434,12 +434,12 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSessionTest do
     started = event(session, :speech_started)
     provider = Session.provider(session)
 
-    send(provider, {:caller_timeout, "long", started.turn_ref})
-    _ = :sys.get_state(provider)
+    refute Map.has_key?(:sys.get_state(provider).deadlines, {:caller, "long"})
     assert :ok = Session.push_audio(session, <<2, 0>>, response_context: context)
     refute_received {:vxpipe_speech_closed, ^session, _reason}
 
     deliver(session, wire, %{"type" => "input_audio_buffer.speech_stopped", "item_id" => "long"})
+    deadline = Map.fetch!(:sys.get_state(provider).deadlines, {:caller, "long"})
 
     deliver(session, wire, %{
       "type" => "conversation.item.input_audio_transcription.completed",
@@ -450,7 +450,7 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSessionTest do
     assert event(session, :input_transcript).text == "A long explanation"
     assert event(session, :turn_ended).turn_ref == started.turn_ref
 
-    send(provider, {:caller_timeout, "long", started.turn_ref})
+    send(provider, {:realtime_timeout, {:caller, "long"}, deadline.ref})
     _ = :sys.get_state(provider)
     refute_received {:vxpipe_speech_closed, ^session, _reason}
   end
@@ -475,12 +475,13 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSessionTest do
 
       provider = Session.provider(session)
 
-      deadline =
+      key =
         if @obligation == :caller,
-          do: {:caller_timeout, "caller_1", started.turn_ref},
-          else: {:native_timeout, started.turn_ref}
+          do: {:caller, "caller_1"},
+          else: {:native, started.turn_ref}
 
-      send(provider, deadline)
+      deadline = Map.fetch!(:sys.get_state(provider).deadlines, key)
+      send(provider, {:realtime_timeout, key, deadline.ref})
       assert_receive {:vxpipe_speech_closed, ^session, _reason}
     end
   end

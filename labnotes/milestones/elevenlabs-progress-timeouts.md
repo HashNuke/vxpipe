@@ -1,7 +1,7 @@
 # ElevenLabs progress timeouts
 
-Status: caller checkpoint implemented; response progress follows in the next
-checkpoint. Both checkpoints are validated before their commits.
+Status: complete. All acceptance checks and final independent GPT-6 Astra xhigh
+review pass. The implementation is recorded in two coherent checkpoints.
 
 ## Outcome and prerequisites
 
@@ -22,16 +22,16 @@ Contracts: [Realtime adapter](../../docs/elevenlabs-realtime-models.md),
   - [x] Start the final-transcript deadline only after native speech stop.
   - [x] Verify missing post-stop evidence still closes and settled timers are harmless.
   - [x] Run root gates and independent GPT-6 Astra xhigh review before committing.
-- [ ] B — Response progress
-  - [ ] Demonstrate failures for progressing generation and credited delivery.
-  - [ ] Start explicit response-creation waits at dispatch, not queue insertion.
-  - [ ] Track provider progress, delivery progress and cancellation separately.
-  - [ ] Fence stale timer messages and keep unrelated events from extending waits.
-  - [ ] Preserve native response-start, fixed-opening and tool-continuation contracts.
-  - [ ] Verify long progress, genuine stalls, cancellation and queued responses.
-  - [ ] Run all five root gates and Lean verification.
-  - [ ] Resolve independent GPT-6 Astra xhigh findings and obtain clean final review.
-  - [ ] Commit a coherent implementation checkpoint and synchronize evidence/index.
+- [x] B — Response progress
+  - [x] Demonstrate failures for progressing generation and credited delivery.
+  - [x] Start explicit response-creation waits at dispatch, not queue insertion.
+  - [x] Track provider progress, delivery progress and cancellation separately.
+  - [x] Fence stale timer messages and keep unrelated events from extending waits.
+  - [x] Preserve native response-start, fixed-opening and tool-continuation contracts.
+  - [x] Verify long progress, genuine stalls, cancellation and queued responses.
+  - [x] Run all five root gates and Lean verification.
+  - [x] Resolve independent GPT-6 Astra xhigh findings and obtain clean final review.
+  - [x] Commit a coherent implementation checkpoint and synchronize evidence/index.
 
 ## Design review
 
@@ -51,10 +51,22 @@ responses must not acquire a transcript timeout. Keep the channel's existing
 
 ## Verification evidence
 
-Caller focused suite: 20 tests pass after the expected red regression. Independent
-GPT-6 Astra xhigh source review is clean. The first full run had one Gateway
-CallIngress failure, which passed its targeted rerun. Before persisting either
-checkpoint, the final combined source passed all five root gates and Lean:
-4,503 tests, zero failures, 159 exclusions, nine Lean build jobs and one passing
-oracle replay. The next checkpoint records the response implementation and final
-combined acceptance evidence.
+Caller focused suite: 20 tests pass after the expected red regression.
+
+Response regression suite: 11 tests, initially seven failures from legacy fixed
+deadlines or missing progress bookkeeping, then all green. Full focused
+ElevenLabs directory: 145 tests, zero failures, four excluded integration cases.
+Independent GPT-6 Astra xhigh source review of both checkpoints is clean.
+The first full umbrella run completed
+4,492 tests with one Gateway failure; the affected test passed its targeted rerun.
+The local WebSocket integration test passes.
+
+Final combined source passes formatting, warnings-as-errors compilation, strict
+Credo, the full umbrella suite (4,503 tests, zero failures, 159 exclusions), the
+unused dependency check and Lean (nine build jobs and one passing oracle replay).
+Gateway passed all 863 tests in the final run; no Gateway changes were necessary.
+No hosted requests or UI changes were required for this adapter-only correction.
+
+Final independent review verified both checkpoint diffs, their documentation and
+all gate evidence. It is clean, with no remaining actionable code, test or
+contract findings. Both design findings are resolved and covered by regressions.

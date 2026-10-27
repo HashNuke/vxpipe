@@ -16,6 +16,7 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeOutput do
       output: nil,
       chunks: :queue.new(),
       bytes: 0,
+      audio_sequence: 0,
       awaiting: nil,
       text: nil,
       text_emitted?: false,
@@ -42,7 +43,8 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeOutput do
          %{
            response
            | chunks: :queue.in(pcm, response.chunks),
-             bytes: response.bytes + byte_size(pcm)
+             bytes: response.bytes + byte_size(pcm),
+             audio_sequence: response.audio_sequence + 1
          }},
       else: {:error, :output_overflow}
   end

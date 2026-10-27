@@ -76,13 +76,42 @@ same caller's PCM so native endpointing can finish, and waits for caller-final a
 native-response obligations before dispatch. Its origin stays pinned even when
 trailing PCM remains. Observed conflicting native/explicit identities fail closed;
 the API does not guarantee metadata echo. Caller-final and native-response obligations have
-bounded deadlines. A local transport test also verifies acknowledgement-based
+scoped deadlines. A local transport test also verifies acknowledgement-based
 frame delivery so incoming WebSocket bursts cannot bypass the session's bounds.
-The initial profile allows 20 seconds for startup. Caller final-transcript and
-native response-start waits begin only after provider speech stop and allow
-30 seconds for missing evidence. Active caller speech has no adapter duration
-limit. Response obligations currently have a 30-second deadline. Pending PCM is
-limited to 512 KiB per response (2 MiB while verifying a fixed opening).
+Pending PCM is limited to 512 KiB per response (2 MiB while verifying a fixed
+opening).
+
+## Progress and failure timeouts
+
+Active caller speech and progressing assistant responses have no adapter-imposed
+total duration limit. Startup still allows 20 seconds. Each subsequent stalled
+obligation has a separate 30-second wait:
+
+- Caller final transcription: starts only after native speech stop, if the final
+  transcript is still missing. Transcription arriving before stop does not start
+  a speaking-duration timer.
+- Native response creation: waits after stop only when no earlier response is
+  generating and no caller is still speaking. Resumed speech suspends this wait.
+  The pending origin remains unchanged; a second stop before the earlier
+  response is identified still fails closed because correlation is ambiguous.
+- Explicit response creation: starts when `response.create` is sent. Queue
+  residence behind another turn does not consume this budget.
+- Provider generation: accepted audio, a new final transcript or a new tool call
+  renews the response's progress wait. Input PCM, unrelated events, duplicate
+  final transcripts/tool calls and playback acknowledgements do not renew it.
+- Missing output transcript: an audible, non-interrupted completed response gets
+  a separate final-transcript wait, independent of output admission and credit.
+  Completed tool-only responses do not wait for speech transcripts.
+- Cancellation: waits for matching response completion; discarded audio or tool
+  tails and repeated interruption requests cannot extend it.
+- Delivery credit: each outstanding chunk has its own wait. Further provider
+  output cannot extend it. The channel's existing 15-second credit deadline also
+  remains in force and may close the allocation first.
+
+Replaced and settled waits cancel their timers and reject stale expiry messages.
+Output admission can queue behind healthy playback without a total-duration
+deadline; bounded response/audio queues and the channel lifecycle still apply.
+These guards use protocol events and acknowledgements, with no local VAD.
 
 Rejected alternatives:
 
@@ -101,6 +130,8 @@ Ordinary tests use synthetic credentials and a fake transport. They cover public
 model selection, private configuration, native turns, response identity, output
 credit and cancellation, and tool-result association. Catalog and configured
 credential tests cover both models; they do not establish hosted behavior.
+Progress-timeout regressions exercise active speech, queued requests, renewed
+generation and delivery, stale expiry, independent stalls and cancellation.
 
 Run only the new ElevenLabs STS cases, with no telephony or fixture generation:
 

@@ -5,7 +5,14 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
   @behaviour Vxpipe.CallEngine.Speech.STSProvider
 
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, Opening, SessionTree, STSProvider}
-  alias Vxpipe.Providers.ElevenLabs.{Realtime, RealtimeAPI, RealtimeOutput, RealtimeSocket}
+
+  alias Vxpipe.Providers.ElevenLabs.{
+    Realtime,
+    RealtimeAPI,
+    RealtimeOutput,
+    RealtimeSocket,
+    RealtimeWatchdog
+  }
 
   @impl true
   defdelegate models(), to: Realtime
@@ -97,6 +104,7 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
          audio_pending?: false,
          audio_serial: 0,
          callers: %{},
+         deadlines: %{},
          native_origin: nil,
          responses: %{},
          queue: [],
@@ -138,24 +146,28 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
   end
 
   @impl true
-  def handle_call(:close, _from, state) do
+  def handle_call(message, from, state),
+    do: message |> handle_request(from, state) |> track_deadlines()
+
+  defp handle_request(:close, _from, state) do
     if state.wire, do: state.wire_module.close(state.wire)
     {:stop, :normal, :ok, state}
   end
 
-  def handle_call(:quiescent, _from, state),
+  defp handle_request(:quiescent, _from, state),
     do: {:reply, state.audio_serial == 0 and map_size(state.responses) == 0, state}
 
-  def handle_call({:input, _context, _operation}, _from, %{ready?: false} = state),
+  defp handle_request({:input, _context, _operation}, _from, %{ready?: false} = state),
     do: {:reply, {:error, :busy}, state}
 
   # Native stop events do not acknowledge consumption of every accepted PCM byte.
   # Keep one authorization origin for this allocation; cutover needs a new one.
-  def handle_call({:input, context, _operation}, _from, %{context: bound} = state)
-      when is_reference(bound) and context != bound,
-      do: stop_reply(state)
+  defp handle_request({:input, context, _operation}, _from, %{context: bound} = state)
+       when is_reference(bound) and context != bound,
+       do: stop_reply(state)
 
-  def handle_call({:input, context, {:audio, pcm}}, _from, state) when is_reference(context) do
+  defp handle_request({:input, context, {:audio, pcm}}, _from, state)
+       when is_reference(context) do
     with true <- not explicit_waiting?(state) and not queued_input?(state),
          {:ok, message} <- Realtime.audio(pcm),
          :ok <- send_wire(state, message) do
@@ -168,8 +180,8 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end
   end
 
-  def handle_call({:input, context, {:text, ref, text}}, _from, state)
-      when is_reference(context) and is_reference(ref) do
+  defp handle_request({:input, context, {:text, ref, text}}, _from, state)
+       when is_reference(context) and is_reference(ref) do
     with true <-
            not state.audio_pending? and is_nil(state.native_origin) and
              map_size(state.callers) == 0 and map_size(state.responses) < 16,
@@ -189,8 +201,8 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end
   end
 
-  def handle_call({:input, context, {:opening, ref, opening}}, _from, state)
-      when is_reference(context) and is_reference(ref) do
+  defp handle_request({:input, context, {:opening, ref, opening}}, _from, state)
+       when is_reference(context) and is_reference(ref) do
     if Opening.valid?(opening) and map_size(state.responses) == 0 and not state.audio_pending? do
       {instructions, fixed} = opening_instructions(opening)
 
@@ -209,17 +221,17 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end
   end
 
-  def handle_call({:input, _context, _operation}, _from, state),
+  defp handle_request({:input, _context, _operation}, _from, state),
     do: {:reply, {:error, :unsupported_operation}, state}
 
-  def handle_call({:interrupt, turn}, _from, state) do
+  defp handle_request({:interrupt, turn}, _from, state) do
     case interrupt_turn(state, turn) do
       {:ok, state} -> {:reply, :ok, state}
       _failure -> stop_reply(state)
     end
   end
 
-  def handle_call({:tool_result, ref, result}, _from, state) do
+  defp handle_request({:tool_result, ref, result}, _from, state) do
     case Map.fetch(state.tools, ref) do
       {:ok, %{id: id, token: token}} ->
         with {:ok, message} <- Realtime.tool_result(id, result),
@@ -237,7 +249,9 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
   end
 
   @impl true
-  def handle_info({:realtime_credentials, pid, {:ok, connection}}, %{bootstrap: pid} = state) do
+  def handle_info(message, state), do: message |> handle_message(state) |> track_deadlines()
+
+  defp handle_message({:realtime_credentials, pid, {:ok, connection}}, %{bootstrap: pid} = state) do
     options = [owner: self(), connection: connection, transport_options: state.wire_options]
 
     child = %{
@@ -257,11 +271,11 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end
   end
 
-  def handle_info({:realtime_credentials, pid, _failure}, %{bootstrap: pid} = state),
+  defp handle_message({:realtime_credentials, pid, _failure}, %{bootstrap: pid} = state),
     do: stop(state)
 
-  def handle_info({:elevenlabs_realtime, wire, credit, payload}, %{wire: wire} = state) do
-    case handle_info({:elevenlabs_realtime, wire, payload}, state) do
+  defp handle_message({:elevenlabs_realtime, wire, credit, payload}, %{wire: wire} = state) do
+    case handle_message({:elevenlabs_realtime, wire, payload}, state) do
       {:noreply, state} ->
         :ok = RealtimeSocket.ack(wire, credit)
         {:noreply, state}
@@ -271,7 +285,7 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end
   end
 
-  def handle_info({:elevenlabs_realtime, wire, payload}, %{wire: wire} = state) do
+  defp handle_message({:elevenlabs_realtime, wire, payload}, %{wire: wire} = state) do
     with {:ok, event} <- Realtime.decode(payload),
          {:ok, state} <- wire_event(state, event),
          {:ok, state} <- drain(state) do
@@ -286,29 +300,18 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end
   end
 
-  def handle_info({:elevenlabs_realtime_closed, wire}, %{wire: wire} = state), do: stop(state)
-  def handle_info({:DOWN, _ref, :process, wire, _reason}, %{wire: wire} = state), do: stop(state)
-  def handle_info(:setup_timeout, %{ready?: false} = state), do: stop(state)
+  defp handle_message({:elevenlabs_realtime_closed, wire}, %{wire: wire} = state), do: stop(state)
 
-  def handle_info({:native_timeout, turn}, %{native_origin: %{turn: turn}} = state),
+  defp handle_message({:DOWN, _ref, :process, wire, _reason}, %{wire: wire} = state),
     do: stop(state)
 
-  def handle_info({:caller_timeout, id, turn}, state) do
-    case Map.get(state.callers, id) do
-      %{turn: ^turn, stopped?: true} -> stop(state)
-      _settled -> {:noreply, state}
-    end
+  defp handle_message(:setup_timeout, %{ready?: false} = state), do: stop(state)
+
+  defp handle_message({:realtime_timeout, key, ref}, state) do
+    if RealtimeWatchdog.current?(state, key, ref), do: stop(state), else: {:noreply, state}
   end
 
-  def handle_info({:response_timeout, token}, state) do
-    case Map.get(state.responses, token) do
-      %{completed?: false, interrupted?: false} -> stop(state)
-      %{done?: false} -> stop(state)
-      _retired -> {:noreply, state}
-    end
-  end
-
-  def handle_info({:vxpipe_speech_output, channel, turn, output}, %{channel: channel} = state) do
+  defp handle_message({:vxpipe_speech_output, channel, turn, output}, %{channel: channel} = state) do
     update_turn(state, turn, fn response ->
       if is_nil(response.output),
         do: {:ok, %{response | output: output}},
@@ -316,10 +319,10 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end)
   end
 
-  def handle_info(
-        {:vxpipe_speech_credit, channel, output, credit, :ok},
-        %{channel: channel} = state
-      ) do
+  defp handle_message(
+         {:vxpipe_speech_credit, channel, output, credit, :ok},
+         %{channel: channel} = state
+       ) do
     case Enum.find(state.responses, fn {_token, response} ->
            response.output == output and response.awaiting == credit
          end) do
@@ -328,16 +331,16 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end
   end
 
-  def handle_info(
-        {:vxpipe_speech_credit, channel, _output, _credit, _failure},
-        %{channel: channel} = state
-      ),
-      do: stop(state)
+  defp handle_message(
+         {:vxpipe_speech_credit, channel, _output, _credit, _failure},
+         %{channel: channel} = state
+       ),
+       do: stop(state)
 
-  def handle_info(
-        {:vxpipe_speech_output_settled, channel, turn, output, _played},
-        %{channel: channel} = state
-      ) do
+  defp handle_message(
+         {:vxpipe_speech_output_settled, channel, turn, output, _played},
+         %{channel: channel} = state
+       ) do
     update_turn(state, turn, fn response ->
       if response.output == output and response.completed?,
         do: {:ok, %{response | settled?: true}},
@@ -345,7 +348,10 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end)
   end
 
-  def handle_info({:vxpipe_speech_response_discard, channel, turn}, %{channel: channel} = state) do
+  defp handle_message(
+         {:vxpipe_speech_response_discard, channel, turn},
+         %{channel: channel} = state
+       ) do
     case interrupt_turn(state, turn) do
       {:ok, state} ->
         update_turn(state, turn, fn response -> {:ok, %{response | settled?: true}} end)
@@ -355,7 +361,7 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end
   end
 
-  def handle_info(_message, state), do: {:noreply, state}
+  defp handle_message(_message, state), do: {:noreply, state}
 
   @impl true
   def format_status(status),
@@ -403,8 +409,6 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
   defp wire_event(%{native_origin: nil} = state, {:speech_stopped, id}) do
     with {:ok, caller} <- Map.fetch(state.callers, id) do
       origin = %{context: caller.context, turn: caller.turn}
-      Process.send_after(self(), {:caller_timeout, id, caller.turn}, 30_000)
-      Process.send_after(self(), {:native_timeout, caller.turn}, 30_000)
 
       update_caller(%{state | native_origin: origin}, id, fn caller ->
         %{caller | stopped?: true, stop_serial: state.audio_serial}
@@ -425,7 +429,6 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     if map_size(state.responses) < 16 do
       token = token()
       response = RealtimeOutput.new(context, nil, nil, nil)
-      Process.send_after(self(), {:response_timeout, token}, 30_000)
 
       state = %{
         put_response(state, token, response)
@@ -534,8 +537,6 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
         RealtimeOutput.new(context, nil, instructions, fixed)
         | continuation?: continuation?
       }
-
-      Process.send_after(self(), {:response_timeout, token}, 30_000)
 
       dispatch(%{
         put_response(state, token, response)
@@ -760,6 +761,12 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
         end
     end
   end
+
+  defp track_deadlines({:reply, reply, state}),
+    do: {:reply, reply, RealtimeWatchdog.sync(state)}
+
+  defp track_deadlines({:noreply, state}), do: {:noreply, RealtimeWatchdog.sync(state)}
+  defp track_deadlines(stopped), do: stopped
 
   defp put_response(state, token, response),
     do: %{state | responses: Map.put(state.responses, token, response)}

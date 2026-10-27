@@ -20,9 +20,33 @@
 - Independent GPT-6 Astra xhigh review cleared caller code/tests/documentation.
   Response design review requires preserving ambiguous-origin failure and
   exempting completed tool-only responses from speech-transcript deadlines.
-- The first full run observed one Gateway CallIngress failure. Its targeted
-  rerun passed, followed by a clean full run on the final combined source before
-  either checkpoint was committed: 4,503 tests, zero failures, 159 exclusions.
-  Format, compile, strict Credo, unused dependency check and Lean also pass
-  (nine build jobs and one oracle replay). The response checkpoint records the
-  remaining implementation and final independent evidence review.
+- Format, compile and strict Credo pass. The first full umbrella run observed a
+  Gateway CallIngress failure; targeted and complete final reruns passed below.
+- Response regressions: initial eight cases produced five expected fixed-deadline
+  failures; adding the native-origin and tool-only design cases produced seven
+  failures across eleven tests. All eleven pass with scoped progress deadlines.
+  After green, replaced the temporary legacy-expiry helper with actual scheduled
+  opaque timer references; queued and completed obligations are asserted absent.
+- All focused ElevenLabs tests pass: 145 tests, zero failures, four exclusions.
+  Existing fixed-opening, room authorization, tool continuation and cancellation
+  tests remain green. No live provider requests were made for this change.
+- Timer policy lives in a dedicated module. Session callback completion reconciles
+  obligation fingerprints once; changing or removing one cancels its old timer.
+  Provider audio progress uses a counter separate from buffered/delivered bytes,
+  so draining the local queue cannot masquerade as upstream progress.
+- Independent GPT-6 Astra xhigh source review of checkpoint B is clean, including
+  the resolved native-origin and tool-only design findings.
+- The first umbrella run completed 4,492 tests with one Gateway CallIngress
+  failure (`:telephony_leg_unavailable` during cancellation/binding). The same
+  test passed its targeted rerun; no Gateway changes were made. Acceptance waited
+  for the complete final umbrella pass rather than relying on the targeted pass.
+- Local tagged WebSocket admission test passes (one test); no hosted connection.
+- Final combined source passes all five root gates and Lean: format,
+  warnings-as-errors compile, strict Credo, 4,503 tests with zero failures and
+  159 exclusions, unused dependency check, nine Lean build jobs and one oracle
+  replay. Gateway passed all 863 tests on the complete final run. No Gateway code
+  or test changes were needed.
+- Final independent GPT-6 Astra xhigh review verified both checkpoint diffs,
+  documentation and gate logs and returned CLEAN: no remaining actionable code,
+  test or contract findings. Persisted as separate caller-finalization and
+  response-progress checkpoints with the synchronized milestone/index.
