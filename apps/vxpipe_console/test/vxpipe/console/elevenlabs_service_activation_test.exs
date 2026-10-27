@@ -14,6 +14,7 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
 
   alias Vxpipe.Providers.ElevenLabs.TTSSession
   alias Vxpipe.Providers.ElevenLabs.STTSession
+  alias Vxpipe.Providers.ElevenLabs.RealtimeSession
 
   setup do
     if Process.whereis(Repo) == nil, do: start_supervised!(Repo)
@@ -150,6 +151,107 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
       assert Keyword.fetch!(public, :model) == "eleven_flash_v2_5"
       assert restored.text_to_speech.usage_provider.name == "elevenlabs"
     end
+  end
+
+  for model <- ["eleven_realtime_v1_mini", "eleven_realtime_v1_max"] do
+    test "published ElevenLabs #{model} inherits and overrides one saved key without local VAD",
+         %{options: options} do
+      model = unquote(model)
+      assert {:ok, tenant, _} = Administration.bootstrap_tenant("Native STS", [:admin], options)
+
+      assert {:ok, _platform} =
+               ProviderCredentials.provision(
+                 :platform,
+                 "elevenlabs",
+                 "voice",
+                 "api_key",
+                 %{"api_key" => "synthetic-platform-sts"},
+                 options
+               )
+
+      source =
+        put_in(source(), [:defaults, :capabilities], %{
+          speech_to_speech: %{
+            provider: "elevenlabs",
+            model: model,
+            credential_name: "voice",
+            options: %{voice: "brian", turn_control: "provider"}
+          }
+        })
+
+      assert {:ok, draft} = Vxpipe.Calls.save_call_spec(tenant.key, source, options)
+      assert draft.validation_errors == []
+
+      assert {:ok, publication} =
+               Vxpipe.Calls.publish_call_spec(
+                 tenant.key,
+                 draft.call_spec_id,
+                 draft.revision,
+                 options
+               )
+
+      assert {:ok, spec} =
+               CallSpec.new(publication.source,
+                 resource_id: publication.call_spec_id,
+                 revision: publication.revision
+               )
+
+      assert {:ok, invocation} =
+               CallInvocation.new(
+                 %{
+                   call_spec: %{id: publication.call_spec_id, revision: publication.revision},
+                   transport: %{type: "web"}
+                 },
+                 tenant_id: tenant.key,
+                 actor_id: "operator-test"
+               )
+
+      assert {:ok, plan} = CallSpecCompiler.compile(spec, invocation, %{host_tools: %{}})
+
+      runtime_options = [
+        owner: self(),
+        credential_source: {ProviderCredentialSource, options},
+        speech_to_speech: [providers: %{RealtimeSession => [enabled: true]}],
+        speech_to_text: [providers: %{}],
+        text_to_speech: [providers: %{}]
+      ]
+
+      assert {:ok, inherited} = PlanStartup.new(plan, runtime_options)
+      assert sts_key(inherited, model) == "synthetic-platform-sts"
+
+      assert {:ok, own} =
+               ProviderCredentials.provision(
+                 tenant.key,
+                 "elevenlabs",
+                 "voice",
+                 "api_key",
+                 %{"api_key" => "synthetic-tenant-sts"},
+                 options
+               )
+
+      assert {:ok, overridden} = PlanStartup.new(plan, runtime_options)
+      assert sts_key(overridden, model) == "synthetic-tenant-sts"
+      assert :ok = ProviderCredentials.delete(tenant.key, own.id, options)
+      assert {:ok, restored} = PlanStartup.new(plan, runtime_options)
+      assert sts_key(restored, model) == "synthetic-platform-sts"
+      refute :erlang.term_to_binary(publication) =~ "synthetic-"
+    end
+  end
+
+  defp sts_key(startup, model) do
+    assert {RealtimeSession, public} = startup.speech_to_speech.provider
+    assert public == [model: model, voice: "brian", turn_control: "provider"]
+    assert startup.agent_activation == nil
+    assert startup.text_to_speech == nil
+    assert Enum.all?(startup.speech_to_text_runtimes, fn {_key, runtime} -> is_nil(runtime) end)
+    assert startup.speech_to_speech.output_speech_to_text == nil
+    assert startup.speech_to_speech.usage_provider.name == "elevenlabs"
+    assert startup.speech_to_speech.usage_provider.model == model
+    refute inspect(startup) =~ "synthetic-"
+
+    startup.speech_to_speech.provider_private
+    |> Keyword.fetch!(:config)
+    |> Map.fetch!(:api_key)
   end
 
   defp stt_key(startup, vad) do

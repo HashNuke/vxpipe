@@ -25,8 +25,8 @@
     {
       "id": "elevenlabs",
       "name": "ElevenLabs",
-      "description": "Transcribe with Scribe and speak with ElevenLabs voices.",
-      "capabilities": ["stt", "tts"],
+      "description": "Transcribe with Scribe, synthesize speech, and converse with ElevenLabs Realtime.",
+      "capabilities": ["stt", "tts", "s2s"],
       "sampleCapabilities": ["stt", "tts"]
     },
     {

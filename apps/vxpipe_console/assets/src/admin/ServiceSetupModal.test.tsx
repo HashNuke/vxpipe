@@ -29,7 +29,7 @@ test.each([
   expect(screen.getByRole("dialog", {name: "Connect ElevenLabs"})).toBeVisible();
   expect(screen.getByText("Text-to-speech")).toBeVisible();
   expect(screen.getByText("Speech-to-text")).toBeVisible();
-  expect(screen.queryByText("Speech-to-speech")).not.toBeInTheDocument();
+  expect(screen.getByText("Speech-to-speech")).toBeVisible();
   expect(screen.getByLabelText("API key")).toHaveAttribute("type", "password");
   expect(screen.getByRole("button", {name: "Test credentials"})).toHaveAttribute("aria-disabled", "true");
   fireEvent.change(screen.getByLabelText("API key"), {target: {value: "synthetic-elevenlabs"}});

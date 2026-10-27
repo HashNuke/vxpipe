@@ -61,6 +61,7 @@ test("call model defaults show only the selected AI path and keep human transcri
 
 test("changing default AI type replaces incompatible models while retaining compatible overrides and human settings", async () => {
   const initial = structuredClone(editorFixture);
+  const catalog = { ...modelCatalogFixture, speech_to_speech: { google: modelCatalogFixture.speech_to_speech!.google! } };
   const stt = { provider: "deepgram", model: "flux-general-en" };
   const sts = { provider: "google", model: "custom-sts", options: { voice: "custom" } };
   initial.source.defaults = { capabilities: {
@@ -69,13 +70,13 @@ test("changing default AI type replaces incompatible models while retaining comp
   } };
   initial.source.participants.intake!.capabilities = { model_inference: { provider: "google", model: "override" } };
   initial.source.participants.reviewer = { type: "agent", prompt: "Review", capabilities: { speech_to_speech: sts } };
-  render(<Harness initial={initial} />);
+  render(<Harness initial={initial} catalog={catalog} />);
   await chooseMode("Speech-to-Speech");
   expect(screen.getByRole("region", { name: "Speech to speech" })).toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Language model" })).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Text to speech" })).not.toBeInTheDocument();
   expect(saved().defaults.capabilities).toEqual({
-    speech_to_speech: recommendedSelection(modelCatalogFixture, "speech_to_speech", "google"), speech_to_text: stt,
+    speech_to_speech: recommendedSelection(catalog, "speech_to_speech", "google"), speech_to_text: stt,
   });
   expect(saved().participants.intake).not.toHaveProperty("capabilities");
   expect(saved().participants.reviewer.capabilities).toEqual({ speech_to_speech: sts });

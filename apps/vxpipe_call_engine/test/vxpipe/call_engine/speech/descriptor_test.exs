@@ -6,6 +6,22 @@ defmodule Vxpipe.CallEngine.Speech.DescriptorTest do
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, Descriptor, Event, Session}
   alias Vxpipe.CallEngine.SpeechSessionProbe
 
+  test "allocation-bound input cutover is a closed STS-only contract" do
+    {:ok, sts} = Vxpipe.Providers.MorseCode.STSSession.configure([])
+    fields = sts |> Map.from_struct() |> Map.to_list() |> Keyword.put(:input_cutover, :close)
+    assert {:ok, descriptor} = Descriptor.new(fields)
+    assert :ok = Descriptor.validate(descriptor)
+
+    assert {:error, :invalid_descriptor} =
+             Descriptor.validate(Map.put(descriptor, :input_cutover, :reuse))
+
+    assert {:error, :invalid_descriptor} = Descriptor.validate(Map.put(descriptor, :hold, :mute))
+    {:ok, stt} = MorseSession.configure([])
+
+    assert {:error, :invalid_descriptor} =
+             Descriptor.validate(Map.put(stt, :input_cutover, :close))
+  end
+
   test "local acoustic gap authority is conversational STT only and still requires speech onset" do
     {:ok, original} = MorseSession.configure([])
     local = %{original | endpointing: :local_gap}

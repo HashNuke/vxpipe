@@ -20,6 +20,7 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   alias Vxpipe.Providers.MorseCodeApi.STT, as: MorseCodeApiSTT
   alias Vxpipe.Providers.MorseCodeApi.STTSession, as: MorseCodeApiSTTSession
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
+  alias Vxpipe.Providers.ElevenLabs.RealtimeSession
   alias Vxpipe.Providers.Rime.{TTS, TTSSession}
   alias Vxpipe.Providers.Registry
   alias Vxpipe.CallEngine.Speech.ContextTTSSocket
@@ -120,6 +121,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "google"}),
     do: Registry.resolve_capability("google", :sts)
 
+  def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "elevenlabs"}),
+    do: Registry.resolve_capability("elevenlabs", :sts)
+
   def adapter(%CapabilitySelection{kind: :speech_to_speech, provider: "rime"}),
     do: Registry.resolve_capability("rime", :sts)
 
@@ -210,7 +214,8 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     {:ok, morse} = Registry.fetch_capability("morse", :sts)
     {:ok, openai} = Registry.fetch_capability("openai", :sts)
     {:ok, google} = Registry.fetch_capability("google", :sts)
-    [morse, DuplexSTSSession, openai, google]
+    {:ok, elevenlabs} = Registry.fetch_capability("elevenlabs", :sts)
+    [morse, DuplexSTSSession, openai, google, elevenlabs]
   end
 
   defp speech_adapters(_kind), do: []
@@ -354,6 +359,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
   defp validate_provider_settings(GoogleSTSSession, :speech_to_speech, settings),
     do: Keyword.validate(settings, enabled: false)
 
+  defp validate_provider_settings(RealtimeSession, :speech_to_speech, settings),
+    do: Keyword.validate(settings, enabled: false)
+
   defp validate_provider_settings(_provider, _kind, _settings),
     do: {:error, :provider_not_configured}
 
@@ -488,6 +496,19 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
     with {:ok, options} <- normalize(input, [:encoding, :sample_rate]),
          {:ok, public} <- MorseCodeApiSTT.public_options(Keyword.put(options, :model, model)) do
       {:ok, [model: public.model, encoding: public.encoding, sample_rate: public.sample_rate]}
+    end
+  end
+
+  def speech_options(%CapabilitySelection{
+        kind: :speech_to_speech,
+        provider: "elevenlabs",
+        model: model,
+        options: input
+      }) do
+    with {:ok, options} <- normalize(input, [:voice, :turn_control]),
+         {:ok, descriptor} <- RealtimeSession.configure(Keyword.put(options, :model, model)) do
+      public = descriptor.settings
+      {:ok, [model: public.model, voice: public.voice, turn_control: public.turn_control]}
     end
   end
 
@@ -637,6 +658,9 @@ defmodule Vxpipe.CallEngine.CapabilityCatalog do
 
   defp validate_speech(%{provider: "google", kind: :speech_to_speech}, options),
     do: validate_provider(GoogleSTSSession, options)
+
+  defp validate_speech(%{provider: "elevenlabs", kind: :speech_to_speech}, options),
+    do: validate_provider(RealtimeSession, options)
 
   defp validate_speech(_selection, _options), do: {:error, :unsupported_capability}
 

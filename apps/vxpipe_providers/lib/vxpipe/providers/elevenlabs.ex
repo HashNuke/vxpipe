@@ -9,6 +9,7 @@ defmodule Vxpipe.Providers.ElevenLabs do
   def capabilities do
     %{
       credential: Vxpipe.Providers.APIKeyCredential,
+      sts: Vxpipe.Providers.ElevenLabs.RealtimeSession,
       stt: Vxpipe.Providers.ElevenLabs.STTSession,
       tts: Vxpipe.Providers.ElevenLabs.TTSSession
     }

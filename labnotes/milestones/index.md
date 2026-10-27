@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 54 milestone specifications: 42 complete and 12 incomplete. Milestone 17, Telnyx calls and
+Status: 56 milestone specifications: 44 complete and 12 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -183,8 +183,10 @@ progress without claiming the entire milestone is complete.
 50. [x] [MCP OAuth authorization](mcp-oauth.md) — Delegated user OAuth replaces MCP API keys using Boruta and existing ExMCP. Token lifecycle, discovery/consent, current permissions and local client interoperability verified; public HTTP API keys remain supported.
 51. [x] [Installation URL and MCP client metadata](installation-url-and-client-metadata.md) — Persisted setup/settings, CIMD/DCR metadata foundation, dynamic telephony/MCP public URLs and the ETS cache follow-up are implemented and locally verified. Root checks and all application suites passed, with a same-seed Call Engine rerun after an initial deadline timing failure. Complete outbound OAuth remains outside this slice.
 52. [ ] [Integrations directory and tenant MCP connections](integrations-directory-and-tenant-mcps.md) — Proposal: use the hosted directory by default, fall back to installed AI/telephony providers, and connect tenant-only MCPs through discovery or custom authentication. Storybook workflow review and T0–T8 task gates are separate from unstarted production implementation.
-53. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-54. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+53. [x] [ElevenLabs Realtime speech-to-speech](elevenlabs-realtime-models.md) — Standalone Mini/Max STS with provider-native turn detection and no local VAD. Complete: Mini/Max native live checks, ten compiled room regressions, all common gates and clean independent GPT-6 Astra xhigh review pass. Five coherent checkpoints record the implementation and evidence.
+54. [x] [ElevenLabs progress timeouts](elevenlabs-progress-timeouts.md) — Native caller speech and progressing output have no adapter duration cap. Scoped creation, finality, cancellation and credit guards pass 145 focused tests, all root gates (4,503 tests, zero failures), Lean and clean final independent GPT-6 Astra xhigh review. Two coherent checkpoints; no local VAD.
+55. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+56. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 The worktree setup milestone is an enabling developer-tooling slice after the
 existing live-runner fixes and before delivery. Its prerequisites are already

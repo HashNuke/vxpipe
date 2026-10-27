@@ -24,7 +24,8 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
                 barge_in: nil,
                 continuity: nil,
                 tool_cancellation?: nil,
-                hold: nil
+                hold: nil,
+                input_cutover: nil
               ]
 
   @fields @enforce_keys ++
@@ -47,7 +48,8 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
               :barge_in,
               :continuity,
               :tool_cancellation?,
-              :hold
+              :hold,
+              :input_cutover
             ]
   @identity_pattern ~r/\A[A-Za-z0-9][A-Za-z0-9._\/-]*\z/
 
@@ -77,7 +79,8 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           barge_in: :room | :provider | nil,
           continuity: :resumption_handle | :history_reseed | :none | nil,
           tool_cancellation?: boolean() | nil,
-          hold: :stop | :mute | nil
+          hold: :stop | :mute | nil,
+          input_cutover: :close | nil
         }
 
   @doc "Build public metadata. Provider-specific settings remain the provider's validation responsibility."
@@ -166,6 +169,8 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
       descriptor.continuity in [:resumption_handle, :history_reseed, :none] and
       is_boolean(descriptor.tool_cancellation?) and
       descriptor.hold in [:stop, :mute] and
+      descriptor.input_cutover in [nil, :close] and
+      (descriptor.input_cutover != :close or descriptor.hold == :stop) and
       (descriptor.endpointing != :inferred_gap or
          (descriptor.turn_control == "provider" and descriptor.speech_start?)) and
       (descriptor.barge_in != :provider or not descriptor.history_reconciliation?)
@@ -176,7 +181,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   defp duplex_facts_declared?(descriptor) do
     not is_nil(descriptor.output_shape) or not is_nil(descriptor.barge_in) or
       not is_nil(descriptor.continuity) or not is_nil(descriptor.tool_cancellation?) or
-      not is_nil(descriptor.hold)
+      not is_nil(descriptor.hold) or not is_nil(descriptor.input_cutover)
   end
 
   defp valid_kind?(%{kind: :stt, cache_identity: nil, input_format: nil} = descriptor),

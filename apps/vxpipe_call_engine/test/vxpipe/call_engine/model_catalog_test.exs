@@ -7,7 +7,7 @@ defmodule Vxpipe.CallEngine.ModelCatalogTest do
     "speech_to_text" => ~w(cartesia deepgram elevenlabs google morse morse_code_api),
     "output_speech_to_text" => ~w(cartesia deepgram elevenlabs google morse morse_code_api),
     "text_to_speech" => ~w(cartesia deepgram elevenlabs google morse morse_code_api rime),
-    "speech_to_speech" => ~w(google morse openai),
+    "speech_to_speech" => ~w(elevenlabs google morse openai),
     "model_inference" => ~w(deepseek fireworks google openai openrouter zenmux)
   }
 
@@ -38,6 +38,16 @@ defmodule Vxpipe.CallEngine.ModelCatalogTest do
 
     assert {:ok, models} = ModelCatalog.models("deepseek", "model_inference")
     assert %{context_limit: 1_048_576} = Enum.find(models, & &1.default)
+  end
+
+  test "ElevenLabs exposes Mini and Max with the native Brian voice recommendation" do
+    assert {:ok, models} = ModelCatalog.models("elevenlabs", "speech_to_speech")
+    assert Enum.map(models, & &1.id) == ["eleven_realtime_v1_mini", "eleven_realtime_v1_max"]
+    assert Enum.find(models, & &1.default).id == "eleven_realtime_v1_mini"
+
+    for model <- models do
+      assert model.voices == %{type: :free_text, default: "brian", parameter: "voice"}
+    end
   end
 
   test "unknown providers, unsupported pairs and invalid capabilities are distinct" do

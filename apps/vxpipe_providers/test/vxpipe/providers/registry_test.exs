@@ -40,6 +40,9 @@ defmodule Vxpipe.Providers.RegistryTest do
 
     assert {:ok, Vxpipe.Providers.Google.STSSession} = Registry.fetch_capability("google", :sts)
 
+    assert {:ok, Vxpipe.Providers.ElevenLabs.RealtimeSession} =
+             Registry.fetch_capability("elevenlabs", :sts)
+
     assert {:ok, Vxpipe.Providers.Google} = Registry.fetch("google")
 
     assert {:ok, Vxpipe.Providers.Google.Credential} =
@@ -115,7 +118,7 @@ defmodule Vxpipe.Providers.RegistryTest do
   test "catalog contains explicit capability metadata" do
     assert Registry.catalog() == %{
              "cartesia" => [:credential, :stt, :tts],
-             "elevenlabs" => [:credential, :stt, :tts],
+             "elevenlabs" => [:credential, :sts, :stt, :tts],
              "deepseek" => [:credential, :credential_validation, :llm],
              "openrouter" => [:credential, :credential_validation, :llm],
              "fireworks" => [:credential, :llm],

@@ -33,6 +33,7 @@ defmodule Vxpipe.CallEngine.Speech.ModelCatalogTest do
           {"cartesia", :tts, "sonic-3.6"},
           {"elevenlabs", :stt, "scribe_v2_realtime"},
           {"elevenlabs", :tts, "eleven_flash_v2_5"},
+          {"elevenlabs", :sts, "eleven_realtime_v1_mini"},
           {"google", :stt, "gemini-3.5-transcribe-live"},
           {"google", :tts, "gemini-3.1-flash-tts-preview"},
           {"google", :sts, "gemini-3.8-live"},

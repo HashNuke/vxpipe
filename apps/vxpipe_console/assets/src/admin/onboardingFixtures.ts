@@ -13,7 +13,7 @@ const providerDetails: Record<
 > = {
   morse_code_api: { label: "MorseCode API", services: ["Speech to text", "Text to speech"] },
   cartesia: { label: "Cartesia", services: ["Text to speech"] },
-  elevenlabs: { label: "ElevenLabs", services: ["Speech to text", "Text to speech"] },
+  elevenlabs: { label: "ElevenLabs", services: ["Speech to text", "Text to speech", "Speech to speech"] },
   deepgram: {
     label: "Deepgram",
     services: ["Speech to text", "Text to speech"],

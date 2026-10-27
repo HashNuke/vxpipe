@@ -107,6 +107,7 @@ config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
   speech_to_text: [providers: %{}],
   speech_to_speech: [
     providers: %{
+      Vxpipe.Providers.ElevenLabs.RealtimeSession => [enabled: true],
       Vxpipe.Providers.OpenAI.GPTLiveSession => [enabled: true],
       Vxpipe.Providers.Google.STSSession => [enabled: true]
     }

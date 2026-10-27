@@ -4,6 +4,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Hold do
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{Input, Output, ToolEvents}
   alias Vxpipe.CallEngine.Speech.Session
 
+  def hold(%{descriptor: %{input_cutover: :close}} = state),
+    do: close_for_cutover(state)
+
   def hold(%{descriptor: %{hold: :mute}} = state) do
     case Session.set_input_hold(state.session, true) do
       :ok ->
@@ -48,6 +51,33 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Hold do
         Output.stop_unavailable(:provider_failed, state)
     end
   end
+
+  def close_for_cutover(state) do
+    state = Input.hold(state)
+    state = %{state | origin_lifecycle_revision: make_ref(), input_turns: MapSet.new()}
+    state = state |> interrupt_tool_turns() |> ToolEvents.retire()
+
+    state =
+      case Output.retire_stale_pending(state) do
+        {:ok, retired} -> retired
+        {:error, _reason} -> state
+      end
+
+    {_played, state} = Output.fence_output(state)
+    Output.stop_unavailable(:input_cutover, state)
+  end
+
+  def release(
+        %{descriptor: %{input_cutover: :close}, held?: false, input_epoch: epoch} = state,
+        epoch
+      )
+      when is_reference(epoch), do: {:reply, :ok, state}
+
+  def release(
+        %{descriptor: %{input_cutover: :close}, response_origins: %{current: context}} = state,
+        _epoch
+      )
+      when is_reference(context), do: close_for_cutover(state)
 
   def release(%{descriptor: %{hold: :mute}} = state, epoch) when is_reference(epoch) do
     case Session.set_input_hold(state.session, false) do

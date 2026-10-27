@@ -601,6 +601,21 @@ inherited from human STT defaults. It resolves through the existing `:stt`
 provider manifest and is required only when the selected STS descriptor lacks
 output transcription.
 
+### ElevenLabs Realtime models
+
+`Vxpipe.Providers.ElevenLabs.RealtimeSession` implements the scoped STS contract
+for `eleven_realtime_v1_mini` and `eleven_realtime_v1_max`. Use provider
+`"elevenlabs"`, either model ID, and optionally a `voice` (default `"brian"`).
+The existing ElevenLabs API-key credential is resolved privately; prompts and
+tools come from the agent activation. No hosted agent ID is involved.
+
+The adapter requires provider-controlled native semantic turn detection and
+transcribes both input and output. It needs no local VAD or separate STT service.
+Speech output is announced on PCM, authorized by the consumer and delivered with
+credit. Tool-only interactions do not open a playback turn. See the
+[Realtime adapter decision](elevenlabs-realtime-models.md) for lifecycle limits
+and the narrowly selectable ElevenLabs live tests.
+
 ## Production registration
 
 Adding a module does not make untrusted call-spec input able to select it. Register a production
