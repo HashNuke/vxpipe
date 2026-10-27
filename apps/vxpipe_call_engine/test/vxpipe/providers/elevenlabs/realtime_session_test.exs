@@ -426,6 +426,35 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSessionTest do
     assert [first.response_index, queued.response_index, native.response_index] == [1, 2, 3]
   end
 
+  test "a caller deadline cannot cut off native speech before the provider stops it" do
+    {session, wire} = start_session()
+    context = make_ref()
+    assert :ok = Session.push_audio(session, <<1, 0>>, response_context: context)
+    deliver(session, wire, %{"type" => "input_audio_buffer.speech_started", "item_id" => "long"})
+    started = event(session, :speech_started)
+    provider = Session.provider(session)
+
+    send(provider, {:caller_timeout, "long", started.turn_ref})
+    _ = :sys.get_state(provider)
+    assert :ok = Session.push_audio(session, <<2, 0>>, response_context: context)
+    refute_received {:vxpipe_speech_closed, ^session, _reason}
+
+    deliver(session, wire, %{"type" => "input_audio_buffer.speech_stopped", "item_id" => "long"})
+
+    deliver(session, wire, %{
+      "type" => "conversation.item.input_audio_transcription.completed",
+      "item_id" => "long",
+      "transcript" => "A long explanation"
+    })
+
+    assert event(session, :input_transcript).text == "A long explanation"
+    assert event(session, :turn_ended).turn_ref == started.turn_ref
+
+    send(provider, {:caller_timeout, "long", started.turn_ref})
+    _ = :sys.get_state(provider)
+    refute_received {:vxpipe_speech_closed, ^session, _reason}
+  end
+
   for obligation <- [:caller, :native] do
     @obligation obligation
     test "missing #{@obligation} terminal evidence closes on its scoped deadline" do

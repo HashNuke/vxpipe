@@ -78,9 +78,10 @@ trailing PCM remains. Observed conflicting native/explicit identities fail close
 the API does not guarantee metadata echo. Caller-final and native-response obligations have
 bounded deadlines. A local transport test also verifies acknowledgement-based
 frame delivery so incoming WebSocket bursts cannot bypass the session's bounds.
-The initial profile allows 20 seconds for startup and 30 seconds for caller-turn
-or response obligations. A caller turn's deadline begins at speech start, so long
-utterances or missing terminal evidence close the allocation. Pending PCM is
+The initial profile allows 20 seconds for startup. Caller final-transcript and
+native response-start waits begin only after provider speech stop and allow
+30 seconds for missing evidence. Active caller speech has no adapter duration
+limit. Response obligations currently have a 30-second deadline. Pending PCM is
 limited to 512 KiB per response (2 MiB while verifying a fixed opening).
 
 Rejected alternatives:

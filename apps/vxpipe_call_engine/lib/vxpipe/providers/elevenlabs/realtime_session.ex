@@ -295,7 +295,7 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
 
   def handle_info({:caller_timeout, id, turn}, state) do
     case Map.get(state.callers, id) do
-      %{turn: ^turn} -> stop(state)
+      %{turn: ^turn, stopped?: true} -> stop(state)
       _settled -> {:noreply, state}
     end
   end
@@ -392,8 +392,6 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
         stop_serial: nil
       }
 
-      Process.send_after(self(), {:caller_timeout, id, caller.turn}, 30_000)
-
       with :ok <- Event.emit(state.channel, :speech_started, turn_ref: caller.turn) do
         {:ok, %{state | callers: Map.put(state.callers, id, caller)}}
       end
@@ -405,6 +403,7 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
   defp wire_event(%{native_origin: nil} = state, {:speech_stopped, id}) do
     with {:ok, caller} <- Map.fetch(state.callers, id) do
       origin = %{context: caller.context, turn: caller.turn}
+      Process.send_after(self(), {:caller_timeout, id, caller.turn}, 30_000)
       Process.send_after(self(), {:native_timeout, caller.turn}, 30_000)
 
       update_caller(%{state | native_origin: origin}, id, fn caller ->
