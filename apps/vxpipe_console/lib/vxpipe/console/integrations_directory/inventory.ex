@@ -2,7 +2,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
   @moduledoc "Authorized local connection status joined to public integration listings."
 
   alias Vxpipe.Calls.UserAuthorization
-  alias Vxpipe.Console.IntegrationsDirectory.{Cache, NativeCatalog, Request}
+  alias Vxpipe.Console.IntegrationsDirectory.{Cache, Listing, NativeCatalog, Request}
 
   @outages [
     :unavailable,
@@ -73,6 +73,8 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
 
     case fetcher.(:integrations, params) do
       {:ok, %{body: page}} ->
+        page = listing_references(page, params)
+
         page =
           Map.update!(
             page,
@@ -106,6 +108,18 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
       {:error, _reason} = error ->
         error
     end
+  end
+
+  defp listing_references(page, params) do
+    Map.update!(page, "items", fn items ->
+      Enum.map(items, fn
+        %{"kind" => "mcp"} = item ->
+          Map.put(item, "listing", Listing.reference(page, item, params))
+
+        item ->
+          item
+      end)
+    end)
   end
 
   defp join(items, bindings, can_connect, mcps \\ []) do

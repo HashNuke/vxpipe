@@ -425,6 +425,65 @@ defmodule Vxpipe.Calls.MCPConnectionsTest do
     refute_received {:mcp_catalog, _, _, _, _}
   end
 
+  test "listed preflight remains authorized, credentialless and bound to the returned entry",
+       data do
+    reference = %{
+      "directory_id" => "public",
+      "integration_id" => "calendar",
+      "entry_revision" => 1,
+      "page" => %{}
+    }
+
+    input = %{"listing" => reference, "revision" => "draft-9"}
+    snapshot = Map.merge(reference, %{"revision" => 1, "endpoint" => data.input["endpoint"]})
+    result = %{endpoint: data.input["endpoint"], revision: "draft-9", listing: snapshot}
+
+    options =
+      Keyword.put(data.options, :mcp_preflight, {MCPProbeFixture, {self(), {:ok, result}}})
+
+    reader = %{data.principal | assigned_tenants: %{@tenant => :read}}
+
+    assert {:error, :forbidden} = MCPConnections.preflight(reader, @tenant, input, options)
+
+    for invalid <- [
+          Map.put(input, "credentials", %{}),
+          Map.put(input, "endpoint", "https://other.example.test/mcp"),
+          Map.put(input, "auth_method", "none"),
+          Map.put(input, "revision", ""),
+          Map.put(input, "listing", nil),
+          put_in(input, ["listing", "page", "q"], String.duplicate("a", 8193))
+        ] do
+      assert {:error, :invalid_mcp_preflight} =
+               MCPConnections.preflight(data.principal, @tenant, invalid, options)
+    end
+
+    refute_received {:mcp_preflight, _, _}
+    assert {:ok, ^result} = MCPConnections.preflight(data.principal, @tenant, input, options)
+    assert_receive {:mcp_preflight, @tenant, ^input}
+
+    for mismatched <- [
+          Map.put(result, :revision, "old-draft"),
+          Map.put(result, :endpoint, "https://other.example.test/mcp"),
+          Map.delete(result, :listing),
+          put_in(result, [:listing, "directory_id"], "other"),
+          put_in(result, [:listing, "integration_id"], "other"),
+          put_in(result, [:listing, "revision"], 2)
+        ] do
+      mismatch_options =
+        Keyword.put(options, :mcp_preflight, {MCPProbeFixture, {self(), {:ok, mismatched}}})
+
+      assert {:error, :mcp_discovery_unavailable} =
+               MCPConnections.preflight(data.principal, @tenant, input, mismatch_options)
+    end
+
+    revoked = Keyword.put(options, :refresh_authority, fn -> {:error, :expired_session} end)
+
+    assert {:error, :mcp_authority_unavailable} =
+             MCPConnections.preflight(data.principal, @tenant, input, revoked)
+
+    refute_received {:mcp_create, _, _, _}
+  end
+
   test "details authorize reads and return tools without credentials", data do
     reader = %{data.principal | assigned_tenants: %{@tenant => :read}}
     assert {:ok, result} = MCPConnections.get(reader, @tenant, "connection-id", data.options)

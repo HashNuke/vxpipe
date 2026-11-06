@@ -675,7 +675,26 @@ instance; per-connection durable claims provide the cross-instance fence.
 ### T6a — Listed-template connection identity and forms
 
 Depends on T1/T2 directory resolution and T4/T5/T6 connection/authentication contracts.
-This is missing production implementation, not just a browser acceptance task.
+Read-only listing resolution/discovery is implemented; saved identity and listed
+forms remain missing production implementation, not just browser acceptance.
+See [lookup and snapshot contracts](../../docs/development/listed-mcp-connections.md).
+
+- [x] Reuse the existing directory page cache for bounded directory/entry/revision
+  references and add those references to remote MCP inventory rows. Reject
+  malformed, retired, incompatible or changed entries without accepting browser
+  connection configuration. Project only supported public recipe/setup fields.
+- [x] Extend the existing authorized, bounded discovery operation with listed
+  references and validate returned draft/entry/endpoint identity. Keep discovery
+  credentialless and filter the whole reference from request logs, including
+  rejected extra private fields. Focused red/green contracts cover these boundaries.
+- [x] Address checkpoint review: distinguish outer-proposal/reference error codes
+  in the contract, and verify canceled/expired discovery cannot continue to MCP
+  requests after an independent shared directory fetch finishes.
+
+Discovery checkpoint evidence: [labnotes](../20261107-0431-connect-listed-mcps.md),
+4,901 umbrella tests with zero failures (201 excluded, seed 177411), all five root
+gates, and clean independent adversarial/exact-index review. No listed connection
+persistence, rendered form or real-provider acceptance is claimed by this checkpoint.
 
 - [ ] Resolve new listed-connection proposals through the existing trusted backend
   directory adapter. Reject retired/incompatible proposals before side effects;

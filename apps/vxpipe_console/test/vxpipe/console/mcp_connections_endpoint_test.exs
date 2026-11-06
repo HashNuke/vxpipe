@@ -142,6 +142,89 @@ defmodule Vxpipe.Console.MCPConnectionsEndpointTest do
     refute_received {:mcp_checked, _}
   end
 
+  test "listed discovery reuses the tenant route and rejects changed directory proposals" do
+    page =
+      Path.expand("../../../../../docs/development/integrations-directory.example.json", __DIR__)
+      |> File.read!()
+      |> JSON.decode!()
+      |> Map.put(
+        "installation_version",
+        Vxpipe.Console.IntegrationsDirectory.Request.installation_version()
+      )
+
+    [entry] = page["items"]
+
+    reference =
+      Vxpipe.Console.IntegrationsDirectory.Listing.reference(page, entry, %{
+        "category" => "calendar",
+        "limit" => 1
+      })
+
+    owner = self()
+    supervisor = start_supervised!({Task.Supervisor, []})
+
+    runner =
+      start_supervised!(
+        {Vxpipe.MCP.PreflightRunner, name: nil, task_supervisor: supervisor, interval: 0}
+      )
+
+    options = [
+      preflight_runner: runner,
+      listing_options: [fetcher: fn _, _ -> {:ok, %{body: page}} end],
+      dns_resolver: fn host, _ ->
+        send(owner, {:listed_dns, host})
+        {:error, :dns_unavailable}
+      end
+    ]
+
+    calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
+
+    Application.put_env(
+      :vxpipe_calls,
+      Vxpipe.Calls,
+      Keyword.put(calls, :mcp_preflight, {Vxpipe.Console.MCPPreflight, options})
+    )
+
+    path = "https://localhost/api/tenants/#{@tenant}/mcp-discovery"
+    authenticated = login() |> recycle() |> get("https://localhost/account")
+    [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, authenticated.resp_body)
+    input = %{"listing" => reference, "revision" => "listed-draft"}
+
+    conn =
+      authenticated
+      |> recycle()
+      |> enforce_csrf()
+      |> put_req_header("x-csrf-token", csrf)
+      |> post(path, input)
+
+    discovery = json_response(conn, 200)["discovery"]
+    assert discovery["endpoint"] == entry["connection"]["endpoint"]
+    assert discovery["listing"]["integration_id"] == entry["id"]
+    assert discovery["listing"]["name"] == entry["name"]
+    assert discovery["revision"] == "listed-draft"
+    assert_receive {:listed_dns, "calendar.example.test"}
+    refute_received {:mcp_saved, _, _}
+
+    changed = put_in(input, ["listing", "entry_revision"], 999)
+    conn = authenticated |> recycle() |> post(path, changed)
+
+    assert json_response(conn, 503) == %{
+             "error" => %{"code" => "mcp_listing_unavailable"}
+           }
+
+    invalid = put_in(input, ["listing", "page", "private_key"], "untrusted-secret")
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        conn = authenticated |> recycle() |> post(path, invalid)
+        assert json_response(conn, 422)["error"]["code"] == "invalid_mcp_listing"
+        refute conn.resp_body =~ "untrusted-secret"
+      end)
+
+    refute log =~ "untrusted-secret"
+    refute_received {:listed_dns, _}
+  end
+
   test "duplicate revoked endpoints return only the identity and generation needed for explicit reconnect" do
     conn =
       login()

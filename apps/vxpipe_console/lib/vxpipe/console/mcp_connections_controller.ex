@@ -166,6 +166,7 @@ defmodule Vxpipe.Console.MCPConnectionsController do
                :invalid_mcp_configuration,
                :invalid_mcp_endpoint,
                :invalid_mcp_preflight,
+               :invalid_mcp_listing,
                :invalid_oauth_issuer,
                :invalid_own_oauth_configuration,
                :oauth_issuer_required,
@@ -176,6 +177,9 @@ defmodule Vxpipe.Console.MCPConnectionsController do
 
         reason when reason in [:mcp_connection_busy, :oauth_refresh_in_progress] ->
           {429, reason}
+
+        :mcp_listing_unavailable ->
+          {503, reason}
 
         _unavailable ->
           {503, :mcp_connection_unavailable}

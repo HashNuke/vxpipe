@@ -1,6 +1,7 @@
 defmodule Vxpipe.Calls.MCPConnections do
   @moduledoc "User-authorized tenant MCP management. No platform inheritance or anonymous failure fallback."
   alias Vxpipe.Calls.{
+    MCPDiscoveryProposal,
     MCPRuntimeCredentials,
     ProviderAuth,
     Repositories,
@@ -38,7 +39,7 @@ defmodule Vxpipe.Calls.MCPConnections do
   def preflight(principal, tenant, input, options \\ []) do
     with :ok <- authorize(principal, tenant, :write),
          :ok <- tenant_exists(tenant, options),
-         :ok <- preflight_input(input),
+         :ok <- MCPDiscoveryProposal.validate(input),
          {:ok, probe} <- Repositories.fetch(options, :mcp_preflight),
          {:ok, result} <- discover(probe, tenant, input),
          :ok <- refresh(principal, tenant, options) do
@@ -46,30 +47,19 @@ defmodule Vxpipe.Calls.MCPConnections do
     end
   end
 
-  defp preflight_input(%{"endpoint" => endpoint, "revision" => revision} = input)
-       when is_binary(endpoint) and byte_size(endpoint) in 1..2048 and
-              is_binary(revision) and byte_size(revision) in 1..128 do
-    if Map.keys(input) -- ~w(endpoint revision issuer) == [] and
-         (not Map.has_key?(input, "issuer") or
-            (is_binary(input["issuer"]) and byte_size(input["issuer"]) in 1..2048)),
-       do: :ok,
-       else: {:error, :invalid_mcp_preflight}
-  end
-
-  defp preflight_input(_input), do: {:error, :invalid_mcp_preflight}
-
   defp discover(probe, tenant, input) do
-    endpoint = input["endpoint"]
-    revision = input["revision"]
-
     case Repositories.call(probe, :discover, [tenant, input]) do
-      {:ok, %{endpoint: ^endpoint, revision: ^revision} = result} ->
-        {:ok, result}
+      {:ok, result} ->
+        if MCPDiscoveryProposal.matches?(result, input),
+          do: {:ok, result},
+          else: {:error, :mcp_discovery_unavailable}
 
       {:error, reason}
       when reason in [
              :invalid_mcp_endpoint,
              :invalid_mcp_preflight,
+             :invalid_mcp_listing,
+             :mcp_listing_unavailable,
              :invalid_oauth_issuer,
              :mcp_connection_busy,
              :mcp_connection_timed_out

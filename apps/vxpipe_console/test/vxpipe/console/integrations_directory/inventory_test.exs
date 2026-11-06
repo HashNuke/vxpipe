@@ -131,14 +131,28 @@ defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
     row = %{
       "id" => "listed-mcp",
       "kind" => "mcp",
+      "revision" => 2,
       "connection" => %{"endpoint" => saved.endpoint}
     }
 
-    opts = Keyword.put(opts, :fetcher, fn _, _ -> {:ok, %{body: %{"items" => [row]}}} end)
+    opts =
+      Keyword.put(opts, :fetcher, fn _, _ ->
+        {:ok, %{body: %{"items" => [row], "directory_id" => "public"}}}
+      end)
+
     assert {:ok, result} = Inventory.list(FakeUserIdentity.principal(), @tenant, %{}, opts)
 
     assert [%{"mcp_connections" => [%{id: "mcp-id"}], "can_connect" => false}] =
              result.page["items"]
+
+    assert [%{"listing" => reference}] = result.page["items"]
+
+    assert reference == %{
+             "directory_id" => "public",
+             "integration_id" => "listed-mcp",
+             "entry_revision" => 2,
+             "page" => %{"scope" => "tenant", "limit" => 20}
+           }
 
     opts = Keyword.put(opts, :fetcher, fn _, _ -> {:error, :unavailable} end)
     assert {:ok, result} = Inventory.list(FakeUserIdentity.principal(), @tenant, %{}, opts)

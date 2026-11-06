@@ -28,6 +28,7 @@ config :phoenix, :filter_parameters, [
   "browser_binding",
   "values",
   "credentials",
+  "listing",
   "endpoint",
   "return_to",
   "api_key",
