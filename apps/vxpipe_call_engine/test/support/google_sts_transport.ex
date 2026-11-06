@@ -27,6 +27,7 @@ defmodule Vxpipe.CallEngine.TestGoogleSTSTransport do
   def acknowledge_retirement(socket), do: GenServer.cast(socket, :retired)
   def finish_retirement(socket), do: GenServer.stop(socket, :normal)
   def deliver(socket, message), do: GenServer.cast(socket, {:deliver, message})
+  def deliver_sync(socket, message), do: GenServer.call(socket, {:deliver, message})
   def disconnect(socket), do: GenServer.cast(socket, :disconnect)
   def reject_session_active(socket), do: GenServer.cast(socket, :session_active)
 
@@ -63,6 +64,11 @@ defmodule Vxpipe.CallEngine.TestGoogleSTSTransport do
 
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, state}
 
+  def handle_call({:deliver, message}, _from, state) do
+    send(state.owner, {:vxpipe_sts_transport, self(), {:message, message}})
+    {:reply, :ok, state}
+  end
+
   @impl true
   def handle_cast(:retire, state) do
     send(state.observer, {:test_google_sts_retire, self()})
@@ -80,14 +86,13 @@ defmodule Vxpipe.CallEngine.TestGoogleSTSTransport do
     {:noreply, state}
   end
 
-  @impl true
-  def handle_cast({:deliver, message}, state) do
-    send(state.owner, {:vxpipe_sts_transport, self(), {:message, message}})
+  def handle_cast(:disconnect, state) do
+    send(state.owner, {:vxpipe_sts_transport, self(), {:closed, :connection_lost}})
     {:noreply, state}
   end
 
-  def handle_cast(:disconnect, state) do
-    send(state.owner, {:vxpipe_sts_transport, self(), {:closed, :connection_lost}})
+  def handle_cast({:deliver, message}, state) do
+    send(state.owner, {:vxpipe_sts_transport, self(), {:message, message}})
     {:noreply, state}
   end
 

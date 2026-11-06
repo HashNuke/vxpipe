@@ -1665,8 +1665,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
   end
 
   defp deliver_sync(session, wire, message) do
-    deliver(wire, message)
-    _ = :sys.get_state(wire)
+    TestGoogleSTSTransport.deliver_sync(wire, JSON.encode!(message))
     _ = :sys.get_state(Session.provider(session))
     :ok
   end

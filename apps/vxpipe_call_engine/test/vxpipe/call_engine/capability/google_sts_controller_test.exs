@@ -1688,8 +1688,7 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
   end
 
   defp deliver(context, message) do
-    TestGoogleSTSTransport.deliver(context.wire, JSON.encode!(message))
-    _ = :sys.get_state(context.wire)
+    TestGoogleSTSTransport.deliver_sync(context.wire, JSON.encode!(message))
     _ = :sys.get_state(context.provider)
     _ = :sys.get_state(context.capability)
     _ = :sys.get_state(context.provider)

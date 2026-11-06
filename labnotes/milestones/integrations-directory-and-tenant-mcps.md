@@ -438,6 +438,12 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
 
 ### Implementation and review fixes
 
+- [x] Stabilize fixture delivery through an acknowledged Google STS message send,
+  avoiding a query against a legitimately retired wire. Isolate ingress cancellation
+  and binding-error cases with fresh per-test setup while retaining all assertions.
+  Test-only checkpoint; full umbrella seed 825059 passes 4,887 tests. See
+  [delivery evidence](../20261107-0424-stabilize-test-delivery.md).
+
 - [x] Split native credential and MCP mutation permissions in the inventory and
   production route. Test service-only, credential-only and platform-only writers;
   prevent enabled inherited actions that the tenant wrapper cannot execute.

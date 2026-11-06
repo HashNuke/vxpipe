@@ -31,16 +31,16 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
     %{backend: backend, options: options, service: service, test_observer: self()}
   end
 
-  test "cancellation and binding errors cancel the owned gate before preparing an answer",
-       context do
-    for decision <- [:cancel, :error] do
+  for decision <- [:cancel, :error] do
+    test "#{decision} binding decision cancels the owned gate before preparing an answer",
+         context do
       backend =
         start_supervised!(
           {TestTelephonyCallBackend,
            observer: self(),
-           bind_decision: decision,
+           bind_decision: unquote(decision),
            usage_reporter: {Vxpipe.Gateway.TestUsageReporter, self()}},
-          id: decision
+          id: unquote(decision)
         )
 
       options = Keyword.put(context.options, :backend, TestTelephonyCallBackend.backend(backend))
@@ -59,7 +59,6 @@ defmodule Vxpipe.Gateway.Telephony.CallIngressTest do
       assert terminal.outcome == :failed
       assert terminal.attempt_id == started.attempt_id
       refute_received {:test_usage_observations, _}
-      LegSupervisor.stop(context.service.identity, "call-leg-1")
     end
   end
 
