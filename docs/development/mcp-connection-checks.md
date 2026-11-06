@@ -14,6 +14,11 @@ headers, duplicate names and line breaks. Its inspection omits endpoint and secr
 Runtime/protocol adapters, timeout limits and private-host policy are trusted
 server options; request input cannot select them.
 
+Endpoint queries preserve nonsecret configuration but reject recognized credential
+parameter names before I/O, because endpoint metadata is public. See the
+[management contract](tenant-mcp-management.md#public-endpoints-and-secrets) for
+the name policy and its limits.
+
 The production client profile rejects localhost and IPv4/IPv6 loopback literals,
 including when listed as private hosts. ExMCP's full DNS-answer validation and
 address pinning remain active for network requests. Private-network exceptions

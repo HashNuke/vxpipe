@@ -48,6 +48,35 @@ defmodule Vxpipe.MCP.StaticConfigurationTest do
     assert {:error, :invalid_mcp_authentication} = config("oauth", %{})
   end
 
+  test "credential query parameters are rejected before public endpoint persistence" do
+    for query <- [
+          "access_token=synthetic-secret",
+          "API-Key=synthetic-secret",
+          "apiKey=synthetic-secret",
+          "%61pi_key=synthetic-secret",
+          "token=synthetic-secret&token=other",
+          "client_secret=synthetic-secret",
+          "region=eu;password=synthetic-secret",
+          "X-Amz-Signature=synthetic-secret",
+          "key=synthetic-secret",
+          "api_key%5B%5D=synthetic-secret",
+          "token[0]=synthetic-secret",
+          "api_key[value]=synthetic-secret",
+          "token%5B0%5D=synthetic-secret",
+          "api_key%5Bvalue%5D=synthetic-secret",
+          "api%ZZkey=synthetic-secret",
+          "%2561pi_key=synthetic-secret"
+        ] do
+      assert {:error, :invalid_mcp_endpoint} =
+               StaticConfiguration.endpoint("https://mcp.example.test/mcp?" <> query)
+    end
+
+    assert {:ok, "https://mcp.example.test/mcp?region=eu&api-version=2&workspace=a%2Fb"} =
+             StaticConfiguration.endpoint(
+               "https://mcp.example.test/mcp?region=eu&api-version=2&workspace=a%2Fb"
+             )
+  end
+
   test "custom headers and extra headers cannot override managed transport or Authorization" do
     assert {:ok, headers} =
              config("headers", %{

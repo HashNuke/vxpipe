@@ -267,6 +267,32 @@ defmodule Vxpipe.Console.Router do
   scope "/api" do
     pipe_through :session_product_api
 
+    post "/tenants/:tenant_key/mcp-discovery",
+         Vxpipe.Console.MCPConnectionsController,
+         :preflight, metadata: %{console_product_api: true}
+
+    get "/tenants/:tenant_key/mcp-connections", Vxpipe.Console.MCPConnectionsController, :index,
+      metadata: %{console_product_api: true}
+
+    post "/tenants/:tenant_key/mcp-connections", Vxpipe.Console.MCPConnectionsController, :create,
+      metadata: %{console_product_api: true}
+
+    post "/tenants/:tenant_key/mcp-connections/:id/reconnect",
+         Vxpipe.Console.MCPConnectionsController,
+         :reconnect, metadata: %{console_product_api: true}
+
+    get "/tenants/:tenant_key/mcp-connections/:id",
+        Vxpipe.Console.MCPConnectionsController,
+        :show, metadata: %{console_product_api: true}
+
+    patch "/tenants/:tenant_key/mcp-connections/:id",
+          Vxpipe.Console.MCPConnectionsController,
+          :update, metadata: %{console_product_api: true}
+
+    delete "/tenants/:tenant_key/mcp-connections/:id",
+           Vxpipe.Console.MCPConnectionsController,
+           :delete, metadata: %{console_product_api: true}
+
     post "/platform/credentials/test", Vxpipe.Console.AdminServicesController, :validate_platform,
       metadata: %{console_product_api: true}
 

@@ -13,6 +13,25 @@ defmodule Vxpipe.Console.RoutePermission do
   def for_request(method, ["api", "installation"]) when method in ["GET", "PATCH"],
     do: :superadmin
 
+  def for_request("POST", ["api", "tenants", tenant, "mcp-discovery"]),
+    do: {:tenant, "tenant_services.write", tenant}
+
+  def for_request("GET", ["api", "tenants", tenant, "mcp-connections"]),
+    do: {:tenant, "tenant_services.read", tenant}
+
+  def for_request("POST", ["api", "tenants", tenant, "mcp-connections"]),
+    do: {:tenant, "tenant_services.write", tenant}
+
+  def for_request("POST", ["api", "tenants", tenant, "mcp-connections", _id, "reconnect"]),
+    do: {:tenant, "tenant_services.write", tenant}
+
+  def for_request("GET", ["api", "tenants", tenant, "mcp-connections", _id]),
+    do: {:tenant, "tenant_services.read", tenant}
+
+  def for_request(method, ["api", "tenants", tenant, "mcp-connections", _id])
+      when method in ["PATCH", "DELETE"],
+      do: {:tenant, "tenant_services.write", tenant}
+
   def for_request("GET", ["api", "account", "connections"]), do: :authenticated
   def for_request("DELETE", ["api", "account", "connections", _id]), do: :authenticated
 

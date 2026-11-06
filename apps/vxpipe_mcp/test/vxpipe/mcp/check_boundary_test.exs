@@ -37,7 +37,7 @@ defmodule Vxpipe.MCP.CheckBoundaryTest do
 
     {:ok, config} =
       StaticConfiguration.new(%{
-        "endpoint" => "https://mcp.example.test/mcp?key=#{marker}",
+        "endpoint" => "https://mcp.example.test/mcp?region=#{marker}",
         "auth_method" => "bearer",
         "credentials" => %{"token" => marker}
       })
@@ -132,7 +132,7 @@ defmodule Vxpipe.MCP.CheckBoundaryTest do
         ] do
       {:ok, config} =
         StaticConfiguration.new(%{
-          "endpoint" => "https://mcp.example.test/mcp?token=synthetic-query-marker",
+          "endpoint" => "https://mcp.example.test/mcp?region=synthetic-query-marker",
           "auth_method" => method,
           "credentials" => credentials
         })

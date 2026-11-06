@@ -154,6 +154,31 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
     assert resolved.secrets == %{"token" => "fresh"}
   end
 
+  test "retained metadata lookup needs no decryption and includes revoked identities only in its tenant",
+       data do
+    attributes = Map.put(data.attributes, :auth_method, "oauth")
+
+    {:ok, original} =
+      ConnectionStore.create(data.context, data.tenant, attributes, %{"access_token" => "old"})
+
+    no_keys = Keyword.put(data.context, :keyring, nil)
+    assert {:ok, ^original} = ConnectionStore.get_retained(no_keys, data.tenant, original.id)
+
+    {:ok, revoked} =
+      ConnectionStore.revoke(data.context, data.tenant, original.id, original.generation)
+
+    assert {:ok, ^revoked} = ConnectionStore.get_retained(no_keys, data.tenant, original.id)
+
+    assert {:error, :mcp_connection_not_found} =
+             ConnectionStore.get_retained(no_keys, data.other, original.id)
+
+    assert {:error, :mcp_connection_not_found} =
+             ConnectionStore.get(no_keys, data.tenant, original.id)
+
+    assert {:ok, []} = ConnectionStore.list(no_keys, data.tenant)
+    refute Map.has_key?(revoked, :secrets)
+  end
+
   test "OAuth completion preserves attempt connection identity and encrypts grant material",
        data do
     id = Ecto.UUID.generate()

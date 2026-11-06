@@ -2,6 +2,11 @@ defmodule Vxpipe.MCP.StaticConfiguration do
   @moduledoc "Validated static connection input. Contains secrets; inspection is deliberately opaque."
   alias Vxpipe.MCP.Authentication
 
+  @credential_query_names ~w(auth authorization proxyauthorization bearer token accesstoken
+    refreshtoken idtoken oauthtoken apitoken apikey xapikey key secret clientsecret
+    password passwd credential credentials signature sig xamzsignature xamzcredential
+    xgoogsignature code session sessionid)
+
   @derive {Inspect, only: [:auth_method]}
   @enforce_keys [:endpoint, :auth_method, :secrets, :authentication]
   defstruct @enforce_keys
@@ -32,7 +37,8 @@ defmodule Vxpipe.MCP.StaticConfiguration do
          false <- Regex.match?(~r/[\x00-\x20\x7f]/, value),
          {:ok, %URI{scheme: "https", host: host, port: port, userinfo: nil, fragment: nil} = uri} <-
            URI.new(value),
-         true <- is_binary(host) and host != "" and port in 1..65_535 do
+         true <- is_binary(host) and host != "" and port in 1..65_535,
+         true <- public_query?(uri.query) do
       {:ok, URI.to_string(%{uri | host: String.downcase(host), path: uri.path || "/"})}
     else
       _invalid -> {:error, :invalid_mcp_endpoint}
@@ -40,6 +46,29 @@ defmodule Vxpipe.MCP.StaticConfiguration do
   end
 
   def endpoint(_value), do: {:error, :invalid_mcp_endpoint}
+
+  defp public_query?(nil), do: true
+
+  defp public_query?(query) do
+    not Regex.match?(~r/%(?![0-9a-fA-F]{2})/, query) and
+      query
+      |> String.replace(";", "&")
+      |> URI.query_decoder()
+      |> Enum.all?(fn {name, _value} ->
+        String.valid?(name) and not String.contains?(name, "%") and
+          not credential_query_name?(name)
+      end)
+  rescue
+    _ -> false
+  end
+
+  defp credential_query_name?(name) do
+    root = name |> String.split("[", parts: 2) |> hd()
+
+    Enum.any?([name, root], fn part ->
+      (part |> String.downcase() |> String.replace(~r/[^a-z0-9]/, "")) in @credential_query_names
+    end)
+  end
 
   defp authentication("none", credentials) when credentials == %{}, do: {:ok, :none}
 

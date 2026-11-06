@@ -73,6 +73,13 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
   def get(_context, _tenant, _id), do: {:error, :invalid_tenant_key}
 
   @impl true
+  def get_retained(context, tenant, id) when is_binary(tenant) do
+    transaction(context, fn repo -> repo |> fetch!(tenant, id) |> metadata(tenant) end)
+  end
+
+  def get_retained(_context, _tenant, _id), do: {:error, :invalid_tenant_key}
+
+  @impl true
   def resolve(context, tenant, id) when is_binary(tenant) do
     transaction(context, fn repo ->
       record = fetch!(repo, tenant, id)

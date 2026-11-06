@@ -197,6 +197,11 @@ if database_enabled? do
       {Vxpipe.Persistence.ProviderCredentialStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
     provider_credential_validator: {Vxpipe.Console.ProviderCredentialValidator, []},
+    mcp_connection_repository:
+      {Vxpipe.Persistence.MCP.ConnectionStore,
+       [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
+    mcp_preflight: {Vxpipe.Console.MCPPreflight, []},
+    mcp_connection_probe: {Vxpipe.Console.MCPConnectionProbe, []},
     telephony_service_repository:
       {Vxpipe.Persistence.TelephonyServiceStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},

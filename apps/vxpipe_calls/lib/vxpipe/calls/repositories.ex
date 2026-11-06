@@ -12,6 +12,9 @@ defmodule Vxpipe.Calls.Repositories do
           | :demo_tenant_repository
           | :operator_login_challenge_repository
           | :operator_api_key_repository
+          | :mcp_connection_repository
+          | :mcp_preflight
+          | :mcp_connection_probe
           | :provider_credential_repository
           | :provider_credential_validator
           | :telephony_service_repository

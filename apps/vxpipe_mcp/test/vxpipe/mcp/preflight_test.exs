@@ -66,6 +66,20 @@ defmodule Vxpipe.MCP.PreflightTest do
 
     assert {:error, :invalid_mcp_preflight} =
              Preflight.discover("tenant", Map.put(input(), "revision", ""))
+
+    owner = self()
+
+    assert {:error, :invalid_mcp_endpoint} =
+             Preflight.discover(
+               "tenant",
+               Map.put(input(), "endpoint", @endpoint <> "?access_token=synthetic-private"),
+               dns_resolver: fn _, _ ->
+                 send(owner, :unexpected_dns)
+                 {:error, :unexpected}
+               end
+             )
+
+    refute_received :unexpected_dns
   end
 
   test "an explicit issuer supports manual discovery only when resource metadata is missing" do

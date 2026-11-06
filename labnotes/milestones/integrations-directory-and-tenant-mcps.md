@@ -206,7 +206,12 @@ independently of T1–T3 behind unexposed operations.
 - [ ] Add persistence migrations for tenant connection identity/config generation,
   encrypted auth material and catalog snapshots, using the existing encryption
   keyring with explicit MCP identity binding and rotation participation.
-- [ ] Add authorized Calls operations/repository ports and Console management API.
+- [x] Add authorized custom-static Calls operations and Console session/CSRF APIs,
+  including discovery, masked replacement, catalog-only refresh and explicit
+  retained-identity reconnect. Real HTTP/PostgreSQL/local-MCP acceptance passes;
+  production modal and listed-template identity remain separate tasks. See
+  [the management contract](../../docs/development/tenant-mcp-management.md).
+- [ ] Complete listed-connection identity and remaining management acceptance.
   Unique directory identity prevents concurrent duplicate creates. Custom identity
   is a durable ID/canonical endpoint, never a display name. Define endpoint duplicate
   handling and disambiguate same-name servers without editable connection aliases;
@@ -232,7 +237,7 @@ and paginated tools without executing a tool; unavailable and zero tools differ.
   and late-result tests pass. See [discovery design](../../docs/development/mcp-discovery.md).
 - [ ] Expose current-authority, session/CSRF-protected Console discovery and wire
   URL edits, revision fencing, retries and field prefills into the production UI.
-  This foundation does not establish full UI/API acceptance.
+  The static management checkpoint exposes this API; production modal acceptance remains open.
 
 ### T5 — Automatic discovery and delegated OAuth
 
@@ -308,6 +313,17 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
 
 ### Implementation and review fixes
 
+- [x] Reject recognized credential query parameters before discovery or connection
+  I/O so tokens cannot enter public endpoint columns or read responses. Preserve
+  nonsecret query parameters, cover encoded/case variants and verify the real
+  Console probe adapter's public projection. Log filtering alone is insufficient.
+- [x] Permit fresh credential replacement without decrypting unreadable old
+  ciphertext. Validate tenant/identity/generation from metadata first and resolve
+  old secrets only when credentials were deliberately omitted.
+- [x] Keep the static management checkpoint independently runnable: exclude later
+  OAuth structs/helpers/routes from its fixture and wiring, and add static catalog
+  refresh plus real Console probe adapter coverage.
+
 - [x] Isolate pure OAuth metadata capability validation from later authorization
   and client-assertion/signing modules so the discovery foundation is independently
   runnable. Validate types and bounds for scopes, grant/response/challenge/auth
@@ -350,10 +366,14 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   Fifteen store tests, two distinct PostgreSQL-client race tests and the full
   473-test Persistence suite pass; static gates pass. See
   [storage review](../20261107-0013-review-mcp-storage.md).
-- [ ] Complete authorized disconnect-to-reconnect for retained MCP identities.
-  Add tombstone lookup/reconnect orchestration without resolving old secrets;
-  current Calls create/update paths cannot reconnect a revoked endpoint. Keep
-  the public flow unchecked until end-to-end coverage passes.
+- [x] Add authorized static HTTP reconnect for retained MCP identities with fresh
+  credentials and the observed revoked generation. Normal create returns an
+  explicit proposal; reconnect preserves ID/namespace and never resolves old
+  credentials. Two tagged HTTP/PostgreSQL/local-MCP tests verify the actual
+  disconnect/reconnect path and fresh replacement after losing an old key. See
+  [management evidence](../20261107-0052-review-mcp-management.md).
+- [ ] Wire retained-identity reconnect into the production modal and delegated
+  OAuth attempts; keep full workflow acceptance open until those cases pass.
 
 - [x] Reject production localhost and IPv4/IPv6 loopback origins before client
   startup, including private-host allowlist attempts. Preserve per-request DNS

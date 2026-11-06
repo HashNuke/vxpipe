@@ -13,6 +13,8 @@ defmodule Vxpipe.Calls.MCPConnectionRepository do
               {:ok, map()} | {:error, term()}
   @callback list(term(), String.t()) :: {:ok, [map()]} | {:error, atom()}
   @callback get(term(), String.t(), String.t()) :: {:ok, map()} | {:error, atom()}
+  @doc "Metadata without decryption, including revoked identity; callers enforce authority and status."
+  @callback get_retained(term(), String.t(), String.t()) :: {:ok, map()} | {:error, atom()}
   @callback resolve(term(), String.t(), String.t()) ::
               {:ok, Vxpipe.Calls.ResolvedMCPConnection.t()} | {:error, atom()}
   @callback replace(term(), String.t(), String.t(), pos_integer(), map(), map()) ::
