@@ -192,6 +192,8 @@ platform exclusion. Existing native connection/update/override tests remain gree
 Depends on T0 approved form and completed prerequisite milestones; may proceed
 independently of T1–T3 behind unexposed operations.
 
+- [x] Add tenant MCP secret envelopes using the existing installation keyring,
+  with separate authenticated identity and bounded JSON payloads.
 - [ ] Add persistence migrations for tenant connection identity/config generation,
   encrypted auth material and catalog snapshots, using the existing encryption
   keyring with explicit MCP identity binding and rotation participation.
@@ -283,6 +285,14 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   evidence; only then check the milestone in the index.
 
 ### Implementation and review fixes
+
+- [x] Extend MCP cipher boundary evidence after adversarial review: key-ID aliases
+  with identical key material, provider/MCP envelope substitution, exact plaintext
+  size, oversized/unsupported envelopes and encoding-error normalization. Verify
+  oversized data is rejected before key lookup. Keep
+  this checkpoint separate from record authorization and OAuth lifecycle claims.
+  All seven focused tests pass; see the
+  [cipher checkpoint](../20261106-2345-review-mcp-cipher.md).
 
 - [x] Strengthen directory cache evidence after adversarial review: acknowledge
   the second pending caller before releasing the first fetch, fail a refresh of
