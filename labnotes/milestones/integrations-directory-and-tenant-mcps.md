@@ -675,8 +675,9 @@ instance; per-connection durable claims provide the cross-instance fence.
 ### T6a — Listed-template connection identity and forms
 
 Depends on T1/T2 directory resolution and T4/T5/T6 connection/authentication contracts.
-Read-only listing resolution/discovery is implemented; saved identity and listed
-forms remain missing production implementation, not just browser acceptance.
+Read-only listing resolution/discovery and snapshot storage are implemented;
+binding that identity through connection flows and listed forms remains missing
+production implementation, not just browser acceptance.
 See [lookup and snapshot contracts](../../docs/development/listed-mcp-connections.md).
 
 - [x] Reuse the existing directory page cache for bounded directory/entry/revision
@@ -690,11 +691,25 @@ See [lookup and snapshot contracts](../../docs/development/listed-mcp-connection
 - [x] Address checkpoint review: distinguish outer-proposal/reference error codes
   in the contract, and verify canceled/expired discovery cannot continue to MCP
   requests after an independent shared directory fetch finishes.
+- [x] Add repository storage for the accepted public listing snapshot separately
+  from encrypted credentials. Bind its directory/entry identity, endpoint and
+  recipe; reject private/unknown fields and mutation of an accepted snapshot.
+  Preserve the snapshot through revocation/reconnection and its name through
+  catalog refresh. Calls/Console mutation wiring remains in the tasks below.
+- [x] Address storage checkpoint review: document outer-method binding versus
+  protocol/credential checks and public metadata's trust boundary; verify the
+  maximum compound ID, omitted-snapshot preservation and unchanged credentials/
+  generation after rejected replacement.
 
 Discovery checkpoint evidence: [labnotes](../20261107-0431-connect-listed-mcps.md),
 4,901 umbrella tests with zero failures (201 excluded, seed 177411), all five root
 gates, and clean independent adversarial/exact-index review. No listed connection
 persistence, rendered form or real-provider acceptance is claimed by this checkpoint.
+
+Snapshot storage evidence: [labnotes](../20261107-0454-persist-listed-mcps.md),
+4,905 umbrella tests with zero failures (201 excluded, seed 371945), all five root
+gates and clean independent adversarial/exact-index review. The additive migration
+preserves existing records; public snapshots survive repository lifecycle changes.
 
 - [ ] Resolve new listed-connection proposals through the existing trusted backend
   directory adapter. Reject retired/incompatible proposals before side effects;

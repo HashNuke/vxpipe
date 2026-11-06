@@ -3,11 +3,18 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
   @behaviour Vxpipe.Calls.MCPConnectionRepository
   import Ecto.Query
   alias Vxpipe.Persistence.{CredentialKeyring, ProviderCredentialScope}
-  alias Vxpipe.Persistence.MCP.{RepositoryBoundary, SecretCipher}
+  alias Vxpipe.Persistence.MCP.{DirectoryEntry, RepositoryBoundary, SecretCipher}
   alias Vxpipe.Persistence.Schema.MCPConnection
 
   @private [log: false, telemetry_event: nil]
-  @configuration [:endpoint, :endpoint_identity, :directory_id, :server_name, :auth_method]
+  @configuration [
+    :endpoint,
+    :endpoint_identity,
+    :directory_id,
+    :directory_entry,
+    :server_name,
+    :auth_method
+  ]
 
   @impl true
   def create(context, tenant, attributes, secrets) when is_binary(tenant) do
@@ -164,7 +171,10 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
         do: repo.rollback(:invalid_mcp_catalog)
 
       record
-      |> MCPConnection.changeset(%{server_name: name, catalog: %{"tools" => catalog}})
+      |> MCPConnection.changeset(%{
+        server_name: DirectoryEntry.name(record.directory_entry, name),
+        catalog: %{"tools" => catalog}
+      })
       |> repo.update(@private)
       |> then(&unwrap!(repo, &1))
       |> metadata(tenant)
@@ -239,6 +249,7 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
   def reencrypt(_context, _size), do: {:error, :invalid_reencryption_batch_size}
 
   defp save!(repo, context, record, tenant, attributes, secrets) do
+    attributes = unwrap!(repo, DirectoryEntry.bind(attributes, record.directory_entry))
     catalog = Map.get(attributes, :catalog, [])
 
     if not is_list(catalog) or byte_size(JSON.encode!(catalog)) > 1_048_576,
@@ -344,6 +355,7 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
       endpoint: record.endpoint,
       endpoint_identity: record.endpoint_identity,
       directory_id: record.directory_id,
+      directory_entry: record.directory_entry,
       server_name: record.server_name,
       auth_method: record.auth_method,
       generation: record.generation,

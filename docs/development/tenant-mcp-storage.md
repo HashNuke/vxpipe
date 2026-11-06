@@ -14,7 +14,7 @@ records. Reads select the connection ID and tenant together; there is no inherit
 or application-config fallback.
 
 `tenant_mcp_connections` stores a stable UUID, endpoint and canonical endpoint
-identity, optional directory ID, server name, authentication method, configuration
+identity, optional directory ID and accepted entry snapshot, server name, authentication method, configuration
 generation, state, tool catalog and encrypted secret envelope. The namespace is
 `mcp_` followed by the UUID without hyphens. Changing server metadata does not
 rename that namespace. The repository receives already validated endpoints and
@@ -45,6 +45,41 @@ does not delete or rewrite rows. Rolling back that compatibility step retains th
 invariant now present in the initial migration. Inconsistent existing rows fail constraint
 validation and require explicit repair. Missing/stopped repositories and checkout
 failures return the fixed unavailable error; unrelated programmer errors propagate.
+
+## Accepted directory configuration
+
+The nullable `directory_entry` JSON column stores accepted public configuration
+separately from encrypted credentials. Existing custom and preview records remain
+valid without it. New listed records use `directory_id` as the unambiguous
+`<directory-id>/<entry-id>` binding; two 64-character IDs plus the separator fit
+the 129-character validation bound. Existing preview IDs are not rewritten.
+
+Persistence accepts only the closed public snapshot from
+[listed discovery](listed-mcp-connections.md): directory/entry IDs, entry revision,
+name, endpoint, authentication recipe and optional plain-text setup notes/HTTPS
+links. The encoded snapshot is bounded to 64 KiB; unknown fields, including nested
+secret fields, are rejected. Its identity, endpoint and recipe must agree with
+the connection attributes. Protocol support, destination policy and actual
+credential validation still belong to the authorized connection boundary.
+This storage check binds the outer authentication method; it does not compare
+encrypted credentials with an API-key header name, OAuth registration mode or
+requested scopes. Its API-key name check enforces grammar, while the directory
+resolver/protocol layer rejects reserved transport headers. Future listed
+mutations must retain those checks before network side effects. The public
+snapshot is immutable through repository operations; it is not cryptographically
+authenticated metadata and does not protect against privileged database changes.
+
+Replacement cannot detach or modify an existing accepted snapshot. Revocation
+clears credentials and the catalog but retains this public configuration for
+explicit same-ID reconnection, even without a decryption key. Catalog refresh
+keeps the accepted directory display name while replacing tool descriptors.
+Custom connections continue to use their server-reported names. Directory
+refreshes never rewrite saved configuration; accepting a changed recipe would
+require a separately designed explicit migration workflow.
+
+The additive migration and repository contracts are implemented. Creating listed
+connections through Calls/Console, binding OAuth attempts and rendering locked
+forms remain T6a tasks; the storage capability alone does not enable Connect.
 
 ## Secrets and rotation
 
@@ -77,7 +112,7 @@ platform inheritance and lifecycle do not describe tenant-only MCP connections.
 Reusing the installation keyring avoids a second operator secret-management system.
 Plaintext credentials and display names as durable identities were rejected.
 
-Fifteen connection-store tests cover encrypted storage, secret inspection,
+Connection-store tests cover encrypted storage, secret inspection,
 cross-tenant reads/writes, duplicate identities, stale updates, invalid-edit
 rollback, revocation/restoration, repository outage/recovery, constraint enforcement
 and re-encryption batch rollback. Two tagged tests use distinct PostgreSQL

@@ -78,6 +78,79 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
              )
   end
 
+  test "accepted directory configuration survives management and retained-ID reconnection",
+       data do
+    listing = %{
+      "directory_id" => "public-directory",
+      "integration_id" => "calendar",
+      "revision" => 2,
+      "name" => "Directory Calendar",
+      "endpoint" => data.attributes.endpoint,
+      "authentication" => %{"type" => "bearer"},
+      "setup_notes" => "Create a key in your account."
+    }
+
+    attributes =
+      data.attributes
+      |> Map.put(:directory_id, "public-directory/calendar")
+      |> Map.put(:directory_entry, listing)
+
+    assert {:ok, original} =
+             ConnectionStore.create(data.context, data.tenant, attributes, %{"token" => "first"})
+
+    assert original.directory_entry == listing
+    assert original.server_name == "Directory Calendar"
+
+    assert {:ok, refreshed} =
+             ConnectionStore.refresh_catalog(data.context, data.tenant, original.id, 1, %{
+               server_name: "Protocol-reported name",
+               catalog: []
+             })
+
+    assert refreshed.directory_entry == listing
+    assert refreshed.server_name == "Directory Calendar"
+
+    assert {:ok, replaced} =
+             ConnectionStore.replace(data.context, data.tenant, original.id, 1, attributes, %{
+               "token" => "replacement"
+             })
+
+    assert replaced.directory_entry == listing
+    assert replaced.id == original.id
+    assert replaced.generation == 2
+
+    assert {:ok, revoked} =
+             ConnectionStore.revoke(data.context, data.tenant, original.id, replaced.generation)
+
+    assert revoked.directory_entry == listing
+    assert revoked.directory_id == "public-directory/calendar"
+
+    assert {:ok, ^revoked} =
+             ConnectionStore.get_retained(
+               Keyword.put(data.context, :keyring, nil),
+               data.tenant,
+               original.id
+             )
+
+    assert {:ok, restored} =
+             ConnectionStore.replace(
+               data.context,
+               data.tenant,
+               original.id,
+               revoked.generation,
+               attributes,
+               %{"token" => "fresh"}
+             )
+
+    assert restored.directory_entry == listing
+    assert restored.namespace == original.namespace
+    assert {:ok, resolved} = ConnectionStore.resolve(data.context, data.tenant, original.id)
+    assert resolved.connection.directory_entry == listing
+    assert resolved.secrets == %{"token" => "fresh"}
+    assert {:ok, [^restored]} = ConnectionStore.list(data.context, data.tenant)
+    assert {:ok, ^restored} = ConnectionStore.get(data.context, data.tenant, original.id)
+  end
+
   test "an unavailable repository fails safely and recovery preserves the saved connection",
        data do
     {:ok, connection} =
@@ -115,6 +188,116 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
     assert {:ok, []} = ConnectionStore.list(data.context, data.other)
     assert {:ok, restored} = ConnectionStore.resolve(data.context, data.tenant, connection.id)
     assert restored.secrets == %{"token" => "before-outage"}
+  end
+
+  test "listed records reject private snapshot fields and inconsistent accepted identities",
+       data do
+    entry = directory_entry(data.attributes.endpoint)
+
+    attributes =
+      data.attributes
+      |> Map.put(:directory_id, "public-directory/calendar")
+      |> Map.put(:directory_entry, entry)
+
+    for invalid <- [
+          Map.put(attributes, :directory_id, "another-directory/calendar"),
+          Map.put(attributes, :endpoint, "https://different.example.test/mcp"),
+          Map.put(attributes, :endpoint_identity, "https://different.example.test/mcp"),
+          Map.put(attributes, :auth_method, "none"),
+          put_in(attributes, [:directory_entry, "client_secret"], "private-marker"),
+          put_in(attributes, [:directory_entry, "authentication", "token"], "private-marker"),
+          put_in(
+            attributes,
+            [:directory_entry, "setup_url"],
+            "https://user:password@example.test"
+          ),
+          put_in(attributes, [:directory_entry, "revision"], 0)
+        ] do
+      assert {:error, :invalid_mcp_configuration} =
+               ConnectionStore.create(data.context, data.tenant, invalid, %{"token" => "secret"})
+
+      assert {:ok, []} = ConnectionStore.list(data.context, data.tenant)
+    end
+  end
+
+  test "credential replacement cannot detach or rewrite an accepted directory configuration",
+       data do
+    attributes =
+      data.attributes
+      |> Map.put(:directory_id, "public-directory/calendar")
+      |> Map.put(:directory_entry, directory_entry(data.attributes.endpoint))
+
+    assert {:ok, original} =
+             ConnectionStore.create(data.context, data.tenant, attributes, %{
+               "token" => "original"
+             })
+
+    for changed <- [
+          Map.put(attributes, :directory_entry, nil),
+          Map.put(attributes, :directory_id, nil),
+          put_in(attributes, [:directory_entry, "revision"], 3),
+          put_in(attributes, [:directory_entry, "name"], "Changed name"),
+          put_in(attributes, [:directory_entry, "setup_notes"], "Changed instructions")
+        ] do
+      assert {:error, :invalid_mcp_configuration} =
+               ConnectionStore.replace(
+                 data.context,
+                 data.tenant,
+                 original.id,
+                 original.generation,
+                 changed,
+                 %{"token" => "replacement"}
+               )
+
+      assert {:ok, ^original} = ConnectionStore.get(data.context, data.tenant, original.id)
+      assert {:ok, resolved} = ConnectionStore.resolve(data.context, data.tenant, original.id)
+      assert resolved.connection.generation == original.generation
+      assert resolved.secrets == %{"token" => "original"}
+    end
+  end
+
+  test "a maximum-length directory binding fits and omitted snapshots remain unchanged", data do
+    directory = String.duplicate("d", 64)
+    integration = String.duplicate("i", 64)
+    identity = directory <> "/" <> integration
+
+    entry =
+      directory_entry(data.attributes.endpoint)
+      |> Map.put("directory_id", directory)
+      |> Map.put("integration_id", integration)
+
+    attributes =
+      data.attributes
+      |> Map.put(:directory_id, identity)
+      |> Map.put(:directory_entry, entry)
+
+    assert {:ok, original} =
+             ConnectionStore.create(data.context, data.tenant, attributes, %{"token" => "old"})
+
+    assert original.directory_id == identity
+    assert original.directory_entry == entry
+
+    replacement =
+      attributes
+      |> Map.delete(:directory_entry)
+      |> Map.put(:server_name, "New protocol-reported name")
+
+    assert {:ok, replaced} =
+             ConnectionStore.replace(
+               data.context,
+               data.tenant,
+               original.id,
+               original.generation,
+               replacement,
+               %{"token" => "fresh"}
+             )
+
+    assert replaced.directory_entry == entry
+    assert replaced.server_name == entry["name"]
+    assert replaced.directory_id == identity
+    assert replaced.generation == original.generation + 1
+    assert {:ok, resolved} = ConnectionStore.resolve(data.context, data.tenant, original.id)
+    assert resolved.secrets == %{"token" => "fresh"}
   end
 
   test "restoring a revoked identity requires fresh secrets and advances its generation", data do
@@ -477,5 +660,16 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
              ConnectionStore.create(data.context, data.tenant, conflict, %{})
 
     assert id == first.id
+  end
+
+  defp directory_entry(endpoint) do
+    %{
+      "directory_id" => "public-directory",
+      "integration_id" => "calendar",
+      "revision" => 2,
+      "name" => "Directory Calendar",
+      "endpoint" => endpoint,
+      "authentication" => %{"type" => "bearer"}
+    }
   end
 end

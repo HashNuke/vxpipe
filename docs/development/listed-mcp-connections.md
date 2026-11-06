@@ -1,7 +1,7 @@
 # Listed MCP discovery and accepted configuration
 
-Status: directory reference resolution and credentialless discovery implemented;
-connection/attempt persistence and locked listed forms remain open in
+Status: directory reference resolution, credentialless discovery and accepted
+snapshot storage implemented; listed connection/attempt wiring and locked forms remain open in
 [T6a](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md#t6a--listed-template-connection-identity-and-forms).
 
 ## Reuse the directory and management boundaries
@@ -75,11 +75,14 @@ malformed references that contain unexpected private fields.
 The discovery response is display data when sent through a browser. A future
 Connect request must resolve its reference again on the backend before side
 effects; it must not trust a returned snapshot submitted by the client. The
-backend will bind the accepted name/endpoint/recipe and directory/entry identity
-into saved configuration and OAuth attempts. In-flight attempts and subsequent
+backend must bind the accepted name/endpoint/recipe and directory/entry identity
+into saved configuration and OAuth attempts. The repository now supports a closed,
+immutable public snapshot alongside encrypted credentials; see the
+[storage contract](tenant-mcp-storage.md#accepted-directory-configuration).
+In-flight attempts and subsequent
 management must use that saved configuration, including after retirement,
 directory outage, disappearance or disconnect. This checkpoint does not yet
-implement that persistence or enable the listed Connect action.
+wire listed creation/OAuth attempts or enable the listed Connect action.
 
 Rejected alternatives: adding a parallel directory API, accepting the entire
 browser listing as authority, unbounded catalog scans, and re-reading the public

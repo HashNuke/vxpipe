@@ -8,6 +8,7 @@ defmodule Vxpipe.Persistence.Schema.MCPConnection do
     field(:endpoint, :string)
     field(:endpoint_identity, :string)
     field(:directory_id, :string)
+    field(:directory_entry, :map)
     field(:server_name, :string)
     field(:auth_method, :string)
     field(:generation, :integer)
@@ -26,6 +27,7 @@ defmodule Vxpipe.Persistence.Schema.MCPConnection do
       :endpoint,
       :endpoint_identity,
       :directory_id,
+      :directory_entry,
       :server_name,
       :auth_method,
       :generation,
@@ -47,7 +49,7 @@ defmodule Vxpipe.Persistence.Schema.MCPConnection do
     ])
     |> validate_length(:endpoint, max: 2048)
     |> validate_length(:endpoint_identity, max: 2048)
-    |> validate_length(:directory_id, max: 128)
+    |> validate_length(:directory_id, max: 129)
     |> validate_length(:server_name, max: 200)
     |> validate_number(:generation, greater_than: 0)
     |> validate_inclusion(:auth_method, ~w(none bearer headers basic oauth))
