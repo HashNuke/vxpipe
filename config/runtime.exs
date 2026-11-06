@@ -7,6 +7,21 @@ nonempty_env = fn name ->
   end
 end
 
+directory_origin =
+  nonempty_env.("VXPIPE_INTEGRATIONS_DIRECTORY_ORIGIN") ||
+    "https://integrations-api-production-2803.up.railway.app"
+
+with {:ok, uri} <- URI.new(directory_origin),
+     %URI{scheme: "https", host: host, userinfo: nil, query: nil, fragment: nil} <- uri,
+     true <- is_binary(host) and host != "",
+     true <- uri.path in [nil, "", "/"],
+     true <- is_integer(uri.port) and uri.port in 1..65_535 do
+  config :vxpipe_console, :integrations_directory_origin, URI.to_string(%{uri | path: nil})
+else
+  _invalid ->
+    raise "invalid VXPIPE_INTEGRATIONS_DIRECTORY_ORIGIN: expected an HTTPS origin"
+end
+
 # Kept private to provider startup; saved services and call specs contain no origin.
 # Missing hosted configuration is reported only when the Morse API is selected.
 config :vxpipe_providers, :morse_code_api,

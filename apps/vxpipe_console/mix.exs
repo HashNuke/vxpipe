@@ -32,6 +32,7 @@ defmodule Vxpipe.Console.MixProject do
       {:bandit, "~> 1.12"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:lazy_html, "~> 0.1", only: :test},
+      {:jsv, "~> 0.22"},
       {:phoenix, "~> 1.8"},
       {:phoenix_live_dashboard, "~> 0.9.1"},
       {:phoenix_live_reload, "~> 1.6", only: :dev},

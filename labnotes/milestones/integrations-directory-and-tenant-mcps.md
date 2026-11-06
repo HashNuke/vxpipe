@@ -1,6 +1,6 @@
 # Integrations directory and tenant MCP connections
 
-Status: **prototype checkpoint; production acceptance pending**. The Storybook proposal
+Status: **production implementation in progress; acceptance pending**. The Storybook proposal
 is part of this specification, not evidence that backend behavior is implemented.
 User review/approval of the workflow remains open. This milestone makes the hosted
 directory the normal browse/search source, preserves installed AI/telephony during
@@ -132,10 +132,11 @@ and recovery without a production backend or any credential/network submission.
 
 Depends on T0 workflow decision; external native definitions are a release gate.
 
-- [ ] Finish/verify root VERSION-to-OTP build metadata; expose a programmatic runtime
-  version accessor and browser response field without a second version constant.
-- [ ] Configure the default API origin and validated runtime operator override.
-- [ ] Add a Console-owned public-directory client: schema validation, version header,
+- [x] Verify root VERSION-to-OTP build metadata and expose a programmatic runtime
+  version accessor without a second version constant.
+- [ ] Expose that installation version in the facade/browser response.
+- [x] Configure the default API origin and validated runtime operator override.
+- [x] Add a Console-owned public-directory client: schema validation, version header,
   `category`, global `q`, scope, pagination and typed/redacted error mapping.
 - [ ] Verify/add native entries and this release's adapter IDs **in the separate
   directory repository**, coordinated as an external prerequisite; do not mark
@@ -276,6 +277,29 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   evidence; only then check the milestone in the index.
 
 ### Implementation and review fixes
+
+- [x] Validate MCP endpoint host and port in addition to generic URI syntax;
+  reject hostless HTTPS authorities and ports outside 1–65535. Strengthen the
+  streaming-size regression to require `response_too_large` for valid oversized
+  JSON, so invalid-JSON rejection cannot conceal a missing byte cap.
+- [x] Keep checkpoint milestone claims tied to committed behavior: split the
+  completed version accessor from the later facade/browser response field, and
+  distinguish checkpoint tests from the broader worktree verification lane.
+
+- [x] Enforce URI formats in directory schema validation and align category query
+  identifiers with the shipped schema. Review found malformed HTTPS-prefixed URLs
+  accepted as valid and valid returned categories that could not be requested.
+  Regression tests failed before enabling formats and matching the category grammar.
+- [x] Document directory HTTP timeouts as per-phase budgets, with caller-owned
+  total-lifetime cancellation, rather than promising a five-second wall-clock cap.
+
+- [x] Tighten public directory response identity before committing the client:
+  reject a response whose revision differs from the explicitly requested snapshot,
+  and reject a later page when the request omitted its cursor. Add failing
+  regressions and preserve valid continuations/empty pages. The 23 scoped tests
+  and full Console suite (470 tests) pass. Final adversarial staged review is
+  tracked in the [client checkpoint](../20261106-2325-review-directory-transport.md);
+  final milestone-wide root acceptance remains in T8.
 
 - [x] Complete adversarial pre-commit review of the Storybook discovery checkpoint.
   Fix URL edits in Manage that reset the method without running discovery, expose

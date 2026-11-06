@@ -1,8 +1,9 @@
 # Integrations directory consumption and unlisted MCPs
 
-Status: proposal for review, 2026-10-25. The accompanying Storybooks simulate the
-workflow; production API consumption, persistence and outbound OAuth are not
-implemented by this checkpoint. Delivery tasks and acceptance gates are in
+Status: public directory client implemented, 2026-11-06. The versioned request,
+bounded transport and schema-validation boundary are implemented. Cache, facade,
+production pages, persistence and outbound OAuth remain separate checkpoints.
+The accompanying Storybooks simulate their workflows. Delivery tasks and acceptance gates are in
 [the milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 This document supersedes earlier proposals that always served AI/telephony browse
 results locally. The installed adapter registry remains authoritative for what
@@ -11,7 +12,7 @@ VxPipe can actually connect.
 ## Directory authority and fallback
 
 Use `https://integrations-api-production-2803.up.railway.app` by default. A runtime
-operator setting, `VXPIPE_INTEGRATIONS_DIRECTORY_URL`, may replace that origin;
+operator setting, `VXPIPE_INTEGRATIONS_DIRECTORY_ORIGIN`, may replace that origin;
 validate it as an HTTPS origin, never accept one from tenant/browser input. It is
 independent of the Installation URL and Gateway public URL. Do not add a tenant
 configuration field for the directory origin.
@@ -230,3 +231,32 @@ MCP management uses Authentication and Tools tabs, direct reconnect/credential
 editing, account context in the header and an auth-method tooltip. Tools search and
 refresh stay outside the independently scrolling tool list. No backend MCP grant
 or directory-fetch implementation is included in these Storybook refinements.
+
+### Runtime directory origin
+
+`VXPIPE_INTEGRATIONS_DIRECTORY_ORIGIN` overrides the hosted directory origin at
+startup. It must be an HTTPS origin, optionally with a port, without credentials,
+path, query or fragment. Invalid configuration fails startup without echoing the
+value. The default is `https://integrations-api-production-2803.up.railway.app`.
+Public requests use the compiled Console OTP application version, derived from
+root `VERSION`, rather than a separately maintained browser version.
+
+
+## Public client validation and time bounds
+
+The Console client accepts a closed set of public query parameters and validates
+the entire response against the shipped schema, including URI formats. Category
+filters use that schema's identifier grammar. Response resource, installation
+version, query, explicit snapshot revision and first-page position must match the
+request. A bad row rejects the page so authoritative pagination stays intact;
+unknown native adapters cannot become executable integrations.
+MCP endpoint validation also requires a nonempty HTTPS host and a valid network
+port, without userinfo, query or fragment; generic URI syntax alone is insufficient.
+
+The anonymous transport follows no redirects and performs no automatic retries.
+It caps streamed response bodies at 1 MiB, rejects compressed responses and maps
+errors to fixed codes without upstream diagnostic bodies. Its connection, pool,
+receive and request budgets are five seconds per phase, not a five-second total
+deadline. Callers that need a total lifetime must own cancellation; the planned directory
+cache owns that boundary for the production facade. ETags and rate-limit
+delays remain internal metadata, not tenant connection data.
