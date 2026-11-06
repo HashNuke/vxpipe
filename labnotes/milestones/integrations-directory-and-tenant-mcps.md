@@ -151,12 +151,18 @@ live check confirms categories/native/MCP entries for the release, with no secre
 
 Depends on T1. Native connection management remains the existing implementation.
 
-- [ ] Cache validated pages with ETag, bounded memory/TTL, keyed by origin/version/
+- [x] Cache validated pages with ETag, bounded memory/TTL, keyed by origin/version/
   query/scope/page; coalesce misses and handle 304 without a cached body safely.
 - [ ] Add authenticated Console facade with local connection-status join and current
   permission filtering. Publish read-safe statuses, never encrypted/plain secrets.
 - [ ] Derive fallback from installed Registry credential capabilities; exclude
   uninstalled/unsupported adapters. Preserve tenant-over-platform precedence.
+- [x] Parse directory 429 Retry-After (seconds or HTTP date) without exposing
+  upstream bodies, and suppress additional upstream queries/categories for the
+  origin during the bounded cooldown. Invalid/missing headers default to 60 seconds;
+  untrusted delays cap at 24 hours. Valid cached pages remain readable. Red/green
+  transport/cache regressions and 14 focused cache/lifecycle tests pass; rendered recovery and
+  broader release acceptance remain pending.
 - [ ] Implement timeout/429/5xx/schema/unsupported-version fallback, sanitized
   diagnostics, explicit retry and request cancellation/out-of-order protection.
 
@@ -277,6 +283,15 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   evidence; only then check the milestone in the index.
 
 ### Implementation and review fixes
+
+- [x] Strengthen directory cache evidence after adversarial review: acknowledge
+  the second pending caller before releasing the first fetch, fail a refresh of
+  an actually cached/expired page, and cover byte eviction, worker/waiter limits,
+  crash/timeout slot recovery and worker termination on a cache restart. Use
+  process/message acknowledgements and controlled clocks rather than sleeps.
+  Fourteen focused tests and the full 476-test Console suite pass. See the
+  [cache checkpoint](../20261106-2339-review-directory-cache.md) for the test-clock
+  synchronization correction and review evidence.
 
 - [x] Validate MCP endpoint host and port in addition to generic URI syntax;
   reject hostless HTTPS authorities and ports outside 1–65535. Strengthen the

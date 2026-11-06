@@ -18,6 +18,7 @@ defmodule Vxpipe.Console.Application do
     children =
       [
         {Phoenix.PubSub, name: Vxpipe.Console.PubSub},
+        Vxpipe.Console.IntegrationsDirectory.Supervisor,
         {TelemetryReporter, max_pending_events: Keyword.fetch!(diagnostics, :max_pending_events)}
       ] ++ [{Endpoint, gateway_mount: gateway_mount()}]
 

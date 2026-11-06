@@ -1,8 +1,9 @@
 # Integrations directory consumption and unlisted MCPs
 
 Status: public directory client implemented, 2026-11-06. The versioned request,
-bounded transport and schema-validation boundary are implemented. Cache, facade,
-production pages, persistence and outbound OAuth remain separate checkpoints.
+bounded transport and schema-validation boundary are implemented. The supervised
+public cache is also implemented. Facade, production pages, persistence and
+outbound OAuth remain separate checkpoints.
 The accompanying Storybooks simulate their workflows. Delivery tasks and acceptance gates are in
 [the milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 This document supersedes earlier proposals that always served AI/telephony browse
@@ -257,6 +258,34 @@ The anonymous transport follows no redirects and performs no automatic retries.
 It caps streamed response bodies at 1 MiB, rejects compressed responses and maps
 errors to fixed codes without upstream diagnostic bodies. Its connection, pool,
 receive and request budgets are five seconds per phase, not a five-second total
-deadline. Callers that need a total lifetime must own cancellation; the planned directory
-cache owns that boundary for the production facade. ETags and rate-limit
+deadline. Callers that need a total lifetime must own cancellation; the directory
+cache supplies that boundary for the production facade. ETags and rate-limit
 delays remain internal metadata, not tenant connection data.
+
+## Public directory cache
+
+Console supervises the public-page cache and its fetch workers as one restart
+boundary. A cache restart terminates old workers. Keys contain the complete
+normalized public request, including configured origin, installation version,
+resource, query, scope and pagination. Tenant status and credentials are joined
+outside this cache.
+
+Entries live for an hour and revalidate with their ETags. A 304 without a cached
+body gets one unconditional retry; a failed expired refresh removes the old entry rather than
+serving stale directory results. Limits are 128 entries, a 16 MiB serialized-term
+budget, eight fetch workers and 64 waiting callers per key. Excess work returns
+`busy`; a worker crash or 12-second deadline releases its slot. Callers have a
+15-second bound. Entries larger than the byte budget may be returned to the
+current callers but are not retained. Limits do not depend on browser behavior.
+
+## Rate-limit cooldown
+
+The Console directory transport preserves a 429 Retry-After as an internal delay,
+accepting seconds or an HTTP date. Missing, malformed, duplicate or oversized
+headers use a 60-second fallback; delays are capped at 24 hours to bound the effect
+of untrusted metadata. The cache records a monotonic origin-specific deadline and
+blocks new upstream requests across queries and categories until that deadline.
+Valid cached entries remain usable. Browser-facing failures retain the sanitized
+`rate_limited` code, and local connected inventory remains independent. A manual
+retry during the cooldown cannot bypass it. This does not introduce automatic
+HTTP retries or forward local connection data to the public directory.
