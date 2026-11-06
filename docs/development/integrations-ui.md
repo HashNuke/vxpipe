@@ -1,8 +1,8 @@
 # Production Integrations interface
 
-Status: native integration management and static custom-MCP forms are implemented.
-OAuth forms, listed-MCP recipes, callback draft recovery and full authenticated
-browser acceptance remain open in the
+Status: native integration management and custom-MCP forms are implemented,
+including [OAuth fields and nonsecret callback recovery](mcp-oauth-ui.md).
+Listed-MCP recipes and full authenticated browser acceptance remain open in the
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 This checkpoint follows the [directory contract](integrations-directory-consumption.md).
 
@@ -65,8 +65,7 @@ Management exposes Authentication and Tools tabs. Refresh tools sends only
 unsaved credential edits. Successful configuration saves retain the effective
 selected method, including a discovered anonymous endpoint. Disconnect and create
 refresh the local inventory. Read-only viewers can inspect tools without mutation
-controls. Unsupported OAuth discovery remains explicit until the OAuth UI
-checkpoint is complete.
+controls. Unsupported OAuth discovery remains explicit and blocks OAuth submission.
 
 ## Alternatives and evidence
 

@@ -5,16 +5,18 @@ import { Button } from "../Button";
 import { ServiceLogo } from "../ServiceLogo";
 import { capabilityLabels, type SetupProviderId } from "../setupCatalog";
 import { shouldInterceptNavigation } from "../shouldInterceptNavigation";
-import { integrationQuery, parseCategories, type IntegrationCategory, type IntegrationConnection, type McpConnection } from "./inventoryApi";
+import { integrationQuery, parseCategories, type IntegrationCategory, type IntegrationConnection } from "./inventoryApi";
 import { CustomMcpDialog } from "./CustomMcpDialog";
 import { useInventory, type IntegrationFetch } from "./useInventory";
+import { useOAuthReturn, type RestoredMcpDialog } from "./useOAuthReturn";
 import "../mcpStories/mcp-services-story.css";
 
 const defaultFetch: IntegrationFetch = (input, init) => window.fetch(input, init);
 const sessionExpired = () => window.location.assign("/auth/login");
 const localCategories: { id: string; name: string; count?: number }[] = [{ id: "connected", name: "Connected integrations" }, { id: "ai", name: "AI models" }, { id: "telephony", name: "Telephony" }];
 
-export function IntegrationsDirectory({ tenantKey, fetchImpl = defaultFetch, onSessionExpired = sessionExpired, onManage, onRemove, removingProvider, revision, csrfToken = "", canEdit = false, canManageMcps = false }: {
+export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedirect, fetchImpl = defaultFetch, onSessionExpired = sessionExpired, onManage, onRemove, removingProvider, revision, csrfToken = "", canEdit = false, canManageMcps = false }: {
+  actorId?: string; onAuthorizationRedirect?: (url: string) => void;
   csrfToken?: string; canEdit?: boolean; canManageMcps?: boolean; tenantKey: string | null; fetchImpl?: IntegrationFetch; onSessionExpired?: () => void;
   onManage: (provider: SetupProviderId, connection?: IntegrationConnection) => void;
   onRemove?: (provider: SetupProviderId, bindingName: string) => void; removingProvider?: SetupProviderId | null; revision?: unknown;
@@ -30,7 +32,7 @@ export function IntegrationsDirectory({ tenantKey, fetchImpl = defaultFetch, onS
   const category = search.trim() ? "search" : /^[a-z][a-z0-9-]{0,63}$/.test(pathCategory) ? pathCategory : "connected";
   const cursor = category === "connected" ? null : params.get("cursor");
   const [searchInput, setSearchInput] = useState(search);
-  const [mcpDialog, setMcpDialog] = useState<{ tenantKey: string; connection?: McpConnection } | null>(null);
+  const [mcpDialog, setMcpDialog] = useState<RestoredMcpDialog | null>(null);
   const [retry, setRetry] = useState(0);
   const [categories, setCategories] = useState<IntegrationCategory[]>([]);
   const [categoriesFailed, setCategoriesFailed] = useState(false);
@@ -39,6 +41,7 @@ export function IntegrationsDirectory({ tenantKey, fetchImpl = defaultFetch, onS
   const state = useInventory(`${prefix}/integrations?${query}`, context, tenantKey, fetchImpl, onSessionExpired, revision, retry, cursor);
   const data = state.data;
   const busy = state.status === "loading";
+  const oauthReturn = useOAuthReturn({ actorId, tenantKey, ready: state.status === "ready", inventory: data, canManageMcps, onRestore: setMcpDialog, onAuthorizationRedirect });
   const categoriesList = [...localCategories, ...(tenantKey === null ? [] : categories)];
   const label = category === "search" ? "Search results" : categoriesList.find(item => item.id === category)?.name ?? "MCP integrations";
 
@@ -74,13 +77,15 @@ export function IntegrationsDirectory({ tenantKey, fetchImpl = defaultFetch, onS
   }
 
   function closeMcp() { setMcpDialog(null); setRetry(value => value + 1); }
+  const showMcpDialog = !!mcpDialog && tenantKey !== null && mcpDialog.tenantKey === tenantKey && mcpDialog.actorId === actorId && (!!mcpDialog.connection || canManageMcps);
 
   return <>
-    {mcpDialog && tenantKey !== null && mcpDialog.tenantKey === tenantKey && <CustomMcpDialog key={`${tenantKey}:${mcpDialog.connection?.id ?? "new"}`} tenantKey={tenantKey} csrfToken={csrfToken} fetchImpl={fetchImpl} onSessionExpired={onSessionExpired} onClose={closeMcp} onConnected={closeMcp} connection={mcpDialog.connection} />}
+    {showMcpDialog && mcpDialog && tenantKey !== null && <CustomMcpDialog key={`${tenantKey}:${mcpDialog.connection?.id ?? "new"}`} tenantKey={tenantKey} csrfToken={csrfToken} fetchImpl={fetchImpl} onSessionExpired={onSessionExpired} onClose={closeMcp} onConnected={closeMcp} connection={mcpDialog.connection ? { ...mcpDialog.connection, canEdit: mcpDialog.connection.canEdit && canManageMcps } : undefined} initialDraft={mcpDialog.initialDraft} returnTo={oauthReturn.returnTo} onAuthorize={oauthReturn.authorize} recoveryNotice={mcpDialog.initialDraft ? oauthReturn.notice ?? undefined : undefined} />}
+    {oauthReturn.notice && !(showMcpDialog && mcpDialog?.initialDraft) && <p className="mb-4" role="status">{oauthReturn.notice}</p>}
     <nav aria-label="Integration breadcrumb" className="mb-6 text-sm text-[var(--admin-muted)]">Integrations <span aria-hidden="true"> / </span><span className="text-[var(--admin-ink)]">{label}</span></nav>
     <div className="mcp-page-heading service-directory-heading">
       <h1>{tenantKey === null ? "Platform Integrations" : "Integrations"}</h1>
-      {tenantKey !== null && canManageMcps && csrfToken && data && <Button disabled={state.status !== "ready"} onClick={() => setMcpDialog({ tenantKey })}>Connect other MCP</Button>}
+      {tenantKey !== null && canManageMcps && csrfToken && data && <Button disabled={state.status !== "ready"} onClick={() => setMcpDialog({ tenantKey, actorId })}>Connect other MCP</Button>}
       <div className="mcp-search"><Search size={17} aria-hidden /><input aria-label="Search integrations" type="search" placeholder="Search all integrations…" maxLength={200} value={searchInput} onChange={event => setSearchInput(event.target.value)} /></div>
     </div>
     <div className="service-directory-layout">
@@ -110,7 +115,7 @@ export function IntegrationsDirectory({ tenantKey, fetchImpl = defaultFetch, onS
               <div className="service-directory-name"><h3>{item.name}</h3>{native && item.capabilities.length > 0 ? <div className="setup-tags service-directory-capabilities">{item.capabilities.map(capability => <span key={capability}>{capabilityLabels[capability]}</span>)}</div> : <p>{item.summary}</p>}</div>
               <div className="directory-row-actions">{item.mcpConnections.map(connection => <Fragment key={connection.id}>
                 <span className="setup-service-status" title={connection.status === "connected" ? "Connected" : "Reconnect required"}>{connection.status === "connected" ? <CheckCheck size={18} aria-hidden /> : <CircleAlert size={18} aria-hidden />}<span className="sr-only">{connection.status === "connected" ? "Connected" : "Reconnect required"}</span></span>
-                <Button disabled={state.status !== "ready"} aria-label={`Manage ${connection.serverName}`} onClick={() => tenantKey && setMcpDialog({ tenantKey, connection: { ...connection, canEdit: connection.canEdit && canManageMcps } })}>Manage</Button>
+                <Button disabled={state.status !== "ready"} aria-label={`Manage ${connection.serverName}`} onClick={() => tenantKey && setMcpDialog({ tenantKey, actorId, connection: { ...connection, canEdit: connection.canEdit && canManageMcps } })}>Manage</Button>
               </Fragment>)}{item.connections.map(connection => <Fragment key={`${connection.provider}:${connection.name}`}>
                 {connection.status === "connected" ? <span className="setup-service-status" title="Connected"><CheckCheck size={18} aria-hidden /><span className="sr-only">Connected</span></span> : <span className="mcp-status-warning directory-attention"><CircleAlert size={16} aria-hidden />Reconnect required</span>}
                 <Button disabled={!canEdit || !(connection.canEdit || (tenantKey !== null && connection.source === "platform" && canEdit)) || !!removingProvider || state.status !== "ready"} aria-label={`Edit ${item.name}${item.connections.length > 1 ? ` (${connection.name})` : ""}`} onClick={() => item.provider && onManage(item.provider, connection)}>{item.connections.length > 1 ? `Edit ${connection.name}` : "Edit"}</Button>

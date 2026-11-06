@@ -262,6 +262,28 @@ and paginated tools without executing a tool; unavailable and zero tools differ.
 
 Depends on T4 and existing Console Installation URL/CIMD foundation.
 
+- [x] Wire production CIMD, DCR and Own-client forms to existing discovery and
+  OAuth/connection operations. Managed CIMD has no generic fields; DCR has only
+  its optional initial token. Own-client shows advertised grants, authentication
+  and signing choices, exact Console callback, active credential fields and
+  grant-specific request parameters. Saved OAuth labels and catalog-only testing
+  preserve existing credentials. See [UI contract](../../docs/development/mcp-oauth-ui.md).
+- [x] Preserve tenant directory location through browser consent and add optional
+  five-minute tab-local nonsecret draft recovery bound to actor/tenant/attempt.
+  Require current authorized inventory before success feedback; consume once,
+  reenter secrets and reject stale saved generations or lost write authority.
+  Storage failure never blocks authorization. Query-bearing endpoint/issuer
+  values are not stored. Browser/provider round-trip acceptance stays open.
+- [x] Fix adversarial UI review findings: reject unsupported saved browser-OAuth
+  endpoint changes before submitting; preserve callback context across expired
+  directory cursor recovery; accept valid percent-encoded return paths within
+  bounded storage. Each finding has a red-then-green regression. Hidden multiline
+  keys require reveal-to-edit and retain newlines across hide/show.
+  Rendered retry notices stay inside the modal; cursor recovery also preserves
+  attempt context while authenticated identity is still loading.
+- [ ] Complete authenticated Console/provider browser acceptance and retained-ID
+  reconnect proposals; fixture UI and protocol acceptance do not close these gates.
+
 - [ ] Inspect installed ExMCP support and adapt its discovery/authorization interfaces;
   record gaps before adding protocol code. Support protected-resource metadata,
   OAuth/OIDC issuer discovery, existing registration, CIMD, then DCR negotiation.

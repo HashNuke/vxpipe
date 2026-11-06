@@ -5,29 +5,38 @@ import { SetupDialog } from "../SetupDialog";
 import { Disclosure, Pairs, SelectField, TextField } from "../mcpStories/FormControls";
 import { useMcpDiscovery } from "./useMcpDiscovery";
 import { validMcpUrl } from "./mcpDiscoveryApi";
+import { OAuthFields } from "./OAuthFields";
+import type { OAuthDraft } from "./oauthDraft";
+import { oauthDefaults, oauthProblem, oauthRequest, type ClientAuthentication, type OAuthGrant, type OAuthMethod, type OAuthValues } from "./oauthForm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import type { McpConnection } from "./inventoryApi";
 import type { IntegrationFetch } from "./useInventory";
 import "../mcpStories/mcp-services-story.css";
 
-type Method = "" | "none" | "bearer" | "headers" | "basic";
+type Method = "" | "none" | "bearer" | "headers" | "basic" | OAuthMethod;
 type Header = { id: number; name: string; value: string };
-export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpired, onClose, onConnected, connection }: {
+type SavedOAuth = { registrationMethod: OAuthMethod; grant: OAuthGrant; clientAuth: ClientAuthentication };
+export type OAuthHandoff = { authorizationUrl: string; attemptId: string; connectionId: string };
+const authorize = (handoff: OAuthHandoff) => window.location.assign(handoff.authorizationUrl);
+export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpired, onClose, onConnected, connection, onAuthorize = authorize, returnTo, initialDraft, recoveryNotice }: {
   connection?: McpConnection; tenantKey: string; csrfToken: string; fetchImpl: IntegrationFetch; onSessionExpired: () => void;
   onClose: () => void; onConnected: () => void;
+  onAuthorize?: (handoff: OAuthHandoff, draft: OAuthDraft) => void; returnTo?: string; initialDraft?: OAuthDraft; recoveryNotice?: string;
 }) {
-  const [endpoint, setEndpoint] = useState(connection?.endpoint ?? "");
+  const [endpoint, setEndpoint] = useState(initialDraft?.endpoint ?? connection?.endpoint ?? "");
   const [revision, setRevision] = useState(0);
-  const [method, setMethod] = useState<Method>((connection?.authMethod ?? "") as Method);
-  const [issuer, setIssuer] = useState<string>();
+  const [method, setMethod] = useState<Method>(initialDraft?.method ?? (connection?.authMethod === "oauth" ? "" : connection?.authMethod ?? "") as Method);
+  const [issuer, setIssuer] = useState<string | undefined>(initialDraft?.issuer);
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [headers, setHeaders] = useState<Header[]>([]);
+  const [oauthEdits, setOAuthEdits] = useState<Partial<OAuthValues>>(initialDraft ? { grant: "authorization_code", ...(initialDraft.clientAuth ? { clientAuth: initialDraft.clientAuth } : {}) } : {});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(connection);
-  const [replaceCredentials, setReplaceCredentials] = useState(!connection);
+  const [savedOAuth, setSavedOAuth] = useState<SavedOAuth | null>(null);
+  const [replaceCredentials, setReplaceCredentials] = useState(!connection || !!initialDraft);
   const [tools, setTools] = useState<string[]>([]);
   const [toolsStatus, setToolsStatus] = useState("loading");
   const [toolsRevision, setToolsRevision] = useState(0);
@@ -47,17 +56,20 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
         const body = await response.json();
         if (body?.connection?.id !== connection.id || !Array.isArray(body.connection.tools) ||
           !body.connection.tools.every((tool: unknown) => !!tool && typeof tool === "object" && "name" in tool && typeof tool.name === "string")) throw new Error("Invalid tools");
-        if (!controller.signal.aborted) { setTools(body.connection.tools.map((tool: { name: string }) => tool.name)); setToolsStatus("ready"); }
+        if (!controller.signal.aborted) { setTools(body.connection.tools.map((tool: { name: string }) => tool.name)); setSavedOAuth(parseSavedOAuth(body.connection.oauth)); setToolsStatus("ready"); }
       }).catch(() => { if (!controller.signal.aborted) setToolsStatus("failed"); });
     return () => controller.abort();
   }, [connection, connectionUrl, fetchImpl, onSessionExpired, toolsRevision]);
   const pending = useRef<AbortController | null>(null);
   useEffect(() => () => pending.current?.abort(), []);
   const discovery = useMcpDiscovery({ tenantKey, csrfToken, endpoint, revision: String(revision), issuer,
-    active: !busy && !readOnly && (!saved || endpoint !== saved.endpoint), fetchImpl, onSessionExpired });
-  const selected = method || (discovery.data?.suggestedMethod === "none" ? "none" : "");
+    active: !readOnly && (!saved || endpoint !== saved.endpoint || (replaceCredentials && (saved.authMethod === "oauth" || ["cimd", "dcr", "own_client"].includes(method)))), fetchImpl, onSessionExpired });
+  const savedMethod: Method = saved?.authMethod === "oauth" ? savedOAuth?.registrationMethod ?? "" : (saved?.authMethod ?? "") as Method;
+  const selected = method || (endpoint === saved?.endpoint ? savedMethod : "") || discovery.data?.suggestedMethod || "";
+  const oauthMethod = selected === "cimd" || selected === "dcr" || selected === "own_client" ? selected : null;
+  const oauthValues = { ...oauthDefaults(endpoint, discovery.data), ...oauthEdits };
 
-  function clearCredentials() { setToken(""); setUsername(""); setPassword(""); setHeaders([]); }
+  function clearCredentials() { setToken(""); setUsername(""); setPassword(""); setHeaders([]); setOAuthEdits({}); }
   function changeUrl(value: string) {
     setReplaceCredentials(true); setEndpoint(value); setRevision(value => value + 1); setIssuer(undefined); setMethod(""); clearCredentials(); setError("");
   }
@@ -66,32 +78,65 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
     setReplaceCredentials(true); setMethod(value as Method); clearCredentials(); setError("");
     if (value === "headers") setHeaders([{ id: 1, name: "X-API-Key", value: "" }]);
   }
-  async function connect(refreshTools = false) {
+  function changeIssuer(value: string) { setIssuer(value || undefined); clearCredentials(); setError(""); }
+  function replaceSavedCredentials(value: boolean) {
+    setReplaceCredentials(value); clearCredentials();
+    if (value && savedOAuth) setOAuthEdits({ grant: savedOAuth.grant, clientAuth: savedOAuth.clientAuth });
+  }
+  async function connect(catalogOnly = false) {
+    const refreshTools = catalogOnly || !!(saved?.authMethod === "oauth" && !replaceCredentials && endpoint === saved.endpoint);
     if (readOnly || busy || (!refreshTools && (!selected || !validMcpUrl(endpoint)))) return;
+    if (!refreshTools && oauthMethod) {
+      const problem = oauthProblem(oauthMethod, oauthValues, discovery.data);
+      if (problem) { setError(problem); return; }
+    }
     if (!refreshTools && replaceCredentials && ((selected === "bearer" && !token) || (selected === "basic" && (!username || !password)) ||
       (selected === "headers" && !headers.length) || headers.some(header => !header.name || !header.value))) {
       setError("Complete the credentials for the selected authentication type."); return;
     }
     const extra = headers.length ? { headers: headers.map(({ name, value }) => ({ name, value })) } : {};
     const credentials = selected === "none" ? {} : selected === "bearer" ? { token, ...extra } : selected === "basic" ? { username, password, ...extra } : extra;
+    const browserOAuth = !refreshTools && oauthMethod && (oauthMethod !== "own_client" || oauthValues.grant === "authorization_code");
+    if (browserOAuth && saved && endpoint !== saved.endpoint) {
+      setError("To use a different server URL with OAuth, connect it as a new MCP."); return;
+    }
+    const requestUrl = browserOAuth ? saved ? `${connectionUrl}/oauth` : `/api/tenants/${encodeURIComponent(tenantKey)}/mcp-oauth` : connectionUrl;
+    const requestBody = refreshTools && saved ? { generation: saved.generation, refresh_tools: true } : oauthMethod ? {
+      ...oauthRequest(oauthMethod, endpoint, String(revision), oauthValues, issuer),
+      ...(saved ? { generation: saved.generation } : {}), ...(browserOAuth && returnTo ? { return_to: returnTo } : {}),
+    } : { endpoint, auth_method: selected, ...(replaceCredentials ? { credentials } : {}), ...(saved ? { generation: saved.generation } : {}) };
     const controller = new AbortController(); pending.current = controller;
     setBusy(true); setError("");
     try {
-      const response = await fetchImpl(connectionUrl, {
-        method: saved ? "PATCH" : "POST", credentials: "same-origin", signal: controller.signal,
+      const response = await fetchImpl(requestUrl, {
+        method: browserOAuth ? "POST" : saved ? "PATCH" : "POST", credentials: "same-origin", signal: controller.signal,
         headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": csrfToken },
-        body: JSON.stringify(refreshTools && saved ? { generation: saved.generation, refresh_tools: true } : {
-          endpoint, auth_method: selected, ...(replaceCredentials ? { credentials } : {}), ...(saved ? { generation: saved.generation } : {}),
-        }),
+        body: JSON.stringify(requestBody),
       });
       if (controller.signal.aborted) return;
       if (response.status === 401) { onSessionExpired(); return; }
       if (!response.ok) { setError(response.status === 409 && saved ? "This connection changed since you opened it. Close and reopen to load the latest settings." : response.status === 409 ? "This server is already connected. Close this dialog to manage its connection." : "Could not connect. Check the URL and credentials, then retry."); return; }
       const body = await response.json();
+      if (browserOAuth) {
+        const handoff = parseHandoff(body);
+        if (!controller.signal.aborted) {
+          const draft: OAuthDraft = { endpoint, method: oauthMethod!, ...(issuer ? { issuer } : {}),
+            ...(oauthMethod === "own_client" ? { clientAuth: oauthValues.clientAuth } : {}), ...(saved ? { generation: saved.generation } : {}) };
+          clearCredentials(); onAuthorize(handoff, draft);
+        }
+        return;
+      }
       if (typeof body?.connection?.id !== "string" || typeof body?.connection?.generation !== "number") throw new Error("Invalid connection response");
       if (!controller.signal.aborted) {
         if (!refreshTools) { clearCredentials(); setMethod(selected); }
-        if (saved) { setSaved({ ...saved, endpoint: refreshTools ? saved.endpoint : endpoint, authMethod: refreshTools ? saved.authMethod : selected, generation: body.connection.generation }); if (!refreshTools) setReplaceCredentials(false); setToolsRevision(value => value + 1); }
+        if (saved) {
+          setSaved({ ...saved, endpoint: refreshTools ? saved.endpoint : endpoint, authMethod: refreshTools ? saved.authMethod : oauthMethod ? "oauth" : selected, generation: body.connection.generation });
+          if (!refreshTools) {
+            setReplaceCredentials(false);
+            if (oauthMethod) setSavedOAuth({ registrationMethod: oauthMethod, grant: oauthValues.grant, clientAuth: oauthValues.clientAuth });
+          }
+          setToolsRevision(value => value + 1);
+        }
         else onConnected();
       }
     } catch { if (!controller.signal.aborted) setError("Could not connect. Check the URL and credentials, then retry."); }
@@ -115,22 +160,27 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
 
   const form = <form className="mcp-dialog-form" noValidate onSubmit={event => { event.preventDefault(); void connect(); }}>
       <div className="mcp-dialog-scroll">
+        {recoveryNotice && <p className="mcp-hint mb-4" role="status">{recoveryNotice}</p>}
         <fieldset disabled={busy || readOnly} className="m-0 min-w-0 border-0 p-0">
           <section className="mcp-form-section">
             <TextField label="MCP server URL" type="url" value={endpoint} onChange={event => changeUrl(event.target.value)} placeholder="https://mcp.example.com/mcp" />
             <div className="mcp-field-note">
-              {discovery.status !== "idle" && <p className="mcp-hint" role="status">{discovery.status === "waiting" ? "Waiting to check URL…" : discovery.status === "checking" ? "Checking MCP server and OAuth settings…" : discovery.status === "failed" || discovery.data?.outcome === "unknown" ? "Could not discover settings. Choose authentication manually, or retry." : discovery.data?.outcome === "unsupported_oauth" ? "This server does not support the OAuth security requirements needed to connect." : discovery.data?.outcome === "issuer_required" ? "Choose an authorization server to continue discovery." : discovery.data?.outcome === "anonymous" ? "Server accepts connections without authentication." : "OAuth settings discovered. OAuth connection support is not available yet."}</p>}
+              {discovery.status !== "idle" && <p className="mcp-hint" role="status">{discovery.status === "waiting" ? "Waiting to check URL…" : discovery.status === "checking" ? "Checking MCP server and OAuth settings…" : discovery.status === "failed" || discovery.data?.outcome === "unknown" ? "Could not discover settings. Choose authentication manually, or retry." : discovery.data?.outcome === "partial" ? "Some OAuth settings could not be discovered. Check the authorization server or retry." : discovery.data?.outcome === "unsupported_oauth" ? "This server does not support the OAuth security requirements needed to connect." : discovery.data?.outcome === "issuer_required" ? "Choose an authorization server to continue discovery." : discovery.data?.outcome === "anonymous" ? "Server accepts connections without authentication." : "OAuth settings discovered."}</p>}
               {(discovery.status === "failed" || discovery.data?.outcome === "unknown" || discovery.data?.outcome === "partial") && <Button type="button" onClick={discovery.retry}>Retry discovery</Button>}
             </div>
-            {discovery.data && discovery.data.issuers.length > 1 && <SelectField label="Authorization server" value={issuer ?? ""} onChange={setIssuer}><option value="" disabled>Select authorization server</option>{discovery.data.issuers.map(value => <option key={value} value={value}>{value}</option>)}</SelectField>}
+            {discovery.data && discovery.data.issuers.length > 1 && <SelectField label="Authorization server" value={issuer ?? ""} onChange={changeIssuer}><option value="" disabled>Select authorization server</option>{discovery.data.issuers.map(value => <option key={value} value={value}>{value}</option>)}</SelectField>}
           </section>
           <section className="mcp-form-section"><h3>Authentication</h3>
             <SelectField label="Authentication Type" value={selected} onChange={changeMethod}>
               <option value="" disabled>Select authentication type</option>
+              <option value="cimd">OAuth - CIMD</option><option value="dcr">OAuth - DCR</option><option value="own_client">OAuth - Own client</option>
               <option value="bearer">Bearer token</option><option value="headers">Custom headers</option><option value="basic">HTTP Basic</option><option value="none">No authentication</option>
             </SelectField>
-            {saved && selected !== "none" && <label className="mcp-hint"><input type="checkbox" checked={replaceCredentials} disabled={endpoint !== saved.endpoint || selected !== saved.authMethod} onChange={event => { setReplaceCredentials(event.target.checked); clearCredentials(); }} /> Replace credentials</label>}
+            {saved && selected !== "none" && <label className="mcp-hint"><input type="checkbox" checked={replaceCredentials} disabled={endpoint !== saved.endpoint || selected !== savedMethod} onChange={event => replaceSavedCredentials(event.target.checked)} /> Replace credentials</label>}
             {saved && !replaceCredentials && selected !== "none" && <p className="mcp-hint">Credentials saved. Values are never displayed.</p>}
+            {replaceCredentials && oauthMethod && <OAuthFields method={oauthMethod} values={oauthValues} discovery={discovery.data}
+              issuer={issuer ?? (typeof discovery.data?.oauth?.issuer === "string" ? discovery.data.oauth.issuer : "")}
+              onIssuerChange={changeIssuer} onChange={patch => setOAuthEdits(current => ({ ...current, ...patch }))} />}
             {replaceCredentials && selected === "bearer" && <TextField label="Bearer token" secret value={token} onChange={event => setToken(event.target.value)} />}
             {replaceCredentials && selected === "basic" && <><TextField label="Username" value={username} onChange={event => setUsername(event.target.value)} autoComplete="off" /><TextField label="Password" secret value={password} onChange={event => setPassword(event.target.value)} /></>}
             {replaceCredentials && selected === "headers" && <Pairs label="Request headers" singular="Header" pairs={headers} onChange={setHeaders} secret />}
@@ -157,4 +207,22 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
       <footer className="mcp-dialog-footer mcp-manage-footer">{!readOnly && <Button className="mcp-disconnect" variant="ghost" disabled={busy} onClick={() => void disconnect()}>Disconnect</Button>}<Button disabled={busy} onClick={onClose}>Close</Button></footer>
     </> : form}
   </SetupDialog>;
+}
+
+function parseHandoff(value: unknown): OAuthHandoff {
+  if (!value || typeof value !== "object" || !("authorization_url" in value) || !("attempt_id" in value) || !("connection_id" in value) ||
+    typeof value.authorization_url !== "string" || value.authorization_url.length > 32768 ||
+    typeof value.attempt_id !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(value.attempt_id) ||
+    typeof value.connection_id !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(value.connection_id)) throw new Error("Invalid OAuth handoff");
+  const url = new URL(value.authorization_url);
+  if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.hash) throw new Error("Invalid authorization URL");
+  return { authorizationUrl: value.authorization_url, attemptId: value.attempt_id, connectionId: value.connection_id };
+}
+
+function parseSavedOAuth(value: unknown): SavedOAuth | null {
+  if (!value || typeof value !== "object" || !("registration_method" in value) || !("grant_type" in value) || !("auth_method" in value) ||
+    !["cimd", "dcr", "own_client"].includes(String(value.registration_method)) ||
+    !["authorization_code", "client_credentials"].includes(String(value.grant_type)) ||
+    !["none", "client_secret_basic", "client_secret_post", "private_key_jwt"].includes(String(value.auth_method))) return null;
+  return { registrationMethod: value.registration_method as OAuthMethod, grant: value.grant_type as OAuthGrant, clientAuth: value.auth_method as ClientAuthentication };
 }

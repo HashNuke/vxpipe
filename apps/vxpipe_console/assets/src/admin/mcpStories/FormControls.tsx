@@ -47,8 +47,9 @@ export function TextField({
   onChange?: ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement>;
 }) {
   const [visible, setVisible] = useState(false);
+  const hiddenMultiline = multiline && secret && !visible;
   return (
-    <Field label={label} hint={hint}>
+    <Field label={label} hint={hint ?? (hiddenMultiline ? "Show this value to enter or edit it." : undefined)}>
       {(id, hintId) => (
         <div className="mcp-secret-field">
           {multiline && (!secret || visible) ? (
@@ -59,6 +60,13 @@ export function TextField({
               value={String(props.value ?? "")}
               placeholder={props.placeholder}
               onChange={props.onChange}
+              disabled={props.disabled}
+              readOnly={props.readOnly}
+              required={props.required}
+              maxLength={props.maxLength}
+              minLength={props.minLength}
+              name={props.name}
+              autoFocus={props.autoFocus}
               spellCheck={false}
               autoComplete="off"
             />
@@ -68,6 +76,9 @@ export function TextField({
               id={id}
               aria-describedby={hintId}
               type={secret && !visible ? "password" : (props.type ?? "text")}
+              value={hiddenMultiline ? (props.value ? "••••••••" : "") : props.value}
+              readOnly={hiddenMultiline || props.readOnly}
+              onChange={hiddenMultiline ? undefined : props.onChange}
               autoComplete={secret ? "off" : props.autoComplete}
               spellCheck={false}
             />

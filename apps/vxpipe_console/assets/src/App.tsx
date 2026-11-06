@@ -1158,6 +1158,7 @@ function ScopedServicesRoute({ platform = false, ...props }: AppProps & { platfo
         ? canWritePlatformServices(principal.role)
         : canWriteTenantCredentials(principal.role, membershipAccess(principal.user, tenantKey)))}
       canManageMcps={!!principal && !platform && effectiveAccess(principal.role, "tenant_services", membershipAccess(principal.user, tenantKey)) === "write"}
+      actorId={principal?.user.id}
       headerActions={
         principal ? (
           <div className="flex flex-wrap items-center gap-2">
