@@ -20,6 +20,23 @@ The operator command uses this same operation and the configured platform keyrin
 mix vxpipe.provider_credential.reencrypt --batch-size 100
 ```
 
+Saved tenant MCP connections use the same installation keyring but a separate
+identity-bound secret store. Rotate that store as well:
+
+```shell
+mix vxpipe.mcp_credential.reencrypt --batch-size 100
+```
+
+This command covers static credentials and saved OAuth grants, preserving connection
+IDs, configuration generations and grant revisions. Its counts cover MCP connection
+rows only. Run both commands until both report no old-key rows. Pending outbound
+OAuth attempts are separate, short-lived encrypted records: retain the old key until
+all attempts issued under it have been claimed or expired, and all writers have
+switched keys. Use `mix vxpipe.mcp_oauth.prune --batch-size 100` to remove terminal attempts and
+inspect live `pending_by_key` counts. Schedule that cleanup periodically; see the
+[attempt retention runbook](development/mcp-oauth-storage.md#retention-and-key-retirement).
+Neither command's empty result alone proves that a key can be retired.
+
 It prints JSON containing only `processed`, `current_key_id` and `remaining_by_key`.
 Repeat until `remaining_by_key` is empty; a busy batch may process zero rows while work remains.
 Invalid arguments fail without echoing their values. Supply no provider credentials to this command.

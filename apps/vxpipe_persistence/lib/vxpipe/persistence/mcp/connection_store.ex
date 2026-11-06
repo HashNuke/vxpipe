@@ -3,7 +3,7 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
   @behaviour Vxpipe.Calls.MCPConnectionRepository
   import Ecto.Query
   alias Vxpipe.Persistence.{CredentialKeyring, ProviderCredentialScope}
-  alias Vxpipe.Persistence.MCP.SecretCipher
+  alias Vxpipe.Persistence.MCP.{RepositoryBoundary, SecretCipher}
   alias Vxpipe.Persistence.Schema.MCPConnection
 
   @private [log: false, telemetry_event: nil]
@@ -378,28 +378,12 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
   defp unwrap!(repo, {:error, reason}), do: repo.rollback(reason)
 
   defp transaction(context, operation) do
-    repo = Keyword.fetch!(context, :repo)
-    repo.transaction(fn -> operation.(repo) end, @private)
-  rescue
-    error -> repository_error(error, __STACKTRACE__)
-  catch
-    :exit, {_reason, {DBConnection.Holder, :checkout, _arguments}} ->
-      {:error, :mcp_connections_unavailable}
+    RepositoryBoundary.call(
+      fn ->
+        repo = Keyword.fetch!(context, :repo)
+        repo.transaction(fn -> operation.(repo) end, @private)
+      end,
+      :mcp_connections_unavailable
+    )
   end
-
-  defp repository_error(%DBConnection.ConnectionError{}, _trace),
-    do: {:error, :mcp_connections_unavailable}
-
-  defp repository_error(%Postgrex.Error{}, _trace),
-    do: {:error, :mcp_connections_unavailable}
-
-  defp repository_error(%RuntimeError{}, [{Ecto.Repo.Registry, :lookup, _, _} | _]),
-    do: {:error, :mcp_connections_unavailable}
-
-  defp repository_error(%ArgumentError{}, [
-         {:ets, :lookup_element, [Ecto.Repo.Registry | _], _} | _
-       ]),
-       do: {:error, :mcp_connections_unavailable}
-
-  defp repository_error(error, trace), do: reraise(error, trace)
 end

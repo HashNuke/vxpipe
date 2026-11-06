@@ -313,6 +313,20 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
 
 ### Implementation and review fixes
 
+- [x] Map known repository/connection outages to stable errors in OAuth attempt
+  and grant stores, preserving programmer exceptions and successful recovery.
+- [x] Clear a prior access-token expiry when a refresh result omits its own expiry;
+  retain the saved refresh token and scope only under their deliberate contracts.
+- [x] Authenticate attempt expiry and state digest inside the encrypted envelope;
+  reject database metadata tampering that changes either lookup state or lifetime.
+  This extends storage tamper resistance, not browser authority.
+- [x] Verify old/new-key attempt claims, missing-key non-consumption, re-encryption
+  during refresh, wrong-tenant grant operations, exact deadline equality, and
+  invalid/oversized refresh completion rollback at the persistence boundary.
+  All 57 focused MCP persistence tests pass; see the
+  [storage runbook](../../docs/development/mcp-oauth-storage.md) and
+  [checkpoint evidence](../20261107-0132-review-mcp-oauth-storage.md).
+
 - [x] Do not suggest browser OAuth when all advertised token authentication
   methods or signing algorithms are unsupported by Own client or managed flows.
 - [x] Reuse DCR registration only with scope evidence covering the newly selected

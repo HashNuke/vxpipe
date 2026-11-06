@@ -200,6 +200,12 @@ if database_enabled? do
     mcp_connection_repository:
       {Vxpipe.Persistence.MCP.ConnectionStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
+    mcp_oauth_attempt_repository:
+      {Vxpipe.Persistence.MCP.OAuthAttemptStore,
+       [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
+    mcp_oauth_grant_repository:
+      {Vxpipe.Persistence.MCP.OAuthGrantStore,
+       [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
     mcp_preflight: {Vxpipe.Console.MCPPreflight, []},
     mcp_connection_probe: {Vxpipe.Console.MCPConnectionProbe, []},
     telephony_service_repository:

@@ -100,7 +100,10 @@ both keys. Run `mix vxpipe.provider_credential.reencrypt --batch-size 100` repea
 
 A failed batch commits no updates; successful earlier batches remain committed. Busy rows remain
 in the reported counts, so zero processed rows alone does not mean completion. Once all writers
-use the new key and no old-key rows remain, remove the old key and restart. Each tenant's actual
+use the new key and no old-key rows remain in any credential store, remove the old key and restart.
+Also run `mix vxpipe.mcp_credential.reencrypt --batch-size 100` for saved MCP
+credentials and OAuth grants, and retain the old key until pending outbound OAuth
+attempts issued under it are claimed or expired. Each tenant's actual
 provider credential, identity, version and status stays unchanged. See the
 [operator transition](platform-credential-reencryption.md#operator-transition) for rollout details.
 
