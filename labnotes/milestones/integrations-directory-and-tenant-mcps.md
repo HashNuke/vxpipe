@@ -221,6 +221,19 @@ isolation, permission changes, concurrent duplicate saves, masked edits, invalid
 headers/URLs and catalog failure tests. A local fixture MCP proves initialization
 and paginated tools without executing a tool; unavailable and zero tools differ.
 
+### T4a — Credentialless discovery foundation
+
+- [x] Add bounded protected-resource and OAuth/OIDC metadata discovery, strict
+  retained-field validation, explicit issuer choice and anonymous initialization
+  through the existing transient checker. Manual issuer fallback applies only
+  to missing resource metadata and suggests Own-client.
+- [x] Supervise preflight admission, frequency and whole-operation lifetime;
+  retire nested I/O on caller death, expiry and runner restart. Composed lifecycle
+  and late-result tests pass. See [discovery design](../../docs/development/mcp-discovery.md).
+- [ ] Expose current-authority, session/CSRF-protected Console discovery and wire
+  URL edits, revision fencing, retries and field prefills into the production UI.
+  This foundation does not establish full UI/API acceptance.
+
 ### T5 — Automatic discovery and delegated OAuth
 
 Depends on T4 and existing Console Installation URL/CIMD foundation.
@@ -294,6 +307,33 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   evidence; only then check the milestone in the index.
 
 ### Implementation and review fixes
+
+- [x] Isolate pure OAuth metadata capability validation from later authorization
+  and client-assertion/signing modules so the discovery foundation is independently
+  runnable. Validate types and bounds for scopes, grant/response/challenge/auth
+  arrays and the CIMD flag before returning an OAuth discovery outcome.
+- [x] Normalize exceptions/throws inside DiscoveryIO's spawned callback worker
+  before OTP reporting. Synthetic log-capture regression passes; the reproduced
+  gap is an injected callback boundary, not a confirmed remote-server secret leak.
+- [x] Accept permitted whitespace around Bearer challenge parameter separators
+  while preserving duplicate rejection, and validate challenge scopes before
+  returning discovery metadata. Preserve quoted and escaped content. The pinned
+  HTTP parser is stricter than the protocol at this whitespace boundary.
+- [x] Verify composed preflight-runner cancellation through held DNS/HTTP work
+  and cleanup on actual application runner restart in the isolated test BEAM.
+  Five lifecycle tests pass in addition to the isolated component checks.
+- [x] Allow explicit issuer discovery for Own-client only when resource metadata
+  is missing. Never bypass malformed/conflicting/unavailable metadata. Reject
+  oversized, invalid UTF-8 and forbidden issuer URL forms before I/O instead of
+  reflecting them in partial results. Both behavior regressions failed first.
+- [x] Accept bare Bearer challenges, including mixed casing and permitted empty
+  list entries, without inventing parameters or accepting multiple Bearer
+  challenges. The well-known fallback regression failed before the parser fix.
+- [x] Enforce the preflight deadline when accepting a queued result, not only when
+  handling the timer message. A suspended-runner regression reproduced late
+  success and now returns the fixed timeout. See the
+  [discovery decision](../../docs/development/mcp-discovery.md) and
+  [checkpoint evidence](../20261107-0031-review-mcp-discovery.md).
 
 - [x] Correct the MCP connection-row SQL constraint to reject connected rows with
   NULL ciphertext and a present key ID. Add a database constraint regression;
