@@ -4,6 +4,9 @@ defmodule Vxpipe.Console.MCPConnectionProbe do
   alias Vxpipe.MCP.{ConnectionCheck, StaticConfiguration}
 
   @impl true
+  def check(options, tenant, %{"auth_method" => "own_client"} = input),
+    do: Vxpipe.Console.MCPOAuthMachineConnection.check(options, tenant, input)
+
   def check(options, tenant, input) do
     check = Keyword.get(options, :connection_check, &ConnectionCheck.run(&1, &2, options))
 

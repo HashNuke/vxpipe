@@ -1,6 +1,7 @@
 defmodule Vxpipe.Calls.MCPConnections do
   @moduledoc "User-authorized tenant MCP management. No platform inheritance or anonymous failure fallback."
   alias Vxpipe.Calls.{
+    MCPRuntimeCredentials,
     ProviderAuth,
     Repositories,
     ResolvedMCPConnection,
@@ -240,6 +241,26 @@ defmodule Vxpipe.Calls.MCPConnections do
     end
   end
 
+  defp refresh_input(
+         %ResolvedMCPConnection{connection: %{auth_method: "oauth"}} = saved,
+         tenant,
+         id,
+         generation,
+         options
+       ) do
+    with {:ok, current} <- MCPRuntimeCredentials.resolve(tenant, id, generation, options) do
+      {:ok,
+       %{
+         "endpoint" => saved.connection.endpoint,
+         "auth_method" => "bearer",
+         "credentials" => %{
+           "token" => current.secrets["access_token"],
+           "headers" => Map.get(saved.secrets, "headers", [])
+         }
+       }}
+    end
+  end
+
   defp refresh_input(saved, _, _, _, _) do
     {:ok,
      %{
@@ -325,6 +346,24 @@ defmodule Vxpipe.Calls.MCPConnections do
       _missing ->
         {:error, :mcp_authority_unavailable}
     end
+  end
+
+  defp input(
+         %{
+           "endpoint" => endpoint,
+           "auth_method" => "own_client",
+           "revision" => revision,
+           "credentials" => %{"grant_type" => "client_credentials"} = credentials
+         } = input
+       )
+       when is_binary(endpoint) and byte_size(endpoint) in 1..2048 and
+              is_binary(revision) and byte_size(revision) in 1..128 do
+    if Map.keys(input) -- ~w(endpoint auth_method credentials revision issuer) == [] and
+         byte_size(JSON.encode!(credentials)) <= 65_536,
+       do: :ok,
+       else: {:error, :invalid_mcp_configuration}
+  rescue
+    _ -> {:error, :invalid_mcp_configuration}
   end
 
   defp input(

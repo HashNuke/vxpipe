@@ -10,6 +10,7 @@ defmodule Vxpipe.MCP.Application do
       Vxpipe.MCP.CredentialLeases,
       Vxpipe.MCP.PreflightSupervisor,
       Vxpipe.MCP.OAuthCompletionSupervisor,
+      Vxpipe.MCP.OAuthRenewalSupervisor,
       {DynamicSupervisor,
        strategy: :one_for_one, name: Vxpipe.MCP.CheckSupervisor, max_children: 8},
       {DynamicSupervisor, strategy: :one_for_one, name: Vxpipe.MCP.ConnectionSupervisor}

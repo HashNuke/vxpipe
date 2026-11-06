@@ -206,6 +206,7 @@ if database_enabled? do
     mcp_oauth_grant_repository:
       {Vxpipe.Persistence.MCP.OAuthGrantStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
+    mcp_oauth_refresh: {Vxpipe.Console.MCPOAuthRefresh, []},
     mcp_oauth_completion: {Vxpipe.Console.MCPOAuthCompletion, []},
     mcp_oauth_preparation: {Vxpipe.Console.MCPOAuthPreparation, []},
     mcp_preflight: {Vxpipe.Console.MCPPreflight, []},

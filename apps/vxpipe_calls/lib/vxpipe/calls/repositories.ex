@@ -13,6 +13,7 @@ defmodule Vxpipe.Calls.Repositories do
           | :operator_login_challenge_repository
           | :operator_api_key_repository
           | :mcp_oauth_grant_repository
+          | :mcp_oauth_refresh
           | :mcp_oauth_completion
           | :mcp_oauth_preparation
           | :mcp_oauth_attempt_repository

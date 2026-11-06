@@ -304,6 +304,27 @@ secret redaction and safe edit/reconnect behavior. Unsupported methods return a
 specific recovery state; hiding an unimplemented choice requires updating the
 proposal and obtaining scope agreement, not quietly claiming this milestone passed.
 
+#### Machine-grant and renewal backend checkpoint (2026-11-07)
+
+- [x] Extend existing tenant MCP create/replace operations with validated registered
+  client-credentials acquisition, initialization/tools and encrypted persistence;
+  require supported confidential authentication and create no browser attempts.
+- [x] Coordinate renewal through durable claim/complete/fail ports, using refresh
+  tokens for delegated grants and saved client configuration for machine grants.
+  Preserve generation/revision fencing and never retry ambiguous redemption.
+- [x] Resolve current pinned OAuth credentials privately, renew once near expiry,
+  reread persisted state and prevent fallback under active/expired ambiguity claims.
+- [x] Refresh OAuth tool catalogs with current tokens and saved MCP headers without
+  overwriting rotated grant state or changing the configuration generation.
+- [x] Verify nine local HTTP/database renewal cases and five durable boundary cases,
+  including cross-tenant saturation, cancellation and late-result rejection.
+- [ ] Complete runtime transport/catalog cutover, production UI and independent-node
+  acceptance before treating this backend checkpoint as full workflow delivery.
+
+See [renewal contracts](../../docs/development/mcp-oauth-renewal.md) and
+[review evidence](../20261107-0208-review-mcp-renewal.md). Admission is per application
+instance; per-connection durable claims provide the cross-instance fence.
+
 ### T7 — Tenant-only runtime/tool picker cutover and migration
 
 Depends on T4; OAuth methods additionally depend on T5/T6.
@@ -336,6 +357,12 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   evidence; only then check the milestone in the index.
 
 ### Implementation and review fixes
+
+- [x] Anchor machine-acquisition and renewal token expiry before token HTTP;
+  verify request and MCP-check time cannot extend the returned lifetime.
+- [x] Admit renewals before durable claim with an aggregate concurrency/lifetime
+  bound. Busy work must not consume claims; held I/O, caller death and late success
+  must not bypass durable ambiguity fencing or persist late tokens.
 
 - [x] Map known repository/connection outages to stable errors in OAuth attempt
   and grant stores, preserving programmer exceptions and successful recovery.
