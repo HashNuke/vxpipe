@@ -38,11 +38,14 @@ export const customServerInfo = { name: "office-tools", title: "Office tools" };
 export const installationUrl = "https://voice.example.test";
 export const callbackUrl = `${installationUrl}/oauth/mcp/callback`;
 export const metadataUrl = `${installationUrl}/oauth/client-metadata.json`;
-export const authLabels: Record<Authentication, string> = {
-  auto: "Discover automatically",
-  cimd: "OAuth · CIMD",
-  dcr: "OAuth · DCR",
-  custom: "Custom authentication",
+export const authLabels: Record<Exclude<Authentication, "custom"> | CustomAuth, string> = {
+  auto: "Not configured",
+  cimd: "OAuth - CIMD",
+  dcr: "OAuth - DCR",
+  oauth: "OAuth - Own client",
+  bearer: "Bearer token",
+  headers: "Custom headers",
+  basic: "HTTP Basic",
   none: "No authentication",
 };
 export type Draft = {
@@ -62,7 +65,6 @@ export type Draft = {
   keyId: string;
   algorithm: string;
   grant: "authorization_code" | "client_credentials";
-  endpointMode: "discovery" | "manual";
   issuer: string;
   authorizationUrl: string;
   tokenUrl: string;
@@ -94,7 +96,6 @@ export function draftFor(preset: Preset = customPreset): Draft {
     keyId: "",
     algorithm: "RS256",
     grant: "authorization_code",
-    endpointMode: "discovery",
     issuer: "",
     authorizationUrl: "",
     tokenUrl: "",
@@ -241,7 +242,6 @@ export function initialState(scenario: Scenario): {
   if (scenario === "no-auth") draft.auth = "none";
   const phase =
     scenario === "registration-required" ? "registration" :
-    scenario === "discovery-failed" ? "discovery-error" :
     scenario === "connected-no-tools" ? "ready" :
     ["services", "connected", "empty", "read-only", "picker"].includes(scenario) ||
     scenario.startsWith("directory-") ||

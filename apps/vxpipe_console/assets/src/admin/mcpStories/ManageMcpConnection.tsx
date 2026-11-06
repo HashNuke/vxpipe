@@ -1,5 +1,5 @@
 import { CircleAlert, Info, RefreshCw, Search, Unplug } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "../Button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
@@ -10,7 +10,7 @@ import { authLabels, draftForConnection, type Connection, type Draft } from "./f
 
 export function McpConnectionHeader({ connection }: { connection: Connection }) {
   const method = connection.auth === "custom"
-    ? { oauth: "OAuth · Registered client", bearer: "Bearer token", basic: "Basic authentication", headers: "API key / headers" }[draftForConnection(connection).customAuth]
+    ? authLabels[draftForConnection(connection).customAuth]
     : authLabels[connection.auth];
   return <div className="mcp-manage-identity">
     <span className="mcp-manage-title">{connection.name}</span>
@@ -22,8 +22,9 @@ export function McpConnectionHeader({ connection }: { connection: Connection }) 
   </div>;
 }
 
-export function ManageMcpConnection({ connection, draft, update, error, readOnly, onSubmit, onReconnect, onDisconnect, onClose }: {
+export function ManageMcpConnection({ connection, draft, update, error, readOnly, discoveryStatus, onSubmit, onReconnect, onDisconnect, onClose }: {
   connection: Connection; draft: Draft; update: (patch: Partial<Draft>) => void; error: string | null; readOnly: boolean;
+  discoveryStatus?: ReactNode;
   onSubmit: () => void; onReconnect: () => void; onDisconnect: () => void; onClose: () => void;
 }) {
   const [tab, setTab] = useState("authentication");
@@ -52,6 +53,7 @@ export function ManageMcpConnection({ connection, draft, update, error, readOnly
         <form onSubmit={event => { event.preventDefault(); onSubmit(); }} noValidate>
           <fieldset disabled={readOnly} className="mcp-auth-fields">
             {draft.preset.id === "custom" && <TextField label="MCP server URL" type="url" value={draft.endpoint} onChange={event => change({ endpoint: event.target.value })} />}
+            {draft.preset.id === "custom" && discoveryStatus}
             {configurable ? <AuthenticationFields draft={draft} update={change} />
               : <><McpSetupInformation preset={draft.preset} /><p className="mcp-hint">{oauth ? "Reconnect to authorize this account again or choose another account." : "This connection does not require authentication."}</p></>}
           </fieldset>
@@ -59,7 +61,7 @@ export function ManageMcpConnection({ connection, draft, update, error, readOnly
           {!readOnly && (oauth || configurable) && <div className="mcp-auth-actions">
             {oauth && !changed
               ? <Button className="mcp-primary" type="button" onClick={onReconnect}>Reconnect</Button>
-              : <Button className="mcp-primary" type="submit" disabled={!changed}>Save changes</Button>}
+              : <Button className="mcp-primary" type="submit" disabled={!changed || (draft.preset.id === "custom" && draft.auth === "auto")}>Save changes</Button>}
           </div>}
         </form>
       </TabsContent>

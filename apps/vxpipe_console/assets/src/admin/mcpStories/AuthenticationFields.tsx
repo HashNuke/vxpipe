@@ -19,8 +19,7 @@ export function AuthenticationFields({
 }) {
   if (draft.preset.id !== "custom") return <><McpSetupInformation preset={draft.preset} /><DirectoryAuthenticationFields draft={draft} update={update} /></>;
   const customOAuth = draft.auth === "custom" && draft.customAuth === "oauth";
-  const oauth =
-    draft.auth !== "none" && (draft.auth !== "custom" || customOAuth);
+
   const text = (key: keyof Draft, label: string, extra = {}) => (
     <TextField
       label={label}
@@ -33,79 +32,36 @@ export function AuthenticationFields({
     <>
       <McpSetupInformation preset={draft.preset} />
       <SelectField
-        label="Authentication"
-        value={draft.auth}
-        onChange={(value) => update({ auth: value as Draft["auth"] })}
+        label="Authentication Type"
+        value={draft.auth === "custom" ? draft.customAuth : draft.auth}
+        onChange={(value) => {
+          if (value === (draft.auth === "custom" ? draft.customAuth : draft.auth)) return;
+          if (value === "oauth" || value === "bearer" || value === "headers" || value === "basic") {
+            update({
+              auth: "custom",
+              customAuth: value,
+              headers: value === "headers"
+                ? [{ id: 1, name: "X-API-Key", value: "" }]
+                : [],
+            });
+          } else {
+            update({ auth: value as Exclude<Draft["auth"], "custom">, headers: [] });
+          }
+        }}
       >
-        {Object.entries(authLabels).map(([key, label]) => (
+        <option value="auto" disabled>Select authentication type</option>
+        {Object.entries(authLabels).filter(([key]) => key !== "auto").map(([key, label]) => (
           <option key={key} value={key}>
             {label}
           </option>
         ))}
       </SelectField>
-      {draft.auth === "auto" && (
-        <p className="mcp-auth-explanation">
-          VxPipe checks whether sign-in is needed and discovers the server’s
-          authentication settings.
-        </p>
-      )}
-      {draft.auth === "none" && (
-        <p className="mcp-auth-explanation">
-          Connect without sending authentication credentials.
-        </p>
-      )}
-      {draft.auth === "cimd" && (
-        <div className="mcp-auth-details">
-          <p>
-            This server will read Vxpipe’s public client metadata to identify
-            this installation.
-          </p>
-        </div>
-      )}
-      {draft.auth === "dcr" && (
-        <div className="mcp-auth-details">
-          <p>
-            Register Vxpipe with the server automatically. Its client
-            credentials will be managed with this connection.
-          </p>
-          <Disclosure title="Dynamic registration settings">
-            {text("registrationUrl", "Registration URL", {
-              placeholder: "Discovered from server metadata",
-              type: "url",
-            })}
-            {text("registrationToken", "Initial registration token", {
-              secret: true,
-              hint: "Optional. Only needed if the registration endpoint requires a token.",
-            })}
-            <Pairs
-              label="Registration parameters"
-              singular="Registration parameter"
-              pairs={draft.registrationParams}
-              onChange={(registrationParams) => update({ registrationParams })}
-            />
-          </Disclosure>
-        </div>
-      )}
+      {draft.auth === "dcr" && text("registrationToken", "Initial registration token", {
+        secret: true,
+        hint: "Optional. Only needed if the registration endpoint requires a token.",
+      })}
       {draft.auth === "custom" && (
         <>
-          <SelectField
-            label="Authentication type"
-            value={draft.customAuth}
-            onChange={(value) =>
-              update({
-                customAuth: value as Draft["customAuth"],
-                headers:
-                  value === "headers" && draft.headers.length === 0
-                    ? [{ id: 1, name: "X-API-Key", value: "" }]
-                    : draft.headers,
-              })
-            }
-          >
-            <option value="bearer">Bearer token</option>
-            <option value="headers">API key / custom headers</option>
-            <option value="basic">HTTP Basic</option>
-            <option value="oauth">OAuth with my client</option>
-          </SelectField>
           {draft.customAuth === "bearer" &&
             text("token", "Bearer token", {
               secret: true,
@@ -200,39 +156,25 @@ export function AuthenticationFields({
           )}
         </>
       )}
-      {oauth && (
+      {customOAuth && (
         <Disclosure title="OAuth endpoints and scopes">
-          <SelectField
-            label="Endpoint configuration"
-            value={draft.endpointMode}
-            onChange={(value) =>
-              update({ endpointMode: value as Draft["endpointMode"] })
-            }
-          >
-            <option value="discovery">Discover automatically</option>
-            <option value="manual">Enter endpoints manually</option>
-          </SelectField>
           {text("issuer", "Authorization server URL", {
             type: "url",
             placeholder: "Optional issuer URL",
           })}
-          {draft.endpointMode === "manual" && (
-            <>
-              {(!customOAuth || draft.grant === "authorization_code") &&
-                text("authorizationUrl", "Authorization URL", {
-                  type: "url",
-                  placeholder: "https://auth.example.com/authorize",
-                })}
-              {text("tokenUrl", "Token URL", {
-                type: "url",
-                placeholder: "https://auth.example.com/token",
-              })}
-              {text("revocationUrl", "Revocation URL", {
-                type: "url",
-                placeholder: "Optional",
-              })}
-            </>
-          )}
+          {draft.grant === "authorization_code" &&
+            text("authorizationUrl", "Authorization URL", {
+              type: "url",
+              placeholder: "https://auth.example.com/authorize",
+            })}
+          {text("tokenUrl", "Token URL", {
+            type: "url",
+            placeholder: "https://auth.example.com/token",
+          })}
+          {text("revocationUrl", "Revocation URL", {
+            type: "url",
+            placeholder: "Optional",
+          })}
           {text("scopes", "Scopes", {
             placeholder: "Discovered from the server",
             hint: "Space-separated scopes, if the server requires specific permissions.",
@@ -245,9 +187,9 @@ export function AuthenticationFields({
           {text("audience", "Audience", { placeholder: "Optional audience" })}
         </Disclosure>
       )}
-      {draft.auth !== "none" && (
+      {draft.auth === "custom" && draft.customAuth !== "headers" && (
         <Disclosure title="Additional parameters">
-          {oauth && (
+          {customOAuth && (
             <>
               <p className="mcp-hint">
                 Add provider-specific values. Vxpipe manages state, PKCE,
@@ -270,15 +212,13 @@ export function AuthenticationFields({
               />
             </>
           )}
-          {!(draft.auth === "custom" && draft.customAuth === "headers") && (
-            <Pairs
-              label="Additional MCP request headers"
-              singular="Header"
-              pairs={draft.headers}
-              onChange={(headers) => update({ headers })}
-              secret
-            />
-          )}
+          <Pairs
+            label="Additional MCP request headers"
+            singular="Header"
+            pairs={draft.headers}
+            onChange={(headers) => update({ headers })}
+            secret
+          />
         </Disclosure>
       )}
     </>

@@ -1,0 +1,12 @@
+# Isolate authentication headers
+
+- User reported X-API-Key carrying into Bearer and HTTP Basic. Inspection confirmed that all methods shared draft.headers; the default row is created by Custom headers, not a fresh Bearer selection.
+- Reused setup and design/browser skill context from earlier in this checkout. Preserved earlier uncommitted work.
+- Red: fresh Bearer/Basic header test passed; four new regression cases failed because existing authentication headers were reused across methods, including a switch through CIMD.
+- Reset headers on each actual authentication-method change. Custom headers initializes one empty X-API-Key row; all other methods initialize no additional headers. Reselecting the same method preserves input. Existing header editors remain available where appropriate.
+- Verification in progress: focused MCP suite, TypeScript/lint, desktop/mobile browser inspection, required umbrella checks.
+- Green: all 105 MCP Storybook tests passed; TypeScript and focused ESLint passed. Browser verified Custom headers → Bearer → Basic at desktop/mobile, with Additional parameters expanded and no carried-over header rows. One stale browser element reference failed after hot reload; refreshed the snapshot and reran that interaction successfully.
+- Root formatting, warnings-as-errors compilation and strict Credo passed. Full frontend and umbrella test runs still in progress.
+- Full frontend suite passed: 120 files, 932 tests. Umbrella run reported one existing Speech.DeadlineTest timeout at line 277 (tree DOWN assertion, 300 ms); the complete focused file passed on the same seed 60509 (14 tests). No speech/backend code changed. Full Call Engine same-seed rerun started to check wider interaction; remaining umbrella applications still running.
+- Final root result: all applications except Call Engine passed; its initial run had the deadline test timeout above. The same-seed Call Engine rerun passed that test but failed MediaPolicy.AuthorityTest at line 211 on a monitored DOWN reason (:noproc instead of the expected enforcer failure). The full authority file passed in isolation with the same seed (45 tests). Both full runs therefore remain recorded as failed; no blanket-green claim. These backend files were not modified.
+- All UI checks pass (932 frontend tests, TypeScript, lint, desktop/mobile); root format/compile/Credo and separately run unused-dependency check pass. Final git diff --check passes. No commits created.

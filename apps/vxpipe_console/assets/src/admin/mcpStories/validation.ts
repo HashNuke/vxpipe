@@ -13,7 +13,7 @@ function https(value: string) {
 export function validateDraft(draft: Draft): string | null {
   if (!https(draft.endpoint))
     return "Enter a complete HTTPS MCP server URL without embedded credentials or a fragment.";
-  if (draft.auth === "none") return null;
+  if (["none", "cimd", "dcr"].includes(draft.auth)) return null;
   const oauth = draft.auth !== "custom" || draft.customAuth === "oauth";
   if (draft.auth === "custom") {
     if (draft.customAuth === "bearer" && !draft.token.trim())
@@ -38,18 +38,11 @@ export function validateDraft(draft: Draft): string | null {
         return "Enter your OAuth client’s signing key.";
     }
   }
-  if (
-    oauth &&
-    draft.endpointMode === "manual" &&
-    (!https(draft.tokenUrl) ||
-      (draft.grant === "authorization_code" && !https(draft.authorizationUrl)))
-  )
-    return "Enter HTTPS authorization and token endpoints for the selected OAuth flow.";
   for (const url of oauth
-    ? [draft.issuer, draft.revocationUrl, draft.registrationUrl, draft.resource]
+    ? [draft.issuer, ...(draft.grant === "authorization_code" ? [draft.authorizationUrl] : []), draft.tokenUrl, draft.revocationUrl, draft.registrationUrl, draft.resource]
     : []) {
     if (url && !https(url))
-      return "Optional OAuth URLs must be complete HTTPS URLs.";
+      return "OAuth URLs must be complete HTTPS URLs.";
   }
   const groups = [
     draft.headers,

@@ -1,6 +1,6 @@
 # Integrations directory and tenant MCP connections
 
-Status: **proposed; production implementation not started**. The Storybook proposal
+Status: **prototype checkpoint; production acceptance pending**. The Storybook proposal
 is part of this specification, not evidence that backend behavior is implemented.
 User review/approval of the workflow remains open. This milestone makes the hosted
 directory the normal browse/search source, preserves installed AI/telephony during
@@ -61,6 +61,50 @@ Existing incomplete onboarding/delivery milestones do not block this slice.
 - Tools become available only after protocol initialization/discovery. Agents still
   choose an explicit allowlist, independently of connection setup.
 
+## Current custom-MCP contract (2026-11-06)
+
+These user-directed decisions supersede the older automatic-authentication dropdown
+and generic advanced controls for CIMD/DCR. They describe production requirements;
+the present Storybook implements only a local simulation.
+
+- Entering/changing a complete HTTPS MCP URL starts debounced discovery before
+  Connect. The browser makes one installation-backend discovery operation; that
+  backend may perform several MCP/resource/OAuth metadata requests. Preserve paths.
+- Show pending, checking MCP server, discovering OAuth settings, success, partial
+  discovery and failure/retry states inline. A failed check is never proof of
+  anonymous access. Do not guess endpoints from a host/brand or reuse the
+  prototype's synthetic `/oauth/*` values in production.
+- Authentication Type contains actual methods only, with an unresolved placeholder.
+  Remove Discover automatically and the Endpoint configuration selector. Managed
+  settings are internal; Own client exposes editable discovered values.
+- Changing URL invalidates pending responses, old server settings and credentials.
+  Closing cancels pending UI work. Editing a field for the same URL takes precedence
+  over a later prefill; responses must match the current draft revision.
+- Changing authentication type clears old header names/values. Custom headers
+  initializes one empty X-API-Key row; other methods initialize no extra headers.
+  Reselecting the same method preserves input. Inactive credentials/parameters
+  cannot be transmitted or block validation under another method.
+- Discovery alone neither creates a connected record nor starts registration,
+  consent or token exchange. Connect validates the selected flow and completes
+  initialization/tools before reporting readiness. Server identity comes from
+  `initialize` (when authorized), not from OAuth protected-resource metadata.
+
+| Authentication Type | Editable configuration in the custom modal |
+| --- | --- |
+| OAuth - CIMD | None beyond MCP URL and the method; metadata, endpoints, scopes/resource, callback and request parameters are managed |
+| OAuth - DCR | Optional masked initial registration token for protected registration; no registration URL/parameter editor or other managed OAuth fields |
+| OAuth - Own client | Client ID, applicable secret/key/client-auth/grant fields, copyable callback for manual registration, editable OAuth endpoints/scopes and supported advanced parameters |
+| Bearer token | Masked bearer token; explicitly added MCP headers only |
+| Custom headers | Editable header names and masked values with Add/Remove; no empty Additional parameters disclosure |
+| HTTP Basic | Username and masked password; explicitly added MCP headers only |
+| No authentication | No credential or additional-parameter controls |
+
+CIMD/DCR are registration mechanisms, not consent substitutes. The retained DCR
+token is an initial access token for registration, not the eventual resource
+access token. Its acquisition is out of band; do not claim discovery can supply it.
+See [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+and [RFC 7591 §3](https://www.rfc-editor.org/rfc/rfc7591.html#section-3).
+
 ## Smaller implementation tasks
 
 Each task is a coherent checkpoint with its own red/green tests and runnable
@@ -74,7 +118,12 @@ production routes remain on the existing flow until their dependencies are ready
 - [x] Add Storybook interactions for API-first listings, installed-provider fallback,
   limited outage search, registration recovery, discovery failure and URL prerequisite.
 - [x] Complete focused tests, rendered desktop/mobile review and record evidence (879 frontend tests; TypeScript and Storybook build pass; finish-review fix resolved).
-- [ ] Obtain user approval of the workflow, including advanced authentication scope.
+- [x] Update the prototype for URL-triggered discovery, one authentication selector,
+  CIMD/DCR field visibility, empty-section removal and header reset on method changes.
+  Evidence: [discovery](../20261106-0941-url-triggered-discovery.md),
+  [managed OAuth](../20261106-1319-simplify-managed-oauth.md), and
+  [header isolation](../20261106-1530-isolate-auth-headers.md).
+- [ ] Obtain user approval of the complete workflow, including advanced authentication scope.
 
 Acceptance: the user can follow the listed Storybooks from browse through connection
 and recovery without a production backend or any credential/network submission.
@@ -225,6 +274,20 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   unavailable independently. Check rate limiting, cache bounds, revocation and logs.
 - [ ] Record independent implementation review, user workflow approval and release
   evidence; only then check the milestone in the index.
+
+### Implementation and review fixes
+
+- [x] Complete adversarial pre-commit review of the Storybook discovery checkpoint.
+  Fix URL edits in Manage that reset the method without running discovery, expose
+  the same progress/retry states and disable Save until a method is selected.
+  Ignore an inactive authorization URL after switching to client credentials.
+  Add transition regressions and preserve manual OAuth edits during pending
+  discovery. Both transition regressions failed before the fixes; 108 prototype
+  and 967 frontend tests pass, as do TypeScript, focused lint and root gates.
+  Chrome desktop/mobile verifies Manage rediscovery through simulated consent.
+  Independent GPT-6 Astra xhigh re-review reports no remaining scoped code issues;
+  the labnote absolute-path hygiene issue was also fixed. See the
+  [review checkpoint](../20261106-2316-review-mcp-prototype.md).
 
 ## Specification review (separate from implementation)
 

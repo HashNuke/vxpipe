@@ -172,7 +172,7 @@ test("a custom anonymous connection keeps its endpoint path and never makes a ne
   fireEvent.change(screen.getByLabelText("MCP server URL"), {
     target: { value: "https://directory.example.test/team/mcp" },
   });
-  fireEvent.change(screen.getByLabelText("Authentication"), {
+  fireEvent.change(screen.getByLabelText("Authentication Type"), {
     target: { value: "none" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Connect" }));
@@ -200,9 +200,7 @@ test("manual OAuth exposes endpoints, client authentication and additional param
   fireEvent.click(
     screen.getByRole("button", { name: /OAuth endpoints and scopes/ }),
   );
-  fireEvent.change(screen.getByLabelText("Endpoint configuration"), {
-    target: { value: "manual" },
-  });
+  expect(screen.queryByLabelText("Endpoint configuration")).not.toBeInTheDocument();
   expect(screen.getByLabelText("Authorization URL")).toBeVisible();
   expect(screen.getByLabelText("Token URL")).toBeVisible();
   expect(screen.getByLabelText("Scopes")).toBeVisible();

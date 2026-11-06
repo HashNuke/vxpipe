@@ -136,24 +136,23 @@ left the legacy credential form flush to the edges. The new dialog fixes that
 composition without changing shared production components. Test/save operations
 remain simulated; provider validation reuses the existing pure validator.
 
-Automatic OAuth is the initial custom-server choice. The user explicitly asked
-to expose manual CIMD, DCR and custom authentication; that supersedes the earlier
-proposal to hide registration choices entirely. CIMD and DCR are displayed as
+Custom servers begin with no selected authentication method. URL-triggered
+discovery prefills the method where possible; users can also select CIMD, DCR,
+or a custom authentication method directly. CIMD and DCR are displayed as
 OAuth registration choices, not as substitutes for consent. Anonymous access is
 an explicit choice, never an error fallback.
 
 | Choice | Reviewable configuration |
 | --- | --- |
-| Automatic OAuth | Discovery, optional endpoint/scopes overrides and extra parameters |
-| CIMD | App-managed metadata/callback, no URL fields; custom servers retain optional OAuth overrides |
-| DCR | App-managed callback, no callback field; custom servers retain registration overrides/token/parameters |
+| CIMD | App-managed discovery, metadata, callbacks and request parameters; no extra fields |
+| DCR | App-managed discovery and registration; optional initial registration token for protected registration |
 | Bearer token | Masked token and optional additional MCP headers |
-| API key / custom headers | Editable header names and masked values |
+| Custom headers | Editable header names and masked values |
 | HTTP Basic | Username, masked password and optional additional headers |
-| OAuth with my client | Client ID, secret or signing key, token endpoint authentication, authorization-code/PKCE or client-credentials grant |
+| OAuth - Own client | Client ID, secret or signing key, token endpoint authentication, authorization-code/PKCE or client-credentials grant |
 | No authentication | Endpoint only |
 
-OAuth advanced settings include issuer, explicit authorization/token/revocation
+OAuth - Own client advanced settings include issuer, explicit authorization/token/revocation
 endpoints, scopes, resource, audience, extra authorization/token request values
 and additional MCP request headers. Callback, state and PKCE are application-owned
 values. The prototype rejects conflicting standard parameters and malformed
@@ -222,11 +221,11 @@ Review these stories on port 6006:
 | --- | --- |
 | [AI models](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--ai-models) | Returned directory page uses the existing native credential form |
 | [Directory unavailable](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--directory-unavailable) | Installed AI/telephony rows appear immediately; search Google, then retry to restore all results without losing the query |
-| [Custom MCP](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--custom-mcp) | Complete endpoint and Discover automatically; server supplies its name and advanced auth choices remain available |
+| [Custom MCP](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--custom-mcp) | Enter a URL to discover editable authentication settings; server identity is supplied at connection time |
 | [Registration required](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--registration-required) | Copy callback for manual registration and enter client details; MCP identity/URL are preserved |
-| [Discovery failed](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--discovery-failed) | Retry or edit connection; failure never silently becomes anonymous access |
+| [Discovery failed](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--discovery-failed) | Inline discovery failure with retry and manual setup; failure never silently becomes anonymous access |
 | [Installation URL required](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--installation-url-required) | OAuth cannot continue; static bearer/anonymous configuration remains usable |
-| [Discover no authentication](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--discover-no-authentication) | Connect discovers an anonymous server without prompting for sign-in |
+| [Discover no authentication](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--discover-no-authentication) | URL discovery selects No authentication before Connect, without prompting for sign-in |
 | [Connected without tools](http://localhost:6006/?path=/story/vxpipe-console-services-mcp-integrations--connected-without-tools) | Successful connection with no usable tools has an explicit outcome |
 
 Existing Manual CIMD, Manual DCR, Custom OAuth, Bearer Token, API Key And Headers,
@@ -289,3 +288,79 @@ plain-text notes above a row of Setup and Documentation links. Missing values
 create no empty rows. HubSpot demonstrates notes plus Documentation; the Example
 knowledge MCP in Remote categories demonstrates both links. Callback URLs remain
 read-only and copyable, with a muted surface that distinguishes them from inputs.
+
+## Single authentication selector (2026-10-31 user review)
+
+Custom MCPs expose all methods directly in the Authentication dropdown:
+OAuth - CIMD, OAuth - DCR, OAuth - Own client,
+Bearer token, Custom headers, HTTP Basic, and No authentication.
+There is no Custom authentication option or nested Authentication type selector.
+Selecting a method shows its fields immediately; saved connections reopen with
+that method selected. OAuth - Own client retains the callback copy control for
+manual registration. CIMD/DCR metadata and callbacks remain app-managed.
+
+The Authentication selector shows method-specific fields without explanatory
+paragraphs beneath it. Custom headers supports one or more editable name/value
+pairs with Add header and Remove header controls.
+
+The single custom MCP method selector is labeled **Authentication Type**.
+The surrounding Authentication section and saved-connection tab keep their names.
+
+## URL-triggered discovery (2026-11-06 user review)
+
+Connect other MCP starts a local discovery simulation when a complete HTTPS URL
+is entered or changed. After a 350 ms debounce it shows Checking MCP server,
+then Discovering OAuth settings, then an editable result. The default fixture
+selects OAuth - CIMD and fills issuer, authorization/token/revocation URLs, scopes,
+and resource. These values are illustrative, not inferred facts about the URL;
+the prototype makes no discovery HTTP requests. Server identity still comes from
+the simulated connection/initialize outcome, not OAuth resource metadata.
+
+Authentication Type begins with a disabled Select authentication type placeholder.
+Discover automatically is no longer a method. The Endpoint configuration selector
+is removed; OAuth endpoint fields are directly editable within OAuth endpoints and
+scopes. Entered OAuth URLs are validated as HTTPS without a mode switch.
+
+URL changes clear the previous server's settings and credentials, cancel pending
+results, and start again. Manual edits made during discovery take precedence over
+prefills. Closing the modal cancels discovery. Connect remains disabled until a
+method is discovered or selected explicitly. Discovery failed presents an inline
+message, Retry discovery, and manual setup; it never defaults to anonymous access.
+Discover no authentication demonstrates an anonymous result before Connect.
+
+Review Custom MCP by entering any complete HTTPS URL, then changing it; use
+Discovery failed and Discover no authentication for the alternative outcomes.
+The existing manual-authentication stories retain their initial method so they
+remain useful field previews; editing their URL starts discovery as usual.
+
+Custom headers shows its name/value editor directly and omits the empty Additional
+parameters section. Other authentication methods retain their applicable parameters.
+
+## CIMD and DCR field review (2026-11-06)
+
+For these two authentication types, hide OAuth endpoints and scopes, audience,
+resource overrides, authorization/token parameter editors, and additional MCP
+headers. DCR also hides the registration URL and arbitrary registration parameters.
+Discovery and the client implementation own these values; changing to CIMD/DCR
+must not validate hidden manual overrides left over from another method.
+OAuth - Own client retains its manual configuration, including discovered defaults.
+
+CIMD requires no additional input in this modal. DCR retains only the optional
+Initial registration token, masked, because protected registration can require a
+user-supplied initial access token. Open registration does not require one.
+This is a UI decision, not a claim that extension parameters are forbidden.
+
+Sources reviewed: [MCP authorization, discovery and client registration](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+and [RFC 7591 §3, initial access tokens](https://www.rfc-editor.org/rfc/rfc7591.html#section-3).
+The alternative of keeping generic override editors was rejected for these managed
+flows: it implies ordinary setup requires users to supply protocol-owned values.
+
+Changing Authentication Type clears the previous method’s header rows, including
+secret values. Custom headers starts with an empty X-API-Key row; Bearer, HTTP
+Basic and Own client start with no additional headers. Switching through CIMD,
+DCR or No authentication cannot carry header credentials into a later selection.
+
+Saved custom connections use the same URL-triggered discovery when their URL is
+edited in Manage. Save changes stays disabled until authentication is selected or
+discovered, and progress/retry remains visible there. Switching an Own-client
+draft to client credentials ignores an unused authorization-code endpoint.

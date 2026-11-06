@@ -21,8 +21,8 @@ test.each(["basic", "oauth"] as const)("managing a custom %s connection retains 
   expect(await screen.findByText("Office tools is connected")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Done" }));
   fireEvent.click(screen.getByRole("button", { name: "Manage Office tools" }));
-  expect(screen.getByLabelText("Authentication type")).toHaveValue(method);
-  expect(screen.getByRole("button", { name: method === "basic" ? "Authentication: Basic authentication" : "Authentication: OAuth · Registered client" })).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "Authentication Type" })).toHaveValue(method);
+  expect(screen.getByRole("button", { name: method === "basic" ? "Authentication: HTTP Basic" : "Authentication: OAuth - Own client" })).toBeVisible();
   expect(screen.getByLabelText(method === "basic" ? "Password" : "Client secret")).toHaveValue("");
   if (method === "oauth") {
     expect(screen.getByLabelText("Grant type")).toHaveValue("client_credentials");
@@ -53,7 +53,7 @@ test("a listed MCP with manual registration asks only for client credentials and
 test.each(["cimd", "dcr"] as const)("custom %s setup also hides managed callback metadata", scenario => {
   render(<McpServicesStory scenario={scenario} />);
   expect(screen.getByLabelText("MCP server URL")).toBeVisible();
-  expect(screen.getByLabelText("Authentication")).toBeVisible();
+  expect(screen.getByLabelText("Authentication Type")).toBeVisible();
   expect(screen.queryByLabelText("Connection name")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Callback URL")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Client metadata URL")).not.toBeInTheDocument();
@@ -63,7 +63,7 @@ test("an unlisted MCP gets its displayed name from server metadata without a nam
   render(<McpServicesStory scenario="custom" />);
   expect(screen.queryByLabelText("Connection name")).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("MCP server URL"), { target: { value: "https://office.example.test/mcp" } });
-  fireEvent.change(screen.getByLabelText("Authentication"), { target: { value: "none" } });
+  fireEvent.change(screen.getByLabelText("Authentication Type"), { target: { value: "none" } });
   fireEvent.click(screen.getByRole("button", { name: "Connect" }));
   expect(await screen.findByText("Office tools is connected")).toBeVisible();
 });
@@ -82,4 +82,81 @@ test("saved directory MCPs use their service name and cannot edit catalog endpoi
   expect(screen.getByRole("tab", { name: "Authentication" })).toHaveAttribute("aria-selected", "true");
   expect(screen.queryByLabelText("Connection name")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("MCP server URL")).not.toBeInTheDocument();
+});
+
+test("custom MCP authentication methods are selected directly in one dropdown", () => {
+  render(<McpServicesStory scenario="custom" />);
+  const authentication = screen.getByRole("combobox", { name: "Authentication Type" });
+  expect(within(authentication).getAllByRole("option").map(option => option.textContent)).toEqual([
+    "Select authentication type", "OAuth - CIMD", "OAuth - DCR", "OAuth - Own client",
+    "Bearer token", "Custom headers", "HTTP Basic", "No authentication",
+  ]);
+  for (const [method, field] of [["oauth", "Client ID"], ["bearer", "Bearer token"], ["headers", "Header name 1"], ["basic", "Username"]]) {
+    fireEvent.change(authentication, { target: { value: method } });
+    expect(authentication).toHaveValue(method);
+    expect(screen.queryByLabelText("Authentication type")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(field)).toBeVisible();
+  }
+  fireEvent.change(authentication, { target: { value: "none" } });
+  expect(screen.queryByLabelText("Username")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Client ID")).not.toBeInTheDocument();
+});
+
+test("custom headers shows its header editor without an empty additional parameters section", () => {
+  render(<McpServicesStory scenario="custom-headers" />);
+  expect(screen.getByLabelText("Header name 1")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Additional parameters" })).not.toBeInTheDocument();
+});
+
+test.each(["cimd", "dcr"] as const)("%s only exposes user-supplied setup fields", method => {
+  render(<McpServicesStory scenario={method} />);
+  expect(screen.queryByRole("button", { name: "OAuth endpoints and scopes" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Additional parameters" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Dynamic registration settings" })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Registration URL")).not.toBeInTheDocument();
+  if (method === "dcr") {
+    expect(screen.getByLabelText("Initial registration token")).toHaveAttribute("type", "password");
+  } else {
+    expect(screen.queryByLabelText("Initial registration token")).not.toBeInTheDocument();
+  }
+});
+
+test.each(["cimd", "dcr"] as const)("switching to %s ignores hidden manual overrides", async method => {
+  render(<McpServicesStory scenario="custom-oauth" />);
+  fireEvent.click(screen.getByRole("button", { name: "OAuth endpoints and scopes" }));
+  fireEvent.change(screen.getByLabelText("Token URL"), { target: { value: "invalid" } });
+  fireEvent.click(screen.getByRole("button", { name: "Additional parameters" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add header" }));
+  fireEvent.change(screen.getByLabelText("Authentication Type"), { target: { value: method } });
+  fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+  expect(await screen.findByRole("button", { name: "Simulate authorization" })).toBeVisible();
+});
+
+test("bearer and Basic start without implicit API-key headers", () => {
+  render(<McpServicesStory scenario="custom-bearer" />);
+  fireEvent.click(screen.getByRole("button", { name: "Additional parameters" }));
+  expect(screen.queryByLabelText("Header name 1")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Authentication Type"), { target: { value: "basic" } });
+  expect(screen.queryByLabelText("Header name 1")).not.toBeInTheDocument();
+});
+
+test.each(["bearer", "basic", "oauth"] as const)("switching from Custom headers to %s discards authentication headers", method => {
+  render(<McpServicesStory scenario="custom-headers" />);
+  fireEvent.change(screen.getByLabelText("Header value 1"), { target: { value: "preview-api-key" } });
+  fireEvent.change(screen.getByLabelText("Authentication Type"), { target: { value: method } });
+  fireEvent.click(screen.getByRole("button", { name: "Additional parameters" }));
+  expect(screen.queryByLabelText("Header name 1")).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue("preview-api-key")).not.toBeInTheDocument();
+});
+
+test("additional headers are scoped to their authentication method, including switches through managed methods", () => {
+  render(<McpServicesStory scenario="custom-bearer" />);
+  fireEvent.click(screen.getByRole("button", { name: "Additional parameters" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add header" }));
+  fireEvent.change(screen.getByLabelText("Header name 1"), { target: { value: "X-Workspace" } });
+  fireEvent.change(screen.getByLabelText("Header value 1"), { target: { value: "preview-workspace" } });
+  fireEvent.change(screen.getByLabelText("Authentication Type"), { target: { value: "cimd" } });
+  fireEvent.change(screen.getByLabelText("Authentication Type"), { target: { value: "headers" } });
+  expect(screen.getByLabelText("Header name 1")).toHaveValue("X-API-Key");
+  expect(screen.getByLabelText("Header value 1")).toHaveValue("");
 });

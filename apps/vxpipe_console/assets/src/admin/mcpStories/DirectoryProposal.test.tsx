@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { McpServicesStory } from "./McpServicesStory";
 import { ServiceDirectory } from "./ServiceDirectory";
@@ -80,7 +80,6 @@ test("unsupported automatic registration hands the draft to manual OAuth client 
 
 test("a failed discovery can be edited without losing the entered URL", () => {
   render(<McpServicesStory scenario="discovery-failed" />);
-  fireEvent.click(screen.getByRole("button", { name: "Edit connection" }));
   expect(screen.getByLabelText("MCP server URL")).toHaveValue("https://office.example.test/mcp");
 });
 
@@ -88,7 +87,7 @@ test("an installation URL issue blocks OAuth, but does not block bearer authenti
   const fetch = vi.spyOn(window, "fetch");
   render(<McpServicesStory scenario="installation-url-required" />);
   expect(screen.getByRole("button", { name: "Connect" })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("Authentication"), { target: { value: "custom" } });
+  fireEvent.change(screen.getByLabelText("Authentication Type"), { target: { value: "bearer" } });
   fireEvent.change(screen.getByLabelText("Bearer token"), { target: { value: "illustrative-token" } });
   fireEvent.click(screen.getByRole("button", { name: "Connect" }));
   expect(await screen.findByText("Office tools is connected")).toBeVisible();
@@ -97,9 +96,10 @@ test("an installation URL issue blocks OAuth, but does not block bearer authenti
 
 test("automatic discovery can connect an anonymous server without OAuth", async () => {
   render(<McpServicesStory scenario="discovery-no-auth" />);
+  await waitFor(() => expect(screen.getByLabelText("Authentication Type")).toHaveValue("none"));
   fireEvent.click(screen.getByRole("button", { name: "Connect" }));
   expect(await screen.findByText("Office tools is connected")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Done" }));
   fireEvent.click(screen.getByRole("button", { name: "Manage Office tools" }));
-  expect(within(screen.getByRole("dialog")).getByRole("combobox", { name: "Authentication" })).toHaveValue("none");
+  expect(within(screen.getByRole("dialog")).getByRole("combobox", { name: "Authentication Type" })).toHaveValue("none");
 });

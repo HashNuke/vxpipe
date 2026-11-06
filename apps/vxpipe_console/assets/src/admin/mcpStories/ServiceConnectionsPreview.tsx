@@ -42,6 +42,7 @@ import {
   type Preset,
   type Scenario,
 } from "./fixtures";
+import { useUrlDiscovery } from "./useUrlDiscovery";
 import { validateDraft } from "./validation";
 import "./mcp-services-story.css";
 
@@ -113,6 +114,7 @@ export function ServiceConnectionsPreview({
   );
   const [phase, setPhase] = useState<Phase>(initial.phase);
   const [draft, setDraft] = useState<Draft>(initial.draft);
+  const discovery = useUrlDiscovery(draft, setDraft, (phase === "form" || phase === "manage") && draft.preset.id === "custom", scenario);
   const [selected, setSelected] = useState<string | null>(initial.selected);
   const [connections, setConnections] = useState<Connection[]>(() =>
     scenario === "empty" || renderInventory
@@ -167,6 +169,7 @@ export function ServiceConnectionsPreview({
     [],
   );
   function close() {
+    discovery.reset();
     operation.current += 1;
     setPhase(null);
     setProviderDialog(null);
@@ -174,6 +177,7 @@ export function ServiceConnectionsPreview({
     setError(null);
   }
   function choose(preset: Preset) {
+    discovery.reset();
     const existing = matchingMcpConnection(connections, preset);
     if (existing) {
       manage(existing);
@@ -191,7 +195,7 @@ export function ServiceConnectionsPreview({
     setProviderDialog(providerId);
   }
   function update(patch: Partial<Draft>) {
-    setDraft((value) => ({ ...value, ...patch }));
+    discovery.update(patch);
     setError(null);
   }
   function finishConnection() {
@@ -234,7 +238,7 @@ export function ServiceConnectionsPreview({
     }));
   }
   async function connect() {
-    if (installationUrlMissing) return;
+    if (installationUrlMissing || (draft.preset.id === "custom" && draft.auth === "auto")) return;
     const invalid = validateDraft(draft);
     if (invalid) {
       setError(invalid);
@@ -258,6 +262,7 @@ export function ServiceConnectionsPreview({
     else finishConnection();
   }
   function manage(connection: Connection) {
+    discovery.reset();
     setSelected(connection.id);
     setDraft(draftForConnection(connection));
     setError(null);
@@ -265,9 +270,20 @@ export function ServiceConnectionsPreview({
   }
   function reconnect() {
     if (!current) return;
+    discovery.reset();
     setDraft(draftForConnection(current));
     setPhase("authorize");
   }
+  const discoveryStatus = discovery.status !== "idle" && <div className="mcp-field-note">
+    <p className="mcp-hint" role="status" aria-live="polite">
+      {discovery.status === "waiting" ? "Waiting to check URL…"
+        : discovery.status === "resource" ? "Checking MCP server…"
+        : discovery.status === "oauth" ? "Discovering OAuth settings…"
+        : discovery.status === "failed" ? "Could not discover settings. Choose an authentication type and enter settings manually, or retry."
+        : "Settings discovered. Review or edit them below."}
+    </p>
+    {discovery.status === "failed" && <Button type="button" onClick={discovery.retry}>Retry discovery</Button>}
+  </div>;
   const title =
     phase === "manage"
       ? (current?.name ?? "MCP connection")
@@ -379,6 +395,7 @@ export function ServiceConnectionsPreview({
                       Remote MCP over Streamable HTTP. Available only to{" "}
                       {tenant.name}.
                     </p>
+                    {discoveryStatus}
                   </section>}
                   <section className="mcp-form-section">
                     {draft.preset.id === "custom" && <h3>Authentication</h3>}
@@ -401,7 +418,7 @@ export function ServiceConnectionsPreview({
                   <Button type="button" onClick={close}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="mcp-primary" disabled={installationUrlMissing}>
+                  <Button type="submit" className="mcp-primary" disabled={installationUrlMissing || (draft.preset.id === "custom" && draft.auth === "auto")}>
                     Connect
                     <ArrowRight size={15} aria-hidden />
                   </Button>
@@ -493,6 +510,7 @@ export function ServiceConnectionsPreview({
             )}
             {phase === "manage" && current && <ManageMcpConnection
               connection={current} draft={draft} update={update} error={error} readOnly={readOnly}
+              discoveryStatus={discoveryStatus}
               onSubmit={() => void connect()} onReconnect={reconnect} onDisconnect={() => setPhase("disconnect")} onClose={close}
             />}
             {phase === "disconnect" && current && (
