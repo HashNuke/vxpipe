@@ -108,12 +108,13 @@ defmodule Vxpipe.MCP.Preflight do
     end
   end
 
-  defp suggested_method(%{"client_id_metadata_document_supported" => true}), do: "cimd"
-
-  defp suggested_method(%{"registration_endpoint" => endpoint}) when is_binary(endpoint),
-    do: "dcr"
-
-  defp suggested_method(_metadata), do: "own_client"
+  defp suggested_method(metadata) do
+    cond do
+      OAuthCapabilities.cimd_supported?(metadata) -> "cimd"
+      OAuthCapabilities.dcr_supported?(metadata) -> "dcr"
+      true -> "own_client"
+    end
+  end
 
   defp anonymous(tenant, context, options) do
     {:ok, configuration} =

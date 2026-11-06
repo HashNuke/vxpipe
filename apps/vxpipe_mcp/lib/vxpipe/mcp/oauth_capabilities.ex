@@ -6,6 +6,19 @@ defmodule Vxpipe.MCP.OAuthCapabilities do
 
   def client_assertion_algorithms, do: @algorithms
 
+  def cimd_supported?(metadata) do
+    validate(metadata) == :ok and metadata["client_id_metadata_document_supported"] == true and
+      "none" in Map.get(metadata, "token_endpoint_auth_methods_supported", ["client_secret_basic"])
+  end
+
+  def dcr_supported?(metadata) do
+    validate(metadata) == :ok and is_binary(metadata["registration_endpoint"]) and
+      Enum.any?(
+        Map.get(metadata, "token_endpoint_auth_methods_supported", ["client_secret_basic"]),
+        &(&1 in ["none", "client_secret_basic", "client_secret_post"])
+      )
+  end
+
   def validate(metadata) when is_map(metadata) do
     if Enum.all?(@arrays, fn field ->
          optional?(metadata, field, fn values -> list?(values, 32, &text?/1) end)
@@ -26,7 +39,12 @@ defmodule Vxpipe.MCP.OAuthCapabilities do
            "authorization_code",
            "implicit"
          ]) and
-         metadata["authorization_response_iss_parameter_supported"] == true,
+         metadata["authorization_response_iss_parameter_supported"] == true and
+         (Enum.any?(
+            Map.get(metadata, "token_endpoint_auth_methods_supported", ["client_secret_basic"]),
+            &(&1 in ["none", "client_secret_basic", "client_secret_post"])
+          ) or
+            private_key_jwt_supported?(metadata)),
        do: :ok,
        else: {:error, :unsupported_oauth_capabilities}
   end

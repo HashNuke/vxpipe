@@ -160,7 +160,53 @@ defmodule Vxpipe.MCP.PreflightTest do
     refute_received :anonymous_check
   end
 
-  defp options(issuers, issuer_response \\ true) do
+  test "discovery suggests only compatible managed registration methods" do
+    for {methods, expected} <- [
+          {["none"], "cimd"},
+          {["client_secret_basic"], "dcr"},
+          {nil, "dcr"},
+          {["private_key_jwt"], "own_client"}
+        ] do
+      changes = %{"registration_endpoint" => @issuer <> "/register"}
+
+      changes =
+        if methods,
+          do: Map.put(changes, "token_endpoint_auth_methods_supported", methods),
+          else: changes
+
+      changes =
+        if methods == ["private_key_jwt"],
+          do: Map.put(changes, "token_endpoint_auth_signing_alg_values_supported", ["RS256"]),
+          else: changes
+
+      assert {:ok, result} =
+               Preflight.discover("tenant", input(), options([@issuer], true, changes))
+
+      assert result.suggested_method == expected
+    end
+  end
+
+  test "discovery rejects browser OAuth without a supported token authentication method" do
+    for metadata <- [
+          %{"token_endpoint_auth_methods_supported" => ["tls_client_auth"]},
+          %{
+            "token_endpoint_auth_methods_supported" => ["private_key_jwt"],
+            "token_endpoint_auth_signing_alg_values_supported" => ["HS256"]
+          }
+        ] do
+      assert {:ok, result} =
+               Preflight.discover("tenant", input(), options([@issuer], true, metadata))
+
+      assert result.outcome == :unsupported_oauth
+      assert result.suggested_method == nil
+    end
+  end
+
+  defp options(
+         issuers,
+         issuer_response \\ true,
+         metadata_changes \\ %{"token_endpoint_auth_methods_supported" => ["none"]}
+       ) do
     owner = self()
 
     [
@@ -176,7 +222,7 @@ defmodule Vxpipe.MCP.PreflightTest do
           true ->
             send(owner, :oauth_fetch)
 
-            response(200, %{
+            metadata = %{
               "issuer" => @issuer,
               "authorization_endpoint" => @issuer <> "/authorize",
               "token_endpoint" => @issuer <> "/token",
@@ -184,7 +230,9 @@ defmodule Vxpipe.MCP.PreflightTest do
               "code_challenge_methods_supported" => ["S256"],
               "response_types_supported" => ["code"],
               "authorization_response_iss_parameter_supported" => issuer_response
-            })
+            }
+
+            response(200, Map.merge(metadata, metadata_changes))
         end
       end,
       anonymous_check: fn _, _ ->

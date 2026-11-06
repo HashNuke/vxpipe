@@ -313,6 +313,28 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
 
 ### Implementation and review fixes
 
+- [x] Do not suggest browser OAuth when all advertised token authentication
+  methods or signing algorithms are unsupported by Own client or managed flows.
+- [x] Reuse DCR registration only with scope evidence covering the newly selected
+  challenge/resource scopes; request fresh registration when coverage is unknown
+  or insufficient. Keep same/subset-scope reuse working. Two red regressions now
+  pass; the full MCP suite passes 163 tests.
+
+- [x] Validate raw OAuth token responses before dependency defaults: require
+  token_type and match the supported Bearer token character/size contract. Cover
+  omitted type, invalid token characters and oversized access tokens.
+- [x] Reject CIMD handoff when explicitly advertised token authentication methods
+  exclude the public client method; keep discovery suggestions consistent.
+- [x] Validate managed token-endpoint query parameters before dynamic registration
+  so protected-field conflicts cannot create an unusable external registration.
+- [x] Bind DCR request metadata to selected resource/challenge scopes and supported
+  grants, and validate explicit returned grant/response-type/scope changes before
+  browser handoff. Distinguish optional RFC scope metadata from the chosen
+  interoperability policy; do not silently assume every registration is usable.
+  Eight red regressions reproduced these issues; 40 focused tests now pass. See
+  [protocol boundary](../../docs/development/mcp-oauth-protocol.md) and
+  [review evidence](../20261107-0113-review-mcp-oauth.md).
+
 - [x] Reject recognized credential query parameters before discovery or connection
   I/O so tokens cannot enter public endpoint columns or read responses. Preserve
   nonsecret query parameters, cover encoded/case variants and verify the real
