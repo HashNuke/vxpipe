@@ -24,9 +24,11 @@ defmodule Vxpipe.MCP.ClientOptions do
     with {:ok, endpoint} <- fetch_endpoint(config),
          :ok <- validate_production_endpoint(endpoint),
          :ok <- reject_raw_headers(config),
+         {:ok, runtime} <- runtime_authentication(config),
          {:ok, headers} <- Authentication.headers(Keyword.get(config, :authentication)),
          {:ok, transport_options} <- TransportOptions.build(config) do
-      {:ok, options(endpoint, headers, config, transport_options, true, true)}
+      {:ok,
+       Keyword.merge(options(endpoint, headers, config, transport_options, true, true), runtime)}
     end
   end
 
@@ -40,11 +42,16 @@ defmodule Vxpipe.MCP.ClientOptions do
     with {:ok, endpoint} <- fetch_endpoint(config),
          :ok <- validate_loopback_endpoint(endpoint),
          :ok <- reject_raw_headers(config),
+         {:ok, runtime} <- runtime_authentication(config),
          {:ok, headers} <- Authentication.headers(Keyword.get(config, :authentication)),
          {:ok, reconnect?} <- loopback_reconnect(config),
          {:ok, use_sse?} <- loopback_sse(config),
          {:ok, transport_options} <- TransportOptions.build(config) do
-      {:ok, options(endpoint, headers, config, transport_options, reconnect?, use_sse?)}
+      {:ok,
+       Keyword.merge(
+         options(endpoint, headers, config, transport_options, reconnect?, use_sse?),
+         runtime
+       )}
     end
   end
 
@@ -53,6 +60,23 @@ defmodule Vxpipe.MCP.ClientOptions do
       {:ok, endpoint} -> {:ok, endpoint}
       :error -> {:error, :endpoint_required}
     end
+  end
+
+  defp runtime_authentication(config) do
+    case Keyword.fetch(config, :runtime_authentication) do
+      :error ->
+        {:ok, []}
+
+      {:ok, %Vxpipe.MCP.RuntimeAuthProvider{} = state} ->
+        case Vxpipe.MCP.RuntimeAuthProvider.init(state) do
+          {:ok, validated} -> {:ok, [auth_provider: {Vxpipe.MCP.RuntimeAuthProvider, validated}]}
+        end
+
+      _ ->
+        {:error, :invalid_authentication}
+    end
+  catch
+    :exit, _ -> {:error, :invalid_authentication}
   end
 
   defp validate_production_endpoint(endpoint) when is_binary(endpoint) do

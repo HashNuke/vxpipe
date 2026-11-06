@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Apply the reviewed ExMCP request-credential patch to its exact pinned sources."""
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main():
+    root = Path(__file__).resolve().parent.parent
+    dependency = root / "deps/ex_mcp"
+    patch = root / "patches/ex_mcp/runtime-request-credentials.patch"
+    manifest = json.loads(patch.with_suffix(".json").read_text())
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=dependency, text=True
+    ).strip()
+    if revision != manifest["revision"] or digest(patch) != manifest["patch_sha256"]:
+        raise ValueError("ExMCP revision or patch checksum differs from the reviewed manifest")
+    actual = {name: digest(dependency / name) for name in manifest["files"]}
+    if all(actual[name] == hashes["patched"] for name, hashes in manifest["files"].items()):
+        print("ExMCP request-credential patch verified")
+        return
+    if not all(actual[name] == hashes["original"] for name, hashes in manifest["files"].items()):
+        raise ValueError("ExMCP sources differ from both reviewed states; preserve changes and review the patch")
+    subprocess.run(["git", "apply", "--check", str(patch)], cwd=dependency, check=True)
+    subprocess.run(["git", "apply", str(patch)], cwd=dependency, check=True)
+    if not all(digest(dependency / name) == hashes["patched"] for name, hashes in manifest["files"].items()):
+        raise ValueError("ExMCP patch result failed checksum verification")
+    print("ExMCP request-credential patch applied and verified")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        print(f"ExMCP patch preparation failed: {error}", file=sys.stderr)
+        sys.exit(1)

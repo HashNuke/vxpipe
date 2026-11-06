@@ -344,6 +344,23 @@ outage does not stop an already authorized call. Catalog refresh, server-name ch
 refresh race and reconnect preserve pinning and scoped failure contracts. Migration
 is repeatable and does not silently share or delete existing credentials.
 
+#### Runtime transport credential checkpoint (2026-11-07)
+
+- [x] Project current pinned credentials into a guarded MCP provider, validating
+  method and bearer syntax without exposing registration/refresh secrets.
+- [x] Resolve credentials for POST, initial GET, SSE reconnect and session DELETE;
+  reject unavailable credentials before submission and preserve local cleanup.
+- [x] Ship the pinned two-file ExMCP transport patch with revision/source/patch
+  checksums, idempotent preparation, setup/CI compilation and preparation tests.
+- [x] Verify actual HTTP token rotation, resume cursor progression and request
+  rejection privacy. Keep network interoperability in the tagged integration lane.
+- [ ] Complete saved-connection catalog/compiler wiring, active call execution and
+  independent-node revocation acceptance before completing runtime cutover.
+
+See [transport contracts](../../docs/development/mcp-runtime-transport.md) and
+[review evidence](../20261107-0224-review-mcp-transport.md). This checkpoint extends
+the committed resolver/renewal boundary; it does not yet wire every call path.
+
 ### T8 — Release and operational verification
 
 Depends on T1–T7. Update installation/operations docs and all related Storybooks.
@@ -357,6 +374,17 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   evidence; only then check the milestone in the index.
 
 ### Implementation and review fixes
+
+- [x] Isolate official MCP fixture npm commands in their pinned checkout working
+  directories after reproducing lock resolution failures from Vxpipe. Preserve
+  fixture revisions and scenarios; the full MCP integration lane passes 176 tests.
+- [x] Give fresh SSE event IDs precedence over captured initial HTTP cursor headers;
+  reproduce the stale reconnect cursor and verify resumed HTTP uses the latest ID.
+- [x] Redact live SSE OTP termination reports when runtime credentials are rejected;
+  verify both formatted and structured reports exclude cached header sentinels.
+- [x] Return a fixed HTTP submission error on the exact runtime credential-rejection
+  signal, preventing a live stateless client's crash report from exposing custom
+  headers. Keep zero-network rejection and terminal SSE behavior.
 
 - [x] Anchor machine-acquisition and renewal token expiry before token HTTP;
   verify request and MCP-check time cannot extend the returned lifetime.

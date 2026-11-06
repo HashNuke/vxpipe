@@ -26,7 +26,7 @@ defmodule Vxpipe.MCP.CheckHTTPFixture do
     if Keyword.get(options, :hold) == method do
       hold(conn, method, options)
     else
-      respond(conn, request)
+      respond(conn, request, options)
     end
   end
 
@@ -43,9 +43,13 @@ defmodule Vxpipe.MCP.CheckHTTPFixture do
     send_resp(conn, 405, "")
   end
 
-  defp respond(conn, %{"method" => "initialize", "id" => id}) do
+  defp respond(conn, %{"method" => "initialize", "id" => id}, options) do
+    conn =
+      if Keyword.get(options, :session, true),
+        do: put_resp_header(conn, "mcp-session-id", "check-fixture-session"),
+        else: conn
+
     conn
-    |> put_resp_header("mcp-session-id", "check-fixture-session")
     |> json(id, %{
       "protocolVersion" => "2025-11-25",
       "capabilities" => %{"tools" => %{}},
@@ -53,9 +57,10 @@ defmodule Vxpipe.MCP.CheckHTTPFixture do
     })
   end
 
-  defp respond(conn, %{"method" => "notifications/initialized"}), do: send_resp(conn, 202, "")
+  defp respond(conn, %{"method" => "notifications/initialized"}, _options),
+    do: send_resp(conn, 202, "")
 
-  defp respond(conn, %{"method" => "tools/list", "id" => id}),
+  defp respond(conn, %{"method" => "tools/list", "id" => id}, _options),
     do: json(conn, id, %{"tools" => []})
 
   defp json(conn, id, result),

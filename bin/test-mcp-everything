@@ -27,8 +27,11 @@ if [[ "$actual_commit" != "$expected_commit" ]]; then
   exit 1
 fi
 
-npm --prefix "$fixture_root/source" ci --ignore-scripts --no-audit --no-fund
-npm --prefix "$fixture_root/source" run build --workspace @modelcontextprotocol/server-everything
+(
+  cd "$fixture_root/source"
+  npm ci --ignore-scripts --no-audit --no-fund
+  npm run build --workspace @modelcontextprotocol/server-everything
+)
 
 port="$(elixir -e '{:ok, socket} = :gen_tcp.listen(0, [:binary, active: false]); {:ok, {_address, port}} = :inet.sockname(socket); IO.puts(port); :gen_tcp.close(socket)')"
 

@@ -17,10 +17,12 @@ class SetupTest(unittest.TestCase):
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory(prefix="vxpipe-setup-")
         self.addCleanup(self.scratch.cleanup)
-        self.base = Path(self.scratch.name)
+        self.base = Path(self.scratch.name).resolve()
         self.root = self.base / "checkout"
         self.root.mkdir()
         shutil.copytree(REPOSITORY / "bin", self.root / "bin")
+        # Dependencies are faked here; the real patch has its own clean-checkout tests.
+        (self.root / "bin/patch-ex-mcp").write_text("#!/bin/bash\nexit 0\n")
         self.fake = self.base / "tools"
         self.fake.mkdir()
         for tool in ("python3", "git", "bash", "dirname"):
@@ -225,6 +227,8 @@ class SetupTest(unittest.TestCase):
         self.assertEqual((self.root / ".vxpipe/worktree.json").read_text(), metadata)
         commands = log.read_text().splitlines()
         self.assertIn("dev deps.get", commands)
+        self.assertIn("dev deps.compile ex_mcp", commands)
+        self.assertIn("test deps.compile ex_mcp", commands)
         self.assertIn("dev ecto.migrate", commands)
         self.assertIn("test ecto.migrate", commands)
 
@@ -329,10 +333,21 @@ assert not list((root / '.vxpipe').glob('.worktree.json.*'))
         log.write_text("")
         result = self.setup(SETUP_COMMAND_LOG=str(log))
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertEqual(log.read_text().splitlines()[:3], ["deps.get", "assets.setup", "assets.build"])
+        self.assertEqual(log.read_text().splitlines()[:5],
+                         ["deps.get", "deps.compile ex_mcp", "deps.compile ex_mcp",
+                          "assets.setup", "assets.build"])
         self.assertIn("bin/dev", result.stdout)
         self.assertIn("mix test", result.stdout)
         self.assertIn("provider", result.stdout)
+
+    def test_patch_failure_stops_before_dependency_compilation(self):
+        (self.root / "bin/patch-ex-mcp").write_text("#!/bin/bash\nexit 1\n")
+        self.tool("mix", 'printf "%s\\n" "$*" >> "$SETUP_COMMAND_LOG"')
+        log = self.base / "commands"
+        result = self.setup(SETUP_COMMAND_LOG=str(log))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("transport patch failed", result.stdout)
+        self.assertEqual(log.read_text().splitlines(), ["deps.get"])
 
     def test_shared_build_overrides_fail_before_writing_metadata(self):
         for name in ("MIX_BUILD_PATH", "MIX_DEPS_PATH"):

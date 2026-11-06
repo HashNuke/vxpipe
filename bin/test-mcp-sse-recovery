@@ -23,9 +23,12 @@ fi
 git -C "$fixture_root" apply \
   "$project_root/apps/vxpipe_mcp/conformance/patches/sse-retry-2025-11-25.patch"
 
-npm --prefix "$fixture_root" ci --ignore-scripts --no-audit --no-fund
-npm --prefix "$fixture_root" start -- client \
-  --command "$project_root/bin/mcp-conformance-client" \
-  --scenario sse-retry \
-  --spec-version 2025-11-25 \
-  --timeout 30000
+(
+  cd "$fixture_root"
+  npm ci --ignore-scripts --no-audit --no-fund
+  npm start -- client \
+    --command "$project_root/bin/mcp-conformance-client" \
+    --scenario sse-retry \
+    --spec-version 2025-11-25 \
+    --timeout 30000
+)

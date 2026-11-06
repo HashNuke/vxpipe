@@ -64,7 +64,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: deps
-          key: mix-ubuntu-26.04-${{ runner.arch }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock', 'mix.exs', 'apps/*/mix.exs') }}
+          key: mix-ubuntu-26.04-${{ runner.arch }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.lock', 'mix.exs', 'apps/*/mix.exs', 'patches/ex_mcp/*') }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -77,6 +77,16 @@ jobs:
 
       - name: Fetch locked Mix dependencies
         run: mix deps.get --check-locked
+
+      - name: Apply and compile reviewed ExMCP transport patch
+        run: |
+          bin/patch-ex-mcp
+          mix deps.compile ex_mcp
+
+      - name: Test dependency preparation
+        run: |
+          python3 test/shell/ex_mcp_patch_test.py
+          python3 test/shell/setup_test.py
 
       - name: Check formatting
         run: mix format --check-formatted

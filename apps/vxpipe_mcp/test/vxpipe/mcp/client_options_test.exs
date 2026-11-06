@@ -3,6 +3,33 @@ defmodule Vxpipe.MCP.ClientOptionsTest do
 
   alias Vxpipe.MCP.ClientOptions
 
+  test "carries only the guarded runtime provider through the fixed transport profile" do
+    {:ok, state} =
+      Vxpipe.MCP.RuntimeAuthProvider.init(%{
+        tenant: "tenant",
+        connection_id: "connection",
+        generation: 1,
+        auth_method: "oauth",
+        resolver: {Vxpipe.MCP.Test.RuntimeAuthFixture, {self(), {:error, :revoked}}}
+      })
+
+    assert {:ok, options} =
+             ClientOptions.build(
+               endpoint: "https://mcp.example.test/mcp",
+               runtime_authentication: state
+             )
+
+    assert options[:auth_provider] == {Vxpipe.MCP.RuntimeAuthProvider, state}
+    assert {:ok, ^state} = Vxpipe.MCP.RuntimeAuthProvider.init(state)
+    refute_received {:resolved, _, _, _}
+
+    assert {:error, :invalid_authentication} =
+             ClientOptions.build(
+               endpoint: "https://mcp.example.test/mcp",
+               runtime_authentication: %{resolver: :unchecked}
+             )
+  end
+
   test "pins the supported protocol and safe transport defaults" do
     assert {:ok, options} =
              ClientOptions.build(

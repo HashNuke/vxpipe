@@ -24,6 +24,8 @@ defmodule Vxpipe.MCP.CumulativeSSEServer do
   def init(owner), do: owner
 
   def call(%{method: "GET"} = conn, owner) do
+    send(owner, {:cumulative_sse_authorization, "GET", get_req_header(conn, "authorization")})
+
     case get_req_header(conn, "last-event-id") do
       [] -> initial_stream(conn, owner)
       last_event_id -> resumed_stream(conn, owner, last_event_id)
@@ -35,6 +37,11 @@ defmodule Vxpipe.MCP.CumulativeSSEServer do
     request = Jason.decode!(body)
     send(owner, {:cumulative_sse_request, Map.get(request, "method"), request})
     respond(conn, request, owner)
+  end
+
+  def call(%{method: "DELETE"} = conn, owner) do
+    send(owner, {:cumulative_sse_authorization, "DELETE", get_req_header(conn, "authorization")})
+    send_resp(conn, 204, "")
   end
 
   defp initial_stream(conn, owner) do
