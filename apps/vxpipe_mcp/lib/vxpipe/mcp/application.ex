@@ -9,6 +9,7 @@ defmodule Vxpipe.MCP.Application do
       {Registry, keys: :unique, name: Vxpipe.MCP.ConnectionRegistry},
       Vxpipe.MCP.CredentialLeases,
       Vxpipe.MCP.PreflightSupervisor,
+      Vxpipe.MCP.OAuthCompletionSupervisor,
       {DynamicSupervisor,
        strategy: :one_for_one, name: Vxpipe.MCP.CheckSupervisor, max_children: 8},
       {DynamicSupervisor, strategy: :one_for_one, name: Vxpipe.MCP.ConnectionSupervisor}

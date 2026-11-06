@@ -29,6 +29,7 @@ config :phoenix, :filter_parameters, [
   "values",
   "credentials",
   "endpoint",
+  "return_to",
   "api_key",
   "account_sid"
 ]

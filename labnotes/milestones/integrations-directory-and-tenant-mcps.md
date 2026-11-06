@@ -263,6 +263,30 @@ changes, missing installation URL, malformed metadata, issuer substitution,
 PKCE/resource validation, refresh races and invalid grants. Real browser flow
 returns to the same tenant/category, then discovers tools before marking connected.
 
+#### Browser-flow backend checkpoint (2026-11-07)
+
+- [x] Wire session/CSRF-protected tenant OAuth start and explicit reconnect through
+  current installation/authority checks, fresh protocol preparation and encrypted
+  attempt persistence before returning the authorization handoff.
+- [x] Claim session/tenant/installation-bound callback state once, validate issuer,
+  redeem the code, initialize MCP/tools and recheck authority before encrypted save.
+- [x] Return claimed failures to the authenticated tenant location with fixed status
+  and bound attempt ID; malformed/unclaimed state and authority loss remain errors.
+- [x] Admit completion before code redemption, bound the whole operation, cancel
+  owned work on caller death/restart and reject a late success before persistence.
+- [x] Anchor token expiry before exchange so MCP checking cannot extend validity.
+- [x] Reconnect retained static/revoked identities without old credentials, preserve
+  namespace/directory/generation fencing and recover unreadable DCR registration
+  through fresh registration. Retain working grants until replacement succeeds.
+- [x] Verify browser code flows through local OAuth/MCP HTTP and encrypted
+  PostgreSQL, including replay, denial, failed initialization and restoration.
+- [ ] Complete production OAuth forms, matching nonsecret draft restoration, listed
+  identities, runtime renewal and independent-node acceptance in later checkpoints.
+
+See [browser-flow contracts](../../docs/development/mcp-oauth-browser-flow.md) and
+[review evidence](../20261107-0143-review-mcp-oauth-flow.md). Backend fixtures do not
+establish rendered browser or external provider interoperability acceptance.
+
 ### T6 — Manual authentication interoperability
 
 Depends on T4/T5; the existing broad form is a proposal, not a support claim.
@@ -408,8 +432,10 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   credentials. Two tagged HTTP/PostgreSQL/local-MCP tests verify the actual
   disconnect/reconnect path and fresh replacement after losing an old key. See
   [management evidence](../20261107-0052-review-mcp-management.md).
-- [ ] Wire retained-identity reconnect into the production modal and delegated
-  OAuth attempts; keep full workflow acceptance open until those cases pass.
+- [x] Wire retained-identity reconnect into delegated OAuth attempts, including
+  fresh registration after secret erasure or unavailable old keys.
+- [ ] Wire retained-identity reconnect into the production modal; keep full workflow
+  acceptance open until those cases pass.
 
 - [x] Reject production localhost and IPv4/IPv6 loopback origins before client
   startup, including private-host allowlist attempts. Preserve per-request DNS

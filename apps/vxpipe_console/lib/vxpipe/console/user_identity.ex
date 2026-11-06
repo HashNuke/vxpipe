@@ -41,6 +41,25 @@ defmodule Vxpipe.Console.UserIdentity do
   def login(email, password, client_address),
     do: with_dependencies(&Sessions.login(&1, email, password, client_address))
 
+  def mcp_oauth_installation do
+    with_dependencies(fn deps ->
+      with {:ok, installation} <- deps.installations.fetch(),
+           origin when is_binary(origin) <- Map.get(installation, :public_url),
+           {:ok, document} <- Vxpipe.MCP.ClientMetadata.document(origin) do
+        [redirect_uri] = document.redirect_uris
+
+        {:ok,
+         %{
+           origin: origin,
+           revision: Map.get(installation, :public_url_revision, 0),
+           redirect_uri: redirect_uri
+         }}
+      else
+        _ -> {:error, :mcp_installation_unavailable}
+      end
+    end)
+  end
+
   def installation(actor),
     do: with_dependencies(&Vxpipe.Identity.InstallationSettings.fetch(&1, actor))
 

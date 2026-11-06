@@ -11,7 +11,7 @@ defmodule Vxpipe.Console.MCPConnectionsController do
            Map.delete(params, "tenant_key"),
            options(conn)
          ) do
-      {:ok, result} -> json(conn, %{discovery: result})
+      {:ok, result} -> json(conn, %{discovery: Map.put(result, :oauth_client, oauth_client())})
       {:error, reason} -> error(conn, reason)
     end
   end
@@ -108,6 +108,21 @@ defmodule Vxpipe.Console.MCPConnectionsController do
       Application.get_env(:vxpipe_console, :user_identity_backend, Vxpipe.Console.UserIdentity)
 
     [refresh_authority: fn -> UserSession.fetch(conn, backend: backend) end]
+  end
+
+  defp oauth_client do
+    backend =
+      Application.get_env(:vxpipe_console, :user_identity_backend, Vxpipe.Console.UserIdentity)
+
+    with {:ok, %{origin: origin}} <- backend.mcp_oauth_installation(),
+         {:ok, document} <- Vxpipe.MCP.ClientMetadata.document(origin),
+         [callback] <- document.redirect_uris,
+         do: %{callback_url: callback, client_id: document.client_id},
+         else: (_ -> nil)
+  rescue
+    _ -> nil
+  catch
+    :exit, _ -> nil
   end
 
   defp error(conn, {:mcp_reconnect_required, %{id: id, generation: generation}}),

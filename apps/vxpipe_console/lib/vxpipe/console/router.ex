@@ -50,6 +50,13 @@ defmodule Vxpipe.Console.Router do
     plug Vxpipe.Console.PrivateNoStore
   end
 
+  pipeline :mcp_oauth_callback do
+    plug :fetch_session
+    plug :put_secure_browser_headers
+    plug Vxpipe.Console.PrivateNoStore
+    plug Vxpipe.Console.RequireUserAPI
+  end
+
   pipeline :user_api do
     plug :user_auth_api
     plug Vxpipe.Console.RequireUserAPI
@@ -83,6 +90,11 @@ defmodule Vxpipe.Console.Router do
     plug :put_secure_browser_headers
     plug Vxpipe.Console.RequireOperator
     plug Vxpipe.Console.RequireTenant
+  end
+
+  scope "/oauth" do
+    pipe_through :mcp_oauth_callback
+    get "/mcp/callback", Vxpipe.Console.MCPOAuthController, :callback, log: false
   end
 
   get "/oauth/client-metadata.json", Vxpipe.Console.MCPClientMetadataController, :show, log: false
@@ -157,6 +169,7 @@ defmodule Vxpipe.Console.Router do
     get "/t/:tenant_key/calls", Vxpipe.Console.CanonicalPageController, :index
     get "/t/:tenant_key/call-specs", Vxpipe.Console.CanonicalPageController, :index
     get "/t/:tenant_key/services", Vxpipe.Console.CanonicalPageController, :index
+    get "/t/:tenant_key/services/:category", Vxpipe.Console.CanonicalPageController, :index
   end
 
   scope "/auth" do
@@ -266,6 +279,13 @@ defmodule Vxpipe.Console.Router do
 
   scope "/api" do
     pipe_through :session_product_api
+
+    post "/tenants/:tenant_key/mcp-oauth", Vxpipe.Console.MCPOAuthController, :create,
+      metadata: %{console_product_api: true}
+
+    post "/tenants/:tenant_key/mcp-connections/:id/oauth",
+         Vxpipe.Console.MCPOAuthController,
+         :reconnect, metadata: %{console_product_api: true}
 
     post "/tenants/:tenant_key/mcp-discovery",
          Vxpipe.Console.MCPConnectionsController,

@@ -15,6 +15,15 @@ defmodule Vxpipe.Console.Test.FakeUserIdentity do
   @user_id "test-owner"
   @session_id "test-session"
 
+  def mcp_oauth_installation,
+    do:
+      {:ok,
+       %{
+         origin: "https://console.example.test",
+         revision: 2,
+         redirect_uri: "https://console.example.test/oauth/mcp/callback"
+       }}
+
   @spec email() :: String.t()
   def email, do: @email
 
