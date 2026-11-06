@@ -198,6 +198,11 @@ independently of T1–T3 behind unexposed operations.
   bounded transient clients without tool invocation. Caller/deadline cancellation,
   log redaction and explicit session cleanup are covered by focused fixtures; see
   [the check design](../../docs/development/mcp-connection-checks.md).
+- [x] Add the trusted tenant connection repository, durable UUID/namespace,
+  encrypted records, generation-checked replacement/revocation, public metadata
+  and catalog refresh, and bounded atomic re-encryption. Distinct database clients
+  verify deterministic duplicate and stale-generation outcomes; authorization and
+  public reconnect remain separate tasks.
 - [ ] Add persistence migrations for tenant connection identity/config generation,
   encrypted auth material and catalog snapshots, using the existing encryption
   keyring with explicit MCP identity binding and rotation participation.
@@ -289,6 +294,26 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   evidence; only then check the milestone in the index.
 
 ### Implementation and review fixes
+
+- [x] Correct the MCP connection-row SQL constraint to reject connected rows with
+  NULL ciphertext and a present key ID. Add a database constraint regression;
+  repository writes already encrypt payloads, so this is an integrity gap rather
+  than a demonstrated authorization bypass.
+- [x] Make connection-storage foundation tests independent of the later OAuth
+  grant store; retain grant-renewal/catalog integration evidence in its own lane.
+- [x] Normalize stopped/missing MCP repositories and checkout failures to the
+  fixed unavailable result using the existing provider-store boundary pattern;
+  preserve programmer errors and prove recovery with an isolated fixture Repo.
+- [x] Verify repository restoration of a revoked MCP identity with fresh secrets
+  at the observed revoked generation, preserving ID/namespace and advancing the
+  generation. Add wrong-tenant replacement and failed-batch rollback coverage.
+  Fifteen store tests, two distinct PostgreSQL-client race tests and the full
+  473-test Persistence suite pass; static gates pass. See
+  [storage review](../20261107-0013-review-mcp-storage.md).
+- [ ] Complete authorized disconnect-to-reconnect for retained MCP identities.
+  Add tombstone lookup/reconnect orchestration without resolving old secrets;
+  current Calls create/update paths cannot reconnect a revoked endpoint. Keep
+  the public flow unchecked until end-to-end coverage passes.
 
 - [x] Reject production localhost and IPv4/IPv6 loopback origins before client
   startup, including private-host allowlist attempts. Preserve per-request DNS
