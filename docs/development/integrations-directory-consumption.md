@@ -1,16 +1,26 @@
 # Integrations directory consumption and unlisted MCPs
 
-Status: public directory client implemented, 2026-11-06. The versioned request,
-bounded transport and schema-validation boundary are implemented. The supervised
-public cache is also implemented. Facade, production pages, persistence and
-outbound OAuth remain separate checkpoints.
-The accompanying Storybooks simulate their workflows. Delivery tasks and acceptance gates are in
+Status: production implementation in progress; updated 2026-11-07. The directory
+client/cache/facade, native Services reuse, static/OAuth management, nonsecret
+callback recovery and saved runtime wiring are implemented. Listed-template and
+retained-ID reconnect UI, authenticated browser/full runtime/independent-node
+acceptance and external directory publication remain open. Storybooks simulate
+workflows without real HTTP; they do not prove provider interoperability.
+Delivery tasks and acceptance gates are in
 [the milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 This document supersedes earlier proposals that always served AI/telephony browse
 results locally. The installed adapter registry remains authoritative for what
 VxPipe can actually connect.
 
 ## Directory authority and fallback
+
+Native provider management reuses the existing Services bindings, credential
+validation, save, removal and override handlers. The Integrations page fetches its
+joined inventory for browsing; it fetches the existing native editor settings only
+when a native action is opened. After a mutation it reloads the joined inventory.
+The Telephony page also loads settings for its existing application-management
+controls. The local integrations facade joins directory/MCP data; it is not a
+second native credential-management implementation.
 
 Use `https://integrations-api-production-2803.up.railway.app` by default. A runtime
 operator setting, `VXPIPE_INTEGRATIONS_DIRECTORY_ORIGIN`, may replace that origin;
@@ -101,8 +111,10 @@ credentials.
 ## Connecting a server not listed in the directory
 
 **Connect other MCP** remains available on all tenant categories, including an
-outage or empty search. The custom form asks for the complete HTTPS MCP URL and authentication
-(default **Discover automatically**). There is no editable connection name: listed
+outage or empty search. The custom form asks for the complete HTTPS MCP URL and
+Authentication Type. URL entry/change triggers debounced discovery through the
+installation backend; there is no Discover automatically authentication option
+or Endpoint configuration mode selector. There is no editable connection name: listed
 MCPs use the directory name, and custom MCPs use initialized server metadata
 (`title`, then `name`; use the endpoint host only as a temporary/fallback label).
 Preserve the endpoint path. This is a hosted Streamable HTTP connection; shell commands, stdio
@@ -114,8 +126,8 @@ Discovery checks the endpoint before prompting for secrets. When authorization i
 needed, use protected-resource metadata and authorization-server metadata. Prefer
 an existing registered client, then advertised CIMD, then advertised DCR; otherwise
 ask for client details. CIMD and DCR are client-registration mechanisms, not two
-kinds of user permission. Explicit manual choices remain in advanced setup for
-providers that need them. [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+kinds of user permission. Actual authentication methods remain directly selectable; unresolved discovery
+shows a placeholder, not an implicit anonymous connection. [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
 
 Listed MCPs use the directory endpoint and authentication recipe, validated against
 live metadata. Do not ask users to choose the authentication type or edit the
@@ -133,31 +145,63 @@ before endpoint/issuer validation.
 
 | Mode | Configuration to support |
 | --- | --- |
-| Automatic / CIMD | Discovery; existing Console client metadata document; optional scopes |
-| DCR | Discovered registration endpoint; optional initial registration token and validated registration parameters |
+| CIMD | Discovered settings and existing Console client metadata; no extra editable configuration |
+| DCR | Discovered registration endpoint and app-managed metadata; optional masked initial access token only |
 | Registered OAuth client | Client ID; none/basic/post token-endpoint client authentication; secret when required; exact callback for authorization-code flow |
-| Manual OAuth endpoints | Issuer, authorization/token endpoints, optional revocation URL, scopes, validated resource/audience and provider-specific parameters |
+| Own-client advanced settings | Editable discovered issuer/endpoints/scopes, optional revocation/resource/audience and supported provider parameters; not exposed for CIMD/DCR |
 | Bearer | Masked token, sent only to the validated MCP resource |
 | API key / custom headers | Named masked headers, excluding transport-managed headers; reject duplicate names/newlines and secret URL parameters |
 | HTTP Basic | Username and masked password over HTTPS, only if explicitly configured |
 | No authentication | No credentials; do not downgrade a rejected authenticated connection automatically |
 
-The broader existing form also previews client-credentials grants and signed
-private-key JWT authentication. Keep them an explicit additional implementation
-task with advertised-support checks, key handling, algorithm constraints and
-interop tests. Client credentials is a separate MCP authorization extension,
-not a substitute for a user's delegated grant. Its application-level credentials
-avoid a browser callback. [OAuth Client Credentials extension](https://modelcontextprotocol.io/extensions/auth/oauth-client-credentials)
+URL preflight reads metadata only: it must not register a client, request tokens,
+start consent, save a connected record or invoke tools. One browser operation may
+need several bounded backend requests. Follow the resource_metadata challenge URL
+or path-specific/root protected-resource well-known paths, then the advertised
+issuer's OAuth/OIDC discovery paths. Do not confuse this with the `initialize`
+response that supplies MCP identity and capabilities after authorization if needed.
+
+Return results bound to the current endpoint/draft revision. URL changes clear
+old credentials/settings and invalidate pending results; manual edits for the same
+URL take precedence over late prefills. Closing cancels pending UI work. Failure,
+partial metadata and unsupported methods require explicit recovery; missing
+metadata never implies No authentication. Do not synthesize real OAuth URLs from
+the prototype's illustrative origin-based values.
+
+For CIMD/DCR, discovery and application logic own endpoints, scopes/resource,
+callback/client metadata and generated request parameters. Hide the generic
+OAuth endpoints/scopes and Additional parameters sections. DCR also hides
+registration URL/parameter overrides, retaining only the optional initial access
+token for protected registration. Its acquisition is out of band, not discoverable.
+See [RFC 7591 §3](https://www.rfc-editor.org/rfc/rfc7591.html#section-3).
+
+When Authentication Type changes, clear previous header names and secret values.
+Custom headers begins with an empty X-API-Key row; other methods have no implicit
+extra headers. Hide the empty Additional parameters section for Custom headers.
+Inactive manual fields neither block a managed connection nor get sent with it.
+Own-client configuration retains editable discovered values; selecting it does not
+turn CIMD/DCR internals into required user input.
+
+The production Own-client form supports client-credentials grants and signed
+private-key JWT authentication with advertised-support checks, protected key
+handling, algorithm constraints and local HTTP/database interoperability tests.
+Authenticated browser and independent-node acceptance remain open. Client credentials uses application-level credentials without a
+browser callback and is explicitly separate from delegated user authorization.
+The reviewed MCP extension targets 2026-07-28; this milestone keeps the
+approved 2025-11-25 wire profile and supports the explicitly selected OAuth grant
+against compatible servers. See the
+[Own-client protocol decision](tenant-mcp-oauth.md#own-client-machine-grants).
 
 Callback identity stays on **Console**: Installation URL + `/oauth/mcp/callback`.
-The existing Console `/oauth/client-metadata.json` and DCR metadata helper are
-foundations; the callback flow itself is not built. Gateway telephony origins may
+Console `/oauth/client-metadata.json`, DCR preparation and the durable callback
+backend and production forms are implemented; authenticated browser acceptance remains open.
+Gateway telephony origins may
 be deployed separately and must not replace this OAuth identity. Missing/nonpublic
 HTTPS Installation URL blocks browser OAuth, while static or anonymous modes stay
 available. Changing that URL invalidates in-flight attempts and requires checking
 existing registrations before subsequent authorization.
 
-## Remaining backend work
+## Backend contracts and remaining acceptance
 
 Create tenant-owned connection/configuration, encrypted auth material,
 single-use authorization attempts and bounded tool-catalog snapshots. A directory
@@ -221,17 +265,28 @@ results are recorded in [the proposal guide](mcp-services-storybook.md) and
 ## Reviewed UI states
 
 Connected rows show a double checkmark without redundant connected/inherited text.
-Inherited native connection management requires `platform_services.write` at
-installation scope. Tenant integration write access alone cannot manage a platform
-connection. Existing server-side platform credential routes already enforce that
-permission; this proposal adds matching controls across connected inventory, hosted
-listings and fallback rows. Loading skeletons belong to pending remote content and
+Editing the shared native platform credential requires installation-scoped
+`platform_services.write`. Tenant credential writers may open inherited entries
+and override/restore their own binding through existing Services operations; they
+cannot remove the shared platform credential from the tenant page. These separate
+permissions apply across connected inventory, hosted listings and fallback rows. Loading skeletons belong to pending remote content and
 never block local inventory.
 
 MCP management uses Authentication and Tools tabs, direct reconnect/credential
 editing, account context in the header and an auth-method tooltip. Tools search and
 refresh stay outside the independently scrolling tool list. No backend MCP grant
 or directory-fetch implementation is included in these Storybook refinements.
+
+## 2026-11-06 reconciliation
+
+The existing [implementation milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
+remains the delivery authority. T4a now owns non-mutating URL preflight and modal
+integration; T5 owns registration/consent/token side effects; T6 owns advanced
+Own-client interoperability. Keeping discovery as an authentication option and
+showing generic override editors for CIMD/DCR were rejected by the user's UI review.
+Prototype tests/browser evidence establish UI behavior only. Production progress
+is tracked separately in the milestone; its release checkbox remains open. The
+external API catalog/release prerequisite is not established by prototype evidence.
 
 ### Runtime directory origin
 
@@ -270,8 +325,8 @@ normalized public request, including configured origin, installation version,
 resource, query, scope and pagination. Tenant status and credentials are joined
 outside this cache.
 
-Entries live for an hour and revalidate with their ETags. A 304 without a cached
-body gets one unconditional retry; a failed expired refresh removes the old entry rather than
+Entries live for an hour and revalidate with their ETags. A 304 without a cached body gets one
+unconditional retry; a failed expired refresh removes the old entry rather than
 serving stale directory results. Limits are 128 entries, a 16 MiB serialized-term
 budget, eight fetch workers and 64 waiting callers per key. Excess work returns
 `busy`; a worker crash or 12-second deadline releases its slot. Callers have a

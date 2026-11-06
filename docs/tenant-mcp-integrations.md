@@ -1,14 +1,15 @@
 # Tenant MCP integrations
 
-Latest review proposal: [directory consumption and unlisted MCPs](development/integrations-directory-consumption.md).
+Current workflow contract: [directory consumption and unlisted MCPs](development/integrations-directory-consumption.md).
 Its merged Integrations page, duplicate-connection policy and API-first behavior
 supersede earlier workflow options below. Delivery is split into
-[T0–T8](../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
+[T0–T8, including URL-preflight checkpoint T4a](../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 
-Status: researched proposal, 2026-10-24. The user specified tenant-only MCP
-services, catalog presets plus custom servers, and CIMD/DCR/anonymous support.
-This document proposes the remaining workflow and implementation contracts;
-it does not claim new UI, persistence or OAuth integration is implemented.
+Status: architecture contract reconciled 2026-11-07. Tenant records, static/OAuth
+management, custom forms and saved runtime wiring are implemented. Listed-template
+and retained-ID reconnect UI plus authenticated browser, full runtime/transfer,
+independent-node and external-release acceptance remain open in the milestone.
+The earlier research remains context; it is not final delivery evidence.
 
 ## Product contract
 
@@ -17,20 +18,20 @@ template: endpoint, display information and provider-specific setup guidance.
 It carries no connected account, token or platform-owned service instance.
 Custom MCPs use the same runtime and persistence path as catalog presets.
 
-- Show MCP connections in tenant Services, grouped separately from AI and
-  telephony services. Do not offer them in Platform services.
+- Show MCP connections in tenant Integrations alongside native AI and telephony
+  integrations. Do not offer MCPs in Platform Integrations.
 - Enforce tenant-only ownership in creation, listing, catalog discovery, call
   preparation and invocation. Removing a tenant connection must never uncover
   an application/platform fallback. Other provider inheritance stays unchanged.
-- Support several connections to the same provider, with meaningful names such
-  as Reception calendar and Sales calendar. Stable connection identity is
-  independent of the display name and catalog provider ID.
+- Custom connections use stable IDs independent of server-reported names. Listed
+  duplicates reopen the existing connection by directory identity; multiple accounts
+  for one directory entry remain a separate product decision. No editable aliases.
 - Reuse credential storage infrastructure and key management, with encrypted
   MCP-specific secret records. Existing AI credentials for Google are not
   Google Calendar authorization.
 - Keep endpoints, tokens and client secrets out of call specs and model input.
 
-## Services workflow
+## Integrations workflow
 
 Visitor mode: Operate. A tenant operator wants to connect a business system and
 make its tools available to selected call agents. Preserve the current Console
@@ -43,10 +44,12 @@ shell, service inventory and compact dialog conventions.
    is editable in its connection form. Custom MCP asks for **MCP server URL** and
    uses the initialized server name, with no connection-name field. This is the full endpoint, including its path;
    never apply Installation URL normalization that discards paths.
-3. **Connect** checks the server. An anonymous endpoint goes directly to discovery;
-   OAuth opens the provider authorization flow and returns to the same connection.
-   Additional client registration fields appear only when needed. Avoid a fixed
-   three-step wizard or asking users to choose between CIMD and DCR.
+3. Entering or changing the custom URL starts a metadata preflight and prefills
+   supported settings. Authentication Type lists actual methods, without Discover
+   automatically. **Connect** then validates the chosen flow, performs registration/
+   authorization as needed, and returns to the same connection. CIMD has no extra
+   editable fields; DCR retains only an optional initial registration token. Own
+   client retains its manual configuration. No fixed three-step wizard is required.
 4. Complete MCP initialization and bounded tool discovery, then show the connection
    as ready with its name, server/provider, tool count and authentication status.
    Saving configuration or receiving a token alone is not evidence of readiness.
@@ -158,16 +161,19 @@ model-name collisions explicitly without rewriting persisted identities.
 - Replace the packaged runtime's application-configuration source with a durable
   tenant connection source. Update publication/preparation and tool-picker reads,
   rather than merely adding rows to the Services page.
-- The current client options turn auth into static headers. OAuth needs a private
-  token-provider boundary for refresh and scoped errors. No browser interaction
-  may block an ongoing voice call; insufficient consent becomes an actionable
-  reconnect state and a safe tool failure.
+- Managed startup descriptors are credential-free. A guarded private boundary
+  resolves current static/OAuth headers for each request, with bounded renewal and
+  scoped errors. No browser interaction may block a voice call; insufficient consent
+  becomes an actionable reconnect state and a safe tool failure.
 
-The existing CIMD document is served by Console. Its advertised future callback
-is Installation URL plus `/oauth/mcp/callback`. Keep that identity stable for this
-proposal and ensure the callback is actually mounted there. OAuth logic belongs
-behind an application-independent adapter; this plan does not assume an
-unimplemented general Gateway URL or claim the callback already exists.
+The CIMD document is served by Console. Its callback is Installation URL plus
+`/oauth/mcp/callback`, now mounted for the tenant OAuth backend. Initial connection,
+refresh, generation-checked reconnect and production custom OAuth forms are
+implemented. Listed-template/retained-ID UI and full interoperability acceptance
+remain open in the milestone.
+Protocol behavior stays in the MCP adapter, with browser authority in Console,
+tenant lifecycle in Calls and encrypted state in Persistence. See the
+[outbound OAuth implementation contract](development/tenant-mcp-oauth.md).
 
 ## Delivery and verification
 
@@ -191,5 +197,6 @@ root gates and rendered desktop/mobile checks for each implemented slice.
 Rejected alternatives: a catalog-only allowlist prevents custom services; platform
 credential inheritance violates tenant ownership; separate protocol code for each
 catalog item duplicates MCP; treating a saved token as ready conceals discovery
-failures; an always-visible CIMD/DCR selector exposes machinery rather than a user
-decision. No implementation milestone is marked complete by this proposal.
+failures. The earlier suggestion to hide CIMD/DCR choices is superseded by the
+user-directed single Authentication Type selector. No implementation milestone is
+marked complete by this architecture document.
