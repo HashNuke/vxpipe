@@ -59,7 +59,7 @@ defmodule Vxpipe.MCP.ClientOptions do
     case URI.new(endpoint) do
       {:ok, %URI{scheme: "https", host: host, userinfo: nil, fragment: nil}}
       when is_binary(host) and host != "" ->
-        :ok
+        if loopback_host?(host), do: {:error, :invalid_endpoint}, else: :ok
 
       {:ok, %URI{scheme: scheme}} when scheme != "https" ->
         {:error, :https_required}

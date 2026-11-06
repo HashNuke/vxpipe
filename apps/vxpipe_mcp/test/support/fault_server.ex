@@ -58,6 +58,11 @@ defmodule Vxpipe.MCP.FaultServer do
     respond(conn, request, fault, session_id)
   end
 
+  def call(%{method: "DELETE"} = conn, {_fault, owner, _session_id}) do
+    send(owner, {:fault_server_request, "DELETE", nil})
+    send_resp(conn, 204, "")
+  end
+
   defp respond(conn, %{"method" => "initialize", "id" => id}, _fault, session_id) do
     result = %{
       "protocolVersion" => "2025-11-25",

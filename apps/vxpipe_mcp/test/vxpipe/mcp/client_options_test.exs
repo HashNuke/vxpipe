@@ -86,6 +86,23 @@ defmodule Vxpipe.MCP.ClientOptionsTest do
              )
   end
 
+  test "production excludes loopback origins even when an operator private-host list includes them" do
+    for host <- [
+          "localhost",
+          "LOCALHOST",
+          "127.0.0.1",
+          "127.23.45.67",
+          "[::1]",
+          "[0:0:0:0:0:0:0:1]"
+        ] do
+      assert {:error, :invalid_endpoint} =
+               ClientOptions.build(
+                 endpoint: "https://#{host}/mcp",
+                 allowed_private_hosts: [host]
+               )
+    end
+  end
+
   test "constructs plaintext transport only through the loopback test API" do
     assert {:ok, options} =
              ClientOptions.build_loopback_test(endpoint: "http://127.0.0.1:4321/rpc")

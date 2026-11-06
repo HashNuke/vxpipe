@@ -23,4 +23,5 @@ defmodule Vxpipe.MCP.ReadyClient do
 
   @impl true
   def handle_call(:status, _from, status), do: {:reply, {:ok, status}, status}
+  def handle_call(:disconnect, _from, status), do: {:reply, :ok, status}
 end

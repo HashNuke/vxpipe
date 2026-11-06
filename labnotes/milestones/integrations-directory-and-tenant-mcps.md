@@ -194,6 +194,10 @@ independently of T1–T3 behind unexposed operations.
 
 - [x] Add tenant MCP secret envelopes using the existing installation keyring,
   with separate authenticated identity and bounded JSON payloads.
+- [x] Validate static authentication and initialize/discover using isolated,
+  bounded transient clients without tool invocation. Caller/deadline cancellation,
+  log redaction and explicit session cleanup are covered by focused fixtures; see
+  [the check design](../../docs/development/mcp-connection-checks.md).
 - [ ] Add persistence migrations for tenant connection identity/config generation,
   encrypted auth material and catalog snapshots, using the existing encryption
   keyring with explicit MCP identity binding and rotation participation.
@@ -285,6 +289,28 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   evidence; only then check the milestone in the index.
 
 ### Implementation and review fixes
+
+- [x] Reject production localhost and IPv4/IPv6 loopback origins before client
+  startup, including private-host allowlist attempts. Preserve per-request DNS
+  validation/address pinning and the separate trusted loopback fixture profile.
+  The focused loopback test failed before the guard and passes afterward.
+- [x] Fix cancellation during MCP initialization: acknowledge supervised startup
+  before network I/O, register the client with an independent lifetime controller,
+  and enforce the absolute deadline before accepting completion. Eight held starts
+  reject a ninth promptly; concurrent success, owner death, timeout, expired
+  admission and late completion tests pass. The original cancellation test failed.
+- [x] Keep raw MCP options out of supervisor start metadata and redact callback
+  status/error reports. Synthetic bearer/Basic/header/query markers are absent from
+  formatted and structured crash logs. The original startup-report exposure was a
+  source hypothesis, not reproduced by the initial fixture; do not overstate it.
+- [x] Attempt bounded disconnect/session DELETE and pin check-only POST mode to
+  avoid unowned asynchronous POST workers. Local HTTP fixtures prove DELETE and
+  actual socket closure during cancelled initialization/tools-list and stalled
+  DELETE. Only completions accepted before the deadline can succeed; final local
+  cleanup has a separate bounded budget. All 26 scoped tests and the 137-test MCP
+  suite pass; static gates pass. See the
+  [check checkpoint](../20261106-2354-review-mcp-checks.md) and
+  [lifecycle decision](../../docs/development/mcp-connection-checks.md).
 
 - [x] Extend MCP cipher boundary evidence after adversarial review: key-ID aliases
   with identical key material, provider/MCP envelope substitution, exact plaintext

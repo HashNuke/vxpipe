@@ -8,6 +8,8 @@ defmodule Vxpipe.MCP.Application do
     children = [
       {Registry, keys: :unique, name: Vxpipe.MCP.ConnectionRegistry},
       Vxpipe.MCP.CredentialLeases,
+      {DynamicSupervisor,
+       strategy: :one_for_one, name: Vxpipe.MCP.CheckSupervisor, max_children: 8},
       {DynamicSupervisor, strategy: :one_for_one, name: Vxpipe.MCP.ConnectionSupervisor}
     ]
 
