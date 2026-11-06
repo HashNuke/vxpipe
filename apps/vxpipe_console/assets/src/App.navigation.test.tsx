@@ -87,7 +87,7 @@ test("editor and history routes do not mount the private navigation", async () =
   }
 });
 
-test("API-key-only permission exposes Services without Calls or Call Specs", async () => {
+test("API-key-only permission exposes Integrations without Calls or Call Specs", async () => {
   window.history.replaceState({}, "", `/t/${key}/dashboard`);
   const base = fetcher();
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -105,7 +105,7 @@ test("API-key-only permission exposes Services without Calls or Call Specs", asy
   });
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
   const rail = await screen.findByRole("complementary");
-  await waitFor(() => expect(within(rail).getByRole("link", { name: "Services" })).toBeVisible());
+  await waitFor(() => expect(within(rail).getByRole("link", { name: "Integrations" })).toBeVisible());
   expect(within(rail).queryByRole("link", { name: "Calls" })).not.toBeInTheDocument();
   expect(within(rail).queryByRole("link", { name: "Call Specs" })).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Recent calls" })).not.toBeInTheDocument();

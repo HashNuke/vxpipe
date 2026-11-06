@@ -158,28 +158,15 @@ const callPage = (
         },
 });
 
-const serviceDirectory = (tenantKey: string, credentials = true) => ({
-  tenant: { key: tenantKey, name: "Example tenant" },
-  truncated: false,
-  credentials: credentials
-    ? [
-        {
-          id: "credential-google",
-          provider: "google",
-          name: "primary",
-          auth_kind: "api_key",
-          status: "active",
-          credential_preview: [
-            { label: "API key", format: "last_four", last_four: "8c4a" },
-          ],
-          last_validated_at: "2026-09-17T01:55:00Z",
-          created_at: "2026-09-17T02:00:00Z",
-          updated_at: "2026-09-17T02:00:00Z",
-        },
-      ]
-    : [],
-  telephony_services: [],
-});
+const serviceDirectory = (tenantKey: string, credentials = true, input: RequestInfo | URL = "") => {
+  const connections = credentials ? [{ provider: "google", name: "primary", source: "tenant", status: "connected",
+    credential_id: "credential-google", platform_available: false, saved_fields: ["api_key"], last_validated_at: null, can_edit: true }] : [];
+  return { tenant: { key: tenantKey, name: "Example tenant" }, bindings: connections,
+    model_catalog: modelCatalogFixture, provider_capabilities: { google: ["credential", "llm"] }, categories: [],
+    installation_version: "0.1.0", directory_status: "local", connections, page: null, fallback_items: [],
+    local_items: credentials || String(input).includes("category=ai") ? [{ id: "provider-google", kind: "provider", name: "Google AI Studio",
+      connection: { provider_id: "google" }, can_connect: !credentials, connections }] : [] };
+};
 
 test("retires tenant setup services in favor of the service inventory", async () => {
   window.history.replaceState(
@@ -190,17 +177,17 @@ test("retires tenant setup services in favor of the service inventory", async ()
   const fetchImpl = vi.fn((input: RequestInfo | URL) =>
     String(input) === "/admin/api/session"
       ? response(operationalSession)
-      : response(serviceDirectory("AAAAAAAAAAAAAAAA", false)),
+      : response(serviceDirectory("AAAAAAAAAAAAAAAA", false, input)),
   );
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
-  expect(await screen.findByText("No services yet")).toBeVisible();
+  expect(await screen.findByText("No connected integrations")).toBeVisible();
   expect(window.location.pathname).toBe(
     "/t/AAAAAAAAAAAAAAAA/services",
   );
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/api/tenants/AAAAAAAAAAAAAAAA/services",
+    "/api/tenants/AAAAAAAAAAAAAAAA/integrations?category=connected",
     expect.any(Object),
   );
 });
@@ -467,7 +454,7 @@ test("opens a tenant's approved call specs page and canonicalizes the workspace 
     "/t/tenant1000000000/call-specs",
   );
   expect(screen.getByRole("link", { name: "Calls" })).toBeVisible();
-  expect(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Services" })).toBeVisible();
+  expect(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Integrations" })).toBeVisible();
   expect(
     screen.getByRole("link", {
       name: "View 5 calls for Delivery rescheduling",
@@ -513,7 +500,7 @@ test("loads filtered tenant calls and updates the URL when the filter changes", 
     await screen.findByText("018f27cb-6f87-7d1c-a61f-8873cb667342"),
   ).toBeVisible();
   expect(screen.getByRole("link", { name: "Call Specs" })).toBeVisible();
-  expect(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Services" })).toBeVisible();
+  expect(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Integrations" })).toBeVisible();
   expect(
     screen.getByRole("link", { name: /open call 018f27cb/i }),
   ).toBeVisible();
@@ -953,24 +940,24 @@ test("loads the approved services page directly and exposes all tenant destinati
   const fetchImpl = vi.fn((input: RequestInfo | URL) =>
     String(input) === "/admin/api/session"
       ? response(operationalSession)
-      : response(serviceDirectory("AAAAAAAAAAAAAAAA")),
+      : response(serviceDirectory("AAAAAAAAAAAAAAAA", true, input)),
   );
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
   expect(
-    await screen.findByRole("heading", { name: "Services" }),
+    await screen.findByRole("heading", { name: "Integrations" }),
   ).toBeVisible();
   expect(await screen.findAllByText("Google AI Studio")).not.toHaveLength(0);
   expect(screen.getByRole("link", { name: "Call Specs" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Calls" })).toBeVisible();
-  expect(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Services" })).toHaveAttribute(
+  expect(within(screen.getByRole("navigation", { name: "Tenant" })).getByRole("link", { name: "Integrations" })).toHaveAttribute(
     "aria-current",
     "page",
   );
   expect(fetchImpl).toHaveBeenCalledWith("/admin/api/session", expect.any(Object));
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/api/tenants/AAAAAAAAAAAAAAAA/services",
+    "/api/tenants/AAAAAAAAAAAAAAAA/integrations?category=connected",
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
 });
@@ -996,6 +983,7 @@ test("submits write-only credential values with CSRF and updates metadata after 
         });
         expect(JSON.parse(String(init?.body))).toEqual({
           provider: "google",
+          name: "google",
           values: { api_key: "private-value" },
         });
         return response(
@@ -1017,16 +1005,18 @@ test("submits write-only credential values with CSRF and updates metadata after 
           201,
         );
       }
-      return response(serviceDirectory("AAAAAAAAAAAAAAAA", false));
+      return response(serviceDirectory("AAAAAAAAAAAAAAAA", false, input));
     },
   );
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
-  expect(await screen.findByText("No services yet")).toBeVisible();
+  expect(await screen.findByText("No connected integrations")).toBeVisible();
 
-  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
-  expect(screen.getByRole("complementary", { hidden: true })).toHaveAttribute("inert");
-  fireEvent.change(screen.getByLabelText("API key"), {
+  fireEvent.click(screen.getByRole("link", { name: "AI models" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
+  await screen.findByRole("dialog");
+  expect(screen.getByRole("complementary", { name: "Console navigation", hidden: true })).toHaveAttribute("inert");
+  fireEvent.change(await screen.findByLabelText("API key"), {
     target: { value: "private-value" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -1039,7 +1029,7 @@ test("submits write-only credential values with CSRF and updates metadata after 
   expect(screen.queryByDisplayValue("private-value")).not.toBeInTheDocument();
 });
 
-test("replaces credentials from the edit dialog and refreshes their safe preview", async () => {
+test("replaces the exact named credential and keeps saved secrets masked", async () => {
   window.history.replaceState(
     {},
     "",
@@ -1055,6 +1045,7 @@ test("replaces credentials from the edit dialog and refreshes their safe preview
       expect(init?.method).toBe("PATCH");
       expect(JSON.parse(String(init?.body))).toEqual({
         provider: "google",
+        name: "primary",
         values: { api_key: "replacement-7f2b" },
       });
       return response({
@@ -1073,22 +1064,26 @@ test("replaces credentials from the edit dialog and refreshes their safe preview
         },
       });
     }
-    return response(serviceDirectory("AAAAAAAAAAAAAAAA"));
+    return response(serviceDirectory("AAAAAAAAAAAAAAAA", true, input));
   });
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
-  expect(await screen.findByText("****8c4a")).toBeVisible();
+  await screen.findByRole("button", { name: "Edit Google AI Studio" });
   fireEvent.click(
-    screen.getByRole("button", { name: "Edit Google AI Studio credentials" }),
+    screen.getByRole("button", { name: "Edit Google AI Studio" }),
   );
-  expect(screen.getByLabelText("Provider")).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("API key"), {
+  expect(await screen.findByLabelText("API key")).toHaveValue("");
+  expect(await screen.findByLabelText("API key")).toHaveAttribute("placeholder", "••••••••");
+  fireEvent.change(await screen.findByLabelText("API key"), {
     target: { value: "replacement-7f2b" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-  expect(await screen.findByText("****7f2b")).toBeVisible();
-  expect(screen.queryByText("****8c4a")).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  fireEvent.click(await screen.findByRole("button", { name: "Edit Google AI Studio" }));
+  expect(await screen.findByLabelText("API key")).toHaveValue("");
+  expect(await screen.findByLabelText("API key")).toHaveAttribute("placeholder", "••••••••");
+  expect(screen.queryByDisplayValue("replacement-7f2b")).not.toBeInTheDocument();
 });
 
 test("ignores a stale credential submission after leaving the tenant services page", async () => {
@@ -1115,7 +1110,7 @@ test("ignores a stale credential submission after leaving the tenant services pa
         ),
       );
     }
-    return response(serviceDirectory("AAAAAAAAAAAAAAAA", false));
+    return response(serviceDirectory("AAAAAAAAAAAAAAAA", false, input));
   });
 
   render(
@@ -1125,9 +1120,10 @@ test("ignores a stale credential submission after leaving the tenant services pa
       onSessionExpired={expired}
     />,
   );
-  expect(await screen.findByText("No services yet")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
-  fireEvent.change(screen.getByLabelText("API key"), {
+  expect(await screen.findByText("No connected integrations")).toBeVisible();
+  fireEvent.click(screen.getByRole("link", { name: "AI models" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
+  fireEvent.change(await screen.findByLabelText("API key"), {
     target: { value: "private-value" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -1151,7 +1147,7 @@ test("ignores a stale credential submission after leaving the tenant services pa
   expect(expired).not.toHaveBeenCalled();
 });
 
-test("ignores a credential response after its dialog is closed and reopened", async () => {
+test("prevents closing a pending credential save and clears its draft after completion", async () => {
   window.history.replaceState(
     {},
     "",
@@ -1166,24 +1162,19 @@ test("ignores a credential response after its dialog is closed and reopened", as
     if (url === "/admin/api/session") return response(operationalSession);
     return init?.method === "POST"
       ? pendingCreate
-      : response(serviceDirectory("AAAAAAAAAAAAAAAA", false));
+      : response(serviceDirectory("AAAAAAAAAAAAAAAA", false, input));
   });
 
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
-  expect(await screen.findByText("No services yet")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
-  fireEvent.change(screen.getByLabelText("API key"), {
+  expect(await screen.findByText("No connected integrations")).toBeVisible();
+  fireEvent.click(screen.getByRole("link", { name: "AI models" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
+  fireEvent.change(await screen.findByLabelText("API key"), {
     target: { value: "first-secret" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
-  fireEvent.click(
-    screen.getByRole("button", { name: "Close credential setup" }),
-  );
-
-  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
-  fireEvent.change(screen.getByLabelText("API key"), {
-    target: { value: "second-secret" },
-  });
+  expect(screen.getByRole("button", { name: "Close dialog" })).toBeDisabled();
+  expect(await screen.findByLabelText("API key")).toBeDisabled();
 
   await act(async () => {
     resolveCreate?.(
@@ -1207,8 +1198,9 @@ test("ignores a credential response after its dialog is closed and reopened", as
     await pendingCreate;
   });
 
-  expect(screen.getByRole("dialog", { name: "Connect a service" })).toBeVisible();
-  expect(screen.getByLabelText("API key")).toHaveValue("second-secret");
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
+  expect(await screen.findByLabelText("API key")).toHaveValue("");
 });
 
 test("presents service load, duplicate, and expired-session outcomes truthfully", async () => {
@@ -1237,7 +1229,7 @@ test("presents service load, duplicate, and expired-session outcomes truthfully"
     if (init?.method === "POST") {
       return response({ error: { code: "credential_already_exists" } }, 409);
     }
-    return response(serviceDirectory("AAAAAAAAAAAAAAAA", false));
+    return response(serviceDirectory("AAAAAAAAAAAAAAAA", false, input));
   });
 
   render(
@@ -1247,9 +1239,10 @@ test("presents service load, duplicate, and expired-session outcomes truthfully"
       onSessionExpired={expired}
     />,
   );
-  expect(await screen.findByText("No services yet")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
-  fireEvent.change(screen.getByLabelText("API key"), {
+  expect(await screen.findByText("No connected integrations")).toBeVisible();
+  fireEvent.click(screen.getByRole("link", { name: "AI models" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
+  fireEvent.change(await screen.findByLabelText("API key"), {
     target: { value: "private-value" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -1289,7 +1282,7 @@ test("rejects a service directory for a different tenant", async () => {
   );
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Services could not be loaded",
+    "Connection status unavailable",
   );
   expect(screen.queryByText("Credential stored")).not.toBeInTheDocument();
 });

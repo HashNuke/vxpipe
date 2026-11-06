@@ -72,7 +72,7 @@ export function ConsoleNavigation({ csrfToken, fetchImpl, onSessionExpired = exp
   useEffect(() => { window.addEventListener("focus", refresh); return () => window.removeEventListener("focus", refresh); }, [refresh]);
   const data = result?.key === selectedKey ? result?.data : undefined;
   const tenant = data?.tenant;
-  return <NavigationShell external={external} tenants={[]} selected={tenant ? { ...tenant, id: tenant.key } : undefined} email={session?.user.email}
+  return <NavigationShell previewIntegrations external={external} tenants={[]} selected={tenant ? { ...tenant, id: tenant.key } : undefined} email={session?.user.email}
     projectedItems={{ tenant: tenantItems(tenant ?? null), platform: data?.platform ?? [] }} path={location.pathname}
     realLinks onNavigate={go} onLogout={() => {
       setLogoutError(false);

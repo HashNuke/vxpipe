@@ -36,6 +36,19 @@ type Modal = ServiceModalState & { bindingName?: string };
 const defaultFetch: Fetch = (input, init) => window.fetch(input, init);
 const sessionExpired = () => window.location.assign("/auth/login");
 
+type InventoryProps = {
+  directory: BindingDirectory | null;
+  revision: number;
+  onManage: (provider: SetupProviderId, bindingName?: string) => void;
+  onRemove: (provider: SetupProviderId, bindingName: string) => void;
+  removingProvider: SetupProviderId | null;
+};
+
+// Keep the component identity stable when its rendering callback changes with navigation.
+function InventoryPresentation({ render, ...props }: InventoryProps & { render: (props: InventoryProps) => ReactNode }) {
+  return render(props);
+}
+
 export function ScopedServicesApp({
   scope,
   csrfToken,
@@ -45,6 +58,8 @@ export function ScopedServicesApp({
   headerActions,
   accessDenied = false,
   canEdit = true,
+  renderInventory,
+  showTelephonyApplications = true,
 }: {
   scope: SetupServiceScope;
   csrfToken: string;
@@ -59,7 +74,11 @@ export function ScopedServicesApp({
    */
   accessDenied?: boolean;
   canEdit?: boolean;
+  showTelephonyApplications?: boolean;
+  renderInventory?: (props: InventoryProps) => ReactNode;
 }) {
+  const Inventory = renderInventory;
+  const hasInventory = Boolean(Inventory);
   const [directory, setDirectory] = useState<BindingDirectory | null>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "unavailable">(
     "loading",
@@ -69,6 +88,8 @@ export function ScopedServicesApp({
   const [notice, setNotice] = useState<{ message: string; kind: "success" | "error" } | null>(null);
   const [removingProvider, setRemovingProvider] = useState<SetupProviderId | null>(null);
   const saving = useRef<AbortController | null>(null);
+  const nativeDetails = useRef<AbortController | null>(null);
+  const [loadingNative, setLoadingNative] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);
   const main = useRef<HTMLElement | null>(null);
   const tenantKey = scope.kind === "tenant" ? scope.tenantKey : null;
@@ -82,6 +103,11 @@ export function ScopedServicesApp({
     const controller = new AbortController();
     setPhase("loading");
     setDirectory(null);
+    setLoadingNative(false);
+    if (hasInventory && !showTelephonyApplications) {
+      setPhase("ready");
+      return () => { nativeDetails.current?.abort(); saving.current?.abort(); };
+    }
     fetchImpl(directoryUrl, {
       credentials: "same-origin",
       headers: { accept: "application/json" },
@@ -107,9 +133,35 @@ export function ScopedServicesApp({
       });
     return () => {
       controller.abort();
+      nativeDetails.current?.abort();
       saving.current?.abort();
     };
-  }, [directoryUrl, tenantKey, fetchImpl, onSessionExpired, retry]);
+  }, [directoryUrl, tenantKey, fetchImpl, onSessionExpired, retry, hasInventory, showTelephonyApplications]);
+
+  async function withNativeSettings(action: (settings: BindingDirectory) => void | Promise<void>) {
+    if (!canEdit || accessDenied || saving.current || nativeDetails.current) return;
+    const controller = new AbortController();
+    nativeDetails.current = controller;
+    setLoadingNative(true);
+    setNotice(null);
+    try {
+      const response = await fetchImpl(directoryUrl, {
+        credentials: "same-origin", headers: { accept: "application/json" }, signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      if (response.status === 401) onSessionExpired();
+      if (!response.ok) throw new Error("unavailable");
+      const next = parseBindingDirectory(await response.json(), scope);
+      if (controller.signal.aborted) return;
+      setDirectory(next);
+      await action(next);
+    } catch {
+      if (!controller.signal.aborted) setNotice({ kind: "error", message: "Integration settings could not be loaded. Try the action again." });
+    } finally {
+      if (nativeDetails.current === controller) nativeDetails.current = null;
+      if (!controller.signal.aborted) setLoadingNative(false);
+    }
+  }
 
   function open(next: Modal) {
     if (!canEdit || saving.current) return;
@@ -197,10 +249,10 @@ export function ScopedServicesApp({
     );
   }
 
-  async function removeCardCredentials(provider: SetupProviderId) {
-    if (modal || saving.current || !directory) return;
-    const selected = directory.bindings.find(
-      (binding) => binding.provider === provider && binding.name === provider,
+  async function removeCardCredentials(provider: SetupProviderId, bindingName: string = provider, settings = directory) {
+    if (!canEdit || modal || saving.current || !settings) return;
+    const selected = settings.bindings.find(
+      (binding) => binding.provider === provider && binding.name === bindingName,
     );
     if (!selected?.credentialId || (tenantKey && selected.source !== "tenant"))
       return;
@@ -259,6 +311,14 @@ export function ScopedServicesApp({
                 : "Credentials could not be saved. Check the connection and try again.",
         );
       stored = true;
+      if (Inventory) {
+        setDirectory(null);
+        setRetry(value => value + 1);
+        if (activeModal) setModal(null);
+        setNotice({ message: operation === "removal" ? "Credentials removed." : "Service saved.", kind: "success" });
+        requestAnimationFrame(() => cardProvider ? main.current?.focus() : trigger.current?.focus());
+        return;
+      }
       const reloaded = await fetchImpl(directoryUrl, {
         credentials: "same-origin",
         headers: { accept: "application/json" },
@@ -332,7 +392,7 @@ export function ScopedServicesApp({
     <AdminShell
       breadcrumbs={
         tenantKey === null
-          ? [{ label: "Platform" }, { label: "Services" }]
+          ? [{ label: "Platform" }, { label: renderInventory ? "Integrations" : "Services" }]
           : [
               {
                 label: "Tenants",
@@ -340,7 +400,7 @@ export function ScopedServicesApp({
                 onSelect: () => onNavigate("/admin"),
               },
               { label: tenant.name },
-              { label: "Setup services" },
+              { label: renderInventory ? "Integrations" : "Setup services" },
             ]
       }
       headerInert={modal !== null}
@@ -374,8 +434,15 @@ export function ScopedServicesApp({
             title="Access unavailable"
             message="Your role does not allow this action."
           />
+        ) : Inventory ? (
+          <>
+            <InventoryPresentation render={Inventory} directory={directory} revision={retry} removingProvider={removingProvider}
+              onRemove={(provider, name) => { void withNativeSettings(settings => removeCardCredentials(provider, name, settings)); }}
+              onManage={(provider, bindingName) => { void withNativeSettings(() => open({ provider, bindingName, status: "idle" })); }} />
+            {loadingNative && <p role="status">Loading integration settings…</p>}
+          </>
         ) : phase === "loading" ? (
-          <p role="status">Loading services…</p>
+          <p role="status">{renderInventory ? "Loading integrations…" : "Loading services…"}</p>
         ) : (
           <TenantSetupPage
             presentation="workspace"
@@ -399,7 +466,7 @@ export function ScopedServicesApp({
             }
           />
         )}
-        {canEdit && phase === "ready" && named.length > 0 ? (
+        {!renderInventory && canEdit && phase === "ready" && named.length > 0 ? (
           <section className="setup-service-group" aria-label="Named bindings">
             <h2>Named bindings</h2>
             <div className="flex flex-wrap gap-2">
@@ -425,7 +492,7 @@ export function ScopedServicesApp({
             </div>
           </section>
         ) : null}
-        {tenantKey !== null ? (
+        {tenantKey !== null && showTelephonyApplications ? (
           <TenantTelephonyApplications
             key={tenantKey}
             tenantKey={tenantKey}
@@ -445,7 +512,7 @@ export function ScopedServicesApp({
             }
           />
         ) : null}
-        {phase === "ready" && tenantKey !== null ? (
+        {!renderInventory && phase === "ready" && tenantKey !== null ? (
           <footer className="setup-footer">
             <p role="status">
               {voiceSetupReady(primary, providers)

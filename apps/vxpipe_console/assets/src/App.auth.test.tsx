@@ -656,14 +656,14 @@ test("read-only members get a capability-derived workspace without creation cont
     "href",
     "/t/acme_demo_000001/calls",
   );
-  expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Platform Integrations" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "My account" })).toHaveAttribute(
     "href",
     "/account",
   );
   expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Roles" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Platform Integrations" })).not.toBeInTheDocument();
   cleanup();
 });
 
@@ -705,7 +705,7 @@ test("sidebar exposes account and platform links matching authority", async () =
   expect(screen.queryByRole("combobox", { name: "Switch tenant" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("href", "/users");
   expect(screen.getByRole("link", { name: "Roles" })).toHaveAttribute("href", "/roles");
-  expect(screen.getByRole("link", { name: "Services" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "Platform Integrations" })).toHaveAttribute(
     "href",
     "/platform/services",
   );

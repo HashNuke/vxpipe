@@ -98,13 +98,14 @@ test("onboarding counts inherited services and opens the tenant service inventor
         model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities,
         bindings: [binding("google"), binding("deepgram")],
       });
-    if (String(url).endsWith("/services"))
-      return response({
-        tenant: { key: tenant.key, name: tenant.name },
-        credentials: [],
-        telephony_services: [],
-        truncated: false,
-      });
+    if (String(url).endsWith("/integrations/categories")) return response({ categories: [] });
+    if (String(url).includes("/integrations?")) {
+      const connections = [binding("google"), binding("deepgram")].map(item => ({ ...item, can_edit: true }));
+      return response({ tenant, installation_version: "0.1.0", directory_status: "local", page: null, fallback_items: [], connections,
+        local_items: connections.map(item => ({ id: `provider-${item.provider}`, kind: "provider",
+          name: item.provider === "google" ? "Google AI Studio" : "Deepgram", connection: { provider_id: item.provider },
+          can_connect: false, connections: [item] })) });
+    }
     return response({}, 404);
   });
   render(<App csrfToken="csrf" fetchImpl={withSession(fetchImpl)} />);
@@ -121,7 +122,10 @@ test("onboarding counts inherited services and opens the tenant service inventor
   expect(screen.getByText("No tenant credentials configured.")).toBeVisible();
   expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Manage services" }));
-  expect(await screen.findByText("No services yet")).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "Integrations" })).toBeVisible();
+  expect(await screen.findByRole("button", { name: "Edit Google AI Studio" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Edit Deepgram" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: /Remove .* credentials/ })).not.toBeInTheDocument();
   expect(window.location.pathname).toBe(
     "/t/AAAAAAAAAAAAAAAA/services",
   );

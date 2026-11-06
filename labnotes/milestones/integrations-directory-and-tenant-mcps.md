@@ -187,6 +187,25 @@ Acceptance: real Console browser checks at desktop/mobile cover healthy director
 API outage and recovery, direct URL/back/forward, unknown status, permissions and
 platform exclusion. Existing native connection/update/override tests remain green.
 
+#### Production inventory and static modal checkpoint (2026-11-07)
+
+- [x] Reuse Services native credential validation, save, override/restore and exact
+  named removal behind the Integrations presentation and stable Services routes.
+- [x] Join authorized local native/MCP status to hosted browse/search pages, with
+  installed fallback, category navigation and cursor recovery.
+- [x] Preserve inventory state across production-wrapper navigation; retain the
+  previous page after a failed next-cursor request.
+- [x] Separate native credential write from MCP service write, including inherited
+  platform bindings and read-only management.
+- [x] Wire debounced, revision-bound URL discovery to static custom MCP creation and
+  management, with credential isolation and catalog-only tools refresh.
+- [ ] Finish authenticated Console browser acceptance, production OAuth/listed
+  templates, callback draft recovery and the external release prerequisite before
+  considering the whole Integrations workflow complete.
+
+See [UI contracts](../../docs/development/integrations-ui.md) and
+[checkpoint evidence](../20261107-0309-review-integrations-ui.md).
+
 ### T4 — Tenant MCP records and static/anonymous connection lifecycle
 
 Depends on T0 approved form and completed prerequisite milestones; may proceed
@@ -396,6 +415,18 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   evidence; only then check the milestone in the index.
 
 ### Implementation and review fixes
+
+- [x] Split native credential and MCP mutation permissions in the inventory and
+  production route. Test service-only, credential-only and platform-only writers;
+  prevent enabled inherited actions that the tenant wrapper cannot execute.
+- [x] Keep the production inventory mounted across cursor navigation and verify
+  failed-next-page recovery through the actual Integrations wrapper.
+- [x] Persist the effective authentication selection after saving a discovered
+  anonymous endpoint; keep subsequent Test connection enabled.
+- [x] Send generation/refresh_tools for catalog-only refresh, preserving saved
+  configuration and unsaved form credentials; align in-memory Storybook responses.
+- [x] Complete installed native capability projection and first-render verification
+  without eagerly loading model/credential settings.
 
 - [x] Remove unsupported cached schemas from picker choices while preserving valid
   siblings/native tools; explicit unsupported selections still fail compilation.

@@ -23,7 +23,7 @@ export function tenantItems(tenant: NavigationTenant | null): NavigationItem[] {
 
 export function projectionAllowsPath(data: NavigationData, pathname: string): boolean {
   const path = pathname.replace(/\/+$/, "");
-  if (path.startsWith("/t/")) return path === data.tenant?.dashboardPath || tenantItems(data.tenant).some(item => item.href === path);
-  if (/^\/(api-keys|users|roles)(\/|$)/.test(path) || path === "/platform/services") return data.platform.some(item => path === item.href || path.startsWith(`${item.href}/`));
+  if (path.startsWith("/t/")) return path === data.tenant?.dashboardPath || tenantItems(data.tenant).some(item => item.href === path || (item.href.endsWith("/services") && path.startsWith(`${item.href}/`)));
+  if (/^\/(api-keys|users|roles)(\/|$)/.test(path) || /^\/platform\/services(\/|$)/.test(path)) return data.platform.some(item => path === item.href || path.startsWith(`${item.href}/`));
   return true;
 }

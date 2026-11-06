@@ -1,3 +1,4 @@
+import { setupProviders } from "./admin/setupCatalog";
 import { modelCatalogFixture } from "./admin/modelCatalogFixtures";
 import {
   cleanup,
@@ -5,10 +6,10 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { App } from "./test/ResourceApp";
+import { ScopedServicesApp } from "./ScopedServicesApp";
 
 afterEach(() => {
   cleanup();
@@ -16,14 +17,28 @@ afterEach(() => {
 });
 const response = (body: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(body), { status }));
-const withAdminSession = (fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) =>
-  (input: RequestInfo | URL, init?: RequestInit) =>
-    String(input) === "/admin/api/session"
-      ? response({
-          user: { id: "owner", email: "owner@example.test", roleId: "admin", enabled: true, memberships: [] },
-          role: { id: "admin", name: "Admin", description: "", kind: "admin", grants: [] },
-        })
-      : fetchImpl(input, init);
+const withInventory = (fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>, canEdit = true) =>
+  async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (!String(input).includes("/integrations?")) return fetchImpl(input, init);
+    const result = await fetchImpl("/api/platform/services", init);
+    if (!result.ok) return result;
+    const directory = await result.json();
+    const connections = directory.bindings.map((value: ReturnType<typeof binding>) => ({ ...value, can_edit: canEdit }));
+    const connectedOnly = String(input).includes("category=connected");
+    return Response.json({ tenant: null, installation_version: "0.1.0", directory_status: "local", connections,
+      page: null, fallback_items: [], local_items: setupProviders.filter(provider =>
+        directory.provider_capabilities[provider.id]?.includes("credential") && (!connectedOnly || connections.some((value: ReturnType<typeof binding>) => value.provider === provider.id))
+      ).map(provider => ({ id: `provider-${provider.id}`, kind: "provider", name: provider.name,
+        connection: { provider_id: provider.id }, can_connect: canEdit,
+        connections: connections.filter((value: ReturnType<typeof binding>) => value.provider === provider.id) })) });
+  };
+const withAdminSession = (fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) => {
+  const inventory = withInventory(fetchImpl);
+  return (input: RequestInfo | URL, init?: RequestInit) => String(input) === "/admin/api/session"
+    ? response({ user: { id: "owner", email: "owner@example.test", roleId: "admin", enabled: true, memberships: [] },
+        role: { id: "admin", name: "Admin", description: "", kind: "admin", grants: [] } })
+    : inventory(input, init);
+};
 const binding = (provider: string, source = "platform", name = provider) => ({
   provider,
   name,
@@ -43,8 +58,19 @@ const providerCapabilities = {
   zenmux: ["credential", "llm"],
 };
 
+test("integration inventory opens the existing provider credential workflow", async () => {
+  const fetchImpl = vi.fn(async () => response({ tenant: null, bindings: [],
+    model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities }));
+  render(<ScopedServicesApp scope={{ kind: "platform" }} csrfToken="csrf" fetchImpl={fetchImpl}
+    onNavigate={vi.fn()} renderInventory={({ onManage }) => <button onClick={() => onManage("google")}>Connect Google integration</button>} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Google integration" }));
+  expect(await screen.findByRole("dialog")).toBeVisible();
+  expect(screen.getByLabelText(/API key/i)).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
+});
+
 test("platform displays existing Telnyx and Deepgram once without writing credentials", async () => {
-  window.history.replaceState({}, "", "/admin/platform/services");
+  window.history.replaceState({}, "", "/platform/services/ai");
   const fetchImpl = vi.fn(async (_url: RequestInfo | URL, options?: RequestInit) => {
     if (options?.method && options.method !== "GET") throw new Error("unexpected credential write");
     return response({
@@ -61,14 +87,14 @@ test("platform displays existing Telnyx and Deepgram once without writing creden
   expect(await screen.findByRole("article", { name: "Telnyx" })).toBeVisible();
   expect(screen.getAllByRole("article", { name: "Telnyx" })).toHaveLength(1);
   expect(screen.getAllByRole("article", { name: "Deepgram" })).toHaveLength(1);
-  expect(screen.getAllByRole("button", { name: "Connect a service" })).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "AI providers" })).not.toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Telephony" })).not.toBeInTheDocument();
   expect(fetchImpl.mock.calls.every(([, options]) => !options?.method || options.method === "GET")).toBe(true);
 });
 
 test("platform service reader sees connections without mutation controls", async () => {
-  window.history.replaceState({}, "", "/admin/platform/services");
+  window.history.replaceState({}, "", "/platform/services/ai");
   const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
     if (String(input) === "/admin/api/session") return response({
       user: { id: "reader", email: "reader@example.test", roleId: "reader", enabled: true, memberships: [] },
@@ -83,24 +109,24 @@ test("platform service reader sees connections without mutation controls", async
     });
   });
 
-  render(<App csrfToken="csrf-example" fetchImpl={fetchImpl} />);
+  render(<App csrfToken="csrf-example" fetchImpl={withInventory(fetchImpl, false)} />);
   expect(await screen.findByRole("article", { name: "Deepgram" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Manage Deepgram|More actions for Deepgram/ })).not.toBeInTheDocument();
 });
 
 test("Setup picker offers installed services with only working capability badges", async () => {
-  window.history.replaceState({}, "", "/admin/platform/services");
+  window.history.replaceState({}, "", "/platform/services/ai");
   const fetchImpl = vi.fn(async () => response({
     tenant: null,
     bindings: [],
     model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities,
   }));
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
-  await screen.findByRole("heading", { name: "Platform Services" });
+  await screen.findByRole("heading", { name: "Platform Integrations" });
 
-  fireEvent.click(screen.getAllByRole("button", { name: "Connect a service" })[0]);
-  const picker = screen.getByRole("combobox", { name: "Service" });
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
+  const picker = await screen.findByRole("combobox", { name: "Service" });
   expect(picker).toHaveTextContent("Zenmux");
   expect(picker).not.toHaveTextContent("Google Vertex AI");
   fireEvent.change(picker, { target: { value: "google" } });
@@ -113,14 +139,14 @@ test("Setup picker offers installed services with only working capability badges
   fireEvent.change(picker, { target: { value: "rime" } });
   expect(screen.getByRole("dialog", { name: "Connect Rime" })).not.toHaveTextContent("Credentials only");
   expect(screen.getByRole("dialog", { name: "Connect Rime" })).toHaveTextContent("Text-to-speech");
-  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
-  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
-  expect(screen.getByRole("combobox", { name: "Service" })).toHaveTextContent("Twilio");
-  expect(screen.getByRole("combobox", { name: "Service" })).toHaveTextContent("Rime");
+  fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
+  expect(await screen.findByRole("combobox", { name: "Service" })).toHaveTextContent("Twilio");
+  expect(await screen.findByRole("combobox", { name: "Service" })).toHaveTextContent("Rime");
 });
 
 test("Telnyx saves the public key and shows backend URLs and saved-field metadata", async () => {
-  window.history.replaceState({}, "", "/admin/platform/services");
+  window.history.replaceState({}, "", "/platform/services/ai");
   let saved = false;
   const fetchImpl = vi.fn(
     async (_url: RequestInfo | URL, options?: RequestInit) => {
@@ -150,9 +176,9 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
     },
   );
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
-  await screen.findByRole("heading", { name: "Platform Services" });
-  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
-  fireEvent.change(screen.getByLabelText("Service"), {
+  await screen.findByRole("heading", { name: "Platform Integrations" });
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
+  fireEvent.change(await screen.findByLabelText("Service"), {
     target: { value: "telnyx" },
   });
   expect(screen.getByLabelText("Webhook URL")).toHaveValue(
@@ -181,8 +207,8 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
       }),
     }),
   );
-  fireEvent.click(screen.getAllByRole("button", { name: "Manage Telnyx" })[0]);
-  expect(screen.getByLabelText("Public key")).toHaveValue("");
+  fireEvent.click(await screen.findByRole("button", { name: "Edit Telnyx" }));
+  expect(await screen.findByLabelText("Public key")).toHaveValue("");
   expect(screen.getByLabelText("Public key")).toHaveAttribute(
     "placeholder",
     "••••••••",
@@ -193,7 +219,7 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
 });
 
 test("platform services test and save separately, then edit the exact persisted binding", async () => {
-  window.history.replaceState({}, "", "/admin/platform/services");
+  window.history.replaceState({}, "", "/platform/services/ai");
   let bindings: ReturnType<typeof binding>[] = [];
   const fetchImpl = vi.fn(
     async (_url: RequestInfo | URL, options?: RequestInit) => {
@@ -216,12 +242,12 @@ test("platform services test and save separately, then edit the exact persisted 
   );
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   expect(
-    await screen.findByRole("heading", { name: "Platform Services" }),
+    await screen.findByRole("heading", { name: "Platform Integrations" }),
   ).toBeInTheDocument();
   fireEvent.click(
-    screen.getAllByRole("button", { name: "Connect a service" })[0],
+    await screen.findByRole("button", { name: "Connect Google AI Studio" }),
   );
-  fireEvent.change(screen.getByLabelText("Service"), {
+  fireEvent.change(await screen.findByLabelText("Service"), {
     target: { value: "deepgram" },
   });
   fireEvent.change(screen.getByLabelText("API key"), {
@@ -229,7 +255,7 @@ test("platform services test and save separately, then edit the exact persisted 
   });
   fireEvent.click(screen.getByRole("button", { name: "Test credentials" }));
   expect(await screen.findByText("Credentials tested successfully.")).toBeVisible();
-  expect(screen.getByRole("dialog")).toBeVisible();
+  expect(await screen.findByRole("dialog")).toBeVisible();
   expect(fetchImpl).toHaveBeenCalledWith(
     "/api/platform/credentials/test",
     expect.objectContaining({
@@ -257,8 +283,8 @@ test("platform services test and save separately, then edit the exact persisted 
       }),
     }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Manage Deepgram" }));
-  expect(screen.getByLabelText("API key")).toHaveValue("");
+  fireEvent.click(await screen.findByRole("button", { name: "Edit Deepgram" }));
+  expect(await screen.findByLabelText("API key")).toHaveValue("");
   expect(screen.getByLabelText("API key")).toHaveAttribute(
     "placeholder",
     "••••••••",
@@ -276,18 +302,16 @@ test("platform services test and save separately, then edit the exact persisted 
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Manage Deepgram" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Edit Deepgram" }));
   expect(
     screen.queryByRole("button", { name: /Disable/ }),
   ).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Remove credentials" })).not.toBeInTheDocument();
-  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
-  const card = screen.getByRole("article", { name: "Deepgram" });
-  fireEvent.click(within(card).getByRole("button", { name: "More actions for Deepgram" }));
-  fireEvent.click(screen.getByRole("button", { name: "Remove credentials" }));
+  fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
+  fireEvent.click(await screen.findByRole("button", { name: "Remove Deepgram (deepgram) credentials" }));
   await waitFor(() =>
     expect(
-      screen.queryByRole("button", { name: "Manage Deepgram" }),
+      screen.queryByRole("button", { name: "Edit Deepgram" }),
     ).not.toBeInTheDocument(),
   );
   expect(fetchImpl).toHaveBeenCalledWith(
@@ -297,7 +321,7 @@ test("platform services test and save separately, then edit the exact persisted 
 });
 
 test("failed card removal keeps the credentials visible and reports the error", async () => {
-  window.history.replaceState({}, "", "/admin/platform/services");
+  window.history.replaceState({}, "", "/platform/services/ai");
   const fetchImpl = vi.fn(async (_url: RequestInfo | URL, options?: RequestInit) =>
     options?.method === "DELETE"
       ? response({ error: { code: "in_use" } }, 409)
@@ -309,9 +333,7 @@ test("failed card removal keeps the credentials visible and reports the error", 
   );
 
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
-  const card = await screen.findByRole("article", { name: "Deepgram" });
-  fireEvent.click(within(card).getByRole("button", { name: "More actions for Deepgram" }));
-  fireEvent.click(screen.getByRole("button", { name: "Remove credentials" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Remove Deepgram (deepgram) credentials" }));
 
   expect(await screen.findByRole("alert", { name: "Notification" })).toHaveTextContent(
     /credential is used by a telephony service/,
@@ -320,7 +342,7 @@ test("failed card removal keeps the credentials visible and reports the error", 
 });
 
 test("platform save failure appears in a page notification while the form stays open", async () => {
-  window.history.replaceState({}, "", "/admin/platform/services");
+  window.history.replaceState({}, "", "/platform/services/ai");
   const fetchImpl = vi.fn(async (_url: RequestInfo | URL, options?: RequestInit) =>
     options?.method === "POST"
       ? response({ error: { code: "unavailable" } }, 503)
@@ -328,9 +350,9 @@ test("platform save failure appears in a page notification while the form stays 
   );
 
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
-  await screen.findByRole("heading", { name: "Platform Services" });
-  fireEvent.click(screen.getByRole("button", { name: "Connect a service" }));
-  fireEvent.change(screen.getByLabelText("Service"), { target: { value: "rime" } });
+  await screen.findByRole("heading", { name: "Platform Integrations" });
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
+  fireEvent.change(await screen.findByLabelText("Service"), { target: { value: "rime" } });
   fireEvent.change(screen.getByLabelText("API key"), { target: { value: "synthetic-rime" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -342,7 +364,7 @@ test("platform save failure appears in a page notification while the form stays 
 });
 
 test("keeps Save usable when a platform credential cannot be tested", async () => {
-  window.history.replaceState({}, "", "/admin/platform/services");
+  window.history.replaceState({}, "", "/platform/services/ai");
   let saved = false;
   const fetchImpl = vi.fn(
     async (_url: RequestInfo | URL, options?: RequestInit) => {
@@ -365,11 +387,11 @@ test("keeps Save usable when a platform credential cannot be tested", async () =
   );
 
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
-  await screen.findByRole("heading", { name: "Platform Services" });
+  await screen.findByRole("heading", { name: "Platform Integrations" });
   fireEvent.click(
-    screen.getAllByRole("button", { name: "Connect a service" })[0],
+    await screen.findByRole("button", { name: "Connect Google AI Studio" }),
   );
-  fireEvent.change(screen.getByLabelText("Service"), {
+  fireEvent.change(await screen.findByLabelText("Service"), {
     target: { value: "rime" },
   });
   fireEvent.change(screen.getByLabelText("API key"), {
@@ -398,7 +420,7 @@ test("keeps Save usable when a platform credential cannot be tested", async () =
 });
 
 test("directory outage is retryable and an expired session never looks like empty setup", async () => {
-  window.history.replaceState({}, "", "/admin/platform/services");
+  window.history.replaceState({}, "", "/platform/services/ai");
   const expired = vi.fn();
   const fetchImpl = vi
     .fn()
@@ -412,12 +434,9 @@ test("directory outage is retryable and an expired session never looks like empt
     />,
   );
   expect(
-    await screen.findByRole("heading", { name: "Platform services unavailable" }),
+    await screen.findByText("Connection status unavailable"),
   ).toBeVisible();
-  expect(
-    screen.getByText("Platform services could not be loaded. Try again."),
-  ).toBeVisible();
-  fireEvent.click(await screen.findByRole("button", { name: "Retry services" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Retry connections" }));
   await waitFor(() => expect(expired).toHaveBeenCalledTimes(1));
   expect(
     screen.queryByRole("button", { name: "Connect a service" }),

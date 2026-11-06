@@ -100,6 +100,9 @@ defmodule Vxpipe.Console.RequireUser do
   defp permitted?(principal, ["admin", "platform", "services"]),
     do: installed?(principal, "platform_services.read")
 
+  defp permitted?(principal, ["admin", "platform", "services", _category]),
+    do: installed?(principal, "platform_services.read")
+
   defp permitted?(principal, ["admin", "onboarding"]),
     do: installed?(principal, "tenants.write")
 

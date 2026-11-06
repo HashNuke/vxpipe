@@ -76,7 +76,7 @@ import {
 import { TenantServicesPage } from "./admin/TenantServicesPage";
 import { TenantsPage } from "./admin/TenantsPage";
 import { CallSpecEditorRoute } from "./CallSpecEditorRoute";
-import { ScopedServicesApp } from "./ScopedServicesApp";
+import { IntegrationsApp } from "./IntegrationsApp";
 import { parseBindingDirectory } from "./admin/serviceBindingsApi";
 import { AccessFrame } from "./admin/authentication/AccessFrame";
 import { ConnectedClients } from "./admin/authentication/ConnectedClients";
@@ -96,6 +96,7 @@ import {
   canWritePlatformServices,
   canReadUsers,
   canWriteTenantCredentials,
+  effectiveAccess,
   membershipAccess,
   workspaceDestinationsFor,
 } from "./admin/authentication/access";
@@ -164,6 +165,7 @@ export function App(props: AppProps) {
         <Route path="/api-keys" element={<ConfiguredRoute render={props => <ApiKeysRoute {...props} />} />} />
         <Route path="/api-keys/new" element={<ConfiguredRoute render={props => <ApiKeysRoute {...props} />} />} />
         <Route path="/platform/services" element={<ConfiguredRoute render={(props) => <ScopedServicesRoute {...props} platform />} />} />
+        <Route path="/platform/services/:category" element={<ConfiguredRoute render={(props) => <ScopedServicesRoute {...props} platform />} />} />
         <Route path="/platform/installation" element={<ConfiguredRoute render={(props) => <InstallationRoute {...props} />} />} />
         <Route path="/" element={<WorkspaceDirectory />} />
         <Route path="/tenants" element={<WorkspaceDirectory />} />
@@ -173,6 +175,7 @@ export function App(props: AppProps) {
         <Route path="/t/:tenantKey/call-specs" element={<ConfiguredRoute render={props => <CallSpecsRoute {...props} />} />} />
         <Route path="/t/:tenantKey/calls" element={<ConfiguredRoute render={props => <CallsRoute {...props} />} />} />
         <Route path="/t/:tenantKey/services" element={<ConfiguredRoute render={props => <ServicesRoute {...props} />} />} />
+        <Route path="/t/:tenantKey/services/:category" element={<ConfiguredRoute render={props => <ServicesRoute {...props} />} />} />
         <Route path="/getting-started" element={<ConfiguredRoute render={props => <RoutedApp {...props} route={{ kind: "onboarding" }} />} />} />
         </Route>
         <Route path="/admin/tenants/:tenantKey/call-specs/:callSpecId" element={<ConfiguredRoute render={(props) => <CallSpecEditorRoute {...props} />} />} />
@@ -1145,7 +1148,7 @@ function ScopedServicesRoute({ platform = false, ...props }: AppProps & { platfo
   const { session, sessionState } = useAccessSession(api, onSessionExpired);
   const principal = sessionState === "ready" ? toOperationalSession(session) : null;
   return (
-    <ScopedServicesApp
+    <IntegrationsApp
       key={platform ? "platform" : tenantKey}
       {...props}
       scope={platform ? { kind: "platform" } : { kind: "tenant", tenantKey, tenantName: "Tenant" }}
@@ -1154,6 +1157,7 @@ function ScopedServicesRoute({ platform = false, ...props }: AppProps & { platfo
       canEdit={!!principal && (platform
         ? canWritePlatformServices(principal.role)
         : canWriteTenantCredentials(principal.role, membershipAccess(principal.user, tenantKey)))}
+      canManageMcps={!!principal && !platform && effectiveAccess(principal.role, "tenant_services", membershipAccess(principal.user, tenantKey)) === "write"}
       headerActions={
         principal ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -1201,8 +1205,7 @@ function CallDetailsRoute(props: AppProps) {
 }
 
 function ServicesRoute(props: AppProps) {
-  const { tenantKey = "" } = useParams();
-  return <RoutedApp {...props} route={{ kind: "services", tenantKey }} />;
+  return <ScopedServicesRoute {...props} />;
 }
 
 function LegacyPageRedirect() {

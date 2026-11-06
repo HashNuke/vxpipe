@@ -164,6 +164,7 @@ defmodule Vxpipe.Console.Router do
     get "/api-keys", Vxpipe.Console.CanonicalPageController, :index
     get "/api-keys/new", Vxpipe.Console.CanonicalPageController, :index
     get "/platform/services", Vxpipe.Console.CanonicalPageController, :index
+    get "/platform/services/:category", Vxpipe.Console.CanonicalPageController, :index
     get "/platform/installation", Vxpipe.Console.InstallationController, :page
     get "/t/:tenant_key/dashboard", Vxpipe.Console.CanonicalPageController, :index
     get "/t/:tenant_key/calls", Vxpipe.Console.CanonicalPageController, :index
@@ -312,6 +313,16 @@ defmodule Vxpipe.Console.Router do
     delete "/tenants/:tenant_key/mcp-connections/:id",
            Vxpipe.Console.MCPConnectionsController,
            :delete, metadata: %{console_product_api: true}
+
+    get "/platform/integrations", Vxpipe.Console.IntegrationsController, :platform,
+      metadata: %{console_product_api: true}
+
+    get "/tenants/:tenant_key/integrations", Vxpipe.Console.IntegrationsController, :tenant,
+      metadata: %{console_product_api: true}
+
+    get "/tenants/:tenant_key/integrations/categories",
+        Vxpipe.Console.IntegrationsController,
+        :categories, metadata: %{console_product_api: true}
 
     post "/platform/credentials/test", Vxpipe.Console.AdminServicesController, :validate_platform,
       metadata: %{console_product_api: true}

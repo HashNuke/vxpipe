@@ -121,8 +121,6 @@ defmodule Vxpipe.Console.Test.MCPManagementFixture do
             })}
   end
 
-  def get_retained(owner, tenant, id), do: get(owner, tenant, id)
-
   def get(_owner, tenant, id) do
     {:ok,
      %{
@@ -132,6 +130,8 @@ defmodule Vxpipe.Console.Test.MCPManagementFixture do
        secrets: %{"token" => "hidden-secret"}
      }}
   end
+
+  def get_retained(owner, tenant, id), do: get(owner, tenant, id)
 
   def refresh_catalog(owner, tenant, id, generation, attributes) do
     send(owner, {:mcp_catalog_saved, tenant, id, generation, attributes})
