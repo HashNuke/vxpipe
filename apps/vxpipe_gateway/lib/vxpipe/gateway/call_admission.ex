@@ -126,8 +126,9 @@ defmodule Vxpipe.Gateway.CallAdmission do
       {:error, :managed_cleanup_requires_admission_owner}
     else
       with :ok <- matching_incoming_service(service, claim),
-           :ok <- validate_phone_plan(claim.call.plan, options) do
-        CallEngine.start_call(claim.call.plan, CallEngineOptions.build(options))
+           :ok <- validate_phone_plan(claim.call.plan, options),
+           {:ok, runtime} <- CallEngineOptions.build(options, claim.call) do
+        CallEngine.start_call(claim.call.plan, runtime)
       end
     end
   end

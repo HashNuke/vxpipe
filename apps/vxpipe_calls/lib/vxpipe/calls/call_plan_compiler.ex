@@ -2,7 +2,7 @@ defmodule Vxpipe.Calls.CallPlanCompiler do
   @moduledoc false
 
   alias Vxpipe.CallEngine
-  alias Vxpipe.Calls.{CallDurationSettings, TelephonyPlanBindings}
+  alias Vxpipe.Calls.{CallDurationSettings, SavedMCPCompilationCatalog, TelephonyPlanBindings}
 
   @spec compile(
           Vxpipe.CallEngine.CallSpec.t(),
@@ -13,17 +13,19 @@ defmodule Vxpipe.Calls.CallPlanCompiler do
           | {:error,
              Vxpipe.CallEngine.Error.t()
              | :call_duration_settings_unavailable
-             | :registries_unavailable}
+             | :registries_unavailable
+             | :mcp_catalog_unavailable}
   def compile(call_spec, invocation, options) when is_list(options) do
     with {:ok, registries} <- registries(options),
          {:ok, duration_options} <-
            CallDurationSettings.compiler_options(invocation.tenant_id, options),
+         {:ok, engine_options} <- engine_options(call_spec, invocation.tenant_id, options),
          {:ok, plan} <-
            CallEngine.compile_call_spec(
              call_spec,
              invocation,
              registries,
-             engine_options(options) ++ duration_options
+             engine_options ++ duration_options
            ) do
       TelephonyPlanBindings.pin(plan, options)
     end
@@ -38,10 +40,24 @@ defmodule Vxpipe.Calls.CallPlanCompiler do
     end
   end
 
-  defp engine_options(options) do
+  defp engine_options(call_spec, tenant, options) do
     case Keyword.fetch(options, :mcp_catalog_store) do
-      {:ok, catalog_store} -> [mcp_catalog_store: catalog_store]
-      :error -> []
+      {:ok, catalog_store} -> {:ok, [mcp_catalog_store: catalog_store]}
+      :error -> saved_catalog_options(call_spec, tenant, options)
+    end
+  end
+
+  defp saved_catalog_options(call_spec, tenant, options) do
+    remote? =
+      Enum.any?(call_spec.participants, fn {_key, participant} ->
+        Enum.any?(participant.tools, fn {_name, selection} -> selection.type == :mcp end)
+      end)
+
+    if remote? do
+      with {:ok, catalog} <- SavedMCPCompilationCatalog.build(tenant, options),
+           do: {:ok, [mcp_catalog_store: catalog]}
+    else
+      {:ok, []}
     end
   end
 end

@@ -1,8 +1,9 @@
 # Current credentials on MCP transport requests
 
 Status: the private credential projection, guarded ExMCP provider and pinned
-transport patch are implemented. Saved-connection catalog/compiler wiring, active
-call acceptance and independent-node revocation remain open in
+transport patch are implemented. Saved catalog/compiler and Gateway startup wiring
+are described in [saved runtime](saved-mcp-runtime.md). Full per-route active call
+acceptance and independent-node revocation remain open in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 This checkpoint depends on the existing
 [renewal boundary](mcp-oauth-renewal.md).
@@ -10,8 +11,9 @@ This checkpoint depends on the existing
 ## Submission boundary
 
 Calls privately resolves the pinned tenant, connection ID and configuration
-generation. OAuth resolution returns only the current access token; static methods
-return the current method after the same status/generation checks. The MCP runtime
+generation. Resolution returns current validated request headers after the same
+status/generation checks; OAuth also returns its current token. Saved snapshots
+contain no bootstrap credentials or keyrings. The MCP runtime
 provider accepts this trusted resolver and verifies its result matches the pinned
 method. It validates bearer syntax before returning a token. Provider state has an
 opaque inspection representation, and no challenge callback starts browser consent
@@ -39,9 +41,10 @@ request or prove immediate cross-node termination of an existing active stream.
 ## Pinned patch and build contract
 
 `patches/ex_mcp/runtime-request-credentials.patch` changes the pinned HTTP and SSE
-modules only. Its adjacent manifest records the exact dependency revision and SHA-256
+modules plus Client status redaction. Its adjacent manifest records the exact dependency revision and SHA-256
 hashes for the patch, original sources and patched sources. `bin/patch-ex-mcp`
-accepts only the complete original or complete patched state. Unknown modifications,
+accepts the complete original/current state or the exact previous reviewed state
+through a separately checksum-pinned upgrade patch. Unknown modifications,
 a different dependency revision, a modified patch or mixed source states fail
 without overwriting them. Reapplication verifies the existing patched state.
 
@@ -75,12 +78,13 @@ header sentinels. Direct rejection tests also assert no DNS or old-token fallbac
 Actual loopback interoperability cases are explicitly tagged `integration`.
 
 Patch tests cover clean local-clone application, idempotence, wrong revision,
-tampered patch, unknown source changes and mixed source states. Setup tests cover
-preparation/compilation ordering and stopping on patch failure. These local checks
-do not replace the pending saved-record publication-to-execution and independent-
-node acceptance gates.
+tampered patches, unknown source changes, mixed source states and upgrade from the
+previous reviewed version. The upgrade test requires no repository history. Setup
+tests cover preparation/compilation ordering and stopping on patch failure. The
+saved-record publication/startup-options/wire slice is now verified; full
+per-admission room/transfer and independent-node acceptance gates remain open.
 
-The full MCP lane passes 176 tests, including the pinned official Everything and
+The full MCP lane passes 179 tests, including the pinned official Everything and
 SSE-recovery fixtures. Their npm install/build/start commands run from each
 fixture's own checkout so workspace/lock resolution is independent of Vxpipe's
 working directory. Fixture revisions and the protocol profile remain unchanged.

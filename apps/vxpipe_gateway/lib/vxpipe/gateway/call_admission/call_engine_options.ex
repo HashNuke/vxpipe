@@ -3,15 +3,19 @@ defmodule Vxpipe.Gateway.CallAdmission.CallEngineOptions do
 
   alias Vxpipe.Gateway.Telephony.OutgoingLegConnector
 
-  def build(options, call) do
-    runtime = build(options)
+  def build(options, %{tenant_key: tenant, plan: %{tenant_id: tenant} = plan} = call) do
+    with {:ok, catalog} <- Vxpipe.Calls.MCPRuntimeCatalog.build(plan, options) do
+      runtime = Keyword.put(build(options), :mcp_catalog_store, catalog)
 
-    if Keyword.get(options, :managed_cleanup, false) == true do
-      scope_connector(runtime, options, call)
-    else
-      {:ok, runtime}
+      if Keyword.get(options, :managed_cleanup, false) == true do
+        scope_connector(runtime, options, call)
+      else
+        {:ok, runtime}
+      end
     end
   end
+
+  def build(_options, _call), do: {:error, :mcp_connection_unavailable}
 
   @spec build(keyword()) :: keyword()
   def build(options) when is_list(options) do

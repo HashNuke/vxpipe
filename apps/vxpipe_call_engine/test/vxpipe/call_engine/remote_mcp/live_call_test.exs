@@ -62,7 +62,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
 
     assert {:ok, room} =
              Vxpipe.CallEngine.TestCallStartup.start_call(plan,
-               mcp_catalog_store: store,
+               mcp_catalog_store: integrations,
                remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
                remote_mcp_protocol_client: TestRemoteMCPProtocolClient
              )

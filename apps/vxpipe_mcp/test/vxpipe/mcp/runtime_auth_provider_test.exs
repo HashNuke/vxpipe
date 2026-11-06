@@ -9,6 +9,7 @@ defmodule Vxpipe.MCP.RuntimeAuthProviderTest do
       connection_id: "connection",
       generation: 1,
       auth_method: "oauth",
+      endpoint: "https://mcp.example.test/mcp",
       resolver: {RuntimeAuthFixture, {self(), result}}
     }
 
@@ -105,6 +106,43 @@ defmodule Vxpipe.MCP.RuntimeAuthProviderTest do
         ] do
       {:ok, state} = RuntimeAuthProvider.init(config(result))
       assert catch_exit(RuntimeAuthProvider.get_token(state)) == :mcp_credentials_unavailable
+    end
+  end
+
+  test "static request headers are resolved only when a request is submitted" do
+    config = %{
+      config({:ok, %{auth_method: "basic", headers: [{"authorization", "Basic dXNlcjpwYXNz"}]}})
+      | auth_method: "basic"
+    }
+
+    {:ok, state} = RuntimeAuthProvider.init(config)
+
+    assert {:ok, [{"authorization", "Basic dXNlcjpwYXNz"}], ^state} =
+             RuntimeAuthProvider.get_headers(state)
+
+    assert_receive {:resolved, "tenant", "connection", 1}
+  end
+
+  test "the complete header provider rejects endpoint or header binding mismatches" do
+    for result <- [
+          %{auth_method: "oauth", token: "valid", endpoint: "https://different.example.test/mcp"},
+          %{auth_method: "oauth", token: "valid", headers: [{"authorization", "Bearer stale"}]},
+          %{auth_method: "oauth", token: "valid", headers: [{"host", "other.example.test"}]}
+        ] do
+      {:ok, state} = RuntimeAuthProvider.init(config({:ok, result}))
+      assert catch_exit(RuntimeAuthProvider.get_headers(state)) == :mcp_credentials_unavailable
+    end
+  end
+
+  test "static method labels cannot substitute unrelated headers for their required authorization" do
+    for method <- ["bearer", "basic"] do
+      configuration = %{
+        config({:ok, %{auth_method: method, headers: [{"x-workspace", "value"}]}})
+        | auth_method: method
+      }
+
+      {:ok, state} = RuntimeAuthProvider.init(configuration)
+      assert catch_exit(RuntimeAuthProvider.get_headers(state)) == :mcp_credentials_unavailable
     end
   end
 

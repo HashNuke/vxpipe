@@ -15,7 +15,18 @@ defmodule Vxpipe.Calls.EditorToolCatalog do
   end
 
   defp remote_tools(tenant, options) do
-    store = Keyword.get(options, :mcp_catalog_store, CatalogStore)
+    if Keyword.has_key?(options, :mcp_catalog_store) do
+      embedded_tools(tenant, options)
+    else
+      case Vxpipe.Calls.SavedMCPCatalog.tools(tenant, options) do
+        {:ok, tools} -> {tools, true}
+        {:error, _} -> {[], false}
+      end
+    end
+  end
+
+  defp embedded_tools(tenant, options) do
+    store = Keyword.fetch!(options, :mcp_catalog_store)
 
     case CatalogStore.snapshot(store) do
       {:ok, catalog} ->

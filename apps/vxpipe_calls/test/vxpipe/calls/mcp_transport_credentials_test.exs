@@ -11,7 +11,8 @@ defmodule Vxpipe.Calls.MCPTransportCredentialsTest do
         tenant_key: "tenant",
         generation: 2,
         auth_method: "oauth",
-        status: "connected"
+        status: "connected",
+        endpoint: "https://mcp.example.test/mcp"
       },
       secrets: %{
         "access_token" => "old",
@@ -46,10 +47,35 @@ defmodule Vxpipe.Calls.MCPTransportCredentialsTest do
       }
     end)
 
-    assert {:ok, %{auth_method: "bearer"}} =
+    assert {:ok, %{auth_method: "bearer", headers: [{"authorization", "Bearer static-private"}]}} =
              Vxpipe.Calls.MCPTransportCredentials.resolve(data.options, "tenant", "connection", 2)
 
     assert {:error, :mcp_connection_unavailable} =
              Vxpipe.Calls.MCPTransportCredentials.resolve(data.options, "tenant", "connection", 1)
+  end
+
+  test "renewal projects the final persisted token and MCP headers without grant secrets", data do
+    Agent.update(data.agent, fn saved ->
+      %{
+        saved
+        | secrets:
+            Map.merge(saved.secrets, %{
+              "expires_at" => DateTime.to_iso8601(@now),
+              "headers" => [%{"name" => "X-Workspace", "value" => "synthetic-workspace"}]
+            })
+      }
+    end)
+
+    assert {:ok, result} =
+             Vxpipe.Calls.MCPTransportCredentials.resolve(data.options, "tenant", "connection", 2)
+
+    assert result.headers == [
+             {"authorization", "Bearer new"},
+             {"x-workspace", "synthetic-workspace"}
+           ]
+
+    assert result.endpoint == "https://mcp.example.test/mcp"
+    refute :erlang.term_to_binary(result) =~ "private-refresh"
+    assert_received :refreshed
   end
 end

@@ -10,6 +10,7 @@ defmodule Vxpipe.MCP.ClientOptionsTest do
         connection_id: "connection",
         generation: 1,
         auth_method: "oauth",
+        endpoint: "https://mcp.example.test/mcp",
         resolver: {Vxpipe.MCP.Test.RuntimeAuthFixture, {self(), {:error, :revoked}}}
       })
 
@@ -22,6 +23,12 @@ defmodule Vxpipe.MCP.ClientOptionsTest do
     assert options[:auth_provider] == {Vxpipe.MCP.RuntimeAuthProvider, state}
     assert {:ok, ^state} = Vxpipe.MCP.RuntimeAuthProvider.init(state)
     refute_received {:resolved, _, _, _}
+
+    assert {:error, :invalid_authentication} =
+             ClientOptions.build(
+               endpoint: "https://other.example.test/mcp",
+               runtime_authentication: state
+             )
 
     assert {:error, :invalid_authentication} =
              ClientOptions.build(

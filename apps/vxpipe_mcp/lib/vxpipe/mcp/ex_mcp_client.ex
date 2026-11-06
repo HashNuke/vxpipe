@@ -52,6 +52,20 @@ defmodule Vxpipe.MCP.ExMCPClient do
        when reason in [:not_connected, :request_too_large],
        do: {:error, :not_submitted}
 
+  defp normalize_invocation_result({:error, {:transport_error, :mcp_credentials_unavailable}}),
+    do: {:error, :not_submitted}
+
+  # The pinned synchronous RequestHandler wraps this local transport rejection in
+  # a fixed error map. Match it exactly; other transport failures stay ambiguous.
+  defp normalize_invocation_result(
+         {:error,
+          %{
+            type: :transport_error,
+            message: "Failed to send request: :mcp_credentials_unavailable"
+          }}
+       ),
+       do: {:error, :not_submitted}
+
   defp normalize_invocation_result({:error, %ExMCP.Error.ProtocolError{}}),
     do: {:error, :remote_error}
 

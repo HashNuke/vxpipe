@@ -1,6 +1,8 @@
 """Verify the pinned transport patch against a clean local dependency checkout."""
 from pathlib import Path
 import shutil
+import json
+import hashlib
 import subprocess
 import tempfile
 import unittest
@@ -49,6 +51,31 @@ class ExMCPPatchTest(unittest.TestCase):
         result = self.patch()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("checksum differs", result.stderr)
+
+    def test_upgrades_the_previous_reviewed_patch_without_discarding_changes(self):
+        manifest = json.loads((self.root / "patches/ex_mcp/runtime-request-credentials.json").read_text())
+        dependency = self.root / "deps/ex_mcp"
+        patch = self.root / "patches/ex_mcp/runtime-request-credentials.patch"
+        upgrade = patch.parent / manifest["previous"]["patch_file"]
+        # Derive the declared prior state without needing history in shallow CI clones.
+        subprocess.run(["git", "apply", str(patch)], cwd=dependency, check=True, capture_output=True)
+        subprocess.run(["git", "apply", "--reverse", str(upgrade)],
+                       cwd=dependency, check=True, capture_output=True)
+        self.assertEqual({name: hashlib.sha256((dependency / name).read_bytes()).hexdigest()
+                          for name in manifest["files"]}, manifest["previous"]["files"])
+        result = self.patch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("applied and verified", result.stdout)
+        self.assertEqual(self.patch().returncode, 0)
+
+    def test_rejects_tampered_upgrade_patch_without_changing_sources(self):
+        manifest = json.loads((self.root / "patches/ex_mcp/runtime-request-credentials.json").read_text())
+        upgrade = self.root / "patches/ex_mcp" / manifest["previous"]["patch_file"]
+        upgrade.write_bytes(upgrade.read_bytes() + b"\n")
+        source = self.root / "deps/ex_mcp/lib/ex_mcp/transport/http.ex"
+        before = source.read_bytes()
+        self.assertNotEqual(self.patch().returncode, 0)
+        self.assertEqual(source.read_bytes(), before)
 
     def test_rejects_a_different_dependency_revision(self):
         dependency = self.root / "deps/ex_mcp"

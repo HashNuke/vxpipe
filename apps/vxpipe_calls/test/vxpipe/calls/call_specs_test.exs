@@ -34,6 +34,55 @@ defmodule Vxpipe.Calls.CallSpecsTest do
     [tenant: tenant, other_tenant: other_tenant, options: options]
   end
 
+  test "publishes selected tools from saved tenant MCP records and rejects revoked selections", %{
+    tenant: tenant,
+    options: options
+  } do
+    source =
+      put_in(call_spec_input(), [:participants, "assistant", :tools], %{
+        "records__lookup" => %{type: "mcp", integration: "connection", tool: "lookup"}
+      })
+
+    record = %{
+      id: "connection",
+      tenant_key: tenant.key,
+      generation: 1,
+      status: "connected",
+      catalog: [%{"name" => "lookup", "inputSchema" => %{"type" => "object"}}]
+    }
+
+    options =
+      Keyword.put(
+        options,
+        :mcp_connection_repository,
+        {Vxpipe.Calls.Test.MCPCatalogFixture, {:ok, [record]}}
+      )
+
+    assert {:ok, draft} = CallSpecs.save(tenant.key, source, options)
+    assert draft.validation_errors == []
+
+    assert {:ok, _published} =
+             CallSpecs.publish(tenant.key, draft.call_spec_id, draft.revision, options)
+
+    revoked =
+      Keyword.put(
+        options,
+        :mcp_connection_repository,
+        {Vxpipe.Calls.Test.MCPCatalogFixture, {:ok, []}}
+      )
+
+    assert {:ok, unavailable} = CallSpecs.save(tenant.key, source, revoked)
+    assert unavailable.validation_errors != []
+
+    assert {:error, _} =
+             CallSpecs.publish(
+               tenant.key,
+               unavailable.call_spec_id,
+               unavailable.revision,
+               revoked
+             )
+  end
+
   test "keeps a saved draft route unavailable until publication", %{
     tenant: tenant,
     options: options

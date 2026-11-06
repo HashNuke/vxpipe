@@ -1,6 +1,5 @@
 defmodule Vxpipe.Calls.CallSpecEditorLookups do
   @moduledoc "Installation- or user-authorized, secret-free choices for the portable call spec editor."
-  alias Vxpipe.CallEngine.RemoteMCP.ConfiguredNames
 
   alias Vxpipe.Calls.{
     EditorToolCatalog,
@@ -26,7 +25,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
          {:ok, bindings} <- EffectiveServiceBindings.list(tenant, options),
          {:ok, telephony} <- list_member_services(tenant, options, privileged),
          {:ok, applications} <- list_member_applications(tenant, options, privileged),
-         {:ok, integrations} <- ConfiguredNames.list(tenant) do
+         {:ok, integrations} <- Vxpipe.Calls.SavedMCPCatalog.names(tenant, options) do
       names =
         bindings.bindings
         |> then(fn all ->
@@ -64,7 +63,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
     with {:ok, bindings} <- EffectiveServiceBindings.list(tenant, options),
          {:ok, telephony} <- OperatorAdministration.list_services(authority, tenant, options),
          {:ok, applications} <- OperatorTelephonyApplications.list(authority, tenant, options),
-         {:ok, integrations} <- ConfiguredNames.list(tenant) do
+         {:ok, integrations} <- Vxpipe.Calls.SavedMCPCatalog.names(tenant, options) do
       names =
         bindings.bindings
         |> Enum.group_by(& &1.provider, & &1.name)

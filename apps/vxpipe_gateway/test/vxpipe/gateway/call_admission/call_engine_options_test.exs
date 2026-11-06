@@ -3,6 +3,64 @@ defmodule Vxpipe.Gateway.CallAdmission.CallEngineOptionsTest do
 
   alias Vxpipe.Gateway.CallAdmission.CallEngineOptions
 
+  test "packaged startup uses a fresh tenant MCP snapshot and rejects revoked records" do
+    record = %{
+      id: "connection",
+      tenant_key: "tenant",
+      generation: 1,
+      status: "connected",
+      auth_method: "bearer",
+      endpoint: "https://mcp.example.test/mcp",
+      catalog: [%{"name" => "lookup", "inputSchema" => %{"type" => "object"}}]
+    }
+
+    alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
+    {:ok, integration} = Vxpipe.Calls.SavedMCPCompilationCatalog.integration(record)
+
+    {:ok, catalog} =
+      IntegrationCatalog.new(tenants: %{"tenant" => %{"connection" => integration}})
+
+    {:ok, remote} = IntegrationCatalog.resolve(catalog, "tenant", "connection", "lookup")
+
+    call = %{
+      tenant_key: "tenant",
+      plan: %{
+        tenant_id: "tenant",
+        participants: %{
+          "assistant" => %{tools: %{"lookup" => %{type: :mcp, remote: remote}}}
+        }
+      }
+    }
+
+    options = [
+      mcp_connection_repository: {__MODULE__, record},
+      mcp_runtime_resolver: {__MODULE__, self()}
+    ]
+
+    assert {:ok, runtime} = CallEngineOptions.build(options, call)
+    assert {:ok, binding} = IntegrationCatalog.checkout(runtime[:mcp_catalog_store], remote)
+    assert binding.client_config[:runtime_authentication].connection_id == "connection"
+
+    assert {:error, :mcp_connection_unavailable} =
+             CallEngineOptions.build(
+               [mcp_connection_repository: {__MODULE__, %{record | status: "revoked"}}],
+               call
+             )
+
+    assert {:error, :mcp_connection_unavailable} =
+             CallEngineOptions.build(options, %{call | tenant_key: "other"})
+  end
+
+  def resolve(_owner, _tenant, _id, _generation), do: {:error, :unused}
+
+  def resolve(record, _tenant, _id),
+    do:
+      {:ok,
+       %Vxpipe.Calls.ResolvedMCPConnection{
+         connection: record,
+         secrets: %{"token" => "private-fixture-token"}
+       }}
+
   test "passes trusted recording configuration to call startup" do
     recording = [
       enabled: true,
@@ -19,7 +77,13 @@ defmodule Vxpipe.Gateway.CallAdmission.CallEngineOptionsTest do
 
   test "managed startup scopes the real outgoing connector to its trusted call" do
     connector = Vxpipe.Gateway.Telephony.OutgoingLegConnector
-    call = %{tenant_key: "tenant", id: "call", room_id: "room"}
+
+    call = %{
+      tenant_key: "tenant",
+      id: "call",
+      room_id: "room",
+      plan: %{tenant_id: "tenant", participants: %{}}
+    }
 
     options = [
       managed_cleanup: true,
@@ -43,7 +107,12 @@ defmodule Vxpipe.Gateway.CallAdmission.CallEngineOptionsTest do
     assert {:error, :cleanup_connector_unavailable} =
              CallEngineOptions.build(
                [managed_cleanup: true, outbound_leg_connector: {CustomConnector, []}],
-               %{tenant_key: "tenant", id: "call", room_id: "room"}
+               %{
+                 tenant_key: "tenant",
+                 id: "call",
+                 room_id: "room",
+                 plan: %{tenant_id: "tenant", participants: %{}}
+               }
              )
   end
 
@@ -51,8 +120,13 @@ defmodule Vxpipe.Gateway.CallAdmission.CallEngineOptionsTest do
     options = [outbound_leg_connector: {CustomConnector, [custom: true]}]
 
     assert {:ok, runtime} =
-             CallEngineOptions.build(options, %{tenant_key: "tenant", id: "call", room_id: "room"})
+             CallEngineOptions.build(options, %{
+               tenant_key: "tenant",
+               id: "call",
+               room_id: "room",
+               plan: %{tenant_id: "tenant", participants: %{}}
+             })
 
-    assert runtime == CallEngineOptions.build(options)
+    assert Keyword.delete(runtime, :mcp_catalog_store) == CallEngineOptions.build(options)
   end
 end

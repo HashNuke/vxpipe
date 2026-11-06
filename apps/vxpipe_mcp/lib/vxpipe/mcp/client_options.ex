@@ -24,7 +24,7 @@ defmodule Vxpipe.MCP.ClientOptions do
     with {:ok, endpoint} <- fetch_endpoint(config),
          :ok <- validate_production_endpoint(endpoint),
          :ok <- reject_raw_headers(config),
-         {:ok, runtime} <- runtime_authentication(config),
+         {:ok, runtime} <- runtime_authentication(config, true),
          {:ok, headers} <- Authentication.headers(Keyword.get(config, :authentication)),
          {:ok, transport_options} <- TransportOptions.build(config) do
       {:ok,
@@ -42,7 +42,7 @@ defmodule Vxpipe.MCP.ClientOptions do
     with {:ok, endpoint} <- fetch_endpoint(config),
          :ok <- validate_loopback_endpoint(endpoint),
          :ok <- reject_raw_headers(config),
-         {:ok, runtime} <- runtime_authentication(config),
+         {:ok, runtime} <- runtime_authentication(config, false),
          {:ok, headers} <- Authentication.headers(Keyword.get(config, :authentication)),
          {:ok, reconnect?} <- loopback_reconnect(config),
          {:ok, use_sse?} <- loopback_sse(config),
@@ -62,14 +62,17 @@ defmodule Vxpipe.MCP.ClientOptions do
     end
   end
 
-  defp runtime_authentication(config) do
+  defp runtime_authentication(config, bind_endpoint?) do
     case Keyword.fetch(config, :runtime_authentication) do
       :error ->
         {:ok, []}
 
       {:ok, %Vxpipe.MCP.RuntimeAuthProvider{} = state} ->
-        case Vxpipe.MCP.RuntimeAuthProvider.init(state) do
-          {:ok, validated} -> {:ok, [auth_provider: {Vxpipe.MCP.RuntimeAuthProvider, validated}]}
+        with true <- not bind_endpoint? or state.endpoint == Keyword.get(config, :endpoint),
+             {:ok, validated} <- Vxpipe.MCP.RuntimeAuthProvider.init(state) do
+          {:ok, [auth_provider: {Vxpipe.MCP.RuntimeAuthProvider, validated}]}
+        else
+          _ -> {:error, :invalid_authentication}
         end
 
       _ ->

@@ -344,6 +344,28 @@ outage does not stop an already authorized call. Catalog refresh, server-name ch
 refresh race and reconnect preserve pinning and scoped failure contracts. Migration
 is repeatable and does not silently share or delete existing credentials.
 
+#### Saved runtime wiring checkpoint (2026-11-07)
+
+- [x] Read tenant saved metadata for editor names/tools and compilation, preserving
+  native choices during storage failure without application-MCP fallback. Filter
+  unsupported schemas and keep zero-tool connection identities available.
+- [x] Share immutable metadata snapshots between publication and preparation, with
+  explicit configuration/catalog pins and no credential reads or persisted secrets.
+- [x] Build fresh saved startup bindings in Gateway browser, incoming and outgoing
+  admission, including the legacy incoming entry. Reject mismatched tenant/pins.
+- [x] Keep startup descriptors free of credentials and keyrings; resolve complete
+  current headers at each request and fence endpoint/method/runtime-source changes.
+- [x] Verify saved PostgreSQL records through publication/preparation, Gateway's
+  startup-options boundary and actual loopback MCP execution. Check revocation,
+  schema/replacement pins, unchanged explicit allowlists and persisted-plan privacy.
+- [x] Document direct CallEngine embedding and manual tenant migration; packaged
+  Gateway never silently starts application-scoped MCP selections.
+- [ ] Complete full per-admission room/transfer and independent-node acceptance
+  before checking off the overall T7/T8 gates.
+
+See [saved runtime contracts](../../docs/development/saved-mcp-runtime.md) and
+[checkpoint evidence](../20261107-0242-review-mcp-cutover.md).
+
 #### Runtime transport credential checkpoint (2026-11-07)
 
 - [x] Project current pinned credentials into a guarded MCP provider, validating
@@ -374,6 +396,18 @@ Depends on T1–T7. Update installation/operations docs and all related Storyboo
   evidence; only then check the milestone in the index.
 
 ### Implementation and review fixes
+
+- [x] Remove unsupported cached schemas from picker choices while preserving valid
+  siblings/native tools; explicit unsupported selections still fail compilation.
+- [x] Reproduce raw supervisor exposure and remove saved credentials/keyrings from
+  ancestor child arguments. Validate token/header/keyring privacy on activation
+  retirement and client failure, before default Logger translation suppresses SASL.
+- [x] Resolve and replace complete credential headers per request, including saved
+  OAuth MCP headers after renewal; validate endpoint/source and Basic/Bearer schemes.
+- [x] Classify fixed pre-submission credential rejection as not submitted in both
+  ExMCP request modes; keep other transport outcomes ambiguous and never retry them.
+- [x] Upgrade the previous reviewed dependency patch through an exact checksum-pinned
+  transition, preserving unknown edits and supporting shallow-checkout CI tests.
 
 - [x] Isolate official MCP fixture npm commands in their pinned checkout working
   directories after reproducing lock resolution failures from Vxpipe. Preserve

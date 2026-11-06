@@ -1,5 +1,5 @@
 defmodule Vxpipe.Calls.EditorToolCatalogTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Vxpipe.CallEngine.RemoteMCP.{CatalogStore, Integration, IntegrationCatalog}
   alias Vxpipe.CallEngine.Tool.DelayedReport
@@ -55,6 +55,108 @@ defmodule Vxpipe.Calls.EditorToolCatalogTest do
 
     refute inspect(result) =~ "never-expose-this"
     refute Enum.any?(EditorToolCatalog.list("other", options).tools, &(&1.type == "mcp"))
+  end
+
+  test "default picker uses saved tenant connections with stable IDs and cached tools" do
+    row = %{
+      id: "connection-id",
+      tenant_key: "tenant",
+      generation: 3,
+      status: "connected",
+      server_name: "Calendar",
+      catalog: [
+        %{
+          "name" => "find_slots",
+          "description" => "Find times",
+          "inputSchema" => %{"type" => "object"}
+        }
+      ]
+    }
+
+    options = [mcp_connection_repository: {Vxpipe.Calls.Test.MCPCatalogFixture, {:ok, [row]}}]
+    result = EditorToolCatalog.list("tenant", options)
+    assert result.mcp_available
+
+    assert Enum.find(result.tools, &(&1.type == "mcp")) == %{
+             type: "mcp",
+             integration: "connection-id",
+             tool: "find_slots",
+             description: "Find times"
+           }
+
+    foreign =
+      Keyword.put(
+        options,
+        :mcp_connection_repository,
+        {Vxpipe.Calls.Test.MCPCatalogFixture, {:ok, [%{row | tenant_key: "other"}]}}
+      )
+
+    refute EditorToolCatalog.list("tenant", foreign).mcp_available
+    refute Enum.any?(EditorToolCatalog.list("tenant", foreign).tools, &(&1.type == "mcp"))
+  end
+
+  test "saved connection outage keeps native tools but does not fall back to application MCPs" do
+    {:ok, original} = CatalogStore.snapshot()
+
+    {:ok, catalog} =
+      Vxpipe.MCP.Catalog.new([
+        %{"name" => "fallback_tool", "inputSchema" => %{"type" => "object"}}
+      ])
+
+    {:ok, integration} =
+      Integration.new(
+        integration_id: "fallback",
+        catalog: catalog,
+        allowed_tools: ["fallback_tool"],
+        configuration_generation: "1",
+        credential_generation: "1",
+        catalog_generation: "1",
+        client_config: []
+      )
+
+    {:ok, configured} = IntegrationCatalog.new(application: %{"fallback" => integration})
+    :ok = CatalogStore.publish(CatalogStore, configured)
+    on_exit(fn -> CatalogStore.publish(CatalogStore, original) end)
+    assert [%{tool: "fallback_tool"}] = IntegrationCatalog.tools(configured, "tenant")
+
+    result =
+      EditorToolCatalog.list("tenant",
+        mcp_connection_repository: {Vxpipe.Calls.Test.MCPCatalogFixture, {:error, :unavailable}}
+      )
+
+    refute result.mcp_available
+    refute Enum.any?(result.tools, &(&1.type == "mcp"))
+    assert Enum.any?(result.tools, &(&1.type == "platform"))
+  end
+
+  test "saved picker omits unsupported input schemas while preserving executable siblings" do
+    row = %{
+      id: "connection",
+      tenant_key: "tenant",
+      generation: 1,
+      status: "connected",
+      catalog: [
+        %{"name" => "valid", "inputSchema" => %{"type" => "object"}},
+        %{
+          "name" => "unsupported",
+          "inputSchema" => %{"$ref" => "https://schemas.example.test/tool.json"}
+        }
+      ]
+    }
+
+    options = [mcp_connection_repository: {Vxpipe.Calls.Test.MCPCatalogFixture, {:ok, [row]}}]
+    result = EditorToolCatalog.list("tenant", options)
+    assert result.mcp_available
+
+    assert Enum.filter(result.tools, &(&1.type == "mcp")) == [
+             %{type: "mcp", integration: "connection", tool: "valid", description: ""}
+           ]
+
+    assert Enum.any?(result.tools, &(&1.type == "platform"))
+    assert {:ok, catalog} = Vxpipe.Calls.SavedMCPCompilationCatalog.build("tenant", options)
+
+    assert {:error, :unsupported_input_schema} =
+             IntegrationCatalog.resolve(catalog, "tenant", "connection", "unsupported")
   end
 
   test "keeps built-in tools available when the MCP catalog store is unavailable" do

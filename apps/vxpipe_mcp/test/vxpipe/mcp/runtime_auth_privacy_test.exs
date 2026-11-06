@@ -114,6 +114,7 @@ defmodule Vxpipe.MCP.RuntimeAuthPrivacyTest do
         connection_id: "connection",
         generation: 1,
         auth_method: "oauth",
+        endpoint: "https://mcp.example.test/mcp",
         resolver: {RuntimeAuthFixture, {owner, fn -> Agent.get(credentials, & &1) end}}
       })
 
@@ -145,9 +146,10 @@ defmodule Vxpipe.MCP.RuntimeAuthPrivacyTest do
 
         result =
           try do
-            Vxpipe.MCP.ExMCPClient.list_tools(
+            Vxpipe.MCP.ExMCPClient.call_tool(
               Vxpipe.MCP.Connection.client(connection),
-              nil,
+              "lookup",
+              %{},
               1_000
             )
           catch
@@ -158,9 +160,9 @@ defmodule Vxpipe.MCP.RuntimeAuthPrivacyTest do
         Connections.close(connection)
       end)
 
-    refute_received {:check_http, "tools/list", _}
+    refute_received {:check_http, "tools/call", _}
     assert_private(log)
-    assert_receive {:request_result, {:error, _}}
+    assert_receive {:request_result, {:error, :not_submitted}}
   end
 
   defp revoked_auth do
@@ -170,6 +172,7 @@ defmodule Vxpipe.MCP.RuntimeAuthPrivacyTest do
         connection_id: "connection",
         generation: 1,
         auth_method: "oauth",
+        endpoint: "https://mcp.example.test/mcp",
         resolver: {RuntimeAuthFixture, {self(), {:error, :revoked}}}
       })
 

@@ -10,7 +10,7 @@ defmodule Vxpipe.MCP.RuntimeAuthProvider do
   """
   @behaviour ExMCP.Authorization.Provider
   @derive {Inspect, only: []}
-  @enforce_keys [:tenant, :connection_id, :generation, :auth_method, :resolver]
+  @enforce_keys [:tenant, :connection_id, :generation, :auth_method, :endpoint, :resolver]
   defstruct @enforce_keys
 
   @impl true
@@ -22,12 +22,14 @@ defmodule Vxpipe.MCP.RuntimeAuthProvider do
           connection_id: id,
           generation: generation,
           auth_method: method,
+          endpoint: endpoint,
           resolver: {module, _context}
         } = config
       )
       when is_binary(tenant) and byte_size(tenant) in 1..128 and is_binary(id) and
              byte_size(id) in 1..128 and is_integer(generation) and generation > 0 and
-             method in ~w(none bearer headers basic oauth) and is_atom(module) do
+             method in ~w(none bearer headers basic oauth) and is_binary(endpoint) and
+             is_atom(module) do
     if Map.keys(config) -- @enforce_keys == [] and Code.ensure_loaded?(module) and
          function_exported?(module, :resolve, 4),
        do: {:ok, struct!(__MODULE__, config)},
@@ -37,19 +39,84 @@ defmodule Vxpipe.MCP.RuntimeAuthProvider do
   def init(_), do: unavailable()
 
   @impl true
-  def get_token(%__MODULE__{auth_method: method} = state) do
+  def get_token(%__MODULE__{auth_method: method, endpoint: endpoint} = state) do
     case resolve(state) do
-      {:ok, %{auth_method: "oauth", token: token}} when method == "oauth" ->
+      {:ok, %{auth_method: "oauth", endpoint: ^endpoint, token: token}} when method == "oauth" ->
         case Vxpipe.MCP.Authentication.headers(type: :bearer, token: token) do
           {:ok, _} -> {:ok, token, state}
           _ -> unavailable()
         end
 
-      {:ok, %{auth_method: ^method}} when method != "oauth" ->
+      {:ok, %{auth_method: ^method, endpoint: ^endpoint}} when method != "oauth" ->
         {:ok, nil, state}
 
       _ ->
         unavailable()
+    end
+  end
+
+  @doc "Resolves and validates the complete credential header set for one submission."
+  def get_headers(%__MODULE__{auth_method: method, endpoint: endpoint} = state) do
+    with {:ok, %{auth_method: ^method, endpoint: ^endpoint} = current} <- resolve(state),
+         {:ok, headers} <- request_headers(current),
+         {:ok, validated} <- validate_headers(headers) do
+      {:ok, validated, state}
+    else
+      _ -> unavailable()
+    end
+  end
+
+  defp request_headers(%{auth_method: "oauth", token: token} = current) do
+    with {:ok, bearer} <- Vxpipe.MCP.Authentication.headers(type: :bearer, token: token),
+         headers <- Map.get(current, :headers, bearer),
+         {:ok, validated} <- validate_headers(headers),
+         true <- List.keyfind(validated, "authorization", 0) == hd(bearer) do
+      {:ok, validated}
+    else
+      _ -> {:error, :invalid_authentication}
+    end
+  end
+
+  defp request_headers(%{auth_method: "none", headers: []}), do: {:ok, []}
+
+  defp request_headers(%{auth_method: method, headers: [_ | _] = headers})
+       when method in ~w(bearer basic headers) do
+    with {:ok, normalized} <- validate_headers(headers),
+         true <- method_headers?(method, normalized) do
+      {:ok, normalized}
+    else
+      _ -> {:error, :invalid_authentication}
+    end
+  end
+
+  defp request_headers(_), do: {:error, :invalid_authentication}
+  defp validate_headers([]), do: {:ok, []}
+
+  defp validate_headers(headers),
+    do: Vxpipe.MCP.Authentication.headers(type: :custom_headers, headers: headers)
+
+  defp method_headers?("headers", _headers), do: true
+
+  defp method_headers?(method, headers) do
+    case {method, List.keyfind(headers, "authorization", 0)} do
+      {"bearer", {_, "Bearer " <> token}} ->
+        match?({:ok, _}, Vxpipe.MCP.Authentication.headers(type: :bearer, token: token))
+
+      {"basic", {_, "Basic " <> encoded}} ->
+        valid_basic?(encoded)
+
+      _ ->
+        false
+    end
+  end
+
+  defp valid_basic?(encoded) do
+    with {:ok, decoded} <- Base.decode64(encoded),
+         [username, password] <- :binary.split(decoded, ":"),
+         true <- byte_size(username) in 1..1024 and byte_size(password) in 1..4096 do
+      Enum.all?(:binary.bin_to_list(decoded), &(&1 in 32..126))
+    else
+      _ -> false
     end
   end
 

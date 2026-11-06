@@ -1,4 +1,20 @@
 defmodule Vxpipe.Calls.Test.MCPRuntimeFixture do
+  def resolve(context, tenant, id, generation) do
+    port = {__MODULE__, context}
+
+    Vxpipe.Calls.MCPTransportCredentials.resolve(
+      [
+        mcp_connection_repository: port,
+        mcp_oauth_grant_repository: port,
+        mcp_oauth_refresh: port,
+        now: fn -> ~U[2026-11-06 12:00:00Z] end
+      ],
+      tenant,
+      id,
+      generation
+    )
+  end
+
   def run(_context, _tenant, operation), do: operation.()
 
   def resolve({owner, agent}, _tenant, _id) do

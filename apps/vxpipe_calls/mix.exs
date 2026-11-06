@@ -26,6 +26,7 @@ defmodule Vxpipe.Calls.MixProject do
   defp deps do
     [
       {:vxpipe_call_engine, in_umbrella: true},
+      {:vxpipe_mcp, in_umbrella: true},
       {:vxpipe_providers, in_umbrella: true},
       {:vxpipe_identity, in_umbrella: true}
     ]

@@ -61,6 +61,16 @@ defmodule Vxpipe.CallEngine.CallSpec.RemoteMCPCompilerTest do
                mcp_catalog_store: store
              )
 
+    assert {:ok, snapshot_plan} =
+             CallEngine.compile_call_spec(
+               call_spec,
+               invocation,
+               Map.delete(registries(integrations), :mcp_integrations),
+               mcp_catalog_store: integrations
+             )
+
+    assert snapshot_plan.participants["reception"].tools == plan.participants["reception"].tools
+
     assert %ToolBinding{
              name: "records__lookup_customer",
              type: :mcp,

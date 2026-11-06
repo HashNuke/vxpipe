@@ -73,7 +73,8 @@ defmodule Vxpipe.Calls.CallSpecEditorLookupsTest do
 
     [
       provider_credential_repository: {TestEditorBindingsRepository, bindings_result},
-      admin_repository: {TestEditorAdminRepository, admin_context}
+      admin_repository: {TestEditorAdminRepository, admin_context},
+      mcp_connection_repository: {Vxpipe.Calls.Test.MCPCatalogFixture, {:ok, []}}
     ]
   end
 
@@ -205,6 +206,30 @@ defmodule Vxpipe.Calls.CallSpecEditorLookupsTest do
     refute dumped =~ "voice-ingress-secret"
     refute dumped =~ "app-ingress-secret"
     refute dumped =~ "11111111-1111-4111-8111-111111111111"
+  end
+
+  test "authorized editor lists stable saved connection IDs including zero-tool servers" do
+    row = %{
+      id: "saved-connection",
+      tenant_key: @tenant,
+      generation: 1,
+      status: "connected",
+      catalog: []
+    }
+
+    opts =
+      options(bindings_fixture(@tenant), services_fixture(@tenant), applications_fixture(@tenant))
+      |> Keyword.put(
+        :mcp_connection_repository,
+        {Vxpipe.Calls.Test.MCPCatalogFixture, {:ok, [row]}}
+      )
+
+    assert {:ok, lookups} =
+             Vxpipe.Calls.list_call_spec_editor_lookups(member_principal(@tenant), @tenant, opts)
+
+    assert lookups.mcp_integrations == ["saved-connection"]
+    assert lookups.tool_catalog.mcp_available
+    refute Enum.any?(lookups.tool_catalog.tools, &(&1.type == "mcp"))
   end
 
   test "editor lookups still enforce call_specs.read, tenant pinning and key format" do

@@ -34,7 +34,7 @@ defmodule Vxpipe.Calls.MCPRuntimeCredentials do
       margin = if refresh?, do: 30, else: 0
 
       if is_nil(expiry) or DateTime.diff(expiry, now) > margin do
-        {:ok, %{saved | secrets: %{"access_token" => token}}}
+        {:ok, %{saved | secrets: Map.take(secrets, ["access_token", "headers"])}}
       else
         if refresh? do
           with :ok <-

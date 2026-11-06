@@ -22,8 +22,11 @@ defmodule Vxpipe.CallEngine.RemoteMCP.CatalogStore do
     }
   end
 
-  @spec snapshot(GenServer.server()) :: {:ok, IntegrationCatalog.t()}
-  def snapshot(server \\ __MODULE__) do
+  @spec snapshot(GenServer.server() | IntegrationCatalog.t()) :: {:ok, IntegrationCatalog.t()}
+  def snapshot(server \\ __MODULE__)
+  def snapshot(%IntegrationCatalog{} = catalog), do: {:ok, catalog}
+
+  def snapshot(server) do
     GenServer.call(server, :snapshot, @call_timeout_ms)
   end
 
