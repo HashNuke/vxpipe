@@ -5,15 +5,16 @@ end
 root = Path.expand("../..", __DIR__)
 output = Path.join(root, ".vxpipe/browser")
 File.mkdir_p!(output)
+File.chmod!(output, 0o700)
 
-for file <- ~w(outbound_mcp_oauth_server.ex mcp_browser_consent.ex) do
+for file <- ~w(outbound_mcp_oauth_server.ex mcp_browser_consent.ex mcp_browser_scenario.ex) do
   Code.require_file(Path.join(root, "apps/vxpipe_console/test/support/" <> file))
 end
 
-alias Vxpipe.Console.Test.{MCPBrowserConsent, OutboundMCPOAuthServer}
+alias Vxpipe.Console.Test.{MCPBrowserConsent, MCPBrowserScenario, OutboundMCPOAuthServer}
 
 mode = System.get_env("MCP_BROWSER_MODE", "cimd")
-unless mode in ~w(cimd dcr own_client), do: raise("Unsupported fixture mode")
+{:ok, scenario} = MCPBrowserScenario.new(mode)
 certificate = System.fetch_env!("VXPIPE_DEV_TLS_CERTFILE")
 key = System.fetch_env!("VXPIPE_DEV_TLS_KEYFILE")
 ca_certificate = System.fetch_env!("VXPIPE_BROWSER_CA_CERTFILE")
@@ -30,7 +31,7 @@ origin = "https://localhost:#{console_port}"
 {:ok, state} =
   DynamicSupervisor.start_child(
     Vxpipe.Console.Test.BrowserPeers,
-    {Agent, fn -> OutboundMCPOAuthServer.initial(mode) end}
+    {Agent, fn -> scenario.state end}
   )
 
 metadata_fetch = fn url ->
@@ -101,6 +102,10 @@ ports = [
 
 calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
 Application.put_env(:vxpipe_calls, Vxpipe.Calls, Keyword.merge(calls, ports))
+
+credentials_path = Path.join(output, "credentials.json")
+File.write!(credentials_path, JSON.encode!(scenario.credentials))
+File.chmod!(credentials_path, 0o600)
 
 File.write!(
   Path.join(output, "peer.json"),

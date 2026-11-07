@@ -41,7 +41,15 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
 
   # Only these fixture adapters reroute validated public requests to the local peer.
   def options(state) do
+    connection_check = fn tenant, configuration ->
+      Vxpipe.MCP.ConnectionCheck.run_loopback_test(tenant, %{
+        configuration
+        | endpoint: base(state) <> "/mcp"
+      })
+    end
+
     [
+      anonymous_check: connection_check,
       dns_resolver: fn _, _ -> {:ok, [{93, 184, 216, 34}]} end,
       http_client: fn uri, {93, 184, 216, 34}, _options ->
         true = uri.host in ["mcp.example.test", "auth.example.test"]
@@ -77,12 +85,7 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
 
         {:ok, {{~c"HTTP/1.1", response.status, ~c"Fixture"}, [], response.body}}
       end,
-      connection_check: fn tenant, configuration ->
-        Vxpipe.MCP.ConnectionCheck.run_loopback_test(tenant, %{
-          configuration
-          | endpoint: base(state) <> "/mcp"
-        })
-      end
+      connection_check: connection_check
     ]
   end
 
@@ -96,8 +99,34 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
   @impl true
   def call(conn, state) do
     record(state, {conn.method, conn.request_path})
-    route(conn, state)
+
+    if Agent.get(state, &(&1.mode in ~w(none bearer headers basic))),
+      do: static_route(conn, state),
+      else: route(conn, state)
   end
+
+  defp static_route(%{request_path: "/mcp"} = conn, state) do
+    {conn, request} =
+      if conn.method == "POST", do: read_mcp_request(conn, state), else: {conn, nil}
+
+    authenticated =
+      Agent.get(state, fn settings ->
+        headers = Map.get(settings, :static_headers, [])
+
+        settings.mode == "none" or
+          (headers != [] and
+             Enum.all?(headers, fn {name, value} -> get_req_header(conn, name) == [value] end))
+      end)
+
+    case {authenticated, conn.method} do
+      {true, "POST"} -> rpc(conn, request, state)
+      {true, "DELETE"} -> send_resp(conn, 200, "")
+      {true, _method} -> send_resp(conn, 405, "")
+      {false, _method} -> json(conn, 401, %{"error" => "unauthorized"})
+    end
+  end
+
+  defp static_route(conn, _state), do: send_resp(conn, 404, "")
 
   defp route(%{method: "GET", request_path: "/mcp"} = conn, state) do
     if get_req_header(conn, "authorization") == [] do
@@ -259,9 +288,7 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
   end
 
   defp route(%{method: "POST", request_path: "/mcp"} = conn, state) do
-    {:ok, body, conn} = read_body(conn)
-    request = JSON.decode!(body)
-    record(state, request["method"])
+    {conn, request} = read_mcp_request(conn, state)
 
     authenticated =
       Agent.get(state, fn s ->
@@ -278,6 +305,13 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
     do: send_resp(conn, 200, "")
 
   defp route(conn, _state), do: send_resp(conn, 404, "")
+
+  defp read_mcp_request(conn, state) do
+    {:ok, body, conn} = read_body(conn)
+    request = JSON.decode!(body)
+    record(state, request["method"])
+    {conn, request}
+  end
 
   defp rpc(conn, %{"method" => "notifications/initialized"}, _state), do: send_resp(conn, 202, "")
 

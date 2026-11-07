@@ -11,7 +11,13 @@ refresh have been exercised through the authenticated browser. Denied replacemen
 preserves the connected record; mobile retained reconnect preserves its ID/namespace
 through denied consent and later explicit approval. Custom unprotected DCR also
 passes discovery, denied initial consent, draft recovery, successful retry and
-saved-credential management, with its tool list inspected on mobile. The complete
+saved-credential management, with its tool list inspected on mobile. The four
+static startup modes now pass real create, wrong-credential rejection where
+applicable and saved testing. Anonymous, bearer and custom-header disconnect also
+pass. Basic failed replacement preserves the working record. Tool lists render on
+mobile, but pointer selection of Tools can
+dismiss a recentering management dialog; Basic tools were verified with keyboard
+navigation and that pointer interaction remains an open UI fix. The complete
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
 also requires other authentication methods, listed/retained identity, independent
 node callbacks, native override/restore, outage states and final release checks.
@@ -59,8 +65,18 @@ Use a dedicated Chrome session with `*.example.test` resolved to `127.0.0.1`, an
 open the Console at its assigned HTTPS localhost port. Configure the installation
 URL to that same origin. Enter the resource URL from `peer.json` in Connect other
 MCP. The default mode is CIMD; `MCP_BROWSER_MODE=dcr` advertises DCR instead.
-Own-client mode requires explicitly provisioning a fixture client and is not a
-ready-made browser scenario yet.
+Static modes are `none`, `bearer`, `headers` and `basic`. They expose an actual MCP
+initialization/tool-list endpoint and no OAuth metadata, registration or token
+endpoints. `none` is suggested only after the backend successfully initializes the
+anonymous peer; other static modes leave discovery unresolved for manual selection.
+Each startup generates fresh fixture credentials in ignored
+`.vxpipe/browser/credentials.json` (mode 0600 inside a mode 0700 directory). Use
+those values in the corresponding Console form without printing them or saving
+them in screenshots. They change on restart, so saved connections need an explicit
+credential replacement. Public `peer.json` contains no credentials.
+
+Own-client mode still requires explicitly provisioning a fixture client and is not
+a ready-made browser scenario yet.
 
 The peer displays Allow/Deny consent and retains authorization parameters in
 bounded, expiring server-side memory. Consent references are one-use. CIMD Allow

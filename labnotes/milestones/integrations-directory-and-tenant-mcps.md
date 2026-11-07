@@ -1174,11 +1174,33 @@ and all related Storybooks.
   failure, rather than implying physical delivery of a response to a dead client.
 
 - [ ] Extend the controlled peer's startup scenarios for remaining authentication
-  and recovery browser checks: static/anonymous methods, configured own clients and
-  machine grants, protected registration, partial/multiple-issuer metadata and
+  and recovery browser checks: configured own clients and machine grants,
+  protected registration, partial/multiple-issuer metadata and
   independent outage states. The user suggested configurable real-server testing;
   an independently hosted test server can additionally exercise unmodified outbound
   DNS/TLS routing when available, without replacing the existing local gates.
+- [x] Add startup-selected anonymous, bearer, custom-header and Basic peers with
+  fresh private credentials and real ExMCP preflight/connection checking. All 18
+  focused static/OAuth/consent cases pass; authenticated browser and final checkpoint
+  gates are recorded separately in [scenario evidence](../20261107-1208-configure-mcp-test-modes.md).
+- [x] Preserve received RPC counting before authentication in the shared fixture.
+  Independent review found that moving counting after authentication weakened
+  existing no-tool-request assertions. Three failing rejected-request cases now
+  pass without executing unauthenticated RPCs.
+- [x] Use incorrect credentials in each static method's own format in negative
+  protocol acceptance: wrong bearer, wrong x-api-key, and Basic with the correct
+  username and wrong password. Keep the absent-credential cases as well.
+- [x] Exercise anonymous, bearer, custom-header and Basic startup modes through the
+  authenticated Console. Verify create, incorrect-credential rejection where
+  applicable and saved-secret testing; failed Basic replacement keeps the existing
+  identity/generation. Anonymous, bearer and header disconnect checks also pass;
+  Basic remains connected for the pointer regression below. Eighteen focused cases and all five root gates
+  pass (4,991 tests, zero failures, 241 excluded, seed 579799). Mobile tools render,
+  with Basic using keyboard navigation because of the pointer issue below.
+- [ ] Prevent pointer activation of Tools from dismissing the recentering management
+  dialog. Reproduced at 390x844 with saved Basic credentials; keyboard selection
+  succeeds. Investigate the tab activation/backdrop click sequence, add a focused
+  failing regression and verify pointer switching in the rendered browser.
 - [x] Verify custom unprotected DCR URL discovery, initial denied consent, draft
   recovery and successful retry through the actual Console browser. The automatic
   method selection exposes only the optional initial registration token; denial
