@@ -14,7 +14,8 @@ end
 alias Vxpipe.Console.Test.{MCPBrowserConsent, MCPBrowserScenario, OutboundMCPOAuthServer}
 
 mode = System.get_env("MCP_BROWSER_MODE", "cimd")
-{:ok, scenario} = MCPBrowserScenario.new(mode)
+client_auth_method = System.get_env("MCP_BROWSER_CLIENT_AUTH_METHOD", "client_secret_basic")
+{:ok, scenario} = MCPBrowserScenario.new(mode, client_auth_method: client_auth_method)
 certificate = System.fetch_env!("VXPIPE_DEV_TLS_CERTFILE")
 key = System.fetch_env!("VXPIPE_DEV_TLS_KEYFILE")
 ca_certificate = System.fetch_env!("VXPIPE_BROWSER_CA_CERTFILE")

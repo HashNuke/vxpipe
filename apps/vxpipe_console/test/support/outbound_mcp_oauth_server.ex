@@ -203,29 +203,12 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
   end
 
   defp route(%{method: "POST", request_path: "/register"} = conn, state) do
-    {:ok, body, conn} = read_body(conn)
-    request = JSON.decode!(body)
+    token = Agent.get(state, &Map.get(&1, :initial_access_token))
 
-    if request["redirect_uris"] == [origin(state) <> "/oauth/mcp/callback"] and
-         request["token_endpoint_auth_method"] == "client_secret_basic" do
-      client =
-        Agent.get_and_update(state, fn s ->
-          n = s.sequence + 1
-
-          client = %{
-            "client_id" => "fixture-client-#{n}",
-            "client_secret" => "fixture-secret-#{n}",
-            "client_secret_expires_at" => 0,
-            "token_endpoint_auth_method" => "client_secret_basic",
-            "redirect_uris" => request["redirect_uris"]
-          }
-
-          {client, %{s | sequence: n, clients: Map.put(s.clients, client["client_id"], client)}}
-        end)
-
-      json(conn, 201, client)
+    if is_nil(token) or get_req_header(conn, "authorization") == ["Bearer " <> token] do
+      register(conn, state)
     else
-      json(conn, 400, %{"error" => "invalid_client_metadata"})
+      json(conn, 401, %{"error" => "invalid_token"})
     end
   end
 
@@ -305,6 +288,33 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
     do: send_resp(conn, 200, "")
 
   defp route(conn, _state), do: send_resp(conn, 404, "")
+
+  defp register(conn, state) do
+    {:ok, body, conn} = read_body(conn)
+    request = JSON.decode!(body)
+
+    if request["redirect_uris"] == [origin(state) <> "/oauth/mcp/callback"] and
+         request["token_endpoint_auth_method"] == "client_secret_basic" do
+      client =
+        Agent.get_and_update(state, fn s ->
+          n = s.sequence + 1
+
+          client = %{
+            "client_id" => "fixture-client-#{n}",
+            "client_secret" => "fixture-secret-#{n}",
+            "client_secret_expires_at" => 0,
+            "token_endpoint_auth_method" => "client_secret_basic",
+            "redirect_uris" => request["redirect_uris"]
+          }
+
+          {client, %{s | sequence: n, clients: Map.put(s.clients, client["client_id"], client)}}
+        end)
+
+      json(conn, 201, client)
+    else
+      json(conn, 400, %{"error" => "invalid_client_metadata"})
+    end
+  end
 
   defp read_mcp_request(conn, state) do
     {:ok, body, conn} = read_body(conn)

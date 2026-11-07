@@ -400,6 +400,9 @@ or a completed OAuth grant. Implement as a separate runnable checkpoint before T
   disconnect. Verified full fixture browse → connect → tools refresh → disconnect.
 - [ ] Complete authenticated browser acceptance for the tenant custom CTA,
   including supported OAuth methods and explicit unsupported-capability recovery.
+  Custom static, CIMD, unprotected/protected DCR, all four own-client authentication
+  methods and three confidential machine methods now pass authenticated acceptance.
+  Partial/multiple-issuer and unsupported-capability recovery remain open.
   An explicit manual choice can recover from failed discovery where the selected
   supported method has enough validated information; CIMD/DCR cannot fabricate
   missing metadata or silently fall back to another method.
@@ -1173,12 +1176,26 @@ and all related Storybooks.
   describe completion of the response-handling attempt, including closed-client
   failure, rather than implying physical delivery of a response to a dead client.
 
-- [ ] Extend the controlled peer's startup scenarios for remaining authentication
-  and recovery browser checks: configured own clients and machine grants,
-  protected registration, partial/multiple-issuer metadata and
-  independent outage states. The user suggested configurable real-server testing;
+- [ ] Extend the controlled peer's startup scenarios for remaining recovery browser
+  checks: partial/multiple-issuer metadata and independent outage states.
+  Configured own clients, machine grants and protected registration are now covered
+  below. The user suggested configurable real-server testing;
   an independently hosted test server can additionally exercise unmodified outbound
   DNS/TLS routing when available, without replacing the existing local gates.
+- [x] Provision own-client browser peers for public, Basic, POST and private-key JWT
+  token authentication, and machine peers for the three confidential methods.
+  Add protected DCR with a fresh initial registration token; missing/wrong tokens
+  cannot register a client. Nine failing scenario cases now pass; the combined
+  protocol/renewal lane passes 36 tests. All five root gates pass (4,991 tests,
+  zero failures, 250 excluded, seed 343039), with clean independent adversarial
+  source/documentation/browser-evidence reviews. See [scenario evidence](../20261107-1247-configure-oauth-test-modes.md).
+- [x] Verify all four own-client methods and three confidential machine methods in
+  the authenticated Console: create, actual consent for delegated grants, saved
+  testing, mobile Tools and disconnect. Machine discovery selects client credentials
+  and connects without browser consent. Protected DCR rejects a missing registration
+  token; explicit Basic-to-DCR retained reconnect succeeds after token entry and
+  consent while preserving ID/namespace. Separate-node callbacks and broader
+  recovery cases remain open.
 - [x] Add startup-selected anonymous, bearer, custom-header and Basic peers with
   fresh private credentials and real ExMCP preflight/connection checking. All 18
   focused static/OAuth/consent cases pass; authenticated browser and final checkpoint
@@ -1212,8 +1229,8 @@ and all related Storybooks.
   method selection exposes only the optional initial registration token; denial
   creates no connected record, and approval initializes/tools-discovers one record.
   Saved-credential testing returns HTTP 200, and management/tools render on desktop
-  and mobile without exposing saved values. Protected registration and broader DCR
-  recovery acceptance remain open.
+  and mobile without exposing saved values. Protected registration and retained
+  Basic-to-DCR recovery now pass above; broader listed/replacement recovery remains open.
 
 - [x] Repair the controlled browser launcher's prerequisites and lifetime. Create
   its output directory before startup; attach its named fixture supervisor to

@@ -11,7 +11,13 @@ refresh have been exercised through the authenticated browser. Denied replacemen
 preserves the connected record; mobile retained reconnect preserves its ID/namespace
 through denied consent and later explicit approval. Custom unprotected DCR also
 passes discovery, denied initial consent, draft recovery, successful retry and
-saved-credential management, with its tool list inspected on mobile. The four
+saved-credential management, with its tool list inspected on mobile. Protected DCR
+also passes missing-token rejection and explicit retained-ID Basic-to-DCR reconnect
+through actual consent. All four own-client authentication methods and the three
+confidential machine methods pass create, saved testing, mobile Tools and disconnect;
+machine discovery selects client credentials and connects without a consent redirect.
+See the [OAuth scenario evidence](../../labnotes/20261107-1247-configure-oauth-test-modes.md).
+The four
 static startup modes now pass real create, wrong-credential rejection where
 applicable, saved testing and disconnect. Basic failed replacement preserves the
 working record. The mobile pointer-tab dismissal exposed by this pass is fixed:
@@ -20,8 +26,9 @@ and keyboard tab selection retain the dialog on desktop and mobile. See the
 [gesture and layout evidence](../../labnotes/20261107-1229-stabilize-mcp-dialog.md).
 The complete
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
-also requires other authentication methods, listed/retained identity, independent
-node callbacks, native override/restore, outage states and final release checks.
+also requires the remaining listed/retained recovery cases, partial/unsupported
+discovery, independent node callbacks, native override/restore, outage states and
+final release checks.
 
 ## Start an isolated session
 
@@ -76,8 +83,20 @@ those values in the corresponding Console form without printing them or saving
 them in screenshots. They change on restart, so saved connections need an explicit
 credential replacement. Public `peer.json` contains no credentials.
 
-Own-client mode still requires explicitly provisioning a fixture client and is not
-a ready-made browser scenario yet.
+`MCP_BROWSER_MODE=own_client` provisions an authorization-code client at startup.
+Choose its token authentication with `MCP_BROWSER_CLIENT_AUTH_METHOD`: `none`,
+`client_secret_basic` (default), `client_secret_post` or `private_key_jwt`.
+`MCP_BROWSER_MODE=machine` provisions a client-credentials grant using the same
+setting, except that public (`none`) clients are rejected. The private credentials
+file supplies the client ID and, as applicable, secret or fresh RSA private key,
+algorithm and key ID. Enter these in OAuth - Own client; machine discovery selects
+the client-credentials grant without a consent redirect.
+
+`MCP_BROWSER_MODE=protected_dcr` advertises DCR and requires the fresh
+`initial_access_token` from the credentials file in Initial registration token.
+Missing or incorrect tokens cannot register a client. Ordinary `dcr` remains
+unprotected. These scenarios use the existing real registration, token and MCP
+protocol boundaries; the peer credentials rotate on every startup.
 
 The peer displays Allow/Deny consent and retains authorization parameters in
 bounded, expiring server-side memory. Consent references are one-use. CIMD Allow
