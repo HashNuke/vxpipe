@@ -27,12 +27,18 @@ and keyboard tab selection retain the dialog on desktop and mobile. See the
 The complete
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
 also requires the remaining listed/retained recovery cases, browser URL/revision
-races, independent node callbacks, native override/restore, outage states and final
+races, independent node callbacks, outage states and final
 release checks. Partial discovery now passes explicit retry with manual-method
 preservation. Multiple-issuer discovery requires selection and recovers from an
 unavailable issuer; both recovered flows pass actual consent and saved management.
 Unsupported OAuth stays blocked with consistent submission feedback. See the
 [discovery recovery evidence](../../labnotes/20261107-1304-verify-discovery-recovery.md).
+
+Native platform inheritance, tenant override and restore also pass through the
+real Console and encrypted stores under a fresh-process directory outage with no
+cached catalog. The tenant returns to the same platform credential after restore,
+and temporary credentials are removed afterward. This does not validate keys with
+an external provider; see the [native evidence](../../labnotes/20261107-1320-verify-native-inheritance.md).
 
 ## Start an isolated session
 

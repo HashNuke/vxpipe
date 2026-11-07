@@ -1158,6 +1158,10 @@ and all related Storybooks.
   live third-party checks only with explicitly provisioned test accounts.
 - [ ] Verify remote API unavailable, no usable cached catalog, and connected-status
   unavailable independently. Check rate limiting, cache bounds, revocation and logs.
+  A fresh-process unreachable-directory check now verifies built-in native fallback
+  with no cached catalog while connected status and native mutations remain available;
+  see [native evidence](../20261107-1320-verify-native-inheritance.md). Other independent
+  outage and final operational checks remain open.
 - [ ] Record independent implementation review, user workflow approval and release
   evidence; only then check the milestone in the index.
 - [ ] After implementation, run an independent review agent using GPT-6 Astra with
@@ -1716,10 +1720,14 @@ Keep this list current as fixes are identified; add review-agent findings here.
   platform credentials. Red/green regression and rendered mobile check pass.
 - [x] Verify named override restoration deletes exactly the tenant credential,
   refreshes inherited state and allows overriding again. Production-component
-  fixture test passes; real backend/browser save-and-restore acceptance is pending.
-- [ ] Verify native override/restore against an authenticated backend browser session.
-  The existing tenant controls and role separation are implemented and fixture-tested;
-  editing the shared platform credential still requires platform write permission.
+  fixture test and authenticated backend/browser save-and-restore acceptance pass.
+- [x] Verify native override/restore against an authenticated backend browser session.
+  Platform Deepgram inheritance, tenant override and restore pass through real
+  identity, CSRF and encrypted stores. Public projections confirm the tenant returns
+  to the same platform credential and its local credential is removed. Desktop/mobile
+  rendering and cleanup pass under real unreachable-directory/empty-cache fallback.
+  No live provider validation is claimed; role separation remains fixture-tested.
+  See [native evidence](../20261107-1320-verify-native-inheritance.md).
 
 - [x] Persist replacement generation through the Ecto changeset instead of only
   mutating its source struct. Stale-write regression now rejects old generations.
