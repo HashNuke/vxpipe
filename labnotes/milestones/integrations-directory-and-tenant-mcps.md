@@ -1222,6 +1222,21 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
+- [ ] Resolve the reproduced EctoStorage resilience monitor failure from the asset
+  checkpoint root run. The expected normal subscriber exit is observed as `:noproc`;
+  investigate and reproduce the cause before changing synchronization or behavior.
+  See [archive monitor evidence](../20261107-1028-stabilize-archive-monitor.md).
+
+- [x] Correct bundled asset URLs on nested tenant pages. Cold-outage browser
+  acceptance exposes native logo imports resolving under `/t/.../services/` and
+  returning HTML. Astra independently reproduces Image failure/naturalWidth zero
+  for the relative URL and successful SVG loading from `/assets/`. Add a failing
+  project-build regression, fix the shared public asset path, rebuild and verify
+  rendered desktop/mobile logos. All ten supplied logos now decode at both sizes;
+  the focused build regression and all 548 Console tests pass. Astra review is clean.
+  The separate Persistence root failure above keeps the final root gate open.
+  Evidence: [asset URL correction](../20261107-1008-fix-nested-asset-urls.md).
+
 - [x] Resolve the two failures from the 82-case tagged Console MCP acceptance run
   (seed 774698): the static retained-ID proposal test expects an initialization
   after the credentialless duplicate guard already returns 409, and the successful

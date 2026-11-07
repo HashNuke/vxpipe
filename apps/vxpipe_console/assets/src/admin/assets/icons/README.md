@@ -6,6 +6,9 @@ landing page declares one; otherwise use its largest declared raster icon, inclu
 apple-touch icons and icons in a web manifest linked from that HTML. Files retain
 their original bytes; no wordmarks, social images, or icon-library substitutes.
 
+The shared esbuild profile emits imported files under the public `/assets/` path.
+This keeps native logos available from nested tenant pages as well as root pages.
+
 | Service | Landing page | Bundled file | Format / source declaration |
 | --- | --- | --- | --- |
 | Deepgram | [https://deepgram.com/](https://deepgram.com/) | [deepgram.ico](deepgram.ico) | [ICO, largest frame 64 × 64](https://deepgram.com/favicon.ico?93834efdfdd5438d) |
