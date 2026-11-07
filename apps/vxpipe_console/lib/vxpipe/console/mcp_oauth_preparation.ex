@@ -1,6 +1,30 @@
 defmodule Vxpipe.Console.MCPOAuthPreparation do
   @moduledoc "Runs bounded protocol preparation and projects its private result for Calls persistence."
+  @behaviour Vxpipe.Calls.MCPOAuthPreparation
 
+  @impl true
+  def resolve_target(options, tenant, input),
+    do: Vxpipe.Console.MCPConnectionTarget.resolve(options, tenant, input)
+
+  @impl true
+  def prepare_target(options, tenant, input, origin, %{directory_entry: nil, endpoint: endpoint}),
+    do: prepare(options, tenant, Map.put(input, "endpoint", endpoint), origin)
+
+  def prepare_target(options, tenant, input, origin, %{directory_entry: entry}) do
+    run(options, tenant, fn ->
+      with {:ok, input, entry} <-
+             Vxpipe.Console.MCPListedOAuth.saved(
+               options,
+               tenant,
+               Map.delete(input, "listing"),
+               origin,
+               entry
+             ),
+           do: prepare_protocol(options, input, origin, entry)
+    end)
+  end
+
+  @impl true
   def prepare_reconnect(options, tenant, input, origin, registration) do
     prepare(Keyword.put(options, :registration, registration), tenant, input, origin)
   end
@@ -13,6 +37,7 @@ defmodule Vxpipe.Console.MCPOAuthPreparation do
     end)
   end
 
+  @impl true
   def prepare_saved(options, tenant, input, origin, registration, entry) do
     options = Keyword.put(options, :registration, registration)
 

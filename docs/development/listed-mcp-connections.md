@@ -105,9 +105,10 @@ The discovery response is display data when sent through a browser. A new static
 `POST /api/tenants/:tenant/mcp-connections` accepts `{listing, credentials}` and
 resolves the reference again before using credentials. It rejects a browser
 snapshot and extra credential fields. Optional browser `endpoint` and
-`auth_method` fields are ignored: the resolved recipe owns both. Lookup and
-connection checking share the bounded preflight lifetime. Calls verifies the
-returned directory/entry/revision and endpoint before persistence.
+`auth_method` fields are ignored: the resolved recipe owns both. Credentialless
+target resolution and duplicate lookup precede the bounded protocol operation.
+Calls verifies the returned full snapshot and canonical endpoint identity before
+persistence. The separate phase bounds are described below.
 
 Supported recipes are explicit anonymous access, bearer token, HTTP Basic and one
 API-key header. Anonymous access accepts empty credentials; bearer accepts only
@@ -168,11 +169,12 @@ Arbitrary snapshots, OAuth endpoint/scope overrides, request parameters and MCP
 headers are rejected. The accepted directory scopes are display hints; the existing
 resource/challenge scope rules determine the requested grant.
 
-Preparation resolves the new reference inside the existing bounded preflight
-runner. It performs credentialless capability selection, then uses the existing
-OAuth protocol preparation to revalidate metadata before registration and consent.
-Both reads share one bounded operation. If required capabilities disappear between
-passes, preparation fails before registration/handoff rather than changing modes.
+Calls resolves the new reference and checks tenant identity before preparation.
+The accepted snapshot enters one bounded preflight operation for credentialless
+capability selection and existing OAuth protocol preparation. These metadata
+reads share that operation; no second directory lookup occurs. If required
+capabilities disappear between passes, preparation fails before registration or
+handoff rather than changing modes.
 
 Preregistered recipes use Own client: client ID and the actual registered client
 authentication method, with its required secret or private key/algorithm/key ID.
@@ -205,8 +207,8 @@ input returns `422 invalid_oauth_issuer` before directory or protocol reads.
 
 ## Retained connection recovery
 
-An existing static create conflict supplies only a bounded connected ID or revoked
-ID/generation. The modal offers Manage existing connection or Review reconnect;
+New static and OAuth starts return only a bounded connected ID or revoked
+ID/generation when identity already exists. The modal offers Manage existing connection or Review reconnect;
 it performs no automatic reconnect. Review reads the existing tenant detail route
 with `?retained_generation=N`. This branch requires current write permission,
 strict positive generation syntax and the exact tenant/ID/generation/revoked state.
@@ -223,14 +225,41 @@ failure offers retry with a five-minute in-memory draft; scope/navigation change
 abort stale responses and discard unfinished recovery. No callback query grants
 connection authority.
 
-## Remaining connection work
+## Duplicate identity before protocol work
 
-Early duplicate detection before static authentication/OAuth preparation remains
-open, including changed listed recipes whose new preparation cannot succeed. The
-required internal target-resolution contract must precede authentication side
-effects, reuse the deterministic tenant endpoint-or-directory lookup and keep
-atomic create authoritative against races. Authenticated rendered-browser and
-full workflow acceptance also remain open.
+Both new-connection paths resolve a credentialless target through required
+Console-owned ports. Custom URLs use the existing canonical endpoint parser
+without network I/O. Listed references use the existing public cache. Resolver
+input contains only endpoint/listing, draft revision and optional issuer; malformed
+issuers fail before directory access. Credentials and DCR initial tokens enter
+only the later protocol continuation.
+
+Calls refreshes write authority before resolution and before/after the tenant
+identity lookup, including conflict results. The repository shares the exact
+endpoint-or-directory query with atomic create, ordered by internal record ID,
+including revoked records. Lookup needs no decryption key. A changed directory
+recipe or endpoint can therefore recover an accepted connection even when its new
+authentication setup would fail. Missing required port callbacks return unavailable
+before resolution; there is no fallback to the earlier authentication-first order.
+
+For a fresh identity, `check_target` or `prepare_target` consumes the accepted
+snapshot without another directory request. Calls binds the protocol result to
+its canonical endpoint/resource, endpoint identity, full snapshot, compound
+directory identity and OAuth draft revision. Custom results cannot add directory
+configuration. Existing saved reconnect/replacement operations remain unchanged.
+
+The listed operation has two sequential bounds: the cache caller allows 15 seconds
+and its shared fetch worker allows 12 seconds; the subsequent protocol runner has
+its existing 15-second deadline and one admission. This is not a single 15-second
+end-to-end deadline. A cancelled caller cannot continue into repository/protocol
+work, while an already shared public fetch may finish for another caller. Atomic
+create remains the final race guard, including another connection appearing during
+OAuth consent; the early lookup is advisory, not an identity reservation.
+
+Rejected alternatives include a new public duplicate API/store, holding database
+locks during directory or OAuth work, resolving a listing twice, and consuming a
+second protocol admission merely to resolve the public target. Authenticated
+rendered-browser and full workflow acceptance remain open.
 
 Rejected alternatives: adding a parallel directory API, accepting the entire
 browser listing as authority, unbounded catalog scans, and re-reading the public
@@ -257,3 +286,9 @@ snapshot binding and callback preservation. Session/CSRF endpoint tests use real
 encrypted repositories and synthetic network responses to exercise create,
 single-use callback, DCR reuse, refresh, disconnect and retained-ID reconnect
 during directory outage, including stale-generation and cross-tenant rejection.
+Early duplicate coverage adds keyless connected/revoked recovery after recipe and
+endpoint changes, one directory resolution/protocol admission, authority loss
+during lookup, custom/snapshot result binding, and the final OAuth create race.
+Real-cache cancellation verifies shared public fetch completion without continuing
+the cancelled tenant request. These checks do not replace authenticated browser
+or full admitted-call acceptance.

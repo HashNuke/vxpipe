@@ -169,7 +169,8 @@ defmodule Vxpipe.Calls.MCPConnectionsTest do
     for changed <- [
           Map.put(entry, "directory_id", "another-directory"),
           Map.put(entry, "integration_id", "another-entry"),
-          Map.put(entry, "revision", 2)
+          Map.put(entry, "revision", 2),
+          Map.put(entry, "authentication", %{"type" => "none"})
         ] do
       changed_check = %{
         checked
@@ -184,7 +185,7 @@ defmodule Vxpipe.Calls.MCPConnectionsTest do
         Keyword.put(
           options,
           :mcp_connection_probe,
-          {MCPProbeFixture, {self(), {:ok, changed_check}}}
+          {MCPProbeFixture, {self(), {:ok, changed_check}, entry}}
         )
 
       assert {:error, :mcp_connection_failed} =
@@ -365,7 +366,7 @@ defmodule Vxpipe.Calls.MCPConnectionsTest do
     refute_received {:mcp_resolve, _, _}
   end
 
-  test "a duplicate revoked endpoint supplies an explicit reconnect proposal without restoring it",
+  test "a duplicate appearing after lookup supplies a reconnect proposal without restoring it",
        data do
     options =
       Keyword.put(
@@ -377,6 +378,7 @@ defmodule Vxpipe.Calls.MCPConnectionsTest do
     assert {:error, {:mcp_reconnect_required, %{id: "revoked-connection", generation: 4}}} =
              MCPConnections.connect(data.principal, @tenant, data.input, options)
 
+    assert_receive {:mcp_probe, @tenant, _}
     refute_received {:mcp_resolve, _, _}
     refute_received {:mcp_replace, _, _, _, _}
   end

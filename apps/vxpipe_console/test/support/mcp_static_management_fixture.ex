@@ -1,6 +1,17 @@
 defmodule Vxpipe.Console.Test.MCPStaticManagementFixture do
   alias Vxpipe.Calls.ResolvedMCPConnection
 
+  def resolve_target(_owner, tenant, input),
+    do: Vxpipe.Console.MCPConnectionTarget.resolve([], tenant, input)
+
+  def find_identity(owner, tenant, identity) do
+    send(owner, {:mcp_identity_lookup, tenant, identity})
+    {:ok, nil}
+  end
+
+  def check_target(owner, tenant, input, target),
+    do: check(owner, tenant, Map.put(input, "endpoint", target.endpoint))
+
   def fetch_tenant(_owner, tenant),
     do:
       {:ok,

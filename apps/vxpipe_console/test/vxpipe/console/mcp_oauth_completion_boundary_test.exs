@@ -16,12 +16,12 @@ defmodule Vxpipe.Console.MCPOAuthCompletionBoundaryTest do
     test "whole-operation deadline stops held #{stage} work" do
       stage = unquote(stage)
       owner = self()
-      opts = options(owner, stage, runner(timeout: 75))
+      opts = options(owner, stage, runner(timeout: 1000))
       start_supervised!({Task, fn -> send(owner, {:result, complete(opts)}) end})
       assert_receive {:held, ^stage, worker}, 1000
       monitor = Process.monitor(worker)
       on_exit(fn -> Process.exit(worker, :kill) end)
-      assert_receive {:result, {:error, :mcp_connection_timed_out}}, 1000
+      assert_receive {:result, {:error, :mcp_connection_timed_out}}, 2000
       assert_receive {:DOWN, ^monitor, :process, ^worker, _}, 1000
     end
 

@@ -21,6 +21,46 @@ defmodule Vxpipe.Console.MCPListedOAuthPreparationTest do
     %{runner: runner}
   end
 
+  test "OAuth target resolution does not discover or register and preparation reuses its snapshot",
+       data do
+    {reference, options} = configuration(data, "dcr")
+    input = %{"listing" => reference, "revision" => "draft"}
+
+    public_options =
+      Keyword.put(options, :http_client, fn _, _, _ ->
+        flunk("target resolution must not contact OAuth")
+      end)
+
+    assert {:ok, target} = MCPOAuthPreparation.resolve_target(public_options, "tenant", input)
+    assert_receive :directory_lookup
+    refute_received :registered
+    assert target.revision == "draft"
+    assert target.directory_entry["authentication"]["registration"] == "dcr"
+
+    options =
+      Keyword.put(options, :listing_options,
+        fetcher: fn _, _ -> flunk("second directory lookup") end
+      )
+
+    assert {:ok, prepared} =
+             MCPOAuthPreparation.prepare_target(options, "tenant", input, @origin, target)
+
+    assert prepared.secrets["directory_entry"] == target.directory_entry
+    assert prepared.attributes.resource == target.endpoint
+    assert_receive :registered
+  end
+
+  test "invalid explicit issuer fails target resolution before reading the directory", data do
+    {reference, options} = configuration(data, "dcr")
+    input = %{"listing" => reference, "revision" => "draft", "issuer" => "http://invalid.test"}
+
+    assert {:error, :invalid_oauth_issuer} =
+             MCPOAuthPreparation.resolve_target(options, "tenant", input)
+
+    refute_received :directory_lookup
+    refute_received :registered
+  end
+
   test "listed registration recipes own endpoints and carry accepted configuration privately",
        data do
     for {registration, expected} <- [

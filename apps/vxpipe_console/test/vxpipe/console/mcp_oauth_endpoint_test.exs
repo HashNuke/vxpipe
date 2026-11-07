@@ -134,6 +134,41 @@ defmodule Vxpipe.Console.MCPOAuthEndpointTest do
     assert json_response(stale, 409)["error"]["code"] == "stale_mcp_connection"
   end
 
+  test "OAuth start returns bounded existing or reconnect proposals before protocol preparation" do
+    page = login() |> recycle() |> get("https://localhost/account")
+    [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, page.resp_body)
+
+    for {suffix, expected} <- [
+          {"existing",
+           %{"code" => "mcp_connection_exists", "connection_id" => "existing-connection"}},
+          {"revoked",
+           %{
+             "code" => "mcp_reconnect_required",
+             "connection_id" => "revoked-connection",
+             "generation" => 4
+           }}
+        ] do
+      response =
+        page
+        |> recycle()
+        |> enforce_csrf()
+        |> put_req_header("x-csrf-token", csrf)
+        |> post("https://localhost/api/tenants/#{@tenant}/mcp-oauth", %{
+          "endpoint" => "https://mcp.example.test/" <> suffix,
+          "revision" => "draft",
+          "auth_method" => "dcr",
+          "initial_access_token" => "private-registration"
+        })
+
+      assert json_response(response, 409) == %{"error" => expected}
+      refute response.resp_body =~ "private-registration"
+      assert get_resp_header(response, "cache-control") == ["private, no-store"]
+    end
+
+    refute_received {:oauth_prepared, _}
+    refute_received {:oauth_attempt_saved, _, _}
+  end
+
   test "rate-limited OAuth preparation returns a retryable response before issuing an attempt" do
     page = login() |> recycle() |> get("https://localhost/account")
     [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, page.resp_body)

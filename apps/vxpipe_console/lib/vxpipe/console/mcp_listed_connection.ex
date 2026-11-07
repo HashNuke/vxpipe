@@ -25,6 +25,18 @@ defmodule Vxpipe.Console.MCPListedConnection do
     end
   end
 
+  def check_target(options, tenant, input, entry) do
+    with :ok <- input(input, ~w(listing endpoint auth_method credentials)) do
+      runner = Keyword.get(options, :preflight_runner, PreflightRunner)
+
+      PreflightRunner.run(runner, tenant, fn ->
+        probe(options, tenant, input["credentials"], entry)
+      end)
+    end
+  catch
+    :exit, _ -> {:error, :mcp_connection_failed}
+  end
+
   defp probe(options, tenant, credentials, entry) do
     with {:ok, method, credentials} <- credentials(entry["authentication"], credentials),
          {:ok, resolved} <-

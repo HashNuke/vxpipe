@@ -1,4 +1,27 @@
 defmodule Vxpipe.Console.Test.MCPManagementFixture do
+  def resolve_target(_owner, tenant, input),
+    do: Vxpipe.Console.MCPConnectionTarget.resolve([], tenant, input)
+
+  def find_identity(_owner, tenant, %{endpoint_identity: endpoint})
+      when endpoint in ["https://mcp.example.test/existing", "https://mcp.example.test/revoked"] do
+    revoked? = String.ends_with?(endpoint, "/revoked")
+
+    {:ok,
+     %{
+       id: if(revoked?, do: "revoked-connection", else: "existing-connection"),
+       tenant_key: tenant,
+       endpoint_identity: endpoint,
+       directory_id: nil,
+       generation: 4,
+       status: if(revoked?, do: "revoked", else: "connected")
+     }}
+  end
+
+  def find_identity(_owner, _tenant, _identity), do: {:ok, nil}
+
+  def prepare_target(owner, tenant, input, origin, _target),
+    do: prepare(owner, tenant, input, origin)
+
   def locate(_owner, state, _authority) do
     if state == String.duplicate("x", 43),
       do: {:error, :oauth_attempt_unavailable},
@@ -67,8 +90,8 @@ defmodule Vxpipe.Console.Test.MCPManagementFixture do
          state: String.duplicate("s", 43),
          issuer: "https://auth.example.test",
          redirect_uri: origin <> "/oauth/mcp/callback",
-         resource: "https://mcp.example.test/mcp",
-         draft_revision: "draft"
+         resource: input["endpoint"],
+         draft_revision: input["revision"]
        },
        secrets: %{"code_verifier" => "private-verifier"}
      }}

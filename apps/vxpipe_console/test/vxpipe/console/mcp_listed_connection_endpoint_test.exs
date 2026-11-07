@@ -127,6 +127,65 @@ defmodule Vxpipe.Console.MCPListedConnectionEndpointTest do
     }
   end
 
+  test "changed listing recipes find connected and revoked identities before credential validation",
+       data do
+    input = %{"listing" => data.reference, "credentials" => credentials("initial")}
+
+    created =
+      request(data, :post, data.path, input) |> json_response(201) |> Map.fetch!("connection")
+
+    assert_receive {:directory_request, _}
+    assert_receive :mcp_checked
+
+    Agent.update(data.directory, fn page ->
+      Map.update!(page, "items", fn [item] ->
+        [
+          item
+          |> Map.put("revision", 2)
+          |> put_in(["connection", "endpoint"], "https://changed.example.test/mcp")
+          |> put_in(["connection", "authentication"], %{"type" => "basic"})
+        ]
+      end)
+    end)
+
+    input = put_in(input, ["listing", "entry_revision"], 2)
+    calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
+
+    Application.put_env(
+      :vxpipe_calls,
+      Vxpipe.Calls,
+      Keyword.put(calls, :mcp_connection_repository, {ConnectionStore, [repo: Repo]})
+    )
+
+    assert request(data, :post, data.path, input) |> json_response(409) ==
+             %{"error" => %{"code" => "mcp_connection_exists", "connection_id" => created["id"]}}
+
+    assert_receive {:directory_request, _}
+    refute_received :mcp_checked
+
+    assert request(data, :delete, data.path <> "/" <> created["id"], %{"generation" => 1})
+           |> json_response(200)
+
+    assert request(data, :post, data.path, input) |> json_response(409) ==
+             %{
+               "error" => %{
+                 "code" => "mcp_reconnect_required",
+                 "connection_id" => created["id"],
+                 "generation" => 2
+               }
+             }
+
+    assert_receive {:directory_request, _}
+    refute_received :mcp_checked
+
+    assert {:ok, retained} =
+             ConnectionStore.get_retained([repo: Repo], data.tenant, created["id"])
+
+    assert retained.endpoint == created["endpoint"]
+    assert retained.directory_entry == created["directory_entry"]
+    assert retained.namespace == created["namespace"]
+  end
+
   test "existing tenant routes preserve listed identity and credentials through a directory outage",
        data do
     input = %{

@@ -42,6 +42,18 @@ defmodule Vxpipe.Console.MCPOAuthController do
       {:error, :forbidden} ->
         failure(conn, 403, :forbidden)
 
+      {:error, {:mcp_reconnect_required, %{id: id, generation: generation}}} ->
+        conn
+        |> put_status(409)
+        |> json(%{
+          error: %{code: :mcp_reconnect_required, connection_id: id, generation: generation}
+        })
+
+      {:error, {:mcp_connection_exists, id}} when is_binary(id) ->
+        conn
+        |> put_status(409)
+        |> json(%{error: %{code: :mcp_connection_exists, connection_id: id}})
+
       {:error, reason} when reason in [:mcp_installation_changed, :stale_mcp_connection] ->
         failure(conn, 409, reason)
 

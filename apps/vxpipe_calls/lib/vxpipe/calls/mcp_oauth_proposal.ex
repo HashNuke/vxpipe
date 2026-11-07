@@ -16,7 +16,8 @@ defmodule Vxpipe.Calls.MCPOAuthProposal do
   end
 
   def validate(%{"listing" => _}), do: {:error, :invalid_oauth_preparation}
-  def validate(_), do: :ok
+  def validate(%{}), do: :ok
+  def validate(_), do: {:error, :invalid_oauth_preparation}
 
   def prepared?(prepared, %{"listing" => _} = input) do
     entry = prepared.secrets["directory_entry"]

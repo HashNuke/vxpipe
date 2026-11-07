@@ -1,7 +1,7 @@
 defmodule Vxpipe.Console.MCPOAuthToolRefreshEndpointTest do
   use ExUnit.Case, async: false
   import Phoenix.ConnTest
-  import Plug.Conn, only: [put_req_header: 3, get_resp_header: 2]
+  import Plug.Conn, only: [put_req_header: 3]
   alias Vxpipe.Console.Test.{FakeUserIdentity, MCPManagementFixture}
   @endpoint Vxpipe.Console.Endpoint
   @tenant "AAAAAAAAAAAAAAAA"

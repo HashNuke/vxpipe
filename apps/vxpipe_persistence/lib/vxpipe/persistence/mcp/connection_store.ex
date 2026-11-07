@@ -87,6 +87,25 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
   def get_retained(_context, _tenant, _id), do: {:error, :invalid_tenant_key}
 
   @impl true
+  def find_identity(context, tenant, %{endpoint_identity: endpoint} = identity)
+      when is_binary(tenant) and is_binary(endpoint) do
+    transaction(context, fn repo ->
+      query =
+        from(c in MCPConnection,
+          join: t in assoc(c, :tenant),
+          where: t.key == ^tenant
+        )
+
+      case repo.one(identity_query(query, identity), @private) do
+        nil -> nil
+        record -> metadata(record, tenant)
+      end
+    end)
+  end
+
+  def find_identity(_context, _tenant, _identity), do: {:error, :invalid_tenant_key}
+
+  @impl true
   def resolve(context, tenant, id) when is_binary(tenant) do
     transaction(context, fn repo ->
       record = fetch!(repo, tenant, id)
@@ -319,9 +338,18 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
   end
 
   defp reject_duplicate!(repo, tenant_id, attributes, except) do
+    query = from(c in MCPConnection, where: c.tenant_id == ^tenant_id)
+    query = if except, do: from(c in query, where: c.public_id != ^except), else: query
+
+    case repo.one(identity_query(query, attributes), @private) do
+      nil -> :ok
+      record -> repo.rollback({:mcp_connection_exists, record.public_id})
+    end
+  end
+
+  defp identity_query(query, attributes) do
     endpoint = Map.fetch!(attributes, :endpoint_identity)
     directory = Map.get(attributes, :directory_id)
-    query = from(c in MCPConnection, where: c.tenant_id == ^tenant_id)
 
     query =
       if directory,
@@ -331,12 +359,7 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
           ),
         else: from(c in query, where: c.endpoint_identity == ^endpoint)
 
-    query = if except, do: from(c in query, where: c.public_id != ^except), else: query
-
-    case repo.one(from(c in query, order_by: c.id, limit: 1), @private) do
-      nil -> :ok
-      record -> repo.rollback({:mcp_connection_exists, record.public_id})
-    end
+    from(c in query, order_by: c.id, limit: 1)
   end
 
   defp identity(record, tenant),

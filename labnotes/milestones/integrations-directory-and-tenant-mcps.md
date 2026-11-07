@@ -837,11 +837,11 @@ Depends on T4/T5/T6; listed identity cases additionally require T6a.
   removes its stale Retry recovery action and notice. Red/green navigation regression
   preserves completed callback feedback. Connected duplicates may open read-only
   management after write authority changes.
-- [ ] Resolve trusted custom/listed targets and check duplicate identity before static
+- [x] Resolve trusted custom/listed targets and check duplicate identity before static
   authentication or OAuth preparation. Extend required internal ports, reuse the
   repository's deterministic endpoint-or-directory query and retain atomic create
   as the final race guard. Cover changed listing recipes, authority loss and races.
-- [ ] Use the existing static reconnect or generation-bound OAuth reconnect
+- [x] Use the existing static reconnect or generation-bound OAuth reconnect
   operation as appropriate. Complete browser-start duplicate/proposal handling
   where needed without adding another connection/grant store. Preserve identity,
   namespace and directory binding; reject changed generations and authority.
@@ -862,8 +862,19 @@ Independent backend and UI source reviews are clean after the retry cleanup fix.
 All 1,056 frontend tests, TypeScript and ESLint pass (the preexisting SetupDialog
 hook warning remains). All five root gates pass: 4,955 umbrella tests with zero
 failures (201 excluded, seed 362537). The separately reviewed output-arbiter
-correction also passes Lean build/oracle/replay. Early duplicate lookup and full
-authenticated workflow acceptance remain open.
+correction also passes Lean build/oracle/replay. Full authenticated workflow
+acceptance remains open.
+
+Early duplicate lookup is implemented and passes its checkpoint gates.
+Custom/listed static, machine and browser OAuth starts resolve a credentialless
+target, refresh authority around keyless identity lookup and bind continuation
+results to the accepted configuration. The same deterministic query remains the
+atomic create guard. Calls 356, Console MCP 83 and storage 22 tests pass, including
+changed recipes, callback races and real-cache caller cancellation. Independent
+adversarial source and exact-index reviews found no remaining checkpoint findings.
+All five root gates pass: 4,984 tests with zero failures (201 excluded, seed 472487).
+Authenticated browser and full runtime/release acceptance remain open. See
+[duplicate lookup evidence](../20261107-0714-check-mcp-duplicates.md).
 
 ### T7 — Tenant-only runtime/tool picker cutover and migration
 
@@ -1028,6 +1039,15 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Reject non-map OAuth proposals before credentialless target resolution.
+  The red case raised BadMapError; it now returns the fixed validation error.
+- [x] Preserve the intent of MCP boundary tests after adding earlier authority
+  refresh: revoke machine-grant authority during the acknowledged probe. Give the
+  completion deadline fixture a 1,000 ms test-only budget to reach its held stage,
+  then assert timeout and monitored worker termination; retain the production
+  15-second limit. Independent review approved the correction, and the focused
+  Calls/Console lanes pass. Remove the exercised endpoint's unused import.
 
 - [x] Reconcile durable documentation with implemented security boundaries: raw
   SecureHTTP token validation, initialization-before-grant persistence, DCR saved-

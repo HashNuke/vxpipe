@@ -1,6 +1,7 @@
 defmodule Vxpipe.Calls.MCPConnections do
   @moduledoc "User-authorized tenant MCP management. No platform inheritance or anonymous failure fallback."
   alias Vxpipe.Calls.{
+    MCPConnectionTarget,
     MCPDiscoveryProposal,
     MCPRuntimeCredentials,
     ProviderAuth,
@@ -127,10 +128,27 @@ defmodule Vxpipe.Calls.MCPConnections do
          :ok <- tenant_exists(tenant, options),
          :ok <- input(input),
          {:ok, repository} <- Repositories.fetch(options, :mcp_connection_repository),
-         {:ok, checked} <- check(options, tenant, input),
+         {:ok, port} <- Repositories.fetch(options, :mcp_connection_probe),
+         :ok <- refresh(principal, tenant, options),
+         {:ok, target} <-
+           MCPConnectionTarget.resolve(port, repository, tenant, input, {:check_target, 4}),
+         :ok <- refresh(principal, tenant, options),
+         :ok <-
+           MCPConnectionTarget.lookup(repository, tenant, target, fn ->
+             refresh(principal, tenant, options)
+           end),
+         {:ok, checked} <- check_target(options, tenant, input, target),
          :ok <- refresh(principal, tenant, options),
          {:ok, record} <- create(repository, tenant, checked) do
       project(record, tenant)
+    end
+  end
+
+  defp check_target(options, tenant, input, target) do
+    with {:ok, checked} <- probe(options, :check_target, [tenant, input, target]) do
+      if MCPConnectionTarget.checked?(checked.connection, target),
+        do: {:ok, checked},
+        else: {:error, :mcp_connection_failed}
     end
   end
 

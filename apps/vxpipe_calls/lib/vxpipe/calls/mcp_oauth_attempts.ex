@@ -6,7 +6,7 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
   attributes. Installation identity must be freshly resolved by that workflow.
   State is consumed before network redemption; no token exchange occurs here.
   """
-  alias Vxpipe.Calls.{MCPOAuthProposal, ProviderAuth, Repositories, UserAuthorization}
+  alias Vxpipe.Calls.{MCPConnectionTarget, MCPOAuthProposal, ProviderAuth, Repositories, UserAuthorization}
   alias Vxpipe.Identity.Principal
 
   def start(principal, tenant, input, options \\ []) do
@@ -16,7 +16,15 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
          :ok <- MCPOAuthProposal.validate(input),
          {:ok, installation} <- installation(options),
          {:ok, port} <- Repositories.fetch(options, :mcp_oauth_preparation),
-         {:ok, prepared} <- prepare(port, tenant, input, installation.origin),
+         {:ok, repository} <- Repositories.fetch(options, :mcp_connection_repository),
+         {:ok, target} <-
+           MCPConnectionTarget.resolve(port, repository, tenant, input, {:prepare_target, 5}),
+         :ok <- refresh(principal, tenant, options),
+         :ok <-
+           MCPConnectionTarget.lookup(repository, tenant, target, fn ->
+             refresh(principal, tenant, options)
+           end),
+         {:ok, prepared} <- prepare_target(port, tenant, input, installation.origin, target),
          {:ok, current} <- installation(options),
          :ok <- same_installation(installation, current) do
       handoff(
@@ -248,10 +256,10 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
        else: {:error, :mcp_installation_changed}
   end
 
-  defp prepare(port, tenant, input, origin) do
+  defp prepare_target(port, tenant, input, origin, target) do
     with {:ok, prepared} <-
-           port |> Repositories.call(:prepare, [tenant, input, origin]) |> prepared_result() do
-      if MCPOAuthProposal.prepared?(prepared, input),
+           port |> Repositories.call(:prepare_target, [tenant, input, origin, target]) |> prepared_result() do
+      if MCPOAuthProposal.prepared?(prepared, input) and MCPConnectionTarget.prepared?(prepared, target),
         do: {:ok, prepared},
         else: {:error, :oauth_preparation_failed}
     end

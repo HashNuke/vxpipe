@@ -4,6 +4,7 @@ defmodule Vxpipe.Calls.MCPOAuthAttemptsTest do
   alias Vxpipe.Calls.Test.{MCPOAuthAttemptFixture, MCPRepositoryFixture}
   alias Vxpipe.Identity.Principal
   @tenant "AAAAAAAAAAAAAAAA"
+  @input %{"endpoint" => "https://mcp.test/mcp", "revision" => "draft", "auth_method" => "cimd"}
 
   setup do
     principal = %Principal{
@@ -40,11 +41,11 @@ defmodule Vxpipe.Calls.MCPOAuthAttemptsTest do
       start_options(data, {:ok, prepared})
       |> Keyword.put(:oauth_return_to, "/t/AAAAAAAAAAAAAAAA/services/ai?q=calendar")
 
-    assert {:ok, result} = MCPOAuthAttempts.start(data.principal, @tenant, %{}, options)
+    assert {:ok, result} = MCPOAuthAttempts.start(data.principal, @tenant, @input, options)
     assert result.authorization_url == prepared.authorization_url
     assert result.attempt_id == "attempt"
     refute Map.has_key?(result, :secrets)
-    assert_receive {:oauth_prepare, %{}, "https://console.test"}
+    assert_receive {:oauth_prepare, @input, "https://console.test"}
     assert_receive {:attempt_issue, @tenant, attributes, %{"code_verifier" => "private"}}
     assert attributes.installation_revision == 2
     assert attributes.return_to == "/t/AAAAAAAAAAAAAAAA/services/ai?q=calendar"
@@ -57,7 +58,7 @@ defmodule Vxpipe.Calls.MCPOAuthAttemptsTest do
 
     prepared = %Vxpipe.Calls.PreparedMCPOAuth{
       authorization_url: "https://auth.test/authorize",
-      attributes: %{},
+      attributes: %{resource: "https://mcp.test/mcp", draft_revision: "draft"},
       secrets: %{}
     }
 
@@ -69,7 +70,7 @@ defmodule Vxpipe.Calls.MCPOAuthAttemptsTest do
       end)
 
     assert {:error, :mcp_installation_changed} =
-             MCPOAuthAttempts.start(data.principal, @tenant, %{}, options)
+             MCPOAuthAttempts.start(data.principal, @tenant, @input, options)
 
     refute_received {:attempt_issue, _, _, _}
   end
@@ -107,14 +108,15 @@ defmodule Vxpipe.Calls.MCPOAuthAttemptsTest do
           },
           %{prepared | secrets: %{}},
           %{prepared | secrets: %{"directory_entry" => Map.put(entry, "revision", 2)}},
-          %{prepared | secrets: %{"directory_entry" => Map.put(entry, "integration_id", "other")}}
+          %{prepared | secrets: %{"directory_entry" => Map.put(entry, "integration_id", "other")}},
+          %{prepared | secrets: %{"directory_entry" => put_in(entry, ["authentication", "registration"], "dcr")}}
         ] do
       assert {:error, :oauth_preparation_failed} =
                MCPOAuthAttempts.start(
                  data.principal,
                  @tenant,
                  input,
-                 start_options(data, {:ok, mismatch})
+                 start_options(data, {:ok, mismatch}, entry)
                )
     end
 
@@ -152,11 +154,11 @@ defmodule Vxpipe.Calls.MCPOAuthAttemptsTest do
   test "start denies before remote work and rejects missing installation identity", data do
     options = start_options(data, {:error, :unused})
     reader = %{data.principal | grants: MapSet.new()}
-    assert {:error, :forbidden} = MCPOAuthAttempts.start(reader, @tenant, %{}, options)
+    assert {:error, :forbidden} = MCPOAuthAttempts.start(reader, @tenant, @input, options)
     options = Keyword.put(options, :installation_identity, fn -> {:error, :unavailable} end)
 
     assert {:error, :mcp_installation_unavailable} =
-             MCPOAuthAttempts.start(data.principal, @tenant, %{}, options)
+             MCPOAuthAttempts.start(data.principal, @tenant, @input, options)
 
     refute_received {:oauth_prepare, _, _}
     refute_received {:attempt_issue, _, _, _}
@@ -166,15 +168,27 @@ defmodule Vxpipe.Calls.MCPOAuthAttemptsTest do
     options = start_options(data, {:error, {:provider, "private"}})
 
     assert {:error, :oauth_preparation_failed} =
-             MCPOAuthAttempts.start(data.principal, @tenant, %{}, options)
+             MCPOAuthAttempts.start(data.principal, @tenant, @input, options)
 
     refute_received {:attempt_issue, _, _, _}
   end
 
-  defp start_options(data, result) do
+  test "non-map OAuth proposals fail validation before target resolution", data do
+    for input <- [nil, [], 42, "invalid"] do
+      assert {:error, :invalid_oauth_preparation} =
+               MCPOAuthAttempts.start(data.principal, @tenant, input, start_options(data, {:error, :unused}))
+    end
+
+    refute_received {:oauth_prepare, _, _}
+  end
+
+  defp start_options(data, result, entry \\ nil) do
+    context = if entry, do: {self(), result, entry}, else: {self(), result}
+
     data.options ++
       [
-        mcp_oauth_preparation: {Vxpipe.Calls.Test.MCPOAuthPreparationFixture, {self(), result}},
+        mcp_connection_repository: {MCPRepositoryFixture, self()},
+        mcp_oauth_preparation: {Vxpipe.Calls.Test.MCPOAuthPreparationFixture, context},
         installation_identity: fn -> {:ok, %{origin: "https://console.test", revision: 2}} end
       ]
   end

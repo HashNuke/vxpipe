@@ -257,6 +257,109 @@ defmodule Vxpipe.Console.MCPListedOAuthEndpointTest do
     refute_received :exchanged
   end
 
+  test "OAuth duplicate proposals precede changed recipe preparation and need no decryption key",
+       data do
+    handoff =
+      request(data, :post, "/mcp-oauth", %{"listing" => data.reference, "revision" => "draft"})
+      |> json_response(201)
+
+    id = handoff["connection_id"]
+    complete(data, handoff)
+    assert_receive :directory_request
+    assert_receive :registered
+    assert_receive :exchanged
+    assert_receive :mcp_checked
+
+    Agent.update(data.directory, fn page ->
+      Map.update!(page, "items", fn [item] ->
+        [
+          item
+          |> Map.put("revision", 2)
+          |> put_in(["connection", "endpoint"], "https://changed.example.test/mcp")
+          |> put_in(["connection", "authentication"], %{
+            "type" => "oauth2",
+            "registration" => "preregistered"
+          })
+        ]
+      end)
+    end)
+
+    calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
+    {module, protocol} = Keyword.fetch!(calls, :mcp_oauth_preparation)
+    parent = self()
+
+    protocol =
+      Keyword.put(protocol, :http_client, fn _, _, _ ->
+        send(parent, :unexpected_oauth_read)
+        {:error, :unavailable}
+      end)
+
+    Application.put_env(
+      :vxpipe_calls,
+      Vxpipe.Calls,
+      calls
+      |> Keyword.put(:mcp_connection_repository, {ConnectionStore, [repo: Repo]})
+      |> Keyword.put(:mcp_oauth_preparation, {module, protocol})
+    )
+
+    input = %{"listing" => Map.put(data.reference, "entry_revision", 2), "revision" => "changed"}
+
+    assert request(data, :post, "/mcp-oauth", input) |> json_response(409) ==
+             %{"error" => %{"code" => "mcp_connection_exists", "connection_id" => id}}
+
+    assert_receive :directory_request
+
+    assert request(data, :delete, "/mcp-connections/" <> id, %{"generation" => 1})
+           |> json_response(200)
+
+    assert request(data, :post, "/mcp-oauth", input) |> json_response(409) ==
+             %{
+               "error" => %{
+                 "code" => "mcp_reconnect_required",
+                 "connection_id" => id,
+                 "generation" => 2
+               }
+             }
+
+    assert_receive :directory_request
+    refute_received :unexpected_oauth_read
+    refute_received :registered
+    refute_received :exchanged
+    refute_received :mcp_checked
+  end
+
+  test "atomic create rejects an OAuth duplicate that appears after both early lookups", data do
+    input = %{"listing" => data.reference, "revision" => "draft"}
+    first = request(data, :post, "/mcp-oauth", input) |> json_response(201)
+    second = request(data, :post, "/mcp-oauth", input) |> json_response(201)
+    refute first["connection_id"] == second["connection_id"]
+    complete(data, first)
+
+    assert {:ok, original} =
+             ConnectionStore.resolve(data.context, data.tenant, first["connection_id"])
+
+    state =
+      second["authorization_url"]
+      |> URI.parse()
+      |> Map.fetch!(:query)
+      |> URI.decode_query()
+      |> Map.fetch!("state")
+
+    query = URI.encode_query(%{"state" => state, "code" => "second-code", "iss" => @issuer})
+    callback = data.session |> recycle() |> get("https://localhost/oauth/mcp/callback?" <> query)
+    assert redirected_to(callback, 303) =~ "mcp=failed"
+    assert {:ok, [record]} = ConnectionStore.list(data.context, data.tenant)
+    assert record.id == first["connection_id"]
+    assert record.generation == 1
+    assert {:ok, after_race} = ConnectionStore.resolve(data.context, data.tenant, record.id)
+    assert after_race == original
+
+    assert data.session
+           |> recycle()
+           |> get("https://localhost/oauth/mcp/callback?" <> query)
+           |> json_response(400)
+  end
+
   test "changed or malformed listing produces a bounded recoverable route error before registration",
        data do
     assert request(data, :post, "/mcp-oauth", %{"listing" => %{}, "revision" => "draft"})

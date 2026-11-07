@@ -1,4 +1,6 @@
 defmodule Vxpipe.Calls.Test.MCPRepositoryFixture do
+  def find_identity(_context, _tenant, _identity), do: {:ok, nil}
+
   def fetch_tenant({_owner, :missing}, _tenant), do: {:error, :not_found}
 
   def fetch_tenant(_owner, tenant),

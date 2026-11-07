@@ -4,6 +4,17 @@ defmodule Vxpipe.Console.MCPConnectionProbe do
   alias Vxpipe.MCP.{ConnectionCheck, StaticConfiguration}
 
   @impl true
+  def resolve_target(options, tenant, input),
+    do: Vxpipe.Console.MCPConnectionTarget.resolve(options, tenant, input)
+
+  @impl true
+  def check_target(options, tenant, input, %{directory_entry: nil, endpoint: endpoint}),
+    do: check(options, tenant, Map.put(input, "endpoint", endpoint))
+
+  def check_target(options, tenant, input, %{directory_entry: entry}),
+    do: Vxpipe.Console.MCPListedConnection.check_target(options, tenant, input, entry)
+
+  @impl true
   def check(options, tenant, %{"listing" => _reference} = input),
     do: Vxpipe.Console.MCPListedConnection.check(options, tenant, input)
 

@@ -421,6 +421,50 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
     assert {:ok, _} = ConnectionStore.create(data.context, data.other, data.attributes, %{})
   end
 
+  test "identity lookup is tenant-scoped metadata and includes revoked records without keys", data do
+    identity = Map.take(data.attributes, [:endpoint_identity, :directory_id])
+    no_keys = Keyword.put(data.context, :keyring, nil)
+    assert {:ok, nil} = ConnectionStore.find_identity(no_keys, data.tenant, identity)
+
+    assert {:ok, original} =
+             ConnectionStore.create(data.context, data.tenant, data.attributes, %{"token" => "private"})
+
+    assert {:ok, ^original} = ConnectionStore.find_identity(no_keys, data.tenant, identity)
+    assert {:ok, nil} = ConnectionStore.find_identity(no_keys, data.other, identity)
+    assert {:ok, ^original} =
+             ConnectionStore.find_identity(no_keys, data.tenant, %{identity | directory_id: nil})
+
+    assert {:ok, revoked} = ConnectionStore.revoke(data.context, data.tenant, original.id, 1)
+    assert {:ok, ^revoked} = ConnectionStore.find_identity(no_keys, data.tenant, identity)
+    refute inspect(revoked) =~ "private"
+
+    assert {:error, :invalid_tenant_key} = ConnectionStore.find_identity(no_keys, :platform, identity)
+  end
+
+  test "identity lookup selects the same deterministic endpoint-or-directory match as create", data do
+    assert {:ok, first} = ConnectionStore.create(data.context, data.tenant, data.attributes, %{})
+
+    second_attributes = %{
+      data.attributes
+      | endpoint: "https://second.example.test/mcp",
+        endpoint_identity: "https://second.example.test/mcp",
+        directory_id: "other-directory"
+    }
+
+    assert {:ok, second} = ConnectionStore.create(data.context, data.tenant, second_attributes, %{})
+    competing = %{second_attributes | directory_id: data.attributes.directory_id}
+    identity = Map.take(competing, [:endpoint_identity, :directory_id])
+    no_keys = Keyword.put(data.context, :keyring, nil)
+    assert {:ok, ^first} = ConnectionStore.find_identity(no_keys, data.tenant, identity)
+
+    assert {:error, {:mcp_connection_exists, id}} =
+             ConnectionStore.create(data.context, data.tenant, competing, %{})
+
+    assert id == first.id
+    assert {:ok, ^second} =
+             ConnectionStore.find_identity(no_keys, data.tenant, %{identity | directory_id: nil})
+  end
+
   test "OAuth details reveal only fixed method labels and remain readable without a key", data do
     secrets = %{
       "registration_method" => "own_client",

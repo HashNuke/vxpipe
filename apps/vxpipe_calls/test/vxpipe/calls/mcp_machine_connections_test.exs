@@ -85,8 +85,15 @@ defmodule Vxpipe.Calls.MCPMachineConnectionsTest do
   end
 
   test "permissions revoked during machine token acquisition prevent persistence", data do
+    authority = start_supervised!({Agent, fn -> data.principal end})
     revoked = %{data.principal | grants: MapSet.new()}
-    options = Keyword.put(data.options, :refresh_authority, fn -> {:ok, revoked} end)
+
+    options =
+      data.options
+      |> Keyword.put(:refresh_authority, fn -> {:ok, Agent.get(authority, & &1)} end)
+      |> Keyword.update!(:mcp_connection_probe, fn {module, {owner, result}} ->
+        {module, {owner, result, {:on_check, fn -> Agent.update(authority, fn _ -> revoked end) end}}}
+      end)
 
     assert {:error, :forbidden} =
              MCPConnections.connect(data.principal, @tenant, data.input, options)

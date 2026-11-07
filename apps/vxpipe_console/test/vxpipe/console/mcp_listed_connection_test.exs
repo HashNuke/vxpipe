@@ -17,7 +17,64 @@ defmodule Vxpipe.Console.MCPListedConnectionTest do
         {Vxpipe.MCP.PreflightRunner, name: nil, task_supervisor: supervisor, interval: 0}
       )
 
-    %{runner: runner}
+    %{runner: runner, task_supervisor: supervisor}
+  end
+
+  test "new listed targets resolve once before their single bounded protocol admission", data do
+    runner =
+      start_supervised!(
+        Supervisor.child_spec(
+          {Vxpipe.MCP.PreflightRunner,
+           name: nil, task_supervisor: data.task_supervisor, interval: 60_000},
+          id: :target_runner
+        )
+      )
+
+    {reference, options} = configuration(%{data | runner: runner}, %{"type" => "bearer"})
+
+    assert {:ok, target} =
+             MCPConnectionProbe.resolve_target(options, "tenant", %{"listing" => reference})
+
+    assert target.directory_id == "example-directory/example-calendar"
+    assert target.endpoint_identity == target.endpoint
+    assert_receive {:directory, _}
+
+    options =
+      options
+      |> Keyword.put(:listing_options,
+        fetcher: fn _, _ -> flunk("target must not resolve twice") end
+      )
+      |> Keyword.put(:connection_check, fn _, _ ->
+        {:ok, %{server_name: "Protocol", catalog: []}}
+      end)
+
+    input = %{"listing" => reference, "credentials" => %{"token" => "synthetic"}}
+    assert {:ok, result} = MCPConnectionProbe.check_target(options, "tenant", input, target)
+    assert result.connection.directory_entry == target.directory_entry
+
+    assert {:error, :mcp_connection_busy} =
+             MCPConnectionProbe.check_target(options, "tenant", input, target)
+  end
+
+  test "custom target normalization needs no directory or MCP request" do
+    options = [
+      listing_options: [fetcher: fn _, _ -> flunk("unexpected directory lookup") end],
+      connection_check: fn _, _ -> flunk("unexpected MCP check") end
+    ]
+
+    input = %{"endpoint" => "https://MCP.example.test", "revision" => "draft"}
+
+    for port <- [MCPConnectionProbe, Vxpipe.Console.MCPOAuthPreparation] do
+      assert {:ok, target} = port.resolve_target(options, "tenant", input)
+
+      assert target == %{
+               endpoint: "https://mcp.example.test/",
+               endpoint_identity: "https://mcp.example.test/",
+               directory_entry: nil,
+               directory_id: nil,
+               revision: "draft"
+             }
+    end
   end
 
   test "listed static connections use the accepted recipe and ignore endpoint/auth overrides",
