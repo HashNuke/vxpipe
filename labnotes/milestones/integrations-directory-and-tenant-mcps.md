@@ -711,10 +711,15 @@ proposal and obtaining scope agreement, not quietly claiming this milestone pass
   overwriting rotated grant state or changing the configuration generation.
 - [x] Verify nine local HTTP/database renewal cases and five durable boundary cases,
   including cross-tenant saturation, cancellation and late-result rejection.
-- [ ] Complete independent-node and authenticated browser acceptance before treating
+- [x] Complete independent-node and authenticated browser acceptance before treating
   this backend checkpoint as full workflow delivery. Runtime transport/catalog
   cutover and production UI are implemented; independent-node renewal/lifecycle
-  checks now pass. Authenticated browser and cross-node callback acceptance remain.
+  checks pass, as do authenticated own-client and all three confidential machine
+  methods. Separate-node callbacks, callback-created grant renewal and both-grant
+  key rotation complete this checkpoint's evidence. See [browser methods](../20261107-1247-configure-oauth-test-modes.md),
+  [node lifecycle](../20261107-1056-mcp-renewal-lifecycle.md),
+  [callbacks](../20261107-0819-verify-oauth-node-callbacks.md) and
+  [rotation](../20261107-0832-verify-mcp-key-rotation.md).
 
 See [renewal contracts](../../docs/development/mcp-oauth-renewal.md) and
 [review evidence](../20261107-0208-review-mcp-renewal.md). Admission is per application
@@ -857,9 +862,11 @@ Listed OAuth UI and authenticated browser acceptance remain separate open work.
   callback identity for preregistered clients. No remote definition can introduce
   executable code or shared client secrets.
 - [ ] Preserve directory identity through catalog refresh, secret replacement,
-  browser callback, machine acquisition, disconnect and retained-ID reconnect.
+  browser callback, disconnect and retained-ID reconnect.
   Do not create a second record when directory and endpoint identify existing
-  connections; preserve the backend's deterministic conflict behavior.
+  connections; preserve the backend's deterministic conflict behavior. Listed V1
+  OAuth recipes use authorization-code grants; custom machine-grant acquisition
+  and recovery belong to T6/T6b, as specified by the approved directory contract.
 - [ ] Add red/green facade/storage/UI contracts for recipe tampering, changed
   versions, outage, duplicates and optional setup content. Verify desktop/mobile
   rendered listed static and OAuth forms, then the authenticated browser workflow.
@@ -1163,8 +1170,9 @@ and all related Storybooks.
 
 - [ ] Run all five root gates plus focused frontend checks and rendered acceptance.
   The callback/rotation/browser-race checkpoints now pass all five root gates
-  (4,991 tests, zero failures, 261 excluded, seed 774698). Final listed/recovery/
-  outage rendering, conformance and any subsequent implementation checks remain.
+  (4,991 tests, zero failures, 261 excluded, seed 774698). The tagged acceptance
+  corrections also pass all five gates with 263 exclusions. Final listed/recovery/
+  outage rendering and any subsequent implementation checks remain.
   Run `bin/verify-lean` for any changes to the source-cutover or speech state
   machines, as required by AGENTS; record applicability and the result.
 - [x] Add tagged database concurrency coverage using independent BEAM processes
@@ -1176,8 +1184,16 @@ and all related Storybooks.
   The combined persistence lane passes 72 tests; all five root gates pass with
   4,987 tests, zero failures and 220 excluded (seed 141375). Independent source and
   staged adversarial reviews are clean. See [evidence](../20261107-0959-mcp-cross-node.md).
-- [ ] Run tagged MCP/OAuth conformance and local cross-node persistence/refresh tests;
+- [x] Run the pinned transport/reference conformance profile, controlled OAuth
+  protocol lanes and local cross-node persistence/refresh tests;
   live third-party checks only with explicitly provisioned test accounts.
+  All 14 tagged MCP cases pass (seed 774698), including the three pinned official/
+  corrected-reference scenarios. The combined Console lane now passes all 82
+  cases after the reproduced test/fixture corrections below. The seven-case
+  independent-BEAM persistence lane is recorded above. This establishes the
+  selected profile and controlled protocol acceptance, not official OAuth
+  certification. Final acceptance still includes the listed/recovery/outage
+  browser workflows.
 - [ ] Verify remote API unavailable, no usable cached catalog, and connected-status
   unavailable independently. Check rate limiting, cache bounds, revocation and logs.
   A fresh-process unreachable-directory check now verifies built-in native fallback
@@ -1196,6 +1212,26 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Resolve the two failures from the 82-case tagged Console MCP acceptance run
+  (seed 774698): the static retained-ID proposal test expects an initialization
+  after the credentialless duplicate guard already returns 409, and the successful
+  delayed-transfer case still observes its source participant immediately after
+  the tool-stopped event. Reproduce each with Astra, distinguish stale test
+  expectations/synchronization from product defects, and rerun the combined lane.
+  Astra reproduced both in a seven-case focused run with the same seed. The
+  corrected proposal expectation and exact source-departure acknowledgement pass
+  all seven focused cases and the combined 82-case lane. The acknowledgement uses
+  the public archive/projection boundary; it does not prove durable persistence.
+  Astra separately reproduced a wire-fixture routing defect: real GET `/` was
+  reported as an MCP stream just like GET `/mcp`. Two route-boundary regressions
+  fail before the fix and pass after restricting the fixture to its declared MCP
+  path. Genuine anonymous `/mcp` observations and cold/warm negative assertions
+  remain intact. An earlier intermittent cold-case anonymous request's path is
+  still unknown; the routing fix does not establish its origin. Final independent
+  adversarial source/evidence review is clean. All five root gates pass, with
+  4,991 tests, zero failures and 263 exclusions (seed 774698).
+  Evidence: [tagged acceptance corrections](../20261107-0917-repair-mcp-acceptance.md).
 
 - [x] Correct the finalization test's monitor-after-exit race found by the full
   same-seed root rerun: `changed late facts produce another immutable source

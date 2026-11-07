@@ -34,6 +34,9 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
   def init(state), do: state
 
   @impl true
+  def call(%{request_path: path} = conn, _state) when path != "/mcp",
+    do: send_resp(conn, 404, "not found")
+
   def call(%{method: "GET"} = conn, state) do
     send(state.owner, {:remote_mcp_wire_stream, authorization(conn)})
 

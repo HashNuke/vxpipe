@@ -3,6 +3,21 @@
 Status: partial, pinned evidence for Milestone 10. This document does not claim blanket
 MCP client certification.
 
+The integrations milestone revalidated the same pinned transport/reference profile
+on 2026-11-07: all three runner cases pass (seed 774698). Four additional real-HTTP
+connection cases and seven runtime credential/privacy cases also pass, covering
+all 14 tagged MCP cases. The corrected SSE fixture remains explicitly distinct
+from an unmodified official pass.
+
+OAuth onboarding is now implemented through Console's explicit preparation,
+consent, callback and renewal operations. The OAuth exclusions in the historical
+Milestone 10 table below describe that earlier scope, not current product
+capabilities. The transport runner does not drive those Console operations or
+establish official OAuth scenario conformance. Current controlled-peer protocol,
+browser and cross-node evidence is tracked in the
+[integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
+and [OAuth protocol profile](mcp-oauth-protocol.md).
+
 ## Pinned inputs
 
 - Protocol: MCP `2025-11-25`, selected through ExMCP's `:legacy_only` profile.

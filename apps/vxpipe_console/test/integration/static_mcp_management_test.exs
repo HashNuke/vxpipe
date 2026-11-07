@@ -91,7 +91,7 @@ defmodule Vxpipe.Console.StaticMCPManagementTest do
              "generation" => 2
            }
 
-    assert_header("proposal-private")
+    refute_received {:check_http, "initialize", _}
     assert Repo.get_by!(MCPConnection, public_id: id).status == "revoked"
     path = "/" <> id <> "/reconnect"
     body = Map.put(input("fresh-private"), "generation", 2)

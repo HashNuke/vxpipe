@@ -3,13 +3,30 @@ defmodule Vxpipe.Console.Integration.SavedMCPTransferTest do
 
   alias Vxpipe.{CallEngine, Calls}
   alias Vxpipe.AgentRuntime.{ModelResponse, ToolCall}
+  alias Vxpipe.Console.Test.ParticipantDepartureWriter
   alias Vxpipe.Persistence.MCP.ConnectionStore
 
   test "a delayed destination executes its saved MCP through the original admitted peer", c do
-    configure_admission(c.options)
+    archive = [
+      enabled: true,
+      writer: {ParticipantDepartureWriter, self()},
+      maximum_pending_facts: 256,
+      retry_delay_ms: 25,
+      drain_timeout_ms: 5_000,
+      source_policy: %{"revision" => 0}
+    ]
+
+    configure_admission(Keyword.put(c.options, :archive, archive))
     active = source_room(c)
+    source_id = Map.fetch!(active.call.plan.participants, "assistant").participant_id
+    tenant = c.tenant
+    call_id = active.call.id
+    incarnation_id = active.call.incarnation_id
     transfer(c, active)
     transfer_stopped(c, active, %{"destination" => "records", "status" => "completed"})
+
+    assert_receive {:participant_departed, ^tenant, ^call_id, ^incarnation_id, ^source_id}, 5_000
+
     assert_absent(c, active, "assistant")
     assert_present(c, active, "records")
     assert_receive {:test_agent_runtime_stream, _retired_source, pending}, 5_000
