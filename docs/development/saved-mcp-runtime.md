@@ -7,8 +7,10 @@ Console call/session admission, real WebRTC input, model-selected ExMCP executio
 and peer output. Authenticated tenant disconnect blocks a subsequent invocation
 in that same room. Local web acceptance also covers tenant isolation, empty catalogs,
 schema/deletion pins, repository outages and delayed agent transfers with cold and
-reused clients after revocation/replacement. Identity is fixture-backed; rendered browser, telephony, in-flight
-request races and separate-node acceptance remain milestone gates.
+reused clients after revocation/replacement. It verifies one already-submitted
+request completing after disconnect while later submissions fail. Identity is
+fixture-backed; rendered browser, telephony and separate-node acceptance remain
+milestone gates.
 
 ## Metadata and pinning
 
@@ -116,6 +118,14 @@ execute successfully. Delayed transfer acceptance uses public participant snapsh
 exact tool outcomes and subsequent input over the original peer to prove ownership
 and unchanged call incarnation. A sibling admitted call keeps the reused MCP client
 open in the revocation regression.
+
+In-flight acceptance holds an authenticated tool POST at the local server, disconnects
+the saved connection through Console, then releases that exact response. The result
+reaches the model and original WebRTC peer; a later model-selected invocation
+fails in the same running room without another protocol request. Explicit handler
+references and a held SSE stream avoid timing assumptions. Cancellation, owner death
+and timeout cannot satisfy the successful-response acknowledgement. This verifies
+local submitted-request semantics, not separate-node renewal or revocation races.
 
 A reusable private-config vault was rejected: it would introduce new lifetime and
 ownership rules for delayed transfer activations. Complete request-header resolution

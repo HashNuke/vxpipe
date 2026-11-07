@@ -12,6 +12,7 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
       authorization: Keyword.get(options, :authorization),
       headers: Keyword.get(options, :headers, []),
       hold_stream: Keyword.get(options, :hold_stream, false),
+      hold_invocation: Keyword.get(options, :hold_invocation, false),
       owner: owner,
       redirect_to: Keyword.get(options, :redirect_to),
       request_label: Keyword.get(options, :request_label),
@@ -88,10 +89,41 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
   defp respond(conn, request, state) do
     if authorized?(conn, state.authorization) and
          Enum.all?(state.headers, fn {name, value} -> get_req_header(conn, name) == [value] end) do
-      protocol_response(conn, request, state.session_id)
+      if state.hold_invocation and request["method"] == "tools/call" do
+        hold_invocation(conn, request, state)
+      else
+        protocol_response(conn, request, state.session_id)
+      end
     else
       send_resp(conn, 401, "unauthorized")
     end
+  end
+
+  defp hold_invocation(conn, request, state) do
+    owner = state.owner
+    monitor = Process.monitor(owner)
+    reference = make_ref()
+    send(owner, {:remote_mcp_wire_invocation_held, self(), reference, request["id"]})
+
+    result =
+      receive do
+        {:release_remote_mcp_wire_invocation, ^reference} ->
+          send(owner, {:remote_mcp_wire_invocation_released, reference})
+          protocol_response(conn, request, state.session_id)
+
+        {:cancel_remote_mcp_wire_invocation, ^reference} ->
+          send_resp(conn, 503, "cancelled")
+
+        {:DOWN, ^monitor, :process, ^owner, _reason} ->
+          send_resp(conn, 503, "cancelled")
+      after
+        30_000 ->
+          send(owner, {:remote_mcp_wire_invocation_timeout, reference})
+          send_resp(conn, 503, "timed out")
+      end
+
+    Process.demonitor(monitor, [:flush])
+    result
   end
 
   defp protocol_response(conn, %{"method" => "initialize", "id" => id}, session_id) do

@@ -56,7 +56,8 @@ defmodule Vxpipe.Console.Test.SavedMCPRuntimeCase do
          owner: self(),
          authorization: "Bearer " <> @token,
          headers: [{"x-workspace", @header}],
-         hold_stream: Map.get(test, :hold_mcp_stream, false)}
+         hold_stream: Map.get(test, :hold_mcp_stream, false),
+         hold_invocation: Map.get(test, :hold_mcp_invocation, false)}
       )
 
     %URI{port: port} = URI.parse(RemoteMCPWireServer.endpoint(server))

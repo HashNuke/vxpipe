@@ -1034,8 +1034,17 @@ preservation after cold/reused-client revocation or replacement. Sixteen tagged
 Console cases, 170 MCP tests and five existing wire cases pass. All five root gates
 pass: 4,987 tests, zero failures (214 excluded, seed 181171). Independent adversarial
 source and staged implementation review found no remaining code issues.
-Telephony, held-request races, separate-node and authenticated rendered acceptance
+Telephony, separate-node and authenticated rendered acceptance
 remain open. See [boundary evidence](../20261107-0822-saved-mcp-boundaries.md).
+
+Submitted-request follow-up: a controlled authenticated MCP POST may complete
+after tenant disconnect, while a subsequent invocation fails in the same admitted
+room without another POST or SSE request. Timeout/cancellation cannot synthesize
+fixture success. All 17 saved-runtime cases and five existing wire cases pass;
+all five root gates pass (4,987 tests, zero failures, 215 excluded, seed 957720).
+Independent adversarial source re-review is clean. This is local web-call acceptance;
+separate-node renewal/revocation races stay open. See
+[in-flight evidence](../20261107-0855-saved-mcp-inflight.md).
 
 ### T8 — Release and operational verification
 
@@ -1064,6 +1073,12 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Strengthen in-flight revocation acceptance to consume the initial protocol
+  handshake and stream observations, then reject every later POST/GET/stream-open
+  observation, including unexpected initialization or reconnects. The controlled
+  held response succeeds only on explicit release; subsequent tool selection fails
+  without sending another request. All 17 saved-runtime acceptance cases pass.
 
 - [x] Revalidate current runtime credentials before reusing an open MCP session for
   another activation. A saved, admitted sibling-call regression first completed a
