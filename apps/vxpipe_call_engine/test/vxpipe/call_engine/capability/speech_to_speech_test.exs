@@ -898,7 +898,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
                       %{event: %{kind: :speech_started, turn_ref: ^turn}}}
     end
 
-    assert :ok = GenServer.call(provider, {:emit, :speech_started, [turn_ref: make_ref()]})
+    # Overflow retires this provider; completion is observed through the owner below.
+    GenServer.cast(provider, {:emit, :speech_started, [turn_ref: make_ref()]})
     assert_receive {:vxpipe_sts_unavailable, ^capability, :pending_caller_overflow}, 1_000
 
     assert_receive {:DOWN, ^capability_monitor, :process, ^capability, :pending_caller_overflow},

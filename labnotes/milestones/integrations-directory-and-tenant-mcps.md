@@ -1377,3 +1377,8 @@ Acceptance follow-up, 2026-11-07:
   separate controller. Exact shutdown-reason/no-dial assertions are preserved;
   50 focused repetitions and the full 29-test file pass. The full umbrella rerun
   remains open. See [correction evidence](../20261107-0613-fix-admission-monitor.md).
+- [ ] Stabilize the terminal speech-overflow fixture by observing completion through
+  the capability instead of awaiting a reply from its deliberately retired provider.
+  Exact overflow and termination assertions remain; fifty focused repetitions and
+  the full 63-test file pass. Full umbrella rerun remains open. See
+  [correction evidence](../20261107-0625-fix-overflow-fixture.md).
