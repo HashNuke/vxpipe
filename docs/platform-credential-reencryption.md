@@ -77,6 +77,18 @@ update other running VMs. A zero-remaining report cannot prevent a separately ru
 with the old configuration from creating another old-key row; complete the writer transition
 before treating that report as permission to retire the key.
 
+Completing the writer transition includes draining operations that captured the old
+keyring. Changing configuration does not update an in-flight MCP renewal's completion
+context. Such work can recreate old-key rows after a re-encryption batch, so run the
+final batches and verify remaining counts only after those operations have finished
+or their instances have stopped. Stopping a claimed renewal retains its ambiguity
+fence and may require reconnect; key rotation does not authorize retrying its token.
+
+The [MCP rotation acceptance](../labnotes/20261107-0832-verify-mcp-key-rotation.md)
+exercises that drain-and-final-batch sequence with held real token responses across
+independent nodes for delegated and machine grants. Both nodes subsequently read
+and renew with only the new key, preserving connection identity and configuration.
+
 ## Verification and rejected alternatives
 
 Focused tests must cover mixed keys and tenants, revoked records, exact plaintext preservation,

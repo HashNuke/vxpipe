@@ -316,7 +316,8 @@ independently of T1–T3 behind unexposed operations.
   keyring. Preserve identity/configuration/grant revisions and redact CLI output.
   Three new database-backed command tests pass; focused MCP persistence suite 26
   passes. Document both stores and pending OAuth attempts before key retirement;
-  cross-node rotation and retention acceptance remain pending.
+  cross-node rotation now passes for delegated and machine grants; pending-attempt
+  retention remains covered separately under T5/T8.
 - [x] Add persistence migrations for tenant connection identity/config generation,
   encrypted auth material and catalog snapshots, using the existing encryption
   keyring with explicit MCP identity binding and rotation participation.
@@ -1186,7 +1187,7 @@ and all related Storybooks.
   Assert one extra token exchange, grant revision 2 and unchanged configuration
   generation. Separate callback and seeded-renewal tests alone do not prove this
   complete workflow; Astra identified the acceptance gap during the checklist audit.
-- [ ] Verify independent-node encryption-key rotation during a held OAuth refresh,
+- [x] Verify independent-node encryption-key rotation during a held OAuth refresh,
   then completion and reads with only the new key. Astra review found existing
   coverage limited to sequential same-BEAM re-encryption; preserve claim exclusivity,
   configuration generation and grant-revision checks across rotation.
@@ -1195,6 +1196,23 @@ and all related Storybooks.
   Drain/transition all writers, rerun batches, then retire the old key and prove
   reads and subsequent renewal on both nodes. Clarify this drain requirement in
   the operator runbook without retrying ambiguously redeemed refresh tokens.
+  Both strengthened delegated and machine real-HTTP cases pass (seed 701522); the public
+  connection metadata and held claim remain unchanged through re-encryption,
+  and both nodes read and subsequently renew using only the new key after the final
+  batch. Exact request totals and grant revisions verify one renewal on each node.
+  See [rotation evidence](../20261107-0832-verify-mcp-key-rotation.md).
+  Astra's fixture-isolation correction is implemented: these installation-wide
+  batches now run in disposable databases. The claimant also switches its
+  configured keyring while its response is held, proving completion retains its
+  captured context. The serial combined lane passes 27 tests (seed 589235), followed
+  by the strengthened two-case run above. Astra's final source re-review is clean;
+  root verification remains below.
+- [ ] Revalidate the root suite's Telnyx max-duration startup failure
+  (`media_harness_failed`, seed 774698) before final acceptance. No telephony
+  implementation changed in these MCP checkpoints; first rerun the unchanged
+  focused harness with the same seed and retain the failure evidence.
+  All 16 unchanged focused cases pass with seed 774698; the full serial root
+  rerun is still required. This does not establish the intermittent failure's cause.
 - [x] Reconcile stale storage/browser-flow documentation with implemented
   independent-node races, production forms and callback draft submission. Keep
   remaining authenticated browser, key-rotation and release gates explicit.

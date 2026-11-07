@@ -76,6 +76,11 @@ Install the new decrypt key on every reader, then switch every writer. Run provi
 and MCP re-encryption until all old-key connection rows are gone. Retain old keys
 for live attempts until claimed or expired, and inspect pending counts after every
 writer has switched. No single store's empty result proves a key is safe to retire.
+The writer transition includes draining in-flight renewals with captured old-key
+contexts. They can write another old-key envelope after a batch reports zero remaining.
+Wait for completion or stop those instances, then rerun batches before retiring the
+key. A stopped claimed renewal retains its ambiguity fence and may require reconnect;
+never retry its refresh token just because encryption keys changed.
 See the [operator transition](../platform-credential-reencryption.md#operator-transition).
 
 ## Decisions and verification
@@ -92,7 +97,10 @@ wrong-tenant operations, outage recovery and redacted operator output. Seven tag
 persistence tests now use independent BEAM processes and distinct PostgreSQL backend
 connections for claim/admission/refresh/revoke races, claim cleanup and claimant
 death. See [cross-node evidence](../../labnotes/20261107-0959-mcp-cross-node.md).
-Independent-node token/transport renewal has its own Console lane; re-encryption
-during cross-node refresh and old-key retirement remain separate acceptance gates.
+Independent-node token/transport renewal has its own Console lane. Two additional
+Console cases cover re-encryption during real delegated/machine token responses,
+claim preservation and exclusion, old-writer completion, final writer transition,
+and new-key-only reads/renewal. See
+[rotation evidence](../../labnotes/20261107-0832-verify-mcp-key-rotation.md).
 Earlier storage evidence and review remain in the
 [checkpoint labnotes](../../labnotes/20261107-0132-review-mcp-oauth-storage.md).

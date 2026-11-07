@@ -69,3 +69,9 @@ The first test run lacked that fixture operation; after adding it, the strengthe
 combined command above passes all 25 tests (seed 593520). No production change.
 Astra's final source audit confirms this closes the composition gap and supports
 the T5 checkbox, retaining the documented operational/browser limitations.
+
+The root run finished with 4,991 tests, one failure and 261 exclusions (seed 774698).
+Only the Telnyx max-duration media-harness startup failed; its unchanged 16-test
+file passes with the same seed. The unused-dependency check also passes. The full
+same-seed serial rerun remains required; follow-up evidence is tracked with
+[key rotation](20261107-0832-verify-mcp-key-rotation.md) and in the milestone.

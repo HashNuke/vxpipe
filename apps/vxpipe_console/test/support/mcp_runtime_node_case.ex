@@ -5,7 +5,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Vxpipe.Calls.Administration
-  alias Vxpipe.Console.Test.{MCPNodeHTTP, MCPRuntimeNode, OutboundMCPOAuthServer}
+  alias Vxpipe.Console.Test.{MCPNodeHTTP, MCPRotationRepo, MCPRuntimeNode, OutboundMCPOAuthServer}
   alias Vxpipe.Persistence.{CredentialKeyring, CredentialStore, Repo}
   alias Vxpipe.Persistence.MCP.ConnectionStore
   alias Vxpipe.Persistence.Schema.Tenant
@@ -24,15 +24,15 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
   end
 
   setup tags do
-    :ok = Sandbox.checkout(Repo, sandbox: false)
+    {repo, repository, cleanup?} = repository(tags)
 
     {:ok, keyring} =
       CredentialKeyring.new("node-test", %{"node-test" => :crypto.strong_rand_bytes(32)})
 
-    context = [repo: Repo, keyring: keyring]
+    context = [repo: repo, keyring: keyring]
     grant = Map.get(tags, :grant, "authorization_code")
-    tenant = tenant()
-    other_tenant = tenant()
+    tenant = tenant(repo, cleanup?)
+    other_tenant = tenant(repo, cleanup?)
 
     state =
       start_supervised!(
@@ -65,7 +65,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
             restart: :temporary
           })
 
-        {peer, :peer.call(peer, MCPRuntimeNode, :boot, [Repo.config(), context, base], 30_000)}
+        {peer, :peer.call(peer, MCPRuntimeNode, :boot, [repository, context, base], 30_000)}
       end
 
     [{first, first_identity}, {second, second_identity}] = nodes
@@ -133,17 +133,42 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
     end
   end
 
-  defp tenant do
+  defp repository(%{isolated_database: true}) do
+    database = "vxpipe_mcp_rotation_" <> String.replace(Ecto.UUID.generate(), "-", "")
+
+    options =
+      Repo.config()
+      |> Keyword.delete(:url)
+      |> Keyword.put(:database, database)
+      |> Keyword.put(:pool, DBConnection.ConnectionPool)
+      |> Keyword.put(:pool_size, 2)
+
+    :ok = Ecto.Adapters.Postgres.storage_up(options)
+    on_exit(fn -> :ok = Ecto.Adapters.Postgres.storage_down(options) end)
+    start_supervised!({MCPRotationRepo, options})
+    migrations = Application.app_dir(:vxpipe_persistence, "priv/repo/migrations")
+    Ecto.Migrator.run(MCPRotationRepo, migrations, :up, all: true, log: false)
+    {MCPRotationRepo, options, false}
+  end
+
+  defp repository(_tags) do
+    :ok = Sandbox.checkout(Repo, sandbox: false)
+    {Repo, Repo.config(), true}
+  end
+
+  defp tenant(repo, cleanup?) do
     {:ok, tenant, _} =
       Administration.bootstrap_tenant("MCP node acceptance", [:admin],
-        credential_repository: {CredentialStore, Repo}
+        credential_repository: {CredentialStore, repo}
       )
 
-    on_exit(fn ->
-      :ok = Sandbox.checkout(Repo, sandbox: false)
-      Repo.delete_all(from(t in Tenant, where: t.key == ^tenant.key))
-      Sandbox.checkin(Repo)
-    end)
+    if cleanup? do
+      on_exit(fn ->
+        :ok = Sandbox.checkout(Repo, sandbox: false)
+        Repo.delete_all(from(t in Tenant, where: t.key == ^tenant.key))
+        Sandbox.checkin(Repo)
+      end)
+    end
 
     tenant.key
   end

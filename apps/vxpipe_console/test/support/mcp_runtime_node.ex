@@ -9,6 +9,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
 
   def boot(repository, context, base) do
     identity = MCPDatabaseNode.boot(repository)
+    context = Keyword.put(context, :repo, Vxpipe.Persistence.Repo)
     Logger.configure(level: :warning)
     {:ok, _} = Application.ensure_all_started(:vxpipe_mcp)
     {:ok, _} = Application.ensure_all_started(:req)
@@ -29,6 +30,30 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
   end
 
   def refresh(tenant, id, revision), do: MCPOAuthRefresh.refresh(tenant, id, 1, revision)
+
+  def context(context) do
+    context = Keyword.put(context, :repo, Vxpipe.Persistence.Repo)
+    options = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
+
+    Application.put_env(
+      :vxpipe_calls,
+      Vxpipe.Calls,
+      options
+      |> Keyword.put(:mcp_connection_repository, {ConnectionStore, context})
+      |> Keyword.put(:mcp_oauth_grant_repository, {OAuthGrantStore, context})
+    )
+  end
+
+  def reencrypt(context),
+    do: context |> Keyword.put(:repo, Vxpipe.Persistence.Repo) |> ConnectionStore.reencrypt(100)
+
+  def stored(tenant, id) do
+    {ConnectionStore, context} =
+      Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
+      |> Keyword.fetch!(:mcp_connection_repository)
+
+    ConnectionStore.resolve(context, tenant, id)
+  end
 
   def start_renewal(tenant, id) do
     {:ok, caller} =
