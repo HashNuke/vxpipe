@@ -1369,3 +1369,11 @@ release results. Listed-template and retained-ID UI are explicit missing vertica
 slices. Authenticated browser, full room/admission/transfer, separate-node and
 external-directory publication remain open. The index stays unchecked. See
 [reconciliation labnotes](../20261107-0413-reconcile-integrations-progress.md).
+
+Acceptance follow-up, 2026-11-07:
+
+- [ ] Stabilize the umbrella gate's pending-admission shutdown test by acknowledging
+  the owner after creating its asynchronous monitor and before terminating the
+  separate controller. Exact shutdown-reason/no-dial assertions are preserved;
+  50 focused repetitions and the full 29-test file pass. The full umbrella rerun
+  remains open. See [correction evidence](../20261107-0613-fix-admission-monitor.md).

@@ -278,6 +278,11 @@ defmodule Vxpipe.CallEngine.OutgoingCallRoomTest do
     assert {:ok, _room} = start_call(plan, outgoing_admission: {controller, make_ref()})
     owner = authority(plan)
     monitor = Process.monitor(owner)
+
+    # Acknowledge the monitor before a different process triggers the owner's exit.
+    assert {:error, :startup_preparing} =
+             Vxpipe.CallEngine.RoomAuthority.readiness_binding(owner)
+
     send(controller, :finish)
 
     assert_receive {:DOWN, ^monitor, :process, ^owner,
