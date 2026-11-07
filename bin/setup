@@ -39,7 +39,7 @@ def main():
         run_step(root, "dev", ["mix", "deps.get"], "Mix dependencies")
         run_step(root, "dev", ["bin/patch-ex-mcp"], "reviewed ExMCP transport patch")
         for environment in ("dev", "test"):
-            run_step(root, environment, ["mix", "deps.compile", "ex_mcp"], f"{environment} patched MCP dependency")
+            run_step(root, environment, ["mix", "deps.compile", "ex_mcp", "--include-children"], f"{environment} patched MCP dependency")
         run_step(root, "dev", ["mix", "assets.setup"], "frontend dependencies")
         run_step(root, "dev", ["mix", "assets.build"], "frontend build")
         for environment in ("dev", "test"):

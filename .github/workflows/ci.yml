@@ -81,7 +81,7 @@ jobs:
       - name: Apply and compile reviewed ExMCP transport patch
         run: |
           bin/patch-ex-mcp
-          mix deps.compile ex_mcp
+          mix deps.compile ex_mcp --include-children
 
       - name: Test dependency preparation
         run: |

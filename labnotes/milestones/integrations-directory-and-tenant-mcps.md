@@ -1154,11 +1154,13 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
-- [ ] Complete fresh-checkout MCP dependency preparation in setup and CI. The
+- [x] Complete fresh-checkout MCP dependency preparation in setup and CI. The
   isolated browser checkout reproduced ExMCP compilation before Plug was built;
   include dependency children when compiling the patched ExMCP. The focused fix
-  passes 33 setup tests, source review and a complete fresh-checkout setup; final
-  checkpoint gates are tracked separately from renewal acceptance.
+  passes 33 setup tests, source review and a complete fresh-checkout setup. All five
+  root gates pass: 4,987 tests, zero failures and 235 excluded (seed 999227). This
+  prerequisite does not close browser acceptance. See
+  [bootstrap evidence](../20261107-1110-fix-mcp-bootstrap.md).
 - [x] Require an explicit release acknowledgement in cross-node renewal lifecycle
   tests. The unconditional response-finished signal could also mean hold timeout;
   four strengthened cases failed before the fixture emitted the correlated release

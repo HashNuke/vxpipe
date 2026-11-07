@@ -227,8 +227,8 @@ class SetupTest(unittest.TestCase):
         self.assertEqual((self.root / ".vxpipe/worktree.json").read_text(), metadata)
         commands = log.read_text().splitlines()
         self.assertIn("dev deps.get", commands)
-        self.assertIn("dev deps.compile ex_mcp", commands)
-        self.assertIn("test deps.compile ex_mcp", commands)
+        self.assertIn("dev deps.compile ex_mcp --include-children", commands)
+        self.assertIn("test deps.compile ex_mcp --include-children", commands)
         self.assertIn("dev ecto.migrate", commands)
         self.assertIn("test ecto.migrate", commands)
 
@@ -334,7 +334,7 @@ assert not list((root / '.vxpipe').glob('.worktree.json.*'))
         result = self.setup(SETUP_COMMAND_LOG=str(log))
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual(log.read_text().splitlines()[:5],
-                         ["deps.get", "deps.compile ex_mcp", "deps.compile ex_mcp",
+                         ["deps.get", "deps.compile ex_mcp --include-children", "deps.compile ex_mcp --include-children",
                           "assets.setup", "assets.build"])
         self.assertIn("bin/dev", result.stdout)
         self.assertIn("mix test", result.stdout)

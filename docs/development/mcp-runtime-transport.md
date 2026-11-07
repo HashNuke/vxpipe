@@ -71,7 +71,9 @@ patch; older unrecognized patched states must be prepared from pristine pinned
 sources rather than accepted implicitly.
 
 `bin/setup` applies the patch after dependency retrieval and compiles ExMCP for dev
-and test. CI applies it before compilation, includes the patch/manifest in its
+and test with `--include-children`, so a fresh checkout builds prerequisites such
+as Plug before compiling the patched dependency. CI uses the same compilation
+mode, applies the patch before compilation, includes the patch/manifest in its
 dependency cache key and runs the preparation tests. Other clean build/release
 pipelines must run `bin/patch-ex-mcp` after `mix deps.get`, then compile ExMCP in
 their target environment. This is a release prerequisite. On dependency upgrade,
