@@ -30,3 +30,20 @@ The focused original-seed run passes one test. All five root gates are rerunning
 Astra reviewed the actual moved monitor and strengthened closure assertions and
 approved them without further changes. No assertion is weakened and no runtime
 code changes. The root rerun remains the outstanding verification gate.
+
+The first corrected root rerun is incomplete: it receives SIGTERM during Gateway
+at 10:40:01 UTC and the command subsequently reports exit 1. Its earlier children
+passed, and no new assertion failure is recorded before shutdown. This is not a
+passing full run. The signal source is being checked before starting a fresh run;
+no reason for the termination is inferred from partial output.
+
+Astra confirms it issued no process termination or group cleanup near the signal;
+its archive diagnostics had already completed. Signal provenance remains unknown.
+Started a fresh full run after confirming the earlier command terminal, with an
+owned PTY session and direct session polling for authoritative liveness/status.
+
+The fresh root run completed with exit 0: all five root gates pass, 4,992 umbrella
+tests with zero failures and 263 exclusions (seed 774698). This includes all 490
+Persistence tests and 548 Console tests. The focused strengthened monitor case and
+full suite are green; the original timing cause remains unconfirmed. The interrupted
+run above is retained as incomplete evidence, not counted as a passing run.

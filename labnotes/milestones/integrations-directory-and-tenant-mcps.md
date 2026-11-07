@@ -870,15 +870,27 @@ Listed OAuth UI and authenticated browser acceptance remain separate open work.
   OAuth capability checks for managed registration hints and exact installation
   callback identity for preregistered clients. No remote definition can introduce
   executable code or shared client secrets.
-- [ ] Preserve directory identity through catalog refresh, secret replacement,
+- [x] Preserve directory identity through catalog refresh, secret replacement,
   browser callback, disconnect and retained-ID reconnect.
   Do not create a second record when directory and endpoint identify existing
   connections; preserve the backend's deterministic conflict behavior. Listed V1
   OAuth recipes use authorization-code grants; custom machine-grant acquisition
   and recovery belong to T6/T6b, as specified by the approved directory contract.
-- [ ] Add red/green facade/storage/UI contracts for recipe tampering, changed
+- [x] Add red/green facade/storage/UI contracts for recipe tampering, changed
   versions, outage, duplicates and optional setup content. Verify desktop/mobile
   rendered listed static and OAuth forms, then the authenticated browser workflow.
+
+Authenticated listed-browser progress: all four static recipes pass actual create
+and Tools with desktop/mobile form inspection. Bearer preserves identity across
+secret replacement, catalog display edits/retirement and explicit retained reconnect.
+CIMD covers cold-outage callback, denied replacement, cancellation, denied retained
+consent and subsequent approval. DCR confirms replacement registration reuse and
+fresh registration after revocation. Listed preregistered-client creation and
+retained recovery pass with Basic client authentication: denied consent clears
+credentials; fresh credentials and approval restore the same identity during the
+outage. Custom machine retained recovery passes with explicit review, cancel and
+fresh Basic client credentials without consent redirection. Existing call-spec
+reference composition remains open; see [current browser evidence](../20261107-0941-verify-listed-browser.md).
 
 ### T6b — Retained-ID reconnect and duplicate recovery
 
@@ -916,6 +928,10 @@ Depends on T4/T5/T6; listed identity cases additionally require T6a.
   cross-tenant IDs, storage failure and preservation of existing call-spec
   references. Cover custom/listed, static/browser OAuth/machine flows and rendered
   desktop/mobile recovery before closing authenticated workflow acceptance.
+  Static/browser/machine browser recovery now passes. Astra mapped the stale,
+  cross-tenant and storage cases to existing tests, but the composed existing
+  call specification -> disconnect -> reconnect -> fresh preparation check remains
+  open. Stable ID/namespace alone does not close that acceptance requirement.
 
 Recovery checkpoint progress: [labnotes](../20261107-0648-wire-retained-mcp.md).
 Calls 24 and Console 11 focused tests pass, plus real-store session/CSRF lifecycle
@@ -1180,8 +1196,10 @@ and all related Storybooks.
 - [ ] Run all five root gates plus focused frontend checks and rendered acceptance.
   The callback/rotation/browser-race checkpoints now pass all five root gates
   (4,991 tests, zero failures, 261 excluded, seed 774698). The tagged acceptance
-  corrections also pass all five gates with 263 exclusions. Final listed/recovery/
-  outage rendering and any subsequent implementation checks remain.
+  corrections also pass all five gates with 263 exclusions. The asset/busy/monitor
+  checkpoint passes all five gates with 4,992 tests, zero failures and 263 exclusions
+  (seed 774698); all 1,065 frontend tests, TypeScript and ESLint pass. Final
+  listed/recovery rendering and any subsequent implementation checks remain.
   Run `bin/verify-lean` for any changes to the source-cutover or speech state
   machines, as required by AGENTS; record applicability and the result.
 - [x] Add tagged database concurrency coverage using independent BEAM processes
@@ -1203,12 +1221,15 @@ and all related Storybooks.
   selected profile and controlled protocol acceptance, not official OAuth
   certification. Final acceptance still includes the listed/recovery/outage
   browser workflows.
-- [ ] Verify remote API unavailable, no usable cached catalog, and connected-status
-  unavailable independently. Check rate limiting, cache bounds, revocation and logs.
-  A fresh-process unreachable-directory check now verifies built-in native fallback
-  with no cached catalog while connected status and native mutations remain available;
-  see [native evidence](../20261107-1320-verify-native-inheritance.md). Other independent
-  outage and final operational checks remain open.
+- [x] Verify remote API unavailable, no usable cached catalog, and connected-status
+  unavailable independently. Actual directory HTTP 503 covers valid-cache and
+  cold-cache behavior; repository-port failure independently produces typed local
+  status failure and safe Retry recovery. Actual HTTP 429 suppresses upstream
+  catalog requests across queries. Cache bounds/deadlines and request-log redaction
+  pass their automated contracts; saved/runtime revocation lanes pass separately.
+  Astra reviewed the composed evidence and bounded claims. See [listed/outage
+  evidence](../20261107-0941-verify-listed-browser.md) and [native evidence](../20261107-1320-verify-native-inheritance.md).
+  This is not a claim about PostgreSQL network failure or live third-party routing.
 - [ ] Record independent implementation review, user workflow approval and release
   evidence; only then check the milestone in the index.
 - [ ] After implementation, run an independent review agent using GPT-6 Astra with
@@ -1234,12 +1255,13 @@ and all related Storybooks.
   retry guidance. Actual desktop/mobile HTTP 429 rendering, independent red/green
   reproduction and all frontend gates pass. See [busy feedback evidence](../20261107-1040-clarify-mcp-busy.md).
 
-- [ ] Resolve the reproduced EctoStorage resilience monitor failure from the asset
+- [x] Resolve the reproduced EctoStorage resilience monitor failure from the asset
   checkpoint root run. The expected normal subscriber exit is observed as `:noproc`;
   investigate and reproduce the cause before changing synchronization or behavior.
   The monitor now precedes handoff activity, with exact normal-exit/uniqueness
   checks retained and killed-source/complete-closure assertions added. Focused
-  original-seed verification and Astra review pass; full root rerun is pending.
+  original-seed verification and Astra review pass. The fresh full root run passes
+  all five gates: 4,992 tests, zero failures, 263 excluded (seed 774698).
   The observed root failure is proof; its timing cause remains unconfirmed.
   See [archive monitor evidence](../20261107-1028-stabilize-archive-monitor.md).
 

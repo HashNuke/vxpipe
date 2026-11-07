@@ -52,6 +52,22 @@ cached catalog. The tenant returns to the same platform credential after restore
 and temporary credentials are removed afterward. This does not validate keys with
 an external provider; see the [native evidence](../../labnotes/20261107-1320-verify-native-inheritance.md).
 
+Listed static recipes now pass authenticated creation and Tools, with fixed
+endpoint/authentication forms inspected on desktop/mobile. Listed CIMD covers
+cold-directory-outage callback, replacement and retained-ID recovery; DCR additionally
+proves saved-registration reuse versus fresh registration after revocation. The
+real directory publisher supplies controlled definitions through a local TLS proxy.
+Independent directory 503, cold cache, local-status failure and HTTP 429 cooldown
+checks pass. Local-status failure removes the isolated repository port; it is not
+a PostgreSQL network-failure experiment. Cache bounds/deadlines and request-log
+redaction use their automated contracts. Listed preregistered-client creation and
+retained recovery also pass with Basic client authentication: denied consent clears
+client credentials, then fresh credentials and approval restore the same identity
+during the outage. Custom machine retained recovery passes with Basic client
+authentication and explicit review/cancel/fresh credentials, without browser consent.
+The existing-call-spec disconnect/reconnect/preparation composition and reusable
+startup outage controls remain open. See [listed/outage evidence](../../labnotes/20261107-0941-verify-listed-browser.md).
+
 ## Start an isolated session
 
 Run `bin/setup` in a separate checkout. Use its assigned databases and ports; do
