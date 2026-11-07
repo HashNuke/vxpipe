@@ -74,6 +74,81 @@ defmodule Vxpipe.Calls.MCPOAuthAttemptsTest do
     refute_received {:attempt_issue, _, _, _}
   end
 
+  test "listed preparation is bound to the proposed entry and draft before persistence", data do
+    entry = %{
+      "directory_id" => "directory",
+      "integration_id" => "calendar",
+      "revision" => 1,
+      "name" => "Calendar",
+      "endpoint" => "https://mcp.test/mcp",
+      "authentication" => %{"type" => "oauth2", "registration" => "cimd"}
+    }
+
+    reference = %{
+      "directory_id" => "directory",
+      "integration_id" => "calendar",
+      "entry_revision" => 1,
+      "page" => %{}
+    }
+
+    input = %{"listing" => reference, "revision" => "draft"}
+
+    prepared = %Vxpipe.Calls.PreparedMCPOAuth{
+      authorization_url: "https://auth.test/authorize",
+      attributes: %{resource: entry["endpoint"], draft_revision: "draft"},
+      secrets: %{"directory_entry" => entry}
+    }
+
+    for mismatch <- [
+          %{prepared | attributes: %{resource: entry["endpoint"], draft_revision: "other"}},
+          %{
+            prepared
+            | attributes: %{resource: "https://other.test/mcp", draft_revision: "draft"}
+          },
+          %{prepared | secrets: %{}},
+          %{prepared | secrets: %{"directory_entry" => Map.put(entry, "revision", 2)}},
+          %{prepared | secrets: %{"directory_entry" => Map.put(entry, "integration_id", "other")}}
+        ] do
+      assert {:error, :oauth_preparation_failed} =
+               MCPOAuthAttempts.start(
+                 data.principal,
+                 @tenant,
+                 input,
+                 start_options(data, {:ok, mismatch})
+               )
+    end
+
+    refute_received {:attempt_issue, _, _, _}
+
+    assert {:ok, _} =
+             MCPOAuthAttempts.start(
+               data.principal,
+               @tenant,
+               input,
+               start_options(data, {:ok, prepared})
+             )
+
+    assert_receive {:attempt_issue, @tenant, _, %{"directory_entry" => ^entry}}
+  end
+
+  test "malformed listed proposals stop before preparation", data do
+    for input <- [
+          %{"listing" => "bad", "revision" => "draft"},
+          %{"listing" => %{}, "revision" => "draft", "directory_entry" => %{}},
+          %{"listing" => %{"unexpected" => String.duplicate("x", 8192)}, "revision" => "draft"}
+        ] do
+      assert {:error, :invalid_oauth_preparation} =
+               MCPOAuthAttempts.start(
+                 data.principal,
+                 @tenant,
+                 input,
+                 start_options(data, {:error, :unused})
+               )
+    end
+
+    refute_received {:oauth_prepare, _, _}
+  end
+
   test "start denies before remote work and rejects missing installation identity", data do
     options = start_options(data, {:error, :unused})
     reader = %{data.principal | grants: MapSet.new()}

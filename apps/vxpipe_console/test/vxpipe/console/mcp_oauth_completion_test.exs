@@ -59,6 +59,48 @@ defmodule Vxpipe.Console.MCPOAuthCompletionTest do
     refute_received :exchanged
   end
 
+  test "accepted listing survives callback without directory access and stays out of credentials" do
+    original = attempt()
+    entry = listed_entry()
+    claimed = %{original | secrets: Map.put(original.secrets, "directory_entry", entry)}
+    opts = options(self(), fn _, _ -> {:ok, %{server_name: "Remote name", catalog: []}} end)
+    assert {:ok, resolved} = MCPOAuthCompletion.complete(opts, "tenant", callback(), claimed)
+    assert resolved.connection.directory_entry == entry
+    assert resolved.connection.directory_id == "directory/calendar"
+    assert resolved.connection.server_name == "Accepted Calendar"
+    refute Map.has_key?(resolved.secrets, "directory_entry")
+    assert_receive :exchanged
+  end
+
+  test "accepted listing must bind the claimed resource and OAuth recipe before redemption" do
+    original = attempt()
+    opts = options(self(), fn _, _ -> flunk("unexpected check") end)
+
+    for entry <- [
+          Map.put(listed_entry(), "endpoint", "https://other.test/mcp"),
+          Map.put(listed_entry(), "authentication", %{"type" => "none"}),
+          %{}
+        ] do
+      claimed = %{original | secrets: Map.put(original.secrets, "directory_entry", entry)}
+
+      assert {:error, :oauth_completion_failed} =
+               MCPOAuthCompletion.complete(opts, "tenant", callback(), claimed)
+    end
+
+    refute_received :exchanged
+  end
+
+  defp listed_entry do
+    %{
+      "directory_id" => "directory",
+      "integration_id" => "calendar",
+      "revision" => 1,
+      "name" => "Accepted Calendar",
+      "endpoint" => "https://mcp.example.test/mcp",
+      "authentication" => %{"type" => "oauth2", "registration" => "cimd"}
+    }
+  end
+
   test "MCP checking does not extend the token lifetime" do
     received_at = ~U[2026-11-07 00:00:00Z]
     clock = start_supervised!({Agent, fn -> received_at end})

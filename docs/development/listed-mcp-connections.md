@@ -1,8 +1,8 @@
 # Listed MCP discovery and accepted configuration
 
 Status: directory reference resolution, credentialless discovery, accepted
-snapshot storage, static connection management and locked static forms implemented;
-listed OAuth attempt wiring and forms remain open in
+snapshot storage, static and browser OAuth connection management and locked static
+forms implemented; listed OAuth forms remain open in
 [T6a](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md#t6a--listed-template-connection-identity-and-forms).
 
 ## Reuse the directory and management boundaries
@@ -131,10 +131,54 @@ viewport bounds work in production as well as Storybook. Desktop/mobile fixture
 inspection covers creation, saved replacement, tools during directory outage and
 read-only access; it does not establish authenticated backend browser acceptance.
 
+## OAuth on the existing tenant routes
+
+`POST /api/tenants/:tenant/mcp-oauth` accepts a listing reference, draft `revision`,
+optional selected `issuer`, and only the credentials needed by the selected live
+registration mechanism. Optional browser endpoint/method overrides are ignored.
+Arbitrary snapshots, OAuth endpoint/scope overrides, request parameters and MCP
+headers are rejected. The accepted directory scopes are display hints; the existing
+resource/challenge scope rules determine the requested grant.
+
+Preparation resolves the new reference inside the existing bounded preflight
+runner. It performs credentialless capability selection, then uses the existing
+OAuth protocol preparation to revalidate metadata before registration and consent.
+Both reads share one bounded operation. If required capabilities disappear between
+passes, preparation fails before registration/handoff rather than changing modes.
+
+Preregistered recipes use Own client: client ID and the actual registered client
+authentication method, with its required secret or private key/algorithm/key ID.
+The backend checks that method against live supported capabilities; it cannot
+infer a client's registration from the authorization server's list of methods.
+Listed V1 recipes use the authorization-code grant. Managed recipes first reuse a
+compatible saved DCR registration, then honor a supported DCR preference or select
+supported CIMD, DCR and finally Own client. CIMD has no user credentials; DCR only
+accepts its optional initial access token. Missing resource metadata with an
+explicit issuer retains the existing Own-client fallback. Invalid metadata does
+not create an anonymous or managed fallback.
+
+Calls verifies the prepared snapshot against the proposed directory/entry/revision,
+resource and draft. The existing encrypted, authenticated OAuth attempt payload
+carries the accepted snapshot through consent. Completion validates its resource
+and OAuth recipe before redemption, then projects its directory identity, name and
+configuration into the connection record. The public snapshot is removed from the
+saved credential payload. Calls rejects a completion result that changes the
+accepted snapshot, directory identity, name or resource.
+
+Saved `POST /api/tenants/:tenant/mcp-connections/:id/oauth` uses generation-bound
+accepted configuration, never a browser listing or a fresh directory lookup.
+Connected replacements can reuse compatible DCR registration; revocation erased
+those credentials, so retained-ID reconnection prepares fresh registration. Current
+tenant/session authority, installation identity, single-use state and generation
+checks remain in their existing owners. Callback, replacement, tool refresh and
+reconnect work during a public directory outage. Invalid references return 422;
+changed/unavailable listings return `503 mcp_listing_unavailable`; invalid issuer
+input returns `422 invalid_oauth_issuer` before directory or protocol reads.
+
 ## Remaining connection work
 
-Listed OAuth attempts must preserve their accepted identity/recipe through
-completion and management. Their locked forms and retained-ID recovery remain open.
+Listed OAuth locked forms and retained-ID recovery remain open, along with the
+authenticated rendered-browser acceptance gates.
 
 Rejected alternatives: adding a parallel directory API, accepting the entire
 browser listing as authority, unbounded catalog scans, and re-reading the public
@@ -155,3 +199,9 @@ it verifies header-name ownership, stale generations and cross-tenant isolation.
 The static-form checkpoint adds red/green parser, payload, permission and inventory
 eligibility coverage. Real provider interoperability and authenticated production
 browser acceptance remain separate gates.
+Listed OAuth coverage adds all registration recipes, private-override rejection,
+missing-metadata fallback, capability loss between discovery passes, accepted
+snapshot binding and callback preservation. Session/CSRF endpoint tests use real
+encrypted repositories and synthetic network responses to exercise create,
+single-use callback, DCR reuse, refresh, disconnect and retained-ID reconnect
+during directory outage, including stale-generation and cross-tenant rejection.

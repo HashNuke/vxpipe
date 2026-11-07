@@ -95,6 +95,69 @@ defmodule Vxpipe.Calls.MCPOAuthReconnectTest do
     assert stored.secrets["access_token"] == "working-access"
   end
 
+  test "listed reconnect uses accepted snapshot and saved registration despite browser overrides",
+       data do
+    entry = listed_entry()
+    MCPOAuthReconnectFixture.listing(data.fixture, entry)
+    input = %{input() | "endpoint" => "https://other.test/mcp", "auth_method" => "none"}
+    assert {:ok, _} = reconnect(data, input)
+    assert_receive {:prepared_saved, canonical, registration, ^entry}
+    assert canonical["endpoint"] == entry["endpoint"]
+    assert registration["client_id"] == "registered"
+
+    assert {:ok, @tenant, _} =
+             MCPOAuthAttempts.complete(data.principal, "state", :callback, data.options)
+
+    saved = MCPOAuthReconnectFixture.snapshot(data.fixture).connection
+    assert saved.directory_entry == entry
+    assert saved.directory_id == "directory/calendar"
+    assert saved.server_name == "Accepted Calendar"
+  end
+
+  test "listed reconnect rejects a browser snapshot or new reference before secret resolution",
+       data do
+    MCPOAuthReconnectFixture.listing(data.fixture, listed_entry())
+
+    for field <- ["directory_entry", "listing"] do
+      assert {:error, :invalid_oauth_reconnect} = reconnect(data, Map.put(input(), field, %{}))
+    end
+
+    refute_received :resolved
+    refute_received {:prepared_saved, _, _, _}
+  end
+
+  test "callback rejects a different accepted snapshot, directory identity or resource", data do
+    entry = listed_entry()
+    MCPOAuthReconnectFixture.listing(data.fixture, entry)
+    assert {:ok, _} = reconnect(data)
+
+    for tamper <- [
+          %{directory_entry: nil},
+          %{directory_id: "other/calendar"},
+          %{directory_entry: Map.put(entry, "revision", 2)},
+          %{endpoint: "https://other.test/mcp"},
+          %{server_name: "Unaccepted name"}
+        ] do
+      MCPOAuthReconnectFixture.completion(data.fixture, {:tamper, tamper})
+
+      assert {:error, :oauth_completion_failed, _} =
+               MCPOAuthAttempts.complete(data.principal, "state", :callback, data.options)
+    end
+
+    assert MCPOAuthReconnectFixture.snapshot(data.fixture).connection.generation == 7
+  end
+
+  defp listed_entry do
+    %{
+      "directory_id" => "directory",
+      "integration_id" => "calendar",
+      "revision" => 1,
+      "name" => "Accepted Calendar",
+      "endpoint" => "https://mcp.test/mcp",
+      "authentication" => %{"type" => "oauth2", "registration" => "discover"}
+    }
+  end
+
   test "protocol failure still rechecks authority before returning recovery context", data do
     assert {:ok, _} = reconnect(data)
     MCPOAuthReconnectFixture.completion(data.fixture, :deny)

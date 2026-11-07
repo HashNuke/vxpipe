@@ -21,7 +21,8 @@ defmodule Vxpipe.Console.MCPOAuthCompletion do
          attempt: attempt,
          secrets: secrets
        }) do
-    with {:ok, code} <-
+    with {:ok, listing} <- accepted_listing(secrets, attempt.resource),
+         {:ok, code} <-
            OAuthCallback.validate(callback, attempt.issuer, secrets["issuer_response_required"]),
          {:ok, request} <- MCPOAuthTokenRequest.build(secrets, attempt.resource),
          request =
@@ -44,19 +45,23 @@ defmodule Vxpipe.Console.MCPOAuthCompletion do
          {:ok, discovered} <- check(options, tenant, configuration) do
       {:ok,
        %ResolvedMCPConnection{
-         connection: %{
-           id: attempt.connection_id,
-           generation: attempt.generation,
-           endpoint: attempt.resource,
-           endpoint_identity: configuration.endpoint,
-           directory_id: nil,
-           auth_method: "oauth",
-           server_name: discovered.server_name,
-           catalog: discovered.catalog
-         },
+         connection:
+           Map.merge(
+             %{
+               id: attempt.connection_id,
+               generation: attempt.generation,
+               endpoint: attempt.resource,
+               endpoint_identity: configuration.endpoint,
+               directory_id: nil,
+               auth_method: "oauth",
+               server_name: discovered.server_name,
+               catalog: discovered.catalog
+             },
+             listing
+           ),
          secrets:
            secrets
-           |> Map.drop(["code_verifier", "issuer_response_required"])
+           |> Map.drop(["code_verifier", "issuer_response_required", "directory_entry"])
            |> Map.merge(%{
              "access_token" => token.access_token,
              "refresh_token" => token.refresh_token,
@@ -83,6 +88,27 @@ defmodule Vxpipe.Console.MCPOAuthCompletion do
         {:error, :oauth_completion_failed}
     end
   end
+
+  defp accepted_listing(
+         %{
+           "directory_entry" =>
+             %{
+               "directory_id" => directory,
+               "integration_id" => integration,
+               "endpoint" => resource,
+               "name" => name,
+               "authentication" => %{"type" => "oauth2"}
+             } = entry
+         },
+         resource
+       )
+       when is_binary(directory) and is_binary(integration) and is_binary(name) do
+    {:ok,
+     %{directory_entry: entry, directory_id: directory <> "/" <> integration, server_name: name}}
+  end
+
+  defp accepted_listing(%{"directory_entry" => _}, _), do: {:error, :oauth_completion_failed}
+  defp accepted_listing(_, _), do: {:ok, %{}}
 
   defp check(options, tenant, configuration) do
     check = Keyword.get(options, :connection_check, &ConnectionCheck.run/2)

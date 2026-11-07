@@ -6,13 +6,14 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
   attributes. Installation identity must be freshly resolved by that workflow.
   State is consumed before network redemption; no token exchange occurs here.
   """
-  alias Vxpipe.Calls.{ProviderAuth, Repositories, UserAuthorization}
+  alias Vxpipe.Calls.{MCPOAuthProposal, ProviderAuth, Repositories, UserAuthorization}
   alias Vxpipe.Identity.Principal
 
   def start(principal, tenant, input, options \\ []) do
     with :ok <- authorize(principal, tenant),
          :ok <- tenant_exists(tenant, options),
          :ok <- refresh(principal, tenant, options),
+         :ok <- MCPOAuthProposal.validate(input),
          {:ok, installation} <- installation(options),
          {:ok, port} <- Repositories.fetch(options, :mcp_oauth_preparation),
          {:ok, prepared} <- prepare(port, tenant, input, installation.origin),
@@ -36,18 +37,13 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
          {:ok, generation} <- reconnect_generation(input),
          {:ok, repository} <- Repositories.fetch(options, :mcp_connection_repository),
          {:ok, connection} <- Repositories.call(repository, :get_retained, [tenant, id]),
+         {:ok, input} <- MCPOAuthProposal.saved_input(Map.delete(input, "generation"), connection),
          :ok <- matching_target(connection, tenant, id, generation, input["endpoint"]),
          {:ok, installation} <- installation(options),
          {:ok, port} <- Repositories.fetch(options, :mcp_oauth_preparation),
          {:ok, registration} <- registration(repository, tenant, connection, input),
          {:ok, prepared} <-
-           Repositories.call(port, :prepare_reconnect, [
-             tenant,
-             Map.delete(input, "generation"),
-             installation.origin,
-             registration
-           ])
-           |> prepared_result(),
+           prepare_saved(port, tenant, input, installation.origin, registration, connection),
          {:ok, current} <- installation(options),
          :ok <- same_installation(installation, current),
          target = %{connection_id: id, generation: generation, operation: "replace"},
@@ -61,9 +57,10 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
          repository,
          tenant,
          %{status: "connected", auth_method: "oauth"} = connection,
-         %{"auth_method" => "dcr"} = input
+         input
        ) do
-    if Map.has_key?(input, "initial_access_token") do
+    if Map.has_key?(input, "initial_access_token") or
+         (input["auth_method"] != "dcr" and is_nil(Map.get(connection, :directory_entry))) do
       {:ok, %{}}
     else
       with {:ok, resolved} <- Repositories.call(repository, :resolve, [tenant, connection.id]),
@@ -91,6 +88,22 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
   end
 
   defp registration(_repository, _tenant, _connection, _input), do: {:ok, %{}}
+
+  defp prepare_saved(port, tenant, input, origin, registration, connection) do
+    arguments = [tenant, input, origin, registration]
+
+    {operation, arguments} =
+      case Map.get(connection, :directory_entry) do
+        %{} = entry -> {:prepare_saved, arguments ++ [entry]}
+        _ -> {:prepare_reconnect, arguments}
+      end
+
+    with {:ok, prepared} <- port |> Repositories.call(operation, arguments) |> prepared_result() do
+      if MCPOAuthProposal.saved_prepared?(prepared, input, connection),
+        do: {:ok, prepared},
+        else: {:error, :oauth_preparation_failed}
+    end
+  end
 
   defp handoff(principal, tenant, prepared, installation, target, options) do
     attributes =
@@ -226,7 +239,8 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
       {:ok, %Vxpipe.Calls.ResolvedMCPConnection{connection: connection} = resolved} ->
         if connection.id == claimed.attempt.connection_id and
              connection.generation == claimed.attempt.generation and
-             connection.auth_method == "oauth",
+             connection.auth_method == "oauth" and
+             MCPOAuthProposal.completed?(connection, claimed),
            do: {:ok, resolved},
            else: {:error, :oauth_completion_failed}
 
@@ -255,7 +269,12 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
   end
 
   defp prepare(port, tenant, input, origin) do
-    port |> Repositories.call(:prepare, [tenant, input, origin]) |> prepared_result()
+    with {:ok, prepared} <-
+           port |> Repositories.call(:prepare, [tenant, input, origin]) |> prepared_result() do
+      if MCPOAuthProposal.prepared?(prepared, input),
+        do: {:ok, prepared},
+        else: {:error, :oauth_preparation_failed}
+    end
   end
 
   defp prepared_result(result) do
@@ -269,6 +288,8 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
              :invalid_own_oauth_configuration,
              :oauth_browser_grant_required,
              :invalid_mcp_endpoint,
+             :invalid_mcp_listing,
+             :mcp_listing_unavailable,
              :invalid_oauth_issuer,
              :oauth_issuer_required,
              :unsupported_oauth_capabilities,

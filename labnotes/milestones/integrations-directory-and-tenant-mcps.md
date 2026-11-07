@@ -676,8 +676,8 @@ instance; per-connection durable claims provide the cross-instance fence.
 
 Depends on T1/T2 directory resolution and T4/T5/T6 connection/authentication contracts.
 Listing resolution/discovery, snapshot storage, static connection management and
-locked static forms are implemented; binding through OAuth flows/forms remains missing
-production implementation, not just browser acceptance.
+locked static forms are implemented. OAuth flows now bind accepted configuration;
+listed OAuth forms remain missing production implementation, not just browser acceptance.
 See [lookup and snapshot contracts](../../docs/development/listed-mcp-connections.md).
 
 - [x] Reuse the existing directory page cache for bounded directory/entry/revision
@@ -724,6 +724,21 @@ See [lookup and snapshot contracts](../../docs/development/listed-mcp-connection
   keep long headings/notes contained. Desktop/mobile Chrome fixture confirmation
   covers API-key creation/replacement, bearer/Basic/anonymous fields, tools during
   outage and read-only controls. Authenticated backend browser acceptance stays open.
+- [x] Address listed OAuth checkpoint review: preserve the existing explicit-issuer
+  Own-client fallback when protected-resource metadata is absent, even when issuer
+  metadata advertises managed registration. Reject conflicting or invalid metadata;
+  verify new and accepted-snapshot preparation without a registration request.
+- [x] Address listed OAuth checkpoint review: reject malformed issuer input with
+  HTTP 422 before directory/protocol reads; verify capability loss between selection
+  and revalidation cannot proceed to registration or consent handoff.
+- [x] Prepare listed OAuth through existing bounded discovery/registration and
+  encrypted attempts. Bind proposed entry/revision, draft and resource; permit only
+  required managed or preregistered client fields. Preserve accepted snapshot/name
+  through callback and reject mismatched protocol results before persistence.
+- [x] Reuse accepted saved configuration for generation-bound OAuth replacement and
+  retained-ID reconnect without directory access. Real-store session/CSRF lifecycle
+  coverage verifies callback outage, single-use state, compatible DCR reuse, refresh,
+  revocation/fresh registration, namespace preservation and stale/cross-tenant rejection.
 
 Discovery checkpoint evidence: [labnotes](../20261107-0431-connect-listed-mcps.md),
 4,901 umbrella tests with zero failures (201 excluded, seed 177411), all five root
@@ -747,7 +762,13 @@ review. ESLint retains only the existing SetupDialog hook warning. Production
 components were inspected with in-memory Storybook responses on desktop/mobile;
 this does not close authenticated production-browser acceptance.
 
-- [ ] Resolve new listed-connection proposals through the existing trusted backend
+Listed OAuth backend evidence: [labnotes](../20261107-0553-connect-listed-oauth.md),
+4,931 umbrella tests with zero failures (201 excluded, seed 181095), all five root
+gates and clean independent adversarial/exact-index review. Two preexisting test
+synchronization races were corrected separately while preserving exact outcomes.
+Listed OAuth UI and authenticated browser acceptance remain separate open work.
+
+- [x] Resolve new listed-connection proposals through the existing trusted backend
   directory adapter. Reject retired/incompatible proposals before side effects;
   bind the validated directory ID, endpoint and recipe into connection/attempt
   configuration. Ignore browser endpoint/authentication overrides for listed entries.
@@ -1372,13 +1393,13 @@ external-directory publication remain open. The index stays unchecked. See
 
 Acceptance follow-up, 2026-11-07:
 
-- [ ] Stabilize the umbrella gate's pending-admission shutdown test by acknowledging
+- [x] Stabilize the umbrella gate's pending-admission shutdown test by acknowledging
   the owner after creating its asynchronous monitor and before terminating the
   separate controller. Exact shutdown-reason/no-dial assertions are preserved;
-  50 focused repetitions and the full 29-test file pass. The full umbrella rerun
-  remains open. See [correction evidence](../20261107-0613-fix-admission-monitor.md).
-- [ ] Stabilize the terminal speech-overflow fixture by observing completion through
+  50 focused repetitions, the full 29-test file and all 4,931 umbrella tests pass
+  (seed 181095). See [correction evidence](../20261107-0613-fix-admission-monitor.md).
+- [x] Stabilize the terminal speech-overflow fixture by observing completion through
   the capability instead of awaiting a reply from its deliberately retired provider.
   Exact overflow and termination assertions remain; fifty focused repetitions and
-  the full 63-test file pass. Full umbrella rerun remains open. See
+  the full 63-test file and all 4,931 umbrella tests pass (seed 181095). See
   [correction evidence](../20261107-0625-fix-overflow-fixture.md).

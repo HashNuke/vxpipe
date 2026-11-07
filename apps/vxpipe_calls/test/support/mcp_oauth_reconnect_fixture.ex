@@ -35,6 +35,26 @@ defmodule Vxpipe.Calls.Test.MCPOAuthReconnectFixture do
   end
 
   def snapshot(pid), do: Agent.get(pid, & &1)
+
+  def listing(pid, entry),
+    do:
+      Agent.update(pid, fn state ->
+        %{
+          state
+          | connection:
+              Map.merge(state.connection, %{
+                directory_entry: entry,
+                directory_id: entry["directory_id"] <> "/" <> entry["integration_id"]
+              })
+        }
+      end)
+
+  def prepare_saved(pid, tenant, input, origin, registration, entry) do
+    send(snapshot(pid).owner, {:prepared_saved, input, registration, entry})
+    {:ok, prepared} = prepare_reconnect(pid, tenant, input, origin, registration)
+    {:ok, %{prepared | secrets: Map.put(prepared.secrets, "directory_entry", entry)}}
+  end
+
   def completion(pid, mode), do: Agent.update(pid, &%{&1 | completion: mode})
   def fail_resolve(pid, reason), do: Agent.update(pid, &Map.put(&1, :resolve_error, reason))
 
@@ -117,16 +137,36 @@ defmodule Vxpipe.Calls.Test.MCPOAuthReconnectFixture do
     if state.completion == :deny do
       {:error, :oauth_consent_denied}
     else
+      entry = claimed.secrets["directory_entry"]
+
+      connection = %{
+        id: claimed.attempt.connection_id,
+        generation: claimed.attempt.generation,
+        endpoint: claimed.attempt.resource,
+        auth_method: "oauth",
+        directory_id: nil,
+        server_name: "Calendar"
+      }
+
+      connection =
+        if entry,
+          do:
+            Map.merge(connection, %{
+              directory_entry: entry,
+              directory_id: entry["directory_id"] <> "/" <> entry["integration_id"],
+              server_name: entry["name"]
+            }),
+          else: connection
+
+      connection =
+        case state.completion do
+          {:tamper, values} -> Map.merge(connection, values)
+          _ -> connection
+        end
+
       {:ok,
        %ResolvedMCPConnection{
-         connection: %{
-           id: claimed.attempt.connection_id,
-           generation: claimed.attempt.generation,
-           endpoint: claimed.attempt.resource,
-           auth_method: "oauth",
-           directory_id: nil,
-           server_name: "Calendar"
-         },
+         connection: connection,
          secrets: %{"access_token" => "replacement-access"}
        }}
     end

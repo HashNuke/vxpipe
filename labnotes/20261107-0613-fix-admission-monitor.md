@@ -22,5 +22,5 @@ runtime behavior changed; the Lean lane is not required for this test correction
 
 Verification: the synchronized focused test passes 50 repetitions and all 29 tests
 in the complete file pass. Independent adversarial exact-index review is clean.
-The full umbrella rerun remains pending and is tracked as an open acceptance gate.
+The subsequent full umbrella rerun passes all 4,931 tests (201 excluded, seed 181095).
 The correction is also tracked in the Integrations milestone acceptance tasks.

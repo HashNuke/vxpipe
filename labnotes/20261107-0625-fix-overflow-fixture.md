@@ -17,4 +17,4 @@ for this test-only synchronization correction.
 Verification: the corrected focused test passes fifty repetitions with the failing
 seed, and the complete 63-test file passes. Independent adversarial source review
 found no remaining issue. The second umbrella run was interrupted after its known
-failure; a clean full rerun remains an open acceptance gate.
+failure; the subsequent full rerun passes all 4,931 tests (201 excluded, seed 181095).

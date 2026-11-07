@@ -56,6 +56,7 @@ defmodule Vxpipe.Console.MCPOAuthController do
              :invalid_oauth_reconnect,
              :invalid_oauth_return_location,
              :invalid_mcp_endpoint,
+             :invalid_mcp_listing,
              :invalid_oauth_issuer,
              :oauth_issuer_required,
              :unsupported_oauth_capabilities,
@@ -65,6 +66,9 @@ defmodule Vxpipe.Console.MCPOAuthController do
 
       {:error, reason} when reason in [:oauth_attempt_busy, :mcp_connection_busy] ->
         failure(conn, 429, reason)
+
+      {:error, :mcp_listing_unavailable} ->
+        failure(conn, 503, :mcp_listing_unavailable)
 
       _ ->
         failure(conn, 503, :oauth_connection_unavailable)
