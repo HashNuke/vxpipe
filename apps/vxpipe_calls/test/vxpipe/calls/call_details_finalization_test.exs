@@ -3,6 +3,7 @@ defmodule Vxpipe.Calls.CallDetailsFinalizationTest do
 
   alias Vxpipe.Calls.{
     CallDetailsAssessment,
+    CallDetailsObject,
     CallDetailsSource,
     PublicationComponent,
     PublicationDecision,
@@ -89,9 +90,15 @@ defmodule Vxpipe.Calls.CallDetailsFinalizationTest do
 
   test "changed late facts produce another immutable source revision", context do
     complete_components = [component("history", :complete), component("usage", :complete)]
+    release_reference = make_ref()
 
     first =
       context.common
+      |> Keyword.put(
+        :publication_artifact_writer,
+        {TestPublicationArtifactWriter,
+         %{observer: self(), response: {:wait, release_reference}, published_at: @published_at}}
+      )
       |> Keyword.put(
         :publication_source,
         {TestPublicationSource,
@@ -107,7 +114,18 @@ defmodule Vxpipe.Calls.CallDetailsFinalizationTest do
                first
              )
 
+    assert_receive {:publication_write_started, first_attempt, "publication-first"}
     first_monitor = Process.monitor(first_worker)
+    object_key = "calls/test/details/#{first_snapshot.filename}"
+
+    assert {:ok, object} =
+             CallDetailsObject.new(
+               object_key,
+               %{"object_key" => object_key, "etag" => "test-etag"},
+               @published_at
+             )
+
+    send(first_attempt, {:release_publication_write, release_reference, {:ok, object}})
     assert_receive {:vxpipe_call_details_published, ^first_worker, "publication-first", 1}
     assert_receive {:DOWN, ^first_monitor, :process, ^first_worker, :normal}
 

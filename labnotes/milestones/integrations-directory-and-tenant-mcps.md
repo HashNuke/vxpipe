@@ -1182,6 +1182,15 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
+- [ ] Correct the finalization test's monitor-after-exit race found by the full
+  same-seed root rerun: `changed late facts produce another immutable source
+  revision` receives `:noproc` after the first worker has already committed.
+  Establish monitoring before releasing the existing fixture acknowledgement;
+  keep the production lifecycle contract. All three focused cases and four static
+  root checks pass; Astra reviewed the actual diff without further findings. The
+  corrected full root run remains active.
+  Evidence: [monitor synchronization](../20261107-0850-stabilize-publication-monitor.md).
+
 - [x] Extend the cross-node CIMD/DCR callback cases to renew their actual saved
   grants on the initiating node and observe rotated tokens on the callback node.
   Assert one extra token exchange, grant revision 2 and unchanged configuration
