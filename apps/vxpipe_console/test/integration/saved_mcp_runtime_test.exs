@@ -3,7 +3,9 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
 
   alias Vxpipe.Calls
   alias Vxpipe.Calls.EditorToolCatalog
+  alias Vxpipe.Calls.MCPConnections
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationOwner
+  alias Vxpipe.Console.Test.FakeUserIdentity
   alias Vxpipe.Console.Test.SavedMCPWireConnectionProvider
   alias Vxpipe.Gateway.CallAdmission.CallEngineOptions
   alias Vxpipe.MCP.{ConnectionKey, Connections}
@@ -202,6 +204,124 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
 
     assert {:error, :mcp_connection_unavailable} =
              CallEngineOptions.build(c.options, %{call | tenant_key: c.other})
+  end
+
+  test "an unchanged published call spec works after explicit reconnect with a fresh generation",
+       c do
+    principal = FakeUserIdentity.principal()
+
+    options =
+      Keyword.put(c.options, :refresh_authority, fn ->
+        FakeUserIdentity.authenticate(FakeUserIdentity.token())
+      end)
+
+    {old_call, route} = published_call(c, c.options)
+
+    assert {:ok, before} =
+             Calls.fetch_call_spec(
+               c.tenant,
+               route.call_spec_id,
+               route.call_spec_revision,
+               c.options
+             )
+
+    assert {:ok, revoked} =
+             MCPConnections.disconnect(principal, c.tenant, c.connection.id, 1, options)
+
+    assert revoked.generation == 2
+
+    assert {:error, :mcp_connection_revoked} =
+             ConnectionStore.resolve(c.context, c.tenant, c.connection.id)
+
+    assert {:error, _} = Calls.prepare_call(c.principal, route.key, %{}, c.options)
+    assert {:error, :mcp_connection_unavailable} = CallEngineOptions.build(c.options, old_call)
+
+    check = fn tenant, configuration ->
+      %URI{port: port} = URI.parse(configuration.endpoint)
+
+      Vxpipe.MCP.ConnectionCheck.run_loopback_test(tenant, %{
+        configuration
+        | endpoint: "http://127.0.0.1:#{port}/mcp"
+      })
+    end
+
+    options =
+      Keyword.put(
+        options,
+        :mcp_connection_probe,
+        {Vxpipe.Console.MCPConnectionProbe, connection_check: check}
+      )
+
+    assert {:ok, reconnected} =
+             MCPConnections.reconnect(
+               principal,
+               c.tenant,
+               c.connection.id,
+               2,
+               %{
+                 "endpoint" => c.connection.endpoint,
+                 "auth_method" => "bearer",
+                 "credentials" => %{
+                   "token" => @token,
+                   "headers" => [%{"name" => "X-Workspace", "value" => @header}]
+                 }
+               },
+               options
+             )
+
+    assert reconnected.id == c.connection.id
+    assert reconnected.namespace == c.connection.namespace
+    assert reconnected.generation == 3
+
+    assert {:ok, ^before} =
+             Calls.fetch_call_spec(
+               c.tenant,
+               route.call_spec_id,
+               route.call_spec_revision,
+               c.options
+             )
+
+    assert {:ok, fresh, _} = Calls.prepare_call(c.principal, route.key, %{}, c.options)
+
+    assert %{"records__lookup_customer" => fresh_tool} =
+             fresh.plan.participants["assistant"].tools
+
+    assert map_size(fresh.plan.participants["assistant"].tools) == 1
+    old_tool = old_call.plan.participants["assistant"].tools["records__lookup_customer"]
+    assert fresh_tool.remote.integration_id == old_tool.remote.integration_id
+    assert fresh_tool.remote.remote_name == old_tool.remote.remote_name
+    assert fresh_tool.remote.credential_generation == "3"
+    assert old_tool.remote.credential_generation == "1"
+
+    assert {:error, :mcp_connection_unavailable} = CallEngineOptions.build(c.options, old_call)
+    assert {:ok, runtime} = CallEngineOptions.build(c.options, fresh)
+    assert_private_absent(c, [before, fresh.plan])
+
+    {:ok, key} =
+      ConnectionKey.new(
+        scope: :tenant,
+        tenant_id: c.tenant,
+        integration_id: c.connection.id,
+        credential_generation: "3"
+      )
+
+    on_exit(fn -> Connections.close(key) end)
+
+    owner =
+      start_supervised!(
+        {IntegrationOwner,
+         activation_id: fresh.id,
+         tools: fresh.plan.participants["assistant"].tools,
+         integrations: Keyword.fetch!(runtime, :mcp_catalog_store),
+         connection_provider: SavedMCPWireConnectionProvider}
+      )
+
+    assert {:ok, %{"content" => [%{"text" => "found customer-42"}]}} =
+             IntegrationOwner.execute(owner, "records__lookup_customer", %{
+               "customer_id" => "customer-42"
+             })
+
+    assert_receive {:remote_mcp_wire_request, "tools/call", "Bearer " <> @token, _}, 2_000
   end
 
   defp published_call(c, options) do

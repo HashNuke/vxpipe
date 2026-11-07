@@ -890,7 +890,7 @@ retained recovery pass with Basic client authentication: denied consent clears
 credentials; fresh credentials and approval restore the same identity during the
 outage. Custom machine retained recovery passes with explicit review, cancel and
 fresh Basic client credentials without consent redirection. Existing call-spec
-reference composition remains open; see [current browser evidence](../20261107-0941-verify-listed-browser.md).
+reference composition now passes its focused real-store/wire lane; see [current browser evidence](../20261107-0941-verify-listed-browser.md).
 
 ### T6b — Retained-ID reconnect and duplicate recovery
 
@@ -924,14 +924,17 @@ Depends on T4/T5/T6; listed identity cases additionally require T6a.
 - [x] Distinguish an already connected duplicate from a retained disconnected
   record. Offer current management instead of misleading retry advice; do not
   trust conflict response text or restore secret values from saved records.
-- [ ] Verify explicit consent, cancel, URL/method changes, stale proposals,
+- [x] Verify explicit consent, cancel, URL/method changes, stale proposals,
   cross-tenant IDs, storage failure and preservation of existing call-spec
   references. Cover custom/listed, static/browser OAuth/machine flows and rendered
   desktop/mobile recovery before closing authenticated workflow acceptance.
   Static/browser/machine browser recovery now passes. Astra mapped the stale,
-  cross-tenant and storage cases to existing tests, but the composed existing
-  call specification -> disconnect -> reconnect -> fresh preparation check remains
-  open. Stable ID/namespace alone does not close that acceptance requirement.
+  cross-tenant and storage cases to existing tests. The composed existing call
+  specification -> disconnect -> reconnect -> fresh preparation check now passes
+  with an unchanged published revision and original route/tool reference, a fresh
+  generation and successful wire invocation; the old prepared generation stays
+  fenced. All five saved-runtime cases and Astra review pass. Root gates rerun
+  with the outage-launcher checkpoint. See [call-spec evidence](../20261107-1109-verify-reconnected-call-spec.md).
 
 Recovery checkpoint progress: [labnotes](../20261107-0648-wire-retained-mcp.md).
 Calls 24 and Console 11 focused tests pass, plus real-store session/CSRF lifecycle
