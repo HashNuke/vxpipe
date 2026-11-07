@@ -9,10 +9,16 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
   def resource, do: @resource
   def issuer, do: @issuer
   def origin, do: @origin
+  defp resource(state), do: Agent.get(state, & &1.resource)
+  defp issuer(state), do: Agent.get(state, & &1.issuer)
+  defp origin(state), do: Agent.get(state, & &1.origin)
 
   def initial(mode),
     do: %{
       mode: mode,
+      resource: @resource,
+      issuer: @issuer,
+      origin: @origin,
       grant: "authorization_code",
       base: nil,
       count: %{},
@@ -93,12 +99,12 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
     route(conn, state)
   end
 
-  defp route(%{method: "GET", request_path: "/mcp"} = conn, _state) do
+  defp route(%{method: "GET", request_path: "/mcp"} = conn, state) do
     if get_req_header(conn, "authorization") == [] do
       conn
       |> put_resp_header(
         "www-authenticate",
-        "Bearer resource_metadata=\"https://mcp.example.test/.well-known/oauth-protected-resource/mcp\""
+        "Bearer resource_metadata=\"#{URI.merge(resource(state), "/.well-known/oauth-protected-resource/mcp")}\""
       )
       |> json(401, %{})
     else
@@ -108,12 +114,12 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
 
   defp route(
          %{method: "GET", request_path: "/.well-known/oauth-protected-resource/mcp"} = conn,
-         _state
+         state
        ),
        do:
          json(conn, 200, %{
-           "resource" => @resource,
-           "authorization_servers" => [@issuer],
+           "resource" => resource(state),
+           "authorization_servers" => [issuer(state)],
            "scopes_supported" => ["tools:read"]
          })
 
@@ -125,10 +131,10 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
     cimd = settings.mode == "cimd"
 
     metadata = %{
-      "issuer" => @issuer,
-      "authorization_endpoint" => @issuer <> "/authorize",
-      "token_endpoint" => @issuer <> "/token",
-      "registration_endpoint" => @issuer <> "/register",
+      "issuer" => settings.issuer,
+      "authorization_endpoint" => settings.issuer <> "/authorize",
+      "token_endpoint" => settings.issuer <> "/token",
+      "registration_endpoint" => settings.issuer <> "/register",
       "client_id_metadata_document_supported" => cimd,
       "authorization_response_iss_parameter_supported" => true,
       "response_types_supported" => ["code"],
@@ -171,7 +177,7 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
     {:ok, body, conn} = read_body(conn)
     request = JSON.decode!(body)
 
-    if request["redirect_uris"] == [@origin <> "/oauth/mcp/callback"] and
+    if request["redirect_uris"] == [origin(state) <> "/oauth/mcp/callback"] and
          request["token_endpoint_auth_method"] == "client_secret_basic" do
       client =
         Agent.get_and_update(state, fn s ->
@@ -199,8 +205,8 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
     params = conn.query_params
 
     valid =
-      params["redirect_uri"] == @origin <> "/oauth/mcp/callback" and
-        params["resource"] == @resource and
+      params["redirect_uri"] == origin(state) <> "/oauth/mcp/callback" and
+        params["resource"] == resource(state) and
         params["response_type"] == "code" and params["code_challenge_method"] == "S256" and
         params["scope"] == "tools:read" and registered?(state, params["client_id"]) and
         Agent.get(state, &contains_parameters?(params, &1.authorization_parameters))
@@ -208,7 +214,7 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
     if valid do
       result =
         Agent.get_and_update(state, fn s ->
-          if s.consent == :deny do
+          if Map.get(conn.assigns, :fixture_consent, s.consent) == :deny do
             {%{"error" => "access_denied"}, s}
           else
             n = s.sequence + 1
@@ -218,7 +224,9 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
         end)
 
       query =
-        result |> Map.merge(%{"state" => params["state"], "iss" => @issuer}) |> URI.encode_query()
+        result
+        |> Map.merge(%{"state" => params["state"], "iss" => issuer(state)})
+        |> URI.encode_query()
 
       conn
       |> put_resp_header("location", params["redirect_uri"] <> "?" <> query)
@@ -237,7 +245,7 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
       Agent.get(state, &contains_parameters?(params, &1.token_parameters)) and
         get_req_header(conn, "x-workspace") == [] and not Map.has_key?(params, "private_key")
 
-    if authenticated?(state, client, method, credential) and params["resource"] == @resource and
+    if authenticated?(state, client, method, credential) and params["resource"] == resource(state) and
          valid_parameters do
       result = Agent.get_and_update(state, fn s -> redeem(s, client, params) end)
 
@@ -320,7 +328,7 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
     do:
       Agent.get(state, fn s ->
         Map.has_key?(s.clients, client) or
-          (s.mode == "cimd" and client == @origin <> "/oauth/client-metadata.json")
+          (s.mode == "cimd" and client == s.origin <> "/oauth/client-metadata.json")
       end)
 
   defp authenticated?(state, client, method, credential) do
@@ -337,7 +345,7 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
           verify_assertion(s, registered, client, credential)
 
         {nil, "none"} ->
-          {s.mode == "cimd" and client == @origin <> "/oauth/client-metadata.json", s}
+          {s.mode == "cimd" and client == s.origin <> "/oauth/client-metadata.json", s}
 
         _ ->
           {false, s}
@@ -349,7 +357,7 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
     case ExMCP.Authorization.JWT.verify_and_validate(assertion, registered["public_key"],
            iss: client,
            sub: client,
-           aud: @issuer <> "/token"
+           aud: s.issuer <> "/token"
          ) do
       {:ok, %{"jti" => id}} ->
         {not MapSet.member?(s.assertion_ids, id),

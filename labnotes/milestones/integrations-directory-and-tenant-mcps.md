@@ -1154,6 +1154,36 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
+- [ ] Extend the controlled peer's startup scenarios for remaining authentication
+  and recovery browser checks: static/anonymous methods, configured own clients and
+  machine grants, protected registration, partial/multiple-issuer metadata and
+  independent outage states. The user suggested configurable real-server testing;
+  an independently hosted test server can additionally exercise unmodified outbound
+  DNS/TLS routing when available, without replacing the existing local gates.
+- [x] Verify custom unprotected DCR URL discovery, initial denied consent, draft
+  recovery and successful retry through the actual Console browser. The automatic
+  method selection exposes only the optional initial registration token; denial
+  creates no connected record, and approval initializes/tools-discovers one record.
+  Saved-credential testing returns HTTP 200, and management/tools render on desktop
+  and mobile without exposing saved values. Protected registration and broader DCR
+  recovery acceptance remain open.
+
+- [x] Repair the controlled browser launcher's prerequisites and lifetime. Create
+  its output directory before startup; attach its named fixture supervisor to
+  Console so peers survive script evaluation; use an explicit test CA for actual
+  CIMD retrieval with peer/hostname verification. The first browser attempts exposed
+  peer shutdown and invalid test trust, without changing production policy.
+- [x] Verify custom CIMD in an authenticated desktop/mobile browser: URL discovery,
+  unavailable-server retry, real TLS CIMD fetch, explicit consent, callback,
+  initialization/tools, refresh and undisplayed saved credentials. Denied replacement
+  preserves the connected generation. Mobile retained review, denied reconnect and
+  later approval preserve ID/namespace; a connected duplicate opens existing
+  management. The combined fixture/OAuth/renewal lane passes 39 tests. All five root
+  gates pass: 4,991 tests, zero failures and 237 excluded (seed 594684). Other methods,
+  listed identity, partial/multiple-issuer discovery and cross-node callback gates
+  remain open. See
+  [browser evidence](../20261107-1108-integrations-browser-acceptance.md) and
+  [runner guide](../../docs/development/mcp-browser-acceptance.md).
 - [x] Complete fresh-checkout MCP dependency preparation in setup and CI. The
   isolated browser checkout reproduced ExMCP compilation before Plug was built;
   include dependency children when compiling the patched ExMCP. The focused fix
