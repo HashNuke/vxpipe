@@ -4,6 +4,9 @@ defmodule Vxpipe.Console.MCPConnectionProbe do
   alias Vxpipe.MCP.{ConnectionCheck, StaticConfiguration}
 
   @impl true
+  def check(options, tenant, %{"listing" => _reference} = input),
+    do: Vxpipe.Console.MCPListedConnection.check(options, tenant, input)
+
   def check(options, tenant, %{"auth_method" => "own_client"} = input),
     do: Vxpipe.Console.MCPOAuthMachineConnection.check(options, tenant, input)
 
@@ -26,4 +29,8 @@ defmodule Vxpipe.Console.MCPConnectionProbe do
        }}
     end
   end
+
+  @impl true
+  def check_saved(options, tenant, input, directory_entry),
+    do: Vxpipe.Console.MCPListedConnection.check_saved(options, tenant, input, directory_entry)
 end

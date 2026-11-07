@@ -1,7 +1,8 @@
 # Listed MCP discovery and accepted configuration
 
-Status: directory reference resolution, credentialless discovery and accepted
-snapshot storage implemented; listed connection/attempt wiring and locked forms remain open in
+Status: directory reference resolution, credentialless discovery, accepted
+snapshot storage and static connection management implemented; listed OAuth
+attempt wiring and locked forms remain open in
 [T6a](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md#t6a--listed-template-connection-identity-and-forms).
 
 ## Reuse the directory and management boundaries
@@ -70,19 +71,46 @@ return `422 invalid_mcp_listing`; unavailable or changed listings return
 The complete `listing` input is filtered from Phoenix request logs, including
 malformed references that contain unexpected private fields.
 
+## Static connections on the existing tenant routes
+
+The discovery response is display data when sent through a browser. A new static
+`POST /api/tenants/:tenant/mcp-connections` accepts `{listing, credentials}` and
+resolves the reference again before using credentials. It rejects a browser
+snapshot and extra credential fields. Optional browser `endpoint` and
+`auth_method` fields are ignored: the resolved recipe owns both. Lookup and
+connection checking share the bounded preflight lifetime. Calls verifies the
+returned directory/entry/revision and endpoint before persistence.
+
+Supported recipes are explicit anonymous access, bearer token, HTTP Basic and one
+API-key header. Anonymous access accepts empty credentials; bearer accepts only
+`token`; Basic accepts only `username` and `password`. API-key input uses
+`headers: [{value, name?}]`, but the accepted recipe supplies the header name.
+Only the user-provided value is used. Stored credentials keep the existing static
+runtime format; this adds no credential store or transport implementation.
+
+The backend binds the accepted name, endpoint, recipe and compound
+`directory_id/integration_id` identity into saved configuration. The repository
+supports a closed, immutable public snapshot alongside encrypted credentials;
+see the
+[storage contract](tenant-mcp-storage.md#accepted-directory-configuration).
+GET/list responses expose that public snapshot, never saved credentials.
+
+Replacement and retained-ID reconnect use a separate `check_saved` port supplied
+with the authorized tenant record's snapshot. They never fetch the directory.
+Calls checks the record's generation and lifecycle state before credential use,
+and verifies the probe preserves its endpoint, method and directory identity.
+Replacement may retain existing credentials when omitted; reconnect requires fresh
+credentials after revocation erased the old ones. Catalog refresh, disconnect and
+reconnect preserve the accepted name, snapshot, ID and namespace even during an
+upstream outage or after retirement. Inventory matches compound directory identity
+as well as canonical endpoint, so a later directory revision does not hide the
+saved connection or confuse identically named entries from different directories.
+
 ## Remaining connection work
 
-The discovery response is display data when sent through a browser. A future
-Connect request must resolve its reference again on the backend before side
-effects; it must not trust a returned snapshot submitted by the client. The
-backend must bind the accepted name/endpoint/recipe and directory/entry identity
-into saved configuration and OAuth attempts. The repository now supports a closed,
-immutable public snapshot alongside encrypted credentials; see the
-[storage contract](tenant-mcp-storage.md#accepted-directory-configuration).
-In-flight attempts and subsequent
-management must use that saved configuration, including after retirement,
-directory outage, disappearance or disconnect. This checkpoint does not yet
-wire listed creation/OAuth attempts or enable the listed Connect action.
+Listed OAuth attempts must preserve their accepted identity/recipe through
+completion and management. Locked static/OAuth forms and the listed Connect action
+remain unimplemented; the static API checkpoint does not enable that UI action.
 
 Rejected alternatives: adding a parallel directory API, accepting the entire
 browser listing as authority, unbounded catalog scans, and re-reading the public
@@ -96,5 +124,8 @@ revision/version changes, retired entries, optional setup fields, recipe
 validation, unsafe links, bounded input, sanitized failures and request logging.
 Calls tests verify tenant authority, authority refresh and mismatched draft/entry
 responses. Endpoint tests exercise the existing authenticated route with the real
-Console preflight adapter and in-memory network fixtures. No UI changes or real
-provider interoperability are claimed by this checkpoint.
+Console adapters and in-memory network fixtures. Static lifecycle coverage uses
+real encrypted persistence and session/CSRF routes for creation, replacement,
+refresh, disconnect and retained-ID reconnect while the directory is offline;
+it verifies header-name ownership, stale generations and cross-tenant isolation.
+No UI changes or real provider interoperability are claimed by this checkpoint.

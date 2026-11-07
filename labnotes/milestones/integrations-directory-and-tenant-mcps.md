@@ -675,8 +675,8 @@ instance; per-connection durable claims provide the cross-instance fence.
 ### T6a — Listed-template connection identity and forms
 
 Depends on T1/T2 directory resolution and T4/T5/T6 connection/authentication contracts.
-Read-only listing resolution/discovery and snapshot storage are implemented;
-binding that identity through connection flows and listed forms remains missing
+Listing resolution/discovery, snapshot storage and static connection management
+are implemented; binding that identity through OAuth flows and listed forms remains missing
 production implementation, not just browser acceptance.
 See [lookup and snapshot contracts](../../docs/development/listed-mcp-connections.md).
 
@@ -700,6 +700,18 @@ See [lookup and snapshot contracts](../../docs/development/listed-mcp-connection
   protocol/credential checks and public metadata's trust boundary; verify the
   maximum compound ID, omitted-snapshot preservation and unchanged credentials/
   generation after rejected replacement.
+- [x] Wire listed static creation through the existing directory adapter and tenant
+  connection routes. Ignore endpoint/authentication/header-name overrides; collect
+  only recipe-required credentials and persist the accepted public snapshot.
+  Reject a probe result for a different directory, entry or revision.
+- [x] Use accepted saved configuration for static replacement and retained-ID
+  reconnect, with generation/state checks before credential use and no directory
+  lookup. Preserve canonical credentials, snapshot/name and ID/namespace through
+  replacement, tool refresh, disconnect and reconnect. Real-store HTTP lifecycle
+  coverage verifies directory outage, stale generation and cross-tenant isolation.
+- [x] Join inventory by compound directory/entry identity as well as canonical
+  endpoint; retain matches across upstream endpoint/revision changes without
+  confusing identical entry IDs from different directories.
 
 Discovery checkpoint evidence: [labnotes](../20261107-0431-connect-listed-mcps.md),
 4,901 umbrella tests with zero failures (201 excluded, seed 177411), all five root
@@ -710,6 +722,11 @@ Snapshot storage evidence: [labnotes](../20261107-0454-persist-listed-mcps.md),
 4,905 umbrella tests with zero failures (201 excluded, seed 371945), all five root
 gates and clean independent adversarial/exact-index review. The additive migration
 preserves existing records; public snapshots survive repository lifecycle changes.
+
+Static management evidence: [labnotes](../20261107-0512-connect-listed-static.md),
+4,914 umbrella tests with zero failures (201 excluded, seed 780141), all five root
+gates and clean independent adversarial/exact-index review. Listed OAuth, locked
+forms and browser acceptance remain open; this checkpoint enables only the API.
 
 - [ ] Resolve new listed-connection proposals through the existing trusted backend
   directory adapter. Reject retired/incompatible proposals before side effects;

@@ -7,4 +7,8 @@ defmodule Vxpipe.Calls.MCPConnectionProbe do
   """
   @callback check(term(), String.t(), map()) ::
               {:ok, Vxpipe.Calls.ResolvedMCPConnection.t()} | {:error, term()}
+
+  @doc "Checks credentials against an accepted snapshot loaded from the tenant record, never browser input."
+  @callback check_saved(term(), String.t(), map(), map()) ::
+              {:ok, Vxpipe.Calls.ResolvedMCPConnection.t()} | {:error, term()}
 end

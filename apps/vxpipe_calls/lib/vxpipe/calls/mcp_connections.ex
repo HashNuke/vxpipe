@@ -16,6 +16,7 @@ defmodule Vxpipe.Calls.MCPConnections do
     :tenant_key,
     :endpoint,
     :directory_id,
+    :directory_entry,
     :server_name,
     :auth_method,
     :generation,
@@ -27,6 +28,8 @@ defmodule Vxpipe.Calls.MCPConnections do
     :invalid_mcp_configuration,
     :invalid_mcp_endpoint,
     :invalid_mcp_authentication,
+    :invalid_mcp_listing,
+    :mcp_listing_unavailable,
     :mcp_connection_timed_out,
     :mcp_connection_busy,
     :mcp_authentication_required,
@@ -140,9 +143,10 @@ defmodule Vxpipe.Calls.MCPConnections do
          {:ok, saved} <- Repositories.call(repository, :get_retained, [tenant, id]),
          :ok <- current(saved, tenant, id, generation),
          :ok <- connected(saved),
+         {:ok, input} <- saved_input(input, saved),
          {:ok, input} <- edit_input(input, saved, repository, tenant, id),
          :ok <- input(input),
-         {:ok, checked} <- check(options, tenant, input),
+         {:ok, checked} <- check_saved(options, tenant, input, saved),
          :ok <- refresh(principal, tenant, options),
          {:ok, record} <-
            Repositories.call(repository, :replace, [
@@ -162,12 +166,13 @@ defmodule Vxpipe.Calls.MCPConnections do
     with :ok <- authorize(principal, tenant, :write),
          :ok <- tenant_exists(tenant, options),
          :ok <- identity(id, generation),
-         :ok <- input(input),
          {:ok, repository} <- Repositories.fetch(options, :mcp_connection_repository),
          {:ok, saved} <- Repositories.call(repository, :get_retained, [tenant, id]),
          :ok <- current(saved, tenant, id, generation),
          :ok <- revoked(saved),
-         {:ok, checked} <- check(options, tenant, input),
+         {:ok, input} <- saved_input(input, saved),
+         :ok <- input(input),
+         {:ok, checked} <- check_saved(options, tenant, input, saved),
          :ok <- same_endpoint(saved, checked.connection),
          :ok <- refresh(principal, tenant, options),
          {:ok, record} <-
@@ -278,6 +283,19 @@ defmodule Vxpipe.Calls.MCPConnections do
 
   defp current(_saved, _tenant, _id, _generation), do: {:error, :not_found}
 
+  defp saved_input(_input, %{directory_entry: %{}, auth_method: "oauth"}),
+    do: {:error, :oauth_reconnect_required}
+
+  defp saved_input(input, %{directory_entry: %{}} = saved) when is_map(input) do
+    if Map.keys(input) -- ~w(endpoint auth_method credentials) == [],
+      do:
+        {:ok,
+         Map.merge(input, %{"endpoint" => saved.endpoint, "auth_method" => saved.auth_method})},
+      else: {:error, :invalid_mcp_configuration}
+  end
+
+  defp saved_input(input, _saved), do: {:ok, input}
+
   defp edit_input(input, saved, repository, tenant, id)
        when is_map(input) do
     cond do
@@ -338,6 +356,17 @@ defmodule Vxpipe.Calls.MCPConnections do
     end
   end
 
+  defp input(%{"listing" => reference, "credentials" => credentials} = input)
+       when is_map(reference) and is_map(credentials) do
+    if Map.keys(input) -- ~w(listing endpoint auth_method credentials) == [] and
+         byte_size(JSON.encode!(reference)) <= 8192 and
+         byte_size(JSON.encode!(credentials)) <= 65_536,
+       do: :ok,
+       else: {:error, :invalid_mcp_configuration}
+  rescue
+    _ -> {:error, :invalid_mcp_configuration}
+  end
+
   defp input(
          %{
            "endpoint" => endpoint,
@@ -378,9 +407,56 @@ defmodule Vxpipe.Calls.MCPConnections do
 
   defp identity(_id, _generation), do: {:error, :invalid_mcp_connection}
 
+  defp check(options, tenant, %{"listing" => reference} = input) do
+    with {:ok, checked} <- probe(options, :check, [tenant, input]) do
+      if matches_listing?(checked.connection, reference),
+        do: {:ok, checked},
+        else: {:error, :mcp_connection_failed}
+    end
+  end
+
   defp check(options, tenant, input) do
+    probe(options, :check, [tenant, input])
+  end
+
+  defp matches_listing?(
+         %{
+           directory_entry: %{
+             "directory_id" => directory,
+             "integration_id" => integration,
+             "revision" => revision,
+             "endpoint" => endpoint
+           },
+           endpoint: endpoint,
+           directory_id: identity
+         },
+         %{
+           "directory_id" => directory,
+           "integration_id" => integration,
+           "entry_revision" => revision
+         }
+       )
+       when is_binary(directory) and is_binary(integration),
+       do: identity == directory <> "/" <> integration
+
+  defp matches_listing?(_connection, _reference), do: false
+
+  defp check_saved(options, tenant, input, %{directory_entry: %{} = entry} = saved) do
+    with {:ok, checked} <- probe(options, :check_saved, [tenant, input, entry]) do
+      if Map.get(checked.connection, :directory_entry) == entry and
+           Map.get(checked.connection, :endpoint) == saved.endpoint and
+           Map.get(checked.connection, :directory_id) == saved.directory_id and
+           Map.get(checked.connection, :auth_method) == saved.auth_method,
+         do: {:ok, checked},
+         else: {:error, :mcp_connection_failed}
+    end
+  end
+
+  defp check_saved(options, tenant, input, _saved), do: check(options, tenant, input)
+
+  defp probe(options, operation, arguments) do
     with {:ok, probe} <- Repositories.fetch(options, :mcp_connection_probe) do
-      case Repositories.call(probe, :check, [tenant, input]) do
+      case Repositories.call(probe, operation, arguments) do
         {:ok, %ResolvedMCPConnection{connection: configuration, secrets: secrets} = result}
         when is_map(configuration) and is_map(secrets) ->
           {:ok, result}

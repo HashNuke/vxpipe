@@ -46,6 +46,11 @@ defmodule Vxpipe.Calls.Test.MCPRepositoryFixture do
      ]}
   end
 
+  def get_retained({owner, %{directory_entry: _} = connection}, tenant, id) do
+    send(owner, {:mcp_metadata, tenant, id})
+    {:ok, Map.merge(connection, %{id: id, tenant_key: tenant})}
+  end
+
   def get_retained(context, tenant, id) do
     owner = if is_tuple(context), do: elem(context, 0), else: context
     send(owner, {:mcp_metadata, tenant, id})
@@ -63,6 +68,16 @@ defmodule Vxpipe.Calls.Test.MCPRepositoryFixture do
        directory_id: nil,
        namespace: "stable",
        catalog: []
+     }}
+  end
+
+  def resolve({owner, %{directory_entry: _} = connection}, tenant, id) do
+    send(owner, {:mcp_resolve, tenant, id})
+
+    {:ok,
+     %Vxpipe.Calls.ResolvedMCPConnection{
+       connection: Map.merge(connection, %{id: id, tenant_key: tenant}),
+       secrets: %{"token" => "saved-secret"}
      }}
   end
 
@@ -88,6 +103,9 @@ defmodule Vxpipe.Calls.Test.MCPRepositoryFixture do
   end
 
   def replace({owner, :unreadable}, tenant, id, generation, attributes, secrets),
+    do: replace(owner, tenant, id, generation, attributes, secrets)
+
+  def replace({owner, %{directory_entry: _}}, tenant, id, generation, attributes, secrets),
     do: replace(owner, tenant, id, generation, attributes, secrets)
 
   def replace(owner, tenant, id, generation, attributes, secrets) do

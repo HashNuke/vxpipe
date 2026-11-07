@@ -182,12 +182,19 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
          records
        ) do
     Enum.filter(records, fn record ->
-      (not is_nil(record.directory_id) and record.directory_id == item["id"]) or
-        same_endpoint?(record.endpoint, endpoint)
+      matches_directory?(record, item) or same_endpoint?(record.endpoint, endpoint)
     end)
   end
 
   defp matching_mcps(_item, _records), do: []
+
+  defp matches_directory?(
+         record,
+         %{"listing" => %{"directory_id" => directory, "integration_id" => integration}}
+       ),
+       do: Map.get(record, :directory_id) == directory <> "/" <> integration
+
+  defp matches_directory?(_record, _item), do: false
 
   defp same_endpoint?(left, right) do
     case {Vxpipe.MCP.StaticConfiguration.endpoint(left),

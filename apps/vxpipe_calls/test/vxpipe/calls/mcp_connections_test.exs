@@ -91,6 +91,137 @@ defmodule Vxpipe.Calls.MCPConnectionsTest do
     refute_received {:mcp_create, _, _, _}
   end
 
+  test "listed creation preserves accepted identity after authorized checking", data do
+    {entry, checked, options} = listed(data)
+
+    input = %{
+      "listing" => %{
+        "directory_id" => entry["directory_id"],
+        "integration_id" => entry["integration_id"],
+        "entry_revision" => entry["revision"],
+        "page" => %{}
+      },
+      "credentials" => %{"token" => "synthetic"}
+    }
+
+    reader = %{data.principal | assigned_tenants: %{@tenant => :read}}
+    assert {:error, :forbidden} = MCPConnections.connect(reader, @tenant, input, options)
+    refute_received {:mcp_probe, _, _}
+    assert {:ok, public} = MCPConnections.connect(data.principal, @tenant, input, options)
+    assert public.directory_entry == entry
+    assert public.directory_id == checked.connection.directory_id
+    assert_receive {:mcp_probe, @tenant, ^input}
+    assert_receive {:mcp_create, @tenant, %{directory_entry: ^entry}, %{"token" => "synthetic"}}
+    refute inspect(public) =~ "synthetic"
+  end
+
+  test "listed replacements use only saved configuration and may retain saved credentials",
+       data do
+    {entry, checked, options} = listed(data)
+    saved = Map.merge(checked.connection, %{generation: 3, status: "connected"})
+
+    options =
+      Keyword.put(options, :mcp_connection_repository, {MCPRepositoryFixture, {self(), saved}})
+
+    input = %{
+      "endpoint" => "https://attacker.example.test/mcp",
+      "auth_method" => "none",
+      "credentials" => %{"token" => "replacement"}
+    }
+
+    assert {:error, :stale_mcp_connection} =
+             MCPConnections.update(data.principal, @tenant, "connection-id", 2, input, options)
+
+    refute_received {:mcp_probe_saved, _, _, _}
+
+    assert {:ok, public} =
+             MCPConnections.update(data.principal, @tenant, "connection-id", 3, input, options)
+
+    assert public.directory_entry == entry
+    assert_receive {:mcp_probe_saved, @tenant, canonical, ^entry}
+    assert canonical["endpoint"] == entry["endpoint"]
+    assert canonical["auth_method"] == "bearer"
+    assert canonical["credentials"] == %{"token" => "replacement"}
+    refute_received {:mcp_probe, _, _}
+
+    assert {:ok, _} =
+             MCPConnections.update(data.principal, @tenant, "connection-id", 3, %{}, options)
+
+    assert_receive {:mcp_resolve, @tenant, "connection-id"}
+
+    assert_receive {:mcp_probe_saved, @tenant, %{"credentials" => %{"token" => "saved-secret"}},
+                    ^entry}
+  end
+
+  test "a listed probe cannot persist a different entry or revision than the proposal", data do
+    {entry, checked, options} = listed(data)
+
+    input = %{
+      "listing" => %{
+        "directory_id" => entry["directory_id"],
+        "integration_id" => entry["integration_id"],
+        "entry_revision" => entry["revision"],
+        "page" => %{}
+      },
+      "credentials" => %{"token" => "synthetic"}
+    }
+
+    for changed <- [
+          Map.put(entry, "directory_id", "another-directory"),
+          Map.put(entry, "integration_id", "another-entry"),
+          Map.put(entry, "revision", 2)
+        ] do
+      changed_check = %{
+        checked
+        | connection:
+            Map.merge(checked.connection, %{
+              directory_entry: changed,
+              directory_id: changed["directory_id"] <> "/" <> changed["integration_id"]
+            })
+      }
+
+      changed_options =
+        Keyword.put(
+          options,
+          :mcp_connection_probe,
+          {MCPProbeFixture, {self(), {:ok, changed_check}}}
+        )
+
+      assert {:error, :mcp_connection_failed} =
+               MCPConnections.connect(data.principal, @tenant, input, changed_options)
+
+      refute_received {:mcp_create, _, _, _}
+    end
+  end
+
+  test "listed reconnect requires fresh credentials and the retained generation", data do
+    {entry, checked, options} = listed(data)
+    saved = Map.merge(checked.connection, %{generation: 4, status: "revoked"})
+
+    options =
+      Keyword.put(options, :mcp_connection_repository, {MCPRepositoryFixture, {self(), saved}})
+
+    input = %{"credentials" => %{"token" => "fresh"}}
+
+    assert {:error, :invalid_mcp_configuration} =
+             MCPConnections.reconnect(data.principal, @tenant, "connection-id", 4, %{}, options)
+
+    assert {:error, :stale_mcp_connection} =
+             MCPConnections.reconnect(data.principal, @tenant, "connection-id", 3, input, options)
+
+    refute_received {:mcp_probe_saved, _, _, _}
+    refute_received {:mcp_resolve, _, _}
+
+    assert {:ok, public} =
+             MCPConnections.reconnect(data.principal, @tenant, "connection-id", 4, input, options)
+
+    assert public.directory_entry == entry
+    assert_receive {:mcp_probe_saved, @tenant, %{"credentials" => %{"token" => "fresh"}}, ^entry}
+    assert_receive {:mcp_replace, @tenant, "connection-id", 4, _}
+    refute_received {:mcp_probe, _, _}
+    refute_received {:mcp_resolve, _, _}
+  end
+
   test "updates and disconnects preserve exact identity and observed generation", data do
     assert {:ok, updated} =
              MCPConnections.update(
@@ -494,5 +625,35 @@ defmodule Vxpipe.Calls.MCPConnectionsTest do
              MCPConnections.get(reader, "BBBBBBBBBBBBBBBB", "connection-id", data.options)
 
     refute_received {:mcp_probe, _, _}
+  end
+
+  defp listed(data) do
+    entry = %{
+      "directory_id" => "public-directory",
+      "integration_id" => "calendar",
+      "revision" => 1,
+      "name" => "Directory Calendar",
+      "endpoint" => data.input["endpoint"],
+      "authentication" => %{"type" => "bearer"}
+    }
+
+    checked = %{
+      data.checked
+      | connection:
+          Map.merge(data.checked.connection, %{
+            directory_id: "public-directory/calendar",
+            directory_entry: entry,
+            server_name: entry["name"]
+          })
+    }
+
+    options =
+      Keyword.put(
+        data.options,
+        :mcp_connection_probe,
+        {MCPProbeFixture, {self(), {:ok, checked}}}
+      )
+
+    {entry, checked, options}
   end
 end

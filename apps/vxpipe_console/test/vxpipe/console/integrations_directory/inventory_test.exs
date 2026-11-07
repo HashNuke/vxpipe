@@ -168,6 +168,43 @@ defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
              Inventory.list(FakeUserIdentity.principal(), @tenant, %{}, opts)
   end
 
+  test "accepted directory identity survives an endpoint revision and remains directory scoped" do
+    saved = %{
+      id: "saved-listed",
+      tenant_key: @tenant,
+      endpoint: "https://old.example.test/mcp",
+      server_name: "Saved name",
+      auth_method: "bearer",
+      generation: 1,
+      status: "connected",
+      tool_count: 0,
+      directory_id: "public/calendar",
+      directory_entry: %{
+        "directory_id" => "public",
+        "integration_id" => "calendar",
+        "revision" => 1
+      }
+    }
+
+    row = %{
+      "id" => "calendar",
+      "revision" => 2,
+      "kind" => "mcp",
+      "connection" => %{"endpoint" => "https://new.example.test/mcp"}
+    }
+
+    for {directory, expected} <- [{"public", [saved.id]}, {"other-directory", []}] do
+      opts =
+        options(fn _, _ -> {:ok, %{body: %{"directory_id" => directory, "items" => [row]}}} end)
+        |> Keyword.put(:mcp_loader, fn _, _, _ -> {:ok, [saved]} end)
+
+      assert {:ok, result} = Inventory.list(FakeUserIdentity.principal(), @tenant, %{}, opts)
+      [item] = result.page["items"]
+      assert Enum.map(item["mcp_connections"], & &1.id) == expected
+      assert result.mcp_connections |> hd() |> Map.fetch!(:endpoint) == saved.endpoint
+    end
+  end
+
   test "native credential and MCP mutations use their separate permission grants" do
     for action <- ["tenant_api_keys.write", "tenant_services.write"] do
       actions = MapSet.new(["tenant_services.read", action])
