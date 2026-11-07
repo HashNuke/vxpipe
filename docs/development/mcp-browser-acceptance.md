@@ -27,12 +27,17 @@ and keyboard tab selection retain the dialog on desktop and mobile. See the
 The complete
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
 also requires the remaining listed/retained recovery cases, browser URL/revision
-races, independent node callbacks, outage states and final
+races, outage states and final
 release checks. Partial discovery now passes explicit retry with manual-method
 preservation. Multiple-issuer discovery requires selection and recovers from an
 unavailable issuer; both recovered flows pass actual consent and saved management.
 Unsupported OAuth stays blocked with consistent submission feedback. See the
 [discovery recovery evidence](../../labnotes/20261107-1304-verify-discovery-recovery.md).
+
+Independent-node callbacks and subsequent grant renewal now pass a separate
+six-case Console endpoint lane with real durable identity and signed cookies.
+Those ConnTest checks do not replace rendered browser or TLS acceptance; see
+[cross-node callback evidence](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md).
 
 Native platform inheritance, tenant override and restore also pass through the
 real Console and encrypted stores under a fresh-process directory outage with no

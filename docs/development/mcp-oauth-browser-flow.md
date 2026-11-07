@@ -1,8 +1,8 @@
 # Tenant MCP OAuth browser flow
 
-Status: backend browser start, callback and explicit reconnect are implemented.
-Production form activation, matching nonsecret draft restoration, listed-template
-selection and independent-node acceptance remain open in
+Status: browser start, callback, explicit reconnect, production forms, listed-template
+selection and matching nonsecret draft restoration are implemented. Full authenticated
+workflow and operational release acceptance remain tracked in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 The existing Services credential APIs continue to own native providers.
 
@@ -59,10 +59,10 @@ After fresh installation/authority checks, claimed failures redirect with fixed
 status or attempt ID. Invalid/unclaimed state and authority/installation failures
 remain bare errors. Responses use private/no-store and no-referrer headers.
 
-The production UI must still submit its current location and restore only a
-matching, short-lived nonsecret draft. Backend redirect tests do not establish
-that rendered browser round trip. Credentials and provider parameter values must
-never be restored from browser storage.
+The production UI submits its current location and restores only a matching,
+short-lived nonsecret draft. Backend redirect tests do not establish the rendered
+browser round trip; the milestone records authenticated browser evidence separately.
+Credentials and provider parameter values are never restored from browser storage.
 
 Explicit reconnect accepts the retained connection ID, exact endpoint and observed
 generation, including a disconnected or static-authentication record. It preserves
@@ -74,9 +74,9 @@ Connected DCR records may reuse registration fields only after fresh issuer,
 resource, callback, method, expiry and scope validation. Explicit initial tokens
 request fresh registration. Missing/unreadable old encryption keys also fall back
 to fresh registration; other repository failures do not. No old access or refresh
-token is passed to registration preparation. This does not yet provide the UI's
-proposal for discovering a previously disconnected identity during an initial
-new-connection flow.
+token is passed to registration preparation. Initial connection attempts also check
+for a retained identity and return an explicit review/reconnect proposal; they do
+not silently restore a disconnected connection.
 
 ## Verification
 
@@ -93,3 +93,21 @@ code grants, replay, denial, failed initialization, concurrent revocation, saved
 registration reuse, disconnect and restoration. Fixtures route transport to
 loopback and provide user identity; these cases do not claim external TLS/CIMD
 retrieval, rendered UI, cross-node behavior or runtime refresh acceptance.
+
+Six additional tagged Console cases use two independently supervised BEAM processes
+with distinct OS/PostgreSQL identities and a newly created, migrated database per
+test. They exercise real persisted identity, installation settings, signed session
+cookies and CSRF through the Endpoint pipeline. CIMD/DCR start on one node and
+finish on the other; wrong-session/replayed callbacks, remote session/role revocation
+and changed installation URLs cannot redeem tokens. Completion also survives
+shutdown of the initiating node. The ordinary user's fresh login remains unable
+to start OAuth after the tenant-service write grant is removed.
+The CIMD/DCR success cases then renew that actual saved grant on the initiating node
+and reread it on the callback node: both tokens rotate, grant revision becomes 2,
+connection metadata stays unchanged and only one additional token request occurs.
+
+These requests use ConnTest, not a listening Console HTTP server. Local OAuth/MCP
+HTTP is real, with validated fixture destinations rerouted to loopback. This lane
+does not establish browser/TLS/CIMD retrieval or changes during a held callback.
+The combined callback, existing code-grant and runtime-renewal lane passes 25 tests
+(seed 593520). See [callback evidence](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md).

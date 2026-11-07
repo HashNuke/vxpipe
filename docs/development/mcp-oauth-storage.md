@@ -88,7 +88,11 @@ that cleartext columns alone allowed lifetime/state substitution.
 
 Focused tests cover encryption, one-time claim, admission bounds, authority binding,
 tampering, missing keys, key transitions, retained claims during rotation, rollback,
-wrong-tenant operations, outage recovery and redacted operator output. Tagged tests
-use distinct PostgreSQL connections in one BEAM for claim/admission/refresh/revoke
-races. They do not establish independent-node acceptance. Evidence and review are
-recorded in [checkpoint labnotes](../../labnotes/20261107-0132-review-mcp-oauth-storage.md).
+wrong-tenant operations, outage recovery and redacted operator output. Seven tagged
+persistence tests now use independent BEAM processes and distinct PostgreSQL backend
+connections for claim/admission/refresh/revoke races, claim cleanup and claimant
+death. See [cross-node evidence](../../labnotes/20261107-0959-mcp-cross-node.md).
+Independent-node token/transport renewal has its own Console lane; re-encryption
+during cross-node refresh and old-key retirement remain separate acceptance gates.
+Earlier storage evidence and review remain in the
+[checkpoint labnotes](../../labnotes/20261107-0132-review-mcp-oauth-storage.md).

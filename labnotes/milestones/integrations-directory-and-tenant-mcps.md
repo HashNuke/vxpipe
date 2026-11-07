@@ -567,10 +567,18 @@ Depends on T4/T4a and existing Console Installation URL/CIMD foundation.
   claim/cleanup race acceptance now passes in the seven-case persistence lane below.
 - [x] Add encrypted grant storage, durable refresh coordination, atomic rotated
   token persistence, permission recheck, redacted error and reconnect transitions.
-- [ ] Verify the complete grant/refresh workflow across independent BEAM nodes.
-  Seven separate-process persistence cases and eleven delegated/machine runtime
-  cases now pass, including caller cancellation and runner restart. Callback
-  acceptance remains open.
+- [x] Verify the complete grant/refresh workflow across independent BEAM nodes.
+  Seven separate-process persistence cases, eleven delegated/machine runtime
+  cases and six Console callback cases now pass. Callbacks use real durable
+  sessions/roles/installation identity and signed cookies through the Endpoint
+  pipeline, including initiating-node shutdown, wrong-session/replay rejection,
+  remote session/role revocation and installation URL changes. The composed local
+  lane does not claim external TLS or rendered browser acceptance; cross-node
+  encryption-key rotation remains a separate operational gate.
+  See [callback evidence](../20261107-0819-verify-oauth-node-callbacks.md).
+  The CIMD/DCR cases also renew the actual callback-created grant on the initiating
+  node and observe rotated access/refresh tokens on the callback node, revision 2,
+  unchanged connection generation and exactly one extra token exchange.
 - [x] Verify delegated token exchange and transport on independent nodes sharing
   PostgreSQL: rotation reaches POST/resumed GET/DELETE, remote revocation blocks
   subsequent submissions, held responses respect revocation and exclusive claims,
@@ -1172,6 +1180,34 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Extend the cross-node CIMD/DCR callback cases to renew their actual saved
+  grants on the initiating node and observe rotated tokens on the callback node.
+  Assert one extra token exchange, grant revision 2 and unchanged configuration
+  generation. Separate callback and seeded-renewal tests alone do not prove this
+  complete workflow; Astra identified the acceptance gap during the checklist audit.
+- [ ] Verify independent-node encryption-key rotation during a held OAuth refresh,
+  then completion and reads with only the new key. Astra review found existing
+  coverage limited to sequential same-BEAM re-encryption; preserve claim exclusivity,
+  configuration generation and grant-revision checks across rotation.
+  Exercise the captured old-primary writer context through its real HTTP response:
+  completion may recreate an old-key envelope after an earlier rotation batch.
+  Drain/transition all writers, rerun batches, then retire the old key and prove
+  reads and subsequent renewal on both nodes. Clarify this drain requirement in
+  the operator runbook without retrying ambiguously redeemed refresh tokens.
+- [x] Reconcile stale storage/browser-flow documentation with implemented
+  independent-node races, production forms and callback draft submission. Keep
+  remaining authenticated browser, key-rotation and release gates explicit.
+
+- [x] Verify OAuth start on one Console BEAM and callback on another using shared
+  durable identity sessions, installation identity and encrypted attempts. Cover
+  wrong-session/replay rejection, remote session revocation and installation URL
+  changes before redemption. Use a disposable database and real protocol fixtures;
+  record the fixture's transport limits separately from rendered browser evidence.
+  Progress: [cross-node callback evidence](../20261107-0819-verify-oauth-node-callbacks.md).
+- [x] Tighten the callback session-revocation assertion to exact 401/session_required
+  and cover a limited user's tenant permission loss. Astra confirmed the fixture's
+  real cookie/session path but noted the initial cases use a Superadmin.
 
 - [x] Add controlled partial, multiple-issuer and unsupported-OAuth discovery
   scenarios. Three failing protocol cases now pass; the combined lane passes
