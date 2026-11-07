@@ -214,4 +214,193 @@ defmodule Vxpipe.MCP.RuntimeAuthProviderTest do
     assert :ok = ExMCP.Transport.HTTP.close(connected)
     send(resumed, :close_stream)
   end
+
+  @tag :integration
+  test "a clean SSE EOF keeps the receiver attached to the resumed session" do
+    alias Vxpipe.MCP.CumulativeSSEServer
+    server = start_supervised!({CumulativeSSEServer, owner: self()})
+
+    {:ok, transport} =
+      ExMCP.Transport.HTTP.connect(
+        url: CumulativeSSEServer.endpoint(server),
+        protocol_version: "2025-11-25",
+        allowed_private_hosts: ["127.0.0.1"]
+      )
+
+    request =
+      Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "method" => "initialize", "params" => %{}})
+
+    assert {:ok, connected, _} = ExMCP.Transport.HTTP.send_message(request, transport)
+    assert_receive {:cumulative_sse_initial_stream, initial}, 1_000
+    owner = self()
+
+    receiver =
+      start_supervised!(
+        {Task,
+         fn ->
+           send(owner, {:resumed_message, ExMCP.Transport.HTTP.receive_message(connected)})
+         end}
+      )
+
+    await_receiver(connected.sse_pid, receiver)
+    send(initial, :close_stream)
+    assert_receive {:cumulative_sse_resumed_stream, resumed, ["event-1"]}, 2_000
+    send(resumed, {:emit_progress, "resumed-session"})
+
+    assert_receive {:resumed_message,
+                    {:ok, %{payload: %{"method" => "notifications/progress"}}, _}},
+                   2_000
+
+    assert :ok = ExMCP.Transport.HTTP.close(connected)
+    send(resumed, :close_stream)
+  end
+
+  @tag :integration
+  test "credential rejection during SSE resumption unblocks the transport receiver" do
+    alias Vxpipe.MCP.CumulativeSSEServer
+    Process.flag(:trap_exit, true)
+
+    tokens =
+      start_supervised!({Agent, fn -> {:ok, %{auth_method: "oauth", token: "initial-token"}} end})
+
+    server = start_supervised!({CumulativeSSEServer, owner: self()})
+    resolver = fn -> Agent.get(tokens, & &1) end
+
+    {:ok, transport} =
+      ExMCP.Transport.HTTP.connect(
+        url: CumulativeSSEServer.endpoint(server),
+        protocol_version: "2025-11-25",
+        allowed_private_hosts: ["127.0.0.1"],
+        auth_provider: {RuntimeAuthProvider, config(resolver)}
+      )
+
+    request =
+      Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "method" => "initialize", "params" => %{}})
+
+    assert {:ok, connected, _} = ExMCP.Transport.HTTP.send_message(request, transport)
+    assert_receive {:cumulative_sse_initial_stream, initial}, 1_000
+    assert_receive {:cumulative_sse_authorization, "GET", ["Bearer initial-token"]}, 1_000
+    owner = self()
+
+    receiver =
+      start_supervised!(
+        {Task,
+         fn ->
+           send(owner, {:terminal_message, ExMCP.Transport.HTTP.receive_message(connected)})
+         end}
+      )
+
+    await_receiver(connected.sse_pid, receiver)
+    monitor = Process.monitor(connected.sse_pid)
+    Agent.update(tokens, fn _ -> {:error, :revoked} end)
+    send(initial, :close_stream)
+    assert_receive {:DOWN, ^monitor, :process, _, :mcp_credentials_unavailable}, 2_000
+    assert_receive {:terminal_message, {:error, :connection_closed}}, 2_000
+    refute_received {:cumulative_sse_authorization, "GET", _}
+    assert :ok = ExMCP.Transport.HTTP.close(connected)
+    refute_received {:cumulative_sse_authorization, "DELETE", _}
+  end
+
+  @tag :integration
+  test "repeated clean SSE reconnects do not accumulate handshake notifications" do
+    alias Vxpipe.MCP.CumulativeSSEServer
+    server = start_supervised!({CumulativeSSEServer, owner: self()})
+    connected = connected_stream(server)
+    assert_receive {:cumulative_sse_initial_stream, initial}, 1_000
+    owner = self()
+
+    receiver =
+      start_supervised!(
+        {Task,
+         fn ->
+           Enum.reduce(1..2, connected, fn cycle, transport ->
+             {:ok, _, next} = ExMCP.Transport.HTTP.receive_message(transport)
+             {:ok, _, next} = ExMCP.Transport.HTTP.receive_message(next)
+             {:messages, messages} = Process.info(self(), :messages)
+             send(owner, {:completed_cycle, cycle, messages})
+
+             if cycle == 1,
+               do:
+                 (receive do
+                    :next_cycle -> :ok
+                  end)
+
+             next
+           end)
+         end}
+      )
+
+    await_receiver(connected.sse_pid, receiver)
+    send(initial, :close_stream)
+    assert_receive {:cumulative_sse_resumed_stream, first, ["event-1"]}, 2_000
+    send(first, {:emit_progress, "first-cycle"})
+    assert_receive {:completed_cycle, 1, messages}, 2_000
+    refute Enum.any?(messages, &match?({:sse_connected, _}, &1))
+    send(receiver, :next_cycle)
+    send(first, :close_stream)
+    assert_receive {:cumulative_sse_resumed_stream, second, ["event-4"]}, 2_000
+    send(second, {:emit_progress, "second-cycle"})
+    assert_receive {:completed_cycle, 2, messages}, 2_000
+    refute Enum.any?(messages, &match?({:sse_connected, _}, &1))
+    assert :ok = ExMCP.Transport.HTTP.close(connected)
+    send(second, :close_stream)
+  end
+
+  @tag :integration
+  test "a resumed GET rejecting SSE unblocks the receiver without replaying POST" do
+    alias Vxpipe.MCP.CumulativeSSEServer
+    server = start_supervised!({CumulativeSSEServer, owner: self(), reject_resume: true})
+    connected = connected_stream(server)
+    assert_receive {:cumulative_sse_initial_stream, initial}, 1_000
+    assert_receive {:cumulative_sse_request, "initialize", _}, 1_000
+    owner = self()
+
+    receiver =
+      start_supervised!(
+        {Task,
+         fn ->
+           send(owner, {:unsupported_stream, ExMCP.Transport.HTTP.receive_message(connected)})
+         end}
+      )
+
+    await_receiver(connected.sse_pid, receiver)
+    send(initial, :close_stream)
+    assert_receive :cumulative_sse_resume_rejected, 2_000
+    assert_receive {:unsupported_stream, {:error, :not_supported_in_sync_mode}}, 2_000
+    refute_received {:cumulative_sse_request, "initialize", _}
+    assert :ok = ExMCP.Transport.HTTP.close(connected)
+  end
+
+  defp connected_stream(server) do
+    {:ok, transport} =
+      ExMCP.Transport.HTTP.connect(
+        url: Vxpipe.MCP.CumulativeSSEServer.endpoint(server),
+        protocol_version: "2025-11-25",
+        allowed_private_hosts: ["127.0.0.1"]
+      )
+
+    request =
+      Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "method" => "initialize", "params" => %{}})
+
+    {:ok, connected, _} = ExMCP.Transport.HTTP.send_message(request, transport)
+    connected
+  end
+
+  defp await_receiver(stream, receiver) do
+    ready? =
+      Enum.reduce_while(1..200, false, fn _, _ ->
+        if :sys.get_state(stream).parent == receiver do
+          {:halt, true}
+        else
+          receive do
+          after
+            5 -> :ok
+          end
+
+          {:cont, false}
+        end
+      end)
+
+    assert ready?, "SSE receiver did not attach"
+  end
 end

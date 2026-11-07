@@ -2,7 +2,8 @@
 
 Status: backend machine acquisition, saved-grant renewal, credentialless OAuth
 catalog refresh, production forms and saved-connection runtime wiring are implemented.
-Independent-node token/transport and authenticated browser acceptance remain open in
+Independent-node delegated token/transport acceptance passes; machine renewal,
+caller/runner lifecycle and authenticated browser acceptance remain open in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 These operations extend existing tenant MCP management and encrypted grant storage;
 native providers continue using the Services APIs.
@@ -91,8 +92,7 @@ refresh. Five additional real-store boundary cases exercise cancellation/admissi
 Registered application-runner restart coverage verifies retirement of its tasks and
 nested work, then successful fresh admission. Public projections and stored envelopes
 exclude plaintext secrets. The fixtures use local transport routing and a fixture
-identity backend; external-provider and independent-node token/transport acceptance
-remain open.
+identity backend; external-provider acceptance remains open.
 
 Seven persistence cases run public repository operations in separate BEAM processes
 against the same committed PostgreSQL database, asserting distinct OS and database
@@ -100,5 +100,18 @@ backend IDs. They cover attempt claim/prune/cap races, refresh exclusivity and
 completion versus revocation, plus a held claim revoked by another node and abrupt
 claimant termination. The surviving node cannot reclaim the ambiguous grant or
 complete it at the claim deadline. Database fencing passes without changing the
-saved credentials; this does not yet prove cross-node token-socket or MCP transport
-lifecycle behavior. See [evidence](../../labnotes/20261107-0959-mcp-cross-node.md).
+saved credentials. See [evidence](../../labnotes/20261107-0959-mcp-cross-node.md).
+
+Five further Console cases exercise the production renewal coordinator and actual
+ExMCP client across independent BEAM processes. A response barrier holds a real
+token exchange after redemption but before sending the minted result. Another node
+can revoke the grant, reject duplicate renewal or renew an unrelated tenant while
+that response is held. Abrupt claimant-node death leaves the old grant fenced and
+cannot cause a second exchange. Successful rotations reach subsequent MCP POST,
+resumed GET and explicit DELETE; remote revocation prevents those submissions.
+The fixture samples its hold flag before announcing the response barrier, so
+changing the setting for an unrelated request cannot release the first request.
+These cases use delegated grants; cross-node machine renewal, caller cancellation,
+runner restart and browser callback acceptance remain open. No public provider or
+token-socket cancellation claim follows from these tests. See
+[runtime evidence](../../labnotes/20261107-1017-mcp-runtime-nodes.md).

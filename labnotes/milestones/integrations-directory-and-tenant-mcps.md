@@ -561,8 +561,16 @@ Depends on T4/T4a and existing Console Installation URL/CIMD foundation.
 - [x] Add encrypted grant storage, durable refresh coordination, atomic rotated
   token persistence, permission recheck, redacted error and reconnect transitions.
 - [ ] Verify the complete grant/refresh workflow across independent BEAM nodes.
-  Seven separate-process persistence cases now pass; token exchange, runner ownership
-  and transport lifecycle still require cross-node acceptance.
+  Seven separate-process persistence cases and five delegated token/transport cases
+  now pass. Machine renewal, runner/caller ownership and callback acceptance remain.
+- [x] Verify delegated token exchange and transport on independent nodes sharing
+  PostgreSQL: rotation reaches POST/resumed GET/DELETE, remote revocation blocks
+  subsequent submissions, held responses respect revocation and exclusive claims,
+  unrelated tenants progress, and a crashed claimant cannot redeem again.
+- [ ] Verify machine-grant renewal across independent nodes, retaining the saved
+  client-credentials grant without introducing refresh-token behavior.
+- [ ] Verify caller cancellation and renewal-runner restart across independent nodes;
+  late token responses cannot persist or permit ambiguous redemption to repeat.
 - [x] Implement custom Own-client handoff when managed registration is unavailable;
   preserve only the nonsecret draft, display the exact manual callback and reject
   unsupported capabilities. Listed-template recipe handling is still required below.
@@ -1017,13 +1025,16 @@ See [saved runtime contracts](../../docs/development/saved-mcp-runtime.md) and
   checksums, idempotent preparation, setup/CI compilation and preparation tests.
 - [x] Verify actual HTTP token rotation, resume cursor progression and request
   rejection privacy. Keep network interoperability in the tagged integration lane.
-- [ ] Complete per-admission room/transfer and independent-node revocation acceptance
-  before completing runtime cutover. Saved catalog/compiler/startup wiring is implemented.
+- [x] Complete per-admission room/transfer and independent-node revocation acceptance.
+  Committed web/phone/transfer cases verify admitted execution and scoped failure;
+  the five independent-node runtime cases below verify actual-client submission
+  fences. Broader grant/caller/runner and final release gates remain open.
 
 See [transport contracts](../../docs/development/mcp-runtime-transport.md) and
 [review evidence](../20261107-0224-review-mcp-transport.md). This checkpoint extends
-the committed resolver/renewal boundary; full per-admission execution remains an
-acceptance gate even though startup wiring is implemented.
+the committed resolver/renewal boundary. Per-admission and independent-node
+transport acceptance pass in the follow-up checkpoints below; this does not close
+the complete cross-node grant workflow or final release gates.
 
 #### Saved web-admission acceptance checkpoint (2026-11-07)
 
@@ -1077,6 +1088,22 @@ adversarial source review is clean. The composite T7/T8 independent-node and rel
 gates remain open.
 See [phone evidence](../20261107-0922-saved-mcp-telephony.md).
 
+#### Independent-node runtime checkpoint (2026-11-07)
+
+Five tagged Console cases now use the production renewal coordinator and real
+ExMCP clients in separate BEAM processes with distinct OS and PostgreSQL backend
+IDs. Token rotation on one node reaches POST, resumed GET and explicit session
+DELETE on the other. A second tool succeeds after clean EOF without initializing
+again. Remote revocation prevents subsequent POST/GET/DELETE. Held real token
+responses cover revocation, duplicate exclusion, unrelated-tenant progress and
+claimant crash fencing. The five cases and 14 focused transport tests pass, as do
+seven pinned-patch preparation tests. The full MCP lane passes 184 tests; all five
+root gates pass with 4,987 tests, zero failures and 229 excluded (seed 108915).
+Independent source and exact-index adversarial reviews are clean. Machine renewal,
+caller cancellation, renewal-runner restart and browser/callback acceptance remain
+open; these tests do not close the composite
+cross-node workflow gate. See [evidence](../20261107-1017-mcp-runtime-nodes.md).
+
 ### T8 — Release and operational verification
 
 Depends on T1–T7, including T4a, T6a and T6b. Update installation/operations docs
@@ -1108,6 +1135,23 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Reconcile transport acceptance wording after documentation review: complete
+  the narrow per-admission/remote-revocation gate, retain broader workflow gates,
+  record the passing MCP lane and name caller cancellation and renewal-runner
+  restart as outstanding. The subtask split preserves the existing scope/order.
+- [x] Preserve the existing MCP session across clean SSE EOF while the stream
+  process resumes; monitor actual stream termination so credential rejection still
+  unblocks the receiver. The focused red test returned connection_closed before
+  resumed events; it now receives them. Never replay a tool POST to repair a stream.
+- [x] Consume successful SSE reconnect notices and handle resumed GET rejection.
+  Two review regressions reproduced mailbox accumulation and a missing 405 result;
+  all 14 focused transport tests now pass. Keep the usable POST session on 405;
+  explicit disconnect retains ownership of stream cleanup.
+- [x] Sample the cross-node fixture's token-response hold flag before notifying the
+  test. Changing the flag for an unrelated tenant cannot release the already-held
+  response. All five cross-node cases pass after the correction; source re-review
+  is clean.
 
 - [x] Match cross-node evidence to the assertions: the two peers have distinct OS
   and PostgreSQL backend IDs, and their OS IDs differ from the parent. The test

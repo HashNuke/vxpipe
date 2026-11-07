@@ -10,8 +10,11 @@ defmodule Vxpipe.MCP.CumulativeSSEServer do
   def child_spec(opts) do
     owner = Keyword.fetch!(opts, :owner)
 
+    fixture =
+      if Keyword.get(opts, :reject_resume, false), do: {:reject_resume, owner}, else: owner
+
     Supervisor.child_spec(
-      {Bandit, plug: {__MODULE__, owner}, ip: {127, 0, 0, 1}, port: 0, startup_log: false},
+      {Bandit, plug: {__MODULE__, fixture}, ip: {127, 0, 0, 1}, port: 0, startup_log: false},
       id: {__MODULE__, make_ref()}
     )
   end
@@ -22,6 +25,15 @@ defmodule Vxpipe.MCP.CumulativeSSEServer do
   end
 
   def init(owner), do: owner
+
+  def call(conn, {:reject_resume, owner}) do
+    if conn.method == "GET" and get_req_header(conn, "last-event-id") != [] do
+      send(owner, :cumulative_sse_resume_rejected)
+      send_resp(conn, 405, "")
+    else
+      call(conn, owner)
+    end
+  end
 
   def call(%{method: "GET"} = conn, owner) do
     send(owner, {:cumulative_sse_authorization, "GET", get_req_header(conn, "authorization")})
