@@ -561,16 +561,21 @@ Depends on T4/T4a and existing Console Installation URL/CIMD foundation.
 - [x] Add encrypted grant storage, durable refresh coordination, atomic rotated
   token persistence, permission recheck, redacted error and reconnect transitions.
 - [ ] Verify the complete grant/refresh workflow across independent BEAM nodes.
-  Seven separate-process persistence cases and five delegated token/transport cases
-  now pass. Machine renewal, runner/caller ownership and callback acceptance remain.
+  Seven separate-process persistence cases and eleven delegated/machine runtime
+  cases now pass, including caller cancellation and runner restart. Callback
+  acceptance remains open.
 - [x] Verify delegated token exchange and transport on independent nodes sharing
   PostgreSQL: rotation reaches POST/resumed GET/DELETE, remote revocation blocks
   subsequent submissions, held responses respect revocation and exclusive claims,
   unrelated tenants progress, and a crashed claimant cannot redeem again.
-- [ ] Verify machine-grant renewal across independent nodes, retaining the saved
-  client-credentials grant without introducing refresh-token behavior.
-- [ ] Verify caller cancellation and renewal-runner restart across independent nodes;
+- [x] Verify machine-grant renewal across independent nodes, retaining the saved
+  client-credentials grant without introducing refresh-token behavior. Two rotations
+  reach POST/resumed GET/DELETE and omit returned refresh tokens from saved state;
+  remote revocation prevents subsequent submissions.
+- [x] Verify caller cancellation and renewal-runner restart across independent nodes;
   late token responses cannot persist or permit ambiguous redemption to repeat.
+  Four real-HTTP cases cover both grants, worker retirement, durable deadline
+  fencing and fresh unrelated renewal on the original node.
 - [x] Implement custom Own-client handoff when managed registration is unavailable;
   preserve only the nonsecret draft, display the exact manual callback and reject
   unsupported capabilities. Listed-template recipe handling is still required below.
@@ -682,7 +687,8 @@ proposal and obtaining scope agreement, not quietly claiming this milestone pass
   including cross-tenant saturation, cancellation and late-result rejection.
 - [ ] Complete independent-node and authenticated browser acceptance before treating
   this backend checkpoint as full workflow delivery. Runtime transport/catalog
-  cutover and production UI are implemented.
+  cutover and production UI are implemented; independent-node renewal/lifecycle
+  checks now pass. Authenticated browser and cross-node callback acceptance remain.
 
 See [renewal contracts](../../docs/development/mcp-oauth-renewal.md) and
 [review evidence](../20261107-0208-review-mcp-renewal.md). Admission is per application
@@ -1104,6 +1110,18 @@ caller cancellation, renewal-runner restart and browser/callback acceptance rema
 open; these tests do not close the composite
 cross-node workflow gate. See [evidence](../20261107-1017-mcp-runtime-nodes.md).
 
+The renewal-lifecycle follow-up extends the combined lane to eleven passing cases.
+Machine rotation/revocation now runs against the real client and never saves a
+refresh token. Four held-response cases verify caller cancellation and registered
+runner restart for both grants, followed by cross-node duplicate rejection,
+deadline fencing and fresh unrelated renewal. The existing backend passes these
+cases without production changes. All 25 combined node/OAuth boundary cases pass
+after the review corrections below, and both independent source re-reviews are
+clean. All five root gates pass: 4,987 tests, zero failures and 235 excluded
+(seed 94648), after an unchanged same-seed retry of an unrelated Twilio harness
+startup failure. Browser/callback acceptance remains open. See
+[lifecycle evidence](../20261107-1056-mcp-renewal-lifecycle.md).
+
 ### T8 — Release and operational verification
 
 Depends on T1–T7, including T4a, T6a and T6b. Update installation/operations docs
@@ -1136,6 +1154,21 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
+- [ ] Complete fresh-checkout MCP dependency preparation in setup and CI. The
+  isolated browser checkout reproduced ExMCP compilation before Plug was built;
+  include dependency children when compiling the patched ExMCP. The focused fix
+  passes 33 setup tests, source review and a complete fresh-checkout setup; final
+  checkpoint gates are tracked separately from renewal acceptance.
+- [x] Require an explicit release acknowledgement in cross-node renewal lifecycle
+  tests. The unconditional response-finished signal could also mean hold timeout;
+  four strengthened cases failed before the fixture emitted the correlated release
+  signal. Keep completion observation separate from proof of the intended release.
+- [x] Update stale machine-grant interoperability assertions to the implemented
+  private runtime projection: current token plus submitted MCP headers. Exact-map
+  equality still rejects client/refresh/private-key secrets; three broader-lane
+  failures exposed the old expectation. Independent source review confirms the
+  header projection is required by the transport contract. Record the completed
+  combined rerun accurately: 25 tests pass, including both review corrections.
 - [x] Reconcile transport acceptance wording after documentation review: complete
   the narrow per-admission/remote-revocation gate, retain broader workflow gates,
   record the passing MCP lane and name caller cancellation and renewal-runner
@@ -1157,13 +1190,6 @@ and all related Storybooks.
   and PostgreSQL backend IDs, and their OS IDs differ from the parent. The test
   does not compare the parent's database backend ID. Keep token/transport lifecycle
   acceptance open; repository concurrency checks alone do not establish it.
-
-- [x] Unrelated umbrella-test repair: wait for STT's turn acknowledgement before
-  asserting a queued onset in the existing activity-demand regression. This is
-  verification maintenance, not an MCP integration requirement. The full run exposed a
-  one-pass, multi-process synchronization gap; the existing mailbox and stale-onset
-  assertions remain. All 37 focused tests pass with the failing seed, and independent
-  adversarial review is clean. See [evidence](../20261107-0938-await-stt-onset.md).
 
 - [x] Finish the phone-acceptance review fixes: send signed carrier hangup and
   observe exact room/socket/leg/tracker cleanup plus persisted managed completion;

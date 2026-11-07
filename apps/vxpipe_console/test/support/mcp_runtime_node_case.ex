@@ -23,13 +23,14 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
     :ok
   end
 
-  setup do
+  setup tags do
     :ok = Sandbox.checkout(Repo, sandbox: false)
 
     {:ok, keyring} =
       CredentialKeyring.new("node-test", %{"node-test" => :crypto.strong_rand_bytes(32)})
 
     context = [repo: Repo, keyring: keyring]
+    grant = Map.get(tags, :grant, "authorization_code")
     tenant = tenant()
     other_tenant = tenant()
 
@@ -37,7 +38,9 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
       start_supervised!(
         {Agent,
          fn ->
-           OutboundMCPOAuthServer.initial("own_client") |> Map.put(:hold_tokens, false)
+           OutboundMCPOAuthServer.initial("own_client")
+           |> Map.put(:hold_tokens, false)
+           |> Map.put(:grant, grant)
          end}
       )
 
@@ -48,8 +51,8 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
 
     {:ok, {_, port}} = ThousandIsland.listener_info(server)
     base = "http://127.0.0.1:#{port}"
-    connection = connection(context, tenant, state, "node-client")
-    other = connection(context, other_tenant, state, "other-client")
+    connection = connection(context, tenant, state, "node-client", grant)
+    other = connection(context, other_tenant, state, "other-client", grant)
 
     nodes =
       for index <- 0..1 do
@@ -72,6 +75,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
 
     %{
       context: context,
+      grant: grant,
       tenant: tenant,
       other_tenant: other_tenant,
       id: connection.id,
@@ -144,7 +148,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
     tenant.key
   end
 
-  defp connection(context, tenant, state, client) do
+  defp connection(context, tenant, state, client, grant) do
     secret = "synthetic-node-client-secret"
     refresh = client <> "-refresh"
     access = client <> "-access"
@@ -157,7 +161,11 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
               "token_endpoint_auth_method" => "client_secret_basic",
               "client_secret" => secret
             }),
-          refresh: Map.put(s.refresh, refresh, client),
+          refresh:
+            if(grant == "authorization_code",
+              do: Map.put(s.refresh, refresh, client),
+              else: s.refresh
+            ),
           access: MapSet.put(s.access, access)
       }
     end)
@@ -176,7 +184,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
         },
         %{
           "registration_method" => "own_client",
-          "grant_type" => "authorization_code",
+          "grant_type" => grant,
           "auth_method" => "client_secret_basic",
           "client_id" => client,
           "client_secret" => secret,
@@ -184,12 +192,27 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
           "issuer" => OutboundMCPOAuthServer.issuer(),
           "resource" => OutboundMCPOAuthServer.resource(),
           "access_token" => access,
-          "refresh_token" => refresh,
           "expires_at" => DateTime.utc_now() |> DateTime.add(300) |> DateTime.to_iso8601(),
           "headers" => [%{"name" => "X-Workspace", "value" => "node-workspace"}]
         }
+        |> grant_configuration(grant, refresh)
       )
 
     connection
+  end
+
+  defp grant_configuration(secrets, "authorization_code", refresh),
+    do: Map.put(secrets, "refresh_token", refresh)
+
+  defp grant_configuration(secrets, "client_credentials", _refresh) do
+    Map.merge(secrets, %{
+      "scopes" => ["tools:read"],
+      "machine_metadata" => %{
+        "issuer" => OutboundMCPOAuthServer.issuer(),
+        "token_endpoint" => OutboundMCPOAuthServer.issuer() <> "/token",
+        "grant_types_supported" => ["client_credentials"],
+        "token_endpoint_auth_methods_supported" => ["client_secret_basic"]
+      }
+    })
   end
 end

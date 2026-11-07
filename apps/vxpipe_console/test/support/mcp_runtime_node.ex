@@ -30,6 +30,51 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
 
   def refresh(tenant, id, revision), do: MCPOAuthRefresh.refresh(tenant, id, 1, revision)
 
+  def start_renewal(tenant, id) do
+    {:ok, caller} =
+      DynamicSupervisor.start_child(
+        Vxpipe.MCP.ConnectionSupervisor,
+        {Task,
+         fn ->
+           result = refresh(tenant, id, 1)
+           Agent.update(__MODULE__, &Map.put(&1, :renewal_result, result))
+         end}
+      )
+
+    Agent.update(__MODULE__, &Map.put(&1, :renewal_caller, caller))
+    :started
+  end
+
+  def cancel_renewal do
+    caller = Agent.get(__MODULE__, & &1.renewal_caller)
+    [worker] = Task.Supervisor.children(Vxpipe.MCP.OAuthRenewalTasks)
+    references = monitor_all([caller, worker])
+    :ok = DynamicSupervisor.terminate_child(Vxpipe.MCP.ConnectionSupervisor, caller)
+    :ok = await_all(references)
+    _ = :sys.get_state(Vxpipe.MCP.OAuthRenewalRunner)
+    :cancelled
+  end
+
+  def restart_renewal_runner do
+    caller = Agent.get(__MODULE__, & &1.renewal_caller)
+    runner = Process.whereis(Vxpipe.MCP.OAuthRenewalRunner)
+    tasks = Process.whereis(Vxpipe.MCP.OAuthRenewalTasks)
+    [worker] = Task.Supervisor.children(tasks)
+    references = monitor_all([runner, tasks, worker, caller])
+    Process.exit(runner, :kill)
+    :ok = await_all(references)
+
+    children = Supervisor.which_children(Vxpipe.MCP.OAuthRenewalSupervisor)
+
+    {Vxpipe.MCP.PreflightRunner, replacement, :worker, _} =
+      List.keyfind(children, Vxpipe.MCP.PreflightRunner, 0)
+
+    true = is_pid(replacement) and replacement != runner
+    true = Process.whereis(Vxpipe.MCP.OAuthRenewalRunner) == replacement
+    true = Process.whereis(Vxpipe.MCP.OAuthRenewalTasks) != tasks
+    {:restarted, Agent.get(__MODULE__, & &1.renewal_result)}
+  end
+
   def revoke(context, tenant, id), do: ConnectionStore.revoke(context, tenant, id, 1)
 
   def resolve(tenant, id, now),
@@ -108,6 +153,12 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
     after
       5_000 -> :cleanup_timeout
     end
+  end
+
+  defp monitor_all(pids), do: Enum.map(pids, &{Process.monitor(&1), &1})
+
+  defp await_all(references) do
+    Enum.each(references, fn {reference, pid} -> :ok = await_down(reference, pid) end)
   end
 
   defp protocol(base) do

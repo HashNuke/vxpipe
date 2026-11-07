@@ -4,9 +4,9 @@ Status: the private credential projection, guarded ExMCP provider and pinned
 transport patch are implemented. Saved catalog/compiler and Gateway startup wiring
 are described in [saved runtime](saved-mcp-runtime.md). Local active-call acceptance
 covers WebRTC and managed incoming/outgoing plus legacy incoming phone admission;
-delayed-transfer cases use WebRTC. Independent-node delegated renewal and transport
-revocation now pass controlled HTTP acceptance; broader cross-node grant/runner and
-authenticated browser acceptance remain open in
+delayed-transfer cases use WebRTC. Independent-node delegated/machine renewal,
+transport revocation and caller/runner lifecycle pass controlled HTTP acceptance.
+Browser/callback acceptance remains open in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 This checkpoint depends on the existing
 [renewal boundary](mcp-oauth-renewal.md).
@@ -106,17 +106,20 @@ tests cover preparation/compilation ordering and stopping on patch failure. The
 saved-record publication/startup-options/wire slice and local web/phone execution
 are now verified.
 
-Five Console integration cases run real token requests and ExMCP clients in two
+Eleven Console integration cases run real token requests and ExMCP clients in two
 independent BEAM processes sharing committed PostgreSQL records. Rotation on one
 node reaches the other's subsequent POST, resumed GET and explicit session DELETE;
 another tool succeeds after resumption without initialization. Revocation blocks
 all three request methods. Held token responses prove revocation fencing,
 per-connection exclusivity with unrelated-tenant progress, and ambiguous-redemption
-fencing after a node crash. These cover delegated renewal and transport, not machine
-renewal, caller cancellation, renewal-runner restart or authenticated browser
-acceptance. Four focused transport regressions cover clean EOF, terminal credential rejection, repeated
+fencing after a node crash. Machine grants now also cover rotation and revocation
+without saving refresh tokens. Caller cancellation and renewal-runner restart
+cover both grants, retaining the durable ambiguity fence while permitting fresh
+unrelated renewal. Browser/callback acceptance remains open. Four focused transport
+regressions cover clean EOF, terminal credential rejection, repeated
 connection notices and resumed GET rejection. See
-[checkpoint evidence](../../labnotes/20261107-1017-mcp-runtime-nodes.md).
+[checkpoint evidence](../../labnotes/20261107-1017-mcp-runtime-nodes.md) and
+[renewal lifecycle evidence](../../labnotes/20261107-1056-mcp-renewal-lifecycle.md).
 
 The full MCP lane passes 184 tests, including the pinned official Everything and
 SSE-recovery fixtures. Their npm install/build/start commands run from each

@@ -10,22 +10,28 @@ defmodule Vxpipe.Console.Test.MCPNodeHTTP do
 
   @impl true
   def call(%{request_path: "/token"} = conn, options) do
-    conn
-    |> register_before_send(fn response ->
-      hold? = Agent.get(options.state, & &1.hold_tokens)
-      send(options.owner, {:node_token_response, self(), response.status})
+    try do
+      conn
+      |> register_before_send(fn response ->
+        hold? = Agent.get(options.state, & &1.hold_tokens)
+        send(options.owner, {:node_token_response, self(), response.status})
 
-      if hold? do
-        receive do
-          :release_token -> response
-        after
-          10_000 -> raise "fixture token response was not released"
+        if hold? do
+          receive do
+            :release_token ->
+              send(options.owner, {:node_token_released, self()})
+              response
+          after
+            10_000 -> raise "fixture token response was not released"
+          end
+        else
+          response
         end
-      else
-        response
-      end
-    end)
-    |> OutboundMCPOAuthServer.call(options.state)
+      end)
+      |> OutboundMCPOAuthServer.call(options.state)
+    after
+      send(options.owner, {:node_token_finished, self()})
+    end
   end
 
   def call(%{request_path: "/mcp"} = conn, options) do

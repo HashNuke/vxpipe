@@ -2,8 +2,8 @@
 
 Status: backend machine acquisition, saved-grant renewal, credentialless OAuth
 catalog refresh, production forms and saved-connection runtime wiring are implemented.
-Independent-node delegated token/transport acceptance passes; machine renewal,
-caller/runner lifecycle and authenticated browser acceptance remain open in
+Independent-node delegated/machine renewal, transport and caller/runner lifecycle
+acceptance pass. Browser/callback acceptance remains open in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 These operations extend existing tenant MCP management and encrypted grant storage;
 native providers continue using the Services APIs.
@@ -102,8 +102,11 @@ claimant termination. The surviving node cannot reclaim the ambiguous grant or
 complete it at the claim deadline. Database fencing passes without changing the
 saved credentials. See [evidence](../../labnotes/20261107-0959-mcp-cross-node.md).
 
-Five further Console cases exercise the production renewal coordinator and actual
-ExMCP client across independent BEAM processes. A response barrier holds a real
+Eleven Console cases exercise the production renewal coordinator and actual
+ExMCP client across independent BEAM processes. Delegated and machine grants both
+rotate credentials for POST, resumed GET and explicit DELETE, and reject those
+submissions after remote revocation. Machine grants omit refresh tokens before and
+after renewal even when the token endpoint supplies one. A response barrier holds a real
 token exchange after redemption but before sending the minted result. Another node
 can revoke the grant, reject duplicate renewal or renew an unrelated tenant while
 that response is held. Abrupt claimant-node death leaves the old grant fenced and
@@ -111,7 +114,13 @@ cannot cause a second exchange. Successful rotations reach subsequent MCP POST,
 resumed GET and explicit DELETE; remote revocation prevents those submissions.
 The fixture samples its hold flag before announcing the response barrier, so
 changing the setting for an unrelated request cannot release the first request.
-These cases use delegated grants; cross-node machine renewal, caller cancellation,
-runner restart and browser callback acceptance remain open. No public provider or
-token-socket cancellation claim follows from these tests. See
-[runtime evidence](../../labnotes/20261107-1017-mcp-runtime-nodes.md).
+For both grant types, caller cancellation and registered runner restart retire the
+actual renewal worker before releasing its held response. The other BEAM cannot
+redeem the ambiguous grant again; its saved credentials remain unchanged, with a
+durable claim requiring reconnect at the deadline. Restart also replaces the runner
+and task supervisor. Fresh unrelated renewal succeeds on the original node after
+either interruption. These tests verify existing caller-owned behavior, without
+adding background continuation or retry. Browser callback acceptance remains open.
+No public provider or physical token-socket cancellation claim follows from these
+tests. See [runtime evidence](../../labnotes/20261107-1017-mcp-runtime-nodes.md) and
+[lifecycle evidence](../../labnotes/20261107-1056-mcp-renewal-lifecycle.md).

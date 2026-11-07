@@ -52,7 +52,12 @@ defmodule Vxpipe.Console.OutboundMCPOAuthRenewalTest do
       assert {:ok, runtime} = MCPRuntimeCredentials.resolve(data.tenant, id, 1, options)
       refreshed = resolve(data, id)
       assert_tools_refresh(data, id, refreshed.secrets)
-      assert runtime.secrets == %{"access_token" => refreshed.secrets["access_token"]}
+
+      assert runtime.secrets == %{
+               "access_token" => refreshed.secrets["access_token"],
+               "headers" => credentials["headers"]
+             }
+
       refute refreshed.secrets["access_token"] == first.secrets["access_token"]
       assert refreshed.secrets["grant_revision"] == 2
       refute Map.has_key?(refreshed.secrets, "refresh_token")
