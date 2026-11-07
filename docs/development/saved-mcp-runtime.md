@@ -5,8 +5,10 @@ metadata. Gateway builds a fresh saved-connection snapshot before starting brows
 incoming and outgoing calls. Local acceptance now joins PostgreSQL publication to
 Console call/session admission, real WebRTC input, model-selected ExMCP execution
 and peer output. Authenticated tenant disconnect blocks a subsequent invocation
-in that same room. Identity is fixture-backed; rendered browser, telephony,
-transfer, broader negative cases and separate-node acceptance remain milestone gates.
+in that same room. Local web acceptance also covers tenant isolation, empty catalogs,
+schema/deletion pins, repository outages and delayed agent transfers with cold and
+reused clients after revocation/replacement. Identity is fixture-backed; rendered browser, telephony, in-flight
+request races and separate-node acceptance remain milestone gates.
 
 ## Metadata and pinning
 
@@ -53,6 +55,15 @@ request and never falls back to cached credentials. A locally rejected POST is
 classified as not submitted; ambiguous transport failures remain unknown and are
 not retried. Existing in-flight requests cannot be retracted by revocation.
 
+Opening a reused session also validates its supplied client profile and resolves
+current runtime headers before authorizing the new activation. The headers are
+discarded after that check; each later transport submission resolves them again.
+This closes the gap where a delayed transfer could take control using another
+room's cached connection after its saved grant was disconnected. Reuse failure
+rejects the new activation without retiring the shared session: an unavailable
+repository must not terminate other rooms, and their own requests remain guarded.
+Explicit node-local revocation still retires the scoped connection and its leases.
+
 The pinned dependency correction now covers HTTP, SSE and Client status redaction.
 The checked upgrade patch accepts the exact previous reviewed sources as well as
 pristine/current sources. Unknown or mixed source edits still stop preparation.
@@ -94,6 +105,17 @@ reports. Activation retirement and client failure exclude synthetic token, custo
 header and encryption-key markers. The saved-record test also verifies metadata-only
 authoring with no decryption key, persisted-plan privacy, foreign-tenant isolation,
 schema/credential changes and execution rejection after revocation.
+
+The saved boundary suite now follows the original published selection through fresh
+preparation after a catalog change. It rejects stale prepared calls and invalid new
+arguments, then executes permitted arguments without granting newly discovered
+tools. An observed repository wrapper distinguishes preparation, startup and active
+request outages; native-only calls make no MCP repository reads. A foreign-tenant
+selection fails publication while that tenant's own server and distinct credentials
+execute successfully. Delayed transfer acceptance uses public participant snapshots,
+exact tool outcomes and subsequent input over the original peer to prove ownership
+and unchanged call incarnation. A sibling admitted call keeps the reused MCP client
+open in the revocation regression.
 
 A reusable private-config vault was rejected: it would introduce new lifetime and
 ownership rules for delayed transfer activations. Complete request-header resolution

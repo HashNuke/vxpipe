@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
     state = %{
       authorization: Keyword.get(options, :authorization),
       headers: Keyword.get(options, :headers, []),
+      hold_stream: Keyword.get(options, :hold_stream, false),
       owner: owner,
       redirect_to: Keyword.get(options, :redirect_to),
       request_label: Keyword.get(options, :request_label),
@@ -35,9 +36,13 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
   def call(%{method: "GET"} = conn, state) do
     send(state.owner, {:remote_mcp_wire_stream, authorization(conn)})
 
-    conn
-    |> put_resp_content_type("text/event-stream")
-    |> send_resp(200, ": stream ready\n\n")
+    if state.hold_stream do
+      hold_stream(conn, state.owner)
+    else
+      conn
+      |> put_resp_content_type("text/event-stream")
+      |> send_resp(200, ": stream ready\n\n")
+    end
   end
 
   def call(%{method: "POST"} = conn, state) do
@@ -49,6 +54,29 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
     else
       _invalid -> send_resp(conn, 400, "invalid request")
     end
+  end
+
+  defp hold_stream(conn, owner) do
+    conn = conn |> put_resp_content_type("text/event-stream") |> send_chunked(200)
+    {:ok, conn} = chunk(conn, ": stream ready\n\n")
+    monitor = Process.monitor(owner)
+    reference = make_ref()
+    send(owner, {:remote_mcp_wire_stream_open, self(), reference})
+
+    receive do
+      {:release_remote_mcp_wire_stream, ^reference} ->
+        Process.demonitor(monitor, [:flush])
+        send(owner, {:remote_mcp_wire_stream_released, reference})
+
+      {:DOWN, ^monitor, :process, ^owner, _reason} ->
+        :ok
+    after
+      30_000 ->
+        Process.demonitor(monitor, [:flush])
+        send(owner, {:remote_mcp_wire_stream_timeout, reference})
+    end
+
+    conn
   end
 
   defp respond(conn, _request, %{redirect_to: redirect_to}) when is_binary(redirect_to) do

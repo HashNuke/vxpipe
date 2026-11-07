@@ -1025,6 +1025,18 @@ acceptance. Telephony, transfer, independent-node and broader negative cases sta
 open. All five checkpoint root gates pass: 4,986 tests, zero failures (202 excluded,
 seed 666644). Independent adversarial source and exact-index reviews are clean.
 
+Saved boundary and transfer follow-up: the local web path now covers foreign tenant
+selections with a separate authorized server, zero-tool records, changed/deleted
+descriptors, and repository outages at preparation, startup and invocation. Fresh
+preparation uses the original publication and never grants newly discovered tools.
+Five delayed-transfer cases prove successful destination execution and source
+preservation after cold/reused-client revocation or replacement. Sixteen tagged
+Console cases, 170 MCP tests and five existing wire cases pass. All five root gates
+pass: 4,987 tests, zero failures (214 excluded, seed 181171). Independent adversarial
+source and staged implementation review found no remaining code issues.
+Telephony, held-request races, separate-node and authenticated rendered acceptance
+remain open. See [boundary evidence](../20261107-0822-saved-mcp-boundaries.md).
+
 ### T8 — Release and operational verification
 
 Depends on T1–T7, including T4a, T6a and T6b. Update installation/operations docs
@@ -1052,6 +1064,20 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Revalidate current runtime credentials before reusing an open MCP session for
+  another activation. A saved, admitted sibling-call regression first completed a
+  delayed transfer after disconnect; a focused Connections regression also failed.
+  Reuse now resolves and discards current headers, rejects the activation on failure,
+  and preserves other rooms' shared session. Per-request authorization remains in
+  place. Cold/reused failure leaves the source responsible on the original peer.
+- [x] Address saved-boundary review gaps: re-prepare the original publication after
+  catalog changes, give simultaneous peers distinct supervised identities, and
+  correlate model inputs/transfer outcomes rather than accepting arbitrary mailbox
+  traffic. Foreign-tenant positive control uses a separate server and credentials.
+  Replace the warm-case mailbox drain with a controlled held SSE stream, so a
+  legitimate request submitted before revocation cannot cause a timing-dependent
+  false failure. Observe and release the exact stream; timeouts cannot pass.
 
 - [x] Forward the trusted MCP connection provider through Gateway admission while
   preserving saved-tenant catalog construction and rejecting protocol/request

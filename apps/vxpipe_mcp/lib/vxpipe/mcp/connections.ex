@@ -14,6 +14,7 @@ defmodule Vxpipe.MCP.Connections do
     CredentialLeases,
     ExMCPRuntime,
     IntegrationSupervisor,
+    RuntimeAuthProvider,
     Telemetry
   }
 
@@ -110,9 +111,31 @@ defmodule Vxpipe.MCP.Connections do
 
   defp open_connection(key, config, opts, options_builder) do
     case lookup(key) do
-      {:ok, connection} -> {{:ok, connection}, :reused}
+      {:ok, connection} -> reuse_connection(connection, config, options_builder)
       :error -> classify_open(start_connection(key, config, opts, options_builder))
     end
+  end
+
+  defp reuse_connection(connection, config, options_builder) do
+    with {:ok, client_options} <- options_builder.(config),
+         :ok <- authorize_reuse(client_options) do
+      {{:ok, connection}, :reused}
+    else
+      {:error, _reason} = error -> {error, :failed}
+    end
+  end
+
+  defp authorize_reuse(client_options) do
+    case Keyword.get(client_options, :auth_provider) do
+      {RuntimeAuthProvider, state} ->
+        {:ok, _headers, ^state} = RuntimeAuthProvider.get_headers(state)
+        :ok
+
+      nil ->
+        :ok
+    end
+  catch
+    :exit, :mcp_credentials_unavailable -> {:error, :connection_failed}
   end
 
   defp reject_revoked_connection({{:ok, connection}, outcome}, key) do

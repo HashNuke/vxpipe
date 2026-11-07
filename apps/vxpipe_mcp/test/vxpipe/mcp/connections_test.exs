@@ -3,6 +3,39 @@ defmodule Vxpipe.MCP.ConnectionsTest do
 
   alias Vxpipe.MCP.{Connection, ConnectionKey, Connections, ReadyClientRuntime}
 
+  test "reused sessions require current runtime credentials without retiring unrelated access" do
+    key = tenant_key("tenant", "reused-#{System.unique_integer([:positive])}")
+    close_on_exit([key])
+
+    valid =
+      {:ok, %{auth_method: "bearer", headers: [{"authorization", "Bearer synthetic-token"}]}}
+
+    credentials = start_supervised!({Agent, fn -> valid end})
+
+    {:ok, authentication} =
+      Vxpipe.MCP.RuntimeAuthProvider.init(%{
+        tenant: "tenant",
+        connection_id: key.integration_id,
+        generation: 1,
+        auth_method: "bearer",
+        endpoint: "https://mcp.example.test/mcp",
+        resolver:
+          {Vxpipe.MCP.Test.RuntimeAuthFixture, {self(), fn -> Agent.get(credentials, & &1) end}}
+      })
+
+    config = [endpoint: authentication.endpoint, runtime_authentication: authentication]
+    assert {:ok, first} = Connections.open(key, config, runtime: ReadyClientRuntime)
+    Agent.update(credentials, fn _ -> {:error, :revoked} end)
+
+    assert {:error, :connection_failed} =
+             Connections.open(key, config, runtime: ReadyClientRuntime)
+
+    assert {:ok, ^first} = Connections.lookup(key)
+
+    Agent.update(credentials, fn _ -> valid end)
+    assert {:ok, ^first} = Connections.open(key, config, runtime: ReadyClientRuntime)
+  end
+
   test "reuses one ready session per integration and credential generation" do
     key = key("generation-a")
     next_key = key("generation-b")
