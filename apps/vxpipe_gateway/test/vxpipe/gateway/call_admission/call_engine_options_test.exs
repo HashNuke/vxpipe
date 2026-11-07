@@ -3,6 +3,28 @@ defmodule Vxpipe.Gateway.CallAdmission.CallEngineOptionsTest do
 
   alias Vxpipe.Gateway.CallAdmission.CallEngineOptions
 
+  test "MCP transport providers come only from trusted startup options" do
+    provider = Vxpipe.CallEngine.TestRemoteMCPConnectionProvider
+
+    call = %{
+      tenant_key: "tenant",
+      remote_mcp_connection_provider: :untrusted,
+      plan: %{tenant_id: "tenant", participants: %{}, remote_mcp_connection_provider: :untrusted}
+    }
+
+    assert {:ok, defaults} = CallEngineOptions.build([], call)
+    refute Keyword.has_key?(defaults, :remote_mcp_connection_provider)
+
+    assert {:ok, runtime} =
+             CallEngineOptions.build(
+               [remote_mcp_connection_provider: provider, remote_mcp_protocol_client: :untrusted],
+               call
+             )
+
+    assert Keyword.fetch!(runtime, :remote_mcp_connection_provider) == provider
+    refute Keyword.has_key?(runtime, :remote_mcp_protocol_client)
+  end
+
   test "packaged startup uses a fresh tenant MCP snapshot and rejects revoked records" do
     record = %{
       id: "connection",

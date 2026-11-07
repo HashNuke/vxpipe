@@ -1012,6 +1012,19 @@ See [transport contracts](../../docs/development/mcp-runtime-transport.md) and
 the committed resolver/renewal boundary; full per-admission execution remains an
 acceptance gate even though startup wiring is implemented.
 
+#### Saved web-admission acceptance checkpoint (2026-11-07)
+
+Saved web-admission acceptance checkpoint passes:
+[labnotes](../20261107-0758-saved-mcp-acceptance.md). A tagged local Console test
+now follows saved PostgreSQL publication through call/session admission, WebRTC
+input, model-selected ExMCP execution and result delivery. An authenticated,
+CSRF-protected tenant disconnect blocks the next invocation in the same running
+room. Six saved-runtime/managed-web tests pass. Identity is fixture-backed; this
+is protocol/endpoint acceptance, not rendered browser or real identity-provider
+acceptance. Telephony, transfer, independent-node and broader negative cases stay
+open. All five checkpoint root gates pass: 4,986 tests, zero failures (202 excluded,
+seed 666644). Independent adversarial source and exact-index reviews are clean.
+
 ### T8 — Release and operational verification
 
 Depends on T1–T7, including T4a, T6a and T6b. Update installation/operations docs
@@ -1039,6 +1052,21 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Forward the trusted MCP connection provider through Gateway admission while
+  preserving saved-tenant catalog construction and rejecting protocol/request
+  overrides. The focused red test first reported the missing option; all six
+  Gateway option tests pass. An invalid HTTP provider field leaves its join token
+  available for the subsequent valid request.
+- [x] Give MCP tools without an optional description a model description based
+  only on their public alias. The full saved-call test exposed agent startup
+  failure; a focused red/green descriptor test now covers the fix. Preserve
+  schema validation and existing host-tool requirements; all six descriptor tests pass.
+- [x] Address saved-call review gaps: inspect every consumed RTVI frame for private
+  values, match the exact invocation completion ID/status and check for extra
+  tools/call submissions again after final peer output and observed cleanup.
+  The six-test saved-runtime/managed-web integration lane, independent adversarial
+  re-review and all five checkpoint root gates pass (4,986 tests, zero failures).
 
 - [x] Reject non-map OAuth proposals before credentialless target resolution.
   The red case raised BadMapError; it now returns the fixed validation error.
@@ -1434,6 +1462,13 @@ strict Credo and unused-dependency checks passed. This verifies the T1/T2 backen
 checkpoint, not the remaining UI/MCP milestone or final release acceptance.
 
 ## Specification review (separate from implementation)
+
+Saved-admission design review, 2026-11-07: independent review approved forwarding
+only the trusted connection provider while preserving saved catalog construction,
+real admission and protocol handling. It required authenticated tenant disconnect,
+same-room terminal failure, bidirectional wire/model/peer observations, input
+override rejection and teardown before global configuration restoration. These
+are checkpoint contracts; the remaining T7/T8 gates keep their original scope.
 
 Local design/dependency review, 2026-10-25: directory browsing can ship before OAuth;
 T4 enables static MCPs without depending on remote availability; T5 requires T4 and

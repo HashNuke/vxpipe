@@ -1,14 +1,32 @@
 defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.Calls
+  import Phoenix.ConnTest
+  import Plug.Conn, only: [put_req_header: 3]
+
+  alias ExWebRTC.PeerConnection
+  alias Vxpipe.{CallEngine, Calls}
+  alias Vxpipe.AgentRuntime.{ModelResponse, ToolCall}
   alias Vxpipe.Calls.{Administration, EditorToolCatalog}
   alias Vxpipe.CallEngine.RemoteMCP.IntegrationOwner
   alias Vxpipe.CallEngine.RemoteMCPWireServer
   alias Vxpipe.Console.Test.SavedMCPWireConnectionProvider
+  alias Vxpipe.Console.Test.FakeUserIdentity
+  alias Vxpipe.Console.Endpoint
+  alias Vxpipe.Gateway.{CallAdmission, TestManagedWebPeer}
   alias Vxpipe.Gateway.CallAdmission.CallEngineOptions
+  alias Vxpipe.Gateway.HTTP.Mount
   alias Vxpipe.MCP.{ConnectionKey, Connections}
-  alias Vxpipe.Persistence.{CallSpecStore, CallStore, CredentialKeyring, CredentialStore, Repo}
+
+  alias Vxpipe.Persistence.{
+    AccessKeyStore,
+    CallSpecStore,
+    CallStore,
+    CredentialKeyring,
+    CredentialStore,
+    Repo
+  }
+
   alias Vxpipe.Persistence.MCP.ConnectionStore
 
   @moduletag :integration
@@ -16,6 +34,7 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
   @token "synthetic-saved-runtime-token"
   @header "synthetic-saved-runtime-header"
   @key "saved-runtime-keyring-marker-123"
+  @endpoint Endpoint
 
   setup do
     if is_nil(Process.whereis(Repo)), do: start_supervised!(Repo)
@@ -28,12 +47,16 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
     context = [repo: Repo, keyring: keyring]
 
     server =
-      start_supervised!({RemoteMCPWireServer, owner: self(), authorization: "Bearer " <> @token})
+      start_supervised!(
+        {RemoteMCPWireServer,
+         owner: self(), authorization: "Bearer " <> @token, headers: [{"x-workspace", @header}]}
+      )
 
     %URI{port: port} = URI.parse(RemoteMCPWireServer.endpoint(server))
     endpoint = "https://mcp.example.test:#{port}/mcp"
 
     options = [
+      access_key_repository: {AccessKeyStore, Repo},
       credential_repository: {CredentialStore, Repo},
       call_spec_repository: {CallSpecStore, Repo},
       call_repository: {CallStore, Repo},
@@ -67,11 +90,111 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
       tenant: tenant.key,
       other: other.key,
       principal: principal,
+      secret: key.secret,
       options: options,
       context: context,
       connection: connection,
       attributes: attributes
     }
+  end
+
+  test "an admitted web call executes its saved MCP tool and observes tenant disconnect", c do
+    configure_admission(c.options)
+    assert {:ok, draft} = Calls.save_call_spec(c.tenant, source(c.connection.id), c.options)
+    assert draft.validation_errors == []
+
+    assert {:ok, published} =
+             Calls.publish_call_spec(c.tenant, draft.call_spec_id, draft.revision, c.options)
+
+    created =
+      api(
+        c.secret,
+        :post,
+        "/api/tenants/#{c.tenant}/call-specs/#{published.call_spec_id}/calls",
+        %{}
+      )
+      |> json_response(201)
+
+    id = created["call"]["id"]
+    base = "/api/tenants/#{c.tenant}/calls/#{id}"
+    token = api(c.secret, :post, base <> "/join-tokens", %{}) |> json_response(201)
+    join_path = base <> "/participants/#{token["participant_key"]}/sessions"
+    join_secret = token["join_token"]["token"]
+
+    # Reject browser-supplied adapters before consuming the single-use join token.
+    assert %{"error" => %{"code" => "invalid_request"}} =
+             api(join_secret, :post, join_path, %{
+               "remote_mcp_connection_provider" => "untrusted"
+             })
+             |> json_response(400)
+
+    admitted = api(join_secret, :post, join_path, %{}) |> json_response(201)
+    assert {:ok, call} = Calls.fetch_call(c.tenant, id, c.options)
+    assert call.state == :running
+    assert admitted["call"]["state"] == "running"
+    assert_private_absent(c, [created, token, admitted, call.plan])
+    on_exit(fn -> close_admitted_call(c, call) end)
+
+    {peer, channel} = connect_web(c, admitted["session"]["session_id"])
+
+    send_web(peer, channel, "send-text", %{
+      content: "Find customer-42.",
+      options: %{run_immediately: true, audio_response: false}
+    })
+
+    assert_receive {:test_agent_runtime_stream, provider, request}, 5_000
+    assert Enum.map(request.tools, & &1.name) == ["records__lookup_customer"]
+    assert_private_absent(c, request)
+    reply_tool(provider, "saved-first", "customer-42")
+
+    assert_receive {:remote_mcp_wire_request, "tools/call", "Bearer " <> @token,
+                    %{
+                      "params" => %{
+                        "name" => "lookup_customer",
+                        "arguments" => %{"customer_id" => "customer-42"}
+                      }
+                    }},
+                   5_000
+
+    {completion, result} = await_tool_result(c, "saved-first", peer, channel)
+    assert_private_absent(c, result)
+
+    assert %{
+             "status" => "completed",
+             "result" => %{"content" => [%{"type" => "text", "text" => "found customer-42"}]}
+           } = tool_outcome(result, "saved-first")
+
+    reply_text(completion, "I found customer-42.")
+    assert await_web(c, peer, channel, "bot-output")["data"]["text"] == "I found customer-42."
+    await_web(c, peer, channel, "bot-stopped-speaking")
+
+    disconnected = disconnect(c) |> json_response(200)
+    assert disconnected["connection"]["status"] == "revoked"
+    assert_secret_absent(disconnected)
+
+    send_web(peer, channel, "send-text", %{
+      content: "Now find customer-43.",
+      options: %{run_immediately: true, audio_response: false}
+    })
+
+    assert_receive {:test_agent_runtime_stream, next_provider, next_request}, 5_000
+    assert_private_absent(c, next_request)
+    reply_tool(next_provider, "saved-after-disconnect", "customer-43")
+    {failed_provider, failure} = await_tool_result(c, "saved-after-disconnect", peer, channel)
+    assert_private_absent(c, failure)
+    assert tool_outcome(failure, "saved-after-disconnect") == %{"status" => "failed"}
+    refute_received {:remote_mcp_wire_request, "tools/call", _, _}
+    reply_text(failed_provider, "The records connection is unavailable.")
+
+    assert await_web(c, peer, channel, "bot-output")["data"]["text"] ==
+             "The records connection is unavailable."
+
+    await_web(c, peer, channel, "bot-stopped-speaking")
+    assert {:ok, still_running} = Calls.fetch_call(c.tenant, id, c.options)
+    assert still_running.state == :running
+    assert still_running.incarnation_id == call.incarnation_id
+    close_admitted_call(c, call)
+    refute_received {:remote_mcp_wire_request, "tools/call", _, _}
   end
 
   test "saved publication and preparation stay secret-free, then wire execution rechecks revocation",
@@ -257,6 +380,228 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
     after
       0 -> []
     end
+  end
+
+  defp configure_admission(options) do
+    mount = Endpoint.config(:gateway_mount)
+    original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+    identity = Application.get_env(:vxpipe_console, :user_identity_backend)
+
+    runtime =
+      original
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:fixture, {Vxpipe.CallEngine.TestAgentRuntimeModelProvider, [owner: self()]})
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(original, :agent_runtime, runtime)
+    )
+
+    Application.put_env(:vxpipe_console, :user_identity_backend, FakeUserIdentity)
+
+    configured =
+      Keyword.put(options, :remote_mcp_connection_provider, SavedMCPWireConnectionProvider)
+
+    Phoenix.Config.put(
+      Endpoint,
+      :gateway_mount,
+      Mount.init(call_admission: [enabled: true, backend: {CallAdmission, configured}])
+    )
+
+    on_exit(fn ->
+      Phoenix.Config.put(Endpoint, :gateway_mount, mount)
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, original)
+      Application.put_env(:vxpipe_console, :user_identity_backend, identity)
+    end)
+  end
+
+  defp api(secret, method, path, body) do
+    conn = build_conn() |> put_req_header("content-type", "application/json")
+    conn = if secret, do: put_req_header(conn, "authorization", "Bearer " <> secret), else: conn
+    dispatch(conn, Endpoint, method, "https://localhost" <> path, JSON.encode!(body))
+  end
+
+  defp disconnect(c) do
+    page =
+      build_conn()
+      |> post("https://localhost/auth/api/login", %{
+        email: FakeUserIdentity.email(),
+        password: FakeUserIdentity.password()
+      })
+      |> recycle()
+      |> get("https://localhost/account")
+
+    [_, csrf] = Regex.run(~r/<meta name="csrf-token" content="([^"]+)"/, page.resp_body)
+    conn = page |> recycle() |> put_req_header("x-csrf-token", csrf)
+    conn = %{conn | private: Map.delete(conn.private, :plug_skip_csrf_protection)}
+
+    delete(
+      conn,
+      "https://localhost/api/tenants/#{c.tenant}/mcp-connections/#{c.connection.id}",
+      %{"generation" => 1}
+    )
+  end
+
+  defp connect_web(c, session_id) do
+    peer = start_supervised!({TestManagedWebPeer, controlling_process: self()})
+    :ok = PeerConnection.controlling_process(peer, self())
+    {:ok, channel} = PeerConnection.create_data_channel(peer, "chat", ordered: true)
+    offer = TestManagedWebPeer.offer(peer)
+
+    answer =
+      api(nil, :post, "/api/rtvi/offer", %{
+        sdp: offer,
+        type: "offer",
+        pc_id: nil,
+        restart_pc: false,
+        requestData: %{session_id: session_id}
+      })
+      |> json_response(200)
+
+    :ok = TestManagedWebPeer.answer(peer, answer["sdp"])
+    assert_receive {:ex_webrtc, ^peer, {:ice_candidate, candidate}}, 5_000
+
+    assert api(nil, :patch, "/api/rtvi/offer", %{
+             pc_id: answer["pc_id"],
+             candidates: [TestManagedWebPeer.candidate(candidate)]
+           }).status == 200
+
+    assert_receive {:ex_webrtc, ^peer, {:connection_state_change, :connected}}, 5_000
+    ref = channel.ref
+    assert_receive {:ex_webrtc, ^peer, {:data_channel_state_change, ^ref, :open}}, 5_000
+
+    :ok =
+      PeerConnection.send_data(
+        peer,
+        ref,
+        JSON.encode!(%{
+          type: "signalling",
+          message: %{type: "trackStatus", receiver_index: 0, enabled: true}
+        })
+      )
+
+    send_web(peer, ref, "client-ready", %{
+      version: "2.1.0",
+      about: %{library: "@pipecat-ai/client-js", library_version: "1.13.0"}
+    })
+
+    await_web(c, peer, ref, "bot-ready")
+    {peer, ref}
+  end
+
+  defp send_web(peer, channel, type, data) do
+    :ok =
+      PeerConnection.send_data(
+        peer,
+        channel,
+        JSON.encode!(%{
+          id: "saved-#{System.unique_integer([:positive])}",
+          label: "rtvi-ai",
+          type: type,
+          data: data
+        })
+      )
+  end
+
+  defp await_web(c, peer, channel, type, deadline \\ nil) do
+    deadline = deadline || System.monotonic_time(:millisecond) + 5_000
+
+    receive do
+      {:ex_webrtc, ^peer, {:data, ^channel, data}} ->
+        message = JSON.decode!(data)
+        assert_private_absent(c, message)
+        if message["type"] == type, do: message, else: await_web(c, peer, channel, type, deadline)
+    after
+      max(0, deadline - System.monotonic_time(:millisecond)) -> flunk("Missing RTVI #{type}")
+    end
+  end
+
+  defp reply_tool(provider, id, customer) do
+    {:ok, tool} =
+      ToolCall.new(
+        id: id,
+        name: "records__lookup_customer",
+        arguments: %{"customer_id" => customer}
+      )
+
+    {:ok, response} = ModelResponse.new(text: "", tool_calls: [tool])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+  end
+
+  defp await_tool_result(c, id, peer, channel) do
+    assert_receive {:test_agent_runtime_stream, acknowledgement, pending}, 5_000
+    assert_private_absent(c, pending)
+    assert pending.tools == []
+
+    assert Enum.any?(pending.messages, fn message ->
+             message.role == :tool and message.tool_call_id == id and
+               JSON.decode!(message.content) == %{"invocation_id" => id, "status" => "running"}
+           end)
+
+    reply_text(acknowledgement, "Checking records.")
+    assert await_web(c, peer, channel, "bot-output")["data"]["text"] == "Checking records."
+    await_web(c, peer, channel, "bot-stopped-speaking")
+    assert_receive {:test_agent_runtime_stream, provider, result}, 5_000
+    {provider, result}
+  end
+
+  defp reply_text(provider, text) do
+    {:ok, response} = ModelResponse.new(text: text)
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+  end
+
+  defp tool_outcome(request, id) do
+    message = List.last(request.messages)
+    assert message.origin == :engine
+    [_instruction, payload] = String.split(message.content, "\n", parts: 2)
+
+    assert %{
+             "type" => "tool_invocation_completion",
+             "invocation_id" => ^id,
+             "tool_name" => "records__lookup_customer",
+             "outcome" => outcome
+           } = JSON.decode!(payload)
+
+    outcome
+  end
+
+  defp assert_private_absent(c, value) do
+    assert_secret_absent(value)
+    refute :erlang.term_to_binary(value) =~ c.connection.endpoint
+  end
+
+  defp assert_secret_absent(value) do
+    for private <- [
+          @token,
+          @header,
+          @key,
+          "runtime_authentication",
+          "client_config"
+        ] do
+      refute :erlang.term_to_binary(value) =~ private
+    end
+  end
+
+  defp close_admitted_call(c, call) do
+    case CallEngine.monitor_room_completion(c.tenant, call.room_id, call.incarnation_id) do
+      {:ok, monitor} ->
+        CallEngine.end_call(c.tenant, call.room_id, call.incarnation_id)
+        assert_receive {:DOWN, ^monitor, :process, _, _}, 5_000
+
+      {:error, _} ->
+        :ok
+    end
+
+    {:ok, key} =
+      ConnectionKey.new(
+        scope: :tenant,
+        tenant_id: c.tenant,
+        integration_id: c.connection.id,
+        credential_generation: "1"
+      )
+
+    Connections.close(key)
   end
 
   defp tool(name),

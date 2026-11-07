@@ -2,9 +2,11 @@
 
 The packaged editor, publication and preparation paths now read saved tenant MCP
 metadata. Gateway builds a fresh saved-connection snapshot before starting browser,
-incoming and outgoing calls. The local saved-record acceptance exercises PostgreSQL
-publication/preparation, Gateway's startup-options boundary and real MCP execution;
-full per-admission room/transfer and separate-node acceptance remain milestone gates.
+incoming and outgoing calls. Local acceptance now joins PostgreSQL publication to
+Console call/session admission, real WebRTC input, model-selected ExMCP execution
+and peer output. Authenticated tenant disconnect blocks a subsequent invocation
+in that same room. Identity is fixture-backed; rendered browser, telephony,
+transfer, broader negative cases and separate-node acceptance remain milestone gates.
 
 ## Metadata and pinning
 
@@ -22,6 +24,11 @@ plans store selected tool descriptors and identities, never endpoints, credentia
 keyrings or runtime resolvers. New catalog tools do not add themselves to a saved
 selection. A catalog change invalidates an older prepared snapshot; prepare again
 to use the current catalog. Runtime startup also rejects replaced/revoked generations.
+
+MCP descriptions are optional in the approved protocol. The model projection uses
+`Call <public alias>.` when the normalized remote description is empty; it preserves
+the pinned schema and does not expose the remote name or connection configuration.
+This keeps a valid tool without a description from failing only at agent startup.
 
 ## Secret-free startup and current request headers
 
@@ -58,6 +65,12 @@ CallEngine API. Calls also retains explicit compilation/picker injection for tru
 hosts. Packaged Gateway admission deliberately requires saved tenant records; it is
 not an embedded application-catalog startup API. A host using application integrations
 must use the direct CallEngine startup boundary or migrate to saved tenant records.
+
+Gateway forwards an explicit server-owned `remote_mcp_connection_provider` to the
+existing CallEngine boundary, allowing a trusted host or local HTTP acceptance
+fixture to own connection establishment. Call specs and HTTP payloads cannot set
+it. This does not enable injected catalogs or protocol overrides in packaged
+admission; saved tenant validation and current credential resolution still apply.
 
 Existing application configuration is neither copied nor silently shared with a
 tenant. Reconnect each server in its intended tenant, obtain its stable saved ID,

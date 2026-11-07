@@ -102,7 +102,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
          {:ok, descriptor} <-
            ToolDescriptor.new(
              name: name,
-             description: remote.description,
+             description: remote_description(remote.description, name),
              input_schema: remote.input_schema,
              binding: binding
            ) do
@@ -141,6 +141,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
   end
 
   defp descriptor(%ToolBinding{}, _remote_owner), do: {:error, :invalid_tool_binding}
+
+  defp remote_description("", name), do: "Call #{name}."
+  defp remote_description(description, _name), do: description
 
   defp compile_variable_bindings(nil), do: {:ok, []}
 

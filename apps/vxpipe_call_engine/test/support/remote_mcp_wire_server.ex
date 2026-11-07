@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
 
     state = %{
       authorization: Keyword.get(options, :authorization),
+      headers: Keyword.get(options, :headers, []),
       owner: owner,
       redirect_to: Keyword.get(options, :redirect_to),
       request_label: Keyword.get(options, :request_label),
@@ -57,7 +58,8 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
   end
 
   defp respond(conn, request, state) do
-    if authorized?(conn, state.authorization) do
+    if authorized?(conn, state.authorization) and
+         Enum.all?(state.headers, fn {name, value} -> get_req_header(conn, name) == [value] end) do
       protocol_response(conn, request, state.session_id)
     else
       send_resp(conn, 401, "unauthorized")

@@ -110,6 +110,25 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
              ToolDescriptors.compile(%{"customer_lookup" => remote_binding})
   end
 
+  test "an MCP tool without its optional description uses only its public alias" do
+    {:ok, catalog} =
+      Vxpipe.MCP.Catalog.new([
+        %{"name" => "lookup_customer", "inputSchema" => %{"type" => "object"}}
+      ])
+
+    {_integrations, binding} =
+      RemoteMCPFixture.binding!(self(), self(), "private", catalog: catalog)
+
+    assert binding.remote.description == ""
+
+    assert {:ok, [descriptor]} =
+             ToolDescriptors.compile(%{"customer_lookup" => binding}, nil, self())
+
+    assert descriptor.description == "Call customer_lookup."
+    refute descriptor.description =~ "lookup_customer"
+    assert descriptor.input_schema == binding.remote.input_schema
+  end
+
   defp host_binding(name, action, conversation_mode) do
     %ToolBinding{
       name: name,
