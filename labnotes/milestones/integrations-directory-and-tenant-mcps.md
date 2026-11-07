@@ -1193,14 +1193,20 @@ and all related Storybooks.
 - [x] Exercise anonymous, bearer, custom-header and Basic startup modes through the
   authenticated Console. Verify create, incorrect-credential rejection where
   applicable and saved-secret testing; failed Basic replacement keeps the existing
-  identity/generation. Anonymous, bearer and header disconnect checks also pass;
-  Basic remains connected for the pointer regression below. Eighteen focused cases and all five root gates
-  pass (4,991 tests, zero failures, 241 excluded, seed 579799). Mobile tools render,
-  with Basic using keyboard navigation because of the pointer issue below.
-- [ ] Prevent pointer activation of Tools from dismissing the recentering management
-  dialog. Reproduced at 390x844 with saved Basic credentials; keyboard selection
-  succeeds. Investigate the tab activation/backdrop click sequence, add a focused
-  failing regression and verify pointer switching in the rendered browser.
+  identity/generation. All four disconnect checks pass; Basic was completed after
+  the pointer fix below. Eighteen focused cases and all five root gates pass
+  (4,991 tests, zero failures, 241 excluded, seed 579799). Mobile tool lists render.
+- [x] Prevent pointer activation of Tools from dismissing the recentering management
+  dialog. Five failing assertions reproduce the gesture boundary; thirteen focused
+  dialog/management tests now pass. Restore anchored management height and Authentication scrolling.
+  Headless Chrome pointer/keyboard checks pass at 390×844 and 1280×900, including
+  inside-to-backdrop release, genuine outside dismissal, Escape and long forms with
+  reachable actions. The 1,062-test frontend suite, TypeScript and asset build pass;
+  all five root gates pass (4,991 tests, zero failures, 241 excluded, seed 721027).
+  Independent adversarial source/test/browser review is clean; see the
+  [evidence](../20261107-1229-stabilize-mcp-dialog.md).
+- [x] Add the independent review's complementary gesture cases: release over content
+  and a different pointer's release must not complete a backdrop dismissal.
 - [x] Verify custom unprotected DCR URL discovery, initial denied consent, draft
   recovery and successful retry through the actual Console browser. The automatic
   method selection exposes only the optional initial registration token; denial

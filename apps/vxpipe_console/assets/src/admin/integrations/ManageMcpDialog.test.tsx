@@ -36,6 +36,21 @@ test("Tools tab reads cached catalog and read-only access has no mutation contro
   expect(screen.queryByRole("button", { name: "Refresh tools" })).not.toBeInTheDocument();
 });
 
+test("switching to Tools does not dismiss when pointer release lands outside the resized panel", async () => {
+  const onClose = vi.fn();
+  render(<CustomMcpDialog {...props} onClose={onClose} fetchImpl={fixture()} />);
+  const tools = screen.getByRole("tab", { name: "Tools" });
+  const backdrop = screen.getByRole("dialog").parentElement!;
+  const pointer = { pointerId: 1, isPrimary: true, button: 0 };
+  fireEvent.pointerDown(tools, pointer);
+  fireEvent.mouseDown(tools, { button: 0, ctrlKey: false });
+  expect(await screen.findByText("list_events")).toBeInTheDocument();
+  fireEvent.pointerUp(backdrop, pointer);
+  fireEvent.click(backdrop);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByRole("tab", { name: "Tools" })).toHaveAttribute("aria-selected", "true");
+});
+
 test("stale saves retain the dialog and explain recovery", async () => {
   const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => init?.method === "PATCH" ? new Response("", { status: 409 }) : Response.json({ connection: { id: "saved-id", generation: 3, tools: [] } }));
   render(<CustomMcpDialog {...props} fetchImpl={fetchImpl} />);

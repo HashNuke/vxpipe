@@ -67,6 +67,16 @@ selected method, including a discovered anonymous endpoint. Disconnect and creat
 refresh the local inventory. Read-only viewers can inspect tools without mutation
 controls. Unsupported OAuth discovery remains explicit and blocks OAuth submission.
 
+Saved management uses an anchored, viewport-capped frame so switching tabs keeps
+the header and footer stable. Authentication content and the tool list scroll
+within that frame. Backdrop dismissal requires a primary pointer gesture that
+begins and ends on the backdrop. Gestures beginning or ending inside the dialog,
+cancelled gestures, and gestures observed while busy at press, release or click
+must not discard the dialog. Explicit Close and Escape remain available
+when idle. This behavior is covered by focused gesture regressions and authenticated
+desktop/mobile Chrome checks; see the
+[dialog evidence](../../labnotes/20261107-1229-stabilize-mcp-dialog.md).
+
 ## Alternatives and evidence
 
 Rejected: a second native credential implementation, eager Services/model reads
@@ -77,7 +87,9 @@ configuration replacement to refresh tools.
 Production-wrapper regressions cover granular roles, native override/restore and
 exact named removal, retained pagination, anonymous save and catalog-only refresh.
 Directory/API tests cover private inventory, local fallback, status joins and
-category navigation. Desktop/mobile Chrome inspection uses the production
+category navigation. Initial desktop/mobile Chrome inspection used the production
 components with in-memory responses. It establishes layout and fixture interaction,
 not authenticated backend/browser acceptance. Checkpoint evidence and limitations
 are recorded in [labnotes](../../labnotes/20261107-0309-review-integrations-ui.md).
+Later [authenticated acceptance](mcp-browser-acceptance.md) records actual Console
+and controlled HTTP/TLS peer checks, with the remaining milestone gates explicit.

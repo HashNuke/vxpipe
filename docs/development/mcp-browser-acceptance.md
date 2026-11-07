@@ -13,11 +13,12 @@ through denied consent and later explicit approval. Custom unprotected DCR also
 passes discovery, denied initial consent, draft recovery, successful retry and
 saved-credential management, with its tool list inspected on mobile. The four
 static startup modes now pass real create, wrong-credential rejection where
-applicable and saved testing. Anonymous, bearer and custom-header disconnect also
-pass. Basic failed replacement preserves the working record. Tool lists render on
-mobile, but pointer selection of Tools can
-dismiss a recentering management dialog; Basic tools were verified with keyboard
-navigation and that pointer interaction remains an open UI fix. The complete
+applicable, saved testing and disconnect. Basic failed replacement preserves the
+working record. The mobile pointer-tab dismissal exposed by this pass is fixed:
+management keeps a stable frame, long Authentication content scrolls, and pointer
+and keyboard tab selection retain the dialog on desktop and mobile. See the
+[gesture and layout evidence](../../labnotes/20261107-1229-stabilize-mcp-dialog.md).
+The complete
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
 also requires other authentication methods, listed/retained identity, independent
 node callbacks, native override/restore, outage states and final release checks.

@@ -249,11 +249,11 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
       </div>
       {saved && !reconnecting ? !readOnly && <div className="mcp-auth-actions px-6 pb-6"><Button type="submit" disabled={busy || !selected || !validMcpUrl(endpoint)}>{busy ? "Checking…" : replaceCredentials ? "Save changes" : "Test connection"}</Button></div> : <footer className="mcp-dialog-footer"><Button type="button" disabled={busy} onClick={onClose}>Cancel</Button>{!readOnly && <Button type="submit" className="mcp-primary" disabled={busy || !selected || !validMcpUrl(endpoint)}>{busy ? "Connecting…" : reconnecting ? "Reconnect" : "Connect"}<ArrowRight size={15} aria-hidden /></Button>}</footer>}
     </form>;
-  return <div className="mcp-services-preview"><SetupDialog title={reconnecting ? `Reconnect ${saved?.serverName}` : saved?.serverName ?? (directoryEntry ? `Connect ${directoryEntry.name}` : "Connect other MCP")} onClose={onClose} busy={busy}>
+  return <div className="mcp-services-preview"><SetupDialog title={reconnecting ? `Reconnect ${saved?.serverName}` : saved?.serverName ?? (directoryEntry ? `Connect ${directoryEntry.name}` : "Connect other MCP")} onClose={onClose} busy={busy} anchorTop={!!saved && !reconnecting}>
     {saved && !reconnecting ? <>
       <Tabs className="mcp-manage-tabs" value={tab} onValueChange={setTab}>
         <TabsList className="mcp-manage-tab-list" variant="line" aria-label="Connection settings"><TabsTrigger value="authentication">Authentication</TabsTrigger><TabsTrigger value="tools">Tools</TabsTrigger></TabsList>
-        <TabsContent value="authentication">{form}</TabsContent>
+        <TabsContent value="authentication" className="mcp-manage-auth">{form}</TabsContent>
         <TabsContent value="tools" className="mcp-tools-panel">
           <div className="mcp-tools-heading"><h3>Available tools ({tools.length})</h3>{!readOnly && <Button aria-label="Refresh tools" disabled={busy} onClick={() => void connect(true)}><RefreshCw size={16} aria-hidden className={busy ? "mcp-spinner" : undefined} />Refresh tools</Button>}</div>
           <div className="mcp-search"><input type="search" aria-label="Search tools" placeholder="Search tools…" value={search} onChange={event => setSearch(event.target.value)} /></div>

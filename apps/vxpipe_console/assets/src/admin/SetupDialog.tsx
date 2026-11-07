@@ -31,6 +31,7 @@ export function SetupDialog({
   useEffect(() => { setOverlay(true); return () => setOverlay(false); }, [setOverlay]);
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const backdropGesture = useRef<{ pointerId: number; released: boolean } | null>(null);
   useEffect(() => {
     const previous =
       document.activeElement instanceof HTMLElement
@@ -82,8 +83,25 @@ export function SetupDialog({
   return (
     <div
       className={`setup-dialog-backdrop${anchorTop ? " setup-dialog-backdrop--anchored" : ""}`}
+      onPointerDownCapture={(event) => {
+        if (!event.isPrimary) return;
+        backdropGesture.current = event.target === event.currentTarget && event.button === 0 && !busy
+          ? { pointerId: event.pointerId, released: false }
+          : null;
+      }}
+      onPointerUpCapture={(event) => {
+        const gesture = backdropGesture.current;
+        if (gesture?.pointerId === event.pointerId) {
+          gesture.released = event.target === event.currentTarget && !busy;
+        }
+      }}
+      onPointerCancelCapture={(event) => {
+        if (backdropGesture.current?.pointerId === event.pointerId) backdropGesture.current = null;
+      }}
       onClick={(event) => {
-        if (event.target === event.currentTarget && !busy) onClose();
+        const released = backdropGesture.current?.released;
+        backdropGesture.current = null;
+        if (released && event.target === event.currentTarget && !busy) onClose();
       }}
     >
       <div
