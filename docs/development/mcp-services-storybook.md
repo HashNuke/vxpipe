@@ -377,8 +377,8 @@ preserves masked credentials until replacement is explicitly selected.
 Saved during outage demonstrates local accepted configuration and tool inspection
 without a directory dependency. Read only retains inspection while removing
 mutation actions. No real HTTP calls, registration or provider credentials are
-used by these fixtures. Retained-ID recovery remains separate
-implementation work; these stories do not establish its acceptance.
+used by these fixtures. Retained-ID recovery has separate production stories
+below; these listed-form stories do not establish its full workflow acceptance.
 
 ## Production listed OAuth forms (2026-11-07)
 
@@ -391,3 +391,19 @@ and saved-registration advice. No provider HTTP or navigation occurs. Desktop an
 mobile Chrome inspection includes typing a manual issuer across discovery
 restarts, masked client-secret entry and simulated handoffs. Authenticated backend
 browser acceptance remains a separate milestone gate.
+
+
+## Production reconnect recovery (2026-11-07)
+
+[Production reconnect recovery](http://localhost:6006/?path=/story/vxpipe-console-integrations-production-reconnect-recovery--custom)
+uses the production modal with in-memory conflict and metadata responses. Custom
+and Accepted Listing show explicit review followed by fresh credential entry and
+an explicit Reconnect. Connected Duplicate opens management. Cancelled OAuth
+shows the restored form with empty registration credentials. All are inspected
+in Chrome at desktop/mobile sizes; fixture submission never calls providers.
+
+[OAuth return: Retained Outage](http://localhost:6006/?path=/story/vxpipe-console-integrations-oauth-return--retained-outage)
+exercises the actual return hook, matching public session draft and metadata retry.
+Leaving recovery through category navigation discards the unfinished retry state.
+Retained Denied restores directly. Real authenticated browser acceptance and early
+backend duplicate detection remain separate milestone work.

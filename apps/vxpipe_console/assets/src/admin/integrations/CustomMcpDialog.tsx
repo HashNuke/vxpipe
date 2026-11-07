@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import type { McpConnection } from "./inventoryApi";
 import { listedMethod, type McpListing } from "./listedMcp";
 import { listedOAuthMethod, listedOAuthRequest } from "./listedOAuthForm";
+import { conflictUrl, parseConflictConnection, parseMcpConflict, type McpConflict } from "./mcpConflict";
 import type { IntegrationFetch } from "./useInventory";
 import "../mcpStories/mcp-services-story.css";
 
@@ -20,13 +21,15 @@ type Header = { id: number; name: string; value: string };
 type SavedOAuth = { registrationMethod: OAuthMethod; grant: OAuthGrant; clientAuth: ClientAuthentication };
 export type OAuthHandoff = { authorizationUrl: string; attemptId: string; connectionId: string };
 const authorize = (handoff: OAuthHandoff) => window.location.assign(handoff.authorizationUrl);
-export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpired, onClose, onConnected, connection, listing, onAuthorize = authorize, returnTo, initialDraft, recoveryNotice }: {
+export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpired, onClose, onConnected, connection, listing, onAuthorize = authorize, returnTo, initialDraft, recoveryNotice, onOpenConnection }: {
   connection?: McpConnection; tenantKey: string; csrfToken: string; fetchImpl: IntegrationFetch; onSessionExpired: () => void;
   listing?: McpListing;
   onClose: () => void; onConnected: () => void;
   onAuthorize?: (handoff: OAuthHandoff, draft: OAuthDraft) => void; returnTo?: string; initialDraft?: OAuthDraft; recoveryNotice?: string;
+  onOpenConnection?: (connection: McpConnection) => void;
 }) {
   const currentListing = listing ?? initialDraft?.listing;
+  const reconnecting = connection?.status === "revoked";
   const directoryEntry = connection?.directoryEntry ?? currentListing?.entry;
   const listedOAuth = directoryEntry?.authentication.type === "oauth2";
   const [endpoint, setEndpoint] = useState(directoryEntry?.endpoint ?? initialDraft?.endpoint ?? connection?.endpoint ?? "");
@@ -41,9 +44,10 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
   const [oauthEdits, setOAuthEdits] = useState<Partial<OAuthValues>>(initialDraft ? { grant: "authorization_code", ...(initialDraft.clientAuth ? { clientAuth: initialDraft.clientAuth } : {}) } : {});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState<McpConflict | null>(null);
   const [saved, setSaved] = useState(connection);
   const [savedOAuth, setSavedOAuth] = useState<SavedOAuth | null>(null);
-  const [replaceCredentials, setReplaceCredentials] = useState(!connection || !!initialDraft);
+  const [replaceCredentials, setReplaceCredentials] = useState(!connection || reconnecting || !!initialDraft);
   const [tools, setTools] = useState<string[]>([]);
   const [toolsStatus, setToolsStatus] = useState("loading");
   const [toolsRevision, setToolsRevision] = useState(0);
@@ -52,7 +56,7 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
   const readOnly = connection?.canEdit === false;
   const connectionUrl = `/api/tenants/${encodeURIComponent(tenantKey)}/mcp-connections${connection ? `/${encodeURIComponent(connection.id)}` : ""}`;
   useEffect(() => {
-    if (!connection) return;
+    if (!connection || reconnecting) return;
     const controller = new AbortController();
     setToolsStatus("loading");
     fetchImpl(connectionUrl, { credentials: "same-origin", headers: { accept: "application/json" }, signal: controller.signal })
@@ -66,7 +70,7 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
         if (!controller.signal.aborted) { setTools(body.connection.tools.map((tool: { name: string }) => tool.name)); setSavedOAuth(parseSavedOAuth(body.connection.oauth)); setToolsStatus("ready"); }
       }).catch(() => { if (!controller.signal.aborted) setToolsStatus("failed"); });
     return () => controller.abort();
-  }, [connection, connectionUrl, fetchImpl, onSessionExpired, toolsRevision]);
+  }, [connection, connectionUrl, fetchImpl, onSessionExpired, toolsRevision, reconnecting]);
   const pending = useRef<AbortController | null>(null);
   useEffect(() => () => pending.current?.abort(), []);
   const discovery = useMcpDiscovery({ tenantKey, csrfToken, endpoint, revision: String(revision), issuer,
@@ -83,19 +87,20 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
 
   function clearCredentials() { setToken(""); setUsername(""); setPassword(""); setHeaders([]); setOAuthEdits({}); }
   function changeUrl(value: string) {
-    setReplaceCredentials(true); setEndpoint(value); setRevision(value => value + 1); setIssuer(undefined); setMethod(""); clearCredentials(); setError("");
+    setReplaceCredentials(true); setEndpoint(value); setRevision(value => value + 1); setIssuer(undefined); setMethod(""); clearCredentials(); setError(""); setConflict(null);
   }
   function changeMethod(value: string) {
     if (value === selected) return;
-    setReplaceCredentials(true); setMethod(value as Method); clearCredentials(); setError("");
+    setReplaceCredentials(true); setMethod(value as Method); clearCredentials(); setError(""); setConflict(null);
     if (value === "headers") setHeaders([{ id: 1, name: "X-API-Key", value: "" }]);
   }
-  function changeIssuer(value: string) { setIssuer(value || undefined); clearCredentials(); setError(""); }
+  function changeIssuer(value: string) { setIssuer(value || undefined); clearCredentials(); setError(""); setConflict(null); }
   function replaceSavedCredentials(value: boolean) {
     setReplaceCredentials(value); clearCredentials();
     if (value && savedOAuth) setOAuthEdits({ grant: savedOAuth.grant, clientAuth: savedOAuth.clientAuth });
   }
   async function connect(catalogOnly = false) {
+    if (catalogOnly && reconnecting) return;
     const refreshTools = catalogOnly || !!(saved?.authMethod === "oauth" && !replaceCredentials && endpoint === saved.endpoint);
     if (readOnly || busy || (!refreshTools && (!selected || !validMcpUrl(endpoint)))) return;
     if (!refreshTools && oauthMethod) {
@@ -113,26 +118,28 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
     if (browserOAuth && saved && endpoint !== saved.endpoint) {
       setError("To use a different server URL with OAuth, connect it as a new MCP."); return;
     }
-    const requestUrl = browserOAuth ? saved ? `${connectionUrl}/oauth` : `/api/tenants/${encodeURIComponent(tenantKey)}/mcp-oauth` : connectionUrl;
+    const requestUrl = browserOAuth ? saved ? `${connectionUrl}/oauth` : `/api/tenants/${encodeURIComponent(tenantKey)}/mcp-oauth` : reconnecting ? `${connectionUrl}/reconnect` : connectionUrl;
     const requestBody = refreshTools && saved ? { generation: saved.generation, refresh_tools: true } : oauthMethod ? {
       ...(listedOAuth ? listedOAuthRequest(oauthMethod, String(revision), reuseRegistration ? { ...oauthValues, initialAccessToken: "" } : oauthValues, issuer, saved ? undefined : currentListing?.reference) : oauthRequest(oauthMethod, endpoint, String(revision), oauthValues, issuer)),
       ...(saved ? { generation: saved.generation } : {}), ...(browserOAuth && returnTo ? { return_to: returnTo } : {}),
     } : { ...(directoryEntry ? (!saved && currentListing ? { listing: currentListing.reference } : {}) : { endpoint, auth_method: selected }),
       ...(replaceCredentials ? { credentials } : {}), ...(saved ? { generation: saved.generation } : {}) };
     const controller = new AbortController(); pending.current = controller;
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setConflict(null);
     try {
       const response = await fetchImpl(requestUrl, {
-        method: browserOAuth ? "POST" : saved ? "PATCH" : "POST", credentials: "same-origin", signal: controller.signal,
+        method: browserOAuth || reconnecting ? "POST" : saved ? "PATCH" : "POST", credentials: "same-origin", signal: controller.signal,
         headers: { accept: "application/json", "content-type": "application/json", "x-csrf-token": csrfToken },
         body: JSON.stringify(requestBody),
       });
       if (controller.signal.aborted) return;
       if (response.status === 401) { onSessionExpired(); return; }
       if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        if (controller.signal.aborted) return;
+        const proposal = response.status === 409 && !saved && onOpenConnection ? parseMcpConflict(errorBody) : null;
+        if (proposal) { setConflict(proposal); return; }
         if (currentListing && !saved) {
-          const errorBody = await response.json().catch(() => null);
-          if (controller.signal.aborted) return;
           if (["mcp_listing_unavailable", "invalid_mcp_listing"].includes(errorBody?.error?.code)) {
             setError("This directory entry changed or is unavailable. Close this dialog and select it again from the directory."); return;
           }
@@ -153,7 +160,7 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
       if (typeof body?.connection?.id !== "string" || typeof body?.connection?.generation !== "number") throw new Error("Invalid connection response");
       if (!controller.signal.aborted) {
         if (!refreshTools) { clearCredentials(); setMethod(selected); }
-        if (saved) {
+        if (saved && !reconnecting) {
           setSaved({ ...saved, endpoint: refreshTools ? saved.endpoint : endpoint, authMethod: refreshTools ? saved.authMethod : oauthMethod ? "oauth" : selected, generation: body.connection.generation });
           if (!refreshTools) {
             setReplaceCredentials(false);
@@ -164,6 +171,21 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
         else onConnected();
       }
     } catch { if (!controller.signal.aborted) setError("Could not connect. Check the URL and credentials, then retry."); }
+    finally { if (!controller.signal.aborted) setBusy(false); }
+  }
+
+  async function openConflict() {
+    if (!conflict || !onOpenConnection || busy || readOnly) return;
+    const controller = new AbortController(); pending.current = controller;
+    setBusy(true); setError("");
+    try {
+      const response = await fetchImpl(conflictUrl(tenantKey, conflict), { credentials: "same-origin", headers: { accept: "application/json" }, signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (response.status === 401) { onSessionExpired(); return; }
+      if (!response.ok) throw new Error("Connection unavailable");
+      const current = parseConflictConnection(await response.json(), tenantKey, conflict);
+      if (!controller.signal.aborted) { clearCredentials(); onOpenConnection(current); }
+    } catch { if (!controller.signal.aborted) setError("Could not load this connection. Retry, or close this dialog and load current integrations."); }
     finally { if (!controller.signal.aborted) setBusy(false); }
   }
 
@@ -194,7 +216,7 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
                 {directoryEntry.setup_url && <a className="underline" href={directoryEntry.setup_url} target="_blank" rel="noopener noreferrer">Setup</a>}
                 {directoryEntry.documentation_url && <a className="underline" href={directoryEntry.documentation_url} target="_blank" rel="noopener noreferrer">Documentation</a>}
               </div>}
-            </> : <TextField label="MCP server URL" type="url" value={endpoint} onChange={event => changeUrl(event.target.value)} placeholder="https://mcp.example.com/mcp" />}
+            </> : <TextField label="MCP server URL" type="url" disabled={reconnecting} value={endpoint} onChange={event => changeUrl(event.target.value)} placeholder="https://mcp.example.com/mcp" />}
             <div className="mcp-field-note">
               {discovery.status !== "idle" && <p className="mcp-hint" role="status">{discovery.status === "waiting" ? "Waiting to check URL…" : discovery.status === "checking" ? "Checking MCP server and OAuth settings…" : discovery.status === "failed" || discovery.data?.outcome === "unknown" ? listedOAuth ? "Could not discover OAuth settings. Check the authorization server URL, or retry." : "Could not discover settings. Choose authentication manually, or retry." : discovery.data?.outcome === "partial" ? "Some OAuth settings could not be discovered. Check the authorization server or retry." : discovery.data?.outcome === "unsupported_oauth" ? "This server does not support the OAuth security requirements needed to connect." : discovery.data?.outcome === "issuer_required" ? "Choose an authorization server to continue discovery." : discovery.data?.outcome === "anonymous" ? "Server accepts connections without authentication." : "OAuth settings discovered."}</p>}
               {(discovery.status === "failed" || discovery.data?.outcome === "unknown" || discovery.data?.outcome === "partial") && <Button type="button" onClick={discovery.retry}>Retry discovery</Button>}
@@ -208,7 +230,7 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
               <option value="cimd">OAuth - CIMD</option><option value="dcr">OAuth - DCR</option><option value="own_client">OAuth - Own client</option>
               <option value="bearer">Bearer token</option><option value="headers">Custom headers</option><option value="basic">HTTP Basic</option><option value="none">No authentication</option>
             </SelectField>}
-            {saved && selected !== "none" && <label className="mcp-hint"><input type="checkbox" checked={replaceCredentials} disabled={!directoryEntry && (endpoint !== saved.endpoint || selected !== savedMethod)} onChange={event => replaceSavedCredentials(event.target.checked)} /> Replace credentials</label>}
+            {saved && !reconnecting && selected !== "none" && <label className="mcp-hint"><input type="checkbox" checked={replaceCredentials} disabled={!directoryEntry && (endpoint !== saved.endpoint || selected !== savedMethod)} onChange={event => replaceSavedCredentials(event.target.checked)} /> Replace credentials</label>}
             {saved && !replaceCredentials && selected !== "none" && <p className="mcp-hint">Credentials saved. Values are never displayed.</p>}
             {replaceCredentials && reuseRegistration && <p className="mcp-hint">Sign in again using the saved client registration.</p>}
             {replaceCredentials && oauthMethod && !reuseRegistration && <OAuthFields method={oauthMethod} values={oauthValues} discovery={discovery.data}
@@ -222,12 +244,13 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
           </section>
         </fieldset>
         {error && <p className="mcp-error" role="alert">{error}</p>}
+        {conflict && <div role="status" className="mcp-field-note"><p className="mcp-hint">{conflict.kind === "reconnect" ? "This server was disconnected. Review its saved settings to reconnect it." : "This server is already connected. Open its current settings to manage it."}</p><Button type="button" disabled={busy} onClick={() => void openConflict()}>{conflict.kind === "reconnect" ? "Review reconnect" : "Manage existing connection"}</Button></div>}
         {busy && <p role="status" className="mcp-hint"><LoaderCircle className="mcp-spinner inline" size={16} aria-hidden /> Checking authentication and discovering tools…</p>}
       </div>
-      {saved ? !readOnly && <div className="mcp-auth-actions px-6 pb-6"><Button type="submit" disabled={busy || !selected || !validMcpUrl(endpoint)}>{busy ? "Checking…" : replaceCredentials ? "Save changes" : "Test connection"}</Button></div> : <footer className="mcp-dialog-footer"><Button type="button" disabled={busy} onClick={onClose}>Cancel</Button><Button type="submit" className="mcp-primary" disabled={busy || !selected || !validMcpUrl(endpoint)}>{busy ? "Connecting…" : "Connect"}<ArrowRight size={15} aria-hidden /></Button></footer>}
+      {saved && !reconnecting ? !readOnly && <div className="mcp-auth-actions px-6 pb-6"><Button type="submit" disabled={busy || !selected || !validMcpUrl(endpoint)}>{busy ? "Checking…" : replaceCredentials ? "Save changes" : "Test connection"}</Button></div> : <footer className="mcp-dialog-footer"><Button type="button" disabled={busy} onClick={onClose}>Cancel</Button>{!readOnly && <Button type="submit" className="mcp-primary" disabled={busy || !selected || !validMcpUrl(endpoint)}>{busy ? "Connecting…" : reconnecting ? "Reconnect" : "Connect"}<ArrowRight size={15} aria-hidden /></Button>}</footer>}
     </form>;
-  return <div className="mcp-services-preview"><SetupDialog title={saved?.serverName ?? (directoryEntry ? `Connect ${directoryEntry.name}` : "Connect other MCP")} onClose={onClose} busy={busy}>
-    {saved ? <>
+  return <div className="mcp-services-preview"><SetupDialog title={reconnecting ? `Reconnect ${saved?.serverName}` : saved?.serverName ?? (directoryEntry ? `Connect ${directoryEntry.name}` : "Connect other MCP")} onClose={onClose} busy={busy}>
+    {saved && !reconnecting ? <>
       <Tabs className="mcp-manage-tabs" value={tab} onValueChange={setTab}>
         <TabsList className="mcp-manage-tab-list" variant="line" aria-label="Connection settings"><TabsTrigger value="authentication">Authentication</TabsTrigger><TabsTrigger value="tools">Tools</TabsTrigger></TabsList>
         <TabsContent value="authentication">{form}</TabsContent>

@@ -5,7 +5,7 @@ import { Button } from "../Button";
 import { ServiceLogo } from "../ServiceLogo";
 import { capabilityLabels, type SetupProviderId } from "../setupCatalog";
 import { shouldInterceptNavigation } from "../shouldInterceptNavigation";
-import { integrationQuery, parseCategories, type IntegrationCategory, type IntegrationConnection } from "./inventoryApi";
+import { integrationQuery, parseCategories, type IntegrationCategory, type IntegrationConnection, type McpConnection } from "./inventoryApi";
 import { CustomMcpDialog } from "./CustomMcpDialog";
 import { useInventory, type IntegrationFetch } from "./useInventory";
 import { useOAuthReturn, type RestoredMcpDialog } from "./useOAuthReturn";
@@ -42,7 +42,7 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
   const state = useInventory(`${prefix}/integrations?${query}`, context, tenantKey, fetchImpl, onSessionExpired, revision, retry, cursor);
   const data = state.data;
   const busy = state.status === "loading";
-  const oauthReturn = useOAuthReturn({ actorId, tenantKey, ready: state.status === "ready", inventory: data, canManageMcps, onRestore: setMcpDialog, onAuthorizationRedirect });
+  const oauthReturn = useOAuthReturn({ actorId, tenantKey, ready: state.status === "ready", inventory: data, canManageMcps, onRestore: setMcpDialog, onAuthorizationRedirect, fetchImpl, onSessionExpired });
   const categoriesList = [...localCategories, ...(tenantKey === null ? [] : categories)];
   const label = category === "search" ? "Search results" : categoriesList.find(item => item.id === category)?.name ?? "MCP integrations";
 
@@ -78,11 +78,13 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
   }
 
   function closeMcp() { setMcpDialog(null); setRetry(value => value + 1); }
+  function openMcp(connection: McpConnection) { if (tenantKey && (canManageMcps || connection.status !== "revoked")) setMcpDialog({ tenantKey, actorId, connection }); }
   const showMcpDialog = !!mcpDialog && tenantKey !== null && mcpDialog.tenantKey === tenantKey && mcpDialog.actorId === actorId && (!!mcpDialog.connection || canManageMcps);
 
   return <>
-    {showMcpDialog && mcpDialog && tenantKey !== null && <CustomMcpDialog key={`${tenantKey}:${mcpDialog.connection?.id ?? mcpDialog.listing?.reference.integration_id ?? "new"}`} tenantKey={tenantKey} csrfToken={csrfToken} fetchImpl={fetchImpl} onSessionExpired={onSessionExpired} onClose={closeMcp} onConnected={closeMcp} connection={mcpDialog.connection ? { ...mcpDialog.connection, canEdit: mcpDialog.connection.canEdit && canManageMcps } : undefined} listing={mcpDialog.listing} initialDraft={mcpDialog.initialDraft} returnTo={oauthReturn.returnTo} onAuthorize={oauthReturn.authorize} recoveryNotice={mcpDialog.initialDraft ? oauthReturn.notice ?? undefined : undefined} />}
+    {showMcpDialog && mcpDialog && tenantKey !== null && <CustomMcpDialog key={`${tenantKey}:${mcpDialog.connection?.id ?? mcpDialog.listing?.reference.integration_id ?? "new"}`} tenantKey={tenantKey} csrfToken={csrfToken} fetchImpl={fetchImpl} onSessionExpired={onSessionExpired} onClose={closeMcp} onConnected={closeMcp} onOpenConnection={openMcp} connection={mcpDialog.connection ? { ...mcpDialog.connection, canEdit: mcpDialog.connection.canEdit && canManageMcps } : undefined} listing={mcpDialog.listing} initialDraft={mcpDialog.initialDraft} returnTo={oauthReturn.returnTo} onAuthorize={oauthReturn.authorize} recoveryNotice={mcpDialog.initialDraft ? oauthReturn.notice ?? undefined : undefined} />}
     {oauthReturn.notice && !(showMcpDialog && mcpDialog?.initialDraft) && <p className="mb-4" role="status">{oauthReturn.notice}</p>}
+    {oauthReturn.retryRecovery && <Button className="mb-4" onClick={oauthReturn.retryRecovery}>Retry recovery</Button>}
     <nav aria-label="Integration breadcrumb" className="mb-6 text-sm text-[var(--admin-muted)]">Integrations <span aria-hidden="true"> / </span><span className="text-[var(--admin-ink)]">{label}</span></nav>
     <div className="mcp-page-heading service-directory-heading">
       <h1>{tenantKey === null ? "Platform Integrations" : "Integrations"}</h1>

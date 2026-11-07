@@ -85,10 +85,29 @@ defmodule Vxpipe.Calls.MCPConnections do
          {:ok, repository} <- Repositories.fetch(options, :mcp_connection_repository),
          {:ok, %{id: ^id, tenant_key: ^tenant} = record} <-
            Repositories.call(repository, :get, [tenant, id]) do
-      {:ok, Map.put(public(record), :tools, Map.get(record, :catalog, []))}
+      {:ok,
+       record
+       |> public()
+       |> Map.put(:tools, Map.get(record, :catalog, []))
+       |> Map.put(:can_edit, authorize(principal, tenant, :write) == :ok)}
     else
       {:error, _reason} = error -> error
       _invalid -> {:error, :mcp_connection_not_found}
+    end
+  end
+
+  @doc "Public reconnect configuration for an explicitly selected revoked generation, without decryption."
+  def get_retained(principal, tenant, id, generation, options \\ []) do
+    with :ok <- authorize(principal, tenant, :write),
+         :ok <- tenant_exists(tenant, options),
+         :ok <- identity(id, generation),
+         :ok <- refresh(principal, tenant, options),
+         {:ok, repository} <- Repositories.fetch(options, :mcp_connection_repository),
+         {:ok, record} <- Repositories.call(repository, :get_retained, [tenant, id]),
+         :ok <- current(record, tenant, id, generation),
+         :ok <- revoked(record),
+         :ok <- refresh(principal, tenant, options) do
+      {:ok, Map.put(public(record), :can_edit, true)}
     end
   end
 

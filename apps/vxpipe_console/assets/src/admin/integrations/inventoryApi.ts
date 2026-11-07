@@ -7,7 +7,7 @@ export type IntegrationConnection = {
 };
 export type McpConnection = {
   id: string; endpoint: string; serverName: string; authMethod: string; generation: number;
-  status: "connected" | "reconnect_required"; toolCount: number; canEdit: boolean;
+  status: "connected" | "reconnect_required" | "revoked"; toolCount: number; canEdit: boolean;
   directoryEntry?: McpDirectoryEntry;
 };
 export type IntegrationEntry = {
@@ -41,12 +41,12 @@ function connection(value: unknown): IntegrationConnection {
     status: value.status as IntegrationConnection["status"], credentialId: value.credential_id as string | null, canEdit: value.can_edit };
 }
 
-function mcpConnection(value: unknown, tenantKey: string | null): McpConnection {
+export function parseMcpConnection(value: unknown, tenantKey: string | null, allowRevoked = false): McpConnection {
   if (!object(value) || tenantKey === null || value.tenant_key !== tenantKey ||
     !text(value.id, 128) || !value.id || !text(value.endpoint) || !value.endpoint.startsWith("https://") ||
     !text(value.server_name, 200) || !text(value.auth_method, 32) ||
     !integer(value.generation) || value.generation < 1 || !integer(value.tool_count) ||
-    !["connected", "reconnect_required"].includes(String(value.status)) || typeof value.can_edit !== "boolean") throw invalid();
+    !["connected", "reconnect_required", ...(allowRevoked ? ["revoked"] : [])].includes(String(value.status)) || typeof value.can_edit !== "boolean") throw invalid();
   const directoryEntry = value.directory_entry == null ? undefined : parseDirectoryEntry(value.directory_entry);
   if (directoryEntry && (value.directory_id !== `${directoryEntry.directory_id}/${directoryEntry.integration_id}` ||
     value.endpoint !== directoryEntry.endpoint || value.server_name !== directoryEntry.name ||
@@ -64,7 +64,7 @@ function entry(value: unknown, tenantKey: string | null): IntegrationEntry {
     !capabilities.every(item => ["stt", "llm", "tts", "sts", "telephony"].includes(item))) throw invalid();
   const mcps = value.mcp_connections ?? (value.kind === "provider" ? [] : undefined);
   if (!Array.isArray(mcps)) throw invalid();
-  return { id: value.id, name: value.name, mcpConnections: mcps.map(item => mcpConnection(item, tenantKey)), kind: value.kind as IntegrationEntry["kind"],
+  return { id: value.id, name: value.name, mcpConnections: mcps.map(item => parseMcpConnection(item, tenantKey)), kind: value.kind as IntegrationEntry["kind"],
     provider: value.kind === "provider" ? value.connection.provider_id as SetupProviderId : undefined,
     capabilities: capabilities.map(value => value === "sts" ? "s2s" : value) as SetupProvider["capabilities"],
     summary: text(value.summary, 200) ? value.summary : "",
@@ -93,7 +93,7 @@ export function parseInventory(value: unknown, tenantKey: string | null): Integr
   const parsed = items.map(item => entry(item, tenantKey));
   const mcps = value.mcp_connections ?? (parsed.every(item => item.kind === "provider") ? [] : undefined);
   if (!Array.isArray(mcps) || mcps.length > 1500) throw invalid();
-  const mcpConnections = mcps.map(item => mcpConnection(item, tenantKey));
+  const mcpConnections = mcps.map(item => parseMcpConnection(item, tenantKey));
   if (new Set(mcpConnections.map(item => item.id)).size !== mcpConnections.length) throw invalid();
   if (new Set(parsed.map(item => item.id)).size !== parsed.length) throw invalid();
   return { tenant: tenant as IntegrationInventory["tenant"], version: value.installation_version,

@@ -187,6 +187,42 @@ defmodule Vxpipe.Console.MCPListedConnectionEndpointTest do
     assert revoked["connection"]["directory_entry"] == entry
     assert revoked["connection"]["generation"] == 3
 
+    # Reconnect review must work without keys or directory access. It never restores secrets.
+    calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
+
+    Application.put_env(
+      :vxpipe_calls,
+      Vxpipe.Calls,
+      Keyword.put(calls, :mcp_connection_repository, {ConnectionStore, [repo: Repo]})
+    )
+
+    detail =
+      data.session
+      |> recycle()
+      |> get("https://localhost" <> path <> "?retained_generation=3")
+      |> json_response(200)
+      |> Map.fetch!("connection")
+
+    assert detail["directory_entry"] == entry
+    assert detail["status"] == "revoked"
+    assert detail["generation"] == 3
+    assert detail["can_edit"] == true
+    refute Map.has_key?(detail, "tools")
+    refute Map.has_key?(detail, "secrets")
+
+    assert data.session |> recycle() |> get("https://localhost" <> path) |> json_response(404)
+
+    assert data.session
+           |> recycle()
+           |> get(
+             "https://localhost/api/tenants/#{data.other}/mcp-connections/#{id}?retained_generation=3"
+           )
+           |> json_response(404)
+
+    refute_received :mcp_checked
+    refute_received {:directory_request, _}
+    Application.put_env(:vxpipe_calls, Vxpipe.Calls, calls)
+
     restored =
       request(data, :post, path <> "/reconnect", %{
         "generation" => 3,

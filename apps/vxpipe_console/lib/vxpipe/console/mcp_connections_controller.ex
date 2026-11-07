@@ -19,12 +19,39 @@ defmodule Vxpipe.Console.MCPConnectionsController do
     end
   end
 
+  def show(conn, %{"tenant_key" => tenant, "id" => id, "retained_generation" => value} = params) do
+    with {:ok, generation} <- retained_generation(value),
+         true <- Map.keys(params) -- ~w(tenant_key id retained_generation) == [],
+         {:ok, record} <-
+           MCPConnections.get_retained(
+             conn.assigns.user_principal,
+             tenant,
+             id,
+             generation,
+             options(conn)
+           ) do
+      json(conn, %{connection: record})
+    else
+      {:error, reason} -> error(conn, reason)
+      _ -> error(conn, :invalid_mcp_connection)
+    end
+  end
+
   def show(conn, %{"tenant_key" => tenant, "id" => id}) do
     case MCPConnections.get(conn.assigns.user_principal, tenant, id) do
       {:ok, record} -> json(conn, %{connection: record})
       {:error, reason} -> error(conn, reason)
     end
   end
+
+  defp retained_generation(value) when is_binary(value) and byte_size(value) in 1..16 do
+    with true <- Regex.match?(~r/\A[1-9][0-9]*\z/, value),
+         {generation, ""} when generation <= 9_007_199_254_740_991 <- Integer.parse(value),
+         do: {:ok, generation},
+         else: (_ -> {:error, :invalid_mcp_connection})
+  end
+
+  defp retained_generation(_), do: {:error, :invalid_mcp_connection}
 
   def index(conn, %{"tenant_key" => tenant}) do
     case MCPConnections.list(conn.assigns.user_principal, tenant) do

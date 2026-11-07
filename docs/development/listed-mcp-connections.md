@@ -203,9 +203,34 @@ reconnect work during a public directory outage. Invalid references return 422;
 changed/unavailable listings return `503 mcp_listing_unavailable`; invalid issuer
 input returns `422 invalid_oauth_issuer` before directory or protocol reads.
 
+## Retained connection recovery
+
+An existing static create conflict supplies only a bounded connected ID or revoked
+ID/generation. The modal offers Manage existing connection or Review reconnect;
+it performs no automatic reconnect. Review reads the existing tenant detail route
+with `?retained_generation=N`. This branch requires current write permission,
+strict positive generation syntax and the exact tenant/ID/generation/revoked state.
+It returns public accepted configuration without decrypting credentials. Ordinary
+GET continues to hide revoked records and now includes `can_edit` for management.
+
+The parent remounts the form with fresh credentials, fixed endpoint and saved
+listed recipe. An explicit Reconnect uses the existing static/machine reconnect
+or browser OAuth route and preserves the original identity and namespace. Connected
+duplicates can open authorized read-only management; revoked setup requires write
+permission. Cancelled/failed consent restores a retained form only from a matching
+actor/tenant/attempt public draft and a fresh metadata read. Temporary lookup
+failure offers retry with a five-minute in-memory draft; scope/navigation changes
+abort stale responses and discard unfinished recovery. No callback query grants
+connection authority.
+
 ## Remaining connection work
 
-Retained-ID recovery and authenticated rendered-browser acceptance remain open.
+Early duplicate detection before static authentication/OAuth preparation remains
+open, including changed listed recipes whose new preparation cannot succeed. The
+required internal target-resolution contract must precede authentication side
+effects, reuse the deterministic tenant endpoint-or-directory lookup and keep
+atomic create authoritative against races. Authenticated rendered-browser and
+full workflow acceptance also remain open.
 
 Rejected alternatives: adding a parallel directory API, accepting the entire
 browser listing as authority, unbounded catalog scans, and re-reading the public

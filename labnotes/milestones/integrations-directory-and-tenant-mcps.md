@@ -677,8 +677,7 @@ instance; per-connection durable claims provide the cross-instance fence.
 Depends on T1/T2 directory resolution and T4/T5/T6 connection/authentication contracts.
 Listing resolution/discovery, snapshot storage, static connection management and
 locked static/OAuth forms are implemented. OAuth flows bind accepted configuration;
-saved-registration discovery advice is implemented and undergoing final checkpoint
-verification. Authenticated browser and retained-ID recovery acceptance remain open.
+saved-registration discovery advice has passed checkpoint verification. Authenticated browser and retained-ID recovery acceptance remain open.
 See [lookup and snapshot contracts](../../docs/development/listed-mcp-connections.md).
 
 - [x] Reuse the existing directory page cache for bounded directory/entry/revision
@@ -821,20 +820,50 @@ Listed OAuth UI and authenticated browser acceptance remain separate open work.
 
 Depends on T4/T5/T6; listed identity cases additionally require T6a.
 
-- [ ] Consume the backend's bounded reconnect proposal for a disconnected endpoint
+- [x] Consume the backend's existing bounded static reconnect proposal for a disconnected endpoint
   and show an explicit Reconnect action. Keep its retained ID/generation bound to
   the current endpoint/draft; an ordinary Connect must not silently resurrect it.
+- [x] Extend the existing detail GET with strict `retained_generation` input, fresh
+  write authorization and exact tenant/ID/generation/revoked checks. Return public
+  accepted configuration without credential decryption or connection side effects;
+  ordinary details include the current edit capability.
+- [x] Render retained static/browser/machine setup with fresh credentials, fixed
+  endpoint and accepted directory recipe. Submit explicitly through the existing
+  reconnect operations; hide connected-only tools/test/disconnect actions.
+- [x] Recover denied/failed retained OAuth from its matching actor/tenant/attempt
+  draft and a fresh generation-bound metadata read. Keep temporary-failure retry
+  context only in bounded, expiring memory and ignore late scope/navigation results.
+- [x] Address independent recovery review: leaving an unfinished callback recovery
+  removes its stale Retry recovery action and notice. Red/green navigation regression
+  preserves completed callback feedback. Connected duplicates may open read-only
+  management after write authority changes.
+- [ ] Resolve trusted custom/listed targets and check duplicate identity before static
+  authentication or OAuth preparation. Extend required internal ports, reuse the
+  repository's deterministic endpoint-or-directory query and retain atomic create
+  as the final race guard. Cover changed listing recipes, authority loss and races.
 - [ ] Use the existing static reconnect or generation-bound OAuth reconnect
   operation as appropriate. Complete browser-start duplicate/proposal handling
   where needed without adding another connection/grant store. Preserve identity,
   namespace and directory binding; reject changed generations and authority.
-- [ ] Distinguish an already connected duplicate from a retained disconnected
+- [x] Distinguish an already connected duplicate from a retained disconnected
   record. Offer current management instead of misleading retry advice; do not
   trust conflict response text or restore secret values from saved records.
 - [ ] Verify explicit consent, cancel, URL/method changes, stale proposals,
   cross-tenant IDs, storage failure and preservation of existing call-spec
   references. Cover custom/listed, static/browser OAuth/machine flows and rendered
   desktop/mobile recovery before closing authenticated workflow acceptance.
+
+Recovery checkpoint progress: [labnotes](../20261107-0648-wire-retained-mcp.md).
+Calls 24 and Console 11 focused tests pass, plus real-store session/CSRF lifecycle
+coverage that reads retained configuration without encryption keys during directory
+outage. Chrome desktop/mobile inspection covers explicit review, cleared credentials,
+accepted listed configuration, connected management and cancelled OAuth setup.
+Independent backend and UI source reviews are clean after the retry cleanup fix.
+All 1,056 frontend tests, TypeScript and ESLint pass (the preexisting SetupDialog
+hook warning remains). All five root gates pass: 4,955 umbrella tests with zero
+failures (201 excluded, seed 362537). The separately reviewed output-arbiter
+correction also passes Lean build/oracle/replay. Early duplicate lookup and full
+authenticated workflow acceptance remain open.
 
 ### T7 — Tenant-only runtime/tool picker cutover and migration
 
@@ -1161,8 +1190,9 @@ and all related Storybooks.
   [management evidence](../20261107-0052-review-mcp-management.md).
 - [x] Wire retained-identity reconnect into delegated OAuth attempts, including
   fresh registration after secret erasure or unavailable old keys.
-- [ ] Wire retained-identity reconnect into the production modal; keep full workflow
-  acceptance open until those cases pass.
+- [x] Wire retained-identity reconnect into the production modal. Focused endpoint/UI
+  tests and rendered desktop/mobile recovery pass; full authenticated workflow
+  acceptance remains open in T6b/T8.
 
 - [x] Extend MCP cipher boundary evidence after adversarial review: key-ID aliases
   with identical key material, provider/MCP envelope substitution, exact plaintext
@@ -1418,6 +1448,14 @@ external-directory publication remain open. The index stays unchecked. See
 
 Acceptance follow-up, 2026-11-07:
 
+- [x] Preserve intentional room-push interruption during output preemption. A late
+  successful/interrupted reply for a retired turn no longer kills room output;
+  native clear remains the sole post-drain frame acknowledgement. Preserve genuine
+  RTP failures and reject interruption while the token is current. Five red-first
+  regressions, 39 focused tests, independent adversarial re-review, all five root
+  gates (4,955 tests, seed 362537) and Lean build/oracle/replay pass. The test gate
+  uses an explicit release and cleanup, without a timing fallback. See
+  [output correction](../20261107-0720-inspect-transfer-policy.md).
 - [x] Stabilize the umbrella gate's pending-admission shutdown test by acknowledging
   the owner after creating its asynchronous monitor and before terminating the
   separate controller. Exact shutdown-reason/no-dial assertions are preserved;

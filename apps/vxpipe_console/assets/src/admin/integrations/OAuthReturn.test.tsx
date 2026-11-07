@@ -83,6 +83,75 @@ test("a changed saved connection is not silently replaced with an old draft", as
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
 
+test.each(["denied", "failed"])("%s recovers a disconnected record through a fresh generation-bound read", async status => {
+  prepare({ generation: 2 });
+  const fresh = fixture();
+  const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => String(url).includes("/mcp-connections/")
+    ? Response.json({ connection: { ...saved, status: "revoked" } }) : fresh(url, init));
+  mount(`${returnTo}&mcp=${status}&mcp_attempt=attempt`, fetchImpl);
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByRole("button", { name: "Reconnect" })).toBeVisible();
+  expect(screen.getByLabelText("MCP server URL")).toBeDisabled();
+  expect(screen.getByLabelText("Initial registration token")).toHaveValue("");
+  expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes("/mcp-connections/"))).toHaveLength(1);
+  expect(fetchImpl.mock.calls.some(([url]) => String(url).endsWith("/connection?retained_generation=2"))).toBe(true);
+  expect(fetchImpl.mock.calls.some(([url]) => /\/(?:mcp-oauth|oauth|reconnect)$/.test(String(url)))).toBe(false);
+  await waitFor(() => expect(screen.getByLabelText("Current location").textContent).toBe(returnTo));
+});
+
+test("retained return recovery can retry a temporary outage without losing its consumed public draft", async () => {
+  prepare({ generation: 2 }); const fresh = fixture(); let unavailable = true;
+  const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => String(url).includes("/mcp-connections/")
+    ? unavailable ? new Response(null, { status: 503 }) : Response.json({ connection: { ...saved, status: "revoked" } }) : fresh(url, init));
+  mount(`${returnTo}&mcp=denied&mcp_attempt=attempt`, fetchImpl);
+  const retry = await screen.findByRole("button", { name: "Retry recovery" });
+  expect(sessionStorage.getItem("vxpipe.mcp.oauth")).toBeNull();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  unavailable = false; fireEvent.click(retry);
+  expect(await screen.findByRole("dialog")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Reconnect" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Retry recovery" })).not.toBeInTheDocument();
+});
+
+test("leaving a failed retained recovery removes its stale retry action", async () => {
+  prepare({ generation: 2 }); const fresh = fixture();
+  const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => String(url).includes("/mcp-connections/")
+    ? new Response(null, { status: 503 }) : fresh(url, init));
+  mount(`${returnTo}&mcp=denied&mcp_attempt=attempt`, fetchImpl);
+  await screen.findByRole("button", { name: "Retry recovery" });
+  fireEvent.click(screen.getByRole("link", { name: "AI models" }));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Retry recovery" })).not.toBeInTheDocument());
+  expect(screen.queryByText(/Could not load the disconnected connection/)).not.toBeInTheDocument();
+});
+
+test.each([{ generation: 3 }, { tenant_key: "other" }, { endpoint: "https://other.test/mcp" }, { can_edit: false }])(
+  "retained return metadata is checked before restoring: %j", async changes => {
+    prepare({ generation: 2 }); const fresh = fixture();
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => String(url).includes("/mcp-connections/")
+      ? Response.json({ connection: { ...saved, status: "revoked", ...changes } }) : fresh(url, init));
+    mount(`${returnTo}&mcp=denied&mcp_attempt=attempt`, fetchImpl);
+    expect(await screen.findByText(/connection changed while you were signing in/)).toBeVisible();
+    expect(fetchImpl.mock.calls.some(([url]) => String(url).includes("retained_generation=2"))).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+test("retained metadata arriving after an actor change cannot reopen the old actor's form", async () => {
+  prepare({ generation: 2 }); const fresh = fixture(); let release!: (value: Response) => void;
+  const pending = new Promise<Response>(resolve => { release = resolve; });
+  const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => String(url).includes("/mcp-connections/") ? pending : fresh(url, init));
+  function ChangingActor() {
+    const [actorId, setActorId] = useState("actor");
+    return <><button onClick={() => setActorId("other-actor")}>Change actor</button><IntegrationsApp actorId={actorId} scope={{ kind: "tenant", tenantKey: "tenant-a", tenantName: "Tenant A" }}
+      canManageMcps csrfToken="csrf" fetchImpl={fetchImpl} onNavigate={vi.fn()} /></>;
+  }
+  render(<MemoryRouter initialEntries={[`${returnTo}&mcp=denied&mcp_attempt=attempt`]}><ChangingActor /></MemoryRouter>);
+  await waitFor(() => expect(fetchImpl.mock.calls.some(([url]) => String(url).includes("retained_generation=2"))).toBe(true));
+  fireEvent.click(screen.getByRole("button", { name: "Change actor" }));
+  release(Response.json({ connection: { ...saved, status: "revoked" } }));
+  await screen.findByText(/No matching sign-in attempt/);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
 test("a denied listed handoff restores the fixed listing and revalidates it before retry", async () => {
   const entry = { directory_id: "directory", integration_id: "calendar", revision: 1, name: "Calendar", endpoint,
     authentication: { type: "oauth2" as const, registration: "dcr" as const } };

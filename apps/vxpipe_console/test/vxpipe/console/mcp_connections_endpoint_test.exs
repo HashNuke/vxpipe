@@ -138,8 +138,63 @@ defmodule Vxpipe.Console.MCPConnectionsEndpointTest do
     conn = login() |> recycle() |> get(path)
     body = json_response(conn, 200)["connection"]
     assert body["tools"] == [%{"name" => "list_events"}]
+    assert body["can_edit"] == true
     refute conn.resp_body =~ "hidden-secret"
     refute_received {:mcp_checked, _}
+  end
+
+  test "explicit retained reads require the exact generation and expose metadata without side effects" do
+    path = "https://localhost" <> @path <> "/revoked-connection?retained_generation=4"
+    assert build_conn() |> get(path) |> json_response(401)
+    authenticated = login()
+    conn = authenticated |> recycle() |> get(path)
+    record = json_response(conn, 200)["connection"]
+    assert record["status"] == "revoked"
+    assert record["generation"] == 4
+    assert record["can_edit"] == true
+    assert get_resp_header(conn, "cache-control") == ["private, no-store"]
+    refute Map.has_key?(record, "tools")
+    refute conn.resp_body =~ "hidden-secret"
+
+    conn = authenticated |> recycle() |> get(String.replace(path, "=4", "=3"))
+    assert json_response(conn, 409)["error"]["code"] == "stale_mcp_connection"
+
+    conn =
+      authenticated
+      |> recycle()
+      |> get(
+        String.replace(
+          path,
+          "revoked-connection?retained_generation=4",
+          "connection-id?retained_generation=3"
+        )
+      )
+
+    assert json_response(conn, 409)["error"]["code"] == "mcp_reconnect_not_required"
+    refute_received {:mcp_resolved, _, _}
+    refute_received {:mcp_checked, _}
+    refute_received {:mcp_saved, _, _}
+    refute_received {:mcp_replaced, _, _, _, _}
+  end
+
+  test "invalid retained generation queries cannot fall through to ordinary details" do
+    authenticated = login()
+    path = "https://localhost" <> @path <> "/connection-id"
+
+    for query <- [
+          "retained_generation=",
+          "retained_generation=0",
+          "retained_generation=-1",
+          "retained_generation=03",
+          "retained_generation=3x",
+          "retained_generation=3.0",
+          "retained_generation=9007199254740992",
+          "retained_generation[]=3",
+          "retained_generation=3&endpoint=https://other.test/mcp"
+        ] do
+      conn = authenticated |> recycle() |> get(path <> "?" <> query)
+      assert json_response(conn, 422)["error"]["code"] == "invalid_mcp_connection"
+    end
   end
 
   test "listed discovery reuses the tenant route and rejects changed directory proposals" do
