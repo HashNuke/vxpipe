@@ -26,9 +26,13 @@ and keyboard tab selection retain the dialog on desktop and mobile. See the
 [gesture and layout evidence](../../labnotes/20261107-1229-stabilize-mcp-dialog.md).
 The complete
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
-also requires the remaining listed/retained recovery cases, partial/unsupported
-discovery, independent node callbacks, native override/restore, outage states and
-final release checks.
+also requires the remaining listed/retained recovery cases, browser URL/revision
+races, independent node callbacks, native override/restore, outage states and final
+release checks. Partial discovery now passes explicit retry with manual-method
+preservation. Multiple-issuer discovery requires selection and recovers from an
+unavailable issuer; both recovered flows pass actual consent and saved management.
+Unsupported OAuth stays blocked with consistent submission feedback. See the
+[discovery recovery evidence](../../labnotes/20261107-1304-verify-discovery-recovery.md).
 
 ## Start an isolated session
 
@@ -97,6 +101,15 @@ the client-credentials grant without a consent redirect.
 Missing or incorrect tokens cannot register a client. Ordinary `dcr` remains
 unprotected. These scenarios use the existing real registration, token and MCP
 protocol boundaries; the peer credentials rotate on every startup.
+
+For discovery recovery, `MCP_BROWSER_MODE=partial` fails the first authorization
+metadata request and succeeds on a later retry. Do not probe the metadata before
+opening the Console, because doing so consumes this one-time failure.
+`multiple_issuers` advertises the working issuer and an unavailable issuer path;
+choose the unavailable issuer to inspect the partial state, then select the working
+issuer to recover. `unsupported` advertises only plain PKCE, so the Console must
+show its unsupported-OAuth state and refuse managed OAuth authorization. These
+three modes otherwise use the CIMD peer and write no client credentials.
 
 The peer displays Allow/Deny consent and retains authorization parameters in
 bounded, expiring server-side memory. Consent references are one-use. CIMD Allow

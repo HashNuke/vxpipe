@@ -8,6 +8,18 @@ defmodule Vxpipe.Console.Test.MCPBrowserScenario do
   def new(mode, _options) when mode in ~w(cimd dcr),
     do: {:ok, %{state: OutboundMCPOAuthServer.initial(mode), credentials: %{}}}
 
+  def new(mode, _options) when mode in ~w(partial multiple_issuers unsupported) do
+    settings =
+      case mode do
+        "partial" -> %{metadata_failures: 1}
+        "multiple_issuers" -> %{multiple_issuers: true}
+        "unsupported" -> %{unsupported_oauth: true}
+      end
+
+    state = Map.merge(OutboundMCPOAuthServer.initial("cimd"), settings)
+    {:ok, %{state: state, credentials: %{}}}
+  end
+
   def new("protected_dcr", _options) do
     token = secret()
     state = Map.put(OutboundMCPOAuthServer.initial("dcr"), :initial_access_token, token)

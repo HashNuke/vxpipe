@@ -154,8 +154,11 @@ production routes remain on the existing flow until their dependencies are ready
   Evidence: [discovery](../20261106-0941-url-triggered-discovery.md),
   [managed OAuth](../20261106-1319-simplify-managed-oauth.md), and
   [header isolation](../20261106-1530-isolate-auth-headers.md).
-- [ ] Review partial discovery and multi-issuer recovery against the real backend
-  before considering the fixture coverage complete.
+- [x] Review partial discovery and multi-issuer recovery against the real backend.
+  Authenticated browser checks now cover explicit retry with manual-method
+  preservation, unavailable-issuer selection and recovery to the working issuer,
+  then real consent, saved testing and disconnect. Unsupported OAuth stays blocked.
+  See [recovery evidence](../20261107-1304-verify-discovery-recovery.md).
 - [ ] Obtain user approval of the complete workflow, including advanced authentication scope.
 
 Acceptance: the user can follow the listed Storybooks from browse through connection
@@ -402,7 +405,8 @@ or a completed OAuth grant. Implement as a separate runnable checkpoint before T
   including supported OAuth methods and explicit unsupported-capability recovery.
   Custom static, CIMD, unprotected/protected DCR, all four own-client authentication
   methods and three confidential machine methods now pass authenticated acceptance.
-  Partial/multiple-issuer and unsupported-capability recovery remain open.
+  Partial/multiple-issuer and unsupported-capability recovery now pass; remaining
+  browser URL/revision races and close/reopen checks stay open.
   An explicit manual choice can recover from failed discovery where the selected
   supported method has enough validated information; CIMD/DCR cannot fabricate
   missing metadata or silently fall back to another method.
@@ -1165,6 +1169,19 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
+- [x] Add controlled partial, multiple-issuer and unsupported-OAuth discovery
+  scenarios. Three failing protocol cases now pass; the combined lane passes
+  39 tests and requires discovery to avoid registration/token/tool side effects.
+  Authenticated desktop/mobile retry and issuer recovery lead to real consent,
+  saved testing and disconnect; unsupported OAuth remains blocked.
+- [x] Correct unsupported-OAuth submission feedback: after metadata is known to be
+  unsupported, report that limitation instead of asking the user to discover again.
+  The reproduced browser message has a failing-then-passing component regression;
+  eight focused cases, all 1,064 frontend tests, TypeScript and the asset build pass.
+  Corrected desktop/mobile rendering is verified. All five root gates pass
+  (4,991 tests, zero failures, 253 excluded, seed 390973), and independent adversarial
+  source/documentation/rendered review is clean. See [recovery evidence](../20261107-1304-verify-discovery-recovery.md).
+
 - [x] Observe explicit response release and completion in the older cross-node
   revocation and claimant-crash cases. A generic renewal error could otherwise be
   satisfied by hold timeout. All eleven strengthened node/lifecycle cases pass.
@@ -1176,9 +1193,9 @@ and all related Storybooks.
   describe completion of the response-handling attempt, including closed-client
   failure, rather than implying physical delivery of a response to a dead client.
 
-- [ ] Extend the controlled peer's startup scenarios for remaining recovery browser
-  checks: partial/multiple-issuer metadata and independent outage states.
-  Configured own clients, machine grants and protected registration are now covered
+- [ ] Extend the controlled peer's startup scenarios for independent outage states.
+  Partial/multiple-issuer metadata, configured own clients, machine grants and
+  protected registration are now covered
   below. The user suggested configurable real-server testing;
   an independently hosted test server can additionally exercise unmodified outbound
   DNS/TLS routing when available, without replacing the existing local gates.

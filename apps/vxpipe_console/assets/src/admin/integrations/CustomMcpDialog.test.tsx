@@ -17,6 +17,11 @@ test("unsupported OAuth security is shown without suggesting anonymous access", 
   expect(screen.getByRole("status")).toHaveTextContent("This server does not support the OAuth security requirements needed to connect.");
   expect(screen.getByLabelText("Authentication Type")).toHaveValue("");
   expect(fetchImpl).toHaveBeenCalledOnce();
+  enter("Authentication Type", "cimd");
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Connect" })); });
+  expect(screen.getByRole("alert")).toHaveTextContent("This server does not support the OAuth security requirements needed to connect.");
+  expect(screen.queryByText("Discover this server's OAuth settings before connecting.")).not.toBeInTheDocument();
+  expect(fetchImpl).toHaveBeenCalledOnce();
 });
 
 test("URL changes clear secrets and auth switching does not carry custom headers", () => {

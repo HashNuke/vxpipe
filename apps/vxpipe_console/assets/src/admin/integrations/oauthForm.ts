@@ -73,6 +73,7 @@ export function oauthRequest(method: OAuthMethod, endpoint: string, revision: st
 
 /** Early form feedback; the backend always rediscovers and validates before sending credentials. */
 export function oauthProblem(method: OAuthMethod, values: OAuthValues, discovery: McpDiscovery | null): string | null {
+  if (discovery?.outcome === "unsupported_oauth") return "This server does not support the OAuth security requirements needed to connect.";
   if (discovery?.outcome !== "oauth") return "Discover this server's OAuth settings before connecting.";
   const grant = method === "own_client" ? values.grant : "authorization_code";
   const choices = oauthOptions(discovery, grant);

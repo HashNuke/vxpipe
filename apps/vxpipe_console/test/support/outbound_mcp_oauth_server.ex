@@ -13,6 +13,14 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
   defp issuer(state), do: Agent.get(state, & &1.issuer)
   defp origin(state), do: Agent.get(state, & &1.origin)
 
+  defp issuers(state) do
+    Agent.get(state, fn settings ->
+      if Map.get(settings, :multiple_issuers, false),
+        do: [settings.issuer, settings.issuer <> "/unavailable"],
+        else: [settings.issuer]
+    end)
+  end
+
   def initial(mode),
     do: %{
       mode: mode,
@@ -148,7 +156,7 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
        do:
          json(conn, 200, %{
            "resource" => resource(state),
-           "authorization_servers" => [issuer(state)],
+           "authorization_servers" => issuers(state),
            "scopes_supported" => ["tools:read"]
          })
 
@@ -156,50 +164,19 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
          %{method: "GET", request_path: "/.well-known/oauth-authorization-server"} = conn,
          state
        ) do
-    settings = Agent.get(state, & &1)
-    cimd = settings.mode == "cimd"
+    settings =
+      Agent.get_and_update(state, fn current ->
+        remaining = Map.get(current, :metadata_failures, 0)
 
-    metadata = %{
-      "issuer" => settings.issuer,
-      "authorization_endpoint" => settings.issuer <> "/authorize",
-      "token_endpoint" => settings.issuer <> "/token",
-      "registration_endpoint" => settings.issuer <> "/register",
-      "client_id_metadata_document_supported" => cimd,
-      "authorization_response_iss_parameter_supported" => true,
-      "response_types_supported" => ["code"],
-      "grant_types_supported" => ["authorization_code", "refresh_token"],
-      "code_challenge_methods_supported" => ["S256"],
-      "token_endpoint_auth_methods_supported" =>
-        if(cimd, do: ["none"], else: ["client_secret_basic"])
-    }
+        next =
+          if remaining > 0, do: Map.put(current, :metadata_failures, remaining - 1), else: current
 
-    metadata =
-      if settings.mode == "own_client" do
-        metadata
-        |> Map.delete("registration_endpoint")
-        |> Map.put("token_endpoint_auth_methods_supported", [
-          "none",
-          "client_secret_basic",
-          "client_secret_post",
-          "private_key_jwt"
-        ])
-        |> Map.put("token_endpoint_auth_signing_alg_values_supported", ["RS256"])
-      else
-        metadata
-      end
+        {current, next}
+      end)
 
-    metadata =
-      if settings.grant == "client_credentials" do
-        metadata
-        |> Map.drop(
-          ~w(authorization_endpoint response_types_supported code_challenge_methods_supported)
-        )
-        |> Map.put("grant_types_supported", ["client_credentials"])
-      else
-        metadata
-      end
-
-    json(conn, 200, metadata)
+    if Map.get(settings, :metadata_failures, 0) > 0,
+      do: json(conn, 503, %{"error" => "metadata_unavailable"}),
+      else: json(conn, 200, authorization_metadata(settings))
   end
 
   defp route(%{method: "POST", request_path: "/register"} = conn, state) do
@@ -288,6 +265,54 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
     do: send_resp(conn, 200, "")
 
   defp route(conn, _state), do: send_resp(conn, 404, "")
+
+  defp authorization_metadata(settings) do
+    cimd = settings.mode == "cimd"
+
+    metadata = %{
+      "issuer" => settings.issuer,
+      "authorization_endpoint" => settings.issuer <> "/authorize",
+      "token_endpoint" => settings.issuer <> "/token",
+      "registration_endpoint" => settings.issuer <> "/register",
+      "client_id_metadata_document_supported" => cimd,
+      "authorization_response_iss_parameter_supported" => true,
+      "response_types_supported" => ["code"],
+      "grant_types_supported" => ["authorization_code", "refresh_token"],
+      "code_challenge_methods_supported" => ["S256"],
+      "token_endpoint_auth_methods_supported" =>
+        if(cimd, do: ["none"], else: ["client_secret_basic"])
+    }
+
+    metadata =
+      if settings.mode == "own_client" do
+        metadata
+        |> Map.delete("registration_endpoint")
+        |> Map.put("token_endpoint_auth_methods_supported", [
+          "none",
+          "client_secret_basic",
+          "client_secret_post",
+          "private_key_jwt"
+        ])
+        |> Map.put("token_endpoint_auth_signing_alg_values_supported", ["RS256"])
+      else
+        metadata
+      end
+
+    metadata =
+      if settings.grant == "client_credentials" do
+        metadata
+        |> Map.drop(
+          ~w(authorization_endpoint response_types_supported code_challenge_methods_supported)
+        )
+        |> Map.put("grant_types_supported", ["client_credentials"])
+      else
+        metadata
+      end
+
+    if Map.get(settings, :unsupported_oauth, false),
+      do: Map.put(metadata, "code_challenge_methods_supported", ["plain"]),
+      else: metadata
+  end
 
   defp register(conn, state) do
     {:ok, body, conn} = read_body(conn)
