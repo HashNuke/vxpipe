@@ -177,6 +177,8 @@ definitions now match the release registry and are committed in the external
 definitions repository (`9eef75c`), following independent adversarial review.
 The complete local catalog imports and serves all 16 entries, and Console validates
 that actual response. Public deployment and native release verification remain open.
+A read-only 2026-11-07 recheck still returns exactly Cal.com, Calendly and Google
+Calendar, with no native entries or next page.
 See [client implementation evidence](../20261106-1603-implement-integrations-directory.md)
 and [native release evidence](../20261107-0859-native-directory-release.md).
 
@@ -188,6 +190,11 @@ and [native release evidence](../20261107-0859-native-directory-release.md).
   Request/Page/Client/Transport tests cover the boundary; the focused directory
   suite passes 34 tests. HTTP 400 distinguishes invalid version/cursor/mismatched
   cursor through a fixed code whitelist, never upstream diagnostic text.
+- [ ] Recover the external release commits and hosting context. Both repositories
+  are now cloned through SSH: `vxpipe/vxpipe-integrations` and
+  `HashNuke/vxpipe-integrations-web`. Their remote branches lack the earlier
+  unpushed checkpoints (`9eef75c` and `a5ed7a5`); source recovery and Railway access
+  have been requested while local acceptance continues.
 - [ ] Verify/add native entries and this release's adapter IDs **in the separate
   directory repository**, coordinated as an external prerequisite; do not mark
   this task complete against an MCP-only catalog.
@@ -402,12 +409,15 @@ or a completed OAuth grant. Implement as a separate runnable checkpoint before T
   saved-secret semantics and keep working saved connections intact on canceled edits.
 - [x] Wire the live tenant static-MCP CTA and refresh inventory after create/manage/
   disconnect. Verified full fixture browse → connect → tools refresh → disconnect.
-- [ ] Complete authenticated browser acceptance for the tenant custom CTA,
+- [x] Complete authenticated browser acceptance for the tenant custom CTA,
   including supported OAuth methods and explicit unsupported-capability recovery.
   Custom static, CIMD, unprotected/protected DCR, all four own-client authentication
   methods and three confidential machine methods now pass authenticated acceptance.
-  Partial/multiple-issuer and unsupported-capability recovery now pass; remaining
-  browser URL/revision races and close/reopen checks stay open.
+  Partial/multiple-issuer and unsupported-capability recovery now pass;
+  browser URL/revision races, same-URL manual edits, close/reopen and inactive
+  credential clearing now pass at desktop/mobile sizes using original backend
+  responses. Independent Astra evidence/source review is clean; see
+  [browser races](../20261107-0843-verify-mcp-browser-races.md).
   An explicit manual choice can recover from failed discovery where the selected
   supported method has enough validated information; CIMD/DCR cannot fabricate
   missing metadata or silently fall back to another method.
@@ -1175,6 +1185,8 @@ and all related Storybooks.
   evidence; only then check the milestone in the index.
 - [ ] After implementation, run an independent review agent using GPT-6 Astra with
   xhigh reasoning effort (explicit user requirement, 2026-11-06).
+  Every reported bug must include a reproduction as proof; an unreproduced
+  suspicion is not a valid bug (user clarification, 2026-11-07).
 - [ ] Add every review finding requiring a change to the fix checklist below;
   implement and verify fixes before declaring the review complete.
 - [ ] Send the user a `pushnotify` completion message only after implementation,
@@ -1190,6 +1202,16 @@ and all related Storybooks.
   root checks pass; Astra reviewed the actual diff without further findings. The
   corrected full root run remains active.
   Evidence: [monitor synchronization](../20261107-0850-stabilize-publication-monitor.md).
+
+- [x] Verify authenticated desktop/mobile custom-MCP discovery races: URL A→B,
+  manual same-URL edits before a late prefill, close/reopen and inactive credential
+  clearing. Hold actual backend responses in the local browser to force ordering;
+  do not substitute synthetic successful discovery. Use an isolated setup-owned
+  checkout/database and record instrumentation limits.
+  All 11 checks pass at each of 1280×900 and 390×844; real response revisions,
+  abort state at release, unchanged draft fields and no mutation/peer side effects
+  are recorded. Independent Astra evidence/source/rendered review is clean.
+  Evidence: [browser races](../20261107-0843-verify-mcp-browser-races.md).
 
 - [x] Extend the cross-node CIMD/DCR callback cases to renew their actual saved
   grants on the initiating node and observe rotated tokens on the callback node.

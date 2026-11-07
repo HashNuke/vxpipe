@@ -26,13 +26,20 @@ and keyboard tab selection retain the dialog on desktop and mobile. See the
 [gesture and layout evidence](../../labnotes/20261107-1229-stabilize-mcp-dialog.md).
 The complete
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
-also requires the remaining listed/retained recovery cases, browser URL/revision
-races, outage states and final
+also requires the remaining listed/retained recovery cases, outage states and final
 release checks. Partial discovery now passes explicit retry with manual-method
 preservation. Multiple-issuer discovery requires selection and recovers from an
 unavailable issuer; both recovered flows pass actual consent and saved management.
 Unsupported OAuth stays blocked with consistent submission feedback. See the
 [discovery recovery evidence](../../labnotes/20261107-1304-verify-discovery-recovery.md).
+
+Custom URL/revision races now pass authenticated desktop/mobile acceptance. Late
+responses cannot overwrite a newer URL or a reopened dialog; manual same-URL
+settings survive prefill. Custom headers → Bearer → Basic and URL changes clear
+inactive credentials. These checks delay original backend responses in the local
+browser, without substituting successful payloads. They establish UI ordering,
+not physical cancellation of completed remote requests; see the
+[race evidence](../../labnotes/20261107-0843-verify-mcp-browser-races.md).
 
 Independent-node callbacks and subsequent grant renewal now pass a separate
 six-case Console endpoint lane with real durable identity and signed cookies.
