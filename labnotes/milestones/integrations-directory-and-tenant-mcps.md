@@ -1246,6 +1246,25 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
+- [x] Normalize directory search queries to the publisher contract before request
+  identity validation. Real authenticated uppercase `CIMD` search returns invalid_page
+  fallback while the publisher returns the matching entry with lowercase `cimd`.
+  Preserve strict response identity checks. Red/green mixed-case, dotted-I and
+  normalized codepoint-limit regressions pass; all 61 directory tests are green.
+  Real desktop/mobile search/history and independent Astra validation pass. Final
+  root verification remains in T8. See
+  [search evidence](../20261107-1129-normalize-directory-search.md).
+
+- [ ] Reconcile current architecture, UI, OAuth, storage/runtime and index summaries
+  with completed browser/node/rotation evidence. Preserve historical checkpoint
+  limitations and leave external release/user approval open.
+
+- [ ] Complete the explicitly required authenticated inventory navigation, read-only
+  permissions and platform-exclusion browser checks at desktop/mobile. Astra final
+  audit found automated coverage but missing recorded real-browser evidence; this
+  is an acceptance evidence gap, not a reproduced product bug. See
+  [inventory browser evidence](../20261107-1126-verify-inventory-browser-controls.md).
+
 - [x] Correct reconnect-test request accounting for background discovery POSTs.
   The full frontend run counts discovery as a second connection mutation; explicitly
   observe discovery and assert only mutation requests. Keep consent/retry and

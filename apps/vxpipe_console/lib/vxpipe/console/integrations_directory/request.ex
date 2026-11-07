@@ -68,17 +68,21 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Request do
   defp normalize_params(_resource, _params), do: {:error, :invalid_query}
 
   defp normalize_search(params) do
-    query = params |> Map.get("q", "") |> String.trim()
+    # Go's publisher uses simple lowercase: U+0130 maps to i, without a combining dot.
+    query =
+      params |> Map.get("q", "") |> String.trim() |> String.replace("İ", "i") |> String.downcase()
+
     params = if query == "", do: Map.delete(params, "q"), else: Map.put(params, "q", query)
 
-    if query != "" and Map.has_key?(params, "category"),
-      do: {:error, :invalid_query},
-      else: {:ok, params}
+    if length(String.to_charlist(query)) > 200 or
+         (query != "" and Map.has_key?(params, "category")),
+       do: {:error, :invalid_query},
+       else: {:ok, params}
   end
 
   defp valid_param?("limit", value), do: is_integer(value) and value in 1..100
   defp valid_param?("scope", value), do: value in ["tenant", "platform"]
-  defp valid_param?("q", value), do: is_binary(value) and String.length(String.trim(value)) <= 200
+  defp valid_param?("q", value), do: is_binary(value) and String.valid?(value)
 
   defp valid_param?("category", value),
     do:

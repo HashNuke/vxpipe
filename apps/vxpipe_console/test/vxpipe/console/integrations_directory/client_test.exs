@@ -24,6 +24,17 @@ defmodule Vxpipe.Console.IntegrationsDirectory.ClientTest do
     end
   end
 
+  test "accepts the publisher's lowercase query echo for mixed-case user searches" do
+    Req.Test.expect(__MODULE__, fn conn ->
+      conn = Plug.Conn.fetch_query_params(conn)
+      query = String.downcase(conn.query_params["q"])
+      Req.Test.json(conn, put_in(empty_page(), ["query", "q"], query))
+    end)
+
+    assert {:ok, %{body: %{"query" => %{"q" => "calendar"}}}} =
+             Client.fetch(:integrations, %{"q" => "  CaLeNdAr  "}, plug: {Req.Test, __MODULE__})
+  end
+
   test "invalid input fails before performing HTTP" do
     assert {:error, :invalid_query} = Client.fetch(:integrations, %{"tenant_id" => "private"})
   end

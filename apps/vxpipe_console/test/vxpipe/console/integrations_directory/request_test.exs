@@ -5,7 +5,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.RequestTest do
 
   test "builds anonymous versioned requests and normalizes global search" do
     assert {:ok, request} =
-             Request.build(:integrations, %{"q" => "  calendar  ", "scope" => "tenant"})
+             Request.build(:integrations, %{"q" => "  CaLeNdAr  ", "scope" => "tenant"})
 
     assert request.url ==
              "https://integrations-api-production-2803.up.railway.app/v1/integrations"
@@ -21,6 +21,20 @@ defmodule Vxpipe.Console.IntegrationsDirectory.RequestTest do
   test "category pages preserve opaque cursors and use their own default limit" do
     assert {:ok, request} = Request.build(:categories, %{"cursor" => "opaque+/="})
     assert request.params == %{"cursor" => "opaque+/=", "limit" => 100}
+  end
+
+  test "search uses the publisher's simple lowercase for dotted capital I" do
+    assert {:ok, request} = Request.build(:integrations, %{"q" => "  İ  "})
+    assert request.params["q"] == "i"
+  end
+
+  test "search limits normalized Unicode codepoints rather than grapheme clusters" do
+    assert {:error, :invalid_query} =
+             Request.build(:integrations, %{"q" => String.duplicate("e\u0301", 101)})
+
+    for query <- [String.duplicate("e\u0301", 100), "  " <> String.duplicate("a", 200) <> "  "] do
+      assert {:ok, _request} = Request.build(:integrations, %{"q" => query})
+    end
   end
 
   test "rejects unsupported parameters instead of forwarding private local data" do

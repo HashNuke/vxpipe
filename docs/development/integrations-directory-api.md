@@ -169,6 +169,12 @@ contracts rather than implemented network behavior.
 | `installation_version` | Required echo of the validated request header |
 | `query` | Integration responses echo `category` (null for search), normalized `q`, and `scope` |
 
+The publisher trims and lowercases search text, then limits it to 200 Unicode
+codepoints. Normalize outbound `q` before building the cache key and validating
+the echoed query; mixed-case user input must not turn a valid search response into
+an unavailable-directory fallback. Match Go's simple lowercase for dotted capital
+`İ` (`i`, without a combining dot), and count codepoints rather than grapheme clusters.
+
 Category IDs and integration IDs use lowercase slug syntax, are unique within
 their respective arrays, and are never derived from display names at runtime.
 Remote category IDs cannot be `connected`, `ai`, `telephony` or `search`. Rename a label without
