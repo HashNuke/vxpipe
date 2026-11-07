@@ -169,8 +169,13 @@ Progress 2026-11-06: added the versioned public request boundary, validated runt
 origin override, bounded HTTP transport and composed schema-validating client with
 focused red/green tests. The authenticated inventory endpoint exposes the actual installation version.
 Error recovery is implemented; the external catalog release gate remains pending.
-The live API returned only three MCP entries for version 0.1.0; native entry
-readiness is not established. See [implementation evidence](../20261106-1603-implement-integrations-directory.md).
+The live API still returns only three MCP entries for version 0.1.0. All 13 native
+definitions now match the release registry and are committed in the external
+definitions repository (`9eef75c`), following independent adversarial review.
+The complete local catalog imports and serves all 16 entries, and Console validates
+that actual response. Public deployment and native release verification remain open.
+See [client implementation evidence](../20261106-1603-implement-integrations-directory.md)
+and [native release evidence](../20261107-0859-native-directory-release.md).
 
 - [x] Finish/verify root VERSION-to-OTP build metadata; expose a programmatic runtime
   version accessor and browser response field without a second version constant.
@@ -189,11 +194,13 @@ empty pages, optional compatibility bounds, unsupported schema/version, unknown
 native adapters, malformed cursors and bounded response/timeouts. A tagged read-only
 live check confirms categories/native/MCP entries for the release, with no secrets.
 
-- [ ] Resolve the native-directory missing-icon contract for MorseCode API. The
-  installed adapter is public, but its homepage has no declared favicon and the
-  Console uses a neutral Plug. Support an omitted native icon in the definition /
-  publisher contract or record an explicit scope decision; never invent branding
-  or silently omit the installed adapter from the release inventory.
+- [x] Resolve the native-directory missing-icon contract for MorseCode API. Its
+  homepage has no declared favicon. Native definitions may omit `icon_url`; the
+  publisher skips asset work and the API omits `logo_url`, preserving Console's
+  neutral icon. MCP icons remain required and supplied-icon failures still abort
+  sync. Definitions commit `0d5fff6` and publisher commit `a5ed7a5` pass Python and
+  Go race/vet/build checks plus independent adversarial staged review. Deploy the
+  publisher/API before iconless definitions; public release readiness remains open.
 
 ### T2 — Bounded public cache and directory outage fallback
 
@@ -1073,6 +1080,17 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Preserve historical icon metadata when publishing an iconless native entry,
+  and document safe deployment/rollback order. Independent review required reading
+  the old revision after removal and clarified that republishing the current
+  catalog does not remove incompatible retained snapshots. The regression and
+  full Go race/vet/build checks pass; native icon prerequisites are committed in
+  their external repositories. Public release remains pending.
+- [x] Replace the stale Cal.com icon with its currently declared 512-pixel PNG.
+  A real local catalog sync first rejected the old unadvertised URL; inspecting
+  the three MCP landing pages and correcting only Cal.com makes all 16 entries
+  import successfully without weakening declared-icon validation.
 
 - [x] Strengthen in-flight revocation acceptance to consume the initial protocol
   handshake and stream observations, then reject every later POST/GET/stream-open

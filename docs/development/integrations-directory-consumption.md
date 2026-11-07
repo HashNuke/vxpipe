@@ -2,9 +2,9 @@
 
 Status: production implementation in progress; updated 2026-11-07. The directory
 client/cache/facade, native Services reuse, static/OAuth management, nonsecret
-callback recovery and saved runtime wiring are implemented. Listed-template and
-retained-ID reconnect UI, authenticated browser/full runtime/independent-node
-acceptance and external directory publication remain open. Storybooks simulate
+callback recovery, listed-template forms, retained-ID reconnect UI and saved runtime
+wiring are implemented. Authenticated browser, telephony/independent-node acceptance
+and external directory publication remain open. Storybooks simulate
 workflows without real HTTP; they do not prove provider interoperability.
 Delivery tasks and acceptance gates are in
 [the milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
@@ -62,6 +62,21 @@ Before enabling production directory browsing, add AI/telephony definitions and
 the matching release registry in the external directory project. A valid empty
 native page must remain distinguishable from an outage. This is a release
 prerequisite, not work silently performed in this repository.
+
+Native providers without a usable declared favicon may omit `icon_url` in the
+external definition. The publisher skips icon fetch/upload and exposes no
+`logo_url`; Console uses its installed logo or neutral fallback. MCP definitions
+still require a declared icon, and invalid supplied values or failed downloads
+still reject the import. This resolves the MorseCode API case without invented
+branding or dropping an installed adapter. The definition schema, publisher and
+read API changes are committed in their separate repositories; publication remains
+an external release gate. See [release evidence](../../labnotes/20261107-0859-native-directory-release.md).
+
+Upgrade the publisher/API before merging iconless definitions. An older publisher
+rejects them, and an older API emits a bucket-root logo URL for assetless snapshots.
+Rollback needs a compatible pre-change database snapshot or expiry/pruning of all
+incompatible historical snapshots; republishing only the current catalog does not
+remove access through older revision/cursor requests.
 
 ## Request, version and cache contract
 
