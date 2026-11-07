@@ -67,7 +67,7 @@ test("API key creation breadcrumb returns to Settings inventory", async () => {
   const { SetupStory } = await import("./SetupStory");
   const { fireEvent } = await import("@testing-library/react");
   render(<SetupStory scenario="api-key-full-access" theme="dark" />);
-  const breadcrumb = await screen.findByRole("navigation", { name: "Breadcrumb" });
-  fireEvent.click(within(breadcrumb).getByRole("button", { name: "API Keys" }));
+  const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" });
+  fireEvent.click(await within(breadcrumb).findByRole("button", { name: "API Keys" }));
   expect(await screen.findByRole("table", { name: "API keys" })).toBeVisible();
 });
