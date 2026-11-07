@@ -1225,6 +1225,10 @@ and all related Storybooks.
 - [ ] Resolve the reproduced EctoStorage resilience monitor failure from the asset
   checkpoint root run. The expected normal subscriber exit is observed as `:noproc`;
   investigate and reproduce the cause before changing synchronization or behavior.
+  The monitor now precedes handoff activity, with exact normal-exit/uniqueness
+  checks retained and killed-source/complete-closure assertions added. Focused
+  original-seed verification and Astra review pass; full root rerun is pending.
+  The observed root failure is proof; its timing cause remains unconfirmed.
   See [archive monitor evidence](../20261107-1028-stabilize-archive-monitor.md).
 
 - [x] Correct bundled asset URLs on nested tenant pages. Cold-outage browser

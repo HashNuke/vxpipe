@@ -13,3 +13,20 @@ after repository recovery, immediately before terminating the synthetic source.
 Do not infer the cause solely from the exit reason. Astra is independently
 investigating the lifecycle and seeking a focused reproduction before any change.
 The full failed output is retained locally in the asset URL root verification log.
+
+Astra's bounded diagnostic runs did not repeat the failure: one focused run, 100
+and 1,000 sequential repeats, and 256 concurrent in-memory clones all passed.
+The complete root failure remains the red evidence. Cross-process monitor-delivery
+ordering is a hypothesis, not an independently reproduced root cause.
+
+Move the monitor immediately after opening the subscriber, before `source_started`
+and `offer`. The subsequent same-sender handoff messages and observed repository
+attempts establish monitor installation before recovery/source termination. Keep
+the exact normal-exit, fact-order and uniqueness assertions; additionally require
+closure source_reason `killed` and incomplete `false`, so unrelated premature
+closure cannot satisfy the strengthened case. No runtime implementation changes.
+The focused original-seed run passes one test. All five root gates are rerunning.
+
+Astra reviewed the actual moved monitor and strengthened closure assertions and
+approved them without further changes. No assertion is weakened and no runtime
+code changes. The root rerun remains the outstanding verification gate.

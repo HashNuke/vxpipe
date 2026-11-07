@@ -23,6 +23,7 @@ defmodule Vxpipe.Persistence.EctoStorageResilienceTest do
                drain_timeout_ms: 1_000
              )
 
+    subscriber_monitor = Process.monitor(handoff.subscriber)
     source = spawn(fn -> Process.sleep(:infinity) end)
     assert :ok = Handoff.source_started(handoff, source)
     assert :ok = Handoff.offer(handoff, engine_fact())
@@ -34,11 +35,9 @@ defmodule Vxpipe.Persistence.EctoStorageResilienceTest do
 
     TestRecoveringArchiveRepository.recover(repository)
 
-    assert_receive {:test_archive_repository_stored,
-                    %Vxpipe.Calls.CallFact{kind: :room_opened}},
+    assert_receive {:test_archive_repository_stored, %Vxpipe.Calls.CallFact{kind: :room_opened}},
                    1_000
 
-    subscriber_monitor = Process.monitor(handoff.subscriber)
     Process.exit(source, :kill)
     assert_receive {:DOWN, ^subscriber_monitor, :process, _subscriber, :normal}, 2_000
 
@@ -46,6 +45,7 @@ defmodule Vxpipe.Persistence.EctoStorageResilienceTest do
 
     assert Enum.map(facts, & &1.kind) == [:room_opened, :archive_stream_closed]
     assert facts |> Enum.map(& &1.id) |> Enum.uniq() |> length() == 2
+    assert %{"source_reason" => "killed", "incomplete" => false} = List.last(facts).payload
   end
 
   defp engine_fact do
