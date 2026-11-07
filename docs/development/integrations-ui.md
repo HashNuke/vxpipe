@@ -2,7 +2,8 @@
 
 Status: native integration management and custom-MCP forms are implemented,
 including [OAuth fields and nonsecret callback recovery](mcp-oauth-ui.md).
-Listed-MCP recipes and full authenticated browser acceptance remain open in the
+Listed-MCP recipes, retained-ID recovery and authenticated MCP/outage flows pass
+[rendered acceptance](mcp-browser-acceptance.md). Final verification, external release and user approval remain in the
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 This checkpoint follows the [directory contract](integrations-directory-consumption.md).
 

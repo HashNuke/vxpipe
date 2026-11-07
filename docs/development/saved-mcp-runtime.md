@@ -13,9 +13,14 @@ fixture-backed. Local carrier-fixture acceptance also covers managed incoming an
 outgoing admission plus the legacy incoming startup entry. Independent-node
 credential/transport lifecycle acceptance now covers both OAuth grant types,
 revocation and caller/runner retirement in a separate lane. Those node tests call
-ExMCP directly; they do not claim distributed admitted-room execution. Remaining
-management-browser flows, cross-node OAuth callbacks and release acceptance stay
-open in the milestone. See [runtime transport](mcp-runtime-transport.md) and the
+ExMCP directly; they do not claim distributed admitted-room execution.
+[Management-browser flows](mcp-browser-acceptance.md) and
+[cross-node callbacks with subsequent renewal](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md)
+also pass separate acceptance lanes. An unchanged published call spec survives
+disconnect/reconnect with fresh preparation while the old prepared generation stays
+fenced; see [composition evidence](../../labnotes/20261107-1109-verify-reconnected-call-spec.md).
+Final verification, external release and user approval remain open in the milestone.
+See [runtime transport](mcp-runtime-transport.md) and the
 [acceptance audit](../../labnotes/20261107-1200-verify-held-mcp-responses.md).
 
 ## Metadata and pinning

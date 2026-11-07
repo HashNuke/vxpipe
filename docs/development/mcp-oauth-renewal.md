@@ -3,7 +3,9 @@
 Status: backend machine acquisition, saved-grant renewal, credentialless OAuth
 catalog refresh, production forms and saved-connection runtime wiring are implemented.
 Independent-node delegated/machine renewal, transport and caller/runner lifecycle
-acceptance pass. Browser/callback acceptance remains open in
+acceptance pass. [Authenticated browser flows](mcp-browser-acceptance.md) and
+[cross-node callback-created grant renewal](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md)
+also pass. Final verification, external release and user approval remain in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 These operations extend existing tenant MCP management and encrypted grant storage;
 native providers continue using the Services APIs.
@@ -120,7 +122,8 @@ redeem the ambiguous grant again; its saved credentials remain unchanged, with a
 durable claim requiring reconnect at the deadline. Restart also replaces the runner
 and task supervisor. Fresh unrelated renewal succeeds on the original node after
 either interruption. These tests verify existing caller-owned behavior, without
-adding background continuation or retry. Browser callback acceptance remains open.
+adding background continuation or retry. Browser callback and cross-node
+callback-created grant renewal now pass the separate lanes linked above.
 No public provider or physical token-socket cancellation claim follows from these
 tests. See [runtime evidence](../../labnotes/20261107-1017-mcp-runtime-nodes.md) and
 [lifecycle evidence](../../labnotes/20261107-1056-mcp-renewal-lifecycle.md).

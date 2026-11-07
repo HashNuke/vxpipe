@@ -4,8 +4,10 @@ Status: production implementation in progress; updated 2026-11-07. The directory
 client/cache/facade, native Services reuse, static/OAuth management, nonsecret
 callback recovery, listed-template forms, retained-ID reconnect UI and saved runtime
 wiring are implemented. Local saved-runtime acceptance covers WebRTC and three
-phone-admission paths. Authenticated browser, independent-node acceptance and
-external directory publication remain open. Storybooks simulate
+phone-admission paths. [Authenticated MCP browser flows](mcp-browser-acceptance.md)
+and independent-node callback/renewal/rotation lanes pass their recorded scopes.
+Final verification, external directory publication and
+user approval remain open. Storybooks simulate
 workflows without real HTTP; they do not prove provider interoperability.
 Delivery tasks and acceptance gates are in
 [the milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
@@ -201,7 +203,8 @@ turn CIMD/DCR internals into required user input.
 The production Own-client form supports client-credentials grants and signed
 private-key JWT authentication with advertised-support checks, protected key
 handling, algorithm constraints and local HTTP/database interoperability tests.
-Authenticated browser and independent-node acceptance remain open. Client credentials uses application-level credentials without a
+[Authenticated browser flows](mcp-browser-acceptance.md) and the independent-node
+renewal lane pass controlled-provider acceptance. Client credentials uses application-level credentials without a
 browser callback and is explicitly separate from delegated user authorization.
 The reviewed MCP extension targets 2026-07-28; this milestone keeps the
 approved 2025-11-25 wire profile and supports the explicitly selected OAuth grant
@@ -210,7 +213,8 @@ against compatible servers. See the
 
 Callback identity stays on **Console**: Installation URL + `/oauth/mcp/callback`.
 Console `/oauth/client-metadata.json`, DCR preparation and the durable callback
-backend and production forms are implemented; authenticated browser acceptance remains open.
+backend and production forms are implemented; authenticated browser callbacks and
+[cross-node callback-created grant renewal](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md) pass their separate acceptance lanes.
 Gateway telephony origins may
 be deployed separately and must not replace this OAuth identity. Missing/nonpublic
 HTTPS Installation URL blocks browser OAuth, while static or anonymous modes stay

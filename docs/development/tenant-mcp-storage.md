@@ -1,10 +1,16 @@
 # Tenant MCP storage boundary
 
 Status: storage, static/OAuth management, grants and saved runtime wiring are
-implemented, 2026-11-07. Authenticated browser, full per-admission execution and
-independent-node acceptance remain open in
+implemented, 2026-11-07. [Authenticated MCP browser flows](mcp-browser-acceptance.md),
+[local admitted-call execution](saved-mcp-runtime.md) and independent-node
+callback/renewal/rotation lanes pass their recorded scopes. Final verification,
+external release and user approval remain in
 [T4–T8](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 The repository is a trusted internal port; it is not a public authorization API.
+
+Verification counts and pending-acceptance statements in the earlier checkpoint
+sections below record their original scope. Use the current evidence linked above
+and the milestone for subsequent completion and remaining release gates.
 
 ## Ownership and records
 
@@ -98,12 +104,14 @@ now runs this operation using the configured MCP repository/keyring. It accepts
 batches of 1–500 and prints only processed/current-key/remaining-key counts. Run it
 alongside provider re-encryption; pending OAuth attempts are a separate short-lived
 store, so retain old keys until those attempts have been claimed or expired.
-Cross-node rotation and the complete retention/retirement acceptance remain pending.
+[Cross-node rotation acceptance](../../labnotes/20261107-0832-verify-mcp-key-rotation.md)
+now covers both grant types, draining old-primary writers, a final re-encryption
+batch and subsequent renewal on both nodes with only the new key.
 
 OAuth grant revisions and durable refresh claims are implemented separately from
 configuration generation. Routine token refresh does not advance configuration
-generation or alter pinned tool identity. Independent-node acceptance remains
-open; see [renewal contracts](mcp-oauth-renewal.md).
+generation or alter pinned tool identity. Independent-node acceptance passes;
+see [renewal contracts](mcp-oauth-renewal.md).
 
 ## Alternatives and verification
 

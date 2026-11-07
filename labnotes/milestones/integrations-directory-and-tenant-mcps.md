@@ -1,6 +1,6 @@
 # Integrations directory and tenant MCP connections
 
-Status: **production implementation in progress (T1–T7); release gates pending**. The Storybook proposal
+Status: **final verification and release gates in progress**. The Storybook proposal
 is part of this specification, not evidence that backend behavior is implemented.
 Updated 2026-11-07 with the user-directed Integrations/custom-MCP changes and
 implementation progress reconciliation. Those specific decisions are recorded below; full workflow/release approval
@@ -9,6 +9,12 @@ including replacement of Services with Integrations for native providers and MCP
 This milestone makes the hosted
 directory the normal browse/search source, preserves installed AI/telephony during
 outages, and connects tenant-owned MCP servers whether listed or entered by URL.
+
+Current local evidence includes authenticated custom/listed/reconnect and inventory
+browser flows, admitted-call runtime checks, independent-node callback/renewal and
+key rotation, plus separate directory/status outages. Dated checkpoint paragraphs
+retain their original scope; later checked tasks and linked evidence supersede
+their pending-acceptance statements. External publication and user approval remain open.
 
 ## Prerequisites and design sources
 
@@ -269,8 +275,10 @@ Progress 2026-11-06: production Services routes now mount Integrations, includin
 category URLs, search, cursor navigation and existing native credential dialogs.
 Native credential lifecycle and production route tests now use the new inventory
 API while retaining existing management operations. Desktop/mobile Storybook
-inspection exercises production components with local fixture responses. Real
-authenticated Console acceptance remains pending.
+inspection exercises production components with local fixture responses. Subsequent
+real authenticated desktop/mobile Console acceptance now passes, including native
+inheritance, listed/reconnect flows and inventory navigation/permissions/exclusion;
+see [inventory evidence](../20261107-1126-verify-inventory-browser-controls.md).
 
 - [x] Connect tenant/platform routes, category breadcrumbs/mobile selector, default
   connected inventory, app-owned native categories and paginated remote categories.
@@ -281,7 +289,7 @@ authenticated Console acceptance remains pending.
 - [x] Mount the tenant custom MCP CTA and saved-MCP Manage controls after the static
   API/preflight foundations; platform/read-only connection creation remains hidden.
   OAuth forms are now implemented under T5/T6. Lifecycle UI tests and desktop/mobile
-  production-component fixtures pass; authenticated backend acceptance remains open.
+  production-component fixtures and subsequent authenticated browser acceptance pass.
 
 Acceptance: real Console browser checks at desktop/mobile cover healthy directory,
 API outage and recovery, direct URL/back/forward, unknown status, permissions and
@@ -301,7 +309,8 @@ platform exclusion. Existing native connection/update/override tests remain gree
   management, with credential isolation and catalog-only tools refresh.
 - [ ] Finish authenticated Console browser acceptance, listed templates, retained-ID
   reconnect proposals and the external release prerequisite before
-  considering the whole Integrations workflow complete.
+  considering the whole Integrations workflow complete. The local browser portions
+  now pass; this composite gate remains open for the external directory release.
 
 See [UI contracts](../../docs/development/integrations-ui.md) and
 [checkpoint evidence](../20261107-0309-review-integrations-ui.md).
@@ -462,8 +471,13 @@ Depends on T4/T4a and existing Console Installation URL/CIMD foundation.
   keys require reveal-to-edit and retain newlines across hide/show.
   Rendered retry notices stay inside the modal; cursor recovery also preserves
   attempt context while authenticated identity is still loading.
-- [ ] Complete authenticated Console/provider browser acceptance and retained-ID
-  reconnect proposals; fixture UI and protocol acceptance do not close these gates.
+- [x] Complete authenticated Console/provider browser acceptance and retained-ID
+  reconnect proposals. Real Chrome/TLS custom and listed flows cover consent,
+  callbacks, denied replacement and retained recovery; six independent-node cases
+  include callback-created grant renewal. Astra approved the composed evidence.
+  See [browser evidence](../20261107-0941-verify-listed-browser.md) and
+  [node evidence](../20261107-0819-verify-oauth-node-callbacks.md). Controlled peers
+  establish this acceptance scope, not live third-party certification.
 
 - [x] Review installed ExMCP callback/transaction ownership and add a private S256
   authorization-request builder with fixed Console callback/resource and protected
@@ -640,8 +654,10 @@ returns to the same tenant/category, then discovers tools before marking connect
   through fresh registration. Retain working grants until replacement succeeds.
 - [x] Verify browser code flows through local OAuth/MCP HTTP and encrypted
   PostgreSQL, including replay, denial, failed initialization and restoration.
-- [ ] Complete listed-template identity handling and real browser/separate-node
-  acceptance. Production forms, nonsecret return recovery and runtime renewal are implemented.
+- [x] Complete listed-template identity handling and real browser/separate-node
+  acceptance. Production forms, nonsecret return recovery and runtime renewal are
+  implemented; the rendered custom/listed flows and callback-created grant renewal
+  pass the separate acceptance lanes recorded above, with independent Astra review.
 
 See [browser-flow contracts](../../docs/development/mcp-oauth-browser-flow.md) and
 [review evidence](../20261107-0143-review-mcp-oauth-flow.md). Backend fixtures do not
@@ -1255,14 +1271,16 @@ and all related Storybooks.
   root verification remains in T8. See
   [search evidence](../20261107-1129-normalize-directory-search.md).
 
-- [ ] Reconcile current architecture, UI, OAuth, storage/runtime and index summaries
+- [x] Reconcile current architecture, UI, OAuth, storage/runtime and index summaries
   with completed browser/node/rotation evidence. Preserve historical checkpoint
-  limitations and leave external release/user approval open.
+  limitations and leave external release/user approval open. Astra independently
+  reviewed the summaries and evidence; all changed-document local links pass.
 
-- [ ] Complete the explicitly required authenticated inventory navigation, read-only
+- [x] Complete the explicitly required authenticated inventory navigation, read-only
   permissions and platform-exclusion browser checks at desktop/mobile. Astra final
   audit found automated coverage but missing recorded real-browser evidence; this
-  is an acceptance evidence gap, not a reproduced product bug. See
+  was an acceptance evidence gap. Real role/session/browser and publisher checks
+  now pass both viewports; the read-only inventory remains unchanged. See
   [inventory browser evidence](../20261107-1126-verify-inventory-browser-controls.md).
 
 - [x] Correct reconnect-test request accounting for background discovery POSTs.

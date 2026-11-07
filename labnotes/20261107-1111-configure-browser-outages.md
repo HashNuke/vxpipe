@@ -55,3 +55,9 @@ Format, warnings-as-errors compilation, strict Credo and unused-lock checks pass
 The full root test run remains active; its result will be recorded separately.
 These fixture/test changes do not alter source-cutover or speech state machines,
 so the Lean lane does not apply to this checkpoint.
+
+The root run was deliberately interrupted during Gateway after the later inventory
+browser pass reproduced the separate uppercase-search bug. Earlier root checks and
+children had passed; this interrupted run is not counted as complete. A fresh full
+run must include the search correction. The interruption was issued explicitly
+through the owned PTY, unlike the earlier unexplained SIGTERM checkpoint.

@@ -26,8 +26,8 @@ and keyboard tab selection retain the dialog on desktop and mobile. See the
 [gesture and layout evidence](../../labnotes/20261107-1229-stabilize-mcp-dialog.md).
 The complete
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
-also requires the remaining listed/retained recovery cases, outage states and final
-release checks. Partial discovery now passes explicit retry with manual-method
+also records the completed listed/retained recovery and outage checks below, with
+final verification and release gates still open. Partial discovery now passes explicit retry with manual-method
 preservation. Multiple-issuer discovery requires selection and recovers from an
 unavailable issuer; both recovered flows pass actual consent and saved management.
 Unsupported OAuth stays blocked with consistent submission feedback. See the
@@ -69,6 +69,12 @@ An unchanged published call spec also passes disconnect/reconnect and fresh
 preparation with its original tool reference; the earlier prepared generation stays
 invalid. See [listed/outage evidence](../../labnotes/20261107-0941-verify-listed-browser.md)
 and [call-spec composition evidence](../../labnotes/20261107-1109-verify-reconnected-call-spec.md).
+
+Authenticated inventory navigation now passes direct category links and browser
+Back/Forward at desktop/mobile. An ordinary read-only role can inspect saved MCP
+Authentication/Tools but cannot connect, replace, test, refresh or disconnect.
+Native fallback Connect controls are disabled. Platform browse/search excludes
+tenant MCPs and the MCP creation action. See [inventory acceptance](../../labnotes/20261107-1126-verify-inventory-browser-controls.md).
 
 ## Start an isolated session
 

@@ -6,7 +6,9 @@ are described in [saved runtime](saved-mcp-runtime.md). Local active-call accept
 covers WebRTC and managed incoming/outgoing plus legacy incoming phone admission;
 delayed-transfer cases use WebRTC. Independent-node delegated/machine renewal,
 transport revocation and caller/runner lifecycle pass controlled HTTP acceptance.
-Browser/callback acceptance remains open in
+[Browser flows](mcp-browser-acceptance.md) and
+[cross-node callback-created grant renewal](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md)
+also pass separate lanes. Final verification, external release and user approval remain in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 This checkpoint depends on the existing
 [renewal boundary](mcp-oauth-renewal.md).
@@ -117,7 +119,7 @@ per-connection exclusivity with unrelated-tenant progress, and ambiguous-redempt
 fencing after a node crash. Machine grants now also cover rotation and revocation
 without saving refresh tokens. Caller cancellation and renewal-runner restart
 cover both grants, retaining the durable ambiguity fence while permitting fresh
-unrelated renewal. Browser/callback acceptance remains open. Four focused transport
+unrelated renewal. Browser/callback acceptance is recorded separately above. Four focused transport
 regressions cover clean EOF, terminal credential rejection, repeated
 connection notices and resumed GET rejection. See
 [checkpoint evidence](../../labnotes/20261107-1017-mcp-runtime-nodes.md) and

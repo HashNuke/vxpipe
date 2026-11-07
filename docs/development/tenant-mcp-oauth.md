@@ -3,13 +3,23 @@
 Status: authorization-request builder, durable attempt store and Calls authorization
 boundary plus registration/token adapters implemented. Connect/callback orchestration and initial credential persistence are wired.
 Grant refresh coordination, reconnect replacement and saved-registration reuse
-are wired. Production forms and nonsecret return recovery are implemented; real
-browser/provider and independent-node acceptance remain open. See the focused
+are wired. Production forms and nonsecret return recovery are implemented.
+[Authenticated browser flows](mcp-browser-acceptance.md),
+[cross-node callback-created grant renewal](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md)
+and [cross-node key rotation](../../labnotes/20261107-0832-verify-mcp-key-rotation.md)
+pass controlled acceptance. Final verification, external
+release and user approval remain open. See the focused
 [UI contract](mcp-oauth-ui.md), [browser flow](mcp-oauth-browser-flow.md),
 [renewal contract](mcp-oauth-renewal.md) and [saved runtime](saved-mcp-runtime.md).
 This is part of
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md),
 not the existing inbound MCP authorization server.
+
+The foundation/checkpoint sections below retain their original verification counts
+and limitations. References there to pending browser, callback, node or rotation
+acceptance describe those earlier checkpoints; the linked evidence above records
+their subsequent completion. Controlled protocol peers and separate node tests do
+not establish live third-party certification or distributed admitted-room execution.
 
 ## Ownership and dependency decision
 
