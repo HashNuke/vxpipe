@@ -192,9 +192,18 @@ and [native release evidence](../20261107-0859-native-directory-release.md).
   cursor through a fixed code whitelist, never upstream diagnostic text.
 - [ ] Recover the external release commits and hosting context. Both repositories
   are now cloned through SSH: `vxpipe/vxpipe-integrations` and
-  `HashNuke/vxpipe-integrations-web`. Their remote branches lack the earlier
-  unpushed checkpoints (`9eef75c` and `a5ed7a5`); source recovery and Railway access
-  have been requested while local acceptance continues.
+  `HashNuke/vxpipe-integrations-web`. The user pushed the missing changes from the
+  other machine; both checkouts fast-forwarded to the recorded checkpoints
+  (`9eef75c` and `a5ed7a5`). Five schema tests, all 16 definitions, publisher race
+  tests, vet and build pass. Hosting context and public release verification remain.
+  See [recovery evidence](../20261107-0937-restore-native-catalog.md).
+- [x] Refresh the recovered Deepgram and Google AI icon declarations after fresh
+  discovery proves their stored URLs absent from the current landing pages. Astra
+  independently reproduces both. All 16 current icon checks pass after the minimal
+  URL/report correction, committed as `40d763a` in the definitions repository.
+  Actual local import/API and Console validation pass for all 16 entries and the
+  exact 13 release-native IDs. Independent final review is clean. Publisher policy
+  is unchanged; public deployment/sync remains pending.
 - [ ] Verify/add native entries and this release's adapter IDs **in the separate
   directory repository**, coordinated as an external prerequisite; do not mark
   this task complete against an MCP-only catalog.
