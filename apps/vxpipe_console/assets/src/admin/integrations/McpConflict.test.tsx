@@ -24,8 +24,9 @@ test("a retained conflict requires explicit review and fresh generation-bound me
   render(<CustomMcpDialog {...defaults} fetchImpl={fetchImpl} onOpenConnection={onOpenConnection} />);
   submit();
   const review = await screen.findByRole("button", { name: "Review reconnect" });
+  await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/api/tenants/tenant-a/mcp-discovery", expect.objectContaining({ method: "POST" })));
   expect(onOpenConnection).not.toHaveBeenCalled();
-  expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  expect(fetchImpl.mock.calls.filter(([url, init]) => init?.method === "POST" && String(url) !== "/api/tenants/tenant-a/mcp-discovery")).toHaveLength(1);
   fireEvent.click(review);
   await waitFor(() => expect(onOpenConnection).toHaveBeenCalledOnce());
   expect(fetchImpl).toHaveBeenCalledWith("/api/tenants/tenant-a/mcp-connections/retained?retained_generation=7", expect.objectContaining({ credentials: "same-origin" }));
@@ -91,5 +92,6 @@ test("a failed metadata read can be retried without resubmitting credentials", a
   await screen.findByText(/Could not load this connection/);
   failed = false; fireEvent.click(screen.getByRole("button", { name: "Review reconnect" }));
   await waitFor(() => expect(onOpenConnection).toHaveBeenCalledOnce());
-  expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/api/tenants/tenant-a/mcp-discovery", expect.objectContaining({ method: "POST" })));
+  expect(fetchImpl.mock.calls.filter(([url, init]) => init?.method === "POST" && String(url) !== "/api/tenants/tenant-a/mcp-discovery")).toHaveLength(1);
 });

@@ -137,6 +137,7 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
       if (!response.ok) {
         const errorBody = await response.json().catch(() => null);
         if (controller.signal.aborted) return;
+        if (response.status === 429) { setError("Connection is busy. Wait a moment, then retry."); return; }
         const proposal = response.status === 409 && !saved && onOpenConnection ? parseMcpConflict(errorBody) : null;
         if (proposal) { setConflict(proposal); return; }
         if (currentListing && !saved) {

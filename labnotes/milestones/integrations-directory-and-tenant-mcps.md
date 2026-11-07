@@ -1222,6 +1222,18 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
+- [x] Correct reconnect-test request accounting for background discovery POSTs.
+  The full frontend run counts discovery as a second connection mutation; explicitly
+  observe discovery and assert only mutation requests. Keep consent/retry and
+  credential-clearing assertions. Deterministic red/green and independent review
+  pass; all 1,065 frontend tests, TypeScript and lint pass. See [request-count evidence](../20261107-1044-count-reconnect-mutations.md).
+
+- [x] Correct misleading credential advice for HTTP 429 MCP busy responses.
+  Authenticated listed reconnect returns `mcp_connection_busy` but the dialog
+  tells the user to check credentials. Preserve the draft and offer explicit
+  retry guidance. Actual desktop/mobile HTTP 429 rendering, independent red/green
+  reproduction and all frontend gates pass. See [busy feedback evidence](../20261107-1040-clarify-mcp-busy.md).
+
 - [ ] Resolve the reproduced EctoStorage resilience monitor failure from the asset
   checkpoint root run. The expected normal subscriber exit is observed as `:noproc`;
   investigate and reproduce the cause before changing synchronization or behavior.

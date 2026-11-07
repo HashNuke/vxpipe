@@ -69,3 +69,19 @@ test("failed connection keeps the draft and never reports success", async () => 
   expect(screen.getByLabelText("MCP server URL")).toHaveValue(endpoint);
   expect(onConnected).not.toHaveBeenCalled();
 });
+
+test("busy connections offer retry guidance without blaming credentials", async () => {
+  const onConnected = vi.fn();
+  const fetchImpl = vi.fn(async () => Response.json({ error: { code: "mcp_connection_busy" } }, { status: 429 }));
+  render(<CustomMcpDialog {...defaults} onConnected={onConnected} fetchImpl={fetchImpl} />);
+  enter("MCP server URL", endpoint);
+  enter("Authentication Type", "bearer");
+  enter("Bearer token", "synthetic-token");
+  fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Connection is busy. Wait a moment, then retry."));
+  expect(screen.getByRole("alert")).not.toHaveTextContent("credentials");
+  expect(screen.getByLabelText("MCP server URL")).toHaveValue(endpoint);
+  expect(screen.getByLabelText("Bearer token")).toHaveValue("synthetic-token");
+  expect(screen.getByRole("button", { name: "Connect" })).toBeEnabled();
+  expect(onConnected).not.toHaveBeenCalled();
+});
