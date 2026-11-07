@@ -423,8 +423,22 @@ defmodule Vxpipe.Gateway.Media.OutputArbiter do
     {:noreply, request(state, {:vxpipe_audio_output_finish, token, self()}, :room_finish)}
   end
 
-  defp response({:room_push, from, _}, _reply, state) do
-    GenServer.reply(from, {:error, :interrupted})
+  defp response({:room_push, from, token}, reply, state)
+       when reply in [:ok, {:error, :interrupted}] do
+    # Clear owns the discarded-frame acknowledgement after native drain. A late
+    # accepted push must not finish the retired turn or acknowledge it twice.
+    result = if state.current && state.current.token == token, do: reply, else: :ok
+    GenServer.reply(from, result)
+    {:noreply, state}
+  end
+
+  defp response({:room_push, from, _}, {:error, _} = error, state) do
+    GenServer.reply(from, error)
+    {:noreply, state}
+  end
+
+  defp response({:room_push, from, _}, _invalid_reply, state) do
+    GenServer.reply(from, {:error, :invalid_output_reply})
     {:noreply, state}
   end
 

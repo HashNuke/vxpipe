@@ -499,6 +499,90 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     assert_receive {:rtp, %{sequence_number: 1, timestamp: 960}}
   end
 
+  test "holding before a room push reply waits for clear and acknowledges its frame exactly once" do
+    {output, native} = start_output()
+
+    start_supervised!(
+      {Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor, connection_id: "connection"}
+    )
+
+    pipeline = start_shared_pipeline(output, "pending-room")
+    assert_receive {:vxpipe_room_audio_output_ready, "pending-room"}
+    token = pause_native_push(native)
+    push = :gen_server.send_request(pipeline, {:push, mixed(0)})
+    assert_receive {:native_push_waiting, ^token}
+    hold = :gen_server.send_request(output, {:vxpipe_audio_output_hold, 1})
+    _ = :sys.get_state(output)
+    send(native, {:continue_native_push, token})
+    assert {:reply, :ok} = :gen_server.wait_response(push, 1_000)
+    assert_receive {:pace, ^native, tick}
+    assert :timeout = :gen_server.wait_response(hold, 0)
+    refute_received {:vxpipe_room_audio_output_sent, "pending-room", 0}
+    send(native, tick)
+    assert {:reply, :ok} = :gen_server.wait_response(hold, 1_000)
+    assert_receive {:vxpipe_room_audio_output_sent, "pending-room", 0}
+    _ = :sys.get_state(pipeline)
+    refute_received {:vxpipe_room_audio_output_sent, "pending-room", 0}
+    assert :ok = OutputSink.release(output, 1)
+    assert :ok = SharedOutputPipeline.push("pending-room", %{mixed(960) | output_generation: 1})
+    assert_receive {:rtp, %{sequence_number: 1, timestamp: 960}}
+  end
+
+  for preempted? <- [false, true] do
+    test "native room push failures retain their cause after preemption: #{preempted?}" do
+      {output, native} = start_output(AudioEgress, send_rtp: fn _, _, _ -> {:error, :closed} end)
+
+      start_supervised!(
+        {Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor, connection_id: "connection"}
+      )
+
+      pipeline = start_shared_pipeline(output, "failed-room")
+      assert_receive {:vxpipe_room_audio_output_ready, "failed-room"}
+      token = pause_native_push(native)
+      push = :gen_server.send_request(pipeline, {:push, mixed(0)})
+      assert_receive {:native_push_waiting, ^token}
+
+      if unquote(preempted?) do
+        :gen_server.send_request(output, {:vxpipe_audio_output_hold, 1})
+        _ = :sys.get_state(output)
+      end
+
+      send(native, {:continue_native_push, token})
+      assert {:reply, {:error, :rtp_unavailable}} = :gen_server.wait_response(push, 1_000)
+    end
+  end
+
+  for preempted? <- [false, true] do
+    test "a native interrupted room push is successful only after arbiter preemption: #{preempted?}" do
+      {output, native} = start_output(AudioEgress, maximum_packets: 0)
+
+      start_supervised!(
+        {Vxpipe.Gateway.WebRTC.ConnectionPeerSupervisor, connection_id: "connection"}
+      )
+
+      pipeline = start_shared_pipeline(output, "interrupted-room")
+      assert_receive {:vxpipe_room_audio_output_ready, "interrupted-room"}
+      token = pause_native_push(native)
+      push = :gen_server.send_request(pipeline, {:push, mixed(0)})
+      assert_receive {:native_push_waiting, ^token}
+      send(native, {:continue_native_push, token})
+      _ = :sys.get_state(native)
+      assert :timeout = :gen_server.wait_response(push, 0)
+
+      if unquote(preempted?) do
+        assert :ok = OutputSink.hold(output, 1)
+        assert {:reply, :ok} = :gen_server.wait_response(push, 1_000)
+        assert_receive {:vxpipe_room_audio_output_sent, "interrupted-room", 0}
+        _ = :sys.get_state(pipeline)
+        refute_received {:vxpipe_room_audio_output_sent, "interrupted-room", 0}
+      else
+        assert {:ok, _} = OutputSink.clear(native)
+        assert {:reply, {:error, :interrupted}} = :gen_server.wait_response(push, 1_000)
+        refute_received {:vxpipe_room_audio_output_sent, "interrupted-room", 0}
+      end
+    end
+  end
+
   test "room binding during clear waits for the drain instead of failing the connection" do
     {output, native} = start_output()
     assert :ok = OutputSink.push(output, direct("old"))
@@ -755,28 +839,61 @@ defmodule Vxpipe.Gateway.Media.OutputArbiterTest do
     token
   end
 
-  defp start_output(native_adapter \\ AudioEgress) do
+  defp pause_native_push(native) do
+    token = make_ref()
+    owner = self()
+
+    :ok =
+      :sys.install(
+        native,
+        {token,
+         fn
+           :done, _, _ ->
+             :done
+
+           _, {:in, {:"$gen_call", _, {:vxpipe_audio_output, _}}}, _ ->
+             send(owner, {:native_push_waiting, token})
+
+             receive do
+               {:continue_native_push, ^token} -> :done
+             end
+
+           state, _, _ ->
+             state
+         end, nil}
+      )
+
+    on_exit(fn -> send(native, {:continue_native_push, token}) end)
+    token
+  end
+
+  defp start_output(native_adapter \\ AudioEgress, overrides \\ []) do
     observer = self()
 
     native =
       start_supervised!(
         {AudioEgress,
-         tenant_id: "tenant",
-         room_id: "room",
-         incarnation_id: "incarnation",
-         participant_id: "caller",
-         connection_id: "connection",
-         peer_connection: self(),
-         track_id: "track",
-         encoder: {TestOpusEncoder, [observer: self()]},
-         send_rtp: fn _, _, packet ->
-           send(observer, {:rtp, packet})
-           :ok
-         end,
-         schedule: fn target, message, _ ->
-           send(observer, {:pace, target, message})
-           make_ref()
-         end}
+         Keyword.merge(
+           [
+             tenant_id: "tenant",
+             room_id: "room",
+             incarnation_id: "incarnation",
+             participant_id: "caller",
+             connection_id: "connection",
+             peer_connection: self(),
+             track_id: "track",
+             encoder: {TestOpusEncoder, [observer: self()]},
+             send_rtp: fn _, _, packet ->
+               send(observer, {:rtp, packet})
+               :ok
+             end,
+             schedule: fn target, message, _ ->
+               send(observer, {:pace, target, message})
+               make_ref()
+             end
+           ],
+           overrides
+         )}
       )
 
     output =
