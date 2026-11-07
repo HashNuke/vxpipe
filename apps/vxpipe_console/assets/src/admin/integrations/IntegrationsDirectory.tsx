@@ -9,7 +9,7 @@ import { integrationQuery, parseCategories, type IntegrationCategory, type Integ
 import { CustomMcpDialog } from "./CustomMcpDialog";
 import { useInventory, type IntegrationFetch } from "./useInventory";
 import { useOAuthReturn, type RestoredMcpDialog } from "./useOAuthReturn";
-import { listedMethod, type McpListing } from "./listedMcp";
+import type { McpListing } from "./listedMcp";
 import "../mcpStories/mcp-services-story.css";
 
 const defaultFetch: IntegrationFetch = (input, init) => window.fetch(input, init);
@@ -122,11 +122,10 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
                 <Button disabled={!canEdit || !(connection.canEdit || (tenantKey !== null && connection.source === "platform" && canEdit)) || !!removingProvider || state.status !== "ready"} aria-label={`Edit ${item.name}${item.connections.length > 1 ? ` (${connection.name})` : ""}`} onClick={() => item.provider && onManage(item.provider, connection)}>{item.connections.length > 1 ? `Edit ${connection.name}` : "Edit"}</Button>
               {onRemove && connection.canEdit && connection.credentialId && (tenantKey === null || connection.source === "tenant") && <Button variant="ghost" disabled={!!removingProvider || state.status !== "ready"} aria-label={`Remove ${item.name} (${connection.name}) credentials`} onClick={() => item.provider && onRemove(item.provider, connection.name)}>{removingProvider === item.provider ? "Removing…" : "Remove"}</Button>}
               </Fragment>)}{item.connections.length === 0 && item.mcpConnections.length === 0 && <>
-                <Button disabled={!item.canConnect || state.status !== "ready" || (item.kind === "mcp" && (!canManageMcps || !csrfToken || !item.listing || !listedMethod(item.listing.entry)))} aria-label={`Connect ${item.name}`} onClick={() => {
+                <Button disabled={!item.canConnect || state.status !== "ready" || (item.kind === "mcp" && (!canManageMcps || !csrfToken || !item.listing))} aria-label={`Connect ${item.name}`} onClick={() => {
                   if (item.provider) onManage(item.provider, undefined);
                   else if (tenantKey && item.listing && canManageMcps) setMcpDialog({ tenantKey, actorId, listing: item.listing });
                 }}>Connect</Button>
-                {item.listing?.entry.authentication.type === "oauth2" && <span className="text-sm text-[var(--admin-muted)]">OAuth setup unavailable</span>}
               </>}</div>
             </article>;
           })}</div>}

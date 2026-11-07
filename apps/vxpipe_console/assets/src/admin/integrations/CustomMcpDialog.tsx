@@ -11,6 +11,7 @@ import { oauthDefaults, oauthProblem, oauthRequest, type ClientAuthentication, t
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import type { McpConnection } from "./inventoryApi";
 import { listedMethod, type McpListing } from "./listedMcp";
+import { listedOAuthMethod, listedOAuthRequest } from "./listedOAuthForm";
 import type { IntegrationFetch } from "./useInventory";
 import "../mcpStories/mcp-services-story.css";
 
@@ -25,11 +26,14 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
   onClose: () => void; onConnected: () => void;
   onAuthorize?: (handoff: OAuthHandoff, draft: OAuthDraft) => void; returnTo?: string; initialDraft?: OAuthDraft; recoveryNotice?: string;
 }) {
-  const directoryEntry = connection?.directoryEntry ?? listing?.entry;
+  const currentListing = listing ?? initialDraft?.listing;
+  const directoryEntry = connection?.directoryEntry ?? currentListing?.entry;
+  const listedOAuth = directoryEntry?.authentication.type === "oauth2";
   const [endpoint, setEndpoint] = useState(directoryEntry?.endpoint ?? initialDraft?.endpoint ?? connection?.endpoint ?? "");
   const [revision, setRevision] = useState(0);
   const [method, setMethod] = useState<Method>(initialDraft?.method ?? (connection?.authMethod === "oauth" ? "" : connection?.authMethod ?? "") as Method);
   const [issuer, setIssuer] = useState<string | undefined>(initialDraft?.issuer);
+  const [manualIssuer, setManualIssuer] = useState(false);
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -66,12 +70,16 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
   const pending = useRef<AbortController | null>(null);
   useEffect(() => () => pending.current?.abort(), []);
   const discovery = useMcpDiscovery({ tenantKey, csrfToken, endpoint, revision: String(revision), issuer,
-    active: !directoryEntry && !readOnly && (!saved || endpoint !== saved.endpoint || (replaceCredentials && (saved.authMethod === "oauth" || ["cimd", "dcr", "own_client"].includes(method)))), fetchImpl, onSessionExpired });
+    ...(!saved && currentListing ? { listing: currentListing.reference } : {}),
+    ...(saved && listedOAuth ? { connection: { connection_id: saved.id, generation: saved.generation } } : {}),
+    active: !readOnly && (listedOAuth ? !saved || replaceCredentials : !directoryEntry && (!saved || endpoint !== saved.endpoint || (replaceCredentials && (saved.authMethod === "oauth" || ["cimd", "dcr", "own_client"].includes(method))))), fetchImpl, onSessionExpired });
   const savedMethod: Method = saved?.authMethod === "oauth" ? savedOAuth?.registrationMethod ?? "" : (saved?.authMethod ?? "") as Method;
-  const selected = directoryEntry ? listedMethod(directoryEntry) : method || (endpoint === saved?.endpoint ? savedMethod : "") || discovery.data?.suggestedMethod || "";
+  const selected = directoryEntry ? listedOAuth ? saved && !replaceCredentials ? savedMethod : listedOAuthMethod(discovery.data?.listing ?? directoryEntry, discovery.data) : listedMethod(directoryEntry) : method || (endpoint === saved?.endpoint ? savedMethod : "") || discovery.data?.suggestedMethod || "";
   const apiKeyHeader = directoryEntry?.authentication.type === "api_key" ? directoryEntry.authentication.header_name : null;
   const oauthMethod = selected === "cimd" || selected === "dcr" || selected === "own_client" ? selected : null;
-  const oauthValues = { ...oauthDefaults(endpoint, discovery.data), ...oauthEdits };
+  const oauthValues = { ...oauthDefaults(endpoint, discovery.data), ...oauthEdits, ...(listedOAuth ? { grant: "authorization_code" as const } : {}) };
+  const clientAuthConfirmed = !listedOAuth || oauthEdits.clientAuth !== undefined;
+  const reuseRegistration = !!(listedOAuth && discovery.data?.oauthRegistration?.reusable);
 
   function clearCredentials() { setToken(""); setUsername(""); setPassword(""); setHeaders([]); setOAuthEdits({}); }
   function changeUrl(value: string) {
@@ -91,7 +99,8 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
     const refreshTools = catalogOnly || !!(saved?.authMethod === "oauth" && !replaceCredentials && endpoint === saved.endpoint);
     if (readOnly || busy || (!refreshTools && (!selected || !validMcpUrl(endpoint)))) return;
     if (!refreshTools && oauthMethod) {
-      const problem = oauthProblem(oauthMethod, oauthValues, discovery.data);
+      if (listedOAuth && oauthMethod === "own_client" && !clientAuthConfirmed) { setError("Choose the authentication method used when this OAuth client was registered."); return; }
+      const problem = reuseRegistration && oauthMethod === "dcr" && discovery.data?.oauthClient ? null : oauthProblem(oauthMethod, oauthValues, discovery.data);
       if (problem) { setError(problem); return; }
     }
     if (!refreshTools && replaceCredentials && ((selected === "bearer" && !token) || (selected === "basic" && (!username || !password)) ||
@@ -106,9 +115,9 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
     }
     const requestUrl = browserOAuth ? saved ? `${connectionUrl}/oauth` : `/api/tenants/${encodeURIComponent(tenantKey)}/mcp-oauth` : connectionUrl;
     const requestBody = refreshTools && saved ? { generation: saved.generation, refresh_tools: true } : oauthMethod ? {
-      ...oauthRequest(oauthMethod, endpoint, String(revision), oauthValues, issuer),
+      ...(listedOAuth ? listedOAuthRequest(oauthMethod, String(revision), reuseRegistration ? { ...oauthValues, initialAccessToken: "" } : oauthValues, issuer, saved ? undefined : currentListing?.reference) : oauthRequest(oauthMethod, endpoint, String(revision), oauthValues, issuer)),
       ...(saved ? { generation: saved.generation } : {}), ...(browserOAuth && returnTo ? { return_to: returnTo } : {}),
-    } : { ...(directoryEntry ? (!saved && listing ? { listing: listing.reference } : {}) : { endpoint, auth_method: selected }),
+    } : { ...(directoryEntry ? (!saved && currentListing ? { listing: currentListing.reference } : {}) : { endpoint, auth_method: selected }),
       ...(replaceCredentials ? { credentials } : {}), ...(saved ? { generation: saved.generation } : {}) };
     const controller = new AbortController(); pending.current = controller;
     setBusy(true); setError("");
@@ -121,7 +130,7 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
       if (controller.signal.aborted) return;
       if (response.status === 401) { onSessionExpired(); return; }
       if (!response.ok) {
-        if (listing && !saved) {
+        if (currentListing && !saved) {
           const errorBody = await response.json().catch(() => null);
           if (controller.signal.aborted) return;
           if (["mcp_listing_unavailable", "invalid_mcp_listing"].includes(errorBody?.error?.code)) {
@@ -135,7 +144,8 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
         const handoff = parseHandoff(body);
         if (!controller.signal.aborted) {
           const draft: OAuthDraft = { endpoint, method: oauthMethod!, ...(issuer ? { issuer } : {}),
-            ...(oauthMethod === "own_client" ? { clientAuth: oauthValues.clientAuth } : {}), ...(saved ? { generation: saved.generation } : {}) };
+            ...(oauthMethod === "own_client" ? { clientAuth: oauthValues.clientAuth } : {}), ...(saved ? { generation: saved.generation } : {}),
+            ...(!saved && currentListing ? { listing: currentListing } : {}) };
           clearCredentials(); onAuthorize(handoff, draft);
         }
         return;
@@ -186,20 +196,23 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
               </div>}
             </> : <TextField label="MCP server URL" type="url" value={endpoint} onChange={event => changeUrl(event.target.value)} placeholder="https://mcp.example.com/mcp" />}
             <div className="mcp-field-note">
-              {discovery.status !== "idle" && <p className="mcp-hint" role="status">{discovery.status === "waiting" ? "Waiting to check URL…" : discovery.status === "checking" ? "Checking MCP server and OAuth settings…" : discovery.status === "failed" || discovery.data?.outcome === "unknown" ? "Could not discover settings. Choose authentication manually, or retry." : discovery.data?.outcome === "partial" ? "Some OAuth settings could not be discovered. Check the authorization server or retry." : discovery.data?.outcome === "unsupported_oauth" ? "This server does not support the OAuth security requirements needed to connect." : discovery.data?.outcome === "issuer_required" ? "Choose an authorization server to continue discovery." : discovery.data?.outcome === "anonymous" ? "Server accepts connections without authentication." : "OAuth settings discovered."}</p>}
+              {discovery.status !== "idle" && <p className="mcp-hint" role="status">{discovery.status === "waiting" ? "Waiting to check URL…" : discovery.status === "checking" ? "Checking MCP server and OAuth settings…" : discovery.status === "failed" || discovery.data?.outcome === "unknown" ? listedOAuth ? "Could not discover OAuth settings. Check the authorization server URL, or retry." : "Could not discover settings. Choose authentication manually, or retry." : discovery.data?.outcome === "partial" ? "Some OAuth settings could not be discovered. Check the authorization server or retry." : discovery.data?.outcome === "unsupported_oauth" ? "This server does not support the OAuth security requirements needed to connect." : discovery.data?.outcome === "issuer_required" ? "Choose an authorization server to continue discovery." : discovery.data?.outcome === "anonymous" ? "Server accepts connections without authentication." : "OAuth settings discovered."}</p>}
               {(discovery.status === "failed" || discovery.data?.outcome === "unknown" || discovery.data?.outcome === "partial") && <Button type="button" onClick={discovery.retry}>Retry discovery</Button>}
             </div>
             {discovery.data && discovery.data.issuers.length > 1 && <SelectField label="Authorization server" value={issuer ?? ""} onChange={changeIssuer}><option value="" disabled>Select authorization server</option>{discovery.data.issuers.map(value => <option key={value} value={value}>{value}</option>)}</SelectField>}
+            {listedOAuth && (manualIssuer || discovery.status === "failed" || ["unknown", "partial"].includes(discovery.data?.outcome ?? "")) && <TextField label="Authorization server URL" type="url" maxLength={2048} value={issuer ?? ""} onChange={event => { setManualIssuer(true); changeIssuer(event.target.value); }} placeholder="https://auth.example.com" />}
           </section>
           <section className="mcp-form-section"><h3>Authentication</h3>
-            {directoryEntry ? <p className="mcp-hint">{apiKeyHeader ? "API key" : selected === "bearer" ? "Bearer token" : selected === "basic" ? "HTTP Basic" : selected === "none" ? "No authentication" : "OAuth setup is unavailable for this integration."}</p> : <SelectField label="Authentication Type" value={selected} onChange={changeMethod}>
+            {directoryEntry ? <p className="mcp-hint">{apiKeyHeader ? "API key" : selected === "bearer" ? "Bearer token" : selected === "basic" ? "HTTP Basic" : selected === "none" ? "No authentication" : selected === "own_client" ? "OAuth · Registered client" : "OAuth"}</p> : <SelectField label="Authentication Type" value={selected} onChange={changeMethod}>
               <option value="" disabled>Select authentication type</option>
               <option value="cimd">OAuth - CIMD</option><option value="dcr">OAuth - DCR</option><option value="own_client">OAuth - Own client</option>
               <option value="bearer">Bearer token</option><option value="headers">Custom headers</option><option value="basic">HTTP Basic</option><option value="none">No authentication</option>
             </SelectField>}
-            {saved && selected !== "none" && <label className="mcp-hint"><input type="checkbox" checked={replaceCredentials} disabled={endpoint !== saved.endpoint || selected !== savedMethod} onChange={event => replaceSavedCredentials(event.target.checked)} /> Replace credentials</label>}
+            {saved && selected !== "none" && <label className="mcp-hint"><input type="checkbox" checked={replaceCredentials} disabled={!directoryEntry && (endpoint !== saved.endpoint || selected !== savedMethod)} onChange={event => replaceSavedCredentials(event.target.checked)} /> Replace credentials</label>}
             {saved && !replaceCredentials && selected !== "none" && <p className="mcp-hint">Credentials saved. Values are never displayed.</p>}
-            {replaceCredentials && oauthMethod && <OAuthFields method={oauthMethod} values={oauthValues} discovery={discovery.data}
+            {replaceCredentials && reuseRegistration && <p className="mcp-hint">Sign in again using the saved client registration.</p>}
+            {replaceCredentials && oauthMethod && !reuseRegistration && <OAuthFields method={oauthMethod} values={oauthValues} discovery={discovery.data}
+              listed={listedOAuth} clientAuthConfirmed={clientAuthConfirmed}
               issuer={issuer ?? (typeof discovery.data?.oauth?.issuer === "string" ? discovery.data.oauth.issuer : "")}
               onIssuerChange={changeIssuer} onChange={patch => setOAuthEdits(current => ({ ...current, ...patch }))} />}
             {replaceCredentials && selected === "bearer" && <TextField label="Bearer token" secret value={token} onChange={event => setToken(event.target.value)} />}

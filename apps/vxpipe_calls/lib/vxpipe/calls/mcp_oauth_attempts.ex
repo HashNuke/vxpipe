@@ -63,27 +63,7 @@ defmodule Vxpipe.Calls.MCPOAuthAttempts do
          (input["auth_method"] != "dcr" and is_nil(Map.get(connection, :directory_entry))) do
       {:ok, %{}}
     else
-      with {:ok, resolved} <- Repositories.call(repository, :resolve, [tenant, connection.id]),
-           :ok <-
-             matching_target(
-               resolved.connection,
-               tenant,
-               connection.id,
-               connection.generation,
-               connection.endpoint
-             ) do
-        {:ok,
-         Map.take(
-           resolved.secrets,
-           ~w(registration_method client_id client_secret client_secret_expires_at auth_method issuer resource redirect_uri scopes)
-         )}
-      else
-        {:error, reason} when reason in [:credential_key_unavailable, :mcp_secret_unreadable] ->
-          {:ok, %{}}
-
-        error ->
-          error
-      end
+      Vxpipe.Calls.MCPSavedOAuthRegistration.fetch(repository, tenant, connection)
     end
   end
 

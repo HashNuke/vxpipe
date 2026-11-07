@@ -43,14 +43,18 @@ defmodule Vxpipe.Calls.MCPConnections do
     with :ok <- authorize(principal, tenant, :write),
          :ok <- tenant_exists(tenant, options),
          :ok <- MCPDiscoveryProposal.validate(input),
+         :ok <- refresh(principal, tenant, options),
          {:ok, probe} <- Repositories.fetch(options, :mcp_preflight),
-         {:ok, result} <- discover(probe, tenant, input),
+         {:ok, result} <- discover(probe, tenant, input, options),
          :ok <- refresh(principal, tenant, options) do
       {:ok, result}
     end
   end
 
-  defp discover(probe, tenant, input) do
+  defp discover(probe, tenant, %{"connection_id" => _} = input, options),
+    do: Vxpipe.Calls.MCPSavedPreflight.discover(probe, tenant, input, options)
+
+  defp discover(probe, tenant, input, _options) do
     case Repositories.call(probe, :discover, [tenant, input]) do
       {:ok, result} ->
         if MCPDiscoveryProposal.matches?(result, input),

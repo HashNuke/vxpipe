@@ -14,6 +14,18 @@ test("stores only the nonsecret recovery fields and consumes a matching draft on
   expect(takeOAuthDraft(identity, 2001)).toBeNull();
 });
 
+test("listed retry context keeps its public reference and cannot restore as a custom endpoint", () => {
+  const listing = { reference: { directory_id: "directory", integration_id: "calendar", entry_revision: 1, page: { scope: "tenant" } },
+    entry: { directory_id: "directory", integration_id: "calendar", revision: 1, name: "Calendar", endpoint: input.draft.endpoint,
+      authentication: { type: "oauth2", registration: "preregistered" } } };
+  expect(saveOAuthDraft({ ...input, draft: { ...input.draft, listing } }, 1000)).toBe(true);
+  expect(takeOAuthDraft(identity, 2000)?.draft).toEqual({ ...input.draft, listing });
+  expect(saveOAuthDraft({ ...input, draft: { ...input.draft, listing: { ...listing, entry: { ...listing.entry, endpoint: "https://other.test/mcp" } } } }, 1000)).toBe(false);
+  sessionStorage.setItem("vxpipe.mcp.oauth", JSON.stringify({ ...input, createdAt: 1000, draft: { ...input.draft, listing: { reference: {}, entry: {} } } }));
+  expect(takeOAuthDraft(identity, 2000)).toBeNull();
+  expect(sessionStorage.getItem("vxpipe.mcp.oauth")).toBeNull();
+});
+
 test("requires the same actor, tenant and attempt and expires after five minutes", () => {
   saveOAuthDraft(input, 1000);
   for (const mismatch of [{ actorId: "other" }, { tenantKey: "other" }, { attemptId: "other" }]) expect(takeOAuthDraft({ ...identity, ...mismatch }, 2000)).toBeNull();

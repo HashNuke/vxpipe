@@ -676,8 +676,9 @@ instance; per-connection durable claims provide the cross-instance fence.
 
 Depends on T1/T2 directory resolution and T4/T5/T6 connection/authentication contracts.
 Listing resolution/discovery, snapshot storage, static connection management and
-locked static forms are implemented. OAuth flows now bind accepted configuration;
-listed OAuth forms remain missing production implementation, not just browser acceptance.
+locked static/OAuth forms are implemented. OAuth flows bind accepted configuration;
+saved-registration discovery advice is implemented and undergoing final checkpoint
+verification. Authenticated browser and retained-ID recovery acceptance remain open.
 See [lookup and snapshot contracts](../../docs/development/listed-mcp-connections.md).
 
 - [x] Reuse the existing directory page cache for bounded directory/entry/revision
@@ -739,6 +740,30 @@ See [lookup and snapshot contracts](../../docs/development/listed-mcp-connection
   retained-ID reconnect without directory access. Real-store session/CSRF lifecycle
   coverage verifies callback outage, single-use state, compatible DCR reuse, refresh,
   revocation/fresh registration, namespace preservation and stale/cross-tenant rejection.
+- [x] Add listed OAuth forms with fixed URL/recipe, live capability selection,
+  explicit preregistered-client authentication and only applicable credential
+  fields. Preserve a validated public listing through consent retry; reenter secrets.
+- [x] Address independent UI review: keep manual issuer recovery mounted and focused
+  across first-character input and discovery restarts. Red/green typing regression
+  and rendered Chrome desktop/mobile confirmation pass.
+- [x] Extend the existing discovery operation with a bounded saved ID/generation
+  proposal and shared Connect-time registration choice. Preserve compatible DCR
+  without new registration endpoints; return only public advice and checked
+  callback identity. Cover revocation, unavailable/expired credentials, scope and
+  issuer changes, plus held authority/generation/installation changes.
+- [x] Complete final saved-discovery/locked-OAuth checkpoint review and root gates.
+  All five root gates pass: 4,944 umbrella tests, zero failures, 201 excluded
+  (seed 426342). Independent adversarial source and exact-index reviews are clean.
+  Focused Calls 43 and Console 37 tests pass; all 1,031 frontend tests, TypeScript
+  and ESLint pass (only the existing SetupDialog hook warning).
+  Production-component Storybook desktop/mobile inspection and independent UI
+  review pass; authenticated browser acceptance remains open. See
+  [form/discovery evidence](../20261107-0617-connect-listed-oauth-forms.md).
+- [x] Address saved-discovery adversarial review: older preflight adapters without
+  the optional saved operation return a bounded unavailable result before reading
+  registration secrets. Red/green regression preserves custom discovery behavior.
+- [x] Reconcile stale durable-document statements with implemented listed OAuth
+  forms while leaving retained-ID recovery and authenticated browser gates open.
 
 Discovery checkpoint evidence: [labnotes](../20261107-0431-connect-listed-mcps.md),
 4,901 umbrella tests with zero failures (201 excluded, seed 177411), all five root
@@ -776,10 +801,10 @@ Listed OAuth UI and authenticated browser acceptance remain separate open work.
   Manage existing connections from saved validated configuration when the directory
   is unavailable or the entry disappears/retires; do not add an upstream dependency
   to refresh, replacement, disconnect or retained-ID reconnect.
-- [ ] Enable listed MCP Connect only with known local connection status, tenant
+- [x] Enable listed MCP Connect only with known local connection status, tenant
   write authority and a supported recipe. Use the directory name/endpoint with no
   editable URL, name or authentication selectors. Preserve custom-MCP behavior.
-- [ ] Render independently optional plain-text setup notes and validated Setup /
+- [x] Render independently optional plain-text setup notes and validated Setup /
   Documentation links. Collect only recipe-required user credentials; use live
   OAuth capability checks for managed registration hints and exact installation
   callback identity for preregistered clients. No remote definition can introduce

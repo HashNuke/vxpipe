@@ -144,3 +144,18 @@ it.each([true, false])("opens a locked listed form only with current MCP write a
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   }
 });
+
+it("enables an eligible listed OAuth connection using the existing dialog", async () => {
+  const listed = { id: "calendar", revision: 1, name: "Calendar tools", kind: "mcp", can_connect: true, connections: [], mcp_connections: [],
+    listing: { directory_id: "directory", integration_id: "calendar", entry_revision: 1, page: { scope: "tenant", limit: 20 } },
+    connection: { endpoint: "https://calendar.example.test/mcp", authentication: { type: "oauth2", registration: "discover" } } };
+  const fetcher = vi.fn(async (url: RequestInfo | URL) => response(String(url).endsWith("/categories") ? { categories: [] } : {
+    ...page, tenant: { key: "tenant-a", name: "Tenant A" }, mcp_connections: [], page: { ...page.page, items: [listed] },
+  }));
+  render(<MemoryRouter initialEntries={["/t/tenant-a/services/calendar"]}><IntegrationsDirectory tenantKey="tenant-a" csrfToken="csrf" canManageMcps fetchImpl={fetcher} onManage={vi.fn()} /></MemoryRouter>);
+  const connect = await screen.findByRole("button", { name: "Connect Calendar tools" });
+  expect(connect).toBeEnabled();
+  fireEvent.click(connect);
+  expect(screen.getByRole("dialog")).toBeVisible();
+  expect(screen.queryByText("OAuth setup unavailable")).not.toBeInTheDocument();
+});

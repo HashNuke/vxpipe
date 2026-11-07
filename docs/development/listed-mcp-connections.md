@@ -1,8 +1,9 @@
 # Listed MCP discovery and accepted configuration
 
 Status: directory reference resolution, credentialless discovery, accepted
-snapshot storage, static and browser OAuth connection management and locked static
-forms implemented; listed OAuth forms remain open in
+snapshot storage, static and browser OAuth connection management, locked listed
+forms and saved-registration discovery advice implemented; authenticated browser
+and retained-ID recovery acceptance remain open in
 [T6a](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md#t6a--listed-template-connection-identity-and-forms).
 
 ## Reuse the directory and management boundaries
@@ -71,6 +72,33 @@ return `422 invalid_mcp_listing`; unavailable or changed listings return
 The complete `listing` input is filtered from Phoenix request logs, including
 malformed references that contain unexpected private fields.
 
+Saved listed OAuth discovery uses the same route with
+`{connection_id, generation, revision, issuer?}`. It rejects endpoint, listing,
+snapshot and credential overrides. Calls checks current tenant write authority,
+loads the accepted saved snapshot and reads only the current connected record's
+registration identity. Revoked records never decrypt their old credentials;
+unreadable registration keys fall back to fresh supported methods.
+
+The bounded credentialless probe shares Connect-time selection: a compatible
+stored DCR client can remain reusable when the server stops offering new
+registrations. Advice checks issuer, resource, scope subset, exact installation
+callback, live authentication capability and secret expiry. The response binds
+`connection_id`, `generation` and draft `revision`, and adds only
+`oauth_registration: {method, reusable}` alongside public metadata. Callback/client
+metadata comes from the same checked installation. Calls rechecks authority,
+generation, lifecycle and installation before returning. No directory read,
+registration, token exchange, connection write or attempt creation occurs.
+Connect repeats the checks; this advice is never authority to reuse credentials.
+
+Listed forms keep URL and authentication fixed. Managed registration exposes only
+the optional DCR initial token when a new registration is needed; reusable DCR
+shows no credential fields. Preregistered clients require an explicit registered
+authentication method, client ID and applicable secret/key, plus the exact callback.
+Partial and multi-issuer discovery retain recovery controls without anonymous
+fallback. Failed consent restores a validated public listing reference in the
+existing actor/tenant/attempt-scoped session draft (bounded to 24,576 characters);
+retry resolves the listing again and requires reentry of secrets.
+
 ## Static connections on the existing tenant routes
 
 The discovery response is display data when sent through a browser. A new static
@@ -111,7 +139,7 @@ saved connection or confuse identically named entries from different directories
 The production Integrations directory enables static MCP Connect only when local
 status is known, no connection matches, the entry is available/preview and the
 current tenant user can write MCP settings. Platform scope never enables MCPs.
-OAuth listed setup remains visibly unavailable until its separate flow is ready.
+Listed OAuth uses the same eligibility checks and its registration-specific form.
 
 The existing MCP dialog shows the directory name and fixed endpoint/authentication
 recipe. API-key setup has one masked value field labelled with the recipe's header;
@@ -177,8 +205,7 @@ input returns `422 invalid_oauth_issuer` before directory or protocol reads.
 
 ## Remaining connection work
 
-Listed OAuth locked forms and retained-ID recovery remain open, along with the
-authenticated rendered-browser acceptance gates.
+Retained-ID recovery and authenticated rendered-browser acceptance remain open.
 
 Rejected alternatives: adding a parallel directory API, accepting the entire
 browser listing as authority, unbounded catalog scans, and re-reading the public

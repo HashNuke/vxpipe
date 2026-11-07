@@ -1,14 +1,15 @@
 import { validMcpUrl } from "./mcpDiscoveryApi";
 import type { ClientAuthentication, OAuthMethod } from "./oauthForm";
+import { parseSavedListing, type McpListing } from "./listedMcp";
 
 export type OAuthDraft = {
-  endpoint: string; method: OAuthMethod; issuer?: string; clientAuth?: ClientAuthentication; generation?: number;
+  endpoint: string; method: OAuthMethod; issuer?: string; clientAuth?: ClientAuthentication; generation?: number; listing?: McpListing;
 };
 export type OAuthDraftIdentity = { actorId: string; tenantKey: string; attemptId: string };
 export type StoredOAuthDraft = OAuthDraftIdentity & { connectionId: string; returnTo: string; createdAt: number; draft: OAuthDraft };
 type StoragePort = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 const key = "vxpipe.mcp.oauth";
-const fields = ["endpoint", "method", "issuer", "clientAuth", "generation"];
+const fields = ["endpoint", "method", "issuer", "clientAuth", "generation", "listing"];
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const id = (value: unknown): value is string => typeof value === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
 function publicUrl(value: unknown): value is string {
@@ -31,6 +32,10 @@ function sanitize(value: unknown, createdAt: number, strict: boolean): StoredOAu
   if (!record(value) || !id(value.actorId) || !id(value.tenantKey) || !id(value.attemptId) || !id(value.connectionId) ||
     !returnLocation(value.returnTo, value.tenantKey) || !record(value.draft) || !Number.isSafeInteger(createdAt) || createdAt < 0) return null;
   const draft = value.draft;
+  let listing: McpListing | undefined;
+  try { listing = draft.listing === undefined ? undefined : parseSavedListing(draft.listing); }
+  catch { return null; }
+  if (listing && (listing.entry.endpoint !== draft.endpoint || draft.generation !== undefined)) return null;
   if (!publicUrl(draft.endpoint) || !["cimd", "dcr", "own_client"].includes(String(draft.method)) ||
     (draft.issuer !== undefined && !publicUrl(draft.issuer)) ||
     (draft.clientAuth !== undefined && !["none", "client_secret_basic", "client_secret_post", "private_key_jwt"].includes(String(draft.clientAuth))) ||
@@ -43,6 +48,7 @@ function sanitize(value: unknown, createdAt: number, strict: boolean): StoredOAu
       ...(draft.issuer ? { issuer: String(draft.issuer) } : {}),
       ...(draft.clientAuth ? { clientAuth: draft.clientAuth as ClientAuthentication } : {}),
       ...(draft.generation ? { generation: Number(draft.generation) } : {}),
+      ...(listing ? { listing } : {}),
     },
   };
 }
@@ -55,7 +61,7 @@ export function saveOAuthDraft(value: unknown, now = Date.now(), storage?: Stora
     const draft = sanitize(value, now, false);
     if (!draft) return false;
     const encoded = JSON.stringify(draft);
-    if (encoded.length > 8192) return false;
+    if (encoded.length > 24576) return false;
     target.setItem(key, encoded);
     return true;
   } catch { return false; }
@@ -66,7 +72,7 @@ export function takeOAuthDraft(identity: OAuthDraftIdentity, now = Date.now(), s
     const target = storage ?? window.sessionStorage;
     const encoded = target.getItem(key);
     if (!encoded) return null;
-    if (encoded.length > 8192) { target.removeItem(key); return null; }
+    if (encoded.length > 24576) { target.removeItem(key); return null; }
     let value: unknown;
     try { value = JSON.parse(encoded); } catch { target.removeItem(key); return null; }
     const draft = sanitize(value, record(value) && typeof value.createdAt === "number" ? value.createdAt : NaN, true);

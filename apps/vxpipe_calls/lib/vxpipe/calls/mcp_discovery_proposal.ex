@@ -1,6 +1,18 @@
 defmodule Vxpipe.Calls.MCPDiscoveryProposal do
   @moduledoc "Credentialless discovery input and draft/entry identity at the authorized port boundary."
 
+  def validate(
+        %{"connection_id" => id, "generation" => generation, "revision" => revision} = input
+      )
+      when is_binary(id) and byte_size(id) in 1..128 and is_integer(generation) and generation > 0 and
+             is_binary(revision) and byte_size(revision) in 1..128 do
+    if Map.keys(input) -- ~w(connection_id generation revision issuer) == [] and
+         valid_issuer?(input) and
+         Regex.match?(~r/\A[a-zA-Z0-9_-]+\z/, id) and String.valid?(revision),
+       do: :ok,
+       else: {:error, :invalid_mcp_preflight}
+  end
+
   def validate(%{"listing" => listing, "revision" => revision} = input)
       when is_map(listing) and is_binary(revision) and byte_size(revision) in 1..128 do
     if Map.keys(input) -- ~w(listing revision issuer) == [] and valid_issuer?(input) and

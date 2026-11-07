@@ -48,6 +48,10 @@ defmodule Vxpipe.Console.MCPListedOAuthEndpointTest do
       end)
 
     directory = start_supervised!({Agent, fn -> page end})
+
+    metadata_state =
+      start_supervised!(Supervisor.child_spec({Agent, fn -> metadata() end}, id: :metadata))
+
     tasks = start_supervised!({Task.Supervisor, []})
 
     runner =
@@ -86,7 +90,7 @@ defmodule Vxpipe.Console.MCPListedOAuthEndpointTest do
                }}
 
             {"auth.example.test", _} ->
-              {200, metadata()}
+              {200, Agent.get(metadata_state, & &1)}
           end
 
         {:ok, %{status: status, headers: [], body: JSON.encode!(body)}}
@@ -134,6 +138,7 @@ defmodule Vxpipe.Console.MCPListedOAuthEndpointTest do
         mcp_connection_repository: {ConnectionStore, context},
         mcp_oauth_attempt_repository: {OAuthAttemptStore, context},
         mcp_connection_probe: {Vxpipe.Console.MCPConnectionProbe, protocol},
+        mcp_preflight: {Vxpipe.Console.MCPPreflight, protocol},
         mcp_oauth_preparation: {Vxpipe.Console.MCPOAuthPreparation, protocol},
         mcp_oauth_completion: {Vxpipe.Console.MCPOAuthCompletion, protocol}
       )
@@ -161,6 +166,7 @@ defmodule Vxpipe.Console.MCPListedOAuthEndpointTest do
       other: other.key,
       context: context,
       directory: directory,
+      metadata_state: metadata_state,
       session: session,
       csrf: csrf,
       path: "/api/tenants/#{tenant.key}",
@@ -263,6 +269,71 @@ defmodule Vxpipe.Console.MCPListedOAuthEndpointTest do
 
     refute_received :registered
     refute_received :exchanged
+  end
+
+  test "saved discovery returns bound reusable advice during directory outage without mutating OAuth",
+       data do
+    handoff =
+      request(data, :post, "/mcp-oauth", %{"listing" => data.reference, "revision" => "draft"})
+      |> json_response(201)
+
+    id = handoff["connection_id"]
+    complete(data, handoff)
+    assert_receive :directory_request
+    assert_receive :registered
+    assert_receive :exchanged
+    assert_receive :mcp_checked
+    Agent.update(data.directory, fn _ -> :offline end)
+
+    Agent.update(
+      data.metadata_state,
+      &Map.drop(&1, ~w(registration_endpoint client_id_metadata_document_supported))
+    )
+
+    input = %{"connection_id" => id, "generation" => 1, "revision" => "advice"}
+
+    discovery =
+      request(data, :post, "/mcp-discovery", input)
+      |> json_response(200)
+      |> Map.fetch!("discovery")
+
+    assert discovery["connection_id"] == id
+    assert discovery["generation"] == 1
+    assert discovery["revision"] == "advice"
+    assert discovery["oauth_registration"] == %{"method" => "dcr", "reusable" => true}
+
+    assert discovery["oauth_client"]["callback_url"] ==
+             "https://console.example.test/oauth/mcp/callback"
+
+    refute inspect(discovery) =~ "synthetic-access"
+
+    assert request(data, :post, "/mcp-discovery", %{input | "generation" => 2})
+           |> json_response(409)
+
+    assert request(%{data | path: "/api/tenants/#{data.other}"}, :post, "/mcp-discovery", input)
+           |> json_response(404)
+
+    assert request(data, :post, "/mcp-discovery", Map.put(input, "credentials", %{}))
+           |> json_response(422)
+
+    assert {:ok, saved} = ConnectionStore.resolve(data.context, data.tenant, id)
+    assert saved.connection.generation == 1
+
+    assert request(data, :delete, "/mcp-connections/" <> id, %{"generation" => 1})
+           |> json_response(200)
+
+    revoked =
+      request(data, :post, "/mcp-discovery", %{input | "generation" => 2}) |> json_response(200)
+
+    assert revoked["discovery"]["oauth_registration"] == %{
+             "method" => "own_client",
+             "reusable" => false
+           }
+
+    refute_received :directory_request
+    refute_received :registered
+    refute_received :exchanged
+    refute_received :mcp_checked
   end
 
   test "malformed listed issuer is a validation error before directory or protocol work", data do

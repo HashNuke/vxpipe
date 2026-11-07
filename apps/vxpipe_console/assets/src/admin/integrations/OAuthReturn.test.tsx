@@ -83,6 +83,31 @@ test("a changed saved connection is not silently replaced with an old draft", as
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
 
+test("a denied listed handoff restores the fixed listing and revalidates it before retry", async () => {
+  const entry = { directory_id: "directory", integration_id: "calendar", revision: 1, name: "Calendar", endpoint,
+    authentication: { type: "oauth2" as const, registration: "dcr" as const } };
+  const reference = { directory_id: "directory", integration_id: "calendar", entry_revision: 1, page: { scope: "tenant" as const, limit: 20 } };
+  prepare({ listing: { reference, entry } });
+  const fresh = fixture();
+  const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+    const response = await fresh(url, init);
+    if (!String(url).endsWith("/mcp-discovery")) return response;
+    const body = await response.json();
+    return Response.json({ discovery: { ...body.discovery, endpoint, listing: entry, resource: { resource: endpoint } } });
+  });
+  const redirect = vi.fn();
+  mount(`${returnTo}&mcp=denied&mcp_attempt=attempt`, fetchImpl, "actor", redirect);
+  await screen.findByRole("dialog", { name: "Connect Calendar" });
+  expect(screen.queryByLabelText("MCP server URL")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Authentication Type")).not.toBeInTheDocument();
+  await screen.findByText("OAuth settings discovered.");
+  expect(screen.getByLabelText("Initial registration token")).toHaveValue("");
+  fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+  await waitFor(() => expect(redirect).toHaveBeenCalledOnce());
+  const request = fetchImpl.mock.calls.find(([url]) => String(url).endsWith("/mcp-oauth"));
+  expect(JSON.parse(String(request?.[1]?.body))).toEqual({ listing: reference, revision: "0", return_to: returnTo });
+});
+
 test.each(["invalid_cursor", "cursor_expired"])("callback draft survives directory cursor recovery: %s", async code => {
   prepare(); const fresh = fixture();
   const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => String(url).includes("cursor=")

@@ -1,10 +1,35 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { useMcpDiscovery } from "./useMcpDiscovery";
+import type { McpListingReference } from "./listedMcp";
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 const response = (discovery: unknown) => new Response(JSON.stringify({ discovery }), { status: 200 });
 const base = { tenantKey: "tenant-a", csrfToken: "csrf", endpoint: "https://mcp.example.test/mcp", revision: "1", active: true, onSessionExpired: vi.fn() };
 const advance = async () => act(async () => { await vi.advanceTimersByTimeAsync(400); });
+
+test("saved discovery binds its advisory registration choice to connection and generation", async () => {
+  vi.useFakeTimers();
+  const connection = { connection_id: "saved", generation: 7 };
+  const fetchImpl = vi.fn(async () => response({ endpoint: base.endpoint, revision: "1", outcome: "oauth", suggested_method: "dcr",
+    ...connection, generation: 6, oauth_registration: { method: "dcr", reusable: true } }));
+  const { result } = renderHook(() => useMcpDiscovery({ ...base, connection, fetchImpl }));
+  await advance();
+  expect(fetchImpl).toHaveBeenCalledWith("/api/tenants/tenant-a/mcp-discovery", expect.objectContaining({ body: JSON.stringify({ ...connection, revision: "1" }) }));
+  expect(result.current.status).toBe("failed");
+  expect(result.current.data).toBeNull();
+});
+
+test("listed discovery sends only its reference and rejects a different accepted entry", async () => {
+  vi.useFakeTimers();
+  const listing: McpListingReference = { directory_id: "directory", integration_id: "calendar", entry_revision: 1, page: { scope: "tenant" } };
+  const fetchImpl = vi.fn(async () => response({ endpoint: base.endpoint, revision: "1", outcome: "oauth", suggested_method: "cimd",
+    listing: { directory_id: "other", integration_id: "calendar", revision: 1, name: "Calendar", endpoint: base.endpoint, authentication: { type: "oauth2", registration: "discover" } } }));
+  const { result } = renderHook(() => useMcpDiscovery({ ...base, listing, fetchImpl }));
+  await advance();
+  expect(fetchImpl).toHaveBeenCalledWith("/api/tenants/tenant-a/mcp-discovery", expect.objectContaining({ body: JSON.stringify({ listing, revision: "1" }) }));
+  expect(result.current.status).toBe("failed");
+  expect(result.current.data).toBeNull();
+});
 
 test("debounces a credentialless same-origin request with CSRF and accepts matching results", async () => {
   vi.useFakeTimers();

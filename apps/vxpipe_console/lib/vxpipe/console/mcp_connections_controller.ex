@@ -11,8 +11,11 @@ defmodule Vxpipe.Console.MCPConnectionsController do
            Map.delete(params, "tenant_key"),
            options(conn)
          ) do
-      {:ok, result} -> json(conn, %{discovery: Map.put(result, :oauth_client, oauth_client())})
-      {:error, reason} -> error(conn, reason)
+      {:ok, result} ->
+        json(conn, %{discovery: Map.put_new_lazy(result, :oauth_client, &oauth_client/0)})
+
+      {:error, reason} ->
+        error(conn, reason)
     end
   end
 
@@ -107,7 +110,10 @@ defmodule Vxpipe.Console.MCPConnectionsController do
     backend =
       Application.get_env(:vxpipe_console, :user_identity_backend, Vxpipe.Console.UserIdentity)
 
-    [refresh_authority: fn -> UserSession.fetch(conn, backend: backend) end]
+    [
+      refresh_authority: fn -> UserSession.fetch(conn, backend: backend) end,
+      installation_identity: fn -> backend.mcp_oauth_installation() end
+    ]
   end
 
   defp oauth_client do
@@ -151,6 +157,7 @@ defmodule Vxpipe.Console.MCPConnectionsController do
         reason
         when reason in [
                :stale_mcp_connection,
+               :mcp_installation_changed,
                :mcp_connection_revoked,
                :mcp_reconnect_not_required
              ] ->

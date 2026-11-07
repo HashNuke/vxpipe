@@ -149,7 +149,8 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
 
           "mcp" ->
             matched_mcps == [] and can_connect_mcp and
-              item["availability"] in ~w(available preview) and static_recipe?(item["connection"])
+              item["availability"] in ~w(available preview) and
+              supported_recipe?(item["connection"])
 
           _ ->
             false
@@ -163,18 +164,22 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
     end)
   end
 
-  defp static_recipe?(%{"authentication" => %{"type" => type}})
+  defp supported_recipe?(%{"authentication" => %{"type" => type}})
        when type in ~w(none bearer basic),
        do: true
 
-  defp static_recipe?(%{"authentication" => %{"type" => "api_key", "header_name" => name}}) do
+  defp supported_recipe?(%{"authentication" => %{"type" => "api_key", "header_name" => name}}) do
     match?(
       {:ok, _},
       Vxpipe.MCP.Authentication.headers(type: :custom_headers, headers: [{name, "validation"}])
     )
   end
 
-  defp static_recipe?(_), do: false
+  defp supported_recipe?(%{"authentication" => %{"type" => "oauth2", "registration" => method}})
+       when method in ~w(discover cimd dcr preregistered),
+       do: true
+
+  defp supported_recipe?(_), do: false
 
   defp native_capabilities(%{"kind" => "provider", "connection" => %{"provider_id" => id}}),
     do: NativeCatalog.capabilities(id)

@@ -78,6 +78,15 @@ export function parseListing(row: Record<string, unknown>): McpListing | undefin
       ...(row.documentation_url !== undefined ? { documentation_url: row.documentation_url } : {}) }) };
 }
 
+export function parseSavedListing(value: unknown): McpListing {
+  if (!object(value) || !object(value.reference) || !object(value.entry)) throw invalid();
+  const entry = parseDirectoryEntry(value.entry);
+  const listing = parseListing({ ...entry, id: entry.integration_id, listing: value.reference,
+    connection: { endpoint: entry.endpoint, authentication: entry.authentication } });
+  if (!listing || listing.entry.directory_id !== entry.directory_id || entry.authentication.type !== "oauth2") throw invalid();
+  return listing;
+}
+
 export function listedMethod(entry?: McpDirectoryEntry): "" | "none" | "bearer" | "basic" | "headers" {
   const type = entry?.authentication.type;
   return type === "api_key" ? "headers" : type === "none" || type === "bearer" || type === "basic" ? type : "";

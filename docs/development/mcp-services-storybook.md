@@ -377,5 +377,17 @@ preserves masked credentials until replacement is explicitly selected.
 Saved during outage demonstrates local accepted configuration and tool inspection
 without a directory dependency. Read only retains inspection while removing
 mutation actions. No real HTTP calls, registration or provider credentials are
-used by these fixtures. Listed OAuth and retained-ID recovery remain separate
-implementation work; these stories do not establish their acceptance.
+used by these fixtures. Retained-ID recovery remains separate
+implementation work; these stories do not establish its acceptance.
+
+## Production listed OAuth forms (2026-11-07)
+
+[Production listed OAuth](http://localhost:6006/?path=/story/vxpipe-console-integrations-production-listed-oauth--cimd)
+uses the production dialog with in-memory discovery and consent responses. Its
+CIMD, DCR and Registered Client stories show only applicable fields. Partial
+Discovery and Multiple Issuers exercise recovery; Missing Resource preserves
+manual client registration, and Saved During Outage uses accepted configuration
+and saved-registration advice. No provider HTTP or navigation occurs. Desktop and
+mobile Chrome inspection includes typing a manual issuer across discovery
+restarts, masked client-secret entry and simulated handoffs. Authenticated backend
+browser acceptance remains a separate milestone gate.

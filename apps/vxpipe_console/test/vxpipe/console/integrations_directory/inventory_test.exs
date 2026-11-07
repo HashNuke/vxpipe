@@ -267,7 +267,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
     end
   end
 
-  test "listed static Connect requires tenant write authority, a supported recipe and no saved match" do
+  test "listed Connect requires tenant write authority, a supported recipe and no saved match" do
     base = %{
       "id" => "calendar",
       "revision" => 1,
@@ -282,7 +282,11 @@ defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
           {%{"type" => "basic"}, true},
           {%{"type" => "api_key", "header_name" => "X-Key"}, true},
           {%{"type" => "api_key", "header_name" => "Host"}, false},
-          {%{"type" => "oauth2", "registration" => "cimd"}, false}
+          {%{"type" => "oauth2", "registration" => "cimd"}, true},
+          {%{"type" => "oauth2", "registration" => "dcr"}, true},
+          {%{"type" => "oauth2", "registration" => "discover"}, true},
+          {%{"type" => "oauth2", "registration" => "preregistered"}, true},
+          {%{"type" => "oauth2", "registration" => "unsupported"}, false}
         ],
         writable <- [true, false],
         retired <- [true, false],

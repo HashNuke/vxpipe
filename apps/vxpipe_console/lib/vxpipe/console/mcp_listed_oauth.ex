@@ -75,34 +75,56 @@ defmodule Vxpipe.Console.MCPListedOAuth do
   defp browser_capabilities(%{outcome: :issuer_required}), do: {:error, :oauth_issuer_required}
   defp browser_capabilities(_), do: {:error, :unsupported_oauth_capabilities}
 
-  defp method("preregistered", _, _, _, _), do: "own_client"
-
   defp method(preference, discovery, input, origin, options) do
+    registration =
+      if Map.has_key?(input, "initial_access_token"),
+        do: nil,
+        else: Keyword.get(options, :registration)
+
+    choice(preference, discovery, origin, registration).method
+  end
+
+  @doc "Public advice from the same live-capability and saved-registration selection used at Connect."
+  def choice(
+        preference,
+        %{outcome: :oauth, supported_grants: grants} = discovery,
+        origin,
+        registration
+      ) do
+    if "authorization_code" in grants, do: select(preference, discovery, origin, registration)
+  end
+
+  def choice(_, _, _, _), do: nil
+
+  defp select("preregistered", _, _, _), do: %{method: "own_client", reusable: false}
+
+  defp select(preference, discovery, origin, registration) do
     metadata = discovery.oauth
-    registration = Keyword.get(options, :registration)
     resource = Map.get(discovery, :resource, %{})
 
     reusable? =
-      not Map.has_key?(input, "initial_access_token") and
-        match?(
-          {:ok, _},
-          OAuthRegistration.reuse(
-            registration,
-            metadata,
-            origin,
-            resource["resource"],
-            ResourceMetadata.authorization_scopes(resource)
-          )
+      match?(
+        {:ok, _},
+        OAuthRegistration.reuse(
+          registration,
+          metadata,
+          origin,
+          resource["resource"],
+          ResourceMetadata.authorization_scopes(resource)
         )
+      )
 
-    cond do
-      not Map.has_key?(discovery, :resource) -> "own_client"
-      reusable? -> "dcr"
-      preference == "dcr" and OAuthCapabilities.dcr_supported?(metadata) -> "dcr"
-      OAuthCapabilities.cimd_supported?(metadata) -> "cimd"
-      OAuthCapabilities.dcr_supported?(metadata) -> "dcr"
-      true -> "own_client"
-    end
+    method =
+      cond do
+        not Map.has_key?(discovery, :resource) -> "own_client"
+        reusable? -> "dcr"
+        preference == "dcr" and OAuthCapabilities.dcr_supported?(metadata) -> "dcr"
+        OAuthCapabilities.cimd_supported?(metadata) -> "cimd"
+        OAuthCapabilities.dcr_supported?(metadata) -> "dcr"
+        true -> "own_client"
+      end
+
+    %{method: method, reusable: method == "dcr" and reusable?}
   end
 
   defp fields("own_client", input) do

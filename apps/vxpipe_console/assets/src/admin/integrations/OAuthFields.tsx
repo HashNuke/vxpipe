@@ -7,9 +7,10 @@ const clients: Record<ClientAuthentication, string> = {
   none: "None · public client", client_secret_basic: "Client secret in Basic header",
   client_secret_post: "Client secret in request body", private_key_jwt: "Signed JWT · private key",
 };
-export function OAuthFields({ method, values, discovery, onChange, issuer, onIssuerChange }: {
+export function OAuthFields({ method, values, discovery, onChange, issuer, onIssuerChange, listed = false, clientAuthConfirmed = true }: {
   method: OAuthMethod; values: OAuthValues; discovery: McpDiscovery | null;
   onChange: (patch: Partial<OAuthValues>) => void; issuer: string; onIssuerChange: (value: string) => void;
+  listed?: boolean; clientAuthConfirmed?: boolean;
 }) {
   if (method === "cimd") return <p className="mcp-hint">Vxpipe uses its client metadata and the server's discovered OAuth settings.</p>;
   if (method === "dcr") return <TextField label="Initial registration token" secret value={values.initialAccessToken}
@@ -25,12 +26,13 @@ export function OAuthFields({ method, values, discovery, onChange, issuer, onIss
   }
   function changeClient(value: string) { onChange({ clientAuth: value as ClientAuthentication, clientSecret: "", privateKey: "", keyId: "" }); }
   return <>
-    <SelectField label="Grant type" value={values.grant} onChange={changeGrant}>
+    {!listed && <SelectField label="Grant type" value={values.grant} onChange={changeGrant}>
       {!choices.grants.includes(values.grant) && <option value={values.grant} disabled>{grants[values.grant]} (unavailable)</option>}
       {choices.grants.map(grant => <option key={grant} value={grant}>{grants[grant]}</option>)}
-    </SelectField>
+    </SelectField>}
     <TextField label="Client ID" maxLength={2048} autoComplete="off" value={values.clientId} onChange={event => onChange({ clientId: event.target.value })} />
-    <SelectField label="Client authentication" value={values.clientAuth} onChange={changeClient}>
+    <SelectField label="Client authentication" value={clientAuthConfirmed ? values.clientAuth : ""} onChange={changeClient}>
+      {!clientAuthConfirmed && <option value="" disabled>Select the registered client authentication</option>}
       {!choices.methods.includes(values.clientAuth) && <option value={values.clientAuth} disabled>{clients[values.clientAuth]} (unavailable)</option>}
       {choices.methods.map(method => <option key={method} value={method}>{clients[method]}</option>)}
     </SelectField>
@@ -44,7 +46,7 @@ export function OAuthFields({ method, values, discovery, onChange, issuer, onIss
       </SelectField>
     </>}
     {browser && discovery?.oauthClient && <><CopyField label="Callback URL" value={discovery.oauthClient.callbackUrl} /><p className="mcp-hint">Register this exact callback with your provider. Vxpipe manages PKCE and state.</p></>}
-    <Disclosure title="OAuth endpoints and scopes">
+    {!listed && <><Disclosure title="OAuth endpoints and scopes">
       <TextField label="Authorization server URL" type="url" maxLength={2048} value={issuer} onChange={event => onIssuerChange(event.target.value)} />
       {browser && <TextField label="Authorization URL" type="url" maxLength={2048} value={values.authorizationUrl} onChange={event => onChange({ authorizationUrl: event.target.value })} />}
       <TextField label="Token URL" type="url" maxLength={2048} value={values.tokenUrl} onChange={event => onChange({ tokenUrl: event.target.value })} />
@@ -58,6 +60,6 @@ export function OAuthFields({ method, values, discovery, onChange, issuer, onIss
       {browser && <Pairs label="Authorization request" singular="Authorization parameter" pairs={values.authorizationParams} onChange={authorizationParams => onChange({ authorizationParams })} />}
       <Pairs label="Token request" singular="Token parameter" pairs={values.tokenParams} onChange={tokenParams => onChange({ tokenParams })} secret />
       <Pairs label="Additional MCP request headers" singular="Header" pairs={values.headers} onChange={headers => onChange({ headers })} secret />
-    </Disclosure>
+    </Disclosure></>}
   </>;
 }
