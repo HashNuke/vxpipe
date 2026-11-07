@@ -544,8 +544,8 @@ Depends on T4/T4a and existing Console Installation URL/CIMD foundation.
   independent of configuration generation. Atomic rotation verifies the claim and
   current connection generation; revocation fences stale workers. Expired claims
   require reconnect and cannot be reclaimed. Persistence lane: 21 tests pass;
-  network orchestration and independent database-session races are now covered;
-  separate-BEAM acceptance remains open.
+  network orchestration and independent-BEAM database races are now covered;
+  cross-node token/transport lifecycle acceptance remains open.
 - [x] Wire internal refresh coordinator and Console token adapter: claim before one
   network exchange, atomically rotate on success, fence failures for reconnect.
   Refresh HTTP uses fixed saved resource/client fields. MCP suite 81 tests and
@@ -557,11 +557,12 @@ Depends on T4/T4a and existing Console Installation URL/CIMD foundation.
   pending-by-key counts. Database tests cover cutoff equality, resumable batches,
   live claim preservation, unavailable replay and CLI redaction/configuration errors.
   Document operator scheduling and key-retirement dependencies. Independent-node
-  claim/cleanup race acceptance remains pending.
+  claim/cleanup race acceptance now passes in the seven-case persistence lane below.
 - [x] Add encrypted grant storage, durable refresh coordination, atomic rotated
   token persistence, permission recheck, redacted error and reconnect transitions.
-- [ ] Verify these grant/refresh contracts across independent BEAM nodes; distinct
-  PostgreSQL sessions alone do not establish cross-node transport lifecycle behavior.
+- [ ] Verify the complete grant/refresh workflow across independent BEAM nodes.
+  Seven separate-process persistence cases now pass; token exchange, runner ownership
+  and transport lifecycle still require cross-node acceptance.
 - [x] Implement custom Own-client handoff when managed registration is unavailable;
   preserve only the nonsecret draft, display the exact manual callback and reject
   unsupported capabilities. Listed-template recipe handling is still required below.
@@ -1084,11 +1085,15 @@ and all related Storybooks.
 - [ ] Run all five root gates plus focused frontend checks and rendered acceptance.
   Run `bin/verify-lean` for any changes to the source-cutover or speech state
   machines, as required by AGENTS; record applicability and the result.
-- [x] Add tagged database concurrency coverage using independently checked-out
-  PostgreSQL sessions (assert distinct backend PIDs): one-time attempt claim,
+- [x] Add tagged database concurrency coverage using independent BEAM processes
+  sharing PostgreSQL (assert distinct OS/backend PIDs): one-time attempt claim,
   cleanup versus live claim, tenant pending cap, refresh exclusivity and refresh
-  completion versus revocation. Five integration tests pass; these verify shared
-  database serialization, not separate-BEAM-node transport/lifecycle behavior.
+  completion versus revocation. Seven integration tests pass, including a held claim
+  revoked from another node and abrupt claimant death with deadline fencing. These
+  verify durable cross-node storage contracts; token/transport lifecycle stays open.
+  The combined persistence lane passes 72 tests; all five root gates pass with
+  4,987 tests, zero failures and 220 excluded (seed 141375). Independent source and
+  staged adversarial reviews are clean. See [evidence](../20261107-0959-mcp-cross-node.md).
 - [ ] Run tagged MCP/OAuth conformance and local cross-node persistence/refresh tests;
   live third-party checks only with explicitly provisioned test accounts.
 - [ ] Verify remote API unavailable, no usable cached catalog, and connected-status
@@ -1103,6 +1108,11 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Match cross-node evidence to the assertions: the two peers have distinct OS
+  and PostgreSQL backend IDs, and their OS IDs differ from the parent. The test
+  does not compare the parent's database backend ID. Keep token/transport lifecycle
+  acceptance open; repository concurrency checks alone do not establish it.
 
 - [x] Unrelated umbrella-test repair: wait for STT's turn acknowledgement before
   asserting a queued onset in the existing activity-demand regression. This is

@@ -6,6 +6,7 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
   alias Vxpipe.Persistence.{CredentialKeyring, CredentialStore, Repo}
   alias Vxpipe.Persistence.MCP.{ConnectionStore, OAuthAttemptStore, OAuthGrantStore}
   alias Vxpipe.Persistence.Schema.{MCPOAuthAttempt, Tenant}
+  alias Vxpipe.Persistence.Test.MCPDatabaseNode
   @moduletag :integration
   @now ~U[2026-11-06 12:00:00.000000Z]
 
@@ -18,7 +19,7 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
       )
 
     {:ok, keyring} = CredentialKeyring.new("race", %{"race" => :crypto.strong_rand_bytes(32)})
-    context = [repo: Repo, keyring: keyring, now: fn -> @now end]
+    context = [repo: Repo, keyring: keyring, now: MCPDatabaseNode.clock(@now)]
 
     attributes = %{
       connection_id: Ecto.UUID.generate(),
@@ -49,13 +50,13 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
     }
   end
 
-  test "distinct database connections claim one attempt only once", data do
+  test "independent BEAM nodes claim one attempt only once", data do
     assert {:ok, _} =
              OAuthAttemptStore.issue(data.context, data.tenant, data.attributes, %{
                "verifier" => "race-private"
              })
 
-    results = race(List.duplicate(fn -> claim(data) end, 2))
+    results = race(List.duplicate(claim_operation(data), 2))
     assert Enum.count(results, &match?({:ok, _}, &1)) == 1
     assert Enum.count(results, &(&1 == {:error, :oauth_attempt_unavailable})) == 1
     assert {:error, :oauth_attempt_unavailable} = claim(data)
@@ -72,14 +73,14 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
     assert {:ok, _} = OAuthAttemptStore.issue(data.context, data.tenant, data.attributes, %{})
 
     [claim, {:ok, progress}] =
-      race([fn -> claim(data) end, fn -> OAuthAttemptStore.prune(data.context, 500) end])
+      race([claim_operation(data), {OAuthAttemptStore, :prune, [data.context, 500]}])
 
     assert {:ok, _} = claim
     assert progress.processed in [0, 1]
     assert {:error, :oauth_attempt_unavailable} = claim(data)
   end
 
-  test "distinct database connections enforce the tenant pending-attempt cap", data do
+  test "independent BEAM nodes enforce the tenant pending-attempt cap", data do
     for index <- 1..7 do
       assert {:ok, _} =
                OAuthAttemptStore.issue(
@@ -93,14 +94,13 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
     results =
       race(
         Enum.map(["a", "b"], fn suffix ->
-          fn ->
-            OAuthAttemptStore.issue(
-              data.context,
-              data.tenant,
-              %{data.attributes | state: data.attributes.state <> suffix},
-              %{}
-            )
-          end
+          {OAuthAttemptStore, :issue,
+           [
+             data.context,
+             data.tenant,
+             %{data.attributes | state: data.attributes.state <> suffix},
+             %{}
+           ]}
         end)
       )
 
@@ -108,9 +108,9 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
     assert Enum.count(results, &(&1 == {:error, :oauth_attempt_busy})) == 1
   end
 
-  test "distinct database connections acquire only one refresh claim", data do
+  test "independent BEAM nodes acquire only one refresh claim", data do
     connection = connection(data)
-    operation = fn -> OAuthGrantStore.claim(data.context, data.tenant, connection.id, 1, 1) end
+    operation = {OAuthGrantStore, :claim, [data.context, data.tenant, connection.id, 1, 1]}
     results = race([operation, operation])
     assert Enum.count(results, &match?({:ok, _}, &1)) == 1
     assert Enum.count(results, &(&1 == {:error, :oauth_refresh_in_progress})) == 1
@@ -122,7 +122,9 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
                "refresh_token" => "new-refresh"
              })
 
-    assert {:error, :stale_oauth_grant} = operation.()
+    assert {:error, :stale_oauth_grant} =
+             OAuthGrantStore.claim(data.context, data.tenant, connection.id, 1, 1)
+
     assert {:ok, saved} = ConnectionStore.resolve(data.context, data.tenant, connection.id)
     assert saved.secrets["grant_revision"] == 2
     assert saved.secrets["refresh_token"] == "new-refresh"
@@ -135,13 +137,16 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
 
     [completion, revoked] =
       race([
-        fn ->
-          OAuthGrantStore.complete(data.context, data.tenant, connection.id, 1, claim.id, %{
-            "access_token" => "new-access",
-            "refresh_token" => "new-refresh"
-          })
-        end,
-        fn -> ConnectionStore.revoke(data.context, data.tenant, connection.id, 1) end
+        {OAuthGrantStore, :complete,
+         [
+           data.context,
+           data.tenant,
+           connection.id,
+           1,
+           claim.id,
+           %{"access_token" => "new-access", "refresh_token" => "new-refresh"}
+         ]},
+        {ConnectionStore, :revoke, [data.context, data.tenant, connection.id, 1]}
       ])
 
     assert completion in [:ok, {:error, :oauth_connection_unavailable}]
@@ -149,6 +154,67 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
 
     assert {:error, :mcp_connection_revoked} =
              ConnectionStore.resolve(data.context, data.tenant, connection.id)
+  end
+
+  test "a node cannot complete its held refresh after another node revokes", data do
+    connection = connection(data)
+    {first, first_identity} = database_node(0)
+    {second, second_identity} = database_node(1)
+    assert_distinct_nodes([first_identity, second_identity])
+    identity = [data.context, data.tenant, connection.id, 1]
+
+    assert {:ok, claim} = :peer.call(first, OAuthGrantStore, :claim, identity ++ [1])
+
+    assert {:ok, %{status: "revoked", generation: 2}} =
+             :peer.call(second, ConnectionStore, :revoke, identity)
+
+    assert {:error, :oauth_connection_unavailable} =
+             :peer.call(
+               first,
+               OAuthGrantStore,
+               :complete,
+               identity ++ [claim.id, %{"access_token" => "late-access"}]
+             )
+
+    assert {:error, :mcp_connection_revoked} =
+             :peer.call(first, ConnectionStore, :resolve, Enum.take(identity, 3))
+  end
+
+  test "a crashed claimant leaves a durable fence that another node cannot reclaim", data do
+    connection = connection(data)
+    assert {:ok, before} = ConnectionStore.resolve(data.context, data.tenant, connection.id)
+    {first, first_identity} = database_node(0)
+    {second, second_identity} = database_node(1)
+    assert_distinct_nodes([first_identity, second_identity])
+    identity = [data.context, data.tenant, connection.id, 1]
+    assert {:ok, claim} = :peer.call(first, OAuthGrantStore, :claim, identity ++ [1])
+    monitor = Process.monitor(first)
+    :peer.cast(first, :erlang, :halt, [137])
+    assert_receive {:DOWN, ^monitor, :process, ^first, _reason}, 5_000
+
+    assert {:error, :oauth_refresh_in_progress} =
+             :peer.call(second, OAuthGrantStore, :claim, identity ++ [1])
+
+    expired = Keyword.put(data.context, :now, MCPDatabaseNode.clock(DateTime.add(@now, 30)))
+    expired_identity = [expired, data.tenant, connection.id, 1]
+
+    assert {:error, :oauth_reconnect_required} =
+             :peer.call(second, OAuthGrantStore, :claim, expired_identity ++ [1])
+
+    assert {:error, :oauth_reconnect_required} =
+             :peer.call(
+               second,
+               OAuthGrantStore,
+               :complete,
+               expired_identity ++ [claim.id, %{"access_token" => "late-access"}]
+             )
+
+    assert {:ok, saved} =
+             :peer.call(second, ConnectionStore, :resolve, Enum.take(identity, 3))
+
+    assert Map.delete(saved.secrets, "refresh_claim") == before.secrets
+    assert saved.secrets["refresh_claim"]["id"] == claim.id
+    assert saved.connection.generation == 1
   end
 
   defp connection(data) do
@@ -172,30 +238,37 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
   defp claim(data),
     do: OAuthAttemptStore.claim(data.context, data.tenant, data.attributes.state, data.authority)
 
+  defp claim_operation(data),
+    do:
+      {OAuthAttemptStore, :claim,
+       [data.context, data.tenant, data.attributes.state, data.authority]}
+
   defp digest(state), do: :crypto.hash(:sha256, state)
 
   defp race(operations) do
     observer = self()
+    nodes = operations |> Enum.with_index() |> Enum.map(fn {_, index} -> database_node(index) end)
 
     workers =
       operations
+      |> Enum.zip(nodes)
       |> Enum.with_index()
-      |> Enum.map(fn {operation, index} ->
+      |> Enum.map(fn {{{module, function, arguments}, {peer, identity}}, index} ->
         pid =
           start_supervised!(
             {Task,
              fn ->
-               :ok = Sandbox.checkout(Repo, sandbox: false)
-               %{rows: [[connection]]} = Repo.query!("SELECT pg_backend_pid()")
-               send(observer, {:ready, self(), connection})
+               send(observer, {:ready, self(), identity})
 
                receive do
-                 :run -> send(observer, {:result, self(), operation.()})
+                 :run ->
+                   send(
+                     observer,
+                     {:result, self(), :peer.call(peer, module, function, arguments)}
+                   )
                after
                  5_000 -> send(observer, {:result, self(), {:error, :test_timeout}})
                end
-
-               Sandbox.checkin(Repo)
              end},
             id: {:attempt_racer, index}
           )
@@ -203,13 +276,13 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
         {pid, Process.monitor(pid)}
       end)
 
-    connections =
+    identities =
       Enum.map(workers, fn {pid, _monitor} ->
-        assert_receive {:ready, ^pid, connection}, 5_000
-        connection
+        assert_receive {:ready, ^pid, identity}, 5_000
+        identity
       end)
 
-    assert length(Enum.uniq(connections)) == length(workers)
+    assert_distinct_nodes(identities)
     Enum.each(workers, fn {pid, _monitor} -> send(pid, :run) end)
 
     Enum.map(workers, fn {pid, monitor} ->
@@ -217,5 +290,24 @@ defmodule Vxpipe.Persistence.Integration.MCPOAuthConcurrencyTest do
       assert_receive {:DOWN, ^monitor, :process, ^pid, :normal}, 5_000
       result
     end)
+  end
+
+  defp database_node(index) do
+    peer =
+      start_supervised!(%{
+        id: {:mcp_database_node, index},
+        start:
+          {:peer, :start_link,
+           [%{connection: :standard_io, args: [~c"+S", ~c"2:2", ~c"-pa" | :code.get_path()]}]},
+        restart: :temporary
+      })
+
+    {peer, :peer.call(peer, MCPDatabaseNode, :boot, [Repo.config()], 30_000)}
+  end
+
+  defp assert_distinct_nodes(identities) do
+    assert length(Enum.uniq_by(identities, & &1.backend)) == length(identities)
+    assert length(Enum.uniq_by(identities, & &1.os_pid)) == length(identities)
+    refute Enum.any?(identities, &(&1.os_pid == System.pid()))
   end
 end

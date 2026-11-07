@@ -1,8 +1,8 @@
 # Tenant MCP machine grants and renewal
 
-Status: backend machine acquisition, saved-grant renewal and credentialless OAuth
-catalog refresh are implemented. Production forms, saved-connection runtime
-transport/picker cutover and independent-node acceptance remain open in
+Status: backend machine acquisition, saved-grant renewal, credentialless OAuth
+catalog refresh, production forms and saved-connection runtime wiring are implemented.
+Independent-node token/transport and authenticated browser acceptance remain open in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 These operations extend existing tenant MCP management and encrypted grant storage;
 native providers continue using the Services APIs.
@@ -91,4 +91,14 @@ refresh. Five additional real-store boundary cases exercise cancellation/admissi
 Registered application-runner restart coverage verifies retirement of its tasks and
 nested work, then successful fresh admission. Public projections and stored envelopes
 exclude plaintext secrets. The fixtures use local transport routing and a fixture
-identity backend; external-provider and independent-node acceptance remain open.
+identity backend; external-provider and independent-node token/transport acceptance
+remain open.
+
+Seven persistence cases run public repository operations in separate BEAM processes
+against the same committed PostgreSQL database, asserting distinct OS and database
+backend IDs. They cover attempt claim/prune/cap races, refresh exclusivity and
+completion versus revocation, plus a held claim revoked by another node and abrupt
+claimant termination. The surviving node cannot reclaim the ambiguous grant or
+complete it at the claim deadline. Database fencing passes without changing the
+saved credentials; this does not yet prove cross-node token-socket or MCP transport
+lifecycle behavior. See [evidence](../../labnotes/20261107-0959-mcp-cross-node.md).
