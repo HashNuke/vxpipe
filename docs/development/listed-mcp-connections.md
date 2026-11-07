@@ -1,8 +1,8 @@
 # Listed MCP discovery and accepted configuration
 
 Status: directory reference resolution, credentialless discovery, accepted
-snapshot storage and static connection management implemented; listed OAuth
-attempt wiring and locked forms remain open in
+snapshot storage, static connection management and locked static forms implemented;
+listed OAuth attempt wiring and forms remain open in
 [T6a](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md#t6a--listed-template-connection-identity-and-forms).
 
 ## Reuse the directory and management boundaries
@@ -106,11 +106,35 @@ upstream outage or after retirement. Inventory matches compound directory identi
 as well as canonical endpoint, so a later directory revision does not hide the
 saved connection or confuse identically named entries from different directories.
 
+## Listed static forms
+
+The production Integrations directory enables static MCP Connect only when local
+status is known, no connection matches, the entry is available/preview and the
+current tenant user can write MCP settings. Platform scope never enables MCPs.
+OAuth listed setup remains visibly unavailable until its separate flow is ready.
+
+The existing MCP dialog shows the directory name and fixed endpoint/authentication
+recipe. API-key setup has one masked value field labelled with the recipe's header;
+bearer and Basic show only their required credentials; anonymous access has none.
+The new request sends the listing reference and active credentials, without a
+browser snapshot, endpoint or authentication override. A changed/missing listing
+asks the user to close and browse again. Saved forms instead use the accepted
+snapshot and existing connection route, with explicit credential replacement.
+
+Notes remain plain text. Setup and Documentation links are independently optional,
+validated HTTPS URLs, and open without an opener or referrer. Client parsing checks
+reference/revision consistency and saved endpoint/name/method/compound identity;
+these checks support presentation and do not replace backend validation.
+
+The shared dialog supplies its own existing MCP style scope, so its controls and
+viewport bounds work in production as well as Storybook. Desktop/mobile fixture
+inspection covers creation, saved replacement, tools during directory outage and
+read-only access; it does not establish authenticated backend browser acceptance.
+
 ## Remaining connection work
 
 Listed OAuth attempts must preserve their accepted identity/recipe through
-completion and management. Locked static/OAuth forms and the listed Connect action
-remain unimplemented; the static API checkpoint does not enable that UI action.
+completion and management. Their locked forms and retained-ID recovery remain open.
 
 Rejected alternatives: adding a parallel directory API, accepting the entire
 browser listing as authority, unbounded catalog scans, and re-reading the public
@@ -128,4 +152,6 @@ Console adapters and in-memory network fixtures. Static lifecycle coverage uses
 real encrypted persistence and session/CSRF routes for creation, replacement,
 refresh, disconnect and retained-ID reconnect while the directory is offline;
 it verifies header-name ownership, stale generations and cross-tenant isolation.
-No UI changes or real provider interoperability are claimed by this checkpoint.
+The static-form checkpoint adds red/green parser, payload, permission and inventory
+eligibility coverage. Real provider interoperability and authenticated production
+browser acceptance remain separate gates.

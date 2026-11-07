@@ -1,4 +1,4 @@
-/* Storybook Services previews only. Inherit the Console's tokens. */
+/* Shared MCP integration forms and Storybook previews. Inherit Console tokens. */
 .mcp-services-preview {
   font-size: 14px;
 }
@@ -192,6 +192,8 @@
 }
 .mcp-services-preview .setup-dialog-header h2 {
   font-size: 18px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .mcp-services-preview .existing-service-notice .setup-dialog {
   width: min(100%, 520px);

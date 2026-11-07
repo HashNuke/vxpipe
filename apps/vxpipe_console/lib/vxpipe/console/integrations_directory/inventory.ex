@@ -29,7 +29,8 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
         connections: bindings,
         mcp_connections: mcps,
         installation_version: Request.installation_version(),
-        can_connect_native: can_write_credentials?(principal, scope)
+        can_connect_native: can_write_credentials?(principal, scope),
+        can_connect_mcp: scope != :platform and can_write?(principal, scope)
       }
 
       if request.params["category"] == "connected" do
@@ -79,7 +80,13 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
           Map.update!(
             page,
             "items",
-            &join(&1, context.connections, context.can_connect_native, context.mcp_connections)
+            &join(
+              &1,
+              context.connections,
+              context.can_connect_native,
+              context.mcp_connections,
+              context.can_connect_mcp
+            )
           )
 
         {:ok,
@@ -122,7 +129,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
     end)
   end
 
-  defp join(items, bindings, can_connect, mcps \\ []) do
+  defp join(items, bindings, can_connect, mcps \\ [], can_connect_mcp \\ false) do
     Enum.map(items, fn item ->
       connections =
         case item do
@@ -133,17 +140,41 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
             []
         end
 
+      matched_mcps = matching_mcps(item, mcps)
+
+      connect? =
+        case item["kind"] do
+          "provider" ->
+            connections == [] and can_connect and item["availability"] != "retired"
+
+          "mcp" ->
+            matched_mcps == [] and can_connect_mcp and
+              item["availability"] in ~w(available preview) and static_recipe?(item["connection"])
+
+          _ ->
+            false
+        end
+
       item
       |> Map.put("capabilities", native_capabilities(item))
       |> Map.put("connections", connections)
-      |> Map.put("mcp_connections", matching_mcps(item, mcps))
-      |> Map.put(
-        "can_connect",
-        item["kind"] == "provider" and connections == [] and can_connect and
-          item["availability"] != "retired"
-      )
+      |> Map.put("mcp_connections", matched_mcps)
+      |> Map.put("can_connect", connect?)
     end)
   end
+
+  defp static_recipe?(%{"authentication" => %{"type" => type}})
+       when type in ~w(none bearer basic),
+       do: true
+
+  defp static_recipe?(%{"authentication" => %{"type" => "api_key", "header_name" => name}}) do
+    match?(
+      {:ok, _},
+      Vxpipe.MCP.Authentication.headers(type: :custom_headers, headers: [{name, "validation"}])
+    )
+  end
+
+  defp static_recipe?(_), do: false
 
   defp native_capabilities(%{"kind" => "provider", "connection" => %{"provider_id" => id}}),
     do: NativeCatalog.capabilities(id)

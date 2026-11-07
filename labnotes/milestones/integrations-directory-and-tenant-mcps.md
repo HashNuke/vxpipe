@@ -675,8 +675,8 @@ instance; per-connection durable claims provide the cross-instance fence.
 ### T6a — Listed-template connection identity and forms
 
 Depends on T1/T2 directory resolution and T4/T5/T6 connection/authentication contracts.
-Listing resolution/discovery, snapshot storage and static connection management
-are implemented; binding that identity through OAuth flows and listed forms remains missing
+Listing resolution/discovery, snapshot storage, static connection management and
+locked static forms are implemented; binding through OAuth flows/forms remains missing
 production implementation, not just browser acceptance.
 See [lookup and snapshot contracts](../../docs/development/listed-mcp-connections.md).
 
@@ -712,6 +712,18 @@ See [lookup and snapshot contracts](../../docs/development/listed-mcp-connection
 - [x] Join inventory by compound directory/entry identity as well as canonical
   endpoint; retain matches across upstream endpoint/revision changes without
   confusing identical entry IDs from different directories.
+- [x] Enable listed static Connect with known local status, current tenant MCP
+  write authority and an available supported recipe. Reuse the production dialog
+  with fixed URL/authentication and only recipe-required credentials; preserve
+  accepted saved configuration during management and directory outages.
+- [x] Validate listed references and saved bindings in the UI projection, render
+  optional plain-text setup notes and safe independent links, and provide explicit
+  recovery for changed/missing listings. Listed OAuth remains visibly disabled.
+- [x] Address rendered checkpoint finding: supply the existing MCP style scope
+  inside the production dialog, correcting unstyled inputs and desktop overflow;
+  keep long headings/notes contained. Desktop/mobile Chrome fixture confirmation
+  covers API-key creation/replacement, bearer/Basic/anonymous fields, tools during
+  outage and read-only controls. Authenticated backend browser acceptance stays open.
 
 Discovery checkpoint evidence: [labnotes](../20261107-0431-connect-listed-mcps.md),
 4,901 umbrella tests with zero failures (201 excluded, seed 177411), all five root
@@ -727,6 +739,13 @@ Static management evidence: [labnotes](../20261107-0512-connect-listed-static.md
 4,914 umbrella tests with zero failures (201 excluded, seed 780141), all five root
 gates and clean independent adversarial/exact-index review. Listed OAuth, locked
 forms and browser acceptance remain open; this checkpoint enables only the API.
+
+Static form evidence: [labnotes](../20261107-0537-connect-listed-forms.md), 1,018
+frontend tests and 4,915 umbrella tests with zero failures (201 excluded, seed
+342196), all five root gates, TypeScript and clean independent adversarial/exact-index
+review. ESLint retains only the existing SetupDialog hook warning. Production
+components were inspected with in-memory Storybook responses on desktop/mobile;
+this does not close authenticated production-browser acceptance.
 
 - [ ] Resolve new listed-connection proposals through the existing trusted backend
   directory adapter. Reject retired/incompatible proposals before side effects;

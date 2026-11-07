@@ -10,6 +10,7 @@ import type { OAuthDraft } from "./oauthDraft";
 import { oauthDefaults, oauthProblem, oauthRequest, type ClientAuthentication, type OAuthGrant, type OAuthMethod, type OAuthValues } from "./oauthForm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import type { McpConnection } from "./inventoryApi";
+import { listedMethod, type McpListing } from "./listedMcp";
 import type { IntegrationFetch } from "./useInventory";
 import "../mcpStories/mcp-services-story.css";
 
@@ -18,12 +19,14 @@ type Header = { id: number; name: string; value: string };
 type SavedOAuth = { registrationMethod: OAuthMethod; grant: OAuthGrant; clientAuth: ClientAuthentication };
 export type OAuthHandoff = { authorizationUrl: string; attemptId: string; connectionId: string };
 const authorize = (handoff: OAuthHandoff) => window.location.assign(handoff.authorizationUrl);
-export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpired, onClose, onConnected, connection, onAuthorize = authorize, returnTo, initialDraft, recoveryNotice }: {
+export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpired, onClose, onConnected, connection, listing, onAuthorize = authorize, returnTo, initialDraft, recoveryNotice }: {
   connection?: McpConnection; tenantKey: string; csrfToken: string; fetchImpl: IntegrationFetch; onSessionExpired: () => void;
+  listing?: McpListing;
   onClose: () => void; onConnected: () => void;
   onAuthorize?: (handoff: OAuthHandoff, draft: OAuthDraft) => void; returnTo?: string; initialDraft?: OAuthDraft; recoveryNotice?: string;
 }) {
-  const [endpoint, setEndpoint] = useState(initialDraft?.endpoint ?? connection?.endpoint ?? "");
+  const directoryEntry = connection?.directoryEntry ?? listing?.entry;
+  const [endpoint, setEndpoint] = useState(directoryEntry?.endpoint ?? initialDraft?.endpoint ?? connection?.endpoint ?? "");
   const [revision, setRevision] = useState(0);
   const [method, setMethod] = useState<Method>(initialDraft?.method ?? (connection?.authMethod === "oauth" ? "" : connection?.authMethod ?? "") as Method);
   const [issuer, setIssuer] = useState<string | undefined>(initialDraft?.issuer);
@@ -63,9 +66,10 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
   const pending = useRef<AbortController | null>(null);
   useEffect(() => () => pending.current?.abort(), []);
   const discovery = useMcpDiscovery({ tenantKey, csrfToken, endpoint, revision: String(revision), issuer,
-    active: !readOnly && (!saved || endpoint !== saved.endpoint || (replaceCredentials && (saved.authMethod === "oauth" || ["cimd", "dcr", "own_client"].includes(method)))), fetchImpl, onSessionExpired });
+    active: !directoryEntry && !readOnly && (!saved || endpoint !== saved.endpoint || (replaceCredentials && (saved.authMethod === "oauth" || ["cimd", "dcr", "own_client"].includes(method)))), fetchImpl, onSessionExpired });
   const savedMethod: Method = saved?.authMethod === "oauth" ? savedOAuth?.registrationMethod ?? "" : (saved?.authMethod ?? "") as Method;
-  const selected = method || (endpoint === saved?.endpoint ? savedMethod : "") || discovery.data?.suggestedMethod || "";
+  const selected = directoryEntry ? listedMethod(directoryEntry) : method || (endpoint === saved?.endpoint ? savedMethod : "") || discovery.data?.suggestedMethod || "";
+  const apiKeyHeader = directoryEntry?.authentication.type === "api_key" ? directoryEntry.authentication.header_name : null;
   const oauthMethod = selected === "cimd" || selected === "dcr" || selected === "own_client" ? selected : null;
   const oauthValues = { ...oauthDefaults(endpoint, discovery.data), ...oauthEdits };
 
@@ -91,11 +95,11 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
       if (problem) { setError(problem); return; }
     }
     if (!refreshTools && replaceCredentials && ((selected === "bearer" && !token) || (selected === "basic" && (!username || !password)) ||
-      (selected === "headers" && !headers.length) || headers.some(header => !header.name || !header.value))) {
+      (selected === "headers" && (apiKeyHeader ? !token : !headers.length)) || headers.some(header => !header.name || !header.value))) {
       setError("Complete the credentials for the selected authentication type."); return;
     }
     const extra = headers.length ? { headers: headers.map(({ name, value }) => ({ name, value })) } : {};
-    const credentials = selected === "none" ? {} : selected === "bearer" ? { token, ...extra } : selected === "basic" ? { username, password, ...extra } : extra;
+    const credentials = selected === "none" ? {} : selected === "bearer" ? { token, ...extra } : selected === "basic" ? { username, password, ...extra } : apiKeyHeader ? { headers: [{ value: token }] } : extra;
     const browserOAuth = !refreshTools && oauthMethod && (oauthMethod !== "own_client" || oauthValues.grant === "authorization_code");
     if (browserOAuth && saved && endpoint !== saved.endpoint) {
       setError("To use a different server URL with OAuth, connect it as a new MCP."); return;
@@ -104,7 +108,8 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
     const requestBody = refreshTools && saved ? { generation: saved.generation, refresh_tools: true } : oauthMethod ? {
       ...oauthRequest(oauthMethod, endpoint, String(revision), oauthValues, issuer),
       ...(saved ? { generation: saved.generation } : {}), ...(browserOAuth && returnTo ? { return_to: returnTo } : {}),
-    } : { endpoint, auth_method: selected, ...(replaceCredentials ? { credentials } : {}), ...(saved ? { generation: saved.generation } : {}) };
+    } : { ...(directoryEntry ? (!saved && listing ? { listing: listing.reference } : {}) : { endpoint, auth_method: selected }),
+      ...(replaceCredentials ? { credentials } : {}), ...(saved ? { generation: saved.generation } : {}) };
     const controller = new AbortController(); pending.current = controller;
     setBusy(true); setError("");
     try {
@@ -115,7 +120,16 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
       });
       if (controller.signal.aborted) return;
       if (response.status === 401) { onSessionExpired(); return; }
-      if (!response.ok) { setError(response.status === 409 && saved ? "This connection changed since you opened it. Close and reopen to load the latest settings." : response.status === 409 ? "This server is already connected. Close this dialog to manage its connection." : "Could not connect. Check the URL and credentials, then retry."); return; }
+      if (!response.ok) {
+        if (listing && !saved) {
+          const errorBody = await response.json().catch(() => null);
+          if (controller.signal.aborted) return;
+          if (["mcp_listing_unavailable", "invalid_mcp_listing"].includes(errorBody?.error?.code)) {
+            setError("This directory entry changed or is unavailable. Close this dialog and select it again from the directory."); return;
+          }
+        }
+        setError(response.status === 409 && saved ? "This connection changed since you opened it. Close and reopen to load the latest settings." : response.status === 409 ? "This server is already connected. Close this dialog to manage its connection." : "Could not connect. Check the credentials and retry."); return;
+      }
       const body = await response.json();
       if (browserOAuth) {
         const handoff = parseHandoff(body);
@@ -163,7 +177,14 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
         {recoveryNotice && <p className="mcp-hint mb-4" role="status">{recoveryNotice}</p>}
         <fieldset disabled={busy || readOnly} className="m-0 min-w-0 border-0 p-0">
           <section className="mcp-form-section">
-            <TextField label="MCP server URL" type="url" value={endpoint} onChange={event => changeUrl(event.target.value)} placeholder="https://mcp.example.com/mcp" />
+            {directoryEntry ? <>
+              <div className="mcp-field"><span className="mcp-hint">MCP server URL</span><p className="break-all">{directoryEntry.endpoint}</p></div>
+              {directoryEntry.setup_notes && <p className="mcp-hint whitespace-pre-wrap break-words">{directoryEntry.setup_notes}</p>}
+              {(directoryEntry.setup_url || directoryEntry.documentation_url) && <div className="flex flex-wrap gap-4 text-sm">
+                {directoryEntry.setup_url && <a className="underline" href={directoryEntry.setup_url} target="_blank" rel="noopener noreferrer">Setup</a>}
+                {directoryEntry.documentation_url && <a className="underline" href={directoryEntry.documentation_url} target="_blank" rel="noopener noreferrer">Documentation</a>}
+              </div>}
+            </> : <TextField label="MCP server URL" type="url" value={endpoint} onChange={event => changeUrl(event.target.value)} placeholder="https://mcp.example.com/mcp" />}
             <div className="mcp-field-note">
               {discovery.status !== "idle" && <p className="mcp-hint" role="status">{discovery.status === "waiting" ? "Waiting to check URL…" : discovery.status === "checking" ? "Checking MCP server and OAuth settings…" : discovery.status === "failed" || discovery.data?.outcome === "unknown" ? "Could not discover settings. Choose authentication manually, or retry." : discovery.data?.outcome === "partial" ? "Some OAuth settings could not be discovered. Check the authorization server or retry." : discovery.data?.outcome === "unsupported_oauth" ? "This server does not support the OAuth security requirements needed to connect." : discovery.data?.outcome === "issuer_required" ? "Choose an authorization server to continue discovery." : discovery.data?.outcome === "anonymous" ? "Server accepts connections without authentication." : "OAuth settings discovered."}</p>}
               {(discovery.status === "failed" || discovery.data?.outcome === "unknown" || discovery.data?.outcome === "partial") && <Button type="button" onClick={discovery.retry}>Retry discovery</Button>}
@@ -171,11 +192,11 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
             {discovery.data && discovery.data.issuers.length > 1 && <SelectField label="Authorization server" value={issuer ?? ""} onChange={changeIssuer}><option value="" disabled>Select authorization server</option>{discovery.data.issuers.map(value => <option key={value} value={value}>{value}</option>)}</SelectField>}
           </section>
           <section className="mcp-form-section"><h3>Authentication</h3>
-            <SelectField label="Authentication Type" value={selected} onChange={changeMethod}>
+            {directoryEntry ? <p className="mcp-hint">{apiKeyHeader ? "API key" : selected === "bearer" ? "Bearer token" : selected === "basic" ? "HTTP Basic" : selected === "none" ? "No authentication" : "OAuth setup is unavailable for this integration."}</p> : <SelectField label="Authentication Type" value={selected} onChange={changeMethod}>
               <option value="" disabled>Select authentication type</option>
               <option value="cimd">OAuth - CIMD</option><option value="dcr">OAuth - DCR</option><option value="own_client">OAuth - Own client</option>
               <option value="bearer">Bearer token</option><option value="headers">Custom headers</option><option value="basic">HTTP Basic</option><option value="none">No authentication</option>
-            </SelectField>
+            </SelectField>}
             {saved && selected !== "none" && <label className="mcp-hint"><input type="checkbox" checked={replaceCredentials} disabled={endpoint !== saved.endpoint || selected !== savedMethod} onChange={event => replaceSavedCredentials(event.target.checked)} /> Replace credentials</label>}
             {saved && !replaceCredentials && selected !== "none" && <p className="mcp-hint">Credentials saved. Values are never displayed.</p>}
             {replaceCredentials && oauthMethod && <OAuthFields method={oauthMethod} values={oauthValues} discovery={discovery.data}
@@ -183,8 +204,8 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
               onIssuerChange={changeIssuer} onChange={patch => setOAuthEdits(current => ({ ...current, ...patch }))} />}
             {replaceCredentials && selected === "bearer" && <TextField label="Bearer token" secret value={token} onChange={event => setToken(event.target.value)} />}
             {replaceCredentials && selected === "basic" && <><TextField label="Username" value={username} onChange={event => setUsername(event.target.value)} autoComplete="off" /><TextField label="Password" secret value={password} onChange={event => setPassword(event.target.value)} /></>}
-            {replaceCredentials && selected === "headers" && <Pairs label="Request headers" singular="Header" pairs={headers} onChange={setHeaders} secret />}
-            {replaceCredentials && (selected === "bearer" || selected === "basic") && <Disclosure title="Additional MCP request headers"><Pairs label="Request headers" singular="Header" pairs={headers} onChange={setHeaders} secret /></Disclosure>}
+            {replaceCredentials && selected === "headers" && (apiKeyHeader ? <TextField label={apiKeyHeader} secret value={token} onChange={event => setToken(event.target.value)} /> : <Pairs label="Request headers" singular="Header" pairs={headers} onChange={setHeaders} secret />)}
+            {!directoryEntry && replaceCredentials && (selected === "bearer" || selected === "basic") && <Disclosure title="Additional MCP request headers"><Pairs label="Request headers" singular="Header" pairs={headers} onChange={setHeaders} secret /></Disclosure>}
           </section>
         </fieldset>
         {error && <p className="mcp-error" role="alert">{error}</p>}
@@ -192,7 +213,7 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
       </div>
       {saved ? !readOnly && <div className="mcp-auth-actions px-6 pb-6"><Button type="submit" disabled={busy || !selected || !validMcpUrl(endpoint)}>{busy ? "Checking…" : replaceCredentials ? "Save changes" : "Test connection"}</Button></div> : <footer className="mcp-dialog-footer"><Button type="button" disabled={busy} onClick={onClose}>Cancel</Button><Button type="submit" className="mcp-primary" disabled={busy || !selected || !validMcpUrl(endpoint)}>{busy ? "Connecting…" : "Connect"}<ArrowRight size={15} aria-hidden /></Button></footer>}
     </form>;
-  return <SetupDialog title={saved?.serverName ?? "Connect other MCP"} onClose={onClose} busy={busy}>
+  return <div className="mcp-services-preview"><SetupDialog title={saved?.serverName ?? (directoryEntry ? `Connect ${directoryEntry.name}` : "Connect other MCP")} onClose={onClose} busy={busy}>
     {saved ? <>
       <Tabs className="mcp-manage-tabs" value={tab} onValueChange={setTab}>
         <TabsList className="mcp-manage-tab-list" variant="line" aria-label="Connection settings"><TabsTrigger value="authentication">Authentication</TabsTrigger><TabsTrigger value="tools">Tools</TabsTrigger></TabsList>
@@ -206,7 +227,7 @@ export function CustomMcpDialog({ tenantKey, csrfToken, fetchImpl, onSessionExpi
       </Tabs>
       <footer className="mcp-dialog-footer mcp-manage-footer">{!readOnly && <Button className="mcp-disconnect" variant="ghost" disabled={busy} onClick={() => void disconnect()}>Disconnect</Button>}<Button disabled={busy} onClick={onClose}>Close</Button></footer>
     </> : form}
-  </SetupDialog>;
+  </SetupDialog></div>;
 }
 
 function parseHandoff(value: unknown): OAuthHandoff {

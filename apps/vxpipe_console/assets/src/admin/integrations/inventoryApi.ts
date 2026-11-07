@@ -1,4 +1,5 @@
 import { setupProviders, type SetupProviderId, type SetupProvider } from "../setupCatalog";
+import { listedMethod, parseDirectoryEntry, parseListing, type McpDirectoryEntry, type McpListing } from "./listedMcp";
 
 export type IntegrationConnection = {
   provider: SetupProviderId; name: string; source: "tenant" | "platform";
@@ -7,10 +8,12 @@ export type IntegrationConnection = {
 export type McpConnection = {
   id: string; endpoint: string; serverName: string; authMethod: string; generation: number;
   status: "connected" | "reconnect_required"; toolCount: number; canEdit: boolean;
+  directoryEntry?: McpDirectoryEntry;
 };
 export type IntegrationEntry = {
   id: string; name: string; kind: "provider" | "mcp"; summary: string;
   provider?: SetupProviderId; capabilities: SetupProvider["capabilities"]; logoUrl?: string; mcpConnections: McpConnection[]; connections: IntegrationConnection[]; canConnect: boolean;
+  listing?: McpListing;
 };
 export type IntegrationPagination = {
   total: number; start: number; end: number; next: string | null; previous: string | null;
@@ -44,7 +47,11 @@ function mcpConnection(value: unknown, tenantKey: string | null): McpConnection 
     !text(value.server_name, 200) || !text(value.auth_method, 32) ||
     !integer(value.generation) || value.generation < 1 || !integer(value.tool_count) ||
     !["connected", "reconnect_required"].includes(String(value.status)) || typeof value.can_edit !== "boolean") throw invalid();
-  return { id: value.id, endpoint: value.endpoint, serverName: value.server_name, authMethod: value.auth_method,
+  const directoryEntry = value.directory_entry == null ? undefined : parseDirectoryEntry(value.directory_entry);
+  if (directoryEntry && (value.directory_id !== `${directoryEntry.directory_id}/${directoryEntry.integration_id}` ||
+    value.endpoint !== directoryEntry.endpoint || value.server_name !== directoryEntry.name ||
+    value.auth_method !== (directoryEntry.authentication.type === "oauth2" ? "oauth" : listedMethod(directoryEntry)))) throw invalid();
+  return { id: value.id, endpoint: value.endpoint, serverName: value.server_name, authMethod: value.auth_method, directoryEntry,
     generation: value.generation, status: value.status as McpConnection["status"], toolCount: value.tool_count, canEdit: value.can_edit };
 }
 
@@ -62,7 +69,8 @@ function entry(value: unknown, tenantKey: string | null): IntegrationEntry {
     capabilities: capabilities.map(value => value === "sts" ? "s2s" : value) as SetupProvider["capabilities"],
     summary: text(value.summary, 200) ? value.summary : "",
     logoUrl: text(value.logo_url) && value.logo_url.startsWith("https://") ? value.logo_url : undefined,
-    connections: value.connections.map(connection), canConnect: value.can_connect };
+    connections: value.connections.map(connection), canConnect: value.can_connect,
+    listing: value.kind === "mcp" ? parseListing(value) : undefined };
 }
 
 export function parseInventory(value: unknown, tenantKey: string | null): IntegrationInventory {

@@ -267,6 +267,55 @@ defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
     end
   end
 
+  test "listed static Connect requires tenant write authority, a supported recipe and no saved match" do
+    base = %{
+      "id" => "calendar",
+      "revision" => 1,
+      "kind" => "mcp",
+      "availability" => "available",
+      "connection" => %{"endpoint" => "https://calendar.example.test/mcp"}
+    }
+
+    for {recipe, expected} <- [
+          {%{"type" => "none"}, true},
+          {%{"type" => "bearer"}, true},
+          {%{"type" => "basic"}, true},
+          {%{"type" => "api_key", "header_name" => "X-Key"}, true},
+          {%{"type" => "api_key", "header_name" => "Host"}, false},
+          {%{"type" => "oauth2", "registration" => "cimd"}, false}
+        ],
+        writable <- [true, false],
+        retired <- [true, false],
+        connected <- [true, false] do
+      actions =
+        MapSet.new(
+          ["tenant_services.read"] ++ if(writable, do: ["tenant_services.write"], else: [])
+        )
+
+      principal = %{
+        FakeUserIdentity.principal()
+        | account_kind: :member,
+          grants: actions,
+          all_tenant_actions: actions
+      }
+
+      row =
+        base
+        |> put_in(["connection", "authentication"], recipe)
+        |> Map.put("availability", if(retired, do: "retired", else: "available"))
+
+      saved = %{id: "saved", endpoint: base["connection"]["endpoint"], server_name: "Saved"}
+
+      opts =
+        options(fn _, _ -> {:ok, %{body: %{"directory_id" => "public", "items" => [row]}}} end)
+        |> Keyword.put(:mcp_loader, fn _, _, _ -> {:ok, if(connected, do: [saved], else: [])} end)
+
+      assert {:ok, result} = Inventory.list(principal, @tenant, %{}, opts)
+      [item] = result.page["items"]
+      assert item["can_connect"] == (expected and writable and not retired and not connected)
+    end
+  end
+
   defp options(fetcher) do
     binding = %{
       provider: "google",

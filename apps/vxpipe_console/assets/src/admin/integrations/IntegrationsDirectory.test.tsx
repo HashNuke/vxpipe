@@ -122,3 +122,25 @@ it("read-only tenant users can inspect saved MCPs but cannot connect or disconne
   expect(screen.queryByRole("button", { name: "Connect other MCP" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Disconnect" })).not.toBeInTheDocument();
 });
+
+it.each([true, false])("opens a locked listed form only with current MCP write authority (%s)", async canManageMcps => {
+  const listed = { id: "calendar", revision: 1, name: "Calendar tools", kind: "mcp", can_connect: true, connections: [], mcp_connections: [],
+    listing: { directory_id: "public", integration_id: "calendar", entry_revision: 1, page: { scope: "tenant", category: "calendar", limit: 20 } },
+    connection: { endpoint: "https://calendar.example.test/mcp", authentication: { type: "bearer" } } };
+  const fetchImpl = vi.fn(async (url: RequestInfo | URL) => response(String(url).endsWith("/categories") ? { categories: [] } : {
+    ...page, tenant: { key: "tenant-a", name: "Tenant A" }, mcp_connections: [], page: { ...page.page, items: [listed] },
+  }));
+  render(<MemoryRouter initialEntries={["/t/tenant-a/services/calendar"]}><IntegrationsDirectory tenantKey="tenant-a" csrfToken="csrf" canManageMcps={canManageMcps} fetchImpl={fetchImpl} onManage={vi.fn()} /></MemoryRouter>);
+  const button = await screen.findByRole("button", { name: "Connect Calendar tools" });
+  if (canManageMcps) {
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(screen.getByRole("dialog", { name: "Connect Calendar tools" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Bearer token")).toHaveAttribute("type", "password");
+    expect(screen.queryByLabelText("MCP server URL")).not.toBeInTheDocument();
+  } else {
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  }
+});

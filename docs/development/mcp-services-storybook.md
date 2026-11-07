@@ -364,3 +364,18 @@ Saved custom connections use the same URL-triggered discovery when their URL is
 edited in Manage. Save changes stays disabled until authentication is selected or
 discovered, and progress/retry remains visible there. Switching an Own-client
 draft to client credentials ignores an unused authorization-code endpoint.
+
+## Production listed static MCP forms (2026-11-07)
+
+[Production listed MCP](http://localhost:6006/?path=/story/vxpipe-console-integrations-production-listed-mcp--api-key)
+uses the production directory and dialog with local fixture responses. API key,
+Bearer, Basic and Anonymous stories show fixed directory names, URLs and recipes;
+only required credentials are editable. Optional notes and setup/documentation
+links appear independently. Connect transitions into saved management, which
+preserves masked credentials until replacement is explicitly selected.
+
+Saved during outage demonstrates local accepted configuration and tool inspection
+without a directory dependency. Read only retains inspection while removing
+mutation actions. No real HTTP calls, registration or provider credentials are
+used by these fixtures. Listed OAuth and retained-ID recovery remain separate
+implementation work; these stories do not establish their acceptance.
