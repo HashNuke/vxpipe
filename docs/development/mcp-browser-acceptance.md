@@ -65,8 +65,10 @@ retained recovery also pass with Basic client authentication: denied consent cle
 client credentials, then fresh credentials and approval restore the same identity
 during the outage. Custom machine retained recovery passes with Basic client
 authentication and explicit review/cancel/fresh credentials, without browser consent.
-The existing-call-spec disconnect/reconnect/preparation composition and reusable
-startup outage controls remain open. See [listed/outage evidence](../../labnotes/20261107-0941-verify-listed-browser.md).
+An unchanged published call spec also passes disconnect/reconnect and fresh
+preparation with its original tool reference; the earlier prepared generation stays
+invalid. See [listed/outage evidence](../../labnotes/20261107-0941-verify-listed-browser.md)
+and [call-spec composition evidence](../../labnotes/20261107-1109-verify-reconnected-call-spec.md).
 
 ## Start an isolated session
 
@@ -151,6 +153,52 @@ fetches the actual public Console document over TLS and checks its client/callba
 identity before returning an authorization code. Deny returns cancellation without
 minting a code. Authorization codes, PKCE, tokens and MCP requests use the existing
 controlled protocol implementation.
+
+## Independent directory and local-status outages
+
+The launcher also starts a loopback HTTPS directory proxy using the same trusted
+CA/server certificate. Its healthy mode forwards anonymous, versioned requests to
+the actual configured directory origin; it does not generate a catalog. The public
+`peer.json` includes `directory_origin`. The proxy forwards ETag validators, keeps
+normal certificate checks, bounds responses to 1 MiB and uses five-second HTTP
+timeouts. Cookies and authorization headers are never forwarded.
+
+Choose the startup conditions independently:
+
+| Variable | Values and default |
+| --- | --- |
+| `MCP_BROWSER_DIRECTORY_MODE` | `healthy` (default), `unavailable` (HTTP 503), `rate_limited` (HTTP 429 with Retry-After 60) |
+| `MCP_BROWSER_LOCAL_STATUS` | `healthy` (default), `unavailable` |
+| `MCP_BROWSER_DIRECTORY_UPSTREAM` | Configured public origin by default; use `http://127.0.0.1:PORT` for an actual local Go publisher, or an HTTPS origin |
+| `MCP_BROWSER_DIRECTORY_PORT` | `0` by default, for an OS-assigned proxy port |
+
+Local-status failure removes only the isolated process's MCP repository port. It
+keeps identity/tenant persistence and the directory available; this is not a
+PostgreSQL network-failure simulation. Restore returns the original repository
+port and preserves other configured ports. Do not point the fixture at a user
+installation.
+
+For recovery checks, launch with `iex -S mix run test/browser/integrations.exs`
+instead of `mix run --no-halt`, retaining the setup environment above. At the IEx
+prompt:
+
+```elixir
+alias Vxpipe.Console.Test.MCPBrowserOutages, as: Outages
+:ok = Outages.directory(Outages, "unavailable")
+:ok = Outages.local_status(Outages, "unavailable")
+:ok = Outages.local_status(Outages, "healthy")
+:ok = Outages.directory(Outages, "healthy")
+Outages.snapshot(Outages)
+```
+
+`snapshot/1` exposes only the selected states and request/forward-attempt counts.
+Changing a state preserves cache contents and rate-limit cooldowns, so a valid
+cached page can remain visible during an outage. Use the explicit
+`Outages.reset_cache()` operation for a cold-cache check or immediate recovery
+after the controlled 429. It restarts only this checkout's directory cache.
+Refresh or use the rendered Retry action after changing a state. These controls
+are loaded only by the existing guarded development launcher and add no production
+HTTP control endpoint. See the [startup and recovery evidence](../../labnotes/20261107-1111-configure-browser-outages.md).
 
 ## Evidence boundaries
 

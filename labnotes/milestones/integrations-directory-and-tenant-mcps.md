@@ -1389,10 +1389,14 @@ and all related Storybooks.
   describe completion of the response-handling attempt, including closed-client
   failure, rather than implying physical delivery of a response to a dead client.
 
-- [ ] Extend the controlled peer's startup scenarios for independent outage states.
+- [x] Extend the controlled peer's startup scenarios for independent outage states.
+  The guarded launcher now provides independent directory 503/429 and local-status
+  failure, actual upstream TLS forwarding, explicit recovery/cache reset and public
+  counters. Five red/green contracts, independent Astra verification and actual
+  desktop/mobile startup/recovery checks pass; full root rerun is pending. See
+  [outage startup evidence](../20261107-1111-configure-browser-outages.md).
   Partial/multiple-issuer metadata, configured own clients, machine grants and
-  protected registration are now covered
-  below. The user suggested configurable real-server testing;
+  protected registration are covered below. The user suggested configurable real-server testing;
   an independently hosted test server can additionally exercise unmodified outbound
   DNS/TLS routing when available, without replacing the existing local gates.
 - [x] Provision own-client browser peers for public, Basic, POST and private-key JWT

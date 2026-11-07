@@ -7,11 +7,13 @@ output = Path.join(root, ".vxpipe/browser")
 File.mkdir_p!(output)
 File.chmod!(output, 0o700)
 
-for file <- ~w(outbound_mcp_oauth_server.ex mcp_browser_consent.ex mcp_browser_scenario.ex) do
+for file <- ~w(outbound_mcp_oauth_server.ex mcp_browser_consent.ex mcp_browser_scenario.ex
+               mcp_browser_outages.ex mcp_browser_directory_proxy.ex) do
   Code.require_file(Path.join(root, "apps/vxpipe_console/test/support/" <> file))
 end
 
 alias Vxpipe.Console.Test.{MCPBrowserConsent, MCPBrowserScenario, OutboundMCPOAuthServer}
+alias Vxpipe.Console.Test.{MCPBrowserDirectoryProxy, MCPBrowserOutages}
 
 mode = System.get_env("MCP_BROWSER_MODE", "cimd")
 client_auth_method = System.get_env("MCP_BROWSER_CLIENT_AUTH_METHOD", "client_secret_basic")
@@ -104,13 +106,53 @@ ports = [
 calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
 Application.put_env(:vxpipe_calls, Vxpipe.Calls, Keyword.merge(calls, ports))
 
+{:ok, directory_request} = Vxpipe.Console.IntegrationsDirectory.Request.build(:categories, %{})
+default_upstream = directory_request.url |> URI.parse() |> Map.put(:path, nil) |> URI.to_string()
+
+{:ok, outages} =
+  DynamicSupervisor.start_child(
+    Vxpipe.Console.Test.BrowserPeers,
+    {MCPBrowserOutages,
+     name: MCPBrowserOutages,
+     upstream: System.get_env("MCP_BROWSER_DIRECTORY_UPSTREAM", default_upstream),
+     directory_mode: System.get_env("MCP_BROWSER_DIRECTORY_MODE", "healthy"),
+     local_status: System.get_env("MCP_BROWSER_LOCAL_STATUS", "healthy")}
+  )
+
+{:ok, directory_proxy} =
+  DynamicSupervisor.start_child(
+    Vxpipe.Console.Test.BrowserPeers,
+    {Bandit,
+     plug: {MCPBrowserDirectoryProxy, %{state: outages}},
+     scheme: :https,
+     ip: {127, 0, 0, 1},
+     port: System.get_env("MCP_BROWSER_DIRECTORY_PORT", "0") |> String.to_integer(),
+     certfile: certificate,
+     keyfile: key}
+  )
+
+{:ok, {_, directory_port}} = ThousandIsland.listener_info(directory_proxy)
+directory_origin = "https://localhost:#{directory_port}"
+trust = Path.join(output, "trusted-ca.pem")
+File.write!(trust, File.read!(CAStore.file_path()) <> File.read!(ca_certificate))
+:public_key.cacerts_load(trust)
+Application.put_env(:vxpipe_console, :integrations_directory_origin, directory_origin)
+:ok = MCPBrowserOutages.reset_cache()
+
 credentials_path = Path.join(output, "credentials.json")
 File.write!(credentials_path, JSON.encode!(scenario.credentials))
 File.chmod!(credentials_path, 0o600)
 
 File.write!(
   Path.join(output, "peer.json"),
-  JSON.encode!(%{resource: resource, issuer: issuer, origin: origin, mode: mode})
+  JSON.encode!(%{
+    resource: resource,
+    issuer: issuer,
+    origin: origin,
+    mode: mode,
+    directory_origin: directory_origin
+  })
 )
 
 IO.puts("Browser acceptance peer ready: #{resource} (#{mode})")
+IO.puts("Browser directory proxy ready: #{directory_origin}")
