@@ -71,6 +71,8 @@ defmodule Vxpipe.Console.MCPRuntimeNodesTest do
              rpc(data.second, :revoke, [data.context, data.tenant, data.id])
 
     send(request, :release_token)
+    assert_receive {:node_token_released, ^request}, 5_000
+    assert_receive {:node_token_finished, ^request}, 5_000
     assert_receive {:renewed, {:error, :oauth_reconnect_required}}, 5_000
     assert {:error, :mcp_connection_revoked} = saved(data)
     assert tokens(data) == 1
@@ -103,6 +105,8 @@ defmodule Vxpipe.Console.MCPRuntimeNodesTest do
     assert_receive {:DOWN, ^monitor, :process, _, _}, 5_000
     assert_receive {:renewed, {:error, :node_stopped}}, 5_000
     send(request, :release_token)
+    assert_receive {:node_token_released, ^request}, 5_000
+    assert_receive {:node_token_finished, ^request}, 5_000
 
     assert {:error, :oauth_refresh_in_progress} =
              rpc(data.second, :refresh, [data.tenant, data.id, 1])

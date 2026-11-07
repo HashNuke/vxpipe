@@ -10,8 +10,13 @@ schema/deletion pins, repository outages and delayed agent transfers with cold a
 reused clients after revocation/replacement. It verifies one already-submitted
 request completing after disconnect while later submissions fail. Identity is
 fixture-backed. Local carrier-fixture acceptance also covers managed incoming and
-outgoing admission plus the legacy incoming startup entry. Rendered browser and
-separate-node acceptance remain milestone gates.
+outgoing admission plus the legacy incoming startup entry. Independent-node
+credential/transport lifecycle acceptance now covers both OAuth grant types,
+revocation and caller/runner retirement in a separate lane. Those node tests call
+ExMCP directly; they do not claim distributed admitted-room execution. Remaining
+management-browser flows, cross-node OAuth callbacks and release acceptance stay
+open in the milestone. See [runtime transport](mcp-runtime-transport.md) and the
+[acceptance audit](../../labnotes/20261107-1200-verify-held-mcp-responses.md).
 
 ## Metadata and pinning
 

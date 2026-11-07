@@ -1015,8 +1015,15 @@ is repeatable and does not silently share or delete existing credentials.
   schema/replacement pins, unchanged explicit allowlists and persisted-plan privacy.
 - [x] Document direct CallEngine embedding and manual tenant migration; packaged
   Gateway never silently starts application-scoped MCP selections.
-- [ ] Complete full per-admission room/transfer and independent-node acceptance
-  before checking off the overall T7/T8 gates.
+- [x] Complete local per-admission room/transfer execution and independent-node
+  credential/transport lifecycle acceptance. The 20 saved-runtime cases cover web,
+  managed incoming/outgoing and legacy phone paths, cold/reused delayed transfers
+  and submitted-request semantics. Eleven node cases cover both grants, revocation,
+  caller/runner retirement and crash fencing. The revocation, claimant-crash and
+  caller/runner cases observe explicit release and completion of the response-handling
+  attempt. These separate lanes do not claim distributed
+  admitted-room execution; cross-node browser callbacks and T8 release remain open.
+  See [audit and correction](../20261107-1200-verify-held-mcp-responses.md).
 
 See [saved runtime contracts](../../docs/development/saved-mcp-runtime.md) and
 [checkpoint evidence](../20261107-0242-review-mcp-cutover.md).
@@ -1033,8 +1040,9 @@ See [saved runtime contracts](../../docs/development/saved-mcp-runtime.md) and
   rejection privacy. Keep network interoperability in the tagged integration lane.
 - [x] Complete per-admission room/transfer and independent-node revocation acceptance.
   Committed web/phone/transfer cases verify admitted execution and scoped failure;
-  the five independent-node runtime cases below verify actual-client submission
-  fences. Broader grant/caller/runner and final release gates remain open.
+  the independent-node runtime/lifecycle cases below verify actual-client submission
+  fences and both grant types. Cross-node browser callback and final release gates
+  remain open.
 
 See [transport contracts](../../docs/development/mcp-runtime-transport.md) and
 [review evidence](../20261107-0224-review-mcp-transport.md). This checkpoint extends
@@ -1153,6 +1161,17 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Observe explicit response release and completion in the older cross-node
+  revocation and claimant-crash cases. A generic renewal error could otherwise be
+  satisfied by hold timeout. All eleven strengthened node/lifecycle cases pass.
+  Independent audit establishes the broad T7 runtime scope from the separate local
+  admission and cross-node transport lanes; do not claim distributed admitted-room
+  execution or complete cross-node browser callbacks. All five checkpoint root gates
+  pass (4,991 tests, zero failures, 237 excluded, seed 535581).
+- [x] Correct the T7 audit wording to name the explicit acknowledgement cases and
+  describe completion of the response-handling attempt, including closed-client
+  failure, rather than implying physical delivery of a response to a dead client.
 
 - [ ] Extend the controlled peer's startup scenarios for remaining authentication
   and recovery browser checks: static/anonymous methods, configured own clients and
