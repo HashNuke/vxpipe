@@ -5,7 +5,7 @@ catalog refresh, production forms and saved-connection runtime wiring are implem
 Independent-node delegated/machine renewal, transport and caller/runner lifecycle
 acceptance pass. [Authenticated browser flows](mcp-browser-acceptance.md) and
 [cross-node callback-created grant renewal](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md)
-also pass. Final verification, external release and user approval remain in
+also pass. Final local verification passes; external release and user approval remain in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 These operations extend existing tenant MCP management and encrypted grant storage;
 native providers continue using the Services APIs.

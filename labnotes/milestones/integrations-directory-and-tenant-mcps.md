@@ -1,6 +1,6 @@
 # Integrations directory and tenant MCP connections
 
-Status: **final verification and release gates in progress**. The Storybook proposal
+Status: **local implementation and verification complete; release gates pending**. The Storybook proposal
 is part of this specification, not evidence that backend behavior is implemented.
 Updated 2026-11-07 with the user-directed Integrations/custom-MCP changes and
 implementation progress reconciliation. Those specific decisions are recorded below; full workflow/release approval
@@ -1212,13 +1212,16 @@ startup failure. Browser/callback acceptance remains open. See
 Depends on T1–T7, including T4a, T6a and T6b. Update installation/operations docs
 and all related Storybooks.
 
-- [ ] Run all five root gates plus focused frontend checks and rendered acceptance.
+- [x] Run all five root gates plus focused frontend checks and rendered acceptance.
   The callback/rotation/browser-race checkpoints now pass all five root gates
   (4,991 tests, zero failures, 261 excluded, seed 774698). The tagged acceptance
   corrections also pass all five gates with 263 exclusions. The asset/busy/monitor
   checkpoint passes all five gates with 4,992 tests, zero failures and 263 exclusions
-  (seed 774698); all 1,065 frontend tests, TypeScript and ESLint pass. Final
-  listed/recovery rendering and any subsequent implementation checks remain.
+  (seed 774698); all 1,065 frontend tests, TypeScript and ESLint pass. The final
+  reconnect/outage/search checkpoint now passes all five root gates: 5,000 tests,
+  zero failures, 264 exclusions, seed 774698. Rendered listed/recovery/outage and
+  inventory acceptance pass; frontend source is unchanged since its green run.
+  No speech/source-cutover implementation changed, so Lean is not applicable.
   Run `bin/verify-lean` for any changes to the source-cutover or speech state
   machines, as required by AGENTS; record applicability and the result.
 - [x] Add tagged database concurrency coverage using independent BEAM processes
@@ -1251,11 +1254,14 @@ and all related Storybooks.
   This is not a claim about PostgreSQL network failure or live third-party routing.
 - [ ] Record independent implementation review, user workflow approval and release
   evidence; only then check the milestone in the index.
-- [ ] After implementation, run an independent review agent using GPT-6 Astra with
+- [x] After implementation, run an independent review agent using GPT-6 Astra with
   xhigh reasoning effort (explicit user requirement, 2026-11-06).
   Every reported bug must include a reproduction as proof; an unreproduced
-  suspicion is not a valid bug (user clarification, 2026-11-07).
-- [ ] Add every review finding requiring a change to the fix checklist below;
+  suspicion is not a valid bug (user clarification, 2026-11-07). Final Astra audit
+  at 89b8d31f finds no unresolved reproduced finding or local implementation/
+  acceptance gap. Final root verification now passes; public release and approval
+  remain separate.
+- [x] Add every review finding requiring a change to the fix checklist below;
   implement and verify fixes before declaring the review complete.
 - [ ] Send the user a `pushnotify` completion message only after implementation,
   independent review and fixes are complete.

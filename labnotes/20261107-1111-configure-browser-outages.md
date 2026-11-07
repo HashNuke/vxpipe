@@ -61,3 +61,7 @@ browser pass reproduced the separate uppercase-search bug. Earlier root checks a
 children had passed; this interrupted run is not counted as complete. A fresh full
 run must include the search correction. The interruption was issued explicitly
 through the owned PTY, unlike the earlier unexplained SIGTERM checkpoint.
+
+The replacement root run including the search fix finishes successfully: all five
+gates pass, with 5,000 tests, zero failures and 264 exclusions (seed 774698).
+See [final verification evidence](20261107-1129-normalize-directory-search.md).

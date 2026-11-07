@@ -8,7 +8,7 @@ delayed-transfer cases use WebRTC. Independent-node delegated/machine renewal,
 transport revocation and caller/runner lifecycle pass controlled HTTP acceptance.
 [Browser flows](mcp-browser-acceptance.md) and
 [cross-node callback-created grant renewal](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md)
-also pass separate lanes. Final verification, external release and user approval remain in
+also pass separate lanes. Final local verification passes; external release and user approval remain in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 This checkpoint depends on the existing
 [renewal boundary](mcp-oauth-renewal.md).

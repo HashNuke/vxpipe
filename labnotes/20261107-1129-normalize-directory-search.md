@@ -42,3 +42,12 @@ unsupported select command) were corrected; neither was a product failure.
 All five root gates are running serially in /tmp/vxpipe-search-root-20261107.log.
 The prior outage root run was deliberately interrupted when this bug was found;
 it is not counted as green evidence. No speech/source-cutover implementation changed.
+
+Final serial root verification exits zero: mix format --check-formatted,
+mix compile --warnings-as-errors, mix credo --strict, mix test --seed 774698
+and mix deps.unlock --check-unused all pass. The umbrella reports 5,000 tests,
+zero failures and 264 exclusions. This includes the reconnect/outage/search
+checkpoint; the five-case tagged saved runtime lane passes separately. Frontend
+source has not changed since all 1,065 tests, TypeScript and ESLint passed.
+Authenticated rendered acceptance and final Astra adversarial review are complete.
+External publication and user approval remain open; this is not milestone completion.

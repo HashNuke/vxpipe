@@ -1,12 +1,12 @@
 # Integrations directory consumption and unlisted MCPs
 
-Status: production implementation in progress; updated 2026-11-07. The directory
+Status: local implementation and verification complete; updated 2026-11-07. The directory
 client/cache/facade, native Services reuse, static/OAuth management, nonsecret
 callback recovery, listed-template forms, retained-ID reconnect UI and saved runtime
 wiring are implemented. Local saved-runtime acceptance covers WebRTC and three
 phone-admission paths. [Authenticated MCP browser flows](mcp-browser-acceptance.md)
 and independent-node callback/renewal/rotation lanes pass their recorded scopes.
-Final verification, external directory publication and
+Final local verification passes; external directory publication and
 user approval remain open. Storybooks simulate
 workflows without real HTTP; they do not prove provider interoperability.
 Delivery tasks and acceptance gates are in

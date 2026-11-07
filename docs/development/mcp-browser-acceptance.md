@@ -27,7 +27,7 @@ and keyboard tab selection retain the dialog on desktop and mobile. See the
 The complete
 [integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md)
 also records the completed listed/retained recovery and outage checks below, with
-final verification and release gates still open. Partial discovery now passes explicit retry with manual-method
+final local verification complete and release gates still open. Partial discovery now passes explicit retry with manual-method
 preservation. Multiple-issuer discovery requires selection and recovers from an
 unavailable issuer; both recovered flows pass actual consent and saved management.
 Unsupported OAuth stays blocked with consistent submission feedback. See the

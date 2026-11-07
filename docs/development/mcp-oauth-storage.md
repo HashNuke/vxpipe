@@ -5,7 +5,7 @@ Calls owns current browser authorization; Console owns protocol orchestration.
 These repository operations are trusted internal ports, not public APIs. Network
 requests run outside transactions. [Production browser flows](mcp-browser-acceptance.md)
 and [cross-node callbacks with renewal](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md)
-pass controlled acceptance. Final verification, external release and user approval
+pass controlled acceptance. Final local verification passes; external release and user approval
 remain [milestone gates](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 
 ## Attempts

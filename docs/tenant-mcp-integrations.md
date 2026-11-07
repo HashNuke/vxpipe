@@ -10,7 +10,7 @@ listed forms, retained-ID reconnect and saved runtime wiring are implemented.
 [Authenticated MCP browser acceptance](development/mcp-browser-acceptance.md),
 [local admitted-call execution and transfer checks](development/saved-mcp-runtime.md),
 and independent-node callback, renewal and rotation lanes pass their recorded
-scopes. Final verification, external release and user
+scopes. Final local verification passes; external release and user
 approval remain in the milestone. The earlier research is context; its checkpoint
 limitations do not supersede this status or establish live third-party certification.
 

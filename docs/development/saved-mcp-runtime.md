@@ -19,7 +19,7 @@ ExMCP directly; they do not claim distributed admitted-room execution.
 also pass separate acceptance lanes. An unchanged published call spec survives
 disconnect/reconnect with fresh preparation while the old prepared generation stays
 fenced; see [composition evidence](../../labnotes/20261107-1109-verify-reconnected-call-spec.md).
-Final verification, external release and user approval remain open in the milestone.
+Final local verification passes; external release and user approval remain open in the milestone.
 See [runtime transport](mcp-runtime-transport.md) and the
 [acceptance audit](../../labnotes/20261107-1200-verify-held-mcp-responses.md).
 
