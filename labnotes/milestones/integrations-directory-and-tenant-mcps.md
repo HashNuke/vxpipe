@@ -1162,6 +1162,9 @@ Depends on T1–T7, including T4a, T6a and T6b. Update installation/operations d
 and all related Storybooks.
 
 - [ ] Run all five root gates plus focused frontend checks and rendered acceptance.
+  The callback/rotation/browser-race checkpoints now pass all five root gates
+  (4,991 tests, zero failures, 261 excluded, seed 774698). Final listed/recovery/
+  outage rendering, conformance and any subsequent implementation checks remain.
   Run `bin/verify-lean` for any changes to the source-cutover or speech state
   machines, as required by AGENTS; record applicability and the result.
 - [x] Add tagged database concurrency coverage using independent BEAM processes
@@ -1194,13 +1197,14 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
-- [ ] Correct the finalization test's monitor-after-exit race found by the full
+- [x] Correct the finalization test's monitor-after-exit race found by the full
   same-seed root rerun: `changed late facts produce another immutable source
   revision` receives `:noproc` after the first worker has already committed.
   Establish monitoring before releasing the existing fixture acknowledgement;
   keep the production lifecycle contract. All three focused cases and four static
   root checks pass; Astra reviewed the actual diff without further findings. The
-  corrected full root run remains active.
+  corrected full root run passes 4,991 tests with zero failures and 261 exclusions
+  (seed 774698), completing all five root checks.
   Evidence: [monitor synchronization](../20261107-0850-stabilize-publication-monitor.md).
 
 - [x] Verify authenticated desktop/mobile custom-MCP discovery races: URL A→B,
@@ -1238,12 +1242,14 @@ and all related Storybooks.
   captured context. The serial combined lane passes 27 tests (seed 589235), followed
   by the strengthened two-case run above. Astra's final source re-review is clean;
   root verification remains below.
-- [ ] Revalidate the root suite's Telnyx max-duration startup failure
+- [x] Revalidate the root suite's Telnyx max-duration startup failure
   (`media_harness_failed`, seed 774698) before final acceptance. No telephony
   implementation changed in these MCP checkpoints; first rerun the unchanged
   focused harness with the same seed and retain the failure evidence.
-  All 16 unchanged focused cases pass with seed 774698; the full serial root
-  rerun is still required. This does not establish the intermittent failure's cause.
+  All 16 unchanged focused cases pass with seed 774698. Telnyx also passes both
+  full serial reruns; after the separate publication-test correction, all 4,991
+  root tests pass with zero failures (261 excluded, seed 774698). This does not
+  establish the original intermittent startup failure's cause.
 - [x] Reconcile stale storage/browser-flow documentation with implemented
   independent-node races, production forms and callback draft submission. Keep
   remaining authenticated browser, key-rotation and release gates explicit.

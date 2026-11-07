@@ -76,3 +76,8 @@ The full root suite for the
 separately committed publication-monitor test correction remains active; the Calls
 child now passes all 356 tests. This browser checkpoint does not close listed,
 retained recovery, independent outage, conformance or public release acceptance.
+
+Final root verification passes all five gates: 4,991 tests, zero failures and 261
+exclusions (seed 774698). The preceding failure/correction evidence is recorded in
+[publication monitor synchronization](20261107-0850-stabilize-publication-monitor.md).
+The remaining milestone acceptance and release gates stay open.

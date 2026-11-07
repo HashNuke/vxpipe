@@ -19,3 +19,12 @@ compilation with warnings as errors, strict Credo and the unused-dependency chec
 pass. Astra reviewed the actual diff and found no bypassed production path or
 weakened assertion. The corrected full same-seed root run is now active; its
 result remains a required milestone gate.
+
+The corrected full umbrella run passes 4,991 tests with zero failures and 261
+exclusions (seed 774698). Together with the completed format, warnings-as-errors
+compile, strict Credo and unused-dependency checks, all five root gates pass.
+The unchanged Telnyx harness passes in both serial reruns; its original intermittent
+startup failure remains unexplained. Only the independently reviewed publication
+monitor synchronization changed between the last two root runs. No speech or
+source-cutover state machine changed in these checkpoints, so no new Lean lane
+was required. Broader milestone acceptance gates remain open.

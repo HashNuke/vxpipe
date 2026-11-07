@@ -80,3 +80,8 @@ to three and four, and delegated refresh tokens rotate while machine grants rema
 refresh-token-free. Both focused cases pass again (seed 701522). Astra's final loop
 review is clean and confirms that the evidence now establishes reads and subsequent
 renewal on both nodes. The full same-seed root rerun is the remaining checkpoint gate.
+
+Final root verification passes all five gates: 4,991 tests, zero failures and 261
+exclusions (seed 774698). The preceding failure/correction evidence is recorded in
+[publication monitor synchronization](20261107-0850-stabilize-publication-monitor.md).
+The remaining milestone acceptance and release gates stay open.

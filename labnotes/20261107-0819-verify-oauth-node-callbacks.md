@@ -75,3 +75,8 @@ Only the Telnyx max-duration media-harness startup failed; its unchanged 16-test
 file passes with the same seed. The unused-dependency check also passes. The full
 same-seed serial rerun remains required; follow-up evidence is tracked with
 [key rotation](20261107-0832-verify-mcp-key-rotation.md) and in the milestone.
+
+Final root verification passes all five gates: 4,991 tests, zero failures and 261
+exclusions (seed 774698). The preceding failure/correction evidence is recorded in
+[publication monitor synchronization](20261107-0850-stabilize-publication-monitor.md).
+The remaining milestone acceptance and release gates stay open.
