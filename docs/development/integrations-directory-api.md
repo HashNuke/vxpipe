@@ -474,7 +474,35 @@ Future Vxpipe integration:
   the user requires a paginated remote API. Query and snapshot consistency belong
   to the API, while Vxpipe renders returned pages.
 
-## Current verification
+## Hosted release verification
+
+Run the read-only live lane from `apps/vxpipe_console` after deploying the
+compatible publisher and synchronizing the release definitions:
+
+```shell
+mix test test/integration/integrations_directory_live_test.exs --include live_integrations_directory
+```
+
+This lane uses the configured directory HTTPS origin and Console's actual
+versioned, bounded, schema-validating client. It requires every installed native
+credential adapter, tenant MCP entries with listed categories, native category
+filters, platform MCP exclusion and global mixed-case search across native/MCP
+entries. It pins a single revision and follows at most ten pages per query.
+No tenant credentials or provider requests are involved. Logo delivery and
+connection/OAuth behavior have separate acceptance checks.
+
+The default origin is the hosted API. `VXPIPE_INTEGRATIONS_DIRECTORY_ORIGIN` can
+select another HTTPS installation origin through runtime configuration; a local
+or staging pass does not establish hosted publication. The dedicated live tag is
+excluded from default tests and generic `--include integration` runs. Do not add
+the generic integration tag to this test: ExUnit includes take precedence over
+other excluded tags.
+
+The current public catalog serves only three MCP entries, so the live lane fails
+at the native-adapter assertion until the external release is published. See
+[hosted-check evidence](../../labnotes/20261107-1155-verify-hosted-catalog.md).
+
+## Original prototype verification
 
 The Storybook prototype covers connected/unconnected rows, inherited-provider
 editing, disconnect updates, data-driven categories and routes, loading, stale

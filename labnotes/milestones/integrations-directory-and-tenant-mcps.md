@@ -1,6 +1,6 @@
 # Integrations directory and tenant MCP connections
 
-Status: **local implementation and verification complete; release gates pending**. The Storybook proposal
+Status: **release verification in progress; hosted publication and approval pending**. The Storybook proposal
 is part of this specification, not evidence that backend behavior is implemented.
 Updated 2026-11-07 with the user-directed Integrations/custom-MCP changes and
 implementation progress reconciliation. Those specific decisions are recorded below; full workflow/release approval
@@ -1212,7 +1212,7 @@ startup failure. Browser/callback acceptance remains open. See
 Depends on T1–T7, including T4a, T6a and T6b. Update installation/operations docs
 and all related Storybooks.
 
-- [x] Run all five root gates plus focused frontend checks and rendered acceptance.
+- [ ] Run all five root gates plus focused frontend checks and rendered acceptance.
   The callback/rotation/browser-race checkpoints now pass all five root gates
   (4,991 tests, zero failures, 261 excluded, seed 774698). The tagged acceptance
   corrections also pass all five gates with 263 exclusions. The asset/busy/monitor
@@ -1221,6 +1221,8 @@ and all related Storybooks.
   reconnect/outage/search checkpoint now passes all five root gates: 5,000 tests,
   zero failures, 264 exclusions, seed 774698. Rendered listed/recovery/outage and
   inventory acceptance pass; frontend source is unchanged since its green run.
+  The added hosted acceptance lane now requires a final default-suite rerun; its
+  explicit public execution remains a separate external-release gate.
   No speech/source-cutover implementation changed, so Lean is not applicable.
   Run `bin/verify-lean` for any changes to the source-cutover or speech state
   machines, as required by AGENTS; record applicability and the result.
@@ -1267,6 +1269,15 @@ and all related Storybooks.
   independent review and fixes are complete.
 
 ### Implementation and review fixes
+
+- [x] Add the explicitly required tagged, read-only hosted catalog acceptance check.
+  The existing transport integration test uses a loopback fixture; no live catalog
+  test existed. Verify categories, every installed native adapter, tenant MCP entries
+  and platform exclusion through the actual public client. Keep this opt-in lane
+  separate from controlled integration runs. The actual Go/TLS full-catalog check
+  passes; generic integration selection excludes it. The public run fails at the
+  expected missing-native assertion. Public catalog release remains blocked
+  while it serves only three MCP entries. See [hosted-check evidence](../20261107-1155-verify-hosted-catalog.md).
 
 - [x] Normalize directory search queries to the publisher contract before request
   identity validation. Real authenticated uppercase `CIMD` search returns invalid_page
