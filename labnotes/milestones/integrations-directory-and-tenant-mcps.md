@@ -1081,6 +1081,13 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
+- [x] Unrelated umbrella-test repair: wait for STT's turn acknowledgement before
+  asserting a queued onset in the existing activity-demand regression. This is
+  verification maintenance, not an MCP integration requirement. The full run exposed a
+  one-pass, multi-process synchronization gap; the existing mailbox and stale-onset
+  assertions remain. All 37 focused tests pass with the failing seed, and independent
+  adversarial review is clean. See [evidence](../20261107-0938-await-stt-onset.md).
+
 - [x] Preserve historical icon metadata when publishing an iconless native entry,
   and document safe deployment/rollback order. Independent review required reading
   the old revision after removal and clarified that republishing the current

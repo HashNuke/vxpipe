@@ -832,6 +832,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
         _ = :sys.get_state(Session.provider(:sys.get_state(stt).session))
         _ = :sys.get_state(stt)
 
+        # Provider work crosses the speech session/channel before STT forwards
+        # the onset. Its turn reference acknowledges that complete delivery path.
+        assert is_reference(await_stt_turn_ref(stt))
         {:messages, messages} = Process.info(context.authority, :messages)
 
         assert Enum.any?(messages, fn
