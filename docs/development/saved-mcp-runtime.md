@@ -9,8 +9,9 @@ in that same room. Local web acceptance also covers tenant isolation, empty cata
 schema/deletion pins, repository outages and delayed agent transfers with cold and
 reused clients after revocation/replacement. It verifies one already-submitted
 request completing after disconnect while later submissions fail. Identity is
-fixture-backed; rendered browser, telephony and separate-node acceptance remain
-milestone gates.
+fixture-backed. Local carrier-fixture acceptance also covers managed incoming and
+outgoing admission plus the legacy incoming startup entry. Rendered browser and
+separate-node acceptance remain milestone gates.
 
 ## Metadata and pinning
 
@@ -126,6 +127,19 @@ fails in the same running room without another protocol request. Explicit handle
 references and a held SSE stream avoid timing assumptions. Cancellation, owner death
 and timeout cannot satisfy the successful-response acknowledgement. This verifies
 local submitted-request semantics, not separate-node renewal or revocation races.
+
+Local phone acceptance publishes the saved selection with persisted native speech
+credentials and a telephony service. Managed incoming/outgoing calls use normal
+carrier verification, admission and media attachment; a compatibility fixture also
+exercises the legacy three-argument incoming startup. Actual Opus input reaches the
+speech wire, the model executes the saved MCP over loopback HTTP, and controlled
+speech output reaches the original phone socket. After authenticated disconnect,
+the next invocation fails without another tool request while the same call remains
+running. A signed carrier hangup then closes the room, media socket, leg and managed
+cleanup tracker; all three routes wait for durable ended state and a private-safe
+archive close record. Carrier commands and speech responses are synthetic: this
+does not claim live-carrier or separate-node interoperability. See
+[phone acceptance evidence](../../labnotes/20261107-0922-saved-mcp-telephony.md).
 
 A reusable private-config vault was rejected: it would introduce new lifetime and
 ownership rules for delayed transfer activations. Complete request-header resolution

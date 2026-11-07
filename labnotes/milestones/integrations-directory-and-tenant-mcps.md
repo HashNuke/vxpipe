@@ -961,18 +961,23 @@ Depends on T4; OAuth methods additionally depend on T5/T6.
   telephony admission, including the legacy incoming entry migrated to build/2.
   Reject revoked/replaced generations between preparation and startup; keep the
   explicitly configured trusted/embedded host path separate.
-- [ ] Test the complete saved-record path from publication through preparation and
+- [x] Test the complete saved-record path from publication through preparation and
   execution, including foreign tenant IDs, storage outage, zero-tool connections,
   changed schemas and deleted tools. Ensure private connection configuration never
-  enters persisted PreparedCall plans or browser projections.
+  enters persisted PreparedCall plans or browser projections. Local WebRTC plus
+  managed incoming/outgoing and legacy incoming carrier-fixture cases execute the
+  saved selection. Web boundary cases cover the listed negative conditions;
+  separate-node acceptance remains below.
 - [x] Bind credentials/token provider and schemas privately by tenant connection ID
   and generation. Refresh tokens without changing stable tool identity.
 - [x] Reuse MCP-name/tool selection and double-underscore runtime naming. Select all
   saves explicit names; new tools do not grant themselves and removed tools fail safely.
 - [x] Implement guarded transport invalidation on disconnect/revocation without
   re-enabling stale grants or retrying ambiguously submitted tool operations.
-- [ ] Verify revocation during full admitted calls and delayed transfer activation;
-  fail within the existing scoped call boundary without a browser prompt.
+- [x] Verify revocation during full admitted calls and delayed transfer activation;
+  fail within the existing scoped call boundary without a browser prompt. Local
+  web/phone calls preserve their room after disconnect; web transfer cases cover
+  cold/reused-client rejection and source preservation. Separate-node races remain open.
 
 Acceptance: tenant A cannot list/execute tenant B or platform MCP tools; directory
 outage does not stop an already authorized call. Catalog refresh, server-name changes, revoke,
@@ -1053,6 +1058,24 @@ Independent adversarial source re-review is clean. This is local web-call accept
 separate-node renewal/revocation races stay open. See
 [in-flight evidence](../20261107-0855-saved-mcp-inflight.md).
 
+#### Saved phone-admission acceptance checkpoint (2026-11-07)
+
+Three local carrier-fixture cases now execute a saved MCP from published specs
+through managed incoming, managed outgoing and legacy incoming startup. Managed
+cases assert durable cleanup ownership; the compatibility fixture explicitly uses
+the legacy three-argument startup and delegates the remaining carrier lifecycle.
+Actual carrier audio reaches STT, model-selected ExMCP results reach the model and
+speech output reaches the original phone socket. Authenticated tenant disconnect
+blocks the next invocation without another tools/call, while the same stored
+room/incarnation remains running. Native and MCP private markers are excluded from
+plans, model/public projections and archived facts. Signed carrier hangup closes
+the observed room/socket/leg/tracker and all three cases await durable ended state.
+All 20 combined saved-runtime cases and all five root gates pass: the full umbrella
+run has 4,987 tests, zero failures and 218 excluded with seed 397067. Independent
+adversarial source review is clean. The composite T7/T8 independent-node and release
+gates remain open.
+See [phone evidence](../20261107-0922-saved-mcp-telephony.md).
+
 ### T8 — Release and operational verification
 
 Depends on T1–T7, including T4a, T6a and T6b. Update installation/operations docs
@@ -1087,6 +1110,14 @@ and all related Storybooks.
   one-pass, multi-process synchronization gap; the existing mailbox and stale-onset
   assertions remain. All 37 focused tests pass with the failing seed, and independent
   adversarial review is clean. See [evidence](../20261107-0938-await-stt-onset.md).
+
+- [x] Finish the phone-acceptance review fixes: send signed carrier hangup and
+  observe exact room/socket/leg/tracker cleanup plus persisted managed completion;
+  add explicit failure-path tracker cleanup, recheck no tool requests after final
+  speech/shutdown, and validate privacy markers in every decoded carrier frame.
+  All three strengthened cases pass with real archive persistence and independent
+  source re-review. Observe durable archive closure before sandbox release; carrier
+  cleanup completion follows the archived end time and need not equal it.
 
 - [x] Preserve historical icon metadata when publishing an iconless native entry,
   and document safe deployment/rollback order. Independent review required reading

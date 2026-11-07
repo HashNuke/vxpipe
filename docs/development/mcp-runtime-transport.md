@@ -2,8 +2,9 @@
 
 Status: the private credential projection, guarded ExMCP provider and pinned
 transport patch are implemented. Saved catalog/compiler and Gateway startup wiring
-are described in [saved runtime](saved-mcp-runtime.md). Full per-route active call
-acceptance and independent-node revocation remain open in
+are described in [saved runtime](saved-mcp-runtime.md). Local active-call acceptance
+covers WebRTC and managed incoming/outgoing plus legacy incoming phone admission;
+delayed-transfer cases use WebRTC. Independent-node revocation remains open in
 [the integrations milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 This checkpoint depends on the existing
 [renewal boundary](mcp-oauth-renewal.md).
@@ -81,8 +82,8 @@ Patch tests cover clean local-clone application, idempotence, wrong revision,
 tampered patches, unknown source changes, mixed source states and upgrade from the
 previous reviewed version. The upgrade test requires no repository history. Setup
 tests cover preparation/compilation ordering and stopping on patch failure. The
-saved-record publication/startup-options/wire slice is now verified; full
-per-admission room/transfer and independent-node acceptance gates remain open.
+saved-record publication/startup-options/wire slice and local web/phone execution
+are now verified. Independent-node acceptance remains open.
 
 The full MCP lane passes 179 tests, including the pinned official Everything and
 SSE-recovery fixtures. Their npm install/build/start commands run from each

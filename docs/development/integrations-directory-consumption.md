@@ -3,8 +3,9 @@
 Status: production implementation in progress; updated 2026-11-07. The directory
 client/cache/facade, native Services reuse, static/OAuth management, nonsecret
 callback recovery, listed-template forms, retained-ID reconnect UI and saved runtime
-wiring are implemented. Authenticated browser, telephony/independent-node acceptance
-and external directory publication remain open. Storybooks simulate
+wiring are implemented. Local saved-runtime acceptance covers WebRTC and three
+phone-admission paths. Authenticated browser, independent-node acceptance and
+external directory publication remain open. Storybooks simulate
 workflows without real HTTP; they do not prove provider interoperability.
 Delivery tasks and acceptance gates are in
 [the milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
