@@ -44,3 +44,19 @@ public failure and corrected tag-isolation evidence, and approves closing the
 automation task without closing public release. No further code correction is
 requested. The original source-only tag-isolation assumption was explicitly
 withdrawn after the parent reproduced ExUnit's include behavior.
+
+Prepared Railway CLI sign-in under the already-authorized release request and
+relayed the activation link immediately in chat and pushnotify. The owned process
+remained live for its full polling window, then exited with Device code expired
+without authorization. No deployment was attempted. Both account/project token
+environment variables are absent, and a service-context status query also returns
+Unauthorized, ruling out a valid project-token-only session hidden by whoami.
+No activation codes, tokens or environment contents are retained in this record.
+
+Final serial verification exits zero: format, warnings-as-errors compilation,
+strict Credo, default umbrella tests and unused-dependency checks all pass. The
+umbrella executes 5,000 tests with zero failures and 265 exclusions (seed 774698);
+the new live check accounts for the extra exclusion. Frontend source is unchanged
+since its green 1,065-test/TypeScript/ESLint run. No source-cutover or speech state
+machine changed, so Lean does not apply. The hosted-check fixture was stopped
+after verification. Public deployment and explicit workflow approval remain open.
