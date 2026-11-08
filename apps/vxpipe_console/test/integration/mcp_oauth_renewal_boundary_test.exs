@@ -10,6 +10,63 @@ defmodule Vxpipe.Console.MCPOAuthRenewalBoundaryTest do
     %{id: id, before: resolve(data, id)}
   end
 
+  test "retiring a session cancels its held renewal before close and leaves the claim fenced",
+       data do
+    connection = session(data)
+    independent = session(data)
+    runner = runner(timeout: 5_000)
+
+    options =
+      renewal_options(data, runner, :hold)
+      |> Keyword.put(:mcp_session, Vxpipe.MCP.Connection.owner(connection))
+
+    observer = self()
+    start_supervised!({Task, fn -> send(observer, {:renewed, refresh(data, options)}) end})
+    assert_receive {:token_request, worker}, 1_000
+    monitor = Process.monitor(worker)
+    :ok = :sys.suspend(runner)
+
+    try do
+      assert :ok = Vxpipe.MCP.Connections.close(connection)
+      assert_receive {:DOWN, ^monitor, :process, ^worker, _reason}, 500
+      assert_receive {:renewed, {:error, :oauth_reconnect_required}}, 1_000
+      send(worker, :release)
+      assert_fenced(data, options)
+
+      assert {:ok, %{connection_status: :ready}} =
+               Vxpipe.MCP.ReadyClientRuntime.status(Vxpipe.MCP.Connection.client(independent))
+
+      assert resolve(data, data.id).connection.status == "connected"
+    after
+      :sys.resume(runner)
+    end
+  end
+
+  test "closing a nonclaimant session preserves the other session's renewal", data do
+    connection = session(data)
+    independent = session(data)
+    runner = runner(limit: 2, timeout: 5_000)
+
+    options =
+      renewal_options(data, runner, :hold)
+      |> Keyword.put(:mcp_session, Vxpipe.MCP.Connection.owner(connection))
+
+    observer = self()
+    start_supervised!({Task, fn -> send(observer, {:renewed, refresh(data, options)}) end})
+    assert_receive {:token_request, worker}, 1_000
+
+    contender = Keyword.put(options, :mcp_session, Vxpipe.MCP.Connection.owner(independent))
+    assert {:error, :oauth_refresh_in_progress} = refresh(data, contender)
+    refute_received {:token_request, _}
+    assert :ok = Vxpipe.MCP.Connections.close(independent)
+    send(worker, :release)
+    assert_receive {:renewed, :ok}, 1_000
+    assert resolve(data, data.id).secrets["access_token"] == "renewed-access"
+
+    assert {:ok, %{connection_status: :ready}} =
+             Vxpipe.MCP.ReadyClientRuntime.status(Vxpipe.MCP.Connection.client(connection))
+  end
+
   test "zero capacity leaves durable grant and revision untouched", data do
     options = renewal_options(data, runner(limit: 0))
     assert {:error, :mcp_connection_busy} = refresh(data, options)
@@ -48,9 +105,10 @@ defmodule Vxpipe.Console.MCPOAuthRenewalBoundaryTest do
   end
 
   for cause <- [:timeout, :caller_death] do
+    @tag cause: cause
     test "#{cause} cancels token work and leaves a fenced grant", data do
-      cause = unquote(cause)
-      runner = runner(timeout: if(cause == :timeout, do: 200, else: 5_000))
+      cause = data.cause
+      runner = runner(timeout: Map.fetch!(%{timeout: 200, caller_death: 5_000}, cause))
       options = renewal_options(data, runner, :hold)
       owner = self()
 
@@ -60,12 +118,14 @@ defmodule Vxpipe.Console.MCPOAuthRenewalBoundaryTest do
       assert_receive {:token_request, worker}, 1_000
       monitor = Process.monitor(worker)
 
-      if cause == :timeout do
-        assert_receive {:renewed, {:error, :mcp_connection_timed_out}}, 1_000
-      else
-        caller_monitor = Process.monitor(caller)
-        stop_supervised!(Task)
-        assert_receive {:DOWN, ^caller_monitor, :process, ^caller, _}, 1_000
+      case cause do
+        :timeout ->
+          assert_receive {:renewed, {:error, :mcp_connection_timed_out}}, 1_000
+
+        :caller_death ->
+          caller_monitor = Process.monitor(caller)
+          stop_supervised!(Task)
+          assert_receive {:DOWN, ^caller_monitor, :process, ^caller, _}, 1_000
       end
 
       assert_receive {:DOWN, ^monitor, :process, ^worker, _}, 1_000
@@ -90,6 +150,31 @@ defmodule Vxpipe.Console.MCPOAuthRenewalBoundaryTest do
     :ok = :sys.resume(runner)
     assert_receive {:renewed, {:error, :mcp_connection_timed_out}}, 1_000
     assert_fenced(data, options)
+  end
+
+  defp session(data) do
+    name = {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {__MODULE__, make_ref()}}}
+
+    host =
+      start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: name}, id: make_ref())
+
+    {:ok, key} =
+      Vxpipe.MCP.ConnectionKey.new(
+        scope: :tenant,
+        tenant_id: data.tenant,
+        integration_id: data.id,
+        credential_generation: "1"
+      )
+
+    {:ok, connection} =
+      Vxpipe.MCP.Connections.open(
+        key,
+        [endpoint: data.before.connection.endpoint],
+        owner: host,
+        runtime: Vxpipe.MCP.ReadyClientRuntime
+      )
+
+    connection
   end
 
   defp assert_fenced(data, options) do

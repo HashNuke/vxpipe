@@ -35,6 +35,26 @@ defmodule Vxpipe.Calls.MCPTransportCredentialsTest do
     }
   end
 
+  test "session ownership reaches both renewal admission and token exchange", data do
+    Agent.update(data.agent, fn saved ->
+      %{saved | secrets: Map.put(saved.secrets, "expires_at", DateTime.to_iso8601(@now))}
+    end)
+
+    session = self()
+
+    assert {:ok, %{token: "new"}} =
+             Vxpipe.Calls.MCPTransportCredentials.resolve(
+               data.options,
+               "tenant",
+               "connection",
+               2,
+               session
+             )
+
+    assert_receive {:renewal_owner, ^session}
+    assert_receive {:exchange_owner, ^session}
+  end
+
   test "transport projection exposes only a current token or static method", data do
     assert {:ok, %{auth_method: "oauth", token: "old"}} =
              Vxpipe.Calls.MCPTransportCredentials.resolve(data.options, "tenant", "connection", 2)

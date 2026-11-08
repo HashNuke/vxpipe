@@ -37,6 +37,16 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
 
   def refresh(tenant, id, revision), do: MCPOAuthRefresh.refresh(tenant, id, 1, revision)
 
+  def refresh_owned(tenant, id, revision) do
+    connection = Agent.get(__MODULE__, & &1.connection)
+    MCPOAuthRefresh.refresh(tenant, id, 1, revision, mcp_session: Connection.owner(connection))
+  end
+
+  def session_ready? do
+    connection = Agent.get(__MODULE__, & &1.connection)
+    Connections.owned_by?(connection, __MODULE__.Host)
+  end
+
   def context(context) do
     context = Keyword.put(context, :repo, Vxpipe.Persistence.Repo)
     options = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)

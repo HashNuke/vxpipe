@@ -120,6 +120,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNodeCase do
     assert_receive {:node_mcp_request, "GET", ["Bearer node-client-access"], ["node-workspace"]},
                    5_000
 
+    assert_receive {:node_rpc, "notifications/initialized"}, 5_000
     flush_protocol()
     stream
   end

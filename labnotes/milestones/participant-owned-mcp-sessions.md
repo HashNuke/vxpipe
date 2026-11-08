@@ -86,8 +86,9 @@ The new timestamps are internal persistence metadata, not new setup form fields.
   caller-owned renewal jobs. Ending a call cancels its jobs, not another call's
   job or the shared grant. Current request-time checks remain authoritative across
   nodes. Preserve ambiguous refresh handling and generation/revision fencing.
-  Teardown acknowledgement also waits for operation-specific cancellation and
-  termination of call-owned jobs under the root renewal supervisor. Fence queued
+  Session-triggered renewal and DNS execute under the existing session transport
+  supervisor; the root runner owns admission bookkeeping only for this path.
+  Teardown acknowledgement observes those exact workers terminate. Fence queued
   runner requests that could otherwise be admitted after caller death; eventual
   processing of caller DOWN is not sufficient proof of completed teardown.
 - Give discovery/check/refresh operations their own bounded lifetime; no call
@@ -175,12 +176,13 @@ normal stop, crash and bounded recovery isolate protocol state and lifetimes.
   before POST, GET/reconnect and DELETE, with no cached fallback on storage failure.
   Add a non-renewing cleanup resolution path: an expired/renewal-required grant
   skips DELETE without a token exchange, while a current valid grant permits it.
-- [ ] Verify durable OAuth refresh claims across sessions/nodes; one caller's
+- [x] Verify durable OAuth refresh claims across sessions/nodes; one caller's
   retirement cancels its work without killing another caller's job. Exercise
   held exchange responses, late completion and claimant death; stale results cannot
   resurrect a grant or trigger another token/tool submission for the retired call.
-  Include a queued-but-not-admitted renewal request and require the runner's exact
-  operation termination/cancellation acknowledgement before reporting teardown.
+  Include a queued-but-not-admitted renewal request and observe exact session-owned
+  operation termination/cancellation before reporting teardown. The configured
+  lifetime starts before either queue, independently of runner responsiveness.
 - [ ] Preserve already-submitted request completion after saved disconnect in an
   otherwise live room. Separately prove call retirement fences its late completion
   and never retries an ambiguous remote side effect.
@@ -283,7 +285,7 @@ remain open until the queue and persistence evidence exists.
 | Stateless MCP peer | No session ID does not weaken local ownership or worker cleanup. |
 | Second integration fails; startup caller/owner dies | No published partial readiness; all first-integration descendants and leases end, including blocked initialization. |
 | Shutdown with held POST, idle/resumed GET, pending reconnect or health timer | Monitor descendant DOWN messages and observe peer closure; no newly submitted call traffic after teardown. Controlled release of old callbacks cannot revive work. |
-| Work paused before submission, after auth/DNS, or queued in ExMCP/renewal runner | Retirement fences final submission admission; releasing pauses yields no new tool POST or token exchange. Exact-operation cancellation/termination acknowledgement covers root-owned jobs as well as local descendants. |
+| Work paused before submission, after auth/DNS, or queued in ExMCP/renewal runner | Retirement fences final submission admission; releasing pauses yields no new tool POST or token exchange. Session-owned operation termination is acknowledged even while shared admission is queued or unresponsive. |
 | DELETE stalls, returns 405 or fails current authorization | Local cleanup completes within the bounded lifecycle; no cached auth, retry loop or shutdown extension per client. Renewal-required credentials skip DELETE without starting a token exchange. |
 | Client killed; activation killed; room owner killed | Correct failure-domain handling and fresh identities on permitted recovery; other calls remain usable; graceful callbacks are not required. |
 | Saved disconnect vs local revoke vs exact-session close | Existing saved in-flight completion is preserved; later requests fail closed. Local revoke reaches every matching holder. Closing one session does not revoke the grant or close another. |
@@ -520,3 +522,23 @@ The maintenance amendment is tracked in the
   outstanding findings. This completes the T3 obsolete-pool removal item. Exact renewal ownership, durable
   catalog jobs and remaining acceptance are still pending. See the
   [explicit-host labnote](../20261108-2011-explicit-mcp-hosts.md).
+
+- Session-triggered OAuth renewal and token DNS now execute under the exact
+  session's transport supervisor. Shared admission retains capacity metadata;
+  the existing session lifecycle enforces caller/runner loss and the original
+  configured deadline before either queue. Closing a session observes its queued
+  or running worker terminate without cancelling another session's work or
+  publishing an initializing session ready. Exact identity reaches initial and
+  reused credentials, while cleanup remains non-renewing. The MCP protocol/lifetime
+  lane passes 290 tests, seed 461380; the final queued matrix passes four cases.
+  Console owned/boundary/cross-node checks pass 23 tests, seed 708070; saved-call
+  regressions pass 29, seed 87759; Calls checks pass 20, seed 965730. The final
+  seven-case renewal boundary rerun also passes. The first umbrella run exposed
+  one unreproduced Gateway observer-monitor failure; the isolated case and all
+  56 neighboring tests pass on its seed. The unchanged full repeat passes all
+  5,068 tests with zero failures and 344 excluded, seed 478700. Format, compile,
+  strict Credo and unused-dependency checks pass. Independent Astra source and
+  test reviews find no outstanding issues. This completes the T3 durable refresh
+  ownership item; the full credential/late-tool matrix and other acceptance
+  requirements remain open. See the
+  [owned-renewal labnote](../20261108-2029-owned-mcp-renewal.md).

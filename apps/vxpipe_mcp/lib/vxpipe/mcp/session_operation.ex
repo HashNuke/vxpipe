@@ -7,10 +7,21 @@ defmodule Vxpipe.MCP.SessionOperation do
 
   # Only this opener's authorization/readiness worker is cancelled. The existing
   # integration and its other operations remain owned by the host.
-  def run(integration, deadline, callback) do
-    with {:ok, operation} <- SessionLifecycle.prepare_operation(integration, deadline) do
+  def run(integration, deadline, callback, opts \\ []) do
+    with {:ok, operation} <-
+           SessionLifecycle.prepare_operation(
+             integration,
+             deadline,
+             Keyword.get(opts, :watch, [])
+           ) do
       try do
-        execute(integration, operation, deadline, callback)
+        execute(
+          integration,
+          operation,
+          deadline,
+          callback,
+          Keyword.get(opts, :publish_ready?, true)
+        )
       after
         SessionLifecycle.cancel_operation(integration, operation)
       end
@@ -19,7 +30,7 @@ defmodule Vxpipe.MCP.SessionOperation do
     :exit, _reason -> @failure
   end
 
-  defp execute(integration, operation, deadline, callback) do
+  defp execute(integration, operation, deadline, callback, publish_ready?) do
     caller = self()
 
     transport =
@@ -35,8 +46,11 @@ defmodule Vxpipe.MCP.SessionOperation do
     admission = Task.async(fn -> start_child(transport, child) end)
 
     case Task.yield(admission, remaining(deadline)) || Task.shutdown(admission, :brutal_kill) do
-      {:ok, {:ok, worker}} -> await_worker(integration, operation, worker, deadline, callback)
-      _failed -> @failure
+      {:ok, {:ok, worker}} ->
+        await_worker(integration, operation, worker, deadline, callback, publish_ready?)
+
+      _failed ->
+        @failure
     end
   end
 
@@ -73,7 +87,7 @@ defmodule Vxpipe.MCP.SessionOperation do
     _kind, _reason -> @failure
   end
 
-  defp await_worker(integration, operation, worker, deadline, callback) do
+  defp await_worker(integration, operation, worker, deadline, callback, publish_ready?) do
     monitor = Process.monitor(worker)
     send(worker, {operation, callback})
 
@@ -85,26 +99,26 @@ defmodule Vxpipe.MCP.SessionOperation do
         remaining(deadline) -> @failure
       end
 
-    # Observing this exact process is the local callback barrier; root-owned
-    # OAuth jobs require their own cancellation contract.
+    # Observing this exact process is the callback completion barrier.
     Process.exit(worker, :kill)
     stopped = await_down(worker, monitor)
     receive do: ({^operation, _late_result} -> :ok), after: (0 -> :ok)
 
     case stopped do
-      :ok -> finish(integration, operation, result, deadline)
+      :ok -> finish(integration, operation, result, deadline, publish_ready?)
       incomplete -> incomplete
     end
   end
 
-  defp finish(integration, operation, :ok, deadline) do
-    case SessionLifecycle.finish_operation(integration, operation, deadline) do
-      :ok -> if remaining(deadline) > 0, do: :ok, else: @failure
+  defp finish(integration, operation, result, deadline, publish_ready?)
+       when result == :ok or publish_ready? == false do
+    case SessionLifecycle.finish_operation(integration, operation, deadline, publish_ready?) do
+      :ok -> if remaining(deadline) > 0, do: result, else: @failure
       _retired -> @failure
     end
   end
 
-  defp finish(_integration, _operation, result, deadline),
+  defp finish(_integration, _operation, result, deadline, _publish_ready?),
     do: if(remaining(deadline) > 0, do: result, else: @failure)
 
   defp await_down(worker, monitor) do

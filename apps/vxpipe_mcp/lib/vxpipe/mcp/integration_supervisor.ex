@@ -3,7 +3,7 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
 
   use Supervisor, restart: :temporary
 
-  alias Vxpipe.MCP.{ConnectionNames, SessionLifecycle}
+  alias Vxpipe.MCP.{ConnectionNames, RuntimeAuthProvider, SessionLifecycle}
 
   def start_link(opts) do
     key = Keyword.fetch!(opts, :key)
@@ -54,6 +54,7 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
       opts
       |> Keyword.fetch!(:client_options)
       |> Keyword.merge(Keyword.get(opts, :runtime_options, []))
+      |> RuntimeAuthProvider.with_session(integration)
       |> Keyword.put(
         :name,
         ConnectionNames.via(:client, key, scope, %{integration_owner: self()})

@@ -24,6 +24,14 @@ method. It validates bearer syntax before returning a token. Provider state has 
 opaque inspection representation, and no challenge callback starts browser consent
 or authorizes an automatic retry.
 
+Owned sessions bind their exact integration PID into the provider for both
+initial transport setup and reuse checks. The trusted resolver uses `resolve/5`
+for that path; standalone management retains `resolve/4`. There is no fallback
+from a session-aware resolution to the management path. Calls forwards the session
+through renewal admission and exchange so token/DNS work belongs to the session.
+See [participant ownership](participant-mcp-ownership.md) for the lifecycle and
+configured pre-admission deadline.
+
 The fixed MCP client profile accepts only this guarded provider. The pinned ExMCP
 HTTP implementation otherwise preserves cached credentials when a provider returns
 an ordinary error tuple. Vxpipe therefore uses a fixed credential-rejection signal.

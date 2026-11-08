@@ -17,6 +17,16 @@ defmodule Vxpipe.Calls.Test.MCPRuntimeFixture do
 
   def run(_context, _tenant, operation), do: operation.()
 
+  def run_owned({owner, _agent} = context, tenant, operation, session) do
+    send(owner, {:renewal_owner, session})
+    run(context, tenant, operation)
+  end
+
+  def refresh_owned({owner, _agent} = context, claim, session) do
+    send(owner, {:exchange_owner, session})
+    refresh(context, claim)
+  end
+
   def resolve({owner, agent}, _tenant, _id) do
     send(owner, :resolved)
     {:ok, Agent.get(agent, & &1)}

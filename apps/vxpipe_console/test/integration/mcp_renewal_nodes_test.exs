@@ -35,6 +35,34 @@ defmodule Vxpipe.Console.MCPRenewalNodesTest do
     end
   end
 
+  for grant <- ["authorization_code", "client_credentials"] do
+    @tag grant: grant
+    test "session retirement fences a held #{grant} response across nodes", data do
+      _first_stream = open(data)
+      _second_stream = open(%{data | first: data.second})
+      assert {:ok, before} = saved(data)
+      hold(data, true)
+      async(:owned_renewed, fn -> rpc(data.first, :refresh_owned, [data.tenant, data.id, 1]) end)
+      assert_receive {:node_token_response, request, 200}, 5_000
+
+      assert {:error, :oauth_refresh_in_progress} =
+               rpc(data.second, :refresh_owned, [data.tenant, data.id, 1])
+
+      assert tokens(data) == 1
+      assert :closed = rpc(data.first, :close)
+      assert_receive {:owned_renewed, {:error, :oauth_reconnect_required}}, 5_000
+      assert true == rpc(data.second, :session_ready?)
+
+      send(request, :release_token)
+      assert_receive {:node_token_released, ^request}, 5_000
+      assert_receive {:node_token_finished, ^request}, 5_000
+      assert_fenced(data, before)
+      assert tokens(data) == 1
+      assert :closed = rpc(data.second, :close)
+      refute_received {:node_rpc, "tools/call"}
+    end
+  end
+
   defp assert_fenced(data, before) do
     assert {:error, :oauth_refresh_in_progress} =
              rpc(data.second, :refresh, [data.tenant, data.id, 1])

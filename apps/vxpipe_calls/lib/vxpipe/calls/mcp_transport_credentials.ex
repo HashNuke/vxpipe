@@ -10,6 +10,12 @@ defmodule Vxpipe.Calls.MCPTransportCredentials do
     project(MCPRuntimeCredentials.resolve(tenant, id, generation, options))
   end
 
+  def resolve(:configured, tenant, id, generation, session),
+    do: resolve([], tenant, id, generation, session)
+
+  def resolve(options, tenant, id, generation, session) when is_pid(session),
+    do: resolve(Keyword.put(options, :mcp_session, session), tenant, id, generation)
+
   def resolve_cleanup(:configured, tenant, id, generation),
     do: resolve_cleanup([], tenant, id, generation)
 

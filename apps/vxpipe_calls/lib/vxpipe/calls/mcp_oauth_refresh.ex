@@ -5,14 +5,16 @@ defmodule Vxpipe.Calls.MCPOAuthRefresh do
   def refresh(tenant, id, generation, revision, options \\ []) do
     with {:ok, repository} <- Repositories.fetch(options, :mcp_oauth_grant_repository),
          {:ok, protocol} <- Repositories.fetch(options, :mcp_oauth_refresh) do
+      session = Keyword.get(options, :mcp_session)
+
       operation = fn ->
         case Repositories.call(repository, :claim, [tenant, id, generation, revision]) do
-          {:ok, claim} -> {:admitted, {:claimed, claim.id, exchange(protocol, claim)}}
+          {:ok, claim} -> {:admitted, {:claimed, claim.id, exchange(protocol, claim, session)}}
           error -> {:admitted, error}
         end
       end
 
-      case Repositories.call(protocol, :run, [tenant, operation]) do
+      case run(protocol, tenant, operation, session) do
         {:admitted, {:claimed, claim_id, result}} ->
           finish(repository, [tenant, id, generation, claim_id], result)
 
@@ -27,6 +29,12 @@ defmodule Vxpipe.Calls.MCPOAuthRefresh do
       end
     end
   end
+
+  defp run(protocol, tenant, operation, nil),
+    do: Repositories.call(protocol, :run, [tenant, operation])
+
+  defp run(protocol, tenant, operation, session),
+    do: Repositories.call(protocol, :run_owned, [tenant, operation, session])
 
   defp finish(repository, identity, exchanged) do
     result =
@@ -48,8 +56,10 @@ defmodule Vxpipe.Calls.MCPOAuthRefresh do
     end
   end
 
-  defp exchange(protocol, claim) do
-    Repositories.call(protocol, :refresh, [claim])
+  defp exchange(protocol, claim, session) do
+    if session,
+      do: Repositories.call(protocol, :refresh_owned, [claim, session]),
+      else: Repositories.call(protocol, :refresh, [claim])
   rescue
     _ -> {:error, :oauth_reconnect_required}
   catch

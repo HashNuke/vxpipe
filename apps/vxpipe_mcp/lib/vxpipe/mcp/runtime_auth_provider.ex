@@ -11,7 +11,7 @@ defmodule Vxpipe.MCP.RuntimeAuthProvider do
   @behaviour ExMCP.Authorization.Provider
   @derive {Inspect, only: []}
   @enforce_keys [:tenant, :connection_id, :generation, :auth_method, :endpoint, :resolver]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [session: nil]
 
   @impl true
   def init(%__MODULE__{} = config), do: init(Map.from_struct(config))
@@ -30,13 +30,26 @@ defmodule Vxpipe.MCP.RuntimeAuthProvider do
              byte_size(id) in 1..128 and is_integer(generation) and generation > 0 and
              method in ~w(none bearer headers basic oauth) and is_binary(endpoint) and
              is_atom(module) do
-    if Map.keys(config) -- @enforce_keys == [] and Code.ensure_loaded?(module) and
+    if Map.keys(config) -- (@enforce_keys ++ [:session]) == [] and
+         (is_nil(Map.get(config, :session)) or is_pid(Map.get(config, :session))) and
+         Code.ensure_loaded?(module) and
          function_exported?(module, :resolve, 4),
        do: {:ok, struct!(__MODULE__, config)},
        else: unavailable()
   end
 
   def init(_), do: unavailable()
+
+  @doc false
+  def with_session(options, integration) when is_pid(integration) do
+    case Keyword.fetch(options, :auth_provider) do
+      {:ok, {__MODULE__, state}} ->
+        Keyword.put(options, :auth_provider, {__MODULE__, %{state | session: integration}})
+
+      :error ->
+        options
+    end
+  end
 
   @impl true
   def get_token(%__MODULE__{auth_method: method, endpoint: endpoint} = state) do
@@ -135,7 +148,12 @@ defmodule Vxpipe.MCP.RuntimeAuthProvider do
 
   defp resolve(state) do
     {module, context} = state.resolver
-    module.resolve(context, state.tenant, state.connection_id, state.generation)
+
+    if state.session do
+      module.resolve(context, state.tenant, state.connection_id, state.generation, state.session)
+    else
+      module.resolve(context, state.tenant, state.connection_id, state.generation)
+    end
   rescue
     _ -> :unavailable
   catch

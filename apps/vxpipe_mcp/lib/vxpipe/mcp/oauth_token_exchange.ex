@@ -6,6 +6,7 @@ defmodule Vxpipe.MCP.OAuthTokenExchange do
     Authentication,
     OAuthClientAssertion,
     OAuthRequestParameters,
+    SessionOperation,
     StaticConfiguration
   }
 
@@ -240,7 +241,35 @@ defmodule Vxpipe.MCP.OAuthTokenExchange do
       connect_timeout_ms: 2000,
       request_timeout_ms: 5000
     )
+    |> owned_dns(options)
   end
+
+  defp owned_dns(http_options, options) do
+    case Keyword.fetch(options, :mcp_session) do
+      {:ok, integration} ->
+        resolver = http_options |> SecureHTTP.options() |> Keyword.fetch!(:dns_resolver)
+
+        Keyword.put(http_options, :dns_resolver, fn host, timeout ->
+          deadline = System.monotonic_time(:millisecond) + timeout
+
+          SessionOperation.run(
+            integration,
+            deadline,
+            fn -> resolve_dns(resolver, host, timeout) end, publish_ready?: false)
+        end)
+
+      :error ->
+        http_options
+    end
+  end
+
+  defp resolve_dns(ExMCP.Internal.DNSResolver, host, _timeout),
+    do: ExMCP.Internal.DNSResolver.resolve_direct(host)
+
+  defp resolve_dns(resolver, host, timeout) when is_function(resolver, 2),
+    do: resolver.(host, timeout)
+
+  defp resolve_dns(resolver, host, timeout), do: resolver.resolve(host, timeout)
 
   defp result({:ok, {{_, 200, _}, _, encoded}}) do
     with {:ok, token} when is_map(token) <- JSON.decode(encoded),

@@ -4,10 +4,23 @@ defmodule Vxpipe.Console.MCPOAuthRefresh do
 
   def run(options, tenant, operation) do
     runner = Keyword.get(options, :renewal_runner, Vxpipe.MCP.OAuthRenewalRunner)
-    Vxpipe.MCP.PreflightRunner.run(runner, tenant, operation)
+
+    case Keyword.fetch(options, :mcp_session) do
+      {:ok, integration} ->
+        Vxpipe.MCP.PreflightRunner.run_owned(runner, tenant, integration, operation)
+
+      :error ->
+        Vxpipe.MCP.PreflightRunner.run(runner, tenant, operation)
+    end
   catch
     :exit, _ -> {:error, :oauth_reconnect_required}
   end
+
+  def run_owned(options, tenant, operation, session),
+    do: run(Keyword.put(options, :mcp_session, session), tenant, operation)
+
+  def refresh_owned(options, claim, session),
+    do: refresh(Keyword.put(options, :mcp_session, session), claim)
 
   def refresh(options, %Vxpipe.Calls.ResolvedMCPRefresh{secrets: secrets}) do
     requested_at = Keyword.get(options, :now, &DateTime.utc_now/0).()

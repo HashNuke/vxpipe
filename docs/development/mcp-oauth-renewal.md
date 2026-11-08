@@ -32,19 +32,28 @@ cannot replace fixed grant/resource/authentication fields.
 Calls owns the trusted renewal coordinator. Its caller must already have authority
 to use the tenant connection; it is not a public management API. The existing
 repository port owns durable claim/complete/fail operations. Console's refresh
-protocol port has two operations: `run(options, tenant, operation)` for bounded
-admission and `refresh(options, claim)` for one token request. This keeps Calls
-independent of the MCP protocol application while admitting before database claim.
+protocol port provides `run(options, tenant, operation)` for bounded management
+admission and `refresh(options, claim)` for one token request. Session-aware
+`run_owned(options, tenant, operation, session)` and
+`refresh_owned(options, claim, session)` preserve exact runtime ownership through
+both stages. This keeps Calls independent of the protocol implementation while
+admitting before database claim.
 Production repository identity is passed explicitly in repository options.
 
 A dedicated application supervisor couples the renewal runner with its task
-supervisor. Each Console/MCP application instance admits up to eight concurrent
+supervisor for independent management work. Session-triggered renewal instead
+runs under the existing MCP transport supervisor; the shared runner grants a
+capacity permit and monitors that worker. The session lifecycle owns cancellation,
+runner-death monitoring and the absolute deadline, including time before admission.
+Its completion never marks an initializing session ready. Each Console/MCP
+application instance admits up to eight concurrent
 renewals across connections, with a fifteen-second claim/exchange budget and no
 tenant cooldown. Per-connection database claims remain authoritative across
 instances. A busy pool creates no claim and leaves the grant/revision unchanged.
 
 The worker returns a tagged claim failure or claimed exchange result. Only a result
-accepted by the runner before its deadline reaches Calls' complete/fail stage.
+accepted before its deadline by the runner (management) or the session lifecycle
+(owned work) reaches Calls' complete/fail stage.
 Persistence remains outside the worker and retains the store's independent claim
 deadline, connection generation and grant-revision checks. A caller delayed after
 admission cannot bypass those final checks. Per-request HTTPS, DNS, destination,

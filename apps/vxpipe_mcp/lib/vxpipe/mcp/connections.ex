@@ -200,7 +200,7 @@ defmodule Vxpipe.MCP.Connections do
     with :ok <- compatible_policy(connection, context),
          :ok <-
            SessionOperation.run(Connection.owner(connection), context.deadline, fn ->
-             with :ok <- authorize_reuse(context.client_options),
+             with :ok <- authorize_reuse(context.client_options, Connection.owner(connection)),
                   do: ready_status(connection, context.runtime)
            end) do
       {{:ok, connection}, :reused}
@@ -222,8 +222,10 @@ defmodule Vxpipe.MCP.Connections do
        else: {:error, :incompatible_connection}
   end
 
-  defp authorize_reuse(client_options) do
-    case Keyword.get(client_options, :auth_provider) do
+  defp authorize_reuse(client_options, integration) do
+    options = RuntimeAuthProvider.with_session(client_options, integration)
+
+    case Keyword.get(options, :auth_provider) do
       {RuntimeAuthProvider, state} ->
         {:ok, _headers, ^state} = RuntimeAuthProvider.get_headers(state)
         :ok

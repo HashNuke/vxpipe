@@ -1,4 +1,9 @@
 defmodule Vxpipe.MCP.Test.RuntimeAuthFixture do
+  def resolve({owner, _result} = context, tenant, id, generation, session) do
+    send(owner, {:resolved_owner, session})
+    resolve(context, tenant, id, generation)
+  end
+
   def resolve({owner, result}, tenant, id, generation) do
     send(owner, {:resolved, tenant, id, generation})
     result = if is_map(result), do: Map.fetch!(result, :request), else: result

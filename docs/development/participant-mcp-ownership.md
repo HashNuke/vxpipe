@@ -7,8 +7,9 @@ TLS POST/GET socket cleanup. Participant placement now includes shared startup
 deadlines, cancellation, partial rollback and source retirement after transfer.
 Catalog loads now use independent temporary operation hosts with bounded cleanup.
 The library requires explicit hosts; the legacy root session pool has been removed.
-Call-owned renewal cancellation, queued catalogs and the remaining acceptance
-matrix are still pending.
+Call-owned renewal and token DNS now run under the exact session, including
+cancellation before shared admission. Queued catalogs and the remaining
+acceptance matrix are still pending.
 The user requested a milestone for moving agent-used MCP connections into the
 participant's call tree. The [implementation milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md)
 tracks that work separately from the integrations-directory workflow approval.
@@ -234,9 +235,9 @@ initial POST and reconnecting GET. A fixture first completes the MCP handshake
 and initial stream, then stalls the resumed GET; session close, host stop/crash
 and client death terminate the exact local tree and close the peer socket.
 
-Cancellation acknowledgement for root-owned renewal work remains open.
-Activation-level teardown acceptance also remains unfinished; standalone lifecycle
-evidence does not establish those call-path contracts.
+Call renewal uses the same owned-operation completion barrier, including while
+queued at its shared admission runner. Full activation-level teardown acceptance
+remains unfinished; standalone evidence does not establish every call-path contract.
 
 ### Activation composition checkpoint
 
@@ -281,9 +282,9 @@ participant trees.
 Loopback acceptance covers same-grant calls, held POST/GET peer closure on hangup
 and forced room-authority death, destination timeout with a usable source,
 successful transfer/re-entry and stale-handle rejection. Saved WebRTC calls and
-phone lanes exercise the same placement. Safe embedded restart descriptors,
-root-owned renewal cancellation and the remaining full-milestone acceptance
-requirements are still open. See the milestone for checkpoint gate evidence.
+phone lanes exercise the same placement. Safe embedded restart descriptors and
+the remaining full-milestone acceptance requirements are still open. See the
+milestone for checkpoint gate evidence.
 
 ## Retirement and external effects
 
@@ -318,8 +319,8 @@ Cleanup uses a fresh, non-renewing credential resolution: if authorization is
 unavailable, requires token renewal, or cannot be obtained within the remaining
 budget, skip DELETE. Never start a token exchange solely to clean up a session
 and never use cached credentials. The standalone batch API implements this
-default; activation-wide integration and call-owned renewal acknowledgement still
-require verification. Supervisor children remain proper
+default. Activation-wide cleanup uses the same barrier; remaining acceptance
+evidence is tracked in the milestone. Supervisor children remain proper
 supervisors with OTP shutdown semantics; a bounded lifecycle worker owns the
 network grace period.
 
@@ -350,23 +351,46 @@ across all matching owner sessions. Closing one session must never implicitly
 revoke the shared grant. Keep the separate-node request-time authority checks;
 a local registry alone is not cluster-wide revocation.
 
-OAuth storage and refresh claims remain grant-scoped. Keep the existing bounded,
-caller-monitored renewal runner and crash fencing, including ambiguous rotating
-refresh-token outcomes; do not add a refresh scheduler for each participant.
-Call-owned callers must disappear on retirement so their pending renewal work
-is cancelled, without cancelling a different caller's job. Root-owned renewal
-workers are an explicit exception to physical subtree placement, not to lifetime
-ownership: teardown needs operation-specific cancellation/termination acknowledgement
-from the runner as well as descendant DOWN messages. A request queued at the
-runner but not yet admitted must be fenced against later admission/submission;
-processing a caller DOWN eventually is insufficient for teardown acknowledgement.
-The same common deadline covers cancellation and observed termination of these
-jobs; no detached post-teardown cleanup waiter may keep the call's work alive.
-A token exchange
+OAuth storage and refresh claims remain grant-scoped. Session-triggered renewal
+now executes under the session's existing transport `DynamicSupervisor`, using
+`SessionOperation` with non-readiness completion. The shared `PreflightRunner`
+grants bounded capacity and retains only admission records, monitors and timers
+for this path. Independent management renewal keeps its existing root task path.
+This replaces the planning proposal for root-owned call renewal workers and an
+additional cross-tree cancellation acknowledgement protocol. The existing
+transport descendant barrier now observes the actual renewal and DNS workers.
+
+The originating resolver registers its operation before either supervisor
+admission or the shared runner queue. Its lifecycle watches the exact runner PID
+as well as the caller and deadline; runner replacement cancels blocked work.
+Each runner publishes its immutable timeout under its exact PID in the existing
+Registry. Reading that nonsecret, automatically cleaned record establishes the
+configured absolute deadline before queueing, even if the runner is suspended.
+Missing metadata fails closed. Admission rechecks the original budget and the
+session lifecycle applies the returned limit before releasing the callback.
+Completing this operation validates its lifetime without marking a starting MCP
+session ready. No participant-specific scheduler or new coordinator is added.
+
+`RuntimeAuthProvider` binds the integration PID both when constructing the client
+and when checking reused credentials. Trusted resolvers must implement
+`resolve/5` for this session-aware path, in addition to management `resolve/4`;
+there is no fallback to ownerless resolution. Calls passes that identity through
+its `run_owned` and `refresh_owned` protocol ports. Cleanup still uses the
+non-renewing `resolve_cleanup/4` path. Token HTTP runs synchronously in the owned
+renewal worker. Token DNS uses the existing direct dependency resolver in another
+bounded session operation, preserving its one-second budget without a detached
+DNS task. A dead caller, cancelled operation or closed session cannot submit a
+later token request after waiting for admission or DNS.
+
+Closing one session cancels its work without revoking the shared grant or killing
+another session's worker. Durable claim, completion and failure fencing remain
+unchanged, including ambiguous rotating-refresh outcomes. A token exchange
 already accepted remotely may still have effects; late results cannot restore
-revoked/replaced grants. Ordinary unrelated management/renewal operations remain
-possible outside a call. The guarantee is removal of the retired call's work,
-not that the entire application becomes silent when one call ends.
+revoked/replaced grants. Shared admission bookkeeping can process DOWN later,
+but acknowledged teardown has already observed all actual session work stop.
+Ordinary unrelated management/renewal operations remain possible outside a call.
+The guarantee is removal of the retired call's work, not that the entire
+application becomes silent when one call ends.
 
 ## Discovery, compatibility and capacity
 
