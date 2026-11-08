@@ -177,11 +177,15 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
         tenant,
         id,
         generation,
+        %{refreshed_at: refreshed_at, refresh_scheduled_at: scheduled_at},
         %{server_name: name, catalog: catalog} = attributes
       ) do
     transaction(context, fn repo ->
       record = current!(repo, tenant, id, generation)
       if record.status != "connected", do: repo.rollback(:mcp_connection_not_found)
+
+      if record.refreshed_at != refreshed_at or record.refresh_scheduled_at != scheduled_at,
+        do: repo.rollback(:stale_mcp_catalog)
 
       if Map.keys(attributes) -- [:server_name, :catalog] != [],
         do: repo.rollback(:invalid_mcp_configuration)
@@ -192,7 +196,8 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
       record
       |> MCPConnection.changeset(%{
         server_name: DirectoryEntry.name(record.directory_entry, name),
-        catalog: %{"tools" => catalog}
+        catalog: %{"tools" => catalog},
+        refreshed_at: next_freshness(context, record.refreshed_at)
       })
       |> repo.update(@private)
       |> then(&unwrap!(repo, &1))
@@ -200,7 +205,28 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
     end)
   end
 
-  def refresh_catalog(_, _, _, _, _), do: {:error, :invalid_mcp_configuration}
+  def refresh_catalog(_, _, _, _, _, _), do: {:error, :invalid_mcp_configuration}
+
+  @doc false
+  def catalog_time(context) do
+    case Keyword.fetch(context, :now) do
+      {:ok, clock} ->
+        clock.()
+
+      :error ->
+        repo = Keyword.fetch!(context, :repo)
+        %{rows: [[now]]} = repo.query!("SELECT clock_timestamp()", [], @private)
+        now
+    end
+  end
+
+  defp next_freshness(context, previous) do
+    now = catalog_time(context)
+
+    if previous && DateTime.compare(now, previous) != :gt,
+      do: DateTime.add(previous, 1, :microsecond),
+      else: now
+  end
 
   def reencrypt(context, size) when is_integer(size) and size in 1..500 do
     transaction(context, fn repo ->
@@ -279,6 +305,8 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
       |> Map.merge(%{
         status: "connected",
         catalog: %{"tools" => catalog},
+        refreshed_at: next_freshness(context, record.refreshed_at),
+        refresh_scheduled_at: nil,
         generation: Map.get(attributes, :generation, record.generation)
       })
 
@@ -384,6 +412,8 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStore do
       generation: record.generation,
       status: record.status,
       catalog: Map.fetch!(record.catalog, "tools"),
+      refreshed_at: record.refreshed_at,
+      refresh_scheduled_at: record.refresh_scheduled_at,
       namespace: "mcp_" <> String.replace(record.public_id, "-", "")
     }
   end

@@ -1,7 +1,7 @@
-defmodule Vxpipe.Console.OwnOAuthRefreshTest do
+defmodule Vxpipe.Calls.OwnOAuthRefreshTest do
   use ExUnit.Case, async: true
   alias ExMCP.Authorization.JWT
-  alias Vxpipe.Console.MCPOAuthRefresh
+  alias Vxpipe.Calls.MCPOAuthProtocol, as: MCPOAuthRefresh
 
   setup_all do
     rsa = :public_key.generate_key({:rsa, 2048, 65_537})

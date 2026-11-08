@@ -198,10 +198,17 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
     {call, route} = published_call(c, c.options)
 
     assert {:ok, _} =
-             ConnectionStore.refresh_catalog(c.context, c.tenant, c.connection.id, 1, %{
-               catalog: [tool("lookup_customer"), tool("new_tool")],
-               server_name: "Renamed records"
-             })
+             ConnectionStore.refresh_catalog(
+               c.context,
+               c.tenant,
+               c.connection.id,
+               1,
+               Map.take(c.connection, [:refreshed_at, :refresh_scheduled_at]),
+               %{
+                 catalog: [tool("lookup_customer"), tool("new_tool")],
+                 server_name: "Renamed records"
+               }
+             )
 
     assert {:error, :mcp_connection_unavailable} = CallEngineOptions.build(c.options, call)
     assert {:ok, refreshed, _} = Calls.prepare_call(c.principal, route.key, %{}, c.options)

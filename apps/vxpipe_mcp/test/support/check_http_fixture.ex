@@ -60,8 +60,22 @@ defmodule Vxpipe.MCP.CheckHTTPFixture do
   defp respond(conn, %{"method" => "notifications/initialized"}, _options),
     do: send_resp(conn, 202, "")
 
-  defp respond(conn, %{"method" => "tools/list", "id" => id}, _options),
-    do: json(conn, id, %{"tools" => []})
+  defp respond(conn, %{"method" => "tools/list", "id" => id}, options) do
+    if Keyword.get(options, :pause_catalog, false) do
+      reference = make_ref()
+      send(Keyword.fetch!(options, :owner), {:check_catalog_paused, self(), reference})
+
+      receive do
+        {:resume_check_catalog, ^reference} -> :ok
+      after
+        10_000 -> raise "catalog fixture barrier timed out"
+      end
+    end
+
+    authorization = List.first(get_req_header(conn, "authorization"))
+    catalogs = Keyword.get(options, :catalogs_by_authorization, %{})
+    json(conn, id, %{"tools" => Map.get(catalogs, authorization, [])})
+  end
 
   defp json(conn, id, result),
     do:

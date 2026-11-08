@@ -54,10 +54,17 @@ defmodule Vxpipe.Console.Integration.SavedMCPBoundariesTest do
 
   test "an empty saved connection remains visible without a selectable or phantom tool", c do
     assert {:ok, _} =
-             ConnectionStore.refresh_catalog(c.context, c.tenant, c.connection.id, 1, %{
-               catalog: [],
-               server_name: "Empty records"
-             })
+             ConnectionStore.refresh_catalog(
+               c.context,
+               c.tenant,
+               c.connection.id,
+               1,
+               Map.take(c.connection, [:refreshed_at, :refresh_scheduled_at]),
+               %{
+                 catalog: [],
+                 server_name: "Empty records"
+               }
+             )
 
     assert {:ok, [id]} = SavedMCPCatalog.names(c.tenant, c.options)
     assert id == c.connection.id
@@ -89,10 +96,17 @@ defmodule Vxpipe.Console.Integration.SavedMCPBoundariesTest do
       ])
 
     assert {:ok, _} =
-             ConnectionStore.refresh_catalog(c.context, c.tenant, c.connection.id, 1, %{
-               catalog: [changed, tool("new_tool")],
-               server_name: "Records"
-             })
+             ConnectionStore.refresh_catalog(
+               c.context,
+               c.tenant,
+               c.connection.id,
+               1,
+               Map.take(c.connection, [:refreshed_at, :refresh_scheduled_at]),
+               %{
+                 catalog: [changed, tool("new_tool")],
+                 server_name: "Records"
+               }
+             )
 
     failed_admission(c, prepared)
 
@@ -119,10 +133,17 @@ defmodule Vxpipe.Console.Integration.SavedMCPBoundariesTest do
     prepared = prepare_web_call(c, source(c.connection.id))
 
     assert {:ok, _} =
-             ConnectionStore.refresh_catalog(c.context, c.tenant, c.connection.id, 1, %{
-               catalog: [],
-               server_name: "Records"
-             })
+             ConnectionStore.refresh_catalog(
+               c.context,
+               c.tenant,
+               c.connection.id,
+               1,
+               Map.take(c.connection, [:refreshed_at, :refresh_scheduled_at]),
+               %{
+                 catalog: [],
+                 server_name: "Records"
+               }
+             )
 
     failed_admission(c, prepared)
     failed = api(c.secret, :post, prepared.create_path, %{})

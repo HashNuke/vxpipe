@@ -8,8 +8,8 @@ deadlines, cancellation, partial rollback and source retirement after transfer.
 Catalog loads now use independent temporary operation hosts with bounded cleanup.
 The library requires explicit hosts; the legacy root session pool has been removed.
 Call-owned renewal and token DNS now run under the exact session, including
-cancellation before shared admission. Queued catalogs and the remaining
-acceptance matrix are still pending.
+cancellation before shared admission. Durable tenant catalog jobs and their T3b
+acceptance checks are complete. The remaining T3/T4 acceptance matrix is pending.
 Embedded runtime restart options now preserve a host catalog-store reference;
 private snapshots are resolved within the activation's bounded initialization.
 The user requested a milestone for moving agent-used MCP connections into the
@@ -496,7 +496,7 @@ timestamps, not a second catalog database or a new consent workflow.
 
 ### Queue and application ownership
 
-Select **Oban with the existing PostgreSQL Repo** for the Sidekiq-style job model.
+Use **Oban with the existing PostgreSQL Repo** for the Sidekiq-style job model.
 Use its periodic scheduling to enqueue a sweep job; the sweep enqueues one job
 per due tenant connection. Use its ordinary retries, finite worker timeouts,
 orphan recovery and job pruning. No Redis service, paid extension, custom queue
@@ -507,26 +507,35 @@ transactional enqueue adapter and thin workers. Workers invoke a trusted Calls
 catalog-maintenance workflow through repository/protocol ports. Calls remains
 database/queue-library independent; `vxpipe_mcp` owns bounded protocol operations.
 Do not add a Persistence-to-Console dependency or fabricate a browser principal.
-Extract any reusable headless discovery/credential adapter currently placed in
-Console to its owning lower application, retaining existing management behavior.
+The existing OAuth protocol adapter now lives in `Calls.MCPOAuthProtocol`, and
+generic token-request projection lives in `MCP.OAuthTokenRequest`. Console keeps
+its existing authorization/completion workflow and uses those shared adapters.
 Start jobs only in configured persistence hosts; standalone Call Engine/MCP
 embedding still works without PostgreSQL or Oban.
 
 Read application configuration for catalog expiry, sweep cadence, batch size,
-queue concurrency and worker timeout. **Do not add environment variables.** A
-proposed starting policy is a one-hour expiry, one-minute sweep and batches of
+queue concurrency and worker timeout. **Do not add environment variables.** The
+configured defaults are a one-hour expiry, one-minute sweep and batches of
 100, with four refresh jobs per node and a finite operation timeout. The expiry
 is deliberately adjustable, and the confirmed rescheduling window is 30 minutes.
-For example, the planned domain policy can be expressed as:
+The domain policy is configured as:
 
 ```elixir
 config :vxpipe_calls, :mcp_catalog_refresh,
   expiry_seconds: 3_600,
-  reschedule_after_seconds: 1_800
+  reschedule_after_seconds: 1_800,
+  batch_size: 100
 ```
 
 Queue/cron settings belong in the persistence host's Oban application configuration.
 Validate positive bounds. Per-node queue concurrency is not a cluster-wide limit.
+`Vxpipe.Persistence.Jobs` runs the maintenance queue at concurrency one and the
+catalog queue at four. The sweep has three attempts; a refresh has five, using
+Oban's standard backoff. Both workers have a 30-second execution timeout through
+`:vxpipe_persistence, :mcp_catalog_worker_timeout_ms`. Discovery has a 10-second
+limit through `:vxpipe_calls, :mcp_catalog_discovery_timeout_ms`, bounded by the
+existing protocol adapter. Lifeline rescues abandoned execution after five
+minutes; Pruner retains terminal history for seven days.
 Use bounded indexed batches rather than scanning/decrypting every tenant record
 on every sweep; the sweep needs metadata only. Exclude connections with incomplete
 matching jobs before applying the batch limit, or use bounded keyset progress so
@@ -634,9 +643,22 @@ Official Oban documentation inspected on 2026-11-08 describes
 Uniqueness concerns insertion, not exactly-once execution; time-based orphan
 recovery can duplicate an attempt. The transactional row check and conditional
 publication are project-owned safeguards. The inspected docs report Oban 2.24.2
-and use `Oban.Cron`; the old `Oban.Plugins.Cron` entry is deprecated. Verify and
-pin a compatible maintained version during implementation, with its migrations
-and lockfile. No Oban dependency or migration is added by this planning change.
+and use `Oban.Cron`; the old `Oban.Plugins.Cron` entry is deprecated. The lockfile
+now selects 2.24.2, with Oban migration version 14 and a separate nullable
+freshness-field migration. Apply both through the existing migration procedure
+before starting a persistence-enabled host. Unknown-age catalogs become eligible
+gradually through the bounded sweep; migration does not open MCP sessions.
+
+The implementation uses [MCPCatalogRefresh](../../apps/vxpipe_calls/lib/vxpipe/calls/mcp_catalog_refresh.ex)
+for the trusted workflow and [CatalogRefreshStore](../../apps/vxpipe_persistence/lib/vxpipe/persistence/mcp/catalog_refresh_store.ex)
+for scheduling. `ConnectionStore.refresh_catalog/6` owns guarded publication for
+both manual and queued refresh. Discovery reuses `MCP.ConnectionCheck`.
+The actual-job tests cover conditional publication, two authorizations at the
+same endpoint, bounded cancellation and replacement-BEAM orphan recovery.
+The saved-call integration cases verify pinned tools, independent lifetimes
+through durable hangup and carrier audio while discovery is held. The remaining
+credential/lifecycle and final milestone acceptance requirements stay open;
+see the [checkpoint labnote](../../labnotes/20261108-2159-tenant-catalog-jobs.md).
 
 ## Alternatives and implications
 

@@ -111,6 +111,7 @@ defmodule Vxpipe.Persistence.MCP.OAuthGrantStoreTest do
                data.tenant,
                data.connection.id,
                1,
+               Map.take(data.connection, [:refreshed_at, :refresh_scheduled_at]),
                %{
                  server_name: "Renamed tools",
                  catalog: [%{"name" => "new_tool", "inputSchema" => %{"type" => "object"}}]
@@ -159,6 +160,8 @@ defmodule Vxpipe.Persistence.MCP.OAuthGrantStoreTest do
              ConnectionStore.resolve(data.context, data.tenant, data.connection.id)
 
     assert resolved.connection.generation == 1
+    assert resolved.connection.refreshed_at == data.connection.refreshed_at
+    assert resolved.connection.refresh_scheduled_at == data.connection.refresh_scheduled_at
     assert resolved.secrets["grant_revision"] == 2
     assert resolved.secrets["refresh_token"] == "new-refresh"
     assert resolved.secrets["client_id"] == "client"

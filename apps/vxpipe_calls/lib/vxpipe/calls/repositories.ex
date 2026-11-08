@@ -18,6 +18,7 @@ defmodule Vxpipe.Calls.Repositories do
           | :mcp_oauth_preparation
           | :mcp_oauth_attempt_repository
           | :mcp_connection_repository
+          | :mcp_catalog_refresh_repository
           | :mcp_preflight
           | :mcp_connection_probe
           | :provider_credential_repository

@@ -1,7 +1,7 @@
-defmodule Vxpipe.Console.MCPOwnedRenewalTest do
+defmodule Vxpipe.Calls.MCPOwnedRenewalTest do
   use ExUnit.Case, async: true
 
-  alias Vxpipe.Console.MCPOAuthRefresh
+  alias Vxpipe.Calls.MCPOAuthProtocol, as: MCPOAuthRefresh
   alias Vxpipe.MCP.{Connection, ConnectionKey, Connections, PreflightRunner, ReadyClientRuntime}
 
   setup do

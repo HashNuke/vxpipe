@@ -1,7 +1,7 @@
 defmodule Vxpipe.Console.MCPOAuthCompletion do
   @moduledoc "Redeems a claimed OAuth callback and verifies MCP initialization before persistence."
   alias Vxpipe.Calls.{ResolvedMCPOAuthAttempt, ResolvedMCPConnection}
-  alias Vxpipe.Console.MCPOAuthTokenRequest
+  alias Vxpipe.MCP.OAuthTokenRequest, as: MCPOAuthTokenRequest
   alias Vxpipe.MCP.{ConnectionCheck, OAuthCallback, OAuthTokenExchange, StaticConfiguration}
 
   def complete(options, tenant, callback, attempt) do

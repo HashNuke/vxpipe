@@ -1,6 +1,6 @@
-defmodule Vxpipe.Console.MachineOAuthRenewalTest do
+defmodule Vxpipe.Calls.MachineOAuthRenewalTest do
   use ExUnit.Case, async: true
-  alias Vxpipe.Console.MCPOAuthRefresh
+  alias Vxpipe.Calls.MCPOAuthProtocol, as: MCPOAuthRefresh
   alias Vxpipe.Calls.ResolvedMCPRefresh
 
   test "machine renewal uses the saved client grant, scope and metadata instead of a refresh token" do

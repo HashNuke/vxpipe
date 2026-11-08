@@ -48,7 +48,7 @@ defmodule Vxpipe.Console.Test.MCPCallbackNode do
       mcp_oauth_grant_repository: {OAuthGrantStore, configuration.context},
       mcp_oauth_preparation: {Vxpipe.Console.MCPOAuthPreparation, protocol},
       mcp_oauth_completion: {Vxpipe.Console.MCPOAuthCompletion, protocol},
-      mcp_oauth_refresh: {Vxpipe.Console.MCPOAuthRefresh, protocol}
+      mcp_oauth_refresh: {Vxpipe.Calls.MCPOAuthProtocol, protocol}
     )
 
     Application.put_env(:vxpipe_console, :user_identity_backend, UserIdentity)

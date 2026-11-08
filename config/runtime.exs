@@ -200,13 +200,16 @@ if database_enabled? do
     mcp_connection_repository:
       {Vxpipe.Persistence.MCP.ConnectionStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
+    mcp_catalog_refresh_repository:
+      {Vxpipe.Persistence.MCP.CatalogRefreshStore,
+       [repo: Vxpipe.Persistence.Repo, oban: Vxpipe.Persistence.Jobs]},
     mcp_oauth_attempt_repository:
       {Vxpipe.Persistence.MCP.OAuthAttemptStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
     mcp_oauth_grant_repository:
       {Vxpipe.Persistence.MCP.OAuthGrantStore,
        [repo: Vxpipe.Persistence.Repo, keyring: credential_keyring]},
-    mcp_oauth_refresh: {Vxpipe.Console.MCPOAuthRefresh, []},
+    mcp_oauth_refresh: {Vxpipe.Calls.MCPOAuthProtocol, []},
     mcp_oauth_completion: {Vxpipe.Console.MCPOAuthCompletion, []},
     mcp_oauth_preparation: {Vxpipe.Console.MCPOAuthPreparation, []},
     mcp_preflight: {Vxpipe.Console.MCPPreflight, []},

@@ -128,7 +128,7 @@ defmodule Vxpipe.Calls.Test.MCPRepositoryFixture do
     {:ok, %{id: id, tenant_key: tenant, generation: generation + 1, status: "revoked"}}
   end
 
-  def refresh_catalog(owner, tenant, id, generation, attributes) do
+  def refresh_catalog(owner, tenant, id, generation, _freshness, attributes) do
     send(owner, {:mcp_catalog, tenant, id, generation, attributes})
 
     with {:ok, metadata} <- get_retained(owner, tenant, id),

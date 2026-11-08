@@ -1,6 +1,6 @@
-defmodule Vxpipe.Console.MCPOAuthRefresh do
+defmodule Vxpipe.Calls.MCPOAuthProtocol do
   @moduledoc "Projects a private durable renewal claim into the saved OAuth grant's token request."
-  alias Vxpipe.Console.MCPOAuthTokenRequest
+  alias Vxpipe.MCP.OAuthTokenRequest, as: MCPOAuthTokenRequest
 
   def run(options, tenant, operation) do
     runner = Keyword.get(options, :renewal_runner, Vxpipe.MCP.OAuthRenewalRunner)

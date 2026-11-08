@@ -17,7 +17,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
     Application.put_env(:vxpipe_calls, Vxpipe.Calls,
       mcp_connection_repository: {ConnectionStore, context},
       mcp_oauth_grant_repository: {OAuthGrantStore, context},
-      mcp_oauth_refresh: {Vxpipe.Console.MCPOAuthRefresh, protocol(base)}
+      mcp_oauth_refresh: {Vxpipe.Calls.MCPOAuthProtocol, protocol(base)}
     )
 
     {:ok, _} =

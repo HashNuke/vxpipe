@@ -20,7 +20,10 @@ defmodule Vxpipe.Persistence.Application do
 
       case Vxpipe.Persistence.PublicationRecoveryConfiguration.children(recovery_settings) do
         {:ok, recovery_children} ->
-          [Vxpipe.Persistence.Repo] ++ installation_cache_children() ++ recovery_children
+          [
+            Vxpipe.Persistence.Repo,
+            {Oban, Application.fetch_env!(:vxpipe_persistence, Oban)}
+          ] ++ installation_cache_children() ++ recovery_children
 
         {:error, reason} ->
           raise ArgumentError, "invalid publication recovery: #{reason}"

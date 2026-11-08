@@ -205,21 +205,21 @@ have explicit lifetimes. Both management and ongoing calls still work independen
 Depends on the T1 operation-owned client and T3 current-credential boundaries.
 Follow the [queue/timestamp contract](../../docs/development/participant-mcp-ownership.md#persistent-tenant-catalog-maintenance).
 
-- [ ] Red-test tenant-owned catalog freshness and due-selection rules. Add
+- [x] Red-test tenant-owned catalog freshness and due-selection rules. Add
   nullable UTC microsecond `refresh_scheduled_at` and `refreshed_at` with an indexed, bounded
   sweep query. Existing unknown-age records keep their catalog and null freshness;
   initial successful save, including OAuth callback, sets `refreshed_at` atomically.
   General record updates/token renewal must not advance either catalog timestamp.
-- [ ] Add compatible Oban dependency/migrations in `vxpipe_persistence`, using
+- [x] Add compatible Oban dependency/migrations in `vxpipe_persistence`, using
   the existing Repo. Start its supervised queues only in persistence-enabled hosts.
   Use standard periodic scheduling, finite execution timeout, bounded retries,
   orphan recovery and pruning. Keep standalone Call Engine/MCP boot independent.
-- [ ] Implement one periodic sweep worker and one per-connection refresh worker.
+- [x] Implement one periodic sweep worker and one per-connection refresh worker.
   Thin queue workers delegate to a trusted Calls workflow and persistence ports;
   extract headless shared protocol adapters if necessary, with no dependency on
   Console or fake browser identity. Put expiry, cadence and limits in application
   configuration; document defaults and verify no environment-variable readers.
-- [ ] Red-test concurrent sweepers and enqueue failure. Recheck eligibility under
+- [x] Red-test concurrent sweepers and enqueue failure. Recheck eligibility under
   the row lock and transactionally insert the job plus `refresh_scheduled_at`.
   Apply uniqueness to tenant/connection/generation. Duplicate/no-op/failed enqueue
   and retry do not extend suppression, including Oban's successful conflict return.
@@ -228,11 +228,11 @@ Follow the [queue/timestamp contract](../../docs/development/participant-mcp-own
   is retained or rescued after 30 minutes rather than duplicated by a new job.
   Exclude incomplete matching jobs before the batch limit or use bounded keyset
   progress; prove a backlog larger than one batch cannot starve later connections.
-- [ ] Resolve current credentials inside each refresh attempt; job arguments hold
+- [x] Resolve current credentials inside each refresh attempt; job arguments hold
   only public IDs, connection generation and scheduling stamp. Fetch the complete
   catalog in a job-owned session with existing response/deadline limits. Close
   its clients, streams and workers on success, error, timeout and cancellation.
-- [ ] Red-test stale/duplicate job completion, reconnect/disconnect/deletion and
+- [x] Red-test stale/duplicate job completion, reconnect/disconnect/deletion and
   a newer manual refresh. Recheck status, generation, scheduling stamp and prior
   `refreshed_at` when atomically publishing catalog plus successful refresh time.
   Use a NULL-safe exact comparison with the observed freshness value; advance it
@@ -240,19 +240,20 @@ Follow the [queue/timestamp contract](../../docs/development/participant-mcp-own
   Hold duplicate/manual results under a fixed clock and reject the losing result.
   No-change and valid empty catalogs advance freshness; partial/error responses
   preserve the last good snapshot. Immediate manual refresh remains available.
-- [ ] Verify timestamp expiry boundaries, clock-controlled retry behavior, node
+- [x] Verify timestamp expiry boundaries, clock-controlled retry behavior, node
   restart/orphan recovery and at-least-once delivery using the actual database
   adapter. No secrets in Oban args/error records/logs; no remote network work
   inside database transactions. Two tenants at one endpoint keep distinct catalogs.
-- [ ] Prove queued maintenance during an active call does not alter its pinned
+- [x] Prove queued maintenance during an active call does not alter its pinned
   tools/schemas, block its audio or borrow its session. Ending that call leaves
   the independent job operational. Run a bounded backlog sweep and reuse existing
   Oban/MCP telemetry to record queue delay, refresh outcomes and cleanup evidence.
 
 Exit: the periodic job finds stale tenant catalogs, durable per-connection jobs
 refresh them without duplicate scheduling, and failed/crashed attempts recover
-without false freshness or cross-tenant publication. All implementation boxes
-remain open until the queue and persistence evidence exists.
+without false freshness or cross-tenant publication. The eight T3b items now have
+implementation, database, wire, call/audio and review evidence; remaining T3/T4
+acceptance stays open.
 
 ### T4 — Transfers, complete call teardown and acceptance
 
@@ -557,3 +558,23 @@ The maintenance amendment is tracked in the
   four T2 items: 14 of 29 implementation items are complete. Credential-change
   composition, durable catalog jobs and final performance/manual acceptance remain
   open. See the [embedded restart labnote](../20261108-2117-embedded-mcp-restart.md).
+
+- Durable tenant catalog maintenance now uses Oban on the existing Repo, with
+  application-configured expiry, bounded sweeps, atomic enqueue/timestamp writes
+  and guarded publication. Existing static/OAuth save establishes freshness;
+  renewal and reencryption preserve it. Real jobs cover same-clock duplicates,
+  manual/replacement/disconnect fencing, tenant-specific catalogs, cancellation
+  and replacement-BEAM orphan recovery. A twelve-job backlog drains across
+  batches of five at queue concurrency four and returns discovery sessions to
+  zero. Saved calls retain pinned tools and their own sessions; carrier audio
+  continues during held discovery, and durable hangup leaves maintenance alive.
+  Persistence passes 62 tests (seed 740152), Calls passes 38 (seed 631102),
+  and the final call/audio lane passes two (seed 569388). The combined Console
+  lane passed 44 of 47 cases; three outdated full-record assertions around
+  manual-refresh freshness were corrected, and all nine cases in that file pass
+  on the same seed 541494. All five root gates pass: 5,094 tests, zero failures,
+  363 excluded, seed 412417. Independent Astra source/incremental reviews approve
+  the checkpoint. This completes all eight T3b items: 22 of 29 implementation
+  items are complete. The phone helper's cleanup/archive timestamp-order
+  assumption remains a T4 acceptance question, with no catalog production change.
+  See the [catalog-job labnote](../20261108-2159-tenant-catalog-jobs.md).

@@ -7,7 +7,7 @@ defmodule Vxpipe.Console.OutboundMCPOAuthRenewalTest do
       Keyword.put(
         data.options,
         :mcp_oauth_refresh,
-        {Vxpipe.Console.MCPOAuthRefresh, data.protocol}
+        {Vxpipe.Calls.MCPOAuthProtocol, data.protocol}
       )
 
     calls = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
@@ -52,6 +52,16 @@ defmodule Vxpipe.Console.OutboundMCPOAuthRenewalTest do
       assert {:ok, runtime} = MCPRuntimeCredentials.resolve(data.tenant, id, 1, options)
       refreshed = resolve(data, id)
       assert_tools_refresh(data, id, refreshed.secrets)
+      rediscovered = resolve(data, id)
+      assert rediscovered.secrets == refreshed.secrets
+
+      assert Map.delete(rediscovered.connection, :refreshed_at) ==
+               Map.delete(refreshed.connection, :refreshed_at)
+
+      assert DateTime.compare(
+               rediscovered.connection.refreshed_at,
+               refreshed.connection.refreshed_at
+             ) == :gt
 
       assert runtime.secrets == %{
                "access_token" => refreshed.secrets["access_token"],
@@ -69,7 +79,7 @@ defmodule Vxpipe.Console.OutboundMCPOAuthRenewalTest do
 
       OutboundMCPOAuthServer.configure(data.peer, %{mcp_fail: true})
       assert json_response(request(data, :patch, "/mcp-connections/#{id}", replacement), 503)
-      assert resolve(data, id) == refreshed
+      assert resolve(data, id) == rediscovered
       OutboundMCPOAuthServer.configure(data.peer, %{mcp_fail: false})
       assert json_response(request(data, :patch, "/mcp-connections/#{id}", replacement), 200)
       current = resolve(data, id)

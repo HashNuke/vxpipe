@@ -1,4 +1,4 @@
-defmodule Vxpipe.Console.MCPOAuthTokenRequest do
+defmodule Vxpipe.MCP.OAuthTokenRequest do
   @moduledoc "Projects encrypted saved client configuration into a private protocol request."
   alias Vxpipe.MCP.OAuthClientAssertion
 

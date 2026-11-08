@@ -14,6 +14,8 @@ defmodule Vxpipe.Persistence.Schema.MCPConnection do
     field(:generation, :integer)
     field(:status, :string)
     field(:catalog, :map)
+    field(:refresh_scheduled_at, :utc_datetime_usec)
+    field(:refreshed_at, :utc_datetime_usec)
     field(:encrypted_payload, :binary, redact: true)
     field(:encryption_key_id, :string)
     timestamps(type: :utc_datetime_usec)
@@ -33,6 +35,8 @@ defmodule Vxpipe.Persistence.Schema.MCPConnection do
       :generation,
       :status,
       :catalog,
+      :refresh_scheduled_at,
+      :refreshed_at,
       :encrypted_payload,
       :encryption_key_id
     ])

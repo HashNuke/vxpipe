@@ -269,6 +269,10 @@ defmodule Vxpipe.Calls.MCPConnections do
              tenant,
              id,
              generation,
+             %{
+               refreshed_at: Map.get(saved.connection, :refreshed_at),
+               refresh_scheduled_at: Map.get(saved.connection, :refresh_scheduled_at)
+             },
              Map.take(checked.connection, [:server_name, :catalog])
            ]) do
       if record.id == id,

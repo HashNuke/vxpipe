@@ -252,8 +252,9 @@ change registration/client identity.
 
 Claims expire after thirty seconds but are never reclaimed for another network
 attempt: a worker may have already consumed a rotating token. An expired claim
-requires reconnect. This is a durable ambiguity fence, not a retry lease. `Calls.MCPOAuthRefresh` now claims before one network exchange through Console's
-adapter, commits only token fields, and fences any failed/ambiguous exchange for
+requires reconnect. This is a durable ambiguity fence, not a retry lease.
+`Calls.MCPOAuthRefresh` claims before one network exchange through the shared
+`Calls.MCPOAuthProtocol` adapter, commits only token fields, and fences any failed/ambiguous exchange for
 reconnect. Omitted refresh tokens preserve the saved rotating token. This is a
 trusted runtime port whose caller owns authorization; it is not a public refresh
 API. Runtime integration and distinct PostgreSQL-session race checks are

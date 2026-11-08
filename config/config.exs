@@ -43,6 +43,24 @@ config :vxpipe_persistence, :call_details_publication_recovery, enabled: false
 
 config :vxpipe_persistence, Vxpipe.Persistence.Repo, log: false
 
+config :vxpipe_persistence, Oban,
+  name: Vxpipe.Persistence.Jobs,
+  repo: Vxpipe.Persistence.Repo,
+  queues: [maintenance: 1, mcp_catalog: 4],
+  cron: [crontab: [{"* * * * *", Vxpipe.Persistence.MCP.CatalogSweepWorker}]],
+  lifeline: [rescue_after: {5, :minutes}],
+  pruner: [max_age: {7, :days}]
+
+config :vxpipe_persistence, :mcp_catalog_worker_timeout_ms, 30_000
+
+config :vxpipe_calls, :mcp_catalog_refresh,
+  expiry_seconds: 3_600,
+  reschedule_after_seconds: 1_800,
+  batch_size: 100
+
+config :vxpipe_calls, :mcp_catalog_discovery_timeout_ms, 10_000
+config :vxpipe_calls, :mcp_catalog_protocol, {Vxpipe.MCP.ConnectionCheck, []}
+
 config :boruta, Boruta.Oauth,
   contexts: [
     clients: Vxpipe.Persistence.OAuth.BorutaClients,

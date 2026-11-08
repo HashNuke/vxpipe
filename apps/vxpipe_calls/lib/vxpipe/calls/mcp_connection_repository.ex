@@ -23,6 +23,7 @@ defmodule Vxpipe.Calls.MCPConnectionRepository do
               {:ok, map()} | {:error, term()}
   @callback revoke(term(), String.t(), String.t(), pos_integer()) ::
               {:ok, map()} | {:error, atom()}
-  @callback refresh_catalog(term(), String.t(), String.t(), pos_integer(), map()) ::
+  @doc "Publishes only while generation and the observed freshness/scheduling timestamps still match."
+  @callback refresh_catalog(term(), String.t(), String.t(), pos_integer(), map(), map()) ::
               {:ok, map()} | {:error, atom()}
 end

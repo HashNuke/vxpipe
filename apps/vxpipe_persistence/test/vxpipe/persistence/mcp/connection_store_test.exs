@@ -102,10 +102,17 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
     assert original.server_name == "Directory Calendar"
 
     assert {:ok, refreshed} =
-             ConnectionStore.refresh_catalog(data.context, data.tenant, original.id, 1, %{
-               server_name: "Protocol-reported name",
-               catalog: []
-             })
+             ConnectionStore.refresh_catalog(
+               data.context,
+               data.tenant,
+               original.id,
+               1,
+               Map.take(original, [:refreshed_at, :refresh_scheduled_at]),
+               %{
+                 server_name: "Protocol-reported name",
+                 catalog: []
+               }
+             )
 
     assert refreshed.directory_entry == listing
     assert refreshed.server_name == "Directory Calendar"
@@ -421,16 +428,20 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
     assert {:ok, _} = ConnectionStore.create(data.context, data.other, data.attributes, %{})
   end
 
-  test "identity lookup is tenant-scoped metadata and includes revoked records without keys", data do
+  test "identity lookup is tenant-scoped metadata and includes revoked records without keys",
+       data do
     identity = Map.take(data.attributes, [:endpoint_identity, :directory_id])
     no_keys = Keyword.put(data.context, :keyring, nil)
     assert {:ok, nil} = ConnectionStore.find_identity(no_keys, data.tenant, identity)
 
     assert {:ok, original} =
-             ConnectionStore.create(data.context, data.tenant, data.attributes, %{"token" => "private"})
+             ConnectionStore.create(data.context, data.tenant, data.attributes, %{
+               "token" => "private"
+             })
 
     assert {:ok, ^original} = ConnectionStore.find_identity(no_keys, data.tenant, identity)
     assert {:ok, nil} = ConnectionStore.find_identity(no_keys, data.other, identity)
+
     assert {:ok, ^original} =
              ConnectionStore.find_identity(no_keys, data.tenant, %{identity | directory_id: nil})
 
@@ -438,10 +449,12 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
     assert {:ok, ^revoked} = ConnectionStore.find_identity(no_keys, data.tenant, identity)
     refute inspect(revoked) =~ "private"
 
-    assert {:error, :invalid_tenant_key} = ConnectionStore.find_identity(no_keys, :platform, identity)
+    assert {:error, :invalid_tenant_key} =
+             ConnectionStore.find_identity(no_keys, :platform, identity)
   end
 
-  test "identity lookup selects the same deterministic endpoint-or-directory match as create", data do
+  test "identity lookup selects the same deterministic endpoint-or-directory match as create",
+       data do
     assert {:ok, first} = ConnectionStore.create(data.context, data.tenant, data.attributes, %{})
 
     second_attributes = %{
@@ -451,7 +464,9 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
         directory_id: "other-directory"
     }
 
-    assert {:ok, second} = ConnectionStore.create(data.context, data.tenant, second_attributes, %{})
+    assert {:ok, second} =
+             ConnectionStore.create(data.context, data.tenant, second_attributes, %{})
+
     competing = %{second_attributes | directory_id: data.attributes.directory_id}
     identity = Map.take(competing, [:endpoint_identity, :directory_id])
     no_keys = Keyword.put(data.context, :keyring, nil)
@@ -461,6 +476,7 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
              ConnectionStore.create(data.context, data.tenant, competing, %{})
 
     assert id == first.id
+
     assert {:ok, ^second} =
              ConnectionStore.find_identity(no_keys, data.tenant, %{identity | directory_id: nil})
   end
@@ -523,7 +539,14 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
     }
 
     assert {:ok, refreshed} =
-             ConnectionStore.refresh_catalog(context, data.tenant, connection.id, 1, attributes)
+             ConnectionStore.refresh_catalog(
+               context,
+               data.tenant,
+               connection.id,
+               1,
+               Map.take(connection, [:refreshed_at, :refresh_scheduled_at]),
+               attributes
+             )
 
     assert refreshed.catalog == attributes.catalog
     assert refreshed.server_name == attributes.server_name
@@ -539,19 +562,41 @@ defmodule Vxpipe.Persistence.MCP.ConnectionStoreTest do
                data.tenant,
                connection.id,
                1,
+               Map.take(refreshed, [:refreshed_at, :refresh_scheduled_at]),
                Map.put(attributes, :auth_method, "none")
              )
 
     assert {:error, :mcp_connection_not_found} =
-             ConnectionStore.refresh_catalog(context, data.other, connection.id, 1, attributes)
+             ConnectionStore.refresh_catalog(
+               context,
+               data.other,
+               connection.id,
+               1,
+               Map.take(refreshed, [:refreshed_at, :refresh_scheduled_at]),
+               attributes
+             )
 
     assert {:ok, _} = ConnectionStore.revoke(context, data.tenant, connection.id, 1)
 
     assert {:error, :stale_mcp_connection} =
-             ConnectionStore.refresh_catalog(context, data.tenant, connection.id, 1, attributes)
+             ConnectionStore.refresh_catalog(
+               context,
+               data.tenant,
+               connection.id,
+               1,
+               Map.take(refreshed, [:refreshed_at, :refresh_scheduled_at]),
+               attributes
+             )
 
     assert {:error, :mcp_connection_not_found} =
-             ConnectionStore.refresh_catalog(context, data.tenant, connection.id, 2, attributes)
+             ConnectionStore.refresh_catalog(
+               context,
+               data.tenant,
+               connection.id,
+               2,
+               Map.take(refreshed, [:refreshed_at, :refresh_scheduled_at]),
+               attributes
+             )
   end
 
   test "replacement and revocation reject stale generations and never expose old secrets", data do

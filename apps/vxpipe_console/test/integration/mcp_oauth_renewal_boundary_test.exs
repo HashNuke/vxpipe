@@ -225,7 +225,7 @@ defmodule Vxpipe.Console.MCPOAuthRenewalBoundaryTest do
           })}}
       end)
 
-    Keyword.put(data.options, :mcp_oauth_refresh, {Vxpipe.Console.MCPOAuthRefresh, protocol})
+    Keyword.put(data.options, :mcp_oauth_refresh, {Vxpipe.Calls.MCPOAuthProtocol, protocol})
   end
 
   defp refresh(data, options),

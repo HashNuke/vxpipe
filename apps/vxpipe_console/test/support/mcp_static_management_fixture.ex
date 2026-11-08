@@ -98,7 +98,7 @@ defmodule Vxpipe.Console.Test.MCPStaticManagementFixture do
      })}
   end
 
-  def refresh_catalog(owner, tenant, id, generation, attributes) do
+  def refresh_catalog(owner, tenant, id, generation, _freshness, attributes) do
     send(owner, {:mcp_catalog_saved, tenant, id, generation, attributes})
 
     with {:ok, record} <- get_retained(owner, tenant, id),

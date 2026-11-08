@@ -53,7 +53,7 @@ defmodule Vxpipe.Calls.Test.MCPRuntimeFixture do
 
   def fail(_, _, _, _, _), do: :ok
 
-  def refresh_catalog({owner, agent}, tenant, id, generation, attributes) do
+  def refresh_catalog({owner, agent}, tenant, id, generation, _freshness, attributes) do
     send(owner, {:catalog_refreshed, attributes})
 
     Agent.get_and_update(agent, fn saved ->

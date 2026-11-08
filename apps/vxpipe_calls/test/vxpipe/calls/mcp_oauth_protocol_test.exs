@@ -1,4 +1,4 @@
-defmodule Vxpipe.Console.MCPOAuthRefreshTest do
+defmodule Vxpipe.Calls.MCPOAuthProtocolTest do
   use ExUnit.Case, async: true
 
   test "expired registration cannot send its client secret during refresh" do
@@ -26,7 +26,7 @@ defmodule Vxpipe.Console.MCPOAuthRefreshTest do
     ]
 
     assert {:error, :invalid_oauth_token_request} =
-             Vxpipe.Console.MCPOAuthRefresh.refresh(options, claim)
+             Vxpipe.Calls.MCPOAuthProtocol.refresh(options, claim)
 
     refute_received :unexpected_dns
   end
@@ -57,7 +57,7 @@ defmodule Vxpipe.Console.MCPOAuthRefreshTest do
       end
     ]
 
-    assert {:ok, tokens} = Vxpipe.Console.MCPOAuthRefresh.refresh(options, claim)
+    assert {:ok, tokens} = Vxpipe.Calls.MCPOAuthProtocol.refresh(options, claim)
     assert tokens["access_token"] == "new-access"
     assert {:ok, _, _} = DateTime.from_iso8601(tokens["expires_at"])
     refute Map.has_key?(tokens, "refresh_token")
@@ -95,7 +95,7 @@ defmodule Vxpipe.Console.MCPOAuthRefreshTest do
       end
     ]
 
-    assert {:ok, tokens} = Vxpipe.Console.MCPOAuthRefresh.refresh(options, claim)
+    assert {:ok, tokens} = Vxpipe.Calls.MCPOAuthProtocol.refresh(options, claim)
     assert tokens["expires_at"] == "2026-11-07T00:05:00Z"
   end
 end
