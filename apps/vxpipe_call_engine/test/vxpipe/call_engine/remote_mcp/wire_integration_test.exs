@@ -176,6 +176,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
   defp start_owner!(catalog, binding, suffix) do
     start_supervised!(
       {IntegrationOwner,
+       session_supervisor: Vxpipe.CallEngine.RemoteMCPFixture.session_supervisor!(),
        activation_id: "activation-#{suffix}",
        tools: %{"customer_lookup" => binding},
        integrations: catalog,

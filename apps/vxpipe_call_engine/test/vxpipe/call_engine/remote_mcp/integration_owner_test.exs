@@ -5,7 +5,12 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
   alias Vxpipe.CallEngine.RemoteMCPFixture
   alias Vxpipe.MCP.{Connections, CredentialLeases}
 
-  test "withholds readiness until scoped connection initialization finishes without invoking tools" do
+  setup do
+    %{session_supervisor: RemoteMCPFixture.session_supervisor!()}
+  end
+
+  test "withholds readiness until scoped connection initialization finishes without invoking tools",
+       %{session_supervisor: sessions} do
     client = client!([])
 
     {catalog, binding} =
@@ -29,6 +34,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
         DynamicSupervisor.start_child(
           supervisor,
           {IntegrationOwner,
+           session_supervisor: sessions,
            activation_id: "readiness-activation",
            participant_id: "support-agent",
            tools: %{"customer_lookup" => binding},
@@ -64,7 +70,9 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     assert invocations(client) == []
   end
 
-  test "opens the scoped generation and invokes the pinned remote operation" do
+  test "opens the scoped generation and invokes the pinned remote operation", %{
+    session_supervisor: sessions
+  } do
     client = client!([{:ok, %{"content" => [%{"type" => "text", "text" => "found"}]}}])
     private_value = "private-runtime-sentinel"
 
@@ -74,6 +82,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     owner =
       start_supervised!(
         {IntegrationOwner,
+         session_supervisor: sessions,
          activation_id: "activation-one",
          tools: %{"customer_lookup" => binding},
          integrations: catalog,
@@ -109,7 +118,9 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     assert {:error, :unknown_tool} = IntegrationOwner.execute(owner, "not_enabled", %{})
   end
 
-  test "withholds a remote response beyond the pinned result limit" do
+  test "withholds a remote response beyond the pinned result limit", %{
+    session_supervisor: sessions
+  } do
     client = client!([{:ok, %{"content" => [String.duplicate("x", 100)]}}])
 
     {catalog, binding} =
@@ -118,6 +129,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     owner =
       start_supervised!(
         {IntegrationOwner,
+         session_supervisor: sessions,
          activation_id: "activation-limit",
          tools: %{"customer_lookup" => binding},
          integrations: catalog,
@@ -137,13 +149,16 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     assert length(invocations(client)) == 1
   end
 
-  test "fails the binding owner closed when its protocol client exits" do
+  test "fails the binding owner closed when its protocol client exits", %{
+    session_supervisor: sessions
+  } do
     client = client!([])
     {catalog, binding} = RemoteMCPFixture.binding!(client, self(), "private")
 
     owner =
       start_supervised!(
         {IntegrationOwner,
+         session_supervisor: sessions,
          activation_id: "activation-connection-loss",
          participant_id: "support-agent",
          tools: %{"customer_lookup" => binding},
@@ -163,7 +178,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     assert {:error, :unavailable} = IntegrationOwner.readiness(owner)
   end
 
-  test "ends a revoked credential lease with its binding owner" do
+  test "ends a revoked credential lease with its binding owner", %{session_supervisor: sessions} do
     generation = "credential-revoked-#{System.unique_integer([:positive, :monotonic])}"
     client = client!([])
 
@@ -173,6 +188,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     owner =
       start_supervised!(
         {IntegrationOwner,
+         session_supervisor: sessions,
          activation_id: "activation-revoked-credential",
          participant_id: "support-agent",
          tools: %{"customer_lookup" => binding},
@@ -194,6 +210,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     assert {:error, {:credential_revoked, _child}} =
              start_supervised(
                {IntegrationOwner,
+                session_supervisor: sessions,
                 activation_id: "activation-revoked-credential-reuse",
                 tools: %{"customer_lookup" => binding},
                 integrations: catalog,

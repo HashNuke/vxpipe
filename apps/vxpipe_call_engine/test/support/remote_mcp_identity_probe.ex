@@ -55,7 +55,15 @@ defmodule Vxpipe.CallEngine.RemoteMCPIdentityProbe do
       remote: resolved
     }
 
-    owner = start_owner!(supervisor, identity, catalog, binding)
+    {:ok, sessions} =
+      DynamicSupervisor.start_child(
+        supervisor,
+        {DynamicSupervisor,
+         strategy: :one_for_one,
+         name: {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {:probe_host, make_ref()}}}}
+      )
+
+    owner = start_owner!(supervisor, sessions, identity, catalog, binding)
     arguments = %{identity.field_name => "value-#{index}"}
 
     {:ok, %{"content" => [%{"text" => result, "type" => "text"}]}} =
@@ -69,6 +77,7 @@ defmodule Vxpipe.CallEngine.RemoteMCPIdentityProbe do
     false = inspected =~ identity.endpoint
 
     :ok = DynamicSupervisor.terminate_child(supervisor, owner)
+    :ok = DynamicSupervisor.terminate_child(supervisor, sessions)
     :ok = DynamicSupervisor.terminate_child(supervisor, client)
   end
 
@@ -160,11 +169,12 @@ defmodule Vxpipe.CallEngine.RemoteMCPIdentityProbe do
     resolved
   end
 
-  defp start_owner!(supervisor, identity, catalog, binding) do
+  defp start_owner!(supervisor, sessions, identity, catalog, binding) do
     {:ok, owner} =
       DynamicSupervisor.start_child(
         supervisor,
         {IntegrationOwner,
+         session_supervisor: sessions,
          activation_id: "activation-#{identity.catalog_generation}",
          integrations: catalog,
          tools: %{identity.local_name => binding},

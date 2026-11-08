@@ -3,5 +3,5 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireConnectionProvider do
 
   alias Vxpipe.MCP.Connections
 
-  def open(key, config), do: Connections.open_loopback_test(key, config)
+  def open(key, config, options \\ []), do: Connections.open_loopback_test(key, config, options)
 end

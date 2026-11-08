@@ -5,6 +5,16 @@ defmodule Vxpipe.CallEngine.RemoteMCPFixture do
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.MCP.Catalog
 
+  def session_supervisor! do
+    reference = make_ref()
+    name = {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {:test_session_host, reference}}}
+
+    ExUnit.Callbacks.start_supervised!(
+      {DynamicSupervisor, strategy: :one_for_one, name: name},
+      id: {DynamicSupervisor, reference}
+    )
+  end
+
   def binding!(client, observer, private_value, overrides \\ []) do
     {:ok, remote_catalog} = Catalog.new([tool_descriptor()])
 

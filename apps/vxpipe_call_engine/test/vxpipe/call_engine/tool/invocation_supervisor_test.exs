@@ -249,6 +249,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
     owner =
       start_supervised!(
         {IntegrationOwner,
+         session_supervisor: Vxpipe.CallEngine.RemoteMCPFixture.session_supervisor!(),
          activation_id: "activation-remote-worker",
          tools: %{"customer_lookup" => resolved},
          integrations: integrations,

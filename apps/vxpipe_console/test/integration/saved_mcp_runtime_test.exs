@@ -152,6 +152,7 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
     owner =
       start_supervised!(
         {IntegrationOwner,
+         session_supervisor: session_supervisor!(),
          activation_id: call.id,
          tools: call.plan.participants["assistant"].tools,
          integrations: Keyword.fetch!(runtime, :mcp_catalog_store),
@@ -310,6 +311,7 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
     owner =
       start_supervised!(
         {IntegrationOwner,
+         session_supervisor: session_supervisor!(),
          activation_id: fresh.id,
          tools: fresh.plan.participants["assistant"].tools,
          integrations: Keyword.fetch!(runtime, :mcp_catalog_store),
@@ -360,7 +362,10 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
 
     on_exit(fn -> Connections.close(key) end)
 
+    sessions = session_supervisor!()
+
     options = [
+      session_supervisor: sessions,
       activation_id: call.id,
       tools: call.plan.participants["assistant"].tools,
       integrations: Keyword.fetch!(runtime, :mcp_catalog_store),
@@ -383,7 +388,7 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
         assert_receive {:DOWN, ^monitor, :process, ^owner, :credential_revoked}, 2_000
         [{_, replacement, _, _}] = Supervisor.which_children(supervisor)
         replacement_monitor = Process.monitor(replacement)
-        {:ok, connection} = Connections.lookup(key)
+        {:ok, connection} = Connections.lookup(key, owner: sessions)
         client = Vxpipe.MCP.Connection.client(connection)
         :ok = GenServer.stop(client, :fixture_connection_lost)
 
@@ -407,6 +412,12 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
       refute log =~ marker
       refute :erlang.term_to_binary(reports) =~ marker
     end
+  end
+
+  defp session_supervisor! do
+    reference = make_ref()
+    name = {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {:saved_test_host, reference}}}
+    start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: name}, id: reference)
   end
 
   defp collect_reports do

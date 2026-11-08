@@ -39,6 +39,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.CatalogStoreTest do
     owner =
       start_supervised!(
         {IntegrationOwner,
+         session_supervisor: Vxpipe.CallEngine.RemoteMCPFixture.session_supervisor!(),
          activation_id: "activation-old-catalog",
          integrations: old_snapshot,
          tools: %{"customer_lookup" => old_binding},

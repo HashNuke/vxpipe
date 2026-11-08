@@ -458,3 +458,16 @@ The maintenance amendment is tracked in the
   default MCP suite ran are covered by the combined lane. Root-owned renewal
   cancellation and participant composition remain later milestone requirements.
   See the [reuse labnote](../20261108-1743-bounded-session-reuse.md).
+
+- Initial T2 composition places an MCP session supervisor before the binding
+  owner inside the existing one-for-all activation graph. The binding owner
+  resolves its fresh exact PID on each initialization and requires providers to
+  return a registered handle for that owner and credential key. Three loopback
+  regressions prove separate activation descendants, isolated stop/recovery and
+  foreign-handle rejection. The 53-test Call Engine slice and 21 saved-runtime,
+  boundary, transfer, in-flight and phone regressions pass. Independent source
+  review finds no outstanding issues. Startup-budget propagation, preparation
+  cancellation and complete call teardown remain open; all T2 boxes stay unchecked.
+  All five root gates pass: 5,042 tests, zero failures, 323 excluded, seed 747278.
+  Final staged review precedes commit. See the
+  [composition labnote](../20261108-1818-participant-session-composition.md).

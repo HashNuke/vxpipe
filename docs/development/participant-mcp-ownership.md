@@ -3,8 +3,9 @@
 Status: implementation in progress, updated 2026-11-08. Standalone session
 ownership and bounded lifecycle (T1) are complete: exact handle retirement,
 owned transport workers, explicit host scoping, bounded startup/reuse and observed
-TLS POST/GET socket cleanup. Participant placement, call-owned renewal cancellation,
-queued catalogs and full call/transfer acceptance remain pending.
+TLS POST/GET socket cleanup. Participant placement has begun; its shared startup
+deadlines, call-owned renewal cancellation, queued catalogs and full call/transfer
+acceptance remain pending.
 The user requested a milestone for moving agent-used MCP connections into the
 participant's call tree. The [implementation milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md)
 tracks that work separately from the integrations-directory workflow approval.
@@ -224,9 +225,36 @@ and initial stream, then stalls the resumed GET; session close, host stop/crash
 and client death terminate the exact local tree and close the peer socket.
 
 Cancellation acknowledgement for root-owned renewal work remains open.
-Participant placement and activation-level
-teardown acceptance also remain unfinished; standalone lifecycle evidence does
-not establish those call-path contracts.
+Activation-level teardown acceptance also remains unfinished; standalone lifecycle
+evidence does not establish those call-path contracts.
+
+### Activation composition checkpoint
+
+MCP-enabled agent graphs now start a named `DynamicSupervisor` before the remote
+binding owner inside the existing `one_for_all` activation supervisor. Native-only
+graphs keep their existing children. The saved owner child specification contains
+the scoped supervisor name; each `IntegrationOwner.init/1` resolves it to the new
+exact PID. Recovery therefore creates a fresh session scope without changing the
+logical activation ID or the existing restart limits.
+
+`IntegrationOwner` now requires `session_supervisor:`. Trusted connection providers
+must implement `open(key, config, owner: exact_pid)` and return a registered, ready
+handle owned by that host with the expected credential key. There is no fallback
+to `open/2` or global sharing in this call path. Rejecting a foreign handle does
+not close its actual owner's session. Standalone hosts must supply and supervise
+their own session supervisor; catalog loading remains on its transitional API
+until the management migration in T3.
+
+Loopback tests cover separate clients for equal tenant grants, one activation's
+stop and recovery leaving another usable, and rejection of foreign ownership.
+Existing tool-loop, pinned-alias and saved-connection tests exercise the migrated
+provider boundary. This establishes structural placement, not completion of T2:
+original preparation-caller cancellation, partial rollback for standalone hosts,
+safe embedded restart descriptors and one initial/transfer readiness budget still
+need their acceptance evidence. Recovery must acquire a new bounded budget only
+after that activation's authoritative commit; a ready call alone does not grant
+that permission to an uncommitted transfer destination. Explicit activation-wide
+graceful retirement remains part of T4.
 
 ## Retirement and external effects
 

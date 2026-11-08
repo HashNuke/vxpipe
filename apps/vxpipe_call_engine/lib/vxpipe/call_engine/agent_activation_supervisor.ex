@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisor do
     :invocation_registry,
     :invocation_supervisor,
     :remote_mcp_owner,
+    :remote_mcp_sessions,
     :request_supervisor,
     :session
   ]

@@ -2,6 +2,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
   @moduledoc """
   Owns one agent activation's authorized runtime access to its pinned MCP tools.
 
+  Requires a host-owned session supervisor. Connection providers implement `open/3`
+  and receive its exact PID in the owner option; foreign handles are rejected.
   Private integration configuration is used while opening scoped protocol clients and is not
   retained in this process's state or returned to callers.
   """
@@ -73,6 +75,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
              :name,
              :participant_id,
              :protocol,
+             :session_supervisor,
              :tools
            ]),
          activation_id when is_binary(activation_id) <- Keyword.get(options, :activation_id),
@@ -82,16 +85,18 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
          true <- participant_id != "",
          %IntegrationCatalog{} = integrations <- Keyword.get(options, :integrations),
          tools when is_map(tools) <- Keyword.get(options, :tools),
+         session_supervisor when is_pid(session_supervisor) <-
+           GenServer.whereis(Keyword.get(options, :session_supervisor)),
          connection_provider when is_atom(connection_provider) <-
            Keyword.get(options, :connection_provider, Connections),
          true <-
            Code.ensure_loaded?(connection_provider) and
-             function_exported?(connection_provider, :open, 2),
+             function_exported?(connection_provider, :open, 3),
          protocol when is_atom(protocol) <- Keyword.get(options, :protocol, ExMCPClient),
          true <- Code.ensure_loaded?(protocol) and function_exported?(protocol, :call_tool, 4),
          {:ok, prepared} <- prepare(tools, integrations),
          :ok <- acquire_credential_leases(prepared),
-         {:ok, connections} <- open_connections(prepared, connection_provider),
+         {:ok, connections} <- open_connections(prepared, connection_provider, session_supervisor),
          {:ok, connection_monitors} <- monitor_connections(connections),
          bindings <- runtime_bindings(prepared, connections, protocol) do
       {:ok,
@@ -197,14 +202,14 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
     )
   end
 
-  defp open_connections(prepared, connection_provider) do
+  defp open_connections(prepared, connection_provider, session_supervisor) do
     Enum.reduce_while(prepared, {:ok, %{}}, fn entry, {:ok, connections} ->
       case Map.fetch(connections, entry.key) do
         {:ok, _connection} ->
           {:cont, {:ok, connections}}
 
         :error ->
-          case open_connection(entry, connection_provider) do
+          case open_connection(entry, connection_provider, session_supervisor) do
             {:ok, connection} ->
               {:cont, {:ok, Map.put(connections, entry.key, connection)}}
 
@@ -215,14 +220,15 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
     end)
   end
 
-  defp open_connection(entry, connection_provider) do
+  defp open_connection(entry, connection_provider, session_supervisor) do
     config = connection_config(entry.integration)
 
-    case connection_provider.open(entry.key, config) do
+    case connection_provider.open(entry.key, config, owner: session_supervisor) do
       {:ok, %Connection{} = connection} ->
-        if Connection.key(connection) == entry.key,
-          do: {:ok, connection},
-          else: {:error, :invalid_connection}
+        if Connection.key(connection) == entry.key and
+             Connections.owned_by?(connection, session_supervisor),
+           do: {:ok, connection},
+           else: {:error, :invalid_connection}
 
       _failure ->
         {:error, :connection_failed}
