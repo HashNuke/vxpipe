@@ -7,8 +7,8 @@ are wired. Production forms and nonsecret return recovery are implemented.
 [Authenticated browser flows](mcp-browser-acceptance.md),
 [cross-node callback-created grant renewal](../../labnotes/20261107-0819-verify-oauth-node-callbacks.md)
 and [cross-node key rotation](../../labnotes/20261107-0832-verify-mcp-key-rotation.md)
-pass controlled acceptance. Final local verification passes; external
-release and user approval remain open. See the focused
+pass controlled acceptance. Final local and hosted release verification pass;
+user workflow approval remains open. See the focused
 [UI contract](mcp-oauth-ui.md), [browser flow](mcp-oauth-browser-flow.md),
 [renewal contract](mcp-oauth-renewal.md) and [saved runtime](saved-mcp-runtime.md).
 This is part of

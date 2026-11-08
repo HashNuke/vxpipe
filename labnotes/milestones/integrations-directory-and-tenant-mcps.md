@@ -1,10 +1,10 @@
 # Integrations directory and tenant MCP connections
 
-Status: **local implementation and verification complete; hosted publication and approval pending**. The Storybook proposal
-is part of this specification, not evidence that backend behavior is implemented.
-Updated 2026-11-07 with the user-directed Integrations/custom-MCP changes and
-implementation progress reconciliation. Those specific decisions are recorded below; full workflow/release approval
-remains open. The user authorized implementation of this milestone on 2026-11-06,
+Status: **implementation, local verification and hosted publication complete;
+workflow approval pending**. The Storybook proposal is part of this specification,
+not evidence that backend behavior is implemented. Updated 2026-11-08 with hosted
+release acceptance and the reviewed Cal.com icon correction. Those specific
+decisions are recorded below; full workflow approval remains open. The user authorized implementation of this milestone on 2026-11-06,
 including replacement of Services with Integrations for native providers and MCPs.
 This milestone makes the hosted
 directory the normal browse/search source, preserves installed AI/telephony during
@@ -14,7 +14,8 @@ Current local evidence includes authenticated custom/listed/reconnect and invent
 browser flows, admitted-call runtime checks, independent-node callback/renewal and
 key rotation, plus separate directory/status outages. Dated checkpoint paragraphs
 retain their original scope; later checked tasks and linked evidence supersede
-their pending-acceptance statements. External publication and user approval remain open.
+their pending-acceptance statements. Hosted publication now passes the actual
+Console live-client gate and browser logo checks. User workflow approval remains open; see [release evidence](../20261108-0657-finish-hosted-integrations.md).
 
 ## Prerequisites and design sources
 
@@ -196,13 +197,14 @@ and [native release evidence](../20261107-0859-native-directory-release.md).
   Request/Page/Client/Transport tests cover the boundary; the focused directory
   suite passes 34 tests. HTTP 400 distinguishes invalid version/cursor/mismatched
   cursor through a fixed code whitelist, never upstream diagnostic text.
-- [ ] Recover the external release commits and hosting context. Both repositories
+- [x] Recover the external release commits and hosting context. Both repositories
   are now cloned through SSH: `vxpipe/vxpipe-integrations` and
   `HashNuke/vxpipe-integrations-web`. The user pushed the missing changes from the
   other machine; both checkouts fast-forwarded to the recorded checkpoints
   (`9eef75c` and `a5ed7a5`). Five schema tests, all 16 definitions, publisher race
-  tests, vet and build pass. Hosting context and public release verification remain.
-  See [recovery evidence](../20261107-0937-restore-native-catalog.md).
+  tests, vet and build pass. The existing Railway service now runs publisher
+  `a5ed7a5`; hosted release verification passes after definitions `4b8d15d`. See [release evidence](../20261108-0657-finish-hosted-integrations.md)
+  and [recovery evidence](../20261107-0937-restore-native-catalog.md).
 - [x] Refresh the recovered Deepgram and Google AI icon declarations after fresh
   discovery proves their stored URLs absent from the current landing pages. Astra
   independently reproduces both. All 16 current icon checks pass after the minimal
@@ -210,9 +212,11 @@ and [native release evidence](../20261107-0859-native-directory-release.md).
   Actual local import/API and Console validation pass for all 16 entries and the
   exact 13 release-native IDs. Independent final review is clean. Publisher policy
   is unchanged; public deployment/sync remains pending.
-- [ ] Verify/add native entries and this release's adapter IDs **in the separate
-  directory repository**, coordinated as an external prerequisite; do not mark
-  this task complete against an MCP-only catalog.
+- [x] Verify/add native entries and this release's adapter IDs **in the separate
+  directory repository**, coordinated as an external prerequisite. The hosted
+  catalog now contains all 13 installed native adapter IDs and three tenant MCPs.
+  The actual Console live lane passes (seed 951735); all 15 supplied logos return
+  image responses and render in Chrome, while MorseCode omits `logo_url`.
 
 Acceptance: local HTTP fixtures assert outgoing version/header/query shape, valid
 empty pages, optional compatibility bounds, unsupported schema/version, unknown
@@ -226,6 +230,15 @@ live check confirms categories/native/MCP entries for the release, with no secre
   sync. Definitions commit `0d5fff6` and publisher commit `a5ed7a5` pass Python and
   Go race/vet/build checks plus independent adversarial staged review. Deploy the
   publisher/API before iconless definitions; public release readiness remains open.
+
+Hosted release acceptance, 2026-11-08: authenticated Railway access recovered the
+existing single-instance service. A private pre-release backup succeeded, then
+publisher `a5ed7a5` deployed successfully without changing its volume, limits or
+secrets. A stale Cal.com favicon was independently reproduced and corrected in
+pushed definitions `4b8d15d`. The durable worker published all 16 entries; the
+actual hosted Console client test passes and all 15 supplied logos load in Chrome.
+This supersedes the earlier pending-publication paragraphs, not the separate user
+workflow approval gate. See [release evidence](../20261108-0657-finish-hosted-integrations.md).
 
 ### T2 — Bounded public cache and directory outage fallback
 
@@ -307,10 +320,11 @@ platform exclusion. Existing native connection/update/override tests remain gree
   platform bindings and read-only management.
 - [x] Wire debounced, revision-bound URL discovery to static custom MCP creation and
   management, with credential isolation and catalog-only tools refresh.
-- [ ] Finish authenticated Console browser acceptance, listed templates, retained-ID
+- [x] Finish authenticated Console browser acceptance, listed templates, retained-ID
   reconnect proposals and the external release prerequisite before
   considering the whole Integrations workflow complete. The local browser portions
-  now pass; this composite gate remains open for the external directory release.
+  pass, and the external directory release now passes hosted acceptance. T0/T8
+  retain the separate user workflow approval gate.
 
 See [UI contracts](../../docs/development/integrations-ui.md) and
 [checkpoint evidence](../20261107-0309-review-integrations-ui.md).
@@ -1223,7 +1237,8 @@ and all related Storybooks.
   inventory acceptance pass; frontend source is unchanged since its green run.
   The added hosted acceptance lane also passes all five default root gates: 5,000
   tests, zero failures, 265 exclusions, seed 774698. Its explicit public execution
-  remains a separate external-release gate and currently fails for missing natives.
+  now passes against the actual public origin (seed 951735) after the 2026-11-08
+  publisher deployment and complete catalog synchronization.
   No speech/source-cutover implementation changed, so Lean is not applicable.
   Run `bin/verify-lean` for any changes to the source-cutover or speech state
   machines, as required by AGENTS; record applicability and the result.
@@ -1264,7 +1279,9 @@ and all related Storybooks.
   at 89b8d31f finds no unresolved reproduced finding or local implementation/
   acceptance gap. Final root verification now passes; public release and approval
   remain separate. The subsequent hosted acceptance lane has independent Astra
-  source/evidence review after its reproduced tag-selection correction.
+  source/evidence review after its reproduced tag-selection correction. The
+  2026-11-08 Astra xhigh release review independently validates the Cal.com repair
+  and finds no new reproduced defect; hosted acceptance evidence is recorded below.
 - [x] Add every review finding requiring a change to the fix checklist below;
   implement and verify fixes before declaring the review complete.
 - [ ] Send the user a `pushnotify` completion message only after implementation,

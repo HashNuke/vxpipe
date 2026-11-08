@@ -1,13 +1,13 @@
 # Integrations directory consumption and unlisted MCPs
 
-Status: local implementation and verification complete; updated 2026-11-07. The directory
-client/cache/facade, native Services reuse, static/OAuth management, nonsecret
+Status: implementation, local verification and hosted publication complete; updated
+2026-11-08. The directory client/cache/facade, native Services reuse, static/OAuth management, nonsecret
 callback recovery, listed-template forms, retained-ID reconnect UI and saved runtime
 wiring are implemented. Local saved-runtime acceptance covers WebRTC and three
 phone-admission paths. [Authenticated MCP browser flows](mcp-browser-acceptance.md)
 and independent-node callback/renewal/rotation lanes pass their recorded scopes.
-Final local verification passes; external directory publication and
-user approval remain open. Storybooks simulate
+Final local verification and [hosted release acceptance](../../labnotes/20261108-0657-finish-hosted-integrations.md)
+pass; user workflow approval remains open. Storybooks simulate
 workflows without real HTTP; they do not prove provider interoperability.
 Delivery tasks and acceptance gates are in
 [the milestone](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
@@ -60,11 +60,11 @@ inheritance. AI/telephony tenant overrides retain their existing precedence,
 including invalid overrides. Prototype fixtures represent the fully installed
 standard build; production must use its actual capability projection.
 
-The latest live read returned **three MCP entries and no native providers**.
-Before enabling production directory browsing, add AI/telephony definitions and
-the matching release registry in the external directory project. A valid empty
-native page must remain distinguishable from an outage. This is a release
-prerequisite, not work silently performed in this repository.
+The hosted release now serves **13 native providers and three MCP entries** for
+version `0.1.0`. The actual Console live-client lane verifies adapter IDs, category
+filters, platform MCP exclusion and global search. Future releases must publish
+matching definitions and adapter registries in the external directory project.
+A valid empty native page remains distinguishable from an outage.
 
 Native providers without a usable declared favicon may omit `icon_url` in the
 external definition. The publisher skips icon fetch/upload and exposes no
@@ -72,8 +72,9 @@ external definition. The publisher skips icon fetch/upload and exposes no
 still require a declared icon, and invalid supplied values or failed downloads
 still reject the import. This resolves the MorseCode API case without invented
 branding or dropping an installed adapter. The definition schema, publisher and
-read API changes are committed in their separate repositories; publication remains
-an external release gate. See [release evidence](../../labnotes/20261107-0859-native-directory-release.md).
+read API changes are deployed from their separate repositories. Hosted Chrome
+inspection verifies all 15 supplied logos; MorseCode correctly omits `logo_url`.
+See [release evidence](../../labnotes/20261108-0657-finish-hosted-integrations.md).
 
 Upgrade the publisher/API before merging iconless definitions. An older publisher
 rejects them, and an older API emits a bucket-root logo URL for assetless snapshots.

@@ -498,9 +498,11 @@ excluded from default tests and generic `--include integration` runs. Do not add
 the generic integration tag to this test: ExUnit includes take precedence over
 other excluded tags.
 
-The current public catalog serves only three MCP entries, so the live lane fails
-at the native-adapter assertion until the external release is published. See
-[hosted-check evidence](../../labnotes/20261107-1155-verify-hosted-catalog.md).
+The 2026-11-08 hosted release passes this lane with 13 native providers and three
+MCP entries (seed 951735). All 15 supplied logos also pass anonymous HTTP and
+rendered Chrome checks; MorseCode omits its logo. See
+[release evidence](../../labnotes/20261108-0657-finish-hosted-integrations.md) and the
+[original hosted-check evidence](../../labnotes/20261107-1155-verify-hosted-catalog.md).
 
 ## Original prototype verification
 

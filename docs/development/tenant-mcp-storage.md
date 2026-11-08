@@ -1,10 +1,10 @@
 # Tenant MCP storage boundary
 
 Status: storage, static/OAuth management, grants and saved runtime wiring are
-implemented, 2026-11-07. [Authenticated MCP browser flows](mcp-browser-acceptance.md),
+implemented, 2026-11-08. [Authenticated MCP browser flows](mcp-browser-acceptance.md),
 [local admitted-call execution](saved-mcp-runtime.md) and independent-node
-callback/renewal/rotation lanes pass their recorded scopes. Final local verification passes;
-external release and user approval remain in
+callback/renewal/rotation lanes pass their recorded scopes. Final local and hosted
+release verification pass; user workflow approval remains in
 [T4–T8](../../labnotes/milestones/integrations-directory-and-tenant-mcps.md).
 The repository is a trusted internal port; it is not a public authorization API.
 
