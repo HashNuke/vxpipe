@@ -1272,6 +1272,13 @@ and all related Storybooks.
 
 ### Implementation and review fixes
 
+- [x] Refresh Cal.com's declared favicon after the 2026-11-08 release import
+  reproduces a stale deployment-qualified URL. All 16 official landing pages were
+  rechecked; only Cal.com changed. Astra independently verifies the declaration
+  and selected 512×512 PNG. Updated definition/provenance, five schema tests and
+  complete local import pass without relaxing publisher policy. Hosted acceptance
+  remains separate; see [release evidence](../20261108-0657-finish-hosted-integrations.md).
+
 - [x] Add the explicitly required tagged, read-only hosted catalog acceptance check.
   The existing transport integration test uses a loopback fixture; no live catalog
   test existed. Verify categories, every installed native adapter, tenant MCP entries

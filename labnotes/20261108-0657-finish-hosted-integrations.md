@@ -31,3 +31,18 @@ The user requested sibling repository guidance in AGENTS and subsequently
 required commits and pushes for every changed repository. Added relative paths
 in `1fb0713b` and pushed it to `origin/main`; no supporting repository source
 has changed during this continuation.
+
+The publisher deployment reaches SUCCESS, retaining the existing volume, single
+replica, limits and configuration. Its worker safely retains the old catalog while
+retrying a failed import. A fresh isolated import independently reproduces the
+cause: Cal.com's deployment-qualified favicon is no longer advertised. All 16
+official landing pages were checked again: Cal.com is the only stale declaration;
+14 other supplied icons remain declared and MorseCode still has no declared icon.
+Astra independently reproduces the old URL's absence and verifies the current
+highest-ranked 512×512 PNG by its response type and PNG dimensions.
+
+Changed only Cal.com's `icon_url` and added dated discovery provenance in the
+definitions repository. The five schema tests and all definitions pass again;
+the actual complete-catalog import now succeeds. The strict publisher policy is
+unchanged. Production will use its owned durable retry worker after the corrected
+definition is pushed, never a concurrent standalone sync on the live database.
