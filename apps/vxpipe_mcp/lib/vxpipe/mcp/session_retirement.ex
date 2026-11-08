@@ -91,28 +91,26 @@ defmodule Vxpipe.MCP.SessionRetirement do
   end
 
   defp describe_owner(key, parent, integration, expected_client) do
-    Enum.find_value([parent, nil], [], fn scope ->
-      name = if scope, do: {:owner, scope, key}, else: {:owner, key}
+    case Registry.lookup(@registry, {:owner, parent, key}) do
+      [{^integration, %{parent: ^parent, runtime: runtime}}] ->
+        current = ConnectionNames.client(key, parent, integration)
 
-      case Registry.lookup(@registry, name) do
-        [{^integration, %{parent: ^parent, runtime: runtime}}] ->
-          current = ConnectionNames.client(key, scope, integration)
+        if Process.alive?(integration) and
+             (current == :error or expected_client == :any or current == {:ok, expected_client}) do
+          actual_client =
+            case current do
+              {:ok, client} -> client
+              :error -> nil
+            end
 
-          if Process.alive?(integration) and
-               (current == :error or expected_client == :any or current == {:ok, expected_client}) do
-            actual_client =
-              case current do
-                {:ok, client} -> client
-                :error -> nil
-              end
+          [%{integration: integration, client: actual_client, runtime: runtime}]
+        else
+          []
+        end
 
-            [%{integration: integration, client: actual_client, runtime: runtime}]
-          end
-
-        _ ->
-          nil
-      end
-    end)
+      _ ->
+        []
+    end
     |> remaining_transport(key, parent, integration)
   end
 

@@ -168,6 +168,7 @@ defmodule Vxpipe.MCP.SessionTransportLifetimeTest do
   end
 
   defp open_connection(server, key \\ connection_key(), opts \\ []) do
+    opts = Keyword.put_new_lazy(opts, :owner, &Vxpipe.MCP.Test.SessionHost.start!/0)
     observer = self()
     capture = start_supervised!({Agent, fn -> false end}, id: make_ref())
 

@@ -3,9 +3,14 @@ defmodule Vxpipe.MCP.ConnectionsTest do
 
   alias Vxpipe.MCP.{Connection, ConnectionKey, Connections, ReadyClientRuntime}
 
-  test "reused sessions require current runtime credentials without retiring unrelated access" do
+  setup do
+    %{host: Vxpipe.MCP.Test.SessionHost.start!()}
+  end
+
+  test "reused sessions require current runtime credentials without retiring unrelated access", %{
+    host: host
+  } do
     key = tenant_key("tenant", "reused-#{System.unique_integer([:positive])}")
-    close_on_exit([key])
 
     valid =
       {:ok, %{auth_method: "bearer", headers: [{"authorization", "Bearer synthetic-token"}]}}
@@ -24,26 +29,25 @@ defmodule Vxpipe.MCP.ConnectionsTest do
       })
 
     config = [endpoint: authentication.endpoint, runtime_authentication: authentication]
-    assert {:ok, first} = Connections.open(key, config, runtime: ReadyClientRuntime)
+    assert {:ok, first} = Connections.open(key, config, owner: host, runtime: ReadyClientRuntime)
     Agent.update(credentials, fn _ -> {:error, :revoked} end)
 
     assert {:error, :connection_failed} =
-             Connections.open(key, config, runtime: ReadyClientRuntime)
+             Connections.open(key, config, owner: host, runtime: ReadyClientRuntime)
 
-    assert {:ok, ^first} = Connections.lookup(key)
+    assert {:ok, ^first} = Connections.lookup(key, owner: host)
 
     Agent.update(credentials, fn _ -> valid end)
-    assert {:ok, ^first} = Connections.open(key, config, runtime: ReadyClientRuntime)
+    assert {:ok, ^first} = Connections.open(key, config, owner: host, runtime: ReadyClientRuntime)
   end
 
-  test "reuses one ready session per integration and credential generation" do
+  test "reuses one ready session per integration and credential generation", %{host: host} do
     key = key("generation-a")
     next_key = key("generation-b")
-    close_on_exit([key, next_key])
 
-    assert {:ok, first} = open(key, "Bearer first-secret")
-    assert {:ok, reused} = open(key, "Bearer changed-but-same-generation")
-    assert {:ok, next_generation} = open(next_key, "Bearer next-secret")
+    assert {:ok, first} = open(host, key, "Bearer first-secret")
+    assert {:ok, reused} = open(host, key, "Bearer first-secret")
+    assert {:ok, next_generation} = open(host, next_key, "Bearer next-secret")
 
     assert Connection.owner(first) == Connection.owner(reused)
     assert Connection.client(first) == Connection.client(reused)
@@ -54,16 +58,15 @@ defmodule Vxpipe.MCP.ConnectionsTest do
     refute inspect(first) =~ "authorization"
   end
 
-  test "never shares a connection between tenant scopes" do
+  test "never shares a connection between tenant scopes", %{host: host} do
     suffix = System.unique_integer([:positive, :monotonic])
     integration_id = "records-#{suffix}"
 
     tenant_a = tenant_key("tenant-a", integration_id)
     tenant_b = tenant_key("tenant-b", integration_id)
-    close_on_exit([tenant_a, tenant_b])
 
-    assert {:ok, first} = open(tenant_a, "Bearer tenant-a-private")
-    assert {:ok, second} = open(tenant_b, "Bearer tenant-b-private")
+    assert {:ok, first} = open(host, tenant_a, "Bearer tenant-a-private")
+    assert {:ok, second} = open(host, tenant_b, "Bearer tenant-b-private")
 
     refute Connection.owner(first) == Connection.owner(second)
     refute Connection.client(first) == Connection.client(second)
@@ -81,10 +84,9 @@ defmodule Vxpipe.MCP.ConnectionsTest do
              ConnectionKey.new([scope: :application, tenant_id: "tenant-a"] ++ base)
   end
 
-  test "retires the complete scoped connection subtree" do
+  test "retires the complete scoped connection subtree", %{host: host} do
     key = key("retired")
-    close_on_exit([key])
-    assert {:ok, connection} = open(key, "Bearer private")
+    assert {:ok, connection} = open(host, key, "Bearer private")
 
     owner_ref = Process.monitor(Connection.owner(connection))
     client_ref = Process.monitor(Connection.client(connection))
@@ -92,36 +94,37 @@ defmodule Vxpipe.MCP.ConnectionsTest do
     assert :ok = Connections.close(connection)
     assert_receive {:DOWN, ^owner_ref, :process, _pid, :shutdown}
     assert_receive {:DOWN, ^client_ref, :process, _pid, :shutdown}
-    assert :error = Connections.lookup(key)
+    assert :error = Connections.lookup(key, owner: host)
   end
 
-  test "closing an old handle cannot retire a replacement with the same credential key" do
+  test "closing an old handle cannot retire a replacement with the same credential key", %{
+    host: host
+  } do
     key = key("reopened")
-    close_on_exit([key])
-    assert {:ok, first} = open(key, "Bearer private")
+    assert {:ok, first} = open(host, key, "Bearer private")
     assert :ok = Connections.close(first)
-    assert {:ok, replacement} = open(key, "Bearer private")
+    assert {:ok, replacement} = open(host, key, "Bearer private")
 
     refute Connection.owner(first) == Connection.owner(replacement)
     refute Connection.client(first) == Connection.client(replacement)
     assert :ok = Connections.close(first)
 
-    assert {:ok, ^replacement} = Connections.lookup(key)
+    assert {:ok, ^replacement} = Connections.lookup(key, owner: host)
 
     assert {:ok, %{connection_status: :ready}} =
              ReadyClientRuntime.status(Connection.client(replacement))
   end
 
-  test "legacy key close retires an integration before its client is registered" do
+  test "local revocation retires an integration before its client is registered", %{host: host} do
     observer = self()
     key = key("pending-close")
-    close_on_exit([key])
 
     start_supervised!(
       {Task,
        fn ->
          result =
            Connections.open(key, [endpoint: "https://mcp.example.test/mcp"],
+             owner: host,
              runtime: ReadyClientRuntime,
              runtime_options: [test_spec_observer: observer]
            )
@@ -134,19 +137,20 @@ defmodule Vxpipe.MCP.ConnectionsTest do
     reference = Process.monitor(integration)
 
     try do
-      assert :ok = Connections.close(key)
+      assert :ok = Connections.revoke(key)
       assert_receive {:DOWN, ^reference, :process, ^integration, _}, 300
       assert_receive {:pending_open_result, {:error, :connection_failed}}
-      assert :error = Connections.lookup(key)
+      assert :error = Connections.lookup(key, owner: host)
     after
       send(integration, :release_spec)
     end
   end
 
-  test "client loss retires its session identity before a replacement can be opened" do
+  test "client loss retires its session identity before a replacement can be opened", %{
+    host: host
+  } do
     key = key("client-lost")
-    close_on_exit([key])
-    assert {:ok, first} = open(key, "Bearer private")
+    assert {:ok, first} = open(host, key, "Bearer private")
     owner_ref = Process.monitor(Connection.owner(first))
     client_ref = Process.monitor(Connection.client(first))
 
@@ -154,20 +158,20 @@ defmodule Vxpipe.MCP.ConnectionsTest do
 
     assert_receive {:DOWN, ^client_ref, :process, _pid, :killed}
     assert_receive {:DOWN, ^owner_ref, :process, _pid, :shutdown}, 1_000
-    assert :error = Connections.lookup(key)
+    assert :error = Connections.lookup(key, owner: host)
 
-    assert {:ok, replacement} = open(key, "Bearer private")
+    assert {:ok, replacement} = open(host, key, "Bearer private")
     refute Connection.owner(first) == Connection.owner(replacement)
     assert :ok = Connections.close(first)
-    assert {:ok, ^replacement} = Connections.lookup(key)
+    assert {:ok, ^replacement} = Connections.lookup(key, owner: host)
 
     assert {:ok, %{connection_status: :ready}} =
              ReadyClientRuntime.status(Connection.client(replacement))
   end
 
-  test "revokes one credential generation and refuses to reopen it" do
+  test "revokes one credential generation and refuses to reopen it", %{host: host} do
     key = key("revoked")
-    assert {:ok, connection} = open(key, "Bearer private")
+    assert {:ok, connection} = open(host, key, "Bearer private")
 
     owner_ref = Process.monitor(Connection.owner(connection))
     client_ref = Process.monitor(Connection.client(connection))
@@ -175,20 +179,20 @@ defmodule Vxpipe.MCP.ConnectionsTest do
     assert :ok = Connections.revoke(key)
     assert_receive {:DOWN, ^owner_ref, :process, _pid, :shutdown}
     assert_receive {:DOWN, ^client_ref, :process, _pid, :shutdown}
-    assert :error = Connections.lookup(key)
+    assert :error = Connections.lookup(key, owner: host)
 
-    assert {:error, :credential_revoked} = open(key, "Bearer private")
-    assert :error = Connections.lookup(key)
+    assert {:error, :credential_revoked} = open(host, key, "Bearer private")
+    assert :error = Connections.lookup(key, owner: host)
   end
 
-  test "rejects and cleans up a session that negotiates another protocol version" do
+  test "rejects and cleans up a session that negotiates another protocol version", %{host: host} do
     key = key("wrong-version")
-    close_on_exit([key])
 
     assert {:error, {:unsupported_protocol_version, "2026-07-28"}} =
              Connections.open(
                key,
                [endpoint: "https://mcp.example.test/rpc"],
+               owner: host,
                runtime: ReadyClientRuntime,
                runtime_options: [
                  test_status: %{
@@ -198,17 +202,17 @@ defmodule Vxpipe.MCP.ConnectionsTest do
                ]
              )
 
-    assert :error = Connections.lookup(key)
+    assert :error = Connections.lookup(key, owner: host)
   end
 
-  test "opens plaintext only through the explicit loopback test entry" do
+  test "opens plaintext only through the explicit loopback test entry", %{host: host} do
     key = key("loopback")
-    close_on_exit([key])
 
     assert {:error, :https_required} =
              Connections.open(
                key,
                [endpoint: "http://127.0.0.1:4321/mcp"],
+               owner: host,
                runtime: ReadyClientRuntime
              )
 
@@ -216,13 +220,14 @@ defmodule Vxpipe.MCP.ConnectionsTest do
              Connections.open_loopback_test(
                key,
                [endpoint: "http://127.0.0.1:4321/mcp"],
+               owner: host,
                runtime: ReadyClientRuntime
              )
 
     assert Connection.key(connection) == key
   end
 
-  defp open(key, authorization) do
+  defp open(host, key, authorization) do
     Connections.open(
       key,
       [
@@ -232,6 +237,7 @@ defmodule Vxpipe.MCP.ConnectionsTest do
           headers: [{"authorization", authorization}]
         ]
       ],
+      owner: host,
       runtime: ReadyClientRuntime
     )
   end
@@ -259,9 +265,5 @@ defmodule Vxpipe.MCP.ConnectionsTest do
       )
 
     key
-  end
-
-  defp close_on_exit(keys) do
-    on_exit(fn -> Enum.each(keys, &Connections.close/1) end)
   end
 end

@@ -392,15 +392,7 @@ defmodule Vxpipe.Console.Test.SavedMCPRuntimeCase do
         :ok
     end
 
-    {:ok, key} =
-      ConnectionKey.new(
-        scope: :tenant,
-        tenant_id: c.tenant,
-        integration_id: c.connection.id,
-        credential_generation: "1"
-      )
-
-    Connections.close(key)
+    :ok
   end
 
   def owned_mcp(c, call) do

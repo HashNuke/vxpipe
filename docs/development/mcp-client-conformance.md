@@ -41,9 +41,12 @@ starting unrelated development voice-provider configuration. The task itself sta
   bounded resolved-integration and credential-generation identity. Tenant keys include the
   trusted tenant ID, so equal integration/generation labels cannot share a client or session
   across tenants.
-- `Vxpipe.MCP.Connections.open/3`, `lookup/1`, and `close/1` own production HTTPS session
-  lifecycle. `open_loopback_test/3` is a distinct loopback-only fixture entry and cannot be
-  selected by a production configuration flag.
+- `Vxpipe.MCP.Connections.open/3` and `lookup/2` require an explicit `owner:`
+  supervisor. Reuse stays within that exact host and requires compatible policy.
+  `close/1` takes the returned connection handle; `revoke/1` affects the selected
+  credential generation across local owners. There is no global session pool.
+  `open_loopback_test/3` is a distinct loopback-only fixture entry with the same
+  ownership contract and cannot be selected by a production configuration flag.
 - `Vxpipe.MCP.Connection.client/1` gives the internal protocol handle to
   `Vxpipe.MCP.Discovery.discover/2` and `Vxpipe.MCP.Invocation.call/5`.
 - Discovery returns a complete `Vxpipe.MCP.Catalog` or an error, never a partial catalog.

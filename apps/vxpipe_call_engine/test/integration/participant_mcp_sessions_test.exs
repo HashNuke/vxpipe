@@ -132,7 +132,6 @@ defmodule Vxpipe.CallEngine.ParticipantMCPSessionsTest do
         credential_generation: generation
       )
 
-    on_exit(fn -> Connections.close(key) end)
     {catalog, binding, key}
   end
 

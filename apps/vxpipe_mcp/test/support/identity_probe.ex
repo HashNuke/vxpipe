@@ -10,16 +10,26 @@ defmodule Vxpipe.MCP.IdentityProbe do
   def measure(churn_count, offset)
       when is_integer(churn_count) and churn_count > 0 and is_integer(offset) and offset >= 0 do
     {:ok, _applications} = Application.ensure_all_started(:vxpipe_mcp)
+    name = {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {__MODULE__, make_ref()}}}
+    {:ok, host} = DynamicSupervisor.start_link(strategy: :one_for_one, name: name)
 
+    try do
+      measure_owned(host, churn_count, offset)
+    after
+      Supervisor.stop(host)
+    end
+  end
+
+  defp measure_owned(host, churn_count, offset) do
     warmup_range = (offset + 1)..(offset + churn_count)
     measured_range = (offset + churn_count + 1)..(offset + 2 * churn_count)
 
-    Enum.each(warmup_range, &churn_once!/1)
+    Enum.each(warmup_range, &churn_once!(host, &1))
     _ = :code.all_loaded()
     atoms_before = :erlang.system_info(:atom_count)
     modules_before = loaded_modules()
 
-    Enum.each(measured_range, &churn_once!/1)
+    Enum.each(measured_range, &churn_once!(host, &1))
     :erlang.garbage_collect()
 
     %{
@@ -29,7 +39,7 @@ defmodule Vxpipe.MCP.IdentityProbe do
     }
   end
 
-  defp churn_once!(index) do
+  defp churn_once!(host, index) do
     name = "remote-tool-#{index}"
 
     {:ok, catalog} =
@@ -56,6 +66,7 @@ defmodule Vxpipe.MCP.IdentityProbe do
       Connections.open(
         key,
         [endpoint: "https://mcp-#{index}.example.test/rpc"],
+        owner: host,
         runtime: ReadyClientRuntime
       )
 
@@ -68,7 +79,7 @@ defmodule Vxpipe.MCP.IdentityProbe do
       @shutdown_timeout -> raise "MCP connection did not stop"
     end
 
-    :error = Connections.lookup(key)
+    :error = Connections.lookup(key, owner: host)
   end
 
   defp atomized_external_values(range) do

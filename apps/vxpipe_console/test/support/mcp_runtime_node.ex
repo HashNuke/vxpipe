@@ -21,7 +21,13 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
     )
 
     {:ok, _} =
-      DynamicSupervisor.start_child(Vxpipe.MCP.ConnectionSupervisor, %{
+      Supervisor.start_child(
+        Vxpipe.MCP.Supervisor,
+        {DynamicSupervisor, strategy: :one_for_one, name: __MODULE__.Host}
+      )
+
+    {:ok, _} =
+      DynamicSupervisor.start_child(__MODULE__.Host, %{
         id: __MODULE__,
         start: {Agent, :start_link, [fn -> %{} end, [name: __MODULE__]]}
       })
@@ -58,7 +64,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
   def start_renewal(tenant, id) do
     {:ok, caller} =
       DynamicSupervisor.start_child(
-        Vxpipe.MCP.ConnectionSupervisor,
+        __MODULE__.Host,
         {Task,
          fn ->
            result = refresh(tenant, id, 1)
@@ -74,7 +80,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
     caller = Agent.get(__MODULE__, & &1.renewal_caller)
     [worker] = Task.Supervisor.children(Vxpipe.MCP.OAuthRenewalTasks)
     references = monitor_all([caller, worker])
-    :ok = DynamicSupervisor.terminate_child(Vxpipe.MCP.ConnectionSupervisor, caller)
+    :ok = DynamicSupervisor.terminate_child(__MODULE__.Host, caller)
     :ok = await_all(references)
     _ = :sys.get_state(Vxpipe.MCP.OAuthRenewalRunner)
     :cancelled
@@ -125,11 +131,15 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
       })
 
     with {:ok, connection} <-
-           Connections.open_loopback_test(key,
-             endpoint: base <> "/mcp",
-             reconnect: true,
-             authentication: :none,
-             runtime_authentication: authentication
+           Connections.open_loopback_test(
+             key,
+             [
+               endpoint: base <> "/mcp",
+               reconnect: true,
+               authentication: :none,
+               runtime_authentication: authentication
+             ],
+             owner: __MODULE__.Host
            ) do
       client = Connection.client(connection)
       stream = :sys.get_state(client).transport_state.sse_pid

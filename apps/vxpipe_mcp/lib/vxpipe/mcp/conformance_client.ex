@@ -7,17 +7,30 @@ defmodule Vxpipe.MCP.ConformanceClient do
 
   @spec run(String.t(), String.t()) :: :ok | {:error, term()}
   def run(server_url, scenario) when is_binary(server_url) and is_binary(scenario) do
+    name = {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {__MODULE__, make_ref()}}}
+    {:ok, host} = DynamicSupervisor.start_link(strategy: :one_for_one, name: name)
+
+    try do
+      run_owned(host, server_url, scenario)
+    after
+      Supervisor.stop(host)
+    end
+  end
+
+  defp run_owned(host, server_url, scenario) do
     with {:ok, key} <- connection_key(),
          {:ok, connection} <-
-           Connections.open_loopback_test(key,
-             endpoint: server_url,
-             reconnect: true,
-             limits: [
-               max_request_bytes: 262_144,
-               max_response_bytes: 262_144,
-               max_stream_buffer_bytes: 262_144
-             ]
-           ) do
+           Connections.open_loopback_test(
+             key,
+             [
+               endpoint: server_url,
+               reconnect: true,
+               limits: [
+                 max_request_bytes: 262_144,
+                 max_response_bytes: 262_144,
+                 max_stream_buffer_bytes: 262_144
+               ]
+             ], owner: host) do
       try do
         run_scenario(scenario, connection)
       after

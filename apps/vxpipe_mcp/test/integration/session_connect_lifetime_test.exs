@@ -90,7 +90,7 @@ defmodule Vxpipe.MCP.SessionConnectLifetimeTest do
     end
   end
 
-  for cancellation <- [:deadline, :caller_death, :host_stop, :key_close] do
+  for cancellation <- [:deadline, :caller_death, :host_stop, :revoke] do
     @cancellation cancellation
 
     test "#{cancellation} closes a socket stalled during TLS connection" do
@@ -119,7 +119,7 @@ defmodule Vxpipe.MCP.SessionConnectLifetimeTest do
           credential_generation: "1"
         )
 
-      opts = if @cancellation == :key_close, do: [], else: [owner: host]
+      opts = [owner: host]
       timeout = if @cancellation == :deadline, do: 500, else: 5_000
 
       caller =
@@ -154,7 +154,7 @@ defmodule Vxpipe.MCP.SessionConnectLifetimeTest do
           :deadline -> :ok
           :caller_death -> Process.exit(caller, :kill)
           :host_stop -> stop_supervised(:host)
-          :key_close -> assert :ok = Connections.close(key)
+          :revoke -> assert :ok = Connections.revoke(key)
         end
 
         assert_receive {:DOWN, ^monitor, :process, ^integration, _reason}, 1_000
@@ -162,7 +162,6 @@ defmodule Vxpipe.MCP.SessionConnectLifetimeTest do
         refute_receive {:connect_result, {:ok, _late_handle}}, 20
       after
         Process.exit(caller, :kill)
-        Connections.close(key)
       end
     end
   end

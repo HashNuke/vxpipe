@@ -6,6 +6,7 @@ owned transport workers, explicit host scoping, bounded startup/reuse and observ
 TLS POST/GET socket cleanup. Participant placement now includes shared startup
 deadlines, cancellation, partial rollback and source retirement after transfer.
 Catalog loads now use independent temporary operation hosts with bounded cleanup.
+The library requires explicit hosts; the legacy root session pool has been removed.
 Call-owned renewal cancellation, queued catalogs and the remaining acceptance
 matrix are still pending.
 The user requested a milestone for moving agent-used MCP connections into the
@@ -159,8 +160,15 @@ stores an opaque policy digest instead of raw headers or credentials. Conflictin
 policy fails without retiring the existing session. Revocation still reaches
 every session for the selected credential generation, across owners.
 
-The omitted-owner API and key-only close remain a transitional legacy path until
-call/catalog consumers migrate. Explicit ownership never falls back to that path.
+The legacy global `ConnectionSupervisor` and ownerless reuse path are removed.
+Calling `open/2` or `open_loopback_test/2` without an owner fails closed with
+`{:error, :invalid_owner}`; unscoped `lookup/1` returns `:error`. Supply `owner:`
+for both opening and lookup. `close/1` accepts an exact `Connection` handle only;
+use `close_owned/3` for selected-key startup rollback after opening work has
+stopped, or `revoke/1` to revoke a credential generation across all local owners.
+Key-only close and the internal three-argument handle constructor are no longer
+supported. Root registries and
+bounded management coordinators remain for their independent responsibilities.
 This API adds no dependency on Calls or Call Engine. New-session initialization
 has a five-second default budget. Supply `deadline: absolute_monotonic_ms` to use
 an existing readiness budget; an expired deadline cannot start a session. A startup
@@ -383,8 +391,11 @@ Call and catalog providers now both require `open/3` with explicit owner and
 deadline. The loader checks the returned key and exact ownership before discovery;
 a rejected foreign handle remains untouched. Existing Console `ConnectionCheck`
 keeps its isolated session/check lifetime, with real POST cancellation and bounded
-DELETE regression coverage. The library's legacy ownerless API remains until its
-separate removal checkpoint; shipped call and catalog paths no longer use it.
+DELETE regression coverage. Shipped call, catalog, conformance and reference-server
+consumers now supply explicit hosts. The two command-line fixture clients use
+caller-linked temporary supervisors and close their exact handles before stopping
+those hosts. Independent connection checks retain their existing lifetime and
+registration scheme; they do not use the removed global session pool.
 
 The older optional embedded `CatalogRefresher` reads application configuration,
 not saved tenant database rows. Its `async_nolink` ownership/publication concern
@@ -393,13 +404,10 @@ saved tenant maintenance. Adapt embedded session ownership only as necessary for
 the changed client API. Broader embedded refresher recovery/publication work is
 a separate follow-up, not a prerequisite for the queue described below.
 
-Migrate every shipped consumer of the current global `Connections.open/2` path.
-The library should expose explicit owner-supervisor/session construction for
-trusted embedded hosts; an ownerless fallback must not silently restore sharing.
-Document any changed `open`, `lookup`, `close`, test-provider and handle contracts.
-Keep standalone ExMCP integration usable without Call Engine or a database, with
-the embedding host providing the owner. Existing saved IDs, call specs, grants,
-tool selections and Console workflows require no migration. A rolling mix of
+Trusted embedding callers must migrate to the explicit host API above, including
+test providers. Standalone ExMCP integration remains usable without Call Engine
+or a database; the embedding host supplies its own supervisor. Existing saved IDs,
+call specs, grants, tool selections and Console workflows require no migration. A rolling mix of
 old/new runtimes cannot promise this ownership guarantee for calls on old nodes;
 rollout evidence must identify the running revision and drain old sessions.
 

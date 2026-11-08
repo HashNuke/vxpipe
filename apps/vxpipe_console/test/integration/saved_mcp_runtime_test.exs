@@ -165,16 +165,6 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
 
     assert {:ok, runtime} = CallEngineOptions.build(c.options, stored)
 
-    {:ok, key} =
-      ConnectionKey.new(
-        scope: :tenant,
-        tenant_id: c.tenant,
-        integration_id: c.connection.id,
-        credential_generation: "1"
-      )
-
-    on_exit(fn -> Connections.close(key) end)
-
     owner =
       start_supervised!(
         {IntegrationOwner,
@@ -324,16 +314,6 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
     assert {:ok, runtime} = CallEngineOptions.build(c.options, fresh)
     assert_private_absent(c, [before, fresh.plan])
 
-    {:ok, key} =
-      ConnectionKey.new(
-        scope: :tenant,
-        tenant_id: c.tenant,
-        integration_id: c.connection.id,
-        credential_generation: "3"
-      )
-
-    on_exit(fn -> Connections.close(key) end)
-
     owner =
       start_supervised!(
         {IntegrationOwner,
@@ -394,8 +374,6 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
         integration_id: c.connection.id,
         credential_generation: "1"
       )
-
-    on_exit(fn -> Connections.close(key) end)
 
     sessions = session_supervisor!()
 

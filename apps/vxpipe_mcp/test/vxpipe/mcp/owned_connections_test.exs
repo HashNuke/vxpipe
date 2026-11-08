@@ -3,6 +3,18 @@ defmodule Vxpipe.MCP.OwnedConnectionsTest do
 
   alias Vxpipe.MCP.{Connection, ConnectionKey, Connections, ReadyClientRuntime}
 
+  test "opening without a host is rejected instead of creating a global session" do
+    result = Connections.open(key(), config(), runtime: ReadyClientRuntime)
+
+    case result do
+      {:ok, connection} -> on_exit(fn -> Connections.close(connection) end)
+      _rejected -> :ok
+    end
+
+    assert {:error, :invalid_owner} = result
+    assert is_nil(Process.whereis(Vxpipe.MCP.ConnectionSupervisor))
+  end
+
   @tag :capture_log
   test "rollback waits for transport descendants after integration registration disappears" do
     parent = owner(:draining_rollback)
@@ -24,7 +36,10 @@ defmodule Vxpipe.MCP.OwnedConnectionsTest do
            Process.flag(:trap_exit, true)
            send(observer, {:draining_child, self()})
            receive do: (:release -> :ok)
-         end}, restart: :temporary, shutdown: 1_000)
+         end},
+        restart: :temporary,
+        shutdown: 1_000
+      )
 
     assert {:ok, slow} = DynamicSupervisor.start_child(transport, spec)
     assert_receive {:draining_child, ^slow}
@@ -174,18 +189,19 @@ defmodule Vxpipe.MCP.OwnedConnectionsTest do
              )
   end
 
-  test "an explicitly dead or missing owner never falls back to global reuse" do
+  test "an explicitly dead or missing owner never reuses another owner" do
     owner = owner(:dead)
     reference = Process.monitor(owner)
     key = key()
-    assert {:ok, global} = Connections.open(key, config(), runtime: ReadyClientRuntime)
+    unrelated_owner = owner(:unrelated)
+    assert {:ok, unrelated} = open(unrelated_owner, key)
     assert :ok = stop_supervised(:dead)
     assert_receive {:DOWN, ^reference, :process, ^owner, :shutdown}
 
     assert {:error, :invalid_owner} = open(owner, key)
     missing = {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {:missing, make_ref()}}}
     assert {:error, :invalid_owner} = open(missing, key)
-    assert {:ok, ^global} = Connections.lookup(key)
+    assert {:ok, ^unrelated} = Connections.lookup(key, owner: unrelated_owner)
   end
 
   test "a delayed close targets its exact owner and session incarnation" do
@@ -212,9 +228,9 @@ defmodule Vxpipe.MCP.OwnedConnectionsTest do
     other_key = key()
     assert {:ok, first} = open(first_owner, key)
     assert {:ok, second} = open(second_owner, key)
-    assert {:ok, global} = Connections.open(key, config(), runtime: ReadyClientRuntime)
+    assert {:ok, third} = open(owner(:revoke_third), key)
     assert {:ok, unrelated} = open(second_owner, other_key)
-    clients = Enum.map([first, second, global], &Connection.client/1)
+    clients = Enum.map([first, second, third], &Connection.client/1)
     assert length(Enum.uniq(clients)) == 3
     monitors = Map.new(clients, &{&1, Process.monitor(&1)})
 
@@ -264,7 +280,7 @@ defmodule Vxpipe.MCP.OwnedConnectionsTest do
     assert Connections.owned_by?(first, first_owner)
     refute Connections.owned_by?(first, second_owner)
 
-    foreign = Connection.new(key, Connection.owner(first), Connection.client(second))
+    foreign = Connection.new(key, Connection.owner(first), Connection.client(second), first_owner)
     refute Connections.owned_by?(foreign, first_owner)
 
     assert :ok = Connections.close(first)
@@ -438,7 +454,6 @@ defmodule Vxpipe.MCP.OwnedConnectionsTest do
         credential_generation: "1"
       )
 
-    on_exit(fn -> Connections.close(key) end)
     key
   end
 end

@@ -7,7 +7,7 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
 
   def start_link(opts) do
     key = Keyword.fetch!(opts, :key)
-    scope = Keyword.get(opts, :scope)
+    scope = Keyword.fetch!(opts, :scope)
 
     metadata = %{
       parent: Keyword.fetch!(opts, :parent),
@@ -24,7 +24,7 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
   def init(opts) do
     key = Keyword.fetch!(opts, :key)
     runtime = Keyword.fetch!(opts, :runtime)
-    scope = Keyword.get(opts, :scope)
+    scope = Keyword.fetch!(opts, :scope)
 
     startup =
       Supervisor.child_spec(

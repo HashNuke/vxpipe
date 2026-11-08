@@ -4,6 +4,7 @@ defmodule Vxpipe.MCP.WireSecurityTest do
   alias Vxpipe.MCP.{ConnectionKey, Connections, FaultServer}
 
   test "rejects a mixed DNS answer at the effective network client before connecting" do
+    host = Vxpipe.MCP.Test.SessionHost.start!()
     server = start_supervised!({FaultServer, fault: :remote_error, owner: self()})
     endpoint = String.replace(FaultServer.endpoint(server), "127.0.0.1", "localhost")
 
@@ -22,6 +23,7 @@ defmodule Vxpipe.MCP.WireSecurityTest do
              Connections.open_loopback_test(
                key,
                [endpoint: endpoint, use_sse: false],
+               owner: host,
                runtime_options: [dns_resolver: resolver]
              )
 

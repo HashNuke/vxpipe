@@ -191,7 +191,7 @@ normal stop, crash and bounded recovery isolate protocol state and lifetimes.
   Existing isolated checks need regression coverage, not a replacement lifecycle.
   The optional embedded refresher is not the saved-tenant scheduler; broader
   coordinator/publication redesign is a separately recorded follow-up.
-- [ ] Remove the obsolete global call-session-cache path from shipped use and document
+- [x] Remove the obsolete global call-session-cache path from shipped use and document
   intentional internal API changes. Keep root registries/coordination only for
   their independent responsibilities; preserve inbound MCP and management routes.
 
@@ -504,3 +504,19 @@ The maintenance amendment is tracked in the
   seed 349432. Independent source and staged documentation review finds no
   outstanding issue; the final evidence update precedes commit. See the
   [catalog-discovery labnote](../20261108-1950-owned-catalog-discovery.md).
+
+- Explicit owners are now mandatory in the library: the root connection pool,
+  key-only close, inferred-host constructor and legacy registry matching are
+  removed. All shipped callers, including the official conformance/reference
+  clients, use explicit hosts. Independent management checks and inbound routes
+  retain their own existing lifetimes. The initial ownerless-open regression,
+  two adapter failures and an async fixture migration failure were reproduced
+  before correction. The final MCP lifecycle/protocol/check/official lane passes
+  104 tests, seed 794191; saved call/transfer/phone and cross-node runtime/renewal
+  pass 33, seed 44771; participant ancestry/isolation passes 3, seed 272031; and
+  catalog loader/wire passes 17, seed 897786. All five root checks pass, including
+  5,057 tests with zero failures and 338 excluded, seed 373187. Independent Astra
+  source and final staged evidence reviews approve the checkpoint with no
+  outstanding findings. This completes the T3 obsolete-pool removal item. Exact renewal ownership, durable
+  catalog jobs and remaining acceptance are still pending. See the
+  [explicit-host labnote](../20261108-2011-explicit-mcp-hosts.md).

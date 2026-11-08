@@ -63,6 +63,7 @@ defmodule Vxpipe.MCP.RuntimeAuthPrivacyTest do
   end
 
   test "credential rejection during supervised runtime startup cannot report private headers" do
+    host = Vxpipe.MCP.Test.SessionHost.start!()
     owner = self()
 
     {:ok, key} =
@@ -83,6 +84,7 @@ defmodule Vxpipe.MCP.RuntimeAuthPrivacyTest do
       ExUnit.CaptureLog.capture_log(fn ->
         assert {:error, :connection_failed} =
                  Connections.open(key, config,
+                   owner: host,
                    runtime_options: [
                      dns_resolver: fn _, _ ->
                        send(owner, :unexpected_dns)
@@ -92,13 +94,14 @@ defmodule Vxpipe.MCP.RuntimeAuthPrivacyTest do
                  )
       end)
 
-    assert Connections.lookup(key) == :error
+    assert Connections.lookup(key, owner: host) == :error
     refute_received :unexpected_dns
     assert_private(log)
   end
 
   @tag :integration
   test "revoked credentials on a live stateless HTTP client return an error without leaking headers" do
+    host = Vxpipe.MCP.Test.SessionHost.start!()
     owner = self()
     server = start_supervised!({Vxpipe.MCP.CheckHTTPFixture, owner: owner, session: false})
 
@@ -135,11 +138,9 @@ defmodule Vxpipe.MCP.RuntimeAuthPrivacyTest do
       runtime_authentication: auth
     ]
 
-    on_exit(fn -> Connections.close(key) end)
-
     log =
       ExUnit.CaptureLog.capture_log(fn ->
-        assert {:ok, connection} = Connections.open_loopback_test(key, config)
+        assert {:ok, connection} = Connections.open_loopback_test(key, config, owner: host)
         assert_receive {:check_http, "initialize", _}
         assert_receive {:check_http, "notifications/initialized", _}
         Agent.update(credentials, fn _ -> {:error, :revoked} end)

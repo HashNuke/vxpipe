@@ -41,11 +41,13 @@ defmodule Vxpipe.MCP.WireLimitTest do
   test "keeps the response budget across complete progress events and reconnection" do
     server = start_supervised!({CumulativeSSEServer, owner: self()})
 
+    host = Vxpipe.MCP.Test.SessionHost.start!()
     task_supervisor = start_supervised!(Task.Supervisor)
 
     task =
       Task.Supervisor.async_nolink(task_supervisor, fn ->
         FaultClient.invoke(CumulativeSSEServer.endpoint(server), :cumulative_sse_oversized,
+          owner: host,
           deadline_ms: 5_000,
           max_response_bytes: @response_limit,
           max_stream_buffer_bytes: @response_limit,

@@ -7,16 +7,29 @@ defmodule Vxpipe.MCP.ReferenceClient do
 
   @spec run(String.t()) :: {:ok, %{tool: map(), result: map()}} | {:error, term()}
   def run(server_url) when is_binary(server_url) do
+    name = {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {__MODULE__, make_ref()}}}
+    {:ok, host} = DynamicSupervisor.start_link(strategy: :one_for_one, name: name)
+
+    try do
+      run_owned(host, server_url)
+    after
+      Supervisor.stop(host)
+    end
+  end
+
+  defp run_owned(host, server_url) do
     with {:ok, key} <- connection_key(),
          {:ok, connection} <-
-           Connections.open_loopback_test(key,
-             endpoint: server_url,
-             limits: [
-               max_request_bytes: 262_144,
-               max_response_bytes: 262_144,
-               max_stream_buffer_bytes: 262_144
-             ]
-           ) do
+           Connections.open_loopback_test(
+             key,
+             [
+               endpoint: server_url,
+               limits: [
+                 max_request_bytes: 262_144,
+                 max_response_bytes: 262_144,
+                 max_stream_buffer_bytes: 262_144
+               ]
+             ], owner: host) do
       try do
         ReferenceProbe.run(Connection.client(connection))
       after

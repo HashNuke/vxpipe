@@ -46,7 +46,6 @@ defmodule Vxpipe.MCP.ConnectionNames do
 
   def sessions(key) do
     Registry.select(@registry, [
-      {{{:owner, key}, :"$1", %{parent: :"$2"}}, [], [{{:"$2", :"$1"}}]},
       {{{:owner, :_, key}, :"$1", %{parent: :"$2"}}, [], [{{:"$2", :"$1"}}]}
     ])
   end
@@ -62,7 +61,6 @@ defmodule Vxpipe.MCP.ConnectionNames do
   def count do
     @registry
     |> Registry.select([
-      {{{:owner, :_}, :"$1", %{parent: :_}}, [], [:"$1"]},
       {{{:owner, :_, :_}, :"$1", %{parent: :_}}, [], [:"$1"]}
     ])
     |> Enum.count(&Process.alive?/1)

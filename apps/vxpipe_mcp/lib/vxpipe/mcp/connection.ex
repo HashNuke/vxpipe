@@ -18,12 +18,6 @@ defmodule Vxpipe.MCP.Connection do
           }
 
   @doc false
-  @spec new(ConnectionKey.t(), pid(), GenServer.server()) :: t()
-  def new(%ConnectionKey{} = key, owner, client) when is_pid(owner) do
-    new(key, owner, client, Process.whereis(Vxpipe.MCP.ConnectionSupervisor))
-  end
-
-  @doc false
   @spec new(ConnectionKey.t(), pid(), GenServer.server(), pid()) :: t()
   def new(%ConnectionKey{} = key, owner, client, session_owner)
       when is_pid(owner) and is_pid(session_owner) do

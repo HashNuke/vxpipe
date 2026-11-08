@@ -12,16 +12,21 @@ defmodule Vxpipe.MCP.FaultClient do
     max_stream_buffer_bytes = Keyword.get(opts, :max_stream_buffer_bytes, @default_limit)
     use_sse? = Keyword.get(opts, :use_sse, false)
     {:ok, key} = connection_key(fault)
+    host = Keyword.get_lazy(opts, :owner, &Vxpipe.MCP.Test.SessionHost.start!/0)
 
     {:ok, connection} =
-      Connections.open_loopback_test(key,
-        endpoint: endpoint,
-        use_sse: use_sse?,
-        limits: [
-          max_response_bytes: max_response_bytes,
-          max_stream_buffer_bytes: max_stream_buffer_bytes,
-          request_timeout_ms: @default_deadline_ms
-        ]
+      Connections.open_loopback_test(
+        key,
+        [
+          endpoint: endpoint,
+          use_sse: use_sse?,
+          limits: [
+            max_response_bytes: max_response_bytes,
+            max_stream_buffer_bytes: max_stream_buffer_bytes,
+            request_timeout_ms: @default_deadline_ms
+          ]
+        ],
+        owner: host
       )
 
     try do

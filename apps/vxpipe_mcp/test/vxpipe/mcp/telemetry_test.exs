@@ -12,13 +12,18 @@ defmodule Vxpipe.MCP.TelemetryTest do
     ScriptedProtocolClient
   }
 
+  setup do
+    %{host: Vxpipe.MCP.Test.SessionHost.start!()}
+  end
+
   @connection_stop [:vxpipe, :mcp, :connection, :stop]
   @request_stop [:vxpipe, :mcp, :request, :stop]
 
-  test "reports opened, reused, and closed connection states without external identity" do
+  test "reports opened, reused, and closed connection states without external identity", %{
+    host: host
+  } do
     attach(@connection_stop)
     key = connection_key()
-    on_exit(fn -> Connections.close(key) end)
 
     assert {:ok, connection} =
              Connections.open(
@@ -27,6 +32,7 @@ defmodule Vxpipe.MCP.TelemetryTest do
                  endpoint: "https://mcp.example.test/rpc",
                  authentication: [type: :bearer, token: "private-secret"]
                ],
+               owner: host,
                runtime: ReadyClientRuntime
              )
 
@@ -42,7 +48,11 @@ defmodule Vxpipe.MCP.TelemetryTest do
     assert {:ok, reused} =
              Connections.open(
                key,
-               [endpoint: "https://mcp.example.test/different"],
+               [
+                 endpoint: "https://mcp.example.test/rpc",
+                 authentication: [type: :bearer, token: "private-secret"]
+               ],
+               owner: host,
                runtime: ReadyClientRuntime
              )
 
@@ -100,14 +110,15 @@ defmodule Vxpipe.MCP.TelemetryTest do
     refute inspect({measurements, metadata}) =~ sentinel
   end
 
-  for operation <- [:key_close, :revoke] do
+  for operation <- [:handle_close, :revoke] do
     @operation operation
-    test "#{operation} reports the retired client and remaining connection count" do
+    test "#{operation} reports the retired client and remaining connection count", %{host: host} do
       attach(@connection_stop)
       key = connection_key()
 
       assert {:ok, connection} =
                Connections.open(key, [endpoint: "https://mcp.example.test/rpc"],
+                 owner: host,
                  runtime: ReadyClientRuntime
                )
 
@@ -115,7 +126,7 @@ defmodule Vxpipe.MCP.TelemetryTest do
       assert_receive {@connection_stop, opened, %{operation: :open}}
 
       case @operation do
-        :key_close -> assert :ok = Connections.close(key)
+        :handle_close -> assert :ok = Connections.close(connection)
         :revoke -> assert :ok = Connections.revoke(key)
       end
 
@@ -126,12 +137,13 @@ defmodule Vxpipe.MCP.TelemetryTest do
     end
   end
 
-  test "closing an already retired handle reports absent" do
+  test "closing an already retired handle reports absent", %{host: host} do
     attach(@connection_stop)
     key = connection_key()
 
     {:ok, connection} =
       Connections.open(key, [endpoint: "https://mcp.example.test/rpc"],
+        owner: host,
         runtime: ReadyClientRuntime
       )
 
@@ -142,12 +154,15 @@ defmodule Vxpipe.MCP.TelemetryTest do
     assert_receive {@connection_stop, _, %{operation: :close, outcome: :absent}}
   end
 
-  test "delayed registry cleanup cannot count dead sessions or report them closed again" do
+  test "delayed registry cleanup cannot count dead sessions or report them closed again", %{
+    host: host
+  } do
     attach(@connection_stop)
     before = Vxpipe.MCP.ConnectionNames.count()
 
     {:ok, connection} =
       Connections.open(connection_key(), [endpoint: "https://mcp.example.test/rpc"],
+        owner: host,
         runtime: ReadyClientRuntime
       )
 

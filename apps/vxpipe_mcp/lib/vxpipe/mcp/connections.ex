@@ -2,10 +2,9 @@ defmodule Vxpipe.MCP.Connections do
   @moduledoc """
   Opens, reuses, and retires supervised MCP sessions.
 
-  Supply the owner option to place sessions under a host-owned DynamicSupervisor.
+  Supply the required owner option to place sessions under a host-owned DynamicSupervisor.
   Its exact local PID scopes reuse and lookup; credential identity stays unchanged.
-  Omitting ownership retains the legacy shared pool while consumers migrate.
-  Invalid explicit ownership never falls back to that pool.
+  Missing or invalid ownership is rejected. There is no global session pool.
   """
 
   alias Vxpipe.MCP.{
@@ -23,7 +22,6 @@ defmodule Vxpipe.MCP.Connections do
     Telemetry
   }
 
-  @connection_supervisor Vxpipe.MCP.ConnectionSupervisor
   @protocol_version "2025-11-25"
   @startup_timeout 5_000
 
@@ -102,30 +100,9 @@ defmodule Vxpipe.MCP.Connections do
     end
   end
 
-  @spec close(Connection.t() | ConnectionKey.t()) :: close_result()
+  @spec close(Connection.t()) :: close_result()
   def close(%Connection{} = connection) do
     close_all([connection])
-  end
-
-  # Key-close is legacy; independently owned sessions require their exact handle.
-  def close(%ConnectionKey{} = key) do
-    case ConnectionNames.lookup(:owner, key, nil) do
-      {:ok, integration} ->
-        SessionRetirement.close_owners(key, [
-          {Process.whereis(@connection_supervisor), integration}
-        ])
-
-      :error ->
-        Telemetry.connection_stop(
-          Telemetry.started_at(),
-          :close,
-          :absent,
-          ConnectionNames.count(),
-          nil
-        )
-
-        :ok
-    end
   end
 
   @doc "Fences all exact sessions before cleanup, sharing one absolute grace deadline."
@@ -189,8 +166,7 @@ defmodule Vxpipe.MCP.Connections do
         with {:ok, pid} <- resolve_owner(owner), do: {:ok, %{parent: pid, scope: pid}}
 
       :error ->
-        with {:ok, pid} <- resolve_owner(@connection_supervisor),
-             do: {:ok, %{parent: pid, scope: nil}}
+        {:error, :invalid_owner}
     end
   end
 
@@ -234,8 +210,6 @@ defmodule Vxpipe.MCP.Connections do
   catch
     :exit, _reason -> {{:error, :connection_failed}, :failed}
   end
-
-  defp compatible_policy(_connection, %{scope: nil}), do: :ok
 
   defp compatible_policy(connection, context) do
     if ConnectionNames.policy(
