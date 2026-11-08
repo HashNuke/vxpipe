@@ -56,8 +56,13 @@ defmodule Vxpipe.MCP.RuntimeAuthProvider do
   end
 
   @doc "Resolves and validates the complete credential header set for one submission."
-  def get_headers(%__MODULE__{auth_method: method, endpoint: endpoint} = state) do
-    with {:ok, %{auth_method: ^method, endpoint: ^endpoint} = current} <- resolve(state),
+  def get_headers(%__MODULE__{} = state), do: headers(state, resolve(state))
+
+  @doc "Obtains cleanup headers only from a resolver with a non-renewing capability."
+  def get_cleanup_headers(%__MODULE__{} = state), do: headers(state, resolve_cleanup(state))
+
+  defp headers(%__MODULE__{auth_method: method, endpoint: endpoint} = state, resolved) do
+    with {:ok, %{auth_method: ^method, endpoint: ^endpoint} = current} <- resolved,
          {:ok, headers} <- request_headers(current),
          {:ok, validated} <- validate_headers(headers) do
       {:ok, validated, state}
@@ -138,4 +143,16 @@ defmodule Vxpipe.MCP.RuntimeAuthProvider do
   end
 
   defp unavailable, do: exit(:mcp_credentials_unavailable)
+
+  defp resolve_cleanup(state) do
+    {module, context} = state.resolver
+
+    if function_exported?(module, :resolve_cleanup, 4),
+      do: module.resolve_cleanup(context, state.tenant, state.connection_id, state.generation),
+      else: :unavailable
+  rescue
+    _ -> :unavailable
+  catch
+    _, _ -> :unavailable
+  end
 end

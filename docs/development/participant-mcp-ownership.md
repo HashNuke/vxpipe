@@ -179,10 +179,34 @@ linking failures back into the client. The idle guard remains with the integrati
 until retirement. Explicit transport disconnect can keep that integration/client
 alive while terminating its transport work.
 
-These are new-session initialization bounds. Bounding a reused session's current
-credential resolution, cancellation of root-owned renewal work, final submission
-fencing and the common retirement budget remain open. The presence of this API
-alone does not complete participant placement or teardown.
+`Connections.close_all(handles, deadline: absolute_monotonic_ms)` now fences all
+selected exact sessions before starting their cleanup. Its default grace budget is
+1,000 ms for the whole batch. The same lifecycle guard rejects readiness and new
+POST/GET work during closing; transport admission is checked before authorization
+and again after DNS/connect, immediately before HTTP submission. Cleanup receives
+an exact-session permission for one DELETE. A rejection before submission reports
+`not_submitted`; previously admitted requests retain their existing outcome rules.
+
+Cleanup reads current credentials through an optional non-renewing capability.
+Expired, revoked, replaced or refresh-claimed grants skip DELETE. A provider or
+resolver without that capability also skips owned DELETE rather than falling back
+to ordinary authorization. The batch's absolute deadline bounds blocked cleanup
+callbacks and network work; caller death cancels the same exact integrations.
+
+The transport supervisor directly owns stream socket tasks as well as POST,
+receiver and guarded DNS work. Default owned DNS resolution runs inside its
+existing supervised helper. Close captures exact supervisor/worker monitors before
+retirement and waits for local termination. Integration DOWN alone is insufficient:
+the transport supervisor must finish shutting down its children. Its registration
+retains public key/parent metadata so late close still observes that barrier after
+integration death. An incomplete local barrier returns `cleanup_incomplete` after
+a shared five-second observation bound; it never reports successful teardown.
+This observation bound does not extend permission to submit network cleanup.
+
+Bounding a reused session's current credential resolution and cancellation of
+root-owned renewal work remain open. Participant placement and activation-level
+teardown acceptance also remain unfinished; standalone lifecycle evidence does
+not establish those call-path contracts.
 
 ## Retirement and external effects
 

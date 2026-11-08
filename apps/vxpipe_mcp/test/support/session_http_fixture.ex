@@ -34,6 +34,9 @@ defmodule Vxpipe.MCP.SessionHTTPFixture do
     hold(conn, :get, owner)
   end
 
+  def call(%{method: "DELETE"} = conn, %{owner: owner, hold_delete: true}),
+    do: hold(conn, :delete, owner)
+
   def call(%{method: "DELETE"} = conn, %{owner: owner}) do
     send(owner, :session_http_delete)
     send_resp(conn, 204, "")

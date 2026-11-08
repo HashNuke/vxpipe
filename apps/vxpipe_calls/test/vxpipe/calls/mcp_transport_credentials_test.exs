@@ -78,4 +78,55 @@ defmodule Vxpipe.Calls.MCPTransportCredentialsTest do
     refute :erlang.term_to_binary(result) =~ "private-refresh"
     assert_received :refreshed
   end
+
+  test "cleanup resolves a current grant without renewing a near-expiry token", data do
+    Agent.update(data.agent, fn saved ->
+      %{saved | secrets: Map.put(saved.secrets, "expires_at", "2026-11-06T12:00:10Z")}
+    end)
+
+    assert {:ok, %{auth_method: "oauth", token: "old"} = current} =
+             Vxpipe.Calls.MCPTransportCredentials.resolve_cleanup(
+               data.options,
+               "tenant",
+               "connection",
+               2
+             )
+
+    assert current.headers == [{"authorization", "Bearer old"}]
+    refute_received :refreshed
+    refute :erlang.term_to_binary(current) =~ "private-refresh"
+  end
+
+  test "cleanup rejects expired, claimed, disconnected and replaced grants without renewal",
+       data do
+    original = Agent.get(data.agent, & &1)
+
+    for saved <- [
+          %{
+            original
+            | secrets: Map.put(original.secrets, "expires_at", DateTime.to_iso8601(@now))
+          },
+          %{
+            original
+            | secrets:
+                Map.put(original.secrets, "refresh_claim", %{
+                  "deadline" => DateTime.to_unix(@now) + 30
+                })
+          },
+          %{original | connection: %{original.connection | status: "disconnected"}},
+          %{original | connection: %{original.connection | generation: 3}}
+        ] do
+      Agent.update(data.agent, fn _ -> saved end)
+
+      assert {:error, _reason} =
+               Vxpipe.Calls.MCPTransportCredentials.resolve_cleanup(
+                 data.options,
+                 "tenant",
+                 "connection",
+                 2
+               )
+
+      refute_received :refreshed
+    end
+  end
 end

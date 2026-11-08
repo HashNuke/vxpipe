@@ -52,10 +52,12 @@ defmodule Vxpipe.MCP.ConnectionNames do
   end
 
   def count do
-    Registry.count_select(@registry, [
-      {{{:owner, :_}, :_, %{parent: :_}}, [], [true]},
-      {{{:owner, :_, :_}, :_, %{parent: :_}}, [], [true]}
+    @registry
+    |> Registry.select([
+      {{{:owner, :_}, :"$1", %{parent: :_}}, [], [:"$1"]},
+      {{{:owner, :_, :_}, :"$1", %{parent: :_}}, [], [:"$1"]}
     ])
+    |> Enum.count(&Process.alive?/1)
   end
 
   defp name(role, key, nil), do: {role, key}

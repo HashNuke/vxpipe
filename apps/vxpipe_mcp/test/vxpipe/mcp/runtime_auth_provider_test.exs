@@ -30,6 +30,46 @@ defmodule Vxpipe.MCP.RuntimeAuthProviderTest do
              RuntimeAuthProvider.handle_forbidden("challenge", [], state)
   end
 
+  test "cleanup uses only the non-renewing resolver and validates its pinned identity" do
+    configuration =
+      config(%{
+        request: {:ok, %{auth_method: "oauth", token: "renewed-token"}},
+        cleanup: {:ok, %{auth_method: "oauth", token: "current-token"}}
+      })
+
+    {:ok, state} = RuntimeAuthProvider.init(configuration)
+
+    assert {:ok, [{"authorization", "Bearer current-token"}], ^state} =
+             RuntimeAuthProvider.get_cleanup_headers(state)
+
+    assert_receive {:cleanup_resolved, "tenant", "connection", 1}
+    refute_received {:resolved, _, _, _}
+
+    for result <- [
+          {:error, :oauth_reconnect_required},
+          {:ok, %{auth_method: "oauth", token: "bad\r\nheader"}},
+          {:ok,
+           %{auth_method: "oauth", token: "valid", endpoint: "https://other.example.test/mcp"}}
+        ] do
+      {:ok, state} = RuntimeAuthProvider.init(config(result))
+
+      assert catch_exit(RuntimeAuthProvider.get_cleanup_headers(state)) ==
+               :mcp_credentials_unavailable
+    end
+  end
+
+  test "cleanup never falls back to a resolver that only supports ordinary requests" do
+    configuration = config({:ok, %{auth_method: "oauth", token: "must-not-resolve"}})
+    {_module, context} = configuration.resolver
+    configuration = %{configuration | resolver: {Vxpipe.MCP.Test.RequestOnlyAuthFixture, context}}
+    {:ok, state} = RuntimeAuthProvider.init(configuration)
+
+    assert catch_exit(RuntimeAuthProvider.get_cleanup_headers(state)) ==
+             :mcp_credentials_unavailable
+
+    refute_received {:resolved, _, _, _}
+  end
+
   test "resolution failure rejects actual HTTP submission before DNS or old-token fallback" do
     owner = self()
     assert {:ok, state} = RuntimeAuthProvider.init(config({:error, :revoked}))
@@ -70,8 +110,39 @@ defmodule Vxpipe.MCP.RuntimeAuthProviderTest do
     }
 
     assert :ok = ExMCP.Transport.HTTP.terminate_session(transport)
-    assert_receive {:resolved, "tenant", "connection", 1}
+    assert_receive {:cleanup_resolved, "tenant", "connection", 1}
+    refute_received {:resolved, _, _, _}
     refute_received :delete_dns
+  end
+
+  test "DELETE skips a renewal-required grant without invoking ordinary resolution" do
+    owner = self()
+
+    {:ok, auth} =
+      RuntimeAuthProvider.init(
+        config(%{
+          request: {:ok, %{auth_method: "oauth", token: "renewed-token"}},
+          cleanup: {:error, :oauth_reconnect_required}
+        })
+      )
+
+    transport = %ExMCP.Transport.HTTP{
+      base_url: "https://mcp.example.test",
+      endpoint: "/mcp",
+      session_id: "session",
+      protocol_version: "2025-11-25",
+      auth_provider: RuntimeAuthProvider,
+      auth_provider_state: auth,
+      dns_resolver: fn _, _ ->
+        send(owner, :cleanup_dns)
+        {:error, :unavailable}
+      end
+    }
+
+    assert :ok = ExMCP.Transport.HTTP.terminate_session(transport)
+    assert_receive {:cleanup_resolved, "tenant", "connection", 1}
+    refute_received {:resolved, _, _, _}
+    refute_received :cleanup_dns
   end
 
   test "SSE connection checks runtime credentials before starting DNS" do
@@ -97,6 +168,35 @@ defmodule Vxpipe.MCP.RuntimeAuthProviderTest do
              :mcp_credentials_unavailable
 
     refute_received :sse_dns
+  end
+
+  test "owned DELETE skips a provider without the non-renewing cleanup callback" do
+    owner = self()
+
+    {:ok, auth} =
+      Vxpipe.MCP.Test.RequestOnlyProvider.init(
+        config({:ok, %{auth_method: "oauth", token: "renewed-token"}})
+      )
+
+    supervisor = start_supervised!({DynamicSupervisor, strategy: :one_for_one})
+
+    transport = %ExMCP.Transport.HTTP{
+      base_url: "https://mcp.example.test",
+      endpoint: "/mcp",
+      session_id: "session",
+      protocol_version: "2025-11-25",
+      auth_provider: Vxpipe.MCP.Test.RequestOnlyProvider,
+      auth_provider_state: auth,
+      transport_supervisor: supervisor,
+      dns_resolver: fn _, _ ->
+        send(owner, :unsupported_cleanup_dns)
+        {:error, :unavailable}
+      end
+    }
+
+    assert :ok = ExMCP.Transport.HTTP.terminate_session(transport)
+    refute_received {:resolved, _, _, _}
+    refute_received :unsupported_cleanup_dns
   end
 
   test "changed method or malformed token cannot reach the transport" do

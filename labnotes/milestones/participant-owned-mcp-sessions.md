@@ -124,13 +124,13 @@ commit. Checkboxes below are runtime work, not specification-review results.
 
 ### T1 — Owner-bound standalone session lifecycle
 
-- [ ] Add the smallest failing `vxpipe_mcp` boundary tests: two owners with the
+- [x] Add the smallest failing `vxpipe_mcp` boundary tests: two owners with the
   same credential key receive different clients; stopping one removes only its
   clients, including when initialization is blocked or only partially complete.
 - [x] Introduce explicit owner/session construction and handles without importing
   Calls or Call Engine. Separate exact-session close/lookup from grant revocation.
   Validate compatible deduplication and reject stale/foreign owner handles.
-- [ ] Add effective ExMCP fixture tests for an active SSE stream and blocked
+- [x] Add effective ExMCP fixture tests for an active SSE stream and blocked
   asynchronous POST. Prove owner/client forced death ends transport workers and
   peer sockets; reproduce any gap before fixing the dependency integration.
 - [ ] Implement bounded graceful cleanup and forced cleanup, including POST/GET
@@ -420,3 +420,26 @@ The maintenance amendment is tracked in the
   graceful cleanup, reused-credential cancellation
   or participant placement. See the
   [bounded-startup labnote](../20261108-1546-bounded-session-startup.md).
+
+- Standalone retirement now fences selected exact sessions before cleanup, shares
+  one absolute grace deadline, and waits for the transport supervisor's descendant
+  barrier even after client/integration death. POST/GET preparation and final
+  submission check the lifecycle; only an exact, single-use cleanup permission
+  permits DELETE while closing. Cleanup uses current non-renewing credentials or
+  skips DELETE, including unsupported providers. Legacy key close still captures
+  an integration before its client is registered. The expanded retirement lane
+  passes twelve cases; the final protocol/privacy/lifecycle lane passes 105,
+  seed 13405. Independent runtime review, clean-checkout preparation and dev/test
+  candidate compilation pass. All five root gates pass: 5,028 tests, zero failures,
+  310 excluded, seed 479143. The final staged evidence review precedes commit.
+  Participant placement,
+  reused-credential cancellation and root renewal-operation acknowledgement remain
+  open. See the [retirement labnote](../20261108-1641-session-retirement-fences.md).
+
+- T1 owner-isolation and forced-transport acceptance now have complete boundary
+  evidence: twelve blocked-startup cases keep another real ExMCP session callable,
+  and held POST/GET cases cover explicit host and integration death as well as
+  client loss. The strengthened startup/transport lane passes 35 tests,
+  seed 227780, including two tagged cases added after the default suite began. The common
+  lifecycle exit still awaits reused-credential and stalled-connect acceptance;
+  no participant composition or full milestone completion is claimed.

@@ -7,7 +7,18 @@ defmodule Vxpipe.Calls.MCPTransportCredentials do
   def resolve(:configured, tenant, id, generation), do: resolve([], tenant, id, generation)
 
   def resolve(options, tenant, id, generation) do
-    with {:ok, saved} <- MCPRuntimeCredentials.resolve(tenant, id, generation, options),
+    project(MCPRuntimeCredentials.resolve(tenant, id, generation, options))
+  end
+
+  def resolve_cleanup(:configured, tenant, id, generation),
+    do: resolve_cleanup([], tenant, id, generation)
+
+  def resolve_cleanup(options, tenant, id, generation) do
+    project(MCPRuntimeCredentials.resolve_cleanup(tenant, id, generation, options))
+  end
+
+  defp project(resolved) do
+    with {:ok, saved} <- resolved,
          {:ok, configuration} <- StaticConfiguration.new(input(saved)),
          {:ok, headers} <- Authentication.headers(configuration.authentication) do
       result = %{

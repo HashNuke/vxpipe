@@ -32,6 +32,12 @@ defmodule Vxpipe.MCP.SessionStartupLifetimeTest do
       server = start_supervised!({SessionHTTPFixture, owner: observer})
       owner = session_owner()
       key = key()
+      other_owner = session_owner()
+      {other_config, _options} = blocked_configuration(server, key, :ready)
+      assert {:ok, other} = Connections.open_loopback_test(key, other_config, owner: other_owner)
+      assert_receive {:session_http_session, other_session}, 1_000
+      assert_receive :session_http_initialized, 1_000
+      assert_receive {:session_http_held, :get, _other_peer}, 1_000
       {config, runtime_options} = blocked_configuration(server, key, @stage)
 
       deadline =
@@ -78,6 +84,11 @@ defmodule Vxpipe.MCP.SessionStartupLifetimeTest do
         send(blocked_worker, :release_startup)
         refute_receive {:session_http_session, _unexpected_session}, 100
         refute_receive {:startup_result, {:ok, _late_handle}}, 100
+
+        assert {:ok, %{"content" => [%{"text" => ^other_session}]}} =
+                 Vxpipe.MCP.ExMCPClient.call_tool(Connection.client(other), "echo", %{}, 1_000)
+
+        assert Connections.owned_by?(other, other_owner)
       after
         Process.exit(blocked_worker, :kill)
         Process.exit(client, :kill)
@@ -435,7 +446,7 @@ defmodule Vxpipe.MCP.SessionStartupLifetimeTest do
   defp retire(:session_death, _caller, _owner, integration), do: Process.exit(integration, :kill)
 
   defp retire(:guard_death, _caller, _owner, integration),
-    do: Process.exit(GenServer.whereis(Vxpipe.MCP.SessionStartup.name(integration)), :kill)
+    do: Process.exit(GenServer.whereis(Vxpipe.MCP.SessionLifecycle.name(integration)), :kill)
 
   defp retire(:deadline, _caller, _owner, _integration), do: :ok
 
@@ -448,6 +459,7 @@ defmodule Vxpipe.MCP.SessionStartupLifetimeTest do
 
     start_supervised!(
       Supervisor.child_spec({DynamicSupervisor, strategy: :one_for_one, name: name},
+        id: make_ref(),
         restart: :temporary
       )
     )

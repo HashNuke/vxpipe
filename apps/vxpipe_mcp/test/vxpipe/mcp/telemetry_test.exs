@@ -100,6 +100,85 @@ defmodule Vxpipe.MCP.TelemetryTest do
     refute inspect({measurements, metadata}) =~ sentinel
   end
 
+  for operation <- [:key_close, :revoke] do
+    @operation operation
+    test "#{operation} reports the retired client and remaining connection count" do
+      attach(@connection_stop)
+      key = connection_key()
+
+      assert {:ok, connection} =
+               Connections.open(key, [endpoint: "https://mcp.example.test/rpc"],
+                 runtime: ReadyClientRuntime
+               )
+
+      client = Connection.client(connection)
+      assert_receive {@connection_stop, opened, %{operation: :open}}
+
+      case @operation do
+        :key_close -> assert :ok = Connections.close(key)
+        :revoke -> assert :ok = Connections.revoke(key)
+      end
+
+      assert_receive {@connection_stop, closed,
+                      %{operation: :close, outcome: :closed, client: ^client}}
+
+      assert closed.active_connections == opened.active_connections - 1
+    end
+  end
+
+  test "closing an already retired handle reports absent" do
+    attach(@connection_stop)
+    key = connection_key()
+
+    {:ok, connection} =
+      Connections.open(key, [endpoint: "https://mcp.example.test/rpc"],
+        runtime: ReadyClientRuntime
+      )
+
+    assert_receive {@connection_stop, _, %{operation: :open}}
+    assert :ok = Connections.close(connection)
+    assert_receive {@connection_stop, _, %{outcome: :closed}}
+    assert :ok = Connections.close(connection)
+    assert_receive {@connection_stop, _, %{operation: :close, outcome: :absent}}
+  end
+
+  test "delayed registry cleanup cannot count dead sessions or report them closed again" do
+    attach(@connection_stop)
+    before = Vxpipe.MCP.ConnectionNames.count()
+
+    {:ok, connection} =
+      Connections.open(connection_key(), [endpoint: "https://mcp.example.test/rpc"],
+        runtime: ReadyClientRuntime
+      )
+
+    assert_receive {@connection_stop, _, %{operation: :open}}
+    integration = Connection.owner(connection)
+
+    [{transport, _}] =
+      Registry.lookup(Vxpipe.MCP.ConnectionRegistry, {:transport_workers, integration})
+
+    monitors =
+      Map.new([integration, transport, Connection.client(connection)], &{&1, Process.monitor(&1)})
+
+    partitions =
+      for {_, pid, _, _} <- Supervisor.which_children(Vxpipe.MCP.ConnectionRegistry), do: pid
+
+    Enum.each(partitions, &:sys.suspend/1)
+
+    try do
+      Process.exit(integration, :kill)
+
+      for {pid, reference} <- monitors,
+          do: assert_receive({:DOWN, ^reference, :process, ^pid, _}, 1_000)
+
+      assert :ok = Connections.close(connection)
+      assert_receive {@connection_stop, measurements, metadata}
+      assert {measurements.active_connections, metadata.outcome} == {before, :absent}
+    after
+      Enum.each(partitions, &:sys.resume/1)
+    end
+  end
+
   test "reports rejected and successful invocation outcomes without tool data" do
     attach(@request_stop)
     sentinel = "private-tool-name"

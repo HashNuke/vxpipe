@@ -17,13 +17,16 @@ defmodule Vxpipe.MCP.Connections do
     ExMCPRuntime,
     IntegrationSupervisor,
     RuntimeAuthProvider,
-    SessionStartup,
+    SessionLifecycle,
+    SessionRetirement,
     Telemetry
   }
 
   @connection_supervisor Vxpipe.MCP.ConnectionSupervisor
   @protocol_version "2025-11-25"
   @startup_timeout 5_000
+
+  @type close_result :: :ok | {:error, :cleanup_incomplete}
 
   @type error ::
           ClientOptions.error()
@@ -66,13 +69,11 @@ defmodule Vxpipe.MCP.Connections do
   end
 
   @doc "Revokes one local credential generation across every session owner."
-  @spec revoke(ConnectionKey.t()) :: :ok
+  @spec revoke(ConnectionKey.t()) :: close_result()
   def revoke(%ConnectionKey{} = key) do
     :ok = CredentialLeases.revoke(key)
 
-    Enum.each(ConnectionNames.sessions(key), fn {parent, owner} ->
-      retire_session(parent, owner, nil)
-    end)
+    SessionRetirement.close_owners(key, ConnectionNames.sessions(key))
   end
 
   @spec lookup(ConnectionKey.t(), keyword()) :: {:ok, Connection.t()} | :error
@@ -99,29 +100,36 @@ defmodule Vxpipe.MCP.Connections do
     end
   end
 
-  @spec close(Connection.t() | ConnectionKey.t()) :: :ok
+  @spec close(Connection.t() | ConnectionKey.t()) :: close_result()
   def close(%Connection{} = connection) do
-    retire_session(
-      Connection.session_owner(connection),
-      Connection.owner(connection),
-      Connection.client(connection)
-    )
+    close_all([connection])
   end
 
   # Key-close is legacy; independently owned sessions require their exact handle.
   def close(%ConnectionKey{} = key) do
-    retire_session(
-      Process.whereis(@connection_supervisor),
-      lookup_pid(:owner, key, nil),
-      lookup_pid(:client, key, nil)
-    )
+    case ConnectionNames.lookup(:owner, key, nil) do
+      {:ok, integration} ->
+        SessionRetirement.close_owners(key, [
+          {Process.whereis(@connection_supervisor), integration}
+        ])
+
+      :error ->
+        Telemetry.connection_stop(
+          Telemetry.started_at(),
+          :close,
+          :absent,
+          ConnectionNames.count(),
+          nil
+        )
+
+        :ok
+    end
   end
 
-  defp retire_session(parent, owner, client) do
-    started_at = Telemetry.started_at()
-    outcome = if parent && owner, do: close_owner(parent, owner), else: :absent
-    Telemetry.connection_stop(started_at, :close, outcome, ConnectionNames.count(), client)
-    :ok
+  @doc "Fences all exact sessions before cleanup, sharing one absolute grace deadline."
+  @spec close_all([Connection.t()], keyword()) :: close_result()
+  def close_all(connections, opts \\ []) do
+    SessionRetirement.close_all(connections, opts)
   end
 
   defp open_connection(key, config, opts, builder) do
@@ -314,7 +322,7 @@ defmodule Vxpipe.MCP.Connections do
   defp ensure_ready(connection, runtime) do
     case runtime.status(Connection.client(connection)) do
       {:ok, %{connection_status: :ready, protocol_version: @protocol_version}} ->
-        SessionStartup.ready(Connection.owner(connection))
+        SessionLifecycle.ready(Connection.owner(connection))
 
       {:ok, %{protocol_version: version}} ->
         {:error, {:unsupported_protocol_version, version}}
@@ -331,13 +339,6 @@ defmodule Vxpipe.MCP.Connections do
   defp classify_open({:error, _reason} = result), do: {result, :failed}
   defp result_client({:ok, connection}), do: Connection.client(connection)
   defp result_client({:error, _reason}), do: nil
-
-  defp lookup_pid(role, key, scope) do
-    case ConnectionNames.lookup(role, key, scope) do
-      {:ok, pid} -> pid
-      :error -> nil
-    end
-  end
 
   defp close_owner(parent, owner) do
     case DynamicSupervisor.terminate_child(parent, owner) do

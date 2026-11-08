@@ -64,11 +64,21 @@ defmodule Vxpipe.MCP.SessionTransportLifetimeTest do
     assert {:error, _reason} = start_supervised({ExMCP.Client, options})
   end
 
-  for retirement <- [:session_close, :client_kill, :client_stop, :disconnect, :receiver_kill] do
+  for retirement <- [
+        :session_close,
+        :client_kill,
+        :client_stop,
+        :owner_kill,
+        :integration_kill,
+        :disconnect,
+        :receiver_kill
+      ] do
     @retirement retirement
     test "#{retirement} terminates held POST work and its active GET stream" do
       server = start_supervised!({SessionHTTPFixture, owner: self()})
-      {connection, capture} = open_connection(server)
+
+      {connection, capture} =
+        open_connection(server, connection_key(), owner: session_owner(:wire_host))
 
       client = Connection.client(connection)
       on_exit(fn -> Connections.close(connection) end)
@@ -226,7 +236,7 @@ defmodule Vxpipe.MCP.SessionTransportLifetimeTest do
        when retirement in [:disconnect, :receiver_kill] do
     # These stop transport work while keeping the session/client available.
     # Its disarmed startup guard lives until the integration is retired.
-    startup = GenServer.whereis(Vxpipe.MCP.SessionStartup.name(Connection.owner(connection)))
+    startup = GenServer.whereis(Vxpipe.MCP.SessionLifecycle.name(Connection.owner(connection)))
     Map.delete(session_workers(connection), startup)
   end
 
@@ -234,6 +244,13 @@ defmodule Vxpipe.MCP.SessionTransportLifetimeTest do
 
   defp retire(:session_close, connection), do: Connections.close(connection)
   defp retire(:client_kill, connection), do: Process.exit(Connection.client(connection), :kill)
+
+  defp retire(:owner_kill, connection),
+    do: Process.exit(Connection.session_owner(connection), :kill)
+
+  defp retire(:integration_kill, connection),
+    do: Process.exit(Connection.owner(connection), :kill)
+
   defp retire(:client_stop, connection), do: ExMCP.Client.stop(Connection.client(connection))
   defp retire(:disconnect, connection), do: ExMCP.Client.disconnect(Connection.client(connection))
 

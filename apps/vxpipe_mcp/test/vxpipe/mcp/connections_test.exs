@@ -112,6 +112,37 @@ defmodule Vxpipe.MCP.ConnectionsTest do
              ReadyClientRuntime.status(Connection.client(replacement))
   end
 
+  test "legacy key close retires an integration before its client is registered" do
+    observer = self()
+    key = key("pending-close")
+    close_on_exit([key])
+
+    start_supervised!(
+      {Task,
+       fn ->
+         result =
+           Connections.open(key, [endpoint: "https://mcp.example.test/mcp"],
+             runtime: ReadyClientRuntime,
+             runtime_options: [test_spec_observer: observer]
+           )
+
+         send(observer, {:pending_open_result, result})
+       end}
+    )
+
+    assert_receive {:pending_integration, integration}
+    reference = Process.monitor(integration)
+
+    try do
+      assert :ok = Connections.close(key)
+      assert_receive {:DOWN, ^reference, :process, ^integration, _}, 300
+      assert_receive {:pending_open_result, {:error, :connection_failed}}
+      assert :error = Connections.lookup(key)
+    after
+      send(integration, :release_spec)
+    end
+  end
+
   test "client loss retires its session identity before a replacement can be opened" do
     key = key("client-lost")
     close_on_exit([key])

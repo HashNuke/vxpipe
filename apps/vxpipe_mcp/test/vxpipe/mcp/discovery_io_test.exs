@@ -25,10 +25,10 @@ defmodule Vxpipe.MCP.DiscoveryIOTest do
         end)
       end)
 
-    assert_receive {:io, io}
+    assert_receive {:io, io}, 1_000
     ref = Process.monitor(io)
     Task.shutdown(owner, :brutal_kill)
-    assert_receive {:DOWN, ^ref, :process, ^io, _}
+    assert_receive {:DOWN, ^ref, :process, ^io, _}, 1_000
     Task.shutdown(worker, :brutal_kill)
   end
 

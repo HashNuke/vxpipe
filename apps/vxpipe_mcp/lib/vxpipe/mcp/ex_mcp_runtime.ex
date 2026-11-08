@@ -8,4 +8,8 @@ defmodule Vxpipe.MCP.ExMCPRuntime do
 
   @impl true
   def status(client), do: ExMCP.Client.get_status(client)
+
+  @impl true
+  def close(client, permission, timeout),
+    do: ExMCP.Client.disconnect(client, permission, timeout)
 end

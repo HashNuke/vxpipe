@@ -5,6 +5,10 @@ defmodule Vxpipe.Calls.MCPRuntimeCredentials do
   def resolve(tenant, id, generation, options \\ []),
     do: resolve(tenant, id, generation, options, true)
 
+  @doc "Reads a currently valid grant without starting or waiting for renewal."
+  def resolve_cleanup(tenant, id, generation, options \\ []),
+    do: resolve(tenant, id, generation, options, false)
+
   defp resolve(tenant, id, generation, options, refresh?) do
     with {:ok, repository} <- Repositories.fetch(options, :mcp_connection_repository),
          {:ok, %ResolvedMCPConnection{connection: connection} = saved} <-
