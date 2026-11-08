@@ -18,6 +18,7 @@ defmodule Vxpipe.MCP.Connections do
     IntegrationSupervisor,
     RuntimeAuthProvider,
     SessionLifecycle,
+    SessionOperation,
     SessionRetirement,
     Telemetry
   }
@@ -31,6 +32,7 @@ defmodule Vxpipe.MCP.Connections do
   @type error ::
           ClientOptions.error()
           | :connection_failed
+          | :cleanup_incomplete
           | :credential_revoked
           | :invalid_owner
           | :incompatible_connection
@@ -208,8 +210,11 @@ defmodule Vxpipe.MCP.Connections do
 
   defp reuse_connection(connection, context) do
     with :ok <- compatible_policy(connection, context),
-         :ok <- authorize_reuse(context.client_options),
-         :ok <- ensure_ready(connection, context.runtime) do
+         :ok <-
+           SessionOperation.run(Connection.owner(connection), context.deadline, fn ->
+             with :ok <- authorize_reuse(context.client_options),
+                  do: ready_status(connection, context.runtime)
+           end) do
       {{:ok, connection}, :reused}
     else
       {:error, _reason} = error -> {error, :failed}
@@ -258,8 +263,12 @@ defmodule Vxpipe.MCP.Connections do
   defp start_connection(key, context) do
     case start_integration(key, context) do
       {:ok, owner, :started} ->
-        result = finish_start(key, owner, context)
-        if match?({:error, _}, result), do: close_owner(context.parent, owner)
+        result =
+          case finish_start(key, owner, context) do
+            {:error, _reason} = failure -> abandon_start(key, owner, context, failure)
+            success -> success
+          end
+
         classify_open(result)
 
       {:ok, _owner, :existing} ->
@@ -273,10 +282,31 @@ defmodule Vxpipe.MCP.Connections do
     end
   end
 
+  defp abandon_start(key, owner, context, failure) do
+    cleanup =
+      case SessionLifecycle.abandon_start(owner) do
+        :retained ->
+          :ok
+
+        :retire ->
+          SessionRetirement.close_owners(key, [{context.parent, owner}],
+            deadline: context.deadline
+          )
+
+        incomplete ->
+          incomplete
+      end
+
+    if cleanup == :ok, do: failure, else: cleanup
+  end
+
   defp finish_start(key, owner, context) do
     with {:ok, connection} <- lookup_session(key, context),
          ^owner <- Connection.owner(connection),
-         :ok <- ensure_ready(connection, context.runtime) do
+         :ok <-
+           SessionOperation.run(owner, context.deadline, fn ->
+             ready_status(connection, context.runtime)
+           end) do
       {:ok, connection}
     else
       {:error, _reason} = error -> error
@@ -320,9 +350,14 @@ defmodule Vxpipe.MCP.Connections do
   end
 
   defp ensure_ready(connection, runtime) do
+    with :ok <- ready_status(connection, runtime),
+         do: SessionLifecycle.ready(Connection.owner(connection))
+  end
+
+  defp ready_status(connection, runtime) do
     case runtime.status(Connection.client(connection)) do
       {:ok, %{connection_status: :ready, protocol_version: @protocol_version}} ->
-        SessionLifecycle.ready(Connection.owner(connection))
+        :ok
 
       {:ok, %{protocol_version: version}} ->
         {:error, {:unsupported_protocol_version, version}}
@@ -339,13 +374,4 @@ defmodule Vxpipe.MCP.Connections do
   defp classify_open({:error, _reason} = result), do: {result, :failed}
   defp result_client({:ok, connection}), do: Connection.client(connection)
   defp result_client({:error, _reason}), do: nil
-
-  defp close_owner(parent, owner) do
-    case DynamicSupervisor.terminate_child(parent, owner) do
-      :ok -> :closed
-      {:error, :not_found} -> :absent
-    end
-  catch
-    :exit, _reason -> :absent
-  end
 end

@@ -133,7 +133,7 @@ commit. Checkboxes below are runtime work, not specification-review results.
 - [x] Add effective ExMCP fixture tests for an active SSE stream and blocked
   asynchronous POST. Prove owner/client forced death ends transport workers and
   peer sockets; reproduce any gap before fixing the dependency integration.
-- [ ] Implement bounded graceful cleanup and forced cleanup, including POST/GET
+- [x] Implement bounded graceful cleanup and forced cleanup, including POST/GET
   connect, DNS, DELETE and credential-resolution stalls. Verify the single total
   grace budget and finite completion with multiple sessions; no `terminate/2`-only
   correctness or one full grace budget per integration.
@@ -443,3 +443,18 @@ The maintenance amendment is tracked in the
   seed 227780, including two tagged cases added after the default suite began. The common
   lifecycle exit still awaits reused-credential and stalled-connect acceptance;
   no participant composition or full milestone completion is claimed.
+
+- Bounded reuse/readiness is implemented with operation tasks under the existing
+  exact transport supervisor. The lifecycle guard tracks caller/deadline admission;
+  failure waits for the callback task to terminate and preserves established
+  sessions. An independently reproduced concurrent-publication race now has a
+  regression: a failed original opener cannot retire a session another opener has
+  successfully published. Eight real TLS cases cover stalled initial POST and
+  reconnecting GET handshakes, with exact process and peer-socket cleanup.
+  Independent review and all five root checks pass, completing T1. The combined
+  lifecycle/ownership lane passes 102 tests (seed 609400), the protocol/privacy
+  lane passes 28 (seed 378989), and the full umbrella passes 5,042 tests with zero
+  failures and 316 excluded (seed 303343). Four tagged GET cases added after the
+  default MCP suite ran are covered by the combined lane. Root-owned renewal
+  cancellation and participant composition remain later milestone requirements.
+  See the [reuse labnote](../20261108-1743-bounded-session-reuse.md).

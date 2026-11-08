@@ -41,7 +41,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     refute_received {:vxpipe_sts_turn_completed, ^capability, _, _, _}
     assert :ok = emit_segment(recognizer, first, "FIRST")
     assert :ok = emit_segment(recognizer, make_ref(), "SECOND")
-    assert :ok = GenServer.call(recognizer, {:emit, :input_finished, []})
+    GenServer.cast(recognizer, {:emit, :input_finished, []})
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "FIRST SECOND", ^turn, 20,
                     _, _},
@@ -66,7 +66,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, first, _}
     complete_playback(20)
     assert :ok = emit_segment(recognizer, make_ref(), "ONE")
-    assert :ok = GenServer.call(recognizer, {:emit, :input_finished, []})
+    GenServer.cast(recognizer, {:emit, :input_finished, []})
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "ONE", ^first, _, _, _},
                    1_000
@@ -90,7 +90,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
     assert :ok = emit_segment(replacement, make_ref(), "TWO")
     complete_playback(20)
     refute_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, _, ^second, _, _, _}
-    assert :ok = GenServer.call(replacement, {:emit, :input_finished, []})
+    GenServer.cast(replacement, {:emit, :input_finished, []})
 
     assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "TWO", ^second, _, _, _},
                    1_000
@@ -421,7 +421,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
              )
 
     monitor = Process.monitor(recognizer)
-    assert :ok = GenServer.call(recognizer, {:emit, :input_finished, []})
+    # Finalization may retire the provider before it can reply to a call.
+    GenServer.cast(recognizer, {:emit, :input_finished, []})
     assert_receive {:DOWN, ^monitor, :process, ^recognizer, _}, 1_000
     assert_receive {:output_stt_started, replacement}, 1_000
     before_loss = :sys.get_state(capability)
@@ -642,7 +643,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechOutputSTTTest do
 
       complete_playback(20)
 
-      assert :ok = GenServer.call(provider, {:emit, :input_finished, []})
+      GenServer.cast(provider, {:emit, :input_finished, []})
 
       assert_receive {:vxpipe_sts_agent_transcript, ^capability, @agent, "CURRENT SECOND REPLY",
                       ^second, _, _, _},

@@ -11,6 +11,29 @@ defmodule Vxpipe.MCP.SessionLifecycle do
 
   def ready(integration), do: GenServer.call(name(integration), :ready, 500)
 
+  # Order startup abandonment with publication by another opener or lookup.
+  def abandon_start(integration) do
+    GenServer.call(name(integration), :abandon_start, 500)
+  catch
+    :exit, {:timeout, _call} -> {:error, :cleanup_incomplete}
+    :exit, _gone -> :retire
+  end
+
+  def prepare_operation(integration, deadline),
+    do: operation_call(integration, {:prepare_operation, deadline}, deadline)
+
+  def claim_operation(integration, operation, deadline),
+    do: operation_call(integration, {:claim_operation, operation}, deadline)
+
+  def finish_operation(integration, operation, deadline),
+    do: operation_call(integration, {:finish_operation, operation}, deadline)
+
+  def cancel_operation(integration, operation),
+    do: GenServer.cast(name(integration), {:cancel_operation, operation})
+
+  defp operation_call(integration, request, deadline),
+    do: GenServer.call(name(integration), request, max(min(deadline - now(), 500), 1))
+
   def begin_close(integration, client, caller, deadline),
     do:
       GenServer.call(
@@ -43,7 +66,8 @@ defmodule Vxpipe.MCP.SessionLifecycle do
          phase: :starting,
          client: nil,
          permission: nil,
-         submitted: false
+         submitted: false,
+         operations: %{}
        }}
     else
       {:stop, :connection_failed}
@@ -58,9 +82,7 @@ defmodule Vxpipe.MCP.SessionLifecycle do
 
   def handle_call(:ready, from, state) do
     if now() < state.deadline and Process.alive?(state.caller) and Process.alive?(state.host) do
-      Process.cancel_timer(state.timer)
-      Enum.each(state.monitors, &Process.demonitor(&1, [:flush]))
-      {:reply, :ok, %{state | phase: :active, monitors: [], timer: nil}}
+      {:reply, :ok, activate(state)}
     else
       GenServer.reply(from, {:error, :connection_failed})
       cancel(state)
@@ -70,7 +92,21 @@ defmodule Vxpipe.MCP.SessionLifecycle do
   def handle_call({:begin_close, _client, _caller, _deadline}, _from, %{phase: :closing} = state),
     do: {:reply, :closing, state}
 
+  def handle_call(:abandon_start, _from, %{phase: :active} = state),
+    do: {:reply, :retained, state}
+
+  def handle_call(:abandon_start, _from, %{phase: :closing} = state),
+    do: {:reply, :retire, state}
+
+  def handle_call(:abandon_start, _from, state) do
+    state = Enum.reduce(Map.keys(state.operations), state, &cancel_operation_state(&2, &1))
+    Process.cancel_timer(state.timer)
+    timer = Process.send_after(self(), :retirement_expired, max(state.deadline - now(), 0))
+    {:reply, :retire, %{state | phase: :closing, timer: timer}}
+  end
+
   def handle_call({:begin_close, client, caller, deadline}, _from, state) do
+    state = Enum.reduce(Map.keys(state.operations), state, &cancel_operation_state(&2, &1))
     if state.timer, do: Process.cancel_timer(state.timer)
     Enum.each(state.monitors, &Process.demonitor(&1, [:flush]))
     permission = make_ref()
@@ -87,6 +123,59 @@ defmodule Vxpipe.MCP.SessionLifecycle do
     }
 
     {:reply, {:ok, permission}, next}
+  end
+
+  def handle_call({:prepare_operation, deadline}, {caller, _tag}, state) do
+    if operation_allowed?(state, caller, deadline) do
+      operation = make_ref()
+
+      pending = %{
+        caller: caller,
+        caller_ref: Process.monitor(caller),
+        deadline: deadline,
+        timer:
+          Process.send_after(self(), {:operation_expired, operation}, max(deadline - now(), 0)),
+        worker: nil,
+        worker_ref: nil
+      }
+
+      {:reply, {:ok, operation},
+       %{state | operations: Map.put(state.operations, operation, pending)}}
+    else
+      {:reply, {:error, :connection_failed}, state}
+    end
+  end
+
+  def handle_call({:claim_operation, operation}, {worker, _tag}, state) do
+    case Map.get(state.operations, operation) do
+      %{worker: nil} = pending ->
+        if operation_allowed?(state, pending.caller, pending.deadline) do
+          claimed = %{pending | worker: worker, worker_ref: Process.monitor(worker)}
+          {:reply, :ok, %{state | operations: Map.put(state.operations, operation, claimed)}}
+        else
+          {:reply, {:error, :connection_failed}, cancel_operation_state(state, operation)}
+        end
+
+      _missing ->
+        {:reply, {:error, :connection_failed}, state}
+    end
+  end
+
+  def handle_call({:finish_operation, operation}, {caller, _tag}, state) do
+    case Map.get(state.operations, operation) do
+      %{caller: ^caller, worker: worker} = pending when is_pid(worker) ->
+        allowed =
+          operation_allowed?(state, caller, pending.deadline) and not Process.alive?(worker)
+
+        next = cancel_operation_state(state, operation)
+
+        if allowed,
+          do: {:reply, :ok, activate(next)},
+          else: {:reply, {:error, :connection_failed}, next}
+
+      _missing ->
+        {:reply, {:error, :connection_failed}, state}
+    end
   end
 
   def handle_call({:admit, method, stage, permission}, _from, state) do
@@ -112,13 +201,29 @@ defmodule Vxpipe.MCP.SessionLifecycle do
   end
 
   @impl true
+  def handle_cast({:cancel_operation, operation}, state),
+    do: {:noreply, cancel_operation_state(state, operation)}
+
+  @impl true
   def handle_info(:retirement_expired, %{phase: :closing} = state), do: cancel(state)
 
   def handle_info(:expired, %{phase: :starting} = state), do: cancel(state)
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
-    if ref in state.monitors, do: cancel(state), else: {:noreply, state}
+    if ref in state.monitors do
+      cancel(state)
+    else
+      next =
+        Enum.reduce(state.operations, state, fn {operation, pending}, acc ->
+          if pending.caller_ref == ref, do: cancel_operation_state(acc, operation), else: acc
+        end)
+
+      {:noreply, next}
+    end
   end
+
+  def handle_info({:operation_expired, operation}, state),
+    do: {:noreply, cancel_operation_state(state, operation)}
 
   def handle_info(_stale, state), do: {:noreply, state}
 
@@ -129,4 +234,32 @@ defmodule Vxpipe.MCP.SessionLifecycle do
   end
 
   defp now, do: System.monotonic_time(:millisecond)
+
+  defp operation_allowed?(state, caller, deadline) do
+    state.phase != :closing and now() < deadline and Process.alive?(caller) and
+      Process.alive?(state.host) and
+      (state.phase == :active or (now() < state.deadline and Process.alive?(state.caller)))
+  end
+
+  defp activate(%{phase: :active} = state), do: state
+
+  defp activate(state) do
+    Process.cancel_timer(state.timer)
+    Enum.each(state.monitors, &Process.demonitor(&1, [:flush]))
+    %{state | phase: :active, monitors: [], timer: nil}
+  end
+
+  defp cancel_operation_state(state, operation) do
+    case Map.pop(state.operations, operation) do
+      {nil, _remaining} ->
+        state
+
+      {pending, remaining} ->
+        if pending.worker, do: Process.exit(pending.worker, :kill)
+        if pending.worker_ref, do: Process.demonitor(pending.worker_ref, [:flush])
+        Process.demonitor(pending.caller_ref, [:flush])
+        Process.cancel_timer(pending.timer)
+        %{state | operations: remaining}
+    end
+  end
 end

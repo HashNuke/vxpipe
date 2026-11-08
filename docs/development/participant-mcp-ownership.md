@@ -1,11 +1,10 @@
 # Participant-owned outbound MCP sessions
 
-Status: implementation in progress, updated 2026-11-08. Exact handle retirement,
-owned transport workers, explicit host-supervisor scoping and bounded new-session
-startup are implemented and boundary-tested. Participant placement, complete
-bounded retirement and queued catalogs remain pending. Startup and transport tests
-cover blocked authorization/DNS, queued admission, helper cancellation and observed
-worker/socket cleanup.
+Status: implementation in progress, updated 2026-11-08. Standalone session
+ownership and bounded lifecycle (T1) are complete: exact handle retirement,
+owned transport workers, explicit host scoping, bounded startup/reuse and observed
+TLS POST/GET socket cleanup. Participant placement, call-owned renewal cancellation,
+queued catalogs and full call/transfer acceptance remain pending.
 The user requested a milestone for moving agent-used MCP connections into the
 participant's call tree. The [implementation milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md)
 tracks that work separately from the integrations-directory workflow approval.
@@ -203,8 +202,29 @@ integration death. An incomplete local barrier returns `cleanup_incomplete` afte
 a shared five-second observation bound; it never reports successful teardown.
 This observation bound does not extend permission to submit network cleanup.
 
-Bounding a reused session's current credential resolution and cancellation of
-root-owned renewal work remain open. Participant placement and activation-level
+Each open now bounds authorization and readiness with the same absolute deadline,
+including reuse and runtime-specific status callbacks. A temporary operation task
+belongs to the exact integration's transport supervisor. The existing lifecycle
+guard registers the original caller/deadline, rejects late worker claims, and
+cancels the task on caller loss, expiry or retirement. It runs no credential or
+runtime callbacks itself. The opener observes task termination before completing;
+a separate five-second local observation cap can return `cleanup_incomplete` and
+does not grant more callback time. Late results cannot publish a handle.
+
+Cancelling reuse preserves the established session and other openers. Failed
+initial startup retires only a still-unpublished integration: the lifecycle makes
+that decision atomically with readiness publication, so an original opener's late
+failure cannot close a session another opener has successfully acquired. Cleanup
+targets the exact integration directly even when its host supervisor is blocked.
+There is no new permanent supervisor or dependency patch for these operations.
+
+Standalone transport acceptance includes real TLS stalls after ClientHello for
+initial POST and reconnecting GET. A fixture first completes the MCP handshake
+and initial stream, then stalls the resumed GET; session close, host stop/crash
+and client death terminate the exact local tree and close the peer socket.
+
+Cancellation acknowledgement for root-owned renewal work remains open.
+Participant placement and activation-level
 teardown acceptance also remain unfinished; standalone lifecycle evidence does
 not establish those call-path contracts.
 
@@ -240,9 +260,9 @@ call-owned renewal jobs and an unresponsive DELETE all consume that budget.
 Cleanup uses a fresh, non-renewing credential resolution: if authorization is
 unavailable, requires token renewal, or cannot be obtained within the remaining
 budget, skip DELETE. Never start a token exchange solely to clean up a session
-and never use cached credentials. This default
-is a proposed engineering choice to verify in the implementation checkpoint,
-not a claim about current shutdown timing. Supervisor children remain proper
+and never use cached credentials. The standalone batch API implements this
+default; activation-wide integration and call-owned renewal acknowledgement still
+require verification. Supervisor children remain proper
 supervisors with OTP shutdown semantics; a bounded lifecycle worker owns the
 network grace period.
 
