@@ -86,17 +86,23 @@ defmodule Vxpipe.MCP.Connections do
   end
 
   @spec close(Connection.t() | ConnectionKey.t()) :: :ok
-  def close(%Connection{} = connection), do: close(Connection.key(connection))
+  def close(%Connection{} = connection) do
+    retire_session(Connection.owner(connection), Connection.client(connection))
+  end
 
   def close(%ConnectionKey{} = key) do
-    started_at = Telemetry.started_at()
-    client = lookup_client(key)
-
-    outcome =
+    owner =
       case ConnectionNames.lookup(:owner, key) do
-        {:ok, owner} -> close_owner(owner)
-        :error -> :absent
+        {:ok, owner} -> owner
+        :error -> nil
       end
+
+    retire_session(owner, lookup_client(key))
+  end
+
+  defp retire_session(owner, client) do
+    started_at = Telemetry.started_at()
+    outcome = if owner, do: close_owner(owner), else: :absent
 
     Telemetry.connection_stop(
       started_at,

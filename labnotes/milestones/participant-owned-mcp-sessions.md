@@ -1,8 +1,9 @@
 # Participant-owned MCP sessions
 
-Status: **specified; not implemented**. Requested 2026-11-08 after the outbound
-ownership review. This document records a new runtime slice; it neither changes
-the implementation nor completes the integrations-directory workflow approval.
+Status: **implementation in progress**. Requested 2026-11-08 after the outbound
+ownership review. This runtime slice does not complete the integrations-directory
+workflow approval. The implementation evidence below records partial checkpoints;
+unchecked acceptance gates remain required.
 The 2026-11-08 follow-up adds tenant catalog maintenance through durable jobs,
 application-configured expiry, `refresh_scheduled_at` and `refreshed_at`.
 
@@ -368,8 +369,18 @@ milestone. Its creation does not release any existing workflow or delivery hold.
   tightening sweep progress, timestamp comparison/precision and Oban conflict
   handling. No remaining planning blockers; implementation remains unverified.
 
-No implementation tests or acceptance runs have been executed for this new slice.
 Research and review evidence belongs in the
 [planning labnote](../20261108-1135-participant-mcp-ownership.md).
 The maintenance amendment is tracked in the
 [queued-refresh labnote](../20261108-1237-queued-catalog-refresh.md).
+
+## Implementation evidence
+
+- First T1 prerequisite: reproduced stale-handle closure of a replacement and
+  reuse of an owner identity after client loss. Exact handle close and temporary,
+  significant client ownership now pass the focused connection/telemetry tests.
+  All five root gates pass (5,002 tests, zero failures, 265 excluded, seed 258421),
+  with independent GPT-6 Astra xhigh checkpoint approval and no valid findings.
+  This does not complete T1's owner migration or transport teardown acceptance.
+  Commands, review and root gate evidence are tracked in the
+  [implementation labnote](../20261108-1401-participant-mcp-implementation.md).

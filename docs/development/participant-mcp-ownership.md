@@ -1,6 +1,8 @@
 # Participant-owned outbound MCP sessions
 
-Status: researched proposal, updated 2026-11-08; runtime implementation has not changed.
+Status: implementation in progress, updated 2026-11-08. The first checkpoint makes
+handle close target an exact session and retires that session on client loss.
+Participant placement, transport teardown and queued catalogs remain pending.
 The user requested a milestone for moving agent-used MCP connections into the
 participant's call tree. The [implementation milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md)
 tracks that work separately from the integrations-directory workflow approval.
@@ -441,5 +443,7 @@ ordering and restart/shutdown design. Published
 [ExMCP documentation](https://hexdocs.pm/ex_mcp/ExMCP.Client.html) describes the
 public API, but the locked revision plus checked patch is the implementation
 baseline. No new runtime reproduction, load benchmark or conformance run was
-performed for this documentation proposal. Review and evidence are recorded in
-the [research labnote](../../labnotes/20261108-1135-participant-mcp-ownership.md).
+performed for the original documentation proposal. Review and evidence are recorded
+in the [research labnote](../../labnotes/20261108-1135-participant-mcp-ownership.md).
+Subsequent reproductions, fixes and verification are recorded in the
+[implementation labnote](../../labnotes/20261108-1401-participant-mcp-implementation.md).

@@ -1,7 +1,7 @@
 defmodule Vxpipe.MCP.IntegrationSupervisor do
   @moduledoc false
 
-  use Supervisor
+  use Supervisor, restart: :temporary
 
   alias Vxpipe.MCP.ConnectionNames
 
@@ -21,6 +21,12 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
       |> Keyword.merge(Keyword.get(opts, :runtime_options, []))
       |> Keyword.put(:name, ConnectionNames.via(:client, key))
 
-    Supervisor.init([runtime.child_spec(client_options)], strategy: :one_for_one)
+    client =
+      Supervisor.child_spec(runtime.child_spec(client_options),
+        restart: :temporary,
+        significant: true
+      )
+
+    Supervisor.init([client], strategy: :one_for_one, auto_shutdown: :any_significant)
   end
 end

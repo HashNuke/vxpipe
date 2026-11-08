@@ -95,6 +95,45 @@ defmodule Vxpipe.MCP.ConnectionsTest do
     assert :error = Connections.lookup(key)
   end
 
+  test "closing an old handle cannot retire a replacement with the same credential key" do
+    key = key("reopened")
+    close_on_exit([key])
+    assert {:ok, first} = open(key, "Bearer private")
+    assert :ok = Connections.close(first)
+    assert {:ok, replacement} = open(key, "Bearer private")
+
+    refute Connection.owner(first) == Connection.owner(replacement)
+    refute Connection.client(first) == Connection.client(replacement)
+    assert :ok = Connections.close(first)
+
+    assert {:ok, ^replacement} = Connections.lookup(key)
+
+    assert {:ok, %{connection_status: :ready}} =
+             ReadyClientRuntime.status(Connection.client(replacement))
+  end
+
+  test "client loss retires its session identity before a replacement can be opened" do
+    key = key("client-lost")
+    close_on_exit([key])
+    assert {:ok, first} = open(key, "Bearer private")
+    owner_ref = Process.monitor(Connection.owner(first))
+    client_ref = Process.monitor(Connection.client(first))
+
+    Process.exit(Connection.client(first), :kill)
+
+    assert_receive {:DOWN, ^client_ref, :process, _pid, :killed}
+    assert_receive {:DOWN, ^owner_ref, :process, _pid, :shutdown}, 1_000
+    assert :error = Connections.lookup(key)
+
+    assert {:ok, replacement} = open(key, "Bearer private")
+    refute Connection.owner(first) == Connection.owner(replacement)
+    assert :ok = Connections.close(first)
+    assert {:ok, ^replacement} = Connections.lookup(key)
+
+    assert {:ok, %{connection_status: :ready}} =
+             ReadyClientRuntime.status(Connection.client(replacement))
+  end
+
   test "revokes one credential generation and refuses to reopen it" do
     key = key("revoked")
     assert {:ok, connection} = open(key, "Bearer private")
