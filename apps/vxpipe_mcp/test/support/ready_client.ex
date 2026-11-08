@@ -12,6 +12,14 @@ defmodule Vxpipe.MCP.ReadyClient do
 
   @impl true
   def init(opts) do
+    if observer = Keyword.get(opts, :test_initialization_observer) do
+      send(observer, {:ready_client_initializing, self()})
+
+      receive do
+        :finish_initialization -> :ok
+      end
+    end
+
     status =
       Keyword.get(opts, :test_status, %{
         connection_status: :ready,

@@ -41,9 +41,13 @@ defmodule Vxpipe.MCP.SessionHTTPFixture do
 
   defp respond(conn, %{"method" => "initialize", "id" => id}, fixture) do
     conn =
-      if Map.get(fixture, :session, true),
-        do: put_resp_header(conn, "mcp-session-id", "owned-session-fixture"),
-        else: conn
+      if Map.get(fixture, :session, true) do
+        session = "owned-session-#{System.unique_integer([:positive])}"
+        send(fixture.owner, {:session_http_session, session})
+        put_resp_header(conn, "mcp-session-id", session)
+      else
+        conn
+      end
 
     json(conn, id, %{
       "protocolVersion" => "2025-11-25",
@@ -55,6 +59,15 @@ defmodule Vxpipe.MCP.SessionHTTPFixture do
   defp respond(conn, %{"method" => "notifications/initialized"}, %{owner: owner}) do
     send(owner, :session_http_initialized)
     send_resp(conn, 202, "")
+  end
+
+  defp respond(
+         conn,
+         %{"method" => "tools/call", "params" => %{"name" => "echo"}, "id" => id},
+         _fixture
+       ) do
+    [session] = get_req_header(conn, "mcp-session-id")
+    json(conn, id, %{"content" => [%{"type" => "text", "text" => session}]})
   end
 
   defp respond(conn, %{"method" => "tools/call"}, %{owner: owner}),

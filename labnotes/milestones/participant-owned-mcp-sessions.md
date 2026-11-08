@@ -127,7 +127,7 @@ commit. Checkboxes below are runtime work, not specification-review results.
 - [ ] Add the smallest failing `vxpipe_mcp` boundary tests: two owners with the
   same credential key receive different clients; stopping one removes only its
   clients, including when initialization is blocked or only partially complete.
-- [ ] Introduce explicit owner/session construction and handles without importing
+- [x] Introduce explicit owner/session construction and handles without importing
   Calls or Call Engine. Separate exact-session close/lookup from grant revocation.
   Validate compatible deduplication and reject stale/foreign owner handles.
 - [ ] Add effective ExMCP fixture tests for an active SSE stream and blocked
@@ -395,3 +395,14 @@ The maintenance amendment is tracked in the
   This does not complete activation ownership, startup cancellation, the final
   submission fence or the shared cleanup deadline. Evidence is tracked in the
   [transport labnote](../20261108-1419-mcp-transport-ownership.md).
+- Explicit standalone owner isolation now passes boundary tests for separate
+  lifetimes, compatible reuse, policy rejection, exact close, scoped lookup,
+  foreign/stale handles, local revocation fanout and failed-open isolation.
+  Controlled initialization regressions prevent early publication through open,
+  lookup and handle validation. A real loopback case observes two distinct remote
+  sessions and proves the second remains callable after the first host stops.
+  All five root gates pass (5,017 tests, zero failures, 275 excluded, seed 580491);
+  the final tagged wire slice passes 24 cases, seed 626532.
+  Blocked-start cancellation, shared retirement deadlines and participant wiring
+  remain open. Review and verification are tracked in the
+  [owner-isolation labnote](../20261108-1505-explicit-session-owners.md).

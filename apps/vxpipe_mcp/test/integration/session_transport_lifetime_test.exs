@@ -16,6 +16,36 @@ defmodule Vxpipe.MCP.SessionTransportLifetimeTest do
   @moduletag :integration
   @moduletag timeout: 15_000
 
+  test "two explicit owners keep independent wire sessions after one owner stops" do
+    server = start_supervised!({SessionHTTPFixture, owner: self()})
+    first_owner = session_owner(:first_session)
+    second_owner = session_owner(:second_session)
+    key = connection_key()
+    {first, _capture} = open_connection(server, key, owner: first_owner)
+    assert_receive {:session_http_session, first_session}
+    assert_receive {:session_http_held, :get, _first_peer}, 1_000
+    first_workers = session_workers(first)
+    {second, _capture} = open_connection(server, key, owner: second_owner)
+    assert_receive {:session_http_session, second_session}
+    assert_receive {:session_http_held, :get, _second_peer}, 1_000
+    refute first_session == second_session
+    refute Connection.client(first) == Connection.client(second)
+    first_client = Connection.client(first)
+    reference = Process.monitor(first_client)
+
+    assert :ok = stop_supervised(:first_session)
+    assert_receive {:DOWN, ^reference, :process, ^first_client, :shutdown}
+
+    for {worker, monitor} <- first_workers do
+      assert_receive {:DOWN, ^monitor, :process, ^worker, _reason}, 1_000
+    end
+
+    assert_receive {:session_http_closed, :get, {:error, :closed}}, 1_000
+
+    assert {:ok, %{"content" => [%{"text" => ^second_session}]}} =
+             ExMCPClient.call_tool(Connection.client(second), "echo", %{}, 1_000)
+  end
+
   test "an already-dead transport supervisor rejects stateless client startup" do
     supervisor = start_supervised!({DynamicSupervisor, strategy: :one_for_one})
     reference = Process.monitor(supervisor)
@@ -126,10 +156,9 @@ defmodule Vxpipe.MCP.SessionTransportLifetimeTest do
     end
   end
 
-  defp open_connection(server) do
+  defp open_connection(server, key \\ connection_key(), opts \\ []) do
     observer = self()
-    capture = start_supervised!({Agent, fn -> false end})
-    key = connection_key()
+    capture = start_supervised!({Agent, fn -> false end}, id: make_ref())
 
     {:ok, authentication} =
       RuntimeAuthProvider.init(%{
@@ -148,15 +177,24 @@ defmodule Vxpipe.MCP.SessionTransportLifetimeTest do
       })
 
     assert {:ok, connection} =
-             Connections.open_loopback_test(key,
-               endpoint: SessionHTTPFixture.endpoint(server),
-               runtime_authentication: authentication,
-               limits: [stream_handshake_timeout_ms: 500]
+             Connections.open_loopback_test(
+               key,
+               [
+                 endpoint: SessionHTTPFixture.endpoint(server),
+                 runtime_authentication: authentication,
+                 limits: [stream_handshake_timeout_ms: 500]
+               ],
+               opts
              )
 
     assert_receive :session_http_initialized, 1_000
 
     {connection, capture}
+  end
+
+  defp session_owner(id) do
+    name = {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {:wire_session_owner, make_ref()}}}
+    start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: name}, id: id)
   end
 
   defp session_workers(connection) do

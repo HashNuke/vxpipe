@@ -7,13 +7,24 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
 
   def start_link(opts) do
     key = Keyword.fetch!(opts, :key)
-    Supervisor.start_link(__MODULE__, opts, name: ConnectionNames.via(:owner, key))
+    scope = Keyword.get(opts, :scope)
+
+    metadata = %{
+      parent: Keyword.fetch!(opts, :parent),
+      policy: Keyword.fetch!(opts, :policy),
+      runtime: Keyword.fetch!(opts, :runtime)
+    }
+
+    Supervisor.start_link(__MODULE__, opts,
+      name: ConnectionNames.via(:owner, key, scope, metadata)
+    )
   end
 
   @impl true
   def init(opts) do
     key = Keyword.fetch!(opts, :key)
     runtime = Keyword.fetch!(opts, :runtime)
+    scope = Keyword.get(opts, :scope)
 
     transport_supervisor =
       {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {:transport_workers, self()}}}
@@ -29,7 +40,10 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
       opts
       |> Keyword.fetch!(:client_options)
       |> Keyword.merge(Keyword.get(opts, :runtime_options, []))
-      |> Keyword.put(:name, ConnectionNames.via(:client, key))
+      |> Keyword.put(
+        :name,
+        ConnectionNames.via(:client, key, scope, %{integration_owner: self()})
+      )
       |> Keyword.put(:transport_supervisor, transport_supervisor)
 
     client =

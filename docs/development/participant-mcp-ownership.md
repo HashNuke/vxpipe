@@ -1,11 +1,10 @@
 # Participant-owned outbound MCP sessions
 
-Status: implementation in progress, updated 2026-11-08. The first checkpoint makes
-handle close target an exact session and retires that session on client loss.
-The next checkpoint owns asynchronous POST, SSE and receiver workers under each
-integration session, with observed worker/socket cleanup in eight loopback cases
-and a ninth regression rejecting startup with an already-dead supervisor.
-Participant placement, complete bounded retirement and queued catalogs remain pending.
+Status: implementation in progress, updated 2026-11-08. Exact handle retirement,
+owned POST/SSE/receiver workers and explicit host-supervisor scoping are implemented
+and boundary-tested. Participant placement, complete bounded retirement and queued
+catalogs remain pending. The transport checkpoint includes eight worker/socket
+cleanup cases and a ninth rejecting startup with an already-dead supervisor.
 The user requested a milestone for moving agent-used MCP connections into the
 participant's call tree. The [implementation milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md)
 tracks that work separately from the integrations-directory workflow approval.
@@ -128,6 +127,40 @@ call 1 through owner P1 and call 2 through owner P2. Restarting call 1's agent
 creates owner P3. A late close/result addressed to P1 cannot resolve to P3.
 These are local process identities, not database connection IDs or the remote
 server's optional MCP session ID. Tenant and credential-generation checks remain.
+
+### Standalone owner API
+
+A host starts a named `DynamicSupervisor` under its own supervision tree, then
+supplies it when opening or looking up a connection:
+
+```elixir
+{:ok, connection} = Connections.open(key, client_config, owner: session_supervisor)
+{:ok, ^connection} = Connections.lookup(key, owner: session_supervisor)
+true = Connections.owned_by?(connection, session_supervisor)
+:ok = Connections.close(connection)
+```
+
+The owner reference resolves once to an exact local PID for each operation.
+Sessions register by that PID and the unchanged credential key; each handle retains
+the parent, integration-supervisor and client PIDs. Missing/dead explicit owners
+fail closed, and an old handle cannot close a replacement or another owner's
+session. Consumers receiving a provider handle must validate `owned_by?/2` as well
+as the expected credential key before publishing it. Public lookup and handle
+validation query the registered runtime's readiness; an initializing client cannot
+be published through those paths.
+
+Within one owner, reuse requires matching effective client options and runtime,
+current authorization and a ready client. Runtime options are merged and duplicate
+keys retain their first value, matching the runtime's keyword lookup. Registration
+stores an opaque policy digest instead of raw headers or credentials. Conflicting
+policy fails without retiring the existing session. Revocation still reaches
+every session for the selected credential generation, across owners.
+
+The omitted-owner API and key-only close remain a transitional legacy path until
+call/catalog consumers migrate. Explicit ownership never falls back to that path.
+This API adds no dependency on Calls or Call Engine. Caller/deadline cancellation
+during blocked startup and the common retirement budget remain separate T1 work;
+the presence of this API alone does not complete participant placement or teardown.
 
 ## Retirement and external effects
 
