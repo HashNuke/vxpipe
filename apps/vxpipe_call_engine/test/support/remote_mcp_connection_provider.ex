@@ -2,12 +2,7 @@ defmodule Vxpipe.CallEngine.TestRemoteMCPConnectionProvider do
   @moduledoc false
 
   alias Vxpipe.CallEngine.TestRemoteMCPClient
-  alias Vxpipe.MCP.{Connection, Connections}
-
-  def open(key, config) do
-    announce(config, key)
-    {:ok, Connection.new(key, self(), Keyword.fetch!(config, :test_client))}
-  end
+  alias Vxpipe.MCP.Connections
 
   def open(key, config, options) do
     send(Keyword.fetch!(config, :test_observer), {:test_remote_mcp_open_options, key, options})

@@ -1,6 +1,8 @@
 defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
   use ExUnit.Case, async: false
 
+  @moduletag :integration
+
   alias Vxpipe.CallEngine.RemoteMCP.{
     CatalogLoader,
     ConfiguredIntegration,
@@ -15,10 +17,24 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
   @authorization "Bearer controlled-tenant-credential"
 
   test "discovers and invokes the pinned operation through the real protocol client" do
-    %{binding: binding, catalog: catalog, key: key} = start_runtime!()
-    on_exit(fn -> Connections.close(key) end)
+    %{binding: binding, catalog: catalog, key: key, configured: configured} = start_runtime!()
+
+    assert_receive {:remote_mcp_wire_initialized, first_discovery}
+    assert_receive {:remote_mcp_wire_delete, [^first_discovery]}
+    assert :error = Connections.lookup(key)
 
     owner = start_owner!(catalog, binding, "wire-success")
+    assert_receive {:remote_mcp_wire_initialized, call_session}
+
+    assert {:ok, _integration} =
+             CatalogLoader.load(configured, connection_provider: RemoteMCPWireConnectionProvider)
+
+    assert_receive {:remote_mcp_wire_initialized, second_discovery}
+    assert second_discovery != call_session
+    assert first_discovery != second_discovery
+    assert_receive {:remote_mcp_wire_delete, [^second_discovery]}
+    refute_receive {:remote_mcp_wire_delete, [^call_session]}, 0
+
     arguments = %{"customer_id" => "customer-42"}
 
     assert {:ok,
@@ -35,11 +51,12 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
                         "name" => "lookup_customer"
                       }
                     }}
+
+    assert_receive {:remote_mcp_wire_session_request, "tools/call", [^call_session]}
   end
 
   test "rejects invalid arguments before sending the tool request" do
-    %{binding: binding, catalog: catalog, key: key} = start_runtime!()
-    on_exit(fn -> Connections.close(key) end)
+    %{binding: binding, catalog: catalog} = start_runtime!()
 
     owner = start_owner!(catalog, binding, "wire-invalid-arguments")
 
@@ -54,7 +71,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
           {"slow", 100, 4_096},
           {"oversized", 1_000, 512}
         ] do
-      %{binding: binding, catalog: catalog, key: key} =
+      %{binding: binding, catalog: catalog} =
         start_runtime!(
           invocation_deadline_ms: deadline_ms,
           maximum_result_bytes: maximum_result_bytes
@@ -70,7 +87,6 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
 
       refute_receive {:remote_mcp_wire_request, "tools/call", _authorization, _request}, 100
       :ok = stop_supervised({IntegrationOwner, "activation-wire-#{scenario}"})
-      :ok = Connections.close(key)
     end
   end
 
@@ -88,8 +104,6 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
           use_sse: false
         ]
       )
-
-    on_exit(fn -> Connections.close(configured.connection_key) end)
 
     assert {:error, :connection_failed} =
              CatalogLoader.load(configured,
@@ -110,7 +124,6 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
       )
 
     configured = configured!(RemoteMCPWireServer.endpoint(redirect))
-    on_exit(fn -> Connections.close(configured.connection_key) end)
 
     assert {:error, :connection_failed} =
              CatalogLoader.load(configured,
@@ -119,6 +132,40 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
 
     assert_receive {:remote_mcp_wire_request, "initialize", @authorization, _request}
     refute_receive {:remote_mcp_wire_request, "redirect_target", _authorization, _request}, 100
+  end
+
+  for method <- ["initialize", "tools/list"], cancellation <- [:caller_death, :deadline] do
+    @tag capture_log: true
+    test "#{cancellation} closes the catalog #{method} POST socket" do
+      server =
+        start_supervised!({Vxpipe.MCP.CheckHTTPFixture, owner: self(), hold: unquote(method)})
+
+      endpoint = Vxpipe.MCP.CheckHTTPFixture.endpoint(server)
+      timeout = if unquote(cancellation) == :deadline, do: 500, else: 5_000
+
+      configured =
+        configured!(endpoint,
+          client_config: [endpoint: endpoint, use_sse: false],
+          discovery_deadline_ms: timeout
+        )
+
+      tasks = start_supervised!({Task.Supervisor, name: __MODULE__.CatalogTasks})
+
+      task =
+        Task.Supervisor.async_nolink(tasks, fn ->
+          CatalogLoader.load(configured, connection_provider: RemoteMCPWireConnectionProvider)
+        end)
+
+      assert_receive {:check_http_held, unquote(method)}, 1_000
+
+      if unquote(cancellation) == :caller_death do
+        Task.shutdown(task, :brutal_kill)
+      else
+        assert {:error, _reason} = Task.await(task, 2_000)
+      end
+
+      assert_receive {:check_http_closed, unquote(method), {:error, :closed}}, 1_000
+    end
   end
 
   defp start_runtime!(overrides \\ []) do
@@ -147,7 +194,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
       remote: remote
     }
 
-    %{binding: binding, catalog: catalog, key: configured.connection_key}
+    %{binding: binding, catalog: catalog, key: configured.connection_key, configured: configured}
   end
 
   defp configured!(endpoint, overrides \\ []) do

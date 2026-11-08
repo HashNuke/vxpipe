@@ -5,6 +5,7 @@ ownership and bounded lifecycle (T1) are complete: exact handle retirement,
 owned transport workers, explicit host scoping, bounded startup/reuse and observed
 TLS POST/GET socket cleanup. Participant placement now includes shared startup
 deadlines, cancellation, partial rollback and source retirement after transfer.
+Catalog loads now use independent temporary operation hosts with bounded cleanup.
 Call-owned renewal cancellation, queued catalogs and the remaining acceptance
 matrix are still pending.
 The user requested a milestone for moving agent-used MCP connections into the
@@ -243,8 +244,7 @@ must implement `open(key, config, owner: exact_pid)` and return a registered, re
 handle owned by that host with the expected credential key. There is no fallback
 to `open/2` or global sharing in this call path. Rejecting a foreign handle does
 not close its actual owner's session. Standalone hosts must supply and supervise
-their own session supervisor; catalog loading remains on its transitional API
-until the management migration in T3.
+their own session supervisor; catalog loading supplies a temporary operation host.
 
 Startup and transfer preparation pass their original absolute deadline and
 preparation PID to the binding owner. Bounded linked tasks perform the authority
@@ -368,6 +368,23 @@ caller/job cancellation and deadlines. They release clients on success and
 failure, never lend them to calls, and never consume a call's remote session state.
 Registries and database catalog snapshots can outlive operations. A catalog job
 may run with no calls active; ending a call does not cancel that independent job.
+
+`CatalogLoader.load/2` now starts a uniquely named temporary `DynamicSupervisor`
+linked to its caller. A linked task opens and discovers under the same absolute
+`discovery_deadline_ms` budget; discovery receives only the time left after opening.
+The task normalizes provider/protocol failures and cannot publish a late success.
+After the task stops, existing exact-owner batch retirement closes the session,
+then the loader observes host termination. Incomplete cleanup is an error rather
+than a successful catalog. Caller death structurally stops both task and host.
+The loader preserves an embedding caller's exit-trapping setting and consumes only
+its own helper/host exit messages. No additional permanent coordinator is needed.
+
+Call and catalog providers now both require `open/3` with explicit owner and
+deadline. The loader checks the returned key and exact ownership before discovery;
+a rejected foreign handle remains untouched. Existing Console `ConnectionCheck`
+keeps its isolated session/check lifetime, with real POST cancellation and bounded
+DELETE regression coverage. The library's legacy ownerless API remains until its
+separate removal checkpoint; shipped call and catalog paths no longer use it.
 
 The older optional embedded `CatalogRefresher` reads application configuration,
 not saved tenant database rows. Its `async_nolink` ownership/publication concern

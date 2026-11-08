@@ -184,7 +184,7 @@ normal stop, crash and bounded recovery isolate protocol state and lifetimes.
 - [ ] Preserve already-submitted request completion after saved disconnect in an
   otherwise live room. Separately prove call retirement fences its late completion
   and never retries an ambiguous remote side effect.
-- [ ] Adapt catalog loading, checks, test providers and standalone embedding where
+- [x] Adapt catalog loading, checks, test providers and standalone embedding where
   needed for explicit bounded operation/host owners. Close clients
   on success, caller death and deadline; verify calls and management never share
   the same session or retire each other's session.
@@ -492,3 +492,15 @@ The maintenance amendment is tracked in the
   the checkpoint with no outstanding findings.
   See the
   [call-lifetime labnote](../20261108-1842-call-mcp-lifetime.md).
+
+- Catalog discovery now uses a temporary named supervisor linked to each caller,
+  mandatory explicit provider ownership, and one absolute open/discovery budget.
+  It stops opening work, retires its exact sessions and observes host termination
+  before returning. Foreign handles and active call sessions remain untouched.
+  The catalog loader/refresh/refresher/wire lane passes 24 tests, seed 867653,
+  including real held POST closure on deadline and caller death. Existing isolated
+  connection checks remain unchanged and pass all 7 unit/wire regressions,
+  seed 195672. All five root gates pass: 5,056 tests, zero failures, 338 excluded,
+  seed 349432. Independent source and staged documentation review finds no
+  outstanding issue; the final evidence update precedes commit. See the
+  [catalog-discovery labnote](../20261108-1950-owned-catalog-discovery.md).

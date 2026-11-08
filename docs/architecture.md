@@ -345,9 +345,14 @@ Call Engine keeps configured infrastructure distinct from a discovered integrati
 snapshot. `RemoteMCP.ConfiguredIntegration` validates one application- or tenant-scoped
 credential generation, allowed-operation set, private client settings, and bounded
 discovery/invocation policy; its inspection omits the private settings. The separate
-`RemoteMCP.CatalogLoader` opens the exact scoped reusable `vxpipe_mcp` connection and
-publishes an integration snapshot only after complete bounded `tools/list` discovery and
-allowed-operation validation. It does not compile a call or expose model tools. Call Spec
+`RemoteMCP.CatalogLoader` opens a fresh `vxpipe_mcp` connection under a temporary,
+named supervisor linked to the discovery caller. Opening and complete `tools/list`
+discovery share one absolute budget. The loader stops its opening/discovery task,
+retires the owned session, and observes its host stop before returning the validated
+integration snapshot; caller death also tears down the linked subtree. A concurrent
+call using the same grant keeps its own session. Trusted providers implement `open/3`
+with the supplied owner and deadline; foreign handles are rejected without closing them.
+The loader does not compile a call or expose model tools. Call Spec
 compilation then resolves from those snapshots and copies only the selected public schema
 and generation identity into the immutable plan. Catalog TTL/refresh orchestration and the
 configuration source remain outside the loader rather than becoming another concern of an
