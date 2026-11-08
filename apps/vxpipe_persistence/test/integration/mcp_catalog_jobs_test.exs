@@ -101,6 +101,54 @@ defmodule Vxpipe.Persistence.Integration.MCPCatalogJobsTest do
     assert Repo.get_by!(MCPConnection, public_id: before.id).server_name == "Manual catalog"
   end
 
+  @tag timeout: 90_000
+  test "configured periodic maintenance reaches the sweep and refresh queues", data do
+    server = start_supervised!({CheckHTTPFixture, owner: self()})
+    protocol(server)
+
+    configure(:vxpipe_calls, :mcp_catalog_refresh,
+      expiry_seconds: 1,
+      reschedule_after_seconds: 1_800,
+      batch_size: 100
+    )
+
+    observe_completion()
+    stop_supervised!(@oban)
+
+    settings =
+      Application.fetch_env!(:vxpipe_persistence, Oban)
+      |> Keyword.put(:name, @oban)
+      |> Keyword.put(:testing, :disabled)
+      |> Keyword.put(:notifier, {Oban.Notifiers.PG, []})
+      |> Keyword.put(:peer, {Oban.Peers.Isolated, [leader?: true]})
+
+    start_supervised!({Oban, settings})
+
+    # Observe the real minute-based Cron tick; no direct call to the sweep worker.
+    assert_receive {:catalog_job_finished, _, first_id}, 70_000
+    assert_receive {:catalog_job_finished, _, second_id}, 5_000
+    workers = Enum.map([first_id, second_id], &Repo.get!(Oban.Job, &1).worker)
+
+    assert Enum.sort(workers) ==
+             Enum.sort(
+               Enum.map(
+                 [Vxpipe.Persistence.MCP.CatalogSweepWorker, CatalogRefreshWorker],
+                 &Oban.Worker.to_string/1
+               )
+             )
+
+    saved = Repo.get_by!(MCPConnection, public_id: data.connection.id)
+    assert saved.refresh_scheduled_at == @now
+    assert saved.refreshed_at == @now
+    assert saved.catalog == %{"tools" => []}
+    assert {:ok, 0} = CatalogRefreshStore.enqueue_due(data.context, @policy)
+    assert_receive {:check_http, "DELETE", _}, 1_000
+
+    IO.puts(
+      "Periodic catalog acceptance: real Cron tick -> sweep -> refresh; both timestamps committed"
+    )
+  end
+
   test "a bounded backlog drains across batches and releases all discovery sessions", data do
     server = start_supervised!({CheckHTTPFixture, owner: self()})
     protocol(server)

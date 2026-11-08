@@ -498,7 +498,7 @@ defmodule Vxpipe.Console.Test.OutboundMCPOAuthServer do
       "access_token" => access,
       "refresh_token" => refresh,
       "token_type" => "Bearer",
-      "expires_in" => 300
+      "expires_in" => Map.get(s, :expires_in, 300)
     }
 
     {{:ok, tokens},

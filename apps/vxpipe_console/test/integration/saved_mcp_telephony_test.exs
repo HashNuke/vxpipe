@@ -4,6 +4,8 @@ defmodule Vxpipe.Console.SavedMCPTelephonyTest do
   alias Vxpipe.Calls
   alias Vxpipe.Console.Test.SavedMCPTelephonyCase, as: Phone
 
+  @moduletag hold_mcp_stream: true, observe_mcp_stream_close: true
+
   setup c, do: Phone.configure(c)
 
   for {direction, legacy, label} <- [
@@ -15,6 +17,8 @@ defmodule Vxpipe.Console.SavedMCPTelephonyTest do
     test "saved MCP tools execute through #{label} phone admission", c do
       published = Phone.publish(c, c.direction)
       active = apply(Phone, c.direction, [c, published])
+      assert_receive {:remote_mcp_wire_stream_open, _, stream_ref}, 2_000
+      descendants = monitor_mcp(c, active.call)
       connection = owned_mcp(c, active.call)
       client = Vxpipe.MCP.Connection.client(connection)
       monitor = Process.monitor(client)
@@ -54,6 +58,11 @@ defmodule Vxpipe.Console.SavedMCPTelephonyTest do
       assert current.incarnation_id == active.call.incarnation_id
       Phone.close(c, active)
       assert_receive {:DOWN, ^monitor, :process, ^client, _reason}, 1_000
+
+      for {pid, reference} <- descendants,
+          do: assert_receive({:DOWN, ^reference, :process, ^pid, _}, 1_000)
+
+      assert_receive {:remote_mcp_wire_stream_closed, ^stream_ref, {:error, :closed}}, 1_000
       refute_received {:remote_mcp_wire_request, "tools/call", _, _}
     end
   end

@@ -121,7 +121,10 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
   def resolve(tenant, id, now),
     do: MCPRuntimeCredentials.resolve(tenant, id, 1, now: MCPDatabaseNode.clock(now))
 
-  def open(tenant, id, base) do
+  def now, do: Agent.get(__MODULE__, &Map.get(&1, :now, DateTime.utc_now()))
+  def set_now(time), do: Agent.update(__MODULE__, &Map.put(&1, :now, time))
+
+  def open(tenant, id, base, resolver_options \\ :configured) do
     {:ok, key} =
       ConnectionKey.new(
         scope: :tenant,
@@ -137,7 +140,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
         generation: 1,
         auth_method: "oauth",
         endpoint: OutboundMCPOAuthServer.resource(),
-        resolver: {MCPTransportCredentials, :configured}
+        resolver: {MCPTransportCredentials, resolver_options}
       })
 
     with {:ok, connection} <-
@@ -182,8 +185,7 @@ defmodule Vxpipe.Console.Test.MCPRuntimeNode do
     owner_monitor = Process.monitor(owner)
     stream_monitor = Process.monitor(stream)
     client_monitor = if is_pid(client), do: Process.monitor(client)
-    # Explicit client disconnect owns remote DELETE; owner retirement is local.
-    if is_pid(client), do: :ok = ExMCP.Client.disconnect(Connection.client(connection))
+    # Owner retirement resolves non-renewing cleanup credentials and closes transport.
     :ok = Connections.close(connection)
     :ok = await_down(owner_monitor, owner)
     :ok = await_down(stream_monitor, stream)

@@ -383,12 +383,16 @@ defmodule Vxpipe.Console.Test.SavedMCPTelephonyCase do
       assert {:error, :not_found} = CallCleanupSupervisor.lookup(cleanup)
     end
 
-    stored = await_archived(c, active.call.id, System.monotonic_time(:millisecond) + 5_000)
+    {stored, facts} =
+      await_archived(c, active.call.id, System.monotonic_time(:millisecond) + 5_000)
+
+    close = Enum.find(facts, &(&1.kind == :archive_stream_closed))
+    assert DateTime.compare(stored.ended_at, close.occurred_at) == :eq
 
     if tracker_monitor do
       assert %DateTime{} = stored.gateway_cleanup_completed_at
       assert %DateTime{} = stored.ended_at
-      assert DateTime.compare(stored.gateway_cleanup_completed_at, stored.ended_at) != :lt
+      assert DateTime.compare(stored.gateway_cleanup_completed_at, stored.started_at) != :lt
     end
 
     close_admitted_call(c, active.call)
@@ -400,7 +404,7 @@ defmodule Vxpipe.Console.Test.SavedMCPTelephonyCase do
     assert_private_absent(c, facts)
 
     if stored.state == :ended and Enum.any?(facts, &(&1.kind == :archive_stream_closed)) do
-      stored
+      {stored, facts}
     else
       assert System.monotonic_time(:millisecond) < deadline, "phone call archive did not close"
 

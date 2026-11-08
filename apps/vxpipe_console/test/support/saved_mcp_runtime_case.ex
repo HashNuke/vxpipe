@@ -57,6 +57,7 @@ defmodule Vxpipe.Console.Test.SavedMCPRuntimeCase do
          authorization: "Bearer " <> @token,
          headers: [{"x-workspace", @header}],
          hold_stream: Map.get(test, :hold_mcp_stream, false),
+         observe_stream_close: Map.get(test, :observe_mcp_stream_close, false),
          hold_invocation: Map.get(test, :hold_mcp_invocation, false)}
       )
 
@@ -201,6 +202,13 @@ defmodule Vxpipe.Console.Test.SavedMCPRuntimeCase do
     response = api(prepared.secret, :post, prepared.path, %{}) |> json_response(503)
     assert response["error"]["code"] == "call_start_failed"
     assert_private_absent(c, response)
+
+    # HTTP returns after starting the failure projection, before its durable write.
+    for pid <- Task.Supervisor.children(Vxpipe.Gateway.AdmissionTaskSupervisor) do
+      reference = Process.monitor(pid)
+      assert_receive {:DOWN, ^reference, :process, ^pid, _reason}, 1_000
+    end
+
     assert {:ok, call} = Calls.fetch_call(c.tenant, prepared.id, c.options)
     assert call.state == :failed
     assert call.incarnation_id == nil
@@ -415,6 +423,18 @@ defmodule Vxpipe.Console.Test.SavedMCPRuntimeCase do
     assert is_pid(host)
     assert {:ok, connection} = Connections.lookup(key, owner: host)
     connection
+  end
+
+  def monitor_mcp(c, call), do: monitor_tree(Vxpipe.MCP.Connection.owner(owned_mcp(c, call)))
+
+  defp monitor_tree(supervisor) do
+    children =
+      Enum.flat_map(Supervisor.which_children(supervisor), fn
+        {_, pid, :supervisor, _} when is_pid(pid) -> monitor_tree(pid)
+        {_, pid, :worker, _} when is_pid(pid) -> [{pid, Process.monitor(pid)}]
+      end)
+
+    [{supervisor, Process.monitor(supervisor)} | children]
   end
 
   def tool(name),

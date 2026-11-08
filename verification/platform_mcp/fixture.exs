@@ -239,6 +239,140 @@ defmodule Vxpipe.PlatformMCPFixture do
     issue(context.actors["calls"], resource)
   end
 
+  defp command(%{"action" => "retire_outbound_call"}, _context) do
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    runtime =
+      settings
+      |> Keyword.fetch!(:agent_runtime)
+      |> Keyword.put(:fixture, {Vxpipe.CallEngine.TestAgentRuntimeModelProvider, [owner: self()]})
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.put(settings, :agent_runtime, runtime)
+    )
+
+    host_name = Vxpipe.PlatformMCPFixture.OutboundHost
+
+    {:ok, host} =
+      Supervisor.start_child(
+        Vxpipe.PlatformMCPFixture.Supervisor,
+        {DynamicSupervisor, strategy: :one_for_one, name: host_name}
+      )
+
+    try do
+      {:ok, server} =
+        DynamicSupervisor.start_child(
+          host,
+          {Vxpipe.CallEngine.RemoteMCPWireServer, owner: self()}
+        )
+
+      {catalog, binding} =
+        Vxpipe.CallEngine.RemoteMCPFixture.binding!(nil, self(), "unused",
+          client_config: [
+            endpoint: Vxpipe.CallEngine.RemoteMCPWireServer.endpoint(server),
+            use_sse: false
+          ]
+        )
+
+      {:ok, store} =
+        DynamicSupervisor.start_child(
+          host,
+          {Vxpipe.CallEngine.RemoteMCP.CatalogStore, catalog: catalog}
+        )
+
+      {:ok, spec} =
+        Vxpipe.CallEngine.CallSpec.new(outbound_source(), resource_id: "ownership", revision: 1)
+
+      id = "acceptance-#{System.unique_integer([:positive])}"
+
+      {:ok, invocation} =
+        Vxpipe.CallEngine.CallInvocation.new(
+          %{
+            call_spec: %{id: "ownership", revision: 1},
+            initial_variables: %{},
+            transport: %{type: "web"}
+          },
+          tenant_id: "tenant-demo",
+          actor_id: "acceptance",
+          call_id: id,
+          room_id: id
+        )
+
+      {:ok, plan} =
+        Vxpipe.CallEngine.compile_call_spec(spec, invocation, %{host_tools: %{}},
+          mcp_catalog_store: store
+        )
+
+      {:ok, room} =
+        Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+          mcp_catalog_store: store,
+          remote_mcp_connection_provider: Vxpipe.CallEngine.RemoteMCPWireConnectionProvider
+        )
+
+      try do
+        activation = Map.fetch!(plan.participants, "assistant").activation_id
+
+        sessions =
+          Vxpipe.CallEngine.AgentActivationSupervisor.whereis_child(
+            activation,
+            :remote_mcp_sessions
+          )
+
+        owner =
+          Vxpipe.CallEngine.AgentActivationSupervisor.whereis_child(activation, :remote_mcp_owner)
+
+        {:ok, key} =
+          Vxpipe.MCP.ConnectionKey.new(
+            scope: :tenant,
+            tenant_id: plan.tenant_id,
+            integration_id: binding.remote.integration_id,
+            credential_generation: binding.remote.credential_generation
+          )
+
+        {:ok, connection} = Vxpipe.MCP.Connections.lookup(key, owner: sessions)
+        client = Vxpipe.MCP.Connection.client(connection)
+        client_monitor = Process.monitor(client)
+
+        {:ok, _} =
+          Vxpipe.CallEngine.RemoteMCP.IntegrationOwner.execute(owner, "customer_lookup", %{
+            "customer_id" => "customer-42"
+          })
+
+        {:ok, completed} =
+          Vxpipe.CallEngine.monitor_room_completion(
+            plan.tenant_id,
+            plan.room_id,
+            room.incarnation_id
+          )
+
+        :ok = Vxpipe.CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+
+        receive do
+          {:DOWN, ^completed, :process, _, _} -> :ok
+        after
+          5_000 -> raise "room cleanup timeout"
+        end
+
+        receive do
+          {:DOWN, ^client_monitor, :process, ^client, _} -> :ok
+        after
+          1_000 -> raise "client cleanup timeout"
+        end
+
+        :error = Vxpipe.MCP.Connections.lookup(key, owner: sessions)
+        %{outbound_tool: "completed", room: "retired", client: "terminated"}
+      after
+        Vxpipe.CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+      end
+    after
+      :ok = Supervisor.terminate_child(Vxpipe.PlatformMCPFixture.Supervisor, host_name)
+      :ok = Supervisor.delete_child(Vxpipe.PlatformMCPFixture.Supervisor, host_name)
+      Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, settings)
+    end
+  end
+
   defp command(%{"action" => "authorize", "params" => params, "resource" => resource}, context) do
     true = resource in Map.values(context.addresses)
     principal = context.actors["platform"]
@@ -252,6 +386,32 @@ defmodule Vxpipe.PlatformMCPFixture do
 
   defp command(%{"action" => "await_expiry", "session" => session}, _context),
     do: await_expiry(session, System.monotonic_time(:millisecond) + 5_000)
+
+  defp outbound_source do
+    %{
+      schema_version: "20260915.01",
+      wait_sounds: %{call_setup: nil},
+      entry_caller: "caller",
+      entry_receiver: "assistant",
+      defaults: %{capabilities: %{}},
+      participants: %{
+        "caller" => %{
+          type: "human",
+          connection: %{service: "web", mode: "receive", admission: "start_call"}
+        },
+        "assistant" => %{
+          type: "agent",
+          prompt: "Acceptance fixture.",
+          first_message: %{mode: "wait_for_input"},
+          capabilities: %{model_inference: %{provider: "fixture", model: "test"}},
+          tools: %{
+            "customer_lookup" => %{type: "mcp", integration: "records", tool: "lookup_customer"}
+          },
+          transfers: []
+        }
+      }
+    }
+  end
 
   defp scoped_actor(actor, tenant, kind) do
     permissions =

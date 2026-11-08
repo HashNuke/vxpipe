@@ -305,6 +305,335 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
 
   @tag :integration
   @tag :capture_log
+  test "late transport results and close messages cannot affect a replacement room incarnation" do
+    server =
+      start_supervised!(
+        {Vxpipe.CallEngine.RemoteMCPWireServer,
+         owner: self(), hold_invocation: true, hold_stream: true}
+      )
+
+    {catalog, binding} =
+      RemoteMCPFixture.binding!(nil, self(), "unused",
+        credential_generation: unique_id("credential"),
+        client_config: [endpoint: Vxpipe.CallEngine.RemoteMCPWireServer.endpoint(server)]
+      )
+
+    plan = compile_plan(catalog)
+
+    runtime = [
+      mcp_catalog_store: RemoteMCPFixture.source!(catalog),
+      remote_mcp_connection_provider: Vxpipe.CallEngine.RemoteMCPWireConnectionProvider
+    ]
+
+    {:ok, key} =
+      Vxpipe.MCP.ConnectionKey.new(
+        scope: :tenant,
+        tenant_id: plan.tenant_id,
+        integration_id: binding.remote.integration_id,
+        credential_generation: binding.remote.credential_generation
+      )
+
+    assert {:ok, first} = Vxpipe.CallEngine.TestCallStartup.start_call(plan, runtime)
+    {caller, connection_id} = attach_caller(plan, first)
+    assert_receive {:remote_mcp_wire_initialized, first_session}, 1_000
+    assert_receive {:remote_mcp_wire_stream_open, old_stream, stream_ref}, 1_000
+    assert_receive {:remote_mcp_wire_session_request, "GET", [^first_session]}, 1_000
+    {_activation, old_connection} = active_mcp(plan, key, "reception")
+    command = send_text(plan, first, caller, connection_id, "Start one side effect.")
+    command_id = command.id
+
+    assert_receive {:test_agent_runtime_stream, provider,
+                    %{correlation: %{command_id: ^command_id, invocation_registry: old_registry}}},
+                   1_000
+
+    reply_with_tool(provider, "retired-side-effect")
+    assert_receive {:remote_mcp_wire_request, "tools/call", _, _}, 1_000
+    assert_receive {:remote_mcp_wire_session_request, "tools/call", [^first_session]}, 1_000
+    assert_receive {:remote_mcp_wire_invocation_held, old_reply, reply_ref, _}, 1_000
+
+    assert_receive {:test_agent_runtime_stream, acknowledgement,
+                    %{correlation: %{command_id: ^command_id}}},
+                   1_000
+
+    reply_with_text(acknowledgement, "Checking.")
+    correlation = command.correlation_id
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^correlation}}, 1_000
+    descendants = monitor_session_tree(Vxpipe.MCP.Connection.owner(old_connection))
+
+    {:ok, completion} =
+      CallEngine.monitor_room_completion(plan.tenant_id, plan.room_id, first.incarnation_id)
+
+    assert :ok = CallEngine.end_call(plan.tenant_id, plan.room_id, first.incarnation_id)
+    assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+
+    for {pid, monitor} <- descendants,
+        do: assert_receive({:DOWN, ^monitor, :process, ^pid, _}, 1_000)
+
+    assert {:ok, replacement} = Vxpipe.CallEngine.TestCallStartup.start_call(plan, runtime)
+
+    on_exit(fn ->
+      CallEngine.end_call(plan.tenant_id, plan.room_id, replacement.incarnation_id)
+    end)
+
+    refute replacement.incarnation_id == first.incarnation_id
+    new_caller = attach_caller(plan, replacement)
+    assert_receive {:remote_mcp_wire_initialized, next_session}, 1_000
+    assert_receive {:remote_mcp_wire_session_request, "GET", [^next_session]}, 1_000
+    refute next_session == first_session
+    {_activation, new_connection} = active_mcp(plan, key, "reception")
+    refute new_connection == old_connection
+    old_handler = Process.monitor(old_reply)
+    send(old_reply, {:release_remote_mcp_wire_invocation, reply_ref})
+    send(old_stream, {:release_remote_mcp_wire_stream, stream_ref})
+    assert_receive {:remote_mcp_wire_invocation_released, ^reply_ref}, 1_000
+    assert_receive {:remote_mcp_wire_stream_released, ^stream_ref}, 1_000
+    assert_receive {:DOWN, ^old_handler, :process, ^old_reply, _}, 1_000
+    assert :ok = Vxpipe.MCP.Connections.close(old_connection)
+
+    assert {:error, :room_unavailable} =
+             CallEngine.end_call(plan.tenant_id, plan.room_id, first.incarnation_id)
+
+    wire_tool_turn(plan, replacement, new_caller, "replacement-tool", release_held: true)
+    assert_receive {:remote_mcp_wire_session_request, "tools/call", [^next_session]}, 1_000
+    refute_received {:remote_mcp_wire_session_request, "tools/call", [^first_session]}
+    refute_received {:remote_mcp_wire_session_request, "GET", [^first_session]}
+    refute_received {:vxpipe_event, %ToolCallCompleted{tool_call_id: "retired-side-effect"}}
+
+    refute_received {:test_agent_runtime_stream, _,
+                     %{correlation: %{invocation_registry: ^old_registry}}}
+  end
+
+  @tag :integration
+  @tag :capture_log
+  test "bounded concurrent call churn returns sessions and workers to baseline" do
+    server =
+      start_supervised!(
+        {Vxpipe.CallEngine.RemoteMCPWireServer, owner: self(), hold_initialization: true}
+      )
+
+    {catalog, binding} =
+      RemoteMCPFixture.binding!(nil, self(), "unused",
+        credential_generation: unique_id("credential"),
+        client_config: [
+          endpoint: Vxpipe.CallEngine.RemoteMCPWireServer.endpoint(server),
+          use_sse: false
+        ]
+      )
+
+    runtime = [
+      mcp_catalog_store: RemoteMCPFixture.source!(catalog),
+      remote_mcp_connection_provider: Vxpipe.CallEngine.RemoteMCPWireConnectionProvider
+    ]
+
+    {:ok, key} =
+      Vxpipe.MCP.ConnectionKey.new(
+        scope: :tenant,
+        tenant_id: "tenant-demo",
+        integration_id: binding.remote.integration_id,
+        credential_generation: binding.remote.credential_generation
+      )
+
+    baseline = Vxpipe.MCP.ConnectionNames.count()
+    handler = {__MODULE__, make_ref()}
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        [:vxpipe, :mcp, :connection, :stop],
+        &__MODULE__.lifecycle_measurement/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    measurements =
+      for _round <- 1..3 do
+        pending =
+          for _ <- 1..4 do
+            plan = compile_plan(catalog)
+            assert {:ok, room} = CallEngine.start_call(plan, runtime)
+
+            on_exit(fn ->
+              CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+            end)
+
+            {plan, room}
+          end
+
+        initializers =
+          for _ <- 1..4 do
+            assert_receive {:remote_mcp_wire_initialization_held, pid, reference}, 2_000
+            {pid, reference}
+          end
+
+        assert length(Enum.uniq(Enum.map(initializers, &elem(&1, 0)))) == 4
+
+        opening_workers =
+          Enum.reduce(pending, 0, fn {plan, _room}, total ->
+            activation = Map.fetch!(plan.participants, "reception").activation_id
+
+            host =
+              Vxpipe.CallEngine.AgentActivationSupervisor.whereis_child(
+                activation,
+                :remote_mcp_sessions
+              )
+
+            total + owned_workers(host)
+          end)
+
+        IO.puts(
+          "MCP concurrency: 4 sessions/clients initializing, #{opening_workers} owned workers"
+        )
+
+        for {pid, reference} <- initializers,
+            do: send(pid, {:release_remote_mcp_initialization, reference})
+
+        active =
+          for {plan, room} <- pending do
+            Vxpipe.CallEngine.TestCallStartup.await_prepared(plan)
+            attach_caller(plan, room)
+            {_activation, connection} = active_mcp(plan, key, "reception")
+            client = Vxpipe.MCP.Connection.client(connection)
+
+            assert_receive {:mcp_lifecycle, %{duration: opened},
+                            %{operation: :open, outcome: :opened, client: ^client}},
+                           1_000
+
+            root = Vxpipe.MCP.Connection.owner(connection)
+            {plan, room, client, opened, owned_workers(root), monitor_session_tree(root)}
+          end
+
+        assert Vxpipe.MCP.ConnectionNames.count() == baseline + 4
+        assert length(Enum.uniq(Enum.map(active, &elem(&1, 2)))) == 4
+
+        retired =
+          for {plan, room, client, opened, workers, descendants} <- active do
+            {:ok, monitor} =
+              CallEngine.monitor_room_completion(
+                plan.tenant_id,
+                plan.room_id,
+                room.incarnation_id
+              )
+
+            assert :ok = CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+            assert_receive {:DOWN, ^monitor, :process, _, _}, 2_000
+
+            for {pid, reference} <- descendants,
+                do: assert_receive({:DOWN, ^reference, :process, ^pid, _}, 1_000)
+
+            assert_receive {:mcp_lifecycle, %{duration: closed},
+                            %{operation: :close, outcome: :closed, client: ^client}},
+                           1_000
+
+            {System.convert_time_unit(opened, :native, :microsecond),
+             System.convert_time_unit(closed, :native, :microsecond), workers}
+          end
+
+        assert Vxpipe.MCP.ConnectionNames.count() == baseline
+        retired
+      end
+      |> List.flatten()
+
+    assert length(measurements) == 12
+
+    IO.puts(
+      "MCP call churn: 3 rounds x 4 concurrent initializations; " <>
+        "{open_us, close_us, owned_workers}=#{inspect(measurements, charlists: :as_lists)}; " <>
+        "sessions/clients return to baseline #{baseline}; all measured workers DOWN"
+    )
+  end
+
+  @tag :integration
+  @tag :capture_log
+  test "provider session capacity rejects transfer preparation while the source remains usable" do
+    capacity = start_supervised!({Agent, fn -> %{limit: 1, sessions: MapSet.new()} end})
+
+    server =
+      start_supervised!(
+        {Vxpipe.CallEngine.RemoteMCPWireServer, owner: self(), session_capacity: capacity}
+      )
+
+    {catalog, binding} =
+      RemoteMCPFixture.binding!(nil, self(), "unused",
+        credential_generation: unique_id("credential"),
+        client_config: [
+          endpoint: Vxpipe.CallEngine.RemoteMCPWireServer.endpoint(server),
+          use_sse: false
+        ]
+      )
+
+    plan = compile_plan(catalog, transfer?: true)
+    baseline = Vxpipe.MCP.ConnectionNames.count()
+
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+               mcp_catalog_store: RemoteMCPFixture.source!(catalog),
+               remote_mcp_connection_provider: Vxpipe.CallEngine.RemoteMCPWireConnectionProvider
+             )
+
+    on_exit(fn -> CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id) end)
+    {caller, connection_id} = attach_caller(plan, room)
+    assert_receive {:remote_mcp_wire_initialized, session}, 1_000
+
+    {:ok, key} =
+      Vxpipe.MCP.ConnectionKey.new(
+        scope: :tenant,
+        tenant_id: plan.tenant_id,
+        integration_id: binding.remote.integration_id,
+        credential_generation: binding.remote.credential_generation
+      )
+
+    {activation, connection} = active_mcp(plan, key, "reception")
+    client = Vxpipe.MCP.Connection.client(connection)
+    monitor = Process.monitor(client)
+    send_text(plan, room, caller, connection_id, "Transfer me.")
+    assert_receive {:test_agent_runtime_stream, provider, _}, 1_000
+    reply_with_tool(provider, "capacity-transfer", "transfer", %{"destination" => "records"})
+    assert_receive :remote_mcp_wire_capacity_rejected, 2_000
+
+    assert_receive {:vxpipe_event,
+                    %Vxpipe.CallEngine.Event.ToolCallFailed{tool_call_id: "capacity-transfer"}},
+                   2_000
+
+    assert {^activation, ^connection} = active_mcp(plan, key, "reception")
+
+    owner =
+      Vxpipe.CallEngine.AgentActivationSupervisor.whereis_child(activation, :remote_mcp_owner)
+
+    assert {:ok, _} =
+             Vxpipe.CallEngine.RemoteMCP.IntegrationOwner.execute(owner, "customer_lookup", %{
+               "customer_id" => "still-here"
+             })
+
+    assert_receive {:remote_mcp_wire_session_request, "tools/call", [^session]}, 1_000
+    assert Agent.get(capacity, & &1.sessions) == MapSet.new([session])
+    assert Vxpipe.MCP.ConnectionNames.count() == baseline + 1
+    refute_received {:DOWN, ^monitor, :process, ^client, _}
+    refute_received {:remote_mcp_wire_initialized, _}
+
+    {:ok, completion} =
+      CallEngine.monitor_room_completion(plan.tenant_id, plan.room_id, room.incarnation_id)
+
+    assert :ok = CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+    assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+    assert Agent.get(capacity, &MapSet.size(&1.sessions)) == 0
+    assert Vxpipe.MCP.ConnectionNames.count() == baseline
+  end
+
+  def lifecycle_measurement(_event, measurements, metadata, owner),
+    do: send(owner, {:mcp_lifecycle, measurements, metadata})
+
+  defp owned_workers(supervisor) do
+    Supervisor.which_children(supervisor)
+    |> Enum.map(fn
+      {_, pid, :supervisor, _} when is_pid(pid) -> owned_workers(pid)
+      {_, pid, :worker, _} when is_pid(pid) -> 1
+    end)
+    |> Enum.sum()
+  end
+
+  @tag :integration
+  @tag :capture_log
   test "the room remains responsive while its retired source's DELETE is held" do
     server = start_supervised!({Vxpipe.MCP.SessionHTTPFixture, owner: self(), hold_delete: true})
 
@@ -1084,7 +1413,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     reply_with_tool(provider, id, "customer_lookup", %{"customer_id" => "customer-42"})
   end
 
-  defp wire_tool_turn(plan, room, {caller, connection_id}, id) do
+  defp wire_tool_turn(plan, room, {caller, connection_id}, id, options \\ []) do
     command = send_text(plan, room, caller, connection_id, "Find a customer.")
     command_id = command.id
 
@@ -1093,6 +1422,12 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
                    1_000
 
     reply_with_tool(provider, id)
+
+    if Keyword.get(options, :release_held, false) do
+      assert_receive {:remote_mcp_wire_invocation_held, handler, reference, _}, 1_000
+      send(handler, {:release_remote_mcp_wire_invocation, reference})
+    end
+
     assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: ^id}}, 1_000
 
     assert_receive {:test_agent_runtime_stream, acknowledgement,

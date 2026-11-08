@@ -263,6 +263,13 @@ try {
     const catalog = await client.listTools();
     assert.deepEqual(catalog.tools.map(tool => tool.name).sort(), allTools);
     await exerciseProducts(client, { tenant: fixture.tenant, mount, secrets: [...Object.values(fixture.keys), ...Object.values(credentials).flatMap(value => [value.access_token, value.refresh_token])], progress: name => { stage = `${mount} ${name}`; } });
+    stage = `${mount} outbound call retirement isolation`;
+    assert.deepEqual(await fixture.command({ action: "retire_outbound_call" }),
+      { outbound_tool: "completed", room: "retired", client: "terminated" });
+    const afterRetirement = await client.callTool({ name: "get_tenant", arguments: { tenant_key: fixture.tenant } });
+    assert.equal(afterRetirement.isError, false);
+    assert.equal(afterRetirement.structuredContent.tenant_key, fixture.tenant);
+    console.log(`PASS SDK ${mount}: existing inbound session survives outbound MCP call retirement`);
     stage = `${mount} authority/schema/revocation`;
 
     for (const [kind, expected] of [["calls", callTools], ["full", tenantTools]]) {

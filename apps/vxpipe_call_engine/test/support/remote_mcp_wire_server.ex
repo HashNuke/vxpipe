@@ -12,6 +12,8 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
       authorization: Keyword.get(options, :authorization),
       headers: Keyword.get(options, :headers, []),
       hold_stream: Keyword.get(options, :hold_stream, false),
+      observe_stream_close: Keyword.get(options, :observe_stream_close, false),
+      session_capacity: Keyword.get(options, :session_capacity),
       hold_invocation: Keyword.get(options, :hold_invocation, false),
       hold_initialization: Keyword.get(options, :hold_initialization, false),
       owner: owner,
@@ -41,8 +43,13 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
   def call(%{method: "GET"} = conn, state) do
     send(state.owner, {:remote_mcp_wire_stream, authorization(conn)})
 
+    send(
+      state.owner,
+      {:remote_mcp_wire_session_request, "GET", get_req_header(conn, "mcp-session-id")}
+    )
+
     if state.hold_stream do
-      hold_stream(conn, state.owner)
+      hold_stream(conn, state.owner, state.observe_stream_close)
     else
       conn
       |> put_resp_content_type("text/event-stream")
@@ -71,17 +78,27 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
     send(state.owner, {:remote_mcp_wire_delete, get_req_header(conn, "mcp-session-id")})
 
     if authorized?(conn, state.authorization) and
-         Enum.all?(state.headers, fn {name, value} -> get_req_header(conn, name) == [value] end),
-       do: send_resp(conn, 200, ""),
-       else: send_resp(conn, 401, "unauthorized")
+         Enum.all?(state.headers, fn {name, value} -> get_req_header(conn, name) == [value] end) do
+      release_sessions(state.session_capacity, get_req_header(conn, "mcp-session-id"))
+      send_resp(conn, 200, "")
+    else
+      send_resp(conn, 401, "unauthorized")
+    end
   end
 
-  defp hold_stream(conn, owner) do
+  defp hold_stream(conn, owner, observe_close?) do
     conn = conn |> put_resp_content_type("text/event-stream") |> send_chunked(200)
     {:ok, conn} = chunk(conn, ": stream ready\n\n")
     monitor = Process.monitor(owner)
     reference = make_ref()
     send(owner, {:remote_mcp_wire_stream_open, self(), reference})
+
+    if observe_close? do
+      {Bandit.Adapter, %{transport: %{socket: socket}}} = conn.adapter
+      result = ThousandIsland.Socket.recv(socket, 0, 10_000)
+      send(owner, {:remote_mcp_wire_stream_closed, reference, result})
+      exit(:normal)
+    end
 
     receive do
       {:release_remote_mcp_wire_stream, ^reference} ->
@@ -115,18 +132,46 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
           if request["method"] == "initialize" do
             if state.hold_initialization, do: hold_initialization(state.owner)
             value = "wire-session-#{System.unique_integer([:positive, :monotonic])}"
-            send(state.owner, {:remote_mcp_wire_initialized, value})
-            value
+
+            if reserve_session(state.session_capacity, value) do
+              send(state.owner, {:remote_mcp_wire_initialized, value})
+              value
+            else
+              :capacity
+            end
           else
             state.session_id
           end
 
-        protocol_response(conn, request, session_id)
+        if session_id == :capacity do
+          send(state.owner, :remote_mcp_wire_capacity_rejected)
+          send_resp(conn, 429, "session capacity reached")
+        else
+          protocol_response(conn, request, session_id)
+        end
       end
     else
       send_resp(conn, 401, "unauthorized")
     end
   end
+
+  defp reserve_session(nil, _session), do: true
+
+  defp reserve_session(capacity, session) do
+    Agent.get_and_update(capacity, fn state ->
+      if MapSet.size(state.sessions) < state.limit,
+        do: {true, %{state | sessions: MapSet.put(state.sessions, session)}},
+        else: {false, state}
+    end)
+  end
+
+  defp release_sessions(nil, _sessions), do: :ok
+
+  defp release_sessions(capacity, sessions),
+    do:
+      Agent.update(capacity, fn state ->
+        %{state | sessions: Enum.reduce(sessions, state.sessions, &MapSet.delete(&2, &1))}
+      end)
 
   defp hold_initialization(owner) do
     reference = make_ref()

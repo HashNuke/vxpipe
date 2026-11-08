@@ -1,9 +1,9 @@
 # Participant-owned MCP sessions
 
-Status: **implementation in progress**. Requested 2026-11-08 after the outbound
+Status: **complete — 29/29 implementation items verified**. Requested 2026-11-08 after the outbound
 ownership review. This runtime slice does not complete the integrations-directory
-workflow approval. The implementation evidence below records partial checkpoints;
-unchecked acceptance gates remain required.
+workflow approval. Implementation, controlled local acceptance, common gates and independent review
+are complete. Verification scope and evidence are recorded below.
 The 2026-11-08 follow-up adds tenant catalog maintenance through durable jobs,
 application-configured expiry, `refresh_scheduled_at` and `refreshed_at`.
 
@@ -63,7 +63,7 @@ The new timestamps are internal persistence metadata, not new setup form fields.
   Sequential opens share the original absolute readiness/transfer deadline.
 - Retire/fence execution before closing transport. Retirement means stopping an
   activation on hangup, transfer or replacement and releasing its resources;
-  saved tenant credentials/catalogs remain. Use one proposed 1,000 ms
+  saved tenant credentials/catalogs remain. Use one 1,000 ms
   graceful cleanup budget for the whole activation, then force local termination;
   acknowledge teardown after all owned descendants have terminated. Cleanup may
   send bounded cancellation/DELETE with current credentials; hard death cannot
@@ -171,7 +171,7 @@ normal stop, crash and bounded recovery isolate protocol state and lifetimes.
 
 ### T3 — Shared credentials and independent management operations
 
-- [ ] Red-test two isolated sessions with the same saved grant during expiry,
+- [x] Red-test two isolated sessions with the same saved grant during expiry,
   disconnect, replacement and local revocation. Keep current credential checks
   before POST, GET/reconnect and DELETE, with no cached fallback on storage failure.
   Add a non-renewing cleanup resolution path: an expired/renewal-required grant
@@ -183,7 +183,7 @@ normal stop, crash and bounded recovery isolate protocol state and lifetimes.
   Include a queued-but-not-admitted renewal request and observe exact session-owned
   operation termination/cancellation before reporting teardown. The configured
   lifetime starts before either queue, independently of runner responsiveness.
-- [ ] Preserve already-submitted request completion after saved disconnect in an
+- [x] Preserve already-submitted request completion after saved disconnect in an
   otherwise live room. Separately prove call retirement fences its late completion
   and never retries an ambiguous remote side effect.
 - [x] Adapt catalog loading, checks, test providers and standalone embedding where
@@ -251,29 +251,29 @@ Follow the [queue/timestamp contract](../../docs/development/participant-mcp-own
 
 Exit: the periodic job finds stale tenant catalogs, durable per-connection jobs
 refresh them without duplicate scheduling, and failed/crashed attempts recover
-without false freshness or cross-tenant publication. The eight T3b items now have
-implementation, database, wire, call/audio and review evidence; remaining T3/T4
-acceptance stays open.
+without false freshness or cross-tenant publication. All eight T3b items have
+implementation, database, wire, call/audio and review evidence. The final closure
+also verifies the remaining T3/T4 acceptance requirements.
 
 ### T4 — Transfers, complete call teardown and acceptance
 
 - [x] Red-test source/destination overlap using the same integration: distinct
   sessions during preparation, destination ready before commit, source cleanup
   after commit, and failed/cancelled preparation cleans only the destination.
-- [ ] Prove re-entry uses the same participant identity with a fresh activation
+- [x] Prove re-entry uses the same participant identity with a fresh activation
   and session; activation recovery and room-incarnation replacement also fence
   old close/reconnect/results. The transfer's existing total budget never resets.
-- [ ] Extend saved WebRTC and managed incoming/outgoing plus legacy incoming phone
+- [x] Extend saved WebRTC and managed incoming/outgoing plus legacy incoming phone
   acceptance through hangup, durable ended state and MCP descendant/wire cleanup.
   Keep call admission, media privacy and transfer routing unchanged.
-- [ ] Run a bounded churn/concurrency scenario. Record session/client/worker counts,
+- [x] Run a bounded churn/concurrency scenario. Record session/client/worker counts,
   per-activation handshake and teardown latency and the declared concurrency;
   return to baseline after retirement. Include provider session-limit rejection
   during overlapping transfer without switching to shared sessions.
-- [ ] Add payload-free lifecycle measurements with bounded labels. Never publish
+- [x] Add payload-free lifecycle measurements with bounded labels. Never publish
   raw session IDs, endpoint secrets, authorization headers or tool payloads.
   Verify logs/status/supervisor failures with synthetic secret markers.
-- [ ] Complete the acceptance matrix, manual verification and common gates below.
+- [x] Complete the acceptance matrix, operator verification and common gates below.
   Update architecture/runtime/API docs and record rollout/drain guidance so old
   globally pooled sessions are not represented as already migrated.
 
@@ -302,6 +302,34 @@ acceptance stays open.
 | Catalog job cancellation during discovery; call ends during maintenance | Job cancellation removes its protocol work. An unrelated call ending does not cancel maintenance; neither path owns the other's session. |
 | Repeated calls and provider connection cap | Session/worker counts return to baseline; bounded failure and truthful latency/count evidence; no hidden global pool fallback. |
 
+### Evidence map
+
+Paths below are relative to `apps/`; each named file is an executable acceptance
+case or a focused boundary suite. Earlier checkpoint evidence remains applicable;
+the final closure run rechecks the affected protocol and composition lanes.
+
+| Matrix rows | Owning evidence |
+| --- | --- |
+| Equal grant/two tenants; independent participants; aliases | `vxpipe_console/test/integration/saved_mcp_runtime_test.exs`, `saved_mcp_boundaries_test.exs`; `vxpipe_call_engine/test/integration/participant_mcp_sessions_test.exs`; `vxpipe_mcp/test/vxpipe/mcp/owned_connections_test.exs` |
+| Stateless peers; blocked startup/owner death; held POST/GET/reconnect | `vxpipe_mcp/test/integration/session_transport_lifetime_test.exs`, `session_startup_lifetime_test.exs`, `session_connect_lifetime_test.exs`; `vxpipe_call_engine/test/vxpipe/call_engine/remote_mcp/integration_owner_test.exs`, `live_call_test.exs` |
+| Final submission fence; queued renewal; bounded/non-renewing DELETE | `vxpipe_mcp/test/integration/session_retirement_test.exs`; `vxpipe_mcp/test/vxpipe/mcp/owned_preflight_runner_test.exs`, `owned_oauth_exchange_test.exs`; `vxpipe_console/test/integration/mcp_shared_grant_sessions_test.exs` |
+| Client/activation/room death; saved disconnect/local revoke/exact close | `vxpipe_call_engine/test/integration/participant_mcp_sessions_test.exs`; `vxpipe_call_engine/test/vxpipe/call_engine/remote_mcp/live_call_test.exs`; `vxpipe_console/test/integration/saved_mcp_shared_sessions_test.exs`, `saved_mcp_inflight_test.exs` |
+| Parallel refresh and node changes | `vxpipe_console/test/integration/mcp_shared_grant_sessions_test.exs`, `mcp_runtime_nodes_test.exs`, `mcp_renewal_nodes_test.exs`, `mcp_oauth_renewal_boundary_test.exs`; owned-renewal checkpoint below |
+| Transfer commit/failure/cancellation/re-entry | `vxpipe_call_engine/test/vxpipe/call_engine/remote_mcp/live_call_test.exs`; `vxpipe_console/test/integration/saved_mcp_transfer_test.exs` |
+| Management during calls; call/job independence and audio | `vxpipe_console/test/integration/saved_mcp_catalog_jobs_test.exs`, `saved_mcp_catalog_audio_test.exs`; owned-discovery checkpoint below |
+| Stale/recent/missing/expired scheduling; incomplete/terminal jobs | `vxpipe_persistence/test/vxpipe/persistence/mcp/catalog_refresh_store_test.exs`; `vxpipe_persistence/test/integration/mcp_catalog_jobs_test.exs` |
+| Concurrent sweepers; rollback; replacement-node orphan recovery | `vxpipe_persistence/test/integration/mcp_catalog_scheduling_test.exs` |
+| Initial/OAuth/manual/empty freshness; held obsolete results | `vxpipe_persistence/test/vxpipe/persistence/mcp/catalog_freshness_test.exs`; `vxpipe_persistence/test/integration/mcp_catalog_jobs_test.exs`; Console OAuth/management checkpoint below |
+| Same endpoint/two tenant catalogs; cancellation | `vxpipe_persistence/test/integration/mcp_catalog_jobs_test.exs` |
+| Repeated calls/provider cap | `vxpipe_call_engine/test/vxpipe/call_engine/remote_mcp/live_call_test.exs` |
+
+Additional completion evidence: saved WebRTC and all three supported phone paths
+use `saved_mcp_runtime_test.exs` and `saved_mcp_telephony_test.exs`; payload-free
+measurements and synthetic-marker privacy use `vxpipe_mcp/test/vxpipe/mcp/telemetry_test.exs`,
+`runtime_auth_privacy_test.exs` and the saved-runtime OTP-report case. Inbound
+platform isolation is exercised by `bin/test-platform-mcp` against the same
+external SDK session before/after an actual outbound call retires.
+
 Use `start_supervised!/1`, process monitors and project/fixture acknowledgements.
 For negative network assertions, fence admission, observe worker/socket closure,
 release controlled pending callbacks, and inspect the peer's acknowledged request
@@ -311,7 +339,7 @@ to the app owning each contract, not to a consumer reaching into another app's
 private internals. Dependency behavior is tested only at Vxpipe's integration
 and supervision boundary.
 
-## Manual verification
+## Operator verification
 
 1. Use an authenticated local Console and a controlled MCP with session/operation
    observations. Start two saved-spec WebRTC calls with the same tenant connection;
@@ -331,19 +359,36 @@ and supervision boundary.
    the existing active call retains its selection; hold/fail one refresh and prove
    duplicate suppression and recovery with a controlled clock.
 
+Operator verification method for this backend-only change: execute and inspect
+the controlled local acceptance harnesses for these scenarios. The Console lane
+uses authenticated endpoint requests, real WebRTC data channels and persistence;
+the platform runner uses HTTP listeners and the official external SDK. Model,
+MCP and carrier peers are controlled fixtures. This provides reproducible runtime
+observations without a second hand-driven browser enactment. No browser visual
+review or live-provider result is claimed. The conditional browser requirement
+above still applies to any UI change.
+
+| Operator scenario | Executed observations |
+| --- | --- |
+| 1 — two saved calls | `saved_mcp_runtime_test.exs`: distinct sessions, selected tools on both, authenticated hangup, durable ended state/descendant/socket cleanup, then another tool on the survivor's original session. |
+| 2 — transfer/re-entry and failure | `live_call_test.exs` and `saved_mcp_transfer_test.exs`: distinct overlapping sessions, re-entry identity, source retirement, held destination timeout, source remains callable, ordinary and held-transport hangup. |
+| 3 — management/disconnect/held results | `saved_mcp_catalog_jobs_test.exs`, `saved_mcp_inflight_test.exs` and room-replacement case: independent discovery, active pins retained, already-submitted result may complete while saved-disconnected, later submissions fail, retired results cannot reach a replacement. |
+| 4 — external inbound MCP | `bin/test-platform-mcp`: actual outbound selected-tool call retires; same official SDK client/session still calls inbound tools on embedded, Console and Gateway mounts. |
+| 5 — periodic maintenance | `mcp_catalog_jobs_test.exs`: one-second application-configured expiry, actual Cron tick, queued sweep/refresh, both timestamps and closed discovery; catalog freshness/scheduling and saved-call cases cover changed catalogs, active pins, duplicate suppression, failure and recovery. |
+
 ## Completion gates
 
-- [ ] T1–T4, including T3b, and every acceptance row have actual evidence; record gaps
+- [x] T1–T4, including T3b, and every acceptance row have actual evidence; record gaps
   instead of checking off a partially verified slice.
-- [ ] Run focused owner-app tests and tagged ExMCP/saved runtime, transfer, phone,
+- [x] Run focused owner-app tests and tagged ExMCP/saved runtime, transfer, phone,
   renewal and durable catalog-job lanes. Record commands, revisions, seeds, counts
   and exclusions.
-- [ ] Pass all [common gates](index.md#common-implementation-and-verification-gates):
+- [x] Pass all [common gates](index.md#common-implementation-and-verification-gates):
   root format, warnings-as-errors compile, strict Credo, umbrella tests and unused
   dependency check. Run Lean if source-cutover or speech state machines change.
-- [ ] Obtain independent design/source and adversarial lifecycle review of the
+- [x] Obtain independent design/source and adversarial lifecycle review of the
   implementation, resolve concrete findings and record remaining limitations.
-- [ ] Finish manual acceptance, documentation, implementation labnotes and index
+- [x] Finish operator acceptance, documentation, implementation labnotes and index
   synchronization, then commit and push coherent checkpoints as requested.
 
 No new UI approval, Railway deployment, directory republishing, public MCP protocol
@@ -370,7 +415,8 @@ milestone. Its creation does not release any existing workflow or delivery hold.
   duplicate suppression and recovery separately from the earlier approval.
   Independent GPT-6 Astra xhigh review approved the amendment on 2026-11-08 after
   tightening sweep progress, timestamp comparison/precision and Oban conflict
-  handling. No remaining planning blockers; implementation remains unverified.
+  handling. No planning blockers remained; implementation was not yet verified
+  at that design review.
 
 Research and review evidence belongs in the
 [planning labnote](../20261108-1135-participant-mcp-ownership.md).
@@ -578,3 +624,22 @@ The maintenance amendment is tracked in the
   items are complete. The phone helper's cleanup/archive timestamp-order
   assumption remains a T4 acceptance question, with no catalog production change.
   See the [catalog-job labnote](../20261108-2159-tenant-catalog-jobs.md).
+
+
+- Final acceptance closes T3 credential/late-result composition and T4 recovery,
+  saved-call teardown, concurrency/capacity, privacy and operator scenarios.
+  The Call Engine lane passes 36 tests (seed 451536), MCP protocol/ownership/privacy
+  passes 293 (seed 441392), Console passes 35 (seed 154888), and actual Cron/job
+  execution passes 13 (seed 905562). The external SDK retains its existing inbound
+  session after outbound call retirement on embedded, Console and Gateway mounts;
+  official server scenarios and restart/expiry also pass.
+  All five common gates pass: the full umbrella run has 5,094 tests, zero failures,
+  371 excluded, seed 157471. Two test assumptions were corrected with reproduced
+  evidence: independent archive/cleanup timestamps and asynchronous failure-state
+  projection. After the latter helper-only correction, its seven affected Console
+  cases and all four fast root gates pass; no production change follows the full
+  run. The final checkpoint contains only tests, fixtures and documentation.
+  Independent GPT-6 Astra xhigh reviews find no outstanding valid issue. All 29
+  implementation items are verified; deployment and the separate directory
+  workflow approval remain outside this milestone. See the
+  [acceptance closure labnote](../20261108-2305-mcp-acceptance-closure.md).

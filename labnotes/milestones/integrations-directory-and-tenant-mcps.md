@@ -1590,7 +1590,9 @@ and all related Storybooks.
   speech/shutdown, and validate privacy markers in every decoded carrier frame.
   All three strengthened cases pass with real archive persistence and independent
   source re-review. Observe durable archive closure before sandbox release; carrier
-  cleanup completion follows the archived end time and need not equal it.
+  cleanup and archive close independently timestamp their observations. Either
+  timestamp may come first; the saved end time matches the archive-close fact,
+  and cleanup completion still requires the exact resources to terminate.
 
 - [x] Preserve historical icon metadata when publishing an iconless native entry,
   and document safe deployment/rollback order. Independent review required reading

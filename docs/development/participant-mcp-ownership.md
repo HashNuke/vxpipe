@@ -1,6 +1,6 @@
 # Participant-owned outbound MCP sessions
 
-Status: implementation in progress, updated 2026-11-08. Standalone session
+Status: implemented and verified, updated 2026-11-08. Standalone session
 ownership and bounded lifecycle (T1) are complete: exact handle retirement,
 owned transport workers, explicit host scoping, bounded startup/reuse and observed
 TLS POST/GET socket cleanup. Participant placement now includes shared startup
@@ -9,7 +9,10 @@ Catalog loads now use independent temporary operation hosts with bounded cleanup
 The library requires explicit hosts; the legacy root session pool has been removed.
 Call-owned renewal and token DNS now run under the exact session, including
 cancellation before shared admission. Durable tenant catalog jobs and their T3b
-acceptance checks are complete. The remaining T3/T4 acceptance matrix is pending.
+acceptance checks are complete. Shared-grant changes, late-result fencing,
+WebRTC/phone teardown, re-entry/replacement, capacity and privacy now have focused
+acceptance evidence. All 29 milestone items and common gates are verified. Operator
+scenarios use controlled local harnesses; no browser or live-provider claim is made.
 Embedded runtime restart options now preserve a host catalog-store reference;
 private snapshots are resolved within the activation's bounded initialization.
 The user requested a milestone for moving agent-used MCP connections into the
@@ -308,8 +311,8 @@ and forced room-authority death, destination timeout with a usable source,
 successful transfer/re-entry and stale-handle rejection. Saved WebRTC calls and
 phone lanes exercise the same placement. Embedded restart-source checks also cover
 raw retained state, changed/unavailable sources and a lookup held past its original
-deadline. Remaining full-milestone acceptance is tracked separately; see the
-milestone for checkpoint gate evidence.
+deadline. The milestone records the complete acceptance matrix and checkpoint
+gate evidence.
 
 ## Retirement and external effects
 
@@ -344,8 +347,8 @@ Cleanup uses a fresh, non-renewing credential resolution: if authorization is
 unavailable, requires token renewal, or cannot be obtained within the remaining
 budget, skip DELETE. Never start a token exchange solely to clean up a session
 and never use cached credentials. The standalone batch API implements this
-default. Activation-wide cleanup uses the same barrier; remaining acceptance
-evidence is tracked in the milestone. Supervisor children remain proper
+default. Activation-wide cleanup uses the same barrier; acceptance
+evidence is recorded in the milestone. Supervisor children remain proper
 supervisors with OTP shutdown semantics; a bounded lifecycle worker owns the
 network grace period.
 
@@ -468,6 +471,26 @@ Measure session/worker counts and handshake/teardown latency at a declared call
 concurrency; do not claim unlimited provider capacity. Provider session-limit
 rejection fails readiness cleanly, leaving a transfer source responsible. New
 cross-tenant quotas or automatic eviction are separate product work.
+
+The local acceptance run exercised three rounds of four concurrent initializations
+(12 activations). At the held initialization boundary each round had four clients
+and 12 owned workers in total; after readiness it had two owned workers per
+session (client and lifecycle guard). Every measured descendant terminated, and
+the session/client count returned from four to its zero baseline after each round.
+Supervisors and shared transport infrastructure are not counted as owned workers.
+Connection-open telemetry ranged from 3.235 to 20.497 ms; ordinary cleanup ranged
+from 0.985 to 1.915 ms. These are loopback fixtures with SSE disabled, including
+the controlled initialization barrier, not a production load benchmark or a
+comparison with the removed shared pool. Active SSE and held socket cleanup have
+separate wire tests. A peer limited to one session rejects the overlapping
+destination while the source retains its original session and executes another
+tool. This verifies bounded failure, not unlimited upstream capacity.
+
+The practical cost is one initialization per selected integration per activation
+and extra overlap during transfer. Saved catalogs avoid repeated tool discovery,
+and maintenance runs independently of call/audio processing. Real provider
+handshake time and session limits remain the main deployment-specific capacity
+constraints; this small local run cannot establish production percentiles.
 
 The present ReqLLM activation path owns `IntegrationOwner`. The native STS path
 [compiles descriptors without a remote owner](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/speech_to_speech_activation.ex),
@@ -656,9 +679,11 @@ both manual and queued refresh. Discovery reuses `MCP.ConnectionCheck`.
 The actual-job tests cover conditional publication, two authorizations at the
 same endpoint, bounded cancellation and replacement-BEAM orphan recovery.
 The saved-call integration cases verify pinned tools, independent lifetimes
-through durable hangup and carrier audio while discovery is held. The remaining
-credential/lifecycle and final milestone acceptance requirements stay open;
-see the [checkpoint labnote](../../labnotes/20261108-2159-tenant-catalog-jobs.md).
+through durable hangup and carrier audio while discovery is held. The final
+periodic acceptance also observes the configured Cron tick enqueue the sweep,
+the sweep enqueue refresh, both timestamps commit, and the discovery session
+close. See the [catalog checkpoint](../../labnotes/20261108-2159-tenant-catalog-jobs.md)
+and [acceptance evidence](../../labnotes/20261108-2305-mcp-acceptance-closure.md).
 
 ## Alternatives and implications
 
@@ -697,3 +722,13 @@ performed for the original documentation proposal. Review and evidence are recor
 in the [research labnote](../../labnotes/20261108-1135-participant-mcp-ownership.md).
 Subsequent reproductions, fixes and verification are recorded in the
 [implementation labnote](../../labnotes/20261108-1401-participant-mcp-implementation.md).
+
+
+Final closure is recorded in the
+[acceptance labnote](../../labnotes/20261108-2305-mcp-acceptance-closure.md): the full
+umbrella run passes 5,094 tests with zero failures (371 excluded, seed 157471),
+with separate tagged protocol, saved-call, cross-node, periodic-job and external
+SDK acceptance. Independent GPT-6 Astra xhigh source and lifecycle review is
+clean. The final checkpoint changes tests/fixtures/documentation only; approved
+Console UX and product behavior are preserved. This completes the ownership
+milestone without asserting deployment or the separate directory workflow approval.

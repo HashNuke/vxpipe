@@ -15,30 +15,55 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
   @header "synthetic-saved-runtime-header"
   @key "saved-runtime-keyring-marker-123"
 
+  @tag hold_mcp_stream: true, observe_mcp_stream_close: true
   test "two admitted saved web calls retain independent sessions across the first hangup", c do
-    configure_admission(c.options)
+    configure_admission(Keyword.put(c.options, :managed_cleanup, true))
     prepared = prepare_web_call(c, source(c.connection.id))
     first = admit_web_call(c, prepared)
     assert_receive {:remote_mcp_wire_initialized, first_session}, 2_000
+    assert_receive {:remote_mcp_wire_stream_open, _, first_stream}, 2_000
     second = admit_web_call(c, prepare_existing_web_call(c, prepared.create_path))
     assert_receive {:remote_mcp_wire_initialized, second_session}, 2_000
+    assert_receive {:remote_mcp_wire_stream_open, _, second_stream}, 2_000
     refute first_session == second_session
     first_connection = owned_mcp(c, first.call)
     second_connection = owned_mcp(c, second.call)
     refute first_connection == second_connection
+    descendants = monitor_mcp(c, first.call)
 
     saved_tool_turn(c, first, "isolated-first")
     assert_receive {:remote_mcp_wire_session_request, "tools/call", [^first_session]}
     client = Vxpipe.MCP.Connection.client(first_connection)
     monitor = Process.monitor(client)
-    close_admitted_call(c, first.call)
+
+    {:ok, tracker} =
+      Vxpipe.Gateway.CallCleanupSupervisor.lookup(%{
+        tenant_key: c.tenant,
+        call_id: first.call.id,
+        room_id: first.call.room_id,
+        incarnation_id: first.call.incarnation_id
+      })
+
+    tracker_monitor = Process.monitor(tracker)
+
+    assert api(c.secret, :post, "/api/tenants/#{c.tenant}/calls/#{first.call.id}/hangup", %{}).status ==
+             200
+
+    assert_receive {:DOWN, ^tracker_monitor, :process, ^tracker, :normal}, 3_000
     assert_receive {:DOWN, ^monitor, :process, ^client, _reason}, 1_000
     assert_receive {:remote_mcp_wire_delete, [^first_session]}, 1_000
+
+    for {pid, reference} <- descendants,
+        do: assert_receive({:DOWN, ^reference, :process, ^pid, _}, 1_000)
+
+    assert_receive {:remote_mcp_wire_stream_closed, ^first_stream, {:error, :closed}}, 1_000
+    assert {:ok, %{state: :ended}} = Calls.fetch_call(c.tenant, first.call.id, c.options)
     assert owned_mcp(c, second.call) == second_connection
     saved_tool_turn(c, second, "isolated-second")
     assert_receive {:remote_mcp_wire_session_request, "tools/call", [^second_session]}
     close_admitted_call(c, second.call)
     assert_receive {:remote_mcp_wire_delete, [^second_session]}, 1_000
+    assert_receive {:remote_mcp_wire_stream_closed, ^second_stream, {:error, :closed}}, 1_000
   end
 
   test "an admitted web call executes its saved MCP tool and observes tenant disconnect", c do
