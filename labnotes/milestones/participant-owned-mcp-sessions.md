@@ -406,3 +406,17 @@ The maintenance amendment is tracked in the
   Blocked-start cancellation, shared retirement deadlines and participant wiring
   remain open. Review and verification are tracked in the
   [owner-isolation labnote](../20261108-1505-explicit-session-owners.md).
+- New-session startup now acknowledges the supervised client before arbitrary
+  authorization/network callbacks. A guarded absolute deadline and caller/host
+  monitors cancel blocked initialization; bounded admission also rejects expired
+  or abandoned requests queued behind the host. Readiness disarms startup
+  cancellation before a handle can be published. DNS/handshake helpers have
+  independent requester/deadline watchers, including cancellation of linked DNS
+  work. The 58-test focused lifecycle slice and 57-test protocol/privacy slice
+  pass; the final strengthened startup lane passes 23 cases. All five root gates
+  pass (5,017 tests, zero failures, 298 excluded, seed 670311), and clean-checkout
+  preparation succeeds. Independent source review resolved admission and DNS
+  requester-lifetime findings. This does not complete retirement fencing,
+  graceful cleanup, reused-credential cancellation
+  or participant placement. See the
+  [bounded-startup labnote](../20261108-1546-bounded-session-startup.md).

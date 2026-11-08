@@ -3,7 +3,7 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
 
   use Supervisor, restart: :temporary
 
-  alias Vxpipe.MCP.ConnectionNames
+  alias Vxpipe.MCP.{ConnectionNames, SessionStartup}
 
   def start_link(opts) do
     key = Keyword.fetch!(opts, :key)
@@ -26,6 +26,16 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
     runtime = Keyword.fetch!(opts, :runtime)
     scope = Keyword.get(opts, :scope)
 
+    startup =
+      Supervisor.child_spec(
+        {SessionStartup,
+         integration: self(),
+         host: Keyword.fetch!(opts, :parent),
+         caller: Keyword.fetch!(opts, :caller),
+         deadline: Keyword.fetch!(opts, :deadline)},
+        significant: true
+      )
+
     transport_supervisor =
       {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {:transport_workers, self()}}}
 
@@ -45,6 +55,7 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
         ConnectionNames.via(:client, key, scope, %{integration_owner: self()})
       )
       |> Keyword.put(:transport_supervisor, transport_supervisor)
+      |> Keyword.put(:defer_connection, true)
 
     client =
       Supervisor.child_spec(runtime.child_spec(client_options),
@@ -52,6 +63,9 @@ defmodule Vxpipe.MCP.IntegrationSupervisor do
         significant: true
       )
 
-    Supervisor.init([workers, client], strategy: :one_for_one, auto_shutdown: :any_significant)
+    Supervisor.init([startup, workers, client],
+      strategy: :one_for_one,
+      auto_shutdown: :any_significant
+    )
   end
 end

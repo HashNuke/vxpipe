@@ -74,7 +74,8 @@ defmodule Vxpipe.MCP.SessionTransportLifetimeTest do
       on_exit(fn -> Connections.close(connection) end)
       assert_receive {:session_http_held, :get, _peer}, 1_000
 
-      linked = session_workers(connection)
+      linked = retiring_workers(connection, @retirement)
+
       Agent.update(capture, fn _ -> true end)
 
       start_supervised!(
@@ -220,6 +221,16 @@ defmodule Vxpipe.MCP.SessionTransportLifetimeTest do
       _terminated -> []
     end)
   end
+
+  defp retiring_workers(connection, retirement)
+       when retirement in [:disconnect, :receiver_kill] do
+    # These stop transport work while keeping the session/client available.
+    # Its disarmed startup guard lives until the integration is retired.
+    startup = GenServer.whereis(Vxpipe.MCP.SessionStartup.name(Connection.owner(connection)))
+    Map.delete(session_workers(connection), startup)
+  end
+
+  defp retiring_workers(connection, _retirement), do: session_workers(connection)
 
   defp retire(:session_close, connection), do: Connections.close(connection)
   defp retire(:client_kill, connection), do: Process.exit(Connection.client(connection), :kill)

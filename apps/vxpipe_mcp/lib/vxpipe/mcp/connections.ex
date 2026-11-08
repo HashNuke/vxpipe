@@ -17,11 +17,13 @@ defmodule Vxpipe.MCP.Connections do
     ExMCPRuntime,
     IntegrationSupervisor,
     RuntimeAuthProvider,
+    SessionStartup,
     Telemetry
   }
 
   @connection_supervisor Vxpipe.MCP.ConnectionSupervisor
   @protocol_version "2025-11-25"
+  @startup_timeout 5_000
 
   @type error ::
           ClientOptions.error()
@@ -123,7 +125,8 @@ defmodule Vxpipe.MCP.Connections do
   end
 
   defp open_connection(key, config, opts, builder) do
-    with {:ok, context} <- owner_context(opts),
+    with {:ok, deadline} <- startup_deadline(opts),
+         {:ok, context} <- owner_context(opts),
          {:ok, options} <- builder.(config) do
       runtime = Keyword.get(opts, :runtime, ExMCPRuntime)
 
@@ -135,6 +138,7 @@ defmodule Vxpipe.MCP.Connections do
       context =
         Map.merge(context, %{
           runtime: runtime,
+          deadline: deadline,
           client_options: options,
           policy: policy(runtime, options)
         })
@@ -146,6 +150,15 @@ defmodule Vxpipe.MCP.Connections do
     else
       {:error, _reason} = error -> {error, :failed}
     end
+  end
+
+  defp startup_deadline(opts) do
+    now = System.monotonic_time(:millisecond)
+    deadline = Keyword.get(opts, :deadline, now + @startup_timeout)
+
+    if is_integer(deadline) and deadline > now,
+      do: {:ok, deadline},
+      else: {:error, :connection_failed}
   end
 
   defp owner_context(opts) do
@@ -272,10 +285,24 @@ defmodule Vxpipe.MCP.Connections do
        runtime: context.runtime,
        client_options: context.client_options,
        parent: context.parent,
+       caller: self(),
+       deadline: context.deadline,
        scope: context.scope,
        policy: context.policy}
 
-    case DynamicSupervisor.start_child(context.parent, child) do
+    task = Task.async(fn -> start_child(context.parent, child) end)
+    remaining = max(context.deadline - System.monotonic_time(:millisecond), 0)
+
+    case Task.yield(task, remaining) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} -> result
+      _failed -> {:error, :connection_failed}
+    end
+  catch
+    :exit, _reason -> {:error, :connection_failed}
+  end
+
+  defp start_child(parent, child) do
+    case DynamicSupervisor.start_child(parent, child) do
       {:ok, owner} -> {:ok, owner, :started}
       {:error, {:already_started, owner}} -> {:ok, owner, :existing}
       {:error, _reason} -> {:error, :connection_failed}
@@ -286,10 +313,17 @@ defmodule Vxpipe.MCP.Connections do
 
   defp ensure_ready(connection, runtime) do
     case runtime.status(Connection.client(connection)) do
-      {:ok, %{connection_status: :ready, protocol_version: @protocol_version}} -> :ok
-      {:ok, %{protocol_version: version}} -> {:error, {:unsupported_protocol_version, version}}
-      {:ok, _status} -> {:error, :not_ready}
-      {:error, _reason} -> {:error, :connection_failed}
+      {:ok, %{connection_status: :ready, protocol_version: @protocol_version}} ->
+        SessionStartup.ready(Connection.owner(connection))
+
+      {:ok, %{protocol_version: version}} ->
+        {:error, {:unsupported_protocol_version, version}}
+
+      {:ok, _status} ->
+        {:error, :not_ready}
+
+      {:error, _reason} ->
+        {:error, :connection_failed}
     end
   end
 

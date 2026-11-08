@@ -71,35 +71,56 @@ unsupported. A missing or already-dead supplied supervisor fails closed before
 initialization; only local ownership is supported. It does not fall back to
 detached workers.
 
-Asynchronous POST workers, standalone SSE workers and the HTTP receiver run under
-that supervisor. The client registers and monitors each POST before releasing it
+Asynchronous POST workers, standalone SSE workers, DNS wrappers, handshake receive
+tasks and the HTTP receiver run under that supervisor. The client registers and monitors each POST before releasing it
 to perform network work; a transport reference rejects stale registration, and
 the task reference rejects stale completion. Receiver death also retires the
 transport work. Temporary/significant client and worker-supervisor children
 retire the integration owner on child loss instead of silently replacing its
 client. Explicit disconnect stops these workers before best-effort remote DELETE.
 
+The standalone session API also supplies `:defer_connection`. ExMCP returns from
+`init/1` before authorization/network work and establishes the connection in
+`handle_continue/2`. For this opt-in supervised HTTP/legacy-profile path, the
+client does not trap exits. An owner can therefore terminate it while arbitrary
+startup callbacks are blocked. Default dependency startup stays synchronous.
+Handshake tasks are monitored instead of linked to this client. A temporary
+watcher monitors each helper's requester and deadline independently of that
+requester's wait. The nontrapping helper links to its watcher and begins work only
+after the caller has installed its monitor and the watcher has acknowledged it.
+Requester death, expiry or watcher loss therefore terminates blocked DNS and its
+linked resolver task. Helper failures are normalized through the caller's task
+monitor. POST, DELETE and initial or
+resumed SSE GET pass the exact transport-supervisor PID into that boundary.
+
+A temporary significant startup guard begins before the client. Until validated
+readiness is acknowledged, caller/host death or the absolute startup deadline
+kills the exact integration. The guard disarms on readiness and remains an idle
+child until integration retirement; loss of this child fails closed. This avoids
+a second client-binding cleanup mechanism and reliance on `terminate/2` during
+forced death.
+
 Loopback tests observe worker termination and peer socket closure after session
 close, forced/normal client death, disconnect and receiver death. Separate cases
 cover an idle GET stream, stateless HTTP and rejected GET. A dead-supervisor
 regression verifies rejected stateless startup. This is a transport
 ownership checkpoint, not proof of the full participant shutdown contract:
-activation placement, blocked startup, the final submission fence and one shared
+activation placement, the final submission fence and one shared
 cleanup deadline remain in the
 [ownership milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md).
 
 ## Pinned patch and build contract
 
 `patches/ex_mcp/runtime-request-credentials.patch` changes the pinned HTTP and SSE
-modules plus Client and ConnectionManager lifecycle handling and status redaction.
+modules plus Client, ConnectionManager and TargetPolicy lifecycle handling and status redaction.
 Its adjacent manifest records the exact dependency revision and SHA-256
 hashes for the patch, original sources and patched sources. `bin/patch-ex-mcp`
-accepts the complete original/current state or either explicitly recorded prior
+accepts the complete original/current state or an explicitly recorded prior
 reviewed state through separately checksum-pinned upgrade patches. Unknown modifications,
 a different dependency revision, a modified patch or mixed source states fail
 without overwriting them. Reapplication verifies the existing patched state.
-The upgrade baselines are the immediately preceding stream-resumption patch and
-its previously supported credential-patch state. Older unrecognized patched
+The upgrade baselines are the immediately preceding transport-ownership patch,
+the stream-resumption patch and the previously supported credential-patch state. Older unrecognized patched
 states must be prepared from pristine pinned sources rather than accepted implicitly.
 
 `bin/setup` applies the patch after dependency retrieval and compiles ExMCP for dev

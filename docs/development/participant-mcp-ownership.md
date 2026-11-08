@@ -1,10 +1,11 @@
 # Participant-owned outbound MCP sessions
 
 Status: implementation in progress, updated 2026-11-08. Exact handle retirement,
-owned POST/SSE/receiver workers and explicit host-supervisor scoping are implemented
-and boundary-tested. Participant placement, complete bounded retirement and queued
-catalogs remain pending. The transport checkpoint includes eight worker/socket
-cleanup cases and a ninth rejecting startup with an already-dead supervisor.
+owned transport workers, explicit host-supervisor scoping and bounded new-session
+startup are implemented and boundary-tested. Participant placement, complete
+bounded retirement and queued catalogs remain pending. Startup and transport tests
+cover blocked authorization/DNS, queued admission, helper cancellation and observed
+worker/socket cleanup.
 The user requested a milestone for moving agent-used MCP connections into the
 participant's call tree. The [implementation milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md)
 tracks that work separately from the integrations-directory workflow approval.
@@ -158,9 +159,30 @@ every session for the selected credential generation, across owners.
 
 The omitted-owner API and key-only close remain a transitional legacy path until
 call/catalog consumers migrate. Explicit ownership never falls back to that path.
-This API adds no dependency on Calls or Call Engine. Caller/deadline cancellation
-during blocked startup and the common retirement budget remain separate T1 work;
-the presence of this API alone does not complete participant placement or teardown.
+This API adds no dependency on Calls or Call Engine. New-session initialization
+has a five-second default budget. Supply `deadline: absolute_monotonic_ms` to use
+an existing readiness budget; an expired deadline cannot start a session. A startup
+guard watches the opening caller, exact host and deadline. The host's start-child
+wait is itself bounded, and guard initialization rejects expired requests or dead
+openers before allowing a client to start, including requests delayed in the host
+queue. Before open, reuse or
+lookup publishes a newly ready handle, it acknowledges readiness with that guard.
+The guard then cancels its timer and monitors, so the opener can exit without
+retiring an established session. Losing the guard retires its integration; it
+cannot silently disappear while initialization continues.
+
+ExMCP acknowledges client startup before running authorization/network callbacks,
+so its supervisors can finish starting without waiting for those callbacks.
+The supervised HTTP client propagates exit signals even when authorization or
+DNS blocks; owned DNS and handshake tasks preserve normalized errors without
+linking failures back into the client. The idle guard remains with the integration
+until retirement. Explicit transport disconnect can keep that integration/client
+alive while terminating its transport work.
+
+These are new-session initialization bounds. Bounding a reused session's current
+credential resolution, cancellation of root-owned renewal work, final submission
+fencing and the common retirement budget remain open. The presence of this API
+alone does not complete participant placement or teardown.
 
 ## Retirement and external effects
 

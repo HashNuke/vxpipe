@@ -12,6 +12,9 @@ defmodule Vxpipe.MCP.ReadyClient do
 
   @impl true
   def init(opts) do
+    if observer = Keyword.get(opts, :test_start_observer),
+      do: send(observer, {:ready_client_started, self()})
+
     if observer = Keyword.get(opts, :test_initialization_observer) do
       send(observer, {:ready_client_initializing, self()})
 
