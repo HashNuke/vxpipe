@@ -3,6 +3,14 @@
 Run `bin/setup` in each checkout/worktree for dependencies, assets, local secrets
 and isolated databases/ports. Safe to rerun; optional `--with-lean`.
 
+## Related repositories
+
+This checkout and its supporting repositories share the same parent directory.
+Resolve supporting checkouts relative to this repository: `../vxpipe-integrations`
+contains the directory definitions, `../vxpipe-integrations-web` contains the
+directory publisher/API, and `../vxpipe-docs` contains the documentation site.
+Look for other supporting repositories alongside these under `../`.
+
 ## Project hygiene
 
 Work in small, coherent checkpoints that leave the umbrella usable. Keep the
