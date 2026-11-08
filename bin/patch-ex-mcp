@@ -21,8 +21,8 @@ def main():
     ).strip()
     if revision != manifest["revision"] or digest(patch) != manifest["patch_sha256"]:
         raise ValueError("ExMCP revision or patch checksum differs from the reviewed manifest")
-    previous = manifest.get("previous")
-    if previous:
+    upgrades = ([manifest["previous"]] if manifest.get("previous") else []) + manifest.get("older", [])
+    for previous in upgrades:
         upgrade = patch.parent / previous["patch_file"]
         if digest(upgrade) != previous["patch_sha256"]:
             raise ValueError("ExMCP upgrade patch checksum differs from the reviewed manifest")
@@ -31,10 +31,11 @@ def main():
         print("ExMCP request-credential patch verified")
         return
     original = all(actual[name] == hashes["original"] for name, hashes in manifest["files"].items())
-    if not original and previous and actual == previous["files"]:
-        patch = upgrade
-    elif not original:
-        raise ValueError("ExMCP sources differ from both reviewed states; preserve changes and review the patch")
+    if not original:
+        previous = next((candidate for candidate in upgrades if actual == candidate["files"]), None)
+        if previous is None:
+            raise ValueError("ExMCP sources differ from reviewed states; preserve changes and review the patch")
+        patch = patch.parent / previous["patch_file"]
     subprocess.run(["git", "apply", "--check", str(patch)], cwd=dependency, check=True)
     subprocess.run(["git", "apply", str(patch)], cwd=dependency, check=True)
     if not all(digest(dependency / name) == hashes["patched"] for name, hashes in manifest["files"].items()):

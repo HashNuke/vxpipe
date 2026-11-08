@@ -77,6 +77,36 @@ class ExMCPPatchTest(unittest.TestCase):
         self.assertNotEqual(self.patch().returncode, 0)
         self.assertEqual(source.read_bytes(), before)
 
+    def test_upgrades_each_older_reviewed_state(self):
+        manifest = json.loads((self.root / "patches/ex_mcp/runtime-request-credentials.json").read_text())
+        self.assertTrue(manifest.get("older"), "preserve the already supported upgrade state")
+        dependency = self.root / "deps/ex_mcp"
+        patch = self.root / "patches/ex_mcp/runtime-request-credentials.patch"
+        self.assertEqual(self.patch().returncode, 0)
+
+        for previous in manifest["older"]:
+            with self.subTest(previous=previous["patch_file"]):
+                upgrade = patch.parent / previous["patch_file"]
+                subprocess.run(["git", "apply", "--reverse", str(upgrade)],
+                               cwd=dependency, check=True, capture_output=True)
+                self.assertEqual({name: hashlib.sha256((dependency / name).read_bytes()).hexdigest()
+                                  for name in manifest["files"]}, previous["files"])
+                result = self.patch()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("applied and verified", result.stdout)
+
+    def test_rejects_tampered_older_upgrade_before_changing_sources(self):
+        manifest = json.loads((self.root / "patches/ex_mcp/runtime-request-credentials.json").read_text())
+        self.assertTrue(manifest.get("older"), "preserve the already supported upgrade state")
+        upgrade = self.root / "patches/ex_mcp" / manifest["older"][0]["patch_file"]
+        upgrade.write_bytes(upgrade.read_bytes() + b"\n")
+        source = self.root / "deps/ex_mcp/lib/ex_mcp/transport/http.ex"
+        before = source.read_bytes()
+        result = self.patch()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("checksum differs", result.stderr)
+        self.assertEqual(source.read_bytes(), before)
+
     def test_rejects_a_different_dependency_revision(self):
         dependency = self.root / "deps/ex_mcp"
         subprocess.run(["git", "checkout", "--quiet", "--detach", "HEAD^"],

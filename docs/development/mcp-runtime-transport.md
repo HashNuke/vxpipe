@@ -59,18 +59,48 @@ clean EOF. Disabling SSE or treating every closed HTTP response as terminal was
 rejected because either would break session resumption. Explicit client disconnect
 owns graceful remote DELETE; retiring Vxpipe's connection owner is local cleanup.
 
+## Session transport ownership
+
+Each `IntegrationSupervisor` now starts a dedicated `DynamicSupervisor` before
+its ExMCP client and supplies it through the checked patch's
+`:transport_supervisor` option. The supervisor name includes the exact integration
+owner PID, and the transport resolves it to that incarnation's PID at connection
+time. This option requires a supervisor dedicated to **one client**: disconnect
+and transport loss terminate every child, so sharing it between clients is
+unsupported. A missing or already-dead supplied supervisor fails closed before
+initialization; only local ownership is supported. It does not fall back to
+detached workers.
+
+Asynchronous POST workers, standalone SSE workers and the HTTP receiver run under
+that supervisor. The client registers and monitors each POST before releasing it
+to perform network work; a transport reference rejects stale registration, and
+the task reference rejects stale completion. Receiver death also retires the
+transport work. Temporary/significant client and worker-supervisor children
+retire the integration owner on child loss instead of silently replacing its
+client. Explicit disconnect stops these workers before best-effort remote DELETE.
+
+Loopback tests observe worker termination and peer socket closure after session
+close, forced/normal client death, disconnect and receiver death. Separate cases
+cover an idle GET stream, stateless HTTP and rejected GET. A dead-supervisor
+regression verifies rejected stateless startup. This is a transport
+ownership checkpoint, not proof of the full participant shutdown contract:
+activation placement, blocked startup, the final submission fence and one shared
+cleanup deadline remain in the
+[ownership milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md).
+
 ## Pinned patch and build contract
 
 `patches/ex_mcp/runtime-request-credentials.patch` changes the pinned HTTP and SSE
-modules plus Client status redaction. Its adjacent manifest records the exact dependency revision and SHA-256
+modules plus Client and ConnectionManager lifecycle handling and status redaction.
+Its adjacent manifest records the exact dependency revision and SHA-256
 hashes for the patch, original sources and patched sources. `bin/patch-ex-mcp`
-accepts the complete original/current state or the exact previous reviewed state
-through a separately checksum-pinned upgrade patch. Unknown modifications,
+accepts the complete original/current state or either explicitly recorded prior
+reviewed state through separately checksum-pinned upgrade patches. Unknown modifications,
 a different dependency revision, a modified patch or mixed source states fail
 without overwriting them. Reapplication verifies the existing patched state.
-The current upgrade baseline is the immediately preceding reviewed credential
-patch; older unrecognized patched states must be prepared from pristine pinned
-sources rather than accepted implicitly.
+The upgrade baselines are the immediately preceding stream-resumption patch and
+its previously supported credential-patch state. Older unrecognized patched
+states must be prepared from pristine pinned sources rather than accepted implicitly.
 
 `bin/setup` applies the patch after dependency retrieval and compiles ExMCP for dev
 and test with `--include-children`, so a fresh checkout builds prerequisites such
@@ -105,7 +135,8 @@ Actual loopback interoperability cases are explicitly tagged `integration`.
 
 Patch tests cover clean local-clone application, idempotence, wrong revision,
 tampered patches, unknown source changes, mixed source states and upgrade from the
-previous reviewed version. The upgrade test requires no repository history. Setup
+supported reviewed versions, including tampered older upgrade rejection. These
+upgrade tests require no repository history. Setup
 tests cover preparation/compilation ordering and stopping on patch failure. The
 saved-record publication/startup-options/wire slice and local web/phone execution
 are now verified.

@@ -1,0 +1,207 @@
+defmodule Vxpipe.MCP.SessionTransportLifetimeTest do
+  use ExUnit.Case, async: false
+
+  alias Vxpipe.MCP.{
+    ClientOptions,
+    Connection,
+    ConnectionKey,
+    Connections,
+    ExMCPClient,
+    RuntimeAuthProvider,
+    SessionHTTPFixture
+  }
+
+  alias Vxpipe.MCP.Test.RuntimeAuthFixture
+
+  @moduletag :integration
+  @moduletag timeout: 15_000
+
+  test "an already-dead transport supervisor rejects stateless client startup" do
+    supervisor = start_supervised!({DynamicSupervisor, strategy: :one_for_one})
+    reference = Process.monitor(supervisor)
+    assert :ok = stop_supervised(DynamicSupervisor)
+    assert_receive {:DOWN, ^reference, :process, ^supervisor, :shutdown}
+
+    server = start_supervised!({SessionHTTPFixture, owner: self(), session: false})
+
+    assert {:ok, options} =
+             ClientOptions.build_loopback_test(
+               endpoint: SessionHTTPFixture.endpoint(server),
+               use_sse: false
+             )
+
+    options = Keyword.put(options, :transport_supervisor, supervisor)
+    assert {:error, _reason} = start_supervised({ExMCP.Client, options})
+  end
+
+  for retirement <- [:session_close, :client_kill, :client_stop, :disconnect, :receiver_kill] do
+    @retirement retirement
+    test "#{retirement} terminates held POST work and its active GET stream" do
+      server = start_supervised!({SessionHTTPFixture, owner: self()})
+      {connection, capture} = open_connection(server)
+
+      client = Connection.client(connection)
+      on_exit(fn -> Connections.close(connection) end)
+      assert_receive {:session_http_held, :get, _peer}, 1_000
+
+      linked = session_workers(connection)
+      Agent.update(capture, fn _ -> true end)
+
+      start_supervised!(
+        {Task,
+         fn ->
+           try do
+             ExMCPClient.call_tool(client, "hold", %{}, 10_000)
+           catch
+             :exit, _reason -> :ok
+           end
+         end}
+      )
+
+      assert_receive {:session_authorization, post_worker}, 1_000
+      post_ref = Process.monitor(post_worker)
+
+      try do
+        assert_receive {:session_http_held, :post, _peer}, 1_000
+
+        retire(@retirement, connection)
+
+        assert_receive {:DOWN, ^post_ref, :process, ^post_worker, _reason}, 1_000
+
+        for {pid, reference} <- linked do
+          assert_receive {:DOWN, ^reference, :process, ^pid, _reason}, 1_000
+        end
+
+        assert_receive {:session_http_closed, :post, {:error, :closed}}, 1_000
+        assert_receive {:session_http_closed, :get, {:error, :closed}}, 1_000
+      after
+        Enum.each([post_worker | Map.keys(linked)], &Process.exit(&1, :kill))
+        Connections.close(connection)
+      end
+    end
+  end
+
+  test "normal client stop terminates an idle GET stream" do
+    server = start_supervised!({SessionHTTPFixture, owner: self()})
+    {connection, _capture} = open_connection(server)
+    on_exit(fn -> Connections.close(connection) end)
+    assert_receive {:session_http_held, :get, _peer}, 1_000
+    linked = session_workers(connection)
+
+    try do
+      assert :ok = ExMCP.Client.stop(Connection.client(connection))
+
+      for {pid, reference} <- linked do
+        assert_receive {:DOWN, ^reference, :process, ^pid, _reason}, 1_000
+      end
+
+      assert_receive {:session_http_closed, :get, {:error, :closed}}, 1_000
+    after
+      Enum.each(Map.keys(linked), &Process.exit(&1, :kill))
+      Connections.close(connection)
+    end
+  end
+
+  for {mode, options} <- [stateless: [session: false], get_rejected: [get_status: 405]] do
+    @options options
+    @mode mode
+    test "normal client stop terminates the receiver for #{@mode}" do
+      server = start_supervised!({SessionHTTPFixture, [owner: self()] ++ @options})
+      {connection, _capture} = open_connection(server)
+      on_exit(fn -> Connections.close(connection) end)
+      if @mode == :get_rejected, do: assert_receive(:session_http_get_rejected, 1_000)
+      linked = session_workers(connection)
+      assert map_size(linked) > 0
+
+      try do
+        assert :ok = ExMCP.Client.stop(Connection.client(connection))
+
+        for {pid, reference} <- linked do
+          assert_receive {:DOWN, ^reference, :process, ^pid, _reason}, 1_000
+        end
+      after
+        Enum.each(Map.keys(linked), &Process.exit(&1, :kill))
+        Connections.close(connection)
+      end
+    end
+  end
+
+  defp open_connection(server) do
+    observer = self()
+    capture = start_supervised!({Agent, fn -> false end})
+    key = connection_key()
+
+    {:ok, authentication} =
+      RuntimeAuthProvider.init(%{
+        tenant: "session-fixture",
+        connection_id: key.integration_id,
+        generation: 1,
+        auth_method: "none",
+        endpoint: "https://mcp.example.test/mcp",
+        resolver:
+          {RuntimeAuthFixture,
+           {observer,
+            fn ->
+              if Agent.get(capture, & &1), do: send(observer, {:session_authorization, self()})
+              {:ok, %{auth_method: "none", headers: []}}
+            end}}
+      })
+
+    assert {:ok, connection} =
+             Connections.open_loopback_test(key,
+               endpoint: SessionHTTPFixture.endpoint(server),
+               runtime_authentication: authentication,
+               limits: [stream_handshake_timeout_ms: 500]
+             )
+
+    assert_receive :session_http_initialized, 1_000
+
+    {connection, capture}
+  end
+
+  defp session_workers(connection) do
+    client = Connection.client(connection)
+    owner = Connection.owner(connection)
+    {:links, links} = Process.info(client, :links)
+
+    registry_partitions =
+      Vxpipe.MCP.ConnectionRegistry
+      |> Supervisor.which_children()
+      |> Enum.map(fn {_id, pid, _type, _modules} -> pid end)
+
+    (links ++ descendant_workers(owner))
+    |> Enum.filter(&(is_pid(&1) and &1 not in [owner, client | registry_partitions]))
+    |> Enum.uniq()
+    |> Map.new(&{&1, Process.monitor(&1)})
+  end
+
+  defp descendant_workers(supervisor) do
+    Enum.flat_map(Supervisor.which_children(supervisor), fn
+      {_id, pid, :supervisor, _modules} when is_pid(pid) -> descendant_workers(pid)
+      {_id, pid, :worker, _modules} when is_pid(pid) -> [pid]
+      _terminated -> []
+    end)
+  end
+
+  defp retire(:session_close, connection), do: Connections.close(connection)
+  defp retire(:client_kill, connection), do: Process.exit(Connection.client(connection), :kill)
+  defp retire(:client_stop, connection), do: ExMCP.Client.stop(Connection.client(connection))
+  defp retire(:disconnect, connection), do: ExMCP.Client.disconnect(Connection.client(connection))
+
+  defp retire(:receiver_kill, connection) do
+    state = :sys.get_state(Connection.client(connection))
+    Process.exit(state.receiver_task.pid, :kill)
+  end
+
+  defp connection_key do
+    {:ok, key} =
+      ConnectionKey.new(
+        scope: :tenant,
+        tenant_id: "session-fixture",
+        integration_id: "transport-#{System.unique_integer([:positive])}",
+        credential_generation: "1"
+      )
+
+    key
+  end
+end

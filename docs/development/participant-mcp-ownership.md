@@ -2,7 +2,10 @@
 
 Status: implementation in progress, updated 2026-11-08. The first checkpoint makes
 handle close target an exact session and retires that session on client loss.
-Participant placement, transport teardown and queued catalogs remain pending.
+The next checkpoint owns asynchronous POST, SSE and receiver workers under each
+integration session, with observed worker/socket cleanup in eight loopback cases
+and a ninth regression rejecting startup with an already-dead supervisor.
+Participant placement, complete bounded retirement and queued catalogs remain pending.
 The user requested a milestone for moving agent-used MCP connections into the
 participant's call tree. The [implementation milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md)
 tracks that work separately from the integrations-directory workflow approval.
@@ -52,7 +55,10 @@ shared; they must not retain or revive a retired activation's protocol session.
 Research baseline: Vxpipe `abcd9db8`; ExMCP git revision
 `5fa760207bb09fc3b19b3049bc481b5e55106095`, plus the tracked
 [runtime credential patch](../../patches/ex_mcp/runtime-request-credentials.patch).
-These are source observations, not newly executed teardown tests.
+The table and dependency observations below describe that research baseline.
+Subsequent implementation evidence is recorded in the milestone; in particular,
+the detached transport-worker findings are addressed by the
+[session transport ownership hook](mcp-runtime-transport.md#session-transport-ownership).
 
 | Boundary | Current evidence | Consequence |
 | --- | --- | --- |

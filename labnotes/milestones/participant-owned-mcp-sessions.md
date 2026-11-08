@@ -140,7 +140,7 @@ commit. Checkboxes below are runtime work, not specification-review results.
   Pause requests before submission, including after credential resolution and DNS;
   retire the owner and release the pauses. Observe no tool POST from the retired
   incarnation; cleanup cancellation/DELETE is the only permitted grace traffic.
-- [ ] If dependency work is needed, update the exact patch/manifest or git pin,
+- [x] If dependency work is needed, update the exact patch/manifest or git pin,
   migration checks and `mix.lock` as appropriate. Verify fresh checkout preparation,
   supported prior-patch upgrade and the affected official conformance lane.
 
@@ -384,3 +384,14 @@ The maintenance amendment is tracked in the
   This does not complete T1's owner migration or transport teardown acceptance.
   Commands, review and root gate evidence are tracked in the
   [implementation labnote](../20261108-1401-participant-mcp-implementation.md).
+- Next T1 prerequisite: reproduced detached POST, SSE and receiver lifetimes,
+  then added a dedicated per-client transport supervisor through the checked
+  ExMCP patch. Nine loopback lifecycle cases pass, including stateless HTTP,
+  rejected GET and rejection of a dead supplied supervisor. The affected
+  conformance, SSE recovery and Everything lanes pass. A clean clone with the
+  candidate files completes `bin/setup`, including dev/test patched dependency
+  compilation, asset build and isolated migrations; both prior patch upgrades pass.
+  All five root gates pass: 5,002 tests, zero failures, 274 excluded, seed 614684.
+  This does not complete activation ownership, startup cancellation, the final
+  submission fence or the shared cleanup deadline. Evidence is tracked in the
+  [transport labnote](../20261108-1419-mcp-transport-ownership.md).
