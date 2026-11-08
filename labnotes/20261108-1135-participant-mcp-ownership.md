@@ -92,3 +92,16 @@ The user has requested commit/push of repository changes and progress notificati
 - Only specification-review boxes are complete in the new milestone. Runtime
   tests, browser checks, benchmarks and deployments were not run for this
   documentation-only checkpoint and are not claimed by review approval.
+
+## Subsequent scope clarification
+
+The user subsequently requested periodic tenant catalog maintenance through a
+standard durable queue, with `refresh_scheduled_at`/`refreshed_at` and application
+configuration rather than environment variables. They confirmed that scheduling
+within the last 30 minutes suppresses another enqueue; stale catalogs become
+candidates again after that window. The milestone/design now include this work.
+The previous embedded-refresher redesign is a separate follow-up; saved tenant
+maintenance uses the queue. Fresh owner PID/reference examples and the plain
+meaning of activation shutdown clarify the existing session contract. See the
+[amendment labnote](20261108-1237-queued-catalog-refresh.md) for research and the
+new review; the original approval above does not cover the amendment by itself.

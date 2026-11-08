@@ -1,9 +1,12 @@
 # Participant-owned outbound MCP sessions
 
-Status: researched proposal, 2026-11-08; runtime implementation has not changed.
+Status: researched proposal, updated 2026-11-08; runtime implementation has not changed.
 The user requested a milestone for moving agent-used MCP connections into the
 participant's call tree. The [implementation milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md)
 tracks that work separately from the integrations-directory workflow approval.
+The user's follow-up adds persistent tenant catalog maintenance through a standard
+background job queue, with application-configured expiry and a confirmed 30-minute
+duplicate-scheduling window.
 
 ## Decision and boundary
 
@@ -81,9 +84,10 @@ or a call to `disconnect/1` in best-effort termination.
 
 1. **Separate authority from session identity.** Keep the tenant/application,
    integration and credential-generation key for authorization/revocation.
-   Add a private owner/session identity tied to the room incarnation,
-   participant, activation and a fresh runtime incarnation. The latter changes
-   even if OTP rebuilds children under the same logical activation ID.
+   Use a fresh session-owner PID/reference for each live activation instance;
+   keep room/participant/activation IDs as authority and diagnostic context.
+   The owner identity changes even if OTP rebuilds children under the same
+   logical activation ID. No additional compound identity framework is required.
    Connection lookup, close, readiness and returned handles must distinguish
    sessions by that identity. Never append an activation string to the tenant
    or credential generation to simulate a separate authority domain.
@@ -111,7 +115,17 @@ or a call to `disconnect/1` in best-effort termination.
    a submitted tool call. Failure of A does not retire B's session in another
    activation. Do not add a second unbounded restart loop around ExMCP reconnect.
 
+For example, tenant A's saved connection 42 and its cached catalog can serve
+call 1 through owner P1 and call 2 through owner P2. Restarting call 1's agent
+creates owner P3. A late close/result addressed to P1 cannot resolve to P3.
+These are local process identities, not database connection IDs or the remote
+server's optional MCP session ID. Tenant and credential-generation checks remain.
+
 ## Retirement and external effects
+
+Here, **retirement means stopping an agent activation and releasing its resources**:
+on hangup, after a successful transfer, or before replacing a failed activation.
+It does not delete the tenant's saved connection, credentials or catalog.
 
 Retirement first fences new tool submissions and readiness. The submission fence
 must cover the effective transport boundary, including requests already queued
@@ -193,17 +207,18 @@ not that the entire application becomes silent when one call ends.
 ## Discovery, compatibility and capacity
 
 Saved catalog reads remain metadata-only. Management checks, OAuth discovery and
-the optional embedded catalog refresher use independently bounded operation
-subtrees, with caller/deadline cancellation, and release their clients on success
-as well as failure. They neither lend sessions to calls nor consume a call's
-remote session state. Registries and catalog snapshots can outlive operations.
-The refresher currently starts `async_nolink` work under a sibling root task
-supervisor and cancels from `terminate/2`; moving only CatalogLoader's client
-under that task would not tie the task to a hard-killed refresher. Give each job
-the refresher incarnation's lifetime and fence publication by that incarnation
-at the catalog commit boundary. A held source/discovery result released after
-refresher death/restart must neither open another session nor publish stale state.
-This is a source-observed planning risk, not a newly reproduced runtime defect.
+background catalog jobs use independently bounded operation subtrees, with
+caller/job cancellation and deadlines. They release clients on success and
+failure, never lend them to calls, and never consume a call's remote session state.
+Registries and database catalog snapshots can outlive operations. A catalog job
+may run with no calls active; ending a call does not cancel that independent job.
+
+The older optional embedded `CatalogRefresher` reads application configuration,
+not saved tenant database rows. Its `async_nolink` ownership/publication concern
+remains recorded in the original research; it is not the scheduler selected for
+saved tenant maintenance. Adapt embedded session ownership only as necessary for
+the changed client API. Broader embedded refresher recovery/publication work is
+a separate follow-up, not a prerequisite for the queue described below.
 
 Migrate every shipped consumer of the current global `Connections.open/2` path.
 The library should expose explicit owner-supervisor/session construction for
@@ -216,8 +231,8 @@ old/new runtimes cannot promise this ownership guarantee for calls on old nodes;
 rollout evidence must identify the running revision and drain old sessions.
 
 Connect only the finite set of selected integrations, deduplicated once per
-activation. Initially use sequential opens under one absolute activation/readiness
-deadline (and a transfer's existing total budget), with no unbounded queue or
+activation. Use one absolute activation/readiness deadline (and a transfer's
+existing total budget), with no unbounded queue or
 per-client reset of that deadline. Preserve existing tool/admission bounds.
 Measure session/worker counts and handshake/teardown latency at a declared call
 concurrency; do not claim unlimited provider capacity. Provider session-limit
@@ -231,6 +246,167 @@ rejects that missing owner. This milestone changes ownership for supported MCP
 execution; it does not silently claim new native STS MCP support. Keep that
 unsupported combination explicit and regression-tested. Any later STS MCP
 feature must use the same participant-lifetime contract.
+
+## Persistent tenant catalog maintenance
+
+The cached catalog contains the complete discovered tool descriptors, including
+names, descriptions and schemas, for one **tenant-owned saved connection**.
+Two tenants using the same endpoint must retain separate snapshots: upstream
+authorization can expose different tools. Pin the snapshot to the connection's
+configuration/credential generation. Never share it merely by endpoint/directory
+entry or treat cached tools as a substitute for current request authorization.
+
+The current [connection schema](../../apps/vxpipe_persistence/lib/vxpipe/persistence/schema/mcp_connection.ex)
+already stores the catalog. Static connection setup discovers it during save;
+[OAuth completion](../../apps/vxpipe_console/lib/vxpipe/console/mcp_oauth_completion.ex)
+discovers it after the user's successful authorization and token exchange,
+including the DCR/CIMD paths. Preserve this initial readiness check. Manual
+`refresh_tools` also exists. This milestone adds durable scheduling and freshness
+timestamps, not a second catalog database or a new consent workflow.
+
+### Queue and application ownership
+
+Select **Oban with the existing PostgreSQL Repo** for the Sidekiq-style job model.
+Use its periodic scheduling to enqueue a sweep job; the sweep enqueues one job
+per due tenant connection. Use its ordinary retries, finite worker timeouts,
+orphan recovery and job pruning. No Redis service, paid extension, custom queue
+engine or one permanent timer/client per saved connection is required.
+
+`vxpipe_persistence` owns the Oban dependency, migrations, supervision after Repo,
+transactional enqueue adapter and thin workers. Workers invoke a trusted Calls
+catalog-maintenance workflow through repository/protocol ports. Calls remains
+database/queue-library independent; `vxpipe_mcp` owns bounded protocol operations.
+Do not add a Persistence-to-Console dependency or fabricate a browser principal.
+Extract any reusable headless discovery/credential adapter currently placed in
+Console to its owning lower application, retaining existing management behavior.
+Start jobs only in configured persistence hosts; standalone Call Engine/MCP
+embedding still works without PostgreSQL or Oban.
+
+Read application configuration for catalog expiry, sweep cadence, batch size,
+queue concurrency and worker timeout. **Do not add environment variables.** A
+proposed starting policy is a one-hour expiry, one-minute sweep and batches of
+100, with four refresh jobs per node and a finite operation timeout. The expiry
+is deliberately adjustable, and the confirmed rescheduling window is 30 minutes.
+For example, the planned domain policy can be expressed as:
+
+```elixir
+config :vxpipe_calls, :mcp_catalog_refresh,
+  expiry_seconds: 3_600,
+  reschedule_after_seconds: 1_800
+```
+
+Queue/cron settings belong in the persistence host's Oban application configuration.
+Validate positive bounds. Per-node queue concurrency is not a cluster-wide limit.
+Use bounded indexed batches rather than scanning/decrypting every tenant record
+on every sweep; the sweep needs metadata only. Exclude connections with incomplete
+matching jobs before applying the batch limit, or use bounded keyset progress so
+those rows cannot occupy every sweep's first batch and starve later connections.
+Keep scheduling and network work off call startup and the audio path.
+
+### Timestamp and scheduling contract
+
+Add nullable UTC timestamps with microsecond precision to each saved connection:
+
+| Field | Meaning and writes |
+| --- | --- |
+| `refresh_scheduled_at` | Time the latest background refresh job was durably enqueued. Update only in the same transaction as insertion of a new job; not when a sweep merely sees the row, a duplicate is suppressed, or an existing job retries. |
+| `refreshed_at` | Time the latest complete validated catalog was successfully committed. Set alongside the initial saved catalog and each accepted automatic/manual refresh, even when the catalog is unchanged or validly empty. Failure never advances it. |
+
+Use database time for persisted comparisons. General `updated_at`, OAuth token
+renewal and encryption-key rotation do not establish catalog freshness. Existing
+records with unknown catalog age retain their catalog and start with null
+`refreshed_at`, making them eligible for a bounded first sweep; do not invent
+historical freshness from a migration's execution time.
+
+The user confirmed this eligibility rule, including the direction of the
+30-minute comparison:
+
+```text
+connected
+AND (refreshed_at IS NULL OR refreshed_at <= now - configured_expiry)
+AND (refresh_scheduled_at IS NULL OR refresh_scheduled_at <= now - 30 minutes)
+```
+
+Thus a stale catalog scheduled five minutes ago is skipped; the same stale
+catalog becomes a candidate after 30 minutes. A fresh catalog is always skipped.
+The timestamps control periodic enqueue eligibility, not remote authorization
+or an exactly-once execution guarantee.
+
+For each candidate, briefly lock/recheck the row and enqueue the job plus update
+`refresh_scheduled_at` in **one Repo transaction**. An enqueue/transaction failure
+must leave neither a committed scheduling timestamp nor a committed job. Multiple
+sweepers must converge on one scheduling decision. Use Oban uniqueness keyed by
+tenant, connection and connection generation as a secondary guard; timestamp
+checking outside a transaction is insufficient. Use ordinary unique insertion
+inside the bounded batch, not a bulk insert that bypasses uniqueness. Oban may
+return `{:ok, job}` for a uniqueness conflict: advance the timestamp only for an
+actual insertion (`conflict? == false`). Match available, scheduled, executing
+and retryable jobs (or the selected version's incomplete-state equivalent), not
+completed history.
+
+Before inserting a replacement after 30 minutes, check whether a matching job
+is still queued, running or retryable. Keep/recover that job instead of adding
+a duplicate due to queue delay; do not advance the timestamp on that no-op.
+Oban's configured orphan recovery handles abandoned executing jobs. Choose a
+rescue age above the finite worker timeout and below the 30-minute recovery
+window. Missing, cancelled or discarded jobs allow a new scheduling decision
+once the row is eligible. Configure bounded attempts/backoff and monitor repeated
+failures; no permanently stuck job may suppress refresh forever.
+
+### Refresh execution and failure behavior
+
+Job arguments contain only tenant/connection IDs, connection generation and
+the committed scheduling timestamp. Resolve current credentials when the job
+executes; do not serialize tokens, headers, secrets or whole connection records
+into the queue. OAuth token renewal reuses existing grant coordination.
+
+At execution, recheck connection status/generation, scheduling stamp and catalog
+freshness; obsolete jobs finish without network work. Open a job-owned temporary
+MCP session, initialize, fetch every catalog page within the existing deadline
+and response limits, validate, then close all protocol resources on completion,
+timeout or job cancellation. Do not hold a database transaction during network I/O.
+
+Commit the catalog and `refreshed_at` together only if the connection is still
+connected, its generation/scheduling stamp still match, and `refreshed_at` exactly
+matches the value observed before discovery, using a NULL-safe comparison. Every
+accepted publication must change that value: use database time, advancing at least
+one microsecond beyond the prior value if the clock is equal or moves backwards.
+This makes the existing freshness field a reliable publication guard without a
+separate version framework. It also prevents an old queued result from replacing
+a newer manual refresh, including under a fixed clock. Manual refresh remains
+an immediate authorized operation and uses the same conditional publication
+contract; successful initial/manual refresh does not pretend a job was scheduled.
+Replacement/reconnect publishes its newly discovered catalog and clears obsolete
+scheduling state. Disconnected/deleted connections are never revived by late jobs.
+
+Queue delivery/rescue can repeat a discovery attempt. Treat discovery as read-only
+and publication as conditional/idempotent; do not claim exactly-once execution.
+Successful no-change discovery still updates freshness. Transient failure keeps
+the last complete snapshot and old `refreshed_at`; partial discovery must never
+replace it with an empty or incomplete list. Authorization failure uses existing
+fail-closed behavior, with a redacted job outcome and no credential fallback.
+Use existing job error/attempt data rather than adding a new failure-history system.
+
+Newly discovered tools never expand a published agent's explicit selection or
+rewrite a running call's pinned schema. Catalog caching removes per-call tool
+discovery; it does not remove per-activation MCP initialization. A queue backlog
+must not stop call startup solely because a refresh job is pending; existing
+generation and current-authority checks still apply.
+
+### Library research and scope
+
+Official Oban documentation inspected on 2026-11-08 describes
+[transactional insertion](https://hexdocs.pm/oban/Oban.html#insert/5),
+[periodic scheduling](https://oban.hexdocs.pm/Oban.Cron.html),
+[worker timeouts/retries](https://hexdocs.pm/oban/Oban.Worker.html),
+[uniqueness](https://hexdocs.pm/oban/unique_jobs.html) and
+[orphan recovery](https://oban.hexdocs.pm/Oban.Lifeline.html).
+Uniqueness concerns insertion, not exactly-once execution; time-based orphan
+recovery can duplicate an attempt. The transactional row check and conditional
+publication are project-owned safeguards. The inspected docs report Oban 2.24.2
+and use `Oban.Cron`; the old `Oban.Plugins.Cron` entry is deprecated. Verify and
+pin a compatible maintained version during implementation, with its migrations
+and lockfile. No Oban dependency or migration is added by this planning change.
 
 ## Alternatives and implications
 
