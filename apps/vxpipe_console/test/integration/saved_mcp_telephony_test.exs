@@ -15,6 +15,9 @@ defmodule Vxpipe.Console.SavedMCPTelephonyTest do
     test "saved MCP tools execute through #{label} phone admission", c do
       published = Phone.publish(c, c.direction)
       active = apply(Phone, c.direction, [c, published])
+      connection = owned_mcp(c, active.call)
+      client = Vxpipe.MCP.Connection.client(connection)
+      monitor = Process.monitor(client)
       {provider, request} = Phone.model_input(c, active, 0, "Find customer-42.")
       assert Enum.map(request.tools, & &1.name) == ["records__lookup_customer"]
       reply_tool(provider, "phone-first", "customer-42")
@@ -50,6 +53,7 @@ defmodule Vxpipe.Console.SavedMCPTelephonyTest do
       assert current.state == :running
       assert current.incarnation_id == active.call.incarnation_id
       Phone.close(c, active)
+      assert_receive {:DOWN, ^monitor, :process, ^client, _reason}, 1_000
       refute_received {:remote_mcp_wire_request, "tools/call", _, _}
     end
   end

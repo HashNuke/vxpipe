@@ -44,7 +44,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
              is_integer(deadline_ms) do
     case participant.kind do
       :agent ->
-        prepare_agent(request, runtime, participant, first_activation?, initial_messages)
+        prepare_agent(
+          request,
+          runtime,
+          participant,
+          first_activation?,
+          initial_messages,
+          deadline_ms
+        )
 
       :human ->
         HumanDestinationPreparer.prepare(
@@ -57,8 +64,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
     end
   end
 
-  defp prepare_agent(request, runtime, participant, first_activation?, initial_messages) do
-    case agent_destination(request, runtime, participant, initial_messages) do
+  defp prepare_agent(
+         request,
+         runtime,
+         participant,
+         first_activation?,
+         initial_messages,
+         deadline_ms
+       ) do
+    case agent_destination(request, runtime, participant, initial_messages, deadline_ms) do
       {:ok, %AgentDestination{} = destination} ->
         prepare_participant(request, runtime, destination, first_activation?)
 
@@ -87,11 +101,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.DestinationPrepare
     end
   end
 
-  defp agent_destination(request, runtime, participant, initial_messages) do
+  defp agent_destination(request, runtime, participant, initial_messages, deadline_ms) do
     options =
       runtime.startup_options
       |> Keyword.put(:initial_messages, initial_messages)
       |> Keyword.put(:transfer_reason, request.reason)
+      |> Keyword.put(:mcp_initialization_deadline, deadline_ms)
 
     PlanStartup.agent_destination(
       runtime.plan,

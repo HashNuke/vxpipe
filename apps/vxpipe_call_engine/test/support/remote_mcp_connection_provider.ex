@@ -10,6 +10,7 @@ defmodule Vxpipe.CallEngine.TestRemoteMCPConnectionProvider do
   end
 
   def open(key, config, options) do
+    send(Keyword.fetch!(config, :test_observer), {:test_remote_mcp_open_options, key, options})
     announce(config, key)
 
     options =
@@ -23,7 +24,13 @@ defmodule Vxpipe.CallEngine.TestRemoteMCPConnectionProvider do
       limits: Keyword.get(config, :limits, [])
     ]
 
-    Connections.open(key, client_config, options)
+    if Keyword.get(config, :test_fail_open, false) do
+      children = DynamicSupervisor.which_children(Keyword.fetch!(options, :owner))
+      send(Keyword.fetch!(config, :test_observer), {:test_mcp_partial_children, children})
+      {:error, :fixture_failure}
+    else
+      Connections.open(key, client_config, options)
+    end
   end
 
   defp announce(config, key) do

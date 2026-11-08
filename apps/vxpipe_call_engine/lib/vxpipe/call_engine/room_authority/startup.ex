@@ -21,6 +21,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Runtime,
     as: ParticipantTransferRuntime
 
+  def mcp_initialization_budget(authority, activation_id, preparer, deadline) do
+    GenServer.call(
+      authority,
+      {:mcp_initialization_budget, activation_id, preparer, deadline},
+      1_000
+    )
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  def mcp_budget(state, activation, preparer, deadline) do
+    case state do
+      %{startup_ready?: true, text_capability: %{activation_id: ^activation}} ->
+        {:ok, System.monotonic_time(:millisecond) + 5_000, nil}
+
+      _preparing ->
+        {:ok, deadline, preparer}
+    end
+  end
+
   @spec start_entries(CreateRoom.t() | ResolvedCallPlan.t(), keyword(), State.t()) ::
           {:ok, State.t()} | {:error, :agent_start_failed | :entry_start_failed}
   def start_entries(%CreateRoom{agent: nil}, _options, %State{} = state), do: {:ok, state}
@@ -56,9 +76,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
 
   def start_entries(%ResolvedCallPlan{} = plan, options, %State{} = state) do
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+    deadline = CallLifecycle.readiness_deadline(state.call_lifecycle)
 
     startup_options = [
       owner: self(),
+      mcp_initialization_deadline: deadline,
       call_variables: CallVariables.whereis(state.snapshot.incarnation_id),
       incarnation_id: state.snapshot.incarnation_id,
       agent_runtime:
@@ -93,7 +115,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
          {:ok, state} <- start_human_receiver(entries, state) do
       runtime = %ParticipantTransferRuntime{plan: plan, startup_options: startup_options}
       incarnation = state.snapshot.incarnation_id
-      deadline = CallLifecycle.readiness_deadline(state.call_lifecycle)
 
       task =
         Task.Supervisor.async(Vxpipe.CallEngine.ReadinessTaskSupervisor, fn ->

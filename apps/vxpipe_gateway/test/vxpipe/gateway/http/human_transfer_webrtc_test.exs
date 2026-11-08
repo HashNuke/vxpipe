@@ -1436,7 +1436,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
       send(provider, {:test_agent_runtime_response, {:ok, response}})
-      assert_receive {:test_remote_mcp_initializing, remote_owner}, 2_000
+      assert_receive {:test_remote_mcp_initializing, initializer}, 2_000
+      assert_receive {:test_remote_mcp_open_options, _key, mcp_options}, 2_000
+
+      [{:agent_activation, destination_activation, :remote_mcp_sessions}] =
+        Registry.keys(CallEngine.RoomRegistry, Keyword.fetch!(mcp_options, :owner))
+
       assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
       assert {:ok, acknowledgement} = ModelResponse.new(text: "Late source acknowledgement.")
       send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
@@ -1450,8 +1455,14 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       refute_receive {:test_tts_transport_started, _destination, _}, 0
       refute_receive {:test_tts_control, ^source_tts, _late_speech}, 0
       assert Agent.get(remote_client, & &1.invocations) == []
-      send(remote_owner, :test_remote_mcp_initialized)
+      send(initializer, :test_remote_mcp_initialized)
       assert_receive {:test_tts_transport_started, destination_tts, _}, 2_000
+
+      remote_owner =
+        CallEngine.AgentActivationSupervisor.whereis_child(
+          destination_activation,
+          :remote_mcp_owner
+        )
 
       assert {:ok, remote_resource, :ready} =
                CallEngine.RemoteMCP.IntegrationOwner.readiness(remote_owner)

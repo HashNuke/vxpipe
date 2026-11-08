@@ -92,6 +92,8 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
       owner_options = [
         activation_id: activation_id,
         session_supervisor: sessions,
+        lifecycle_owner: Keyword.fetch!(options, :owner),
+        initialization: Keyword.get(options, :mcp_initialization),
         participant_id: Keyword.fetch!(options, :agent_participant_id),
         tools: Keyword.fetch!(options, :tools),
         integrations: integrations,

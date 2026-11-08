@@ -3,9 +3,10 @@
 Status: implementation in progress, updated 2026-11-08. Standalone session
 ownership and bounded lifecycle (T1) are complete: exact handle retirement,
 owned transport workers, explicit host scoping, bounded startup/reuse and observed
-TLS POST/GET socket cleanup. Participant placement has begun; its shared startup
-deadlines, call-owned renewal cancellation, queued catalogs and full call/transfer
-acceptance remain pending.
+TLS POST/GET socket cleanup. Participant placement now includes shared startup
+deadlines, cancellation, partial rollback and source retirement after transfer.
+Call-owned renewal cancellation, queued catalogs and the remaining acceptance
+matrix are still pending.
 The user requested a milestone for moving agent-used MCP connections into the
 participant's call tree. The [implementation milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md)
 tracks that work separately from the integrations-directory workflow approval.
@@ -245,16 +246,36 @@ not close its actual owner's session. Standalone hosts must supply and supervise
 their own session supervisor; catalog loading remains on its transitional API
 until the management migration in T3.
 
-Loopback tests cover separate clients for equal tenant grants, one activation's
-stop and recovery leaving another usable, and rejection of foreign ownership.
-Existing tool-loop, pinned-alias and saved-connection tests exercise the migrated
-provider boundary. This establishes structural placement, not completion of T2:
-original preparation-caller cancellation, partial rollback for standalone hosts,
-safe embedded restart descriptors and one initial/transfer readiness budget still
-need their acceptance evidence. Recovery must acquire a new bounded budget only
-after that activation's authoritative commit; a ready call alone does not grant
-that permission to an uncommitted transfer destination. Explicit activation-wide
-graceful retirement remains part of T4.
+Startup and transfer preparation pass their original absolute deadline and
+preparation PID to the binding owner. Bounded linked tasks perform the authority
+query and connection work; the owner watches the room/preparer and stops each
+helper before publishing readiness. Linking these short-lived helpers directly
+avoids waiting for admission to another task supervisor. The existing room
+authority grants a fresh five-second recovery budget only to its currently
+committed activation; an uncommitted destination keeps its original budget.
+
+Failed or cancelled startup stops opening work, then rolls back selected keys
+under the exact session-owner PID. `Connections.close_owned/3` snapshots both
+current integrations and their remaining transport registrations, so it can
+finish cleanup without relying on handles lost with the opening task. It shares
+one grace deadline capped at 1,000 ms and the remaining startup budget. This is
+an owner-controlled startup operation; delayed incarnation cleanup still uses
+exact handles through `close_all/2`.
+
+Normal binding-owner termination uses the existing batch close for best-effort
+protocol DELETE. Structural session ownership remains the fallback on hard death.
+After transfer commit, the existing per-room transfer task supervisor performs
+source termination against the exact participant-supervisor PID. This keeps room
+input and hangup responsive during a held DELETE. Unavailable task admission
+forces that exact participant down; room teardown includes both task and
+participant trees.
+
+Loopback acceptance covers same-grant calls, held POST/GET peer closure on hangup
+and forced room-authority death, destination timeout with a usable source,
+successful transfer/re-entry and stale-handle rejection. Saved WebRTC calls and
+phone lanes exercise the same placement. Safe embedded restart descriptors,
+root-owned renewal cancellation and the remaining full-milestone acceptance
+requirements are still open. See the milestone for checkpoint gate evidence.
 
 ## Retirement and external effects
 

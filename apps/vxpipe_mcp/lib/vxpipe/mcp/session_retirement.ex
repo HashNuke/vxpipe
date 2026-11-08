@@ -24,6 +24,22 @@ defmodule Vxpipe.MCP.SessionRetirement do
     report_close(descriptions, requested, opts, started_at)
   end
 
+  def close_owned(keys, parent, opts) do
+    started_at = Telemetry.started_at()
+
+    descriptions =
+      keys
+      |> Enum.uniq()
+      |> Enum.flat_map(fn key ->
+        key
+        |> ConnectionNames.owned_sessions(parent)
+        |> Enum.flat_map(&describe_owner(key, parent, &1, :any))
+      end)
+
+    requested = Enum.map(descriptions, &{&1.integration, &1.client})
+    report_close(descriptions, requested, opts, started_at)
+  end
+
   defp report_close(descriptions, requested, opts, started_at) do
     result = retire(descriptions, opts)
     by_integration = Map.new(descriptions, &{&1.integration, &1.client})

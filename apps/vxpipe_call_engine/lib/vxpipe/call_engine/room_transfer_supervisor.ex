@@ -95,6 +95,25 @@ defmodule Vxpipe.CallEngine.RoomTransferSupervisor do
     Task.Supervisor.async(via(incarnation_id), work)
   end
 
+  def retire_participant(incarnation_id, participant) when is_pid(participant) do
+    case Task.Supervisor.start_child(via(incarnation_id), fn ->
+           Vxpipe.CallEngine.RoomParticipantSupervisor.stop_participant(
+             incarnation_id,
+             participant
+           )
+         end) do
+      {:ok, _task} -> :ok
+      {:error, _unavailable} -> force_retirement(participant)
+    end
+  catch
+    :exit, _reason -> force_retirement(participant)
+  end
+
+  defp force_retirement(participant) do
+    Process.exit(participant, :kill)
+    :ok
+  end
+
   def recover(pending, %Runtime{} = runtime, restore_speech?) when is_boolean(restore_speech?) do
     deadline =
       System.monotonic_time(:millisecond) + @recovery_timeout_ms

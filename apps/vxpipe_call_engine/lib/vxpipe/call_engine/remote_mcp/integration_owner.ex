@@ -67,11 +67,15 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
 
   @impl true
   def init(options) do
+    Process.flag(:trap_exit, true)
+
     with {:ok, options} <-
            Keyword.validate(options, [
              :activation_id,
              :connection_provider,
+             :initialization,
              :integrations,
+             :lifecycle_owner,
              :name,
              :participant_id,
              :protocol,
@@ -96,8 +100,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
          true <- Code.ensure_loaded?(protocol) and function_exported?(protocol, :call_tool, 4),
          {:ok, prepared} <- prepare(tools, integrations),
          :ok <- acquire_credential_leases(prepared),
-         {:ok, connections} <- open_connections(prepared, connection_provider, session_supervisor),
-         {:ok, connection_monitors} <- monitor_connections(connections),
+         {:ok, connections, connection_monitors} <-
+           initialize_connections(prepared, connection_provider, session_supervisor, options),
          bindings <- runtime_bindings(prepared, connections, protocol) do
       {:ok,
        %__MODULE__{
@@ -143,6 +147,17 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
 
   def handle_info(_message, state), do: {:noreply, state}
 
+  @impl true
+  def terminate(_reason, %__MODULE__{bindings: bindings}) do
+    # Graceful protocol cleanup is best effort. The activation-owned session
+    # subtree still removes all clients/workers when this process is killed.
+    bindings
+    |> Map.values()
+    |> Enum.map(& &1.connection)
+    |> Enum.uniq()
+    |> Connections.close_all()
+  end
+
   defp binding(owner, local_name) do
     GenServer.call(owner, {:binding, local_name}, @binding_timeout_ms)
   end
@@ -168,7 +183,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
 
   defp prepare(tools, integrations) do
     Enum.reduce_while(tools, {:ok, []}, fn
-      {name, %ToolBinding{name: name, type: :host}}, {:ok, prepared} ->
+      {name, %ToolBinding{name: name, type: type}}, {:ok, prepared}
+      when type in [:host, :participant_transfer, :platform] ->
         {:cont, {:ok, prepared}}
 
       {name, %ToolBinding{name: name, type: :mcp, remote: remote}}, {:ok, prepared} ->
@@ -202,14 +218,120 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
     )
   end
 
-  defp open_connections(prepared, connection_provider, session_supervisor) do
+  defp initialize_connections(prepared, provider, sessions, options) do
+    owner = Keyword.get(options, :lifecycle_owner)
+
+    with {:ok, deadline, preparer} <- initialization_budget(options),
+         true <- deadline > System.monotonic_time(:millisecond),
+         owners <- Enum.uniq(Enum.filter([owner, preparer], &is_pid/1)),
+         true <- Enum.all?(owners, &Process.alive?/1) do
+      run_initialization(prepared, provider, sessions, deadline, owners)
+    else
+      _unavailable -> {:error, :invalid_configuration}
+    end
+  end
+
+  defp initialization_budget(options) do
+    case Keyword.get(options, :initialization) do
+      nil ->
+        {:ok, System.monotonic_time(:millisecond) + 5_000, nil}
+
+      {preparer, deadline} when is_pid(preparer) and is_integer(deadline) ->
+        owner = Keyword.fetch!(options, :lifecycle_owner)
+        preparing? = Process.alive?(preparer)
+        admission_deadline = System.monotonic_time(:millisecond) + 1_000
+
+        admission_deadline =
+          if preparing?, do: min(deadline, admission_deadline), else: admission_deadline
+
+        owners = if preparing?, do: [owner, preparer], else: [owner]
+
+        work = fn ->
+          Vxpipe.CallEngine.RoomAuthority.Startup.mcp_initialization_budget(
+            owner,
+            Keyword.fetch!(options, :activation_id),
+            preparer,
+            deadline
+          )
+        end
+
+        initialization_task(work, admission_deadline, Enum.uniq(owners))
+
+      _invalid ->
+        {:error, :invalid_configuration}
+    end
+  end
+
+  defp run_initialization(prepared, provider, sessions, deadline, owners) do
+    result =
+      initialization_task(
+        fn -> open_connections(prepared, provider, sessions, deadline) end,
+        deadline,
+        owners
+      )
+
+    with {:ok, connections} <- result,
+         {:ok, connection_monitors} <- monitor_connections(connections) do
+      {:ok, connections, connection_monitors}
+    else
+      _failure ->
+        keys = Enum.map(prepared, & &1.key)
+        cleanup_deadline = min(deadline, System.monotonic_time(:millisecond) + 1_000)
+        _ = Connections.close_owned(keys, sessions, deadline: cleanup_deadline)
+        {:error, :invalid_configuration}
+    end
+  end
+
+  defp initialization_task(work, deadline, owners) do
+    monitors = Map.new(owners, &{Process.monitor(&1), &1})
+
+    task =
+      Task.async(fn ->
+        if System.monotonic_time(:millisecond) < deadline and Enum.all?(owners, &Process.alive?/1),
+          do: work.(),
+          else: {:error, :invalid_configuration}
+      end)
+
+    result =
+      try do
+        await_initialization(task, monitors, deadline)
+      after
+        Enum.each(monitors, fn {reference, _owner} -> Process.demonitor(reference, [:flush]) end)
+        _ = Task.shutdown(task, :brutal_kill)
+      end
+
+    if System.monotonic_time(:millisecond) < deadline and Enum.all?(owners, &Process.alive?/1) do
+      result
+    else
+      {:error, :invalid_configuration}
+    end
+  end
+
+  defp await_initialization(%Task{ref: reference}, monitors, deadline) do
+    receive do
+      {^reference, result} ->
+        result
+
+      {:DOWN, ^reference, :process, _worker, _reason} ->
+        {:error, :invalid_configuration}
+
+      {:DOWN, owner_monitor, :process, _owner, _reason}
+      when is_map_key(monitors, owner_monitor) ->
+        {:error, :invalid_configuration}
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        {:error, :invalid_configuration}
+    end
+  end
+
+  defp open_connections(prepared, connection_provider, session_supervisor, deadline) do
     Enum.reduce_while(prepared, {:ok, %{}}, fn entry, {:ok, connections} ->
       case Map.fetch(connections, entry.key) do
         {:ok, _connection} ->
           {:cont, {:ok, connections}}
 
         :error ->
-          case open_connection(entry, connection_provider, session_supervisor) do
+          case open_connection(entry, connection_provider, session_supervisor, deadline) do
             {:ok, connection} ->
               {:cont, {:ok, Map.put(connections, entry.key, connection)}}
 
@@ -220,10 +342,13 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
     end)
   end
 
-  defp open_connection(entry, connection_provider, session_supervisor) do
+  defp open_connection(entry, connection_provider, session_supervisor, deadline) do
     config = connection_config(entry.integration)
 
-    case connection_provider.open(entry.key, config, owner: session_supervisor) do
+    case connection_provider.open(entry.key, config,
+           owner: session_supervisor,
+           deadline: deadline
+         ) do
       {:ok, %Connection{} = connection} ->
         if Connection.key(connection) == entry.key and
              Connections.owned_by?(connection, session_supervisor),

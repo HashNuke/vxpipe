@@ -1,7 +1,6 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.RoomParticipantSupervisor
   alias Vxpipe.CallEngine.RoomTransferSupervisor
   alias Vxpipe.CallEngine.Command.{AttachConnection, ParticipantTransferControl}
   alias Vxpipe.CallEngine.TextToSpeechRequest
@@ -305,7 +304,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer do
       {%{participant_id: participant_id, participant_supervisor: supervisor}, pending}
       when participant_id == context.agent_participant_id ->
         _ =
-          RoomParticipantSupervisor.stop_participant(
+          RoomTransferSupervisor.retire_participant(
             state.snapshot.incarnation_id,
             supervisor
           )

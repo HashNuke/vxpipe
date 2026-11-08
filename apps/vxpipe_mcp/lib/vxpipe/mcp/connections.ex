@@ -134,6 +134,18 @@ defmodule Vxpipe.MCP.Connections do
     SessionRetirement.close_all(connections, opts)
   end
 
+  @doc """
+  Rolls back selected keys in an exact owner after its opening work has stopped.
+
+  Unlike handle close, this snapshots current sessions, including unready ones.
+  Use only for the owner's startup rollback, never for a delayed incarnation close.
+  The entire batch shares one cleanup deadline.
+  """
+  @spec close_owned([ConnectionKey.t()], pid(), keyword()) :: close_result()
+  def close_owned(keys, owner, opts \\ []) when is_pid(owner) do
+    SessionRetirement.close_owned(keys, owner, opts)
+  end
+
   defp open_connection(key, config, opts, builder) do
     with {:ok, deadline} <- startup_deadline(opts),
          {:ok, context} <- owner_context(opts),

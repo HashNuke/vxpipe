@@ -129,6 +129,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
     )
     |> put_optional(:initial_messages, Keyword.get(options, :initial_messages))
     |> put_optional(:mcp_integrations, mcp_integrations)
+    |> put_optional(:mcp_initialization, initialization(options, mcp_integrations))
     |> put_optional(
       :remote_mcp_connection_provider,
       Keyword.get(options, :remote_mcp_connection_provider)
@@ -137,6 +138,15 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
       :remote_mcp_protocol_client,
       Keyword.get(options, :remote_mcp_protocol_client)
     )
+  end
+
+  defp initialization(_options, nil), do: nil
+
+  defp initialization(options, _integrations) do
+    case Keyword.get(options, :mcp_initialization_deadline) do
+      deadline when is_integer(deadline) -> {self(), deadline}
+      _none -> nil
+    end
   end
 
   defp tool_invocation_timeout(plan, receiver, settings) do

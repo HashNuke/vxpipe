@@ -155,7 +155,7 @@ room/database, with measured descendant and wire cleanup on success/failure.
 - [ ] Deduplicate compatible aliases within an activation, preserve schema/tool
   pins and per-invocation budgets, and reject conflicting effective policies.
   Native-only agents start no MCP subtree and perform no MCP storage lookup.
-- [ ] Open only selected integrations under one absolute readiness budget; fail
+- [x] Open only selected integrations under one absolute readiness budget; fail
   closed and clean every partial child/lease on cancellation, timeout or failure.
   Room authority remains responsive throughout initialization and cleanup.
 - [ ] Preserve existing activation restart/failure semantics with fresh runtime
@@ -254,7 +254,7 @@ remain open until the queue and persistence evidence exists.
 
 ### T4 — Transfers, complete call teardown and acceptance
 
-- [ ] Red-test source/destination overlap using the same integration: distinct
+- [x] Red-test source/destination overlap using the same integration: distinct
   sessions during preparation, destination ready before commit, source cleanup
   after commit, and failed/cancelled preparation cleans only the destination.
 - [ ] Prove re-entry uses the same participant identity with a fresh activation
@@ -471,3 +471,24 @@ The maintenance amendment is tracked in the
   All five root gates pass: 5,042 tests, zero failures, 323 excluded, seed 747278.
   Final staged review precedes commit. See the
   [composition labnote](../20261108-1818-participant-session-composition.md).
+
+- Call startup and transfers now preserve the original readiness deadline and
+  preparation lifetime; only an already committed activation receives a fresh
+  recovery budget. Partial failure/cancellation rolls back selected owner sessions,
+  including transport trees still draining after their integration exits. Normal
+  termination uses batch cleanup, and source retirement runs in the existing room
+  transfer supervisor so held DELETE cannot block room control. Focused Call Engine
+  checks pass 47 tests, seed 359346; the final live-call file passes 15, seed 159365,
+  including actual initial readiness expiry and forced binding-owner death.
+  The library rollback suite passes 17, seed 265230, and the combined saved WebRTC,
+  transfer, in-flight, boundary and phone lane passes 22, seed 323044. Four
+  independently reproduced Astra findings now pass their probes. The full umbrella
+  run (seed 217046) found only four Gateway handoff cases using the initializer
+  PID as the binding owner. Their test-only correction preserves the existing
+  privacy/wait assertions; all four pass on the same seed. No production code
+  changed after the full run. Root format, compile, strict Credo and unused-dependency
+  checks pass. This completes the T2 startup/rollback and T4 transfer-overlap items;
+  the other partial items remain unchecked. Final staged Astra review approves
+  the checkpoint with no outstanding findings.
+  See the
+  [call-lifetime labnote](../20261108-1842-call-mcp-lifetime.md).

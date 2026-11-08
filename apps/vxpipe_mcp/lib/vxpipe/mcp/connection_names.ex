@@ -51,6 +51,14 @@ defmodule Vxpipe.MCP.ConnectionNames do
     ])
   end
 
+  def owned_sessions(key, parent) do
+    Registry.select(@registry, [
+      {{{:owner, parent, key}, :"$1", :_}, [], [:"$1"]},
+      {{{:transport_workers, :"$1"}, :_, %{parent: parent, key: key}}, [], [:"$1"]}
+    ])
+    |> Enum.uniq()
+  end
+
   def count do
     @registry
     |> Registry.select([

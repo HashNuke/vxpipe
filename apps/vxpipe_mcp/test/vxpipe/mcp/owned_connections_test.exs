@@ -3,6 +3,88 @@ defmodule Vxpipe.MCP.OwnedConnectionsTest do
 
   alias Vxpipe.MCP.{Connection, ConnectionKey, Connections, ReadyClientRuntime}
 
+  @tag :capture_log
+  test "rollback waits for transport descendants after integration registration disappears" do
+    parent = owner(:draining_rollback)
+    key = key()
+    assert {:ok, connection} = open(parent, key)
+    integration = Connection.owner(connection)
+
+    transport =
+      GenServer.whereis(
+        {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {:transport_workers, integration}}}
+      )
+
+    observer = self()
+
+    spec =
+      Supervisor.child_spec(
+        {Task,
+         fn ->
+           Process.flag(:trap_exit, true)
+           send(observer, {:draining_child, self()})
+           receive do: (:release -> :ok)
+         end}, restart: :temporary, shutdown: 1_000)
+
+    assert {:ok, slow} = DynamicSupervisor.start_child(transport, spec)
+    assert_receive {:draining_child, ^slow}
+    transport_ref = Process.monitor(transport)
+    integration_ref = Process.monitor(integration)
+    Process.exit(integration, :kill)
+    assert_receive {:DOWN, ^integration_ref, :process, ^integration, :killed}
+
+    for {_, partition, _, _} <- Supervisor.which_children(Vxpipe.MCP.ConnectionRegistry),
+        do: :sys.get_state(partition)
+
+    assert Registry.lookup(Vxpipe.MCP.ConnectionRegistry, {:owner, parent, key}) == []
+
+    start_supervised!(
+      {Task, fn -> send(observer, {:rollback_done, Connections.close_owned([key], parent)}) end}
+    )
+
+    try do
+      refute_receive {:rollback_done, :ok}, 100
+    after
+      send(slow, :release)
+    end
+
+    assert_receive {:rollback_done, :ok}, 1_000
+    assert_receive {:DOWN, ^transport_ref, :process, ^transport, _reason}, 1_000
+  end
+
+  test "startup rollback closes selected keys in one exact owner without needing ready handles" do
+    first_owner = owner(:rollback_first)
+    second_owner = owner(:rollback_second)
+    selected = [key(), key()]
+    unrelated_key = key()
+
+    connections =
+      Enum.map(selected, fn key ->
+        assert {:ok, connection} = open(first_owner, key)
+        connection
+      end)
+
+    assert {:ok, independent} = open(second_owner, hd(selected))
+    assert {:ok, unrelated} = open(first_owner, unrelated_key)
+
+    clients =
+      Map.new(connections, fn connection ->
+        client = Connection.client(connection)
+        {client, Process.monitor(client)}
+      end)
+
+    assert :ok = Connections.close_owned(selected, first_owner)
+
+    for {client, monitor} <- clients do
+      assert_receive {:DOWN, ^monitor, :process, ^client, _reason}
+    end
+
+    for connection <- [independent, unrelated] do
+      assert {:ok, %{connection_status: :ready}} =
+               ReadyClientRuntime.status(Connection.client(connection))
+    end
+  end
+
   test "equal credentials in two owners create separate descendants and lifetimes" do
     first_owner = owner(:first)
     second_owner = owner(:second)

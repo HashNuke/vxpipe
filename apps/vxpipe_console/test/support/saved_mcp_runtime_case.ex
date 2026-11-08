@@ -403,6 +403,28 @@ defmodule Vxpipe.Console.Test.SavedMCPRuntimeCase do
     Connections.close(key)
   end
 
+  def owned_mcp(c, call) do
+    participant = Map.fetch!(call.plan.participants, "assistant")
+
+    host =
+      Vxpipe.CallEngine.AgentActivationSupervisor.whereis_child(
+        participant.activation_id,
+        :remote_mcp_sessions
+      )
+
+    {:ok, key} =
+      ConnectionKey.new(
+        scope: :tenant,
+        tenant_id: c.tenant,
+        integration_id: c.connection.id,
+        credential_generation: "1"
+      )
+
+    assert is_pid(host)
+    assert {:ok, connection} = Connections.lookup(key, owner: host)
+    connection
+  end
+
   def tool(name),
     do: %{
       "name" => name,

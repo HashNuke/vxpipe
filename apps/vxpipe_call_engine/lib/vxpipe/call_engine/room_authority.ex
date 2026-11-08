@@ -44,6 +44,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     ParticipantLifecycle,
     ReadinessBinding,
     State,
+    Startup,
     StartupReadiness,
     ToolCalls,
     UsageObservations
@@ -215,6 +216,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_call(:readiness_binding, _from, state),
     do: {:reply, ReadinessBinding.capture(state), state}
+
+  def handle_call({:mcp_initialization_budget, activation, preparer, deadline}, _from, state),
+    do: {:reply, Startup.mcp_budget(state, activation, preparer, deadline), state}
 
   def handle_call(:input_admission, _from, state) do
     admission =

@@ -9,6 +9,204 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     %{session_supervisor: RemoteMCPFixture.session_supervisor!()}
   end
 
+  test "waiting for the room budget respects the original startup deadline", %{
+    session_supervisor: sessions
+  } do
+    client = client!([])
+    {catalog, binding} = RemoteMCPFixture.binding!(client, self(), "private")
+    started = System.monotonic_time(:millisecond)
+
+    assert {:error, _reason} =
+             start_supervised(
+               {IntegrationOwner,
+                activation_id: "budget-wait",
+                session_supervisor: sessions,
+                lifecycle_owner: self(),
+                initialization: {self(), started + 100},
+                tools: %{"customer_lookup" => binding},
+                integrations: catalog,
+                connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+                protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+             )
+
+    assert System.monotonic_time(:millisecond) - started < 400
+    refute_received {:test_remote_mcp_opened, _, _}
+  end
+
+  test "preparer death interrupts waiting for the room budget", %{session_supervisor: sessions} do
+    client = client!([])
+    preparer = start_supervised!({Agent, fn -> :preparing end}, id: :budget_preparer)
+    {catalog, binding} = RemoteMCPFixture.binding!(client, self(), "private")
+
+    supervisor =
+      start_supervised!({DynamicSupervisor, name: unique_name(), strategy: :one_for_one})
+
+    tasks = start_supervised!({Task.Supervisor, name: unique_name()})
+    authority = self()
+
+    starter =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        DynamicSupervisor.start_child(
+          supervisor,
+          {IntegrationOwner,
+           activation_id: "budget-cancel",
+           session_supervisor: sessions,
+           lifecycle_owner: authority,
+           initialization: {preparer, System.monotonic_time(:millisecond) + 5_000},
+           tools: %{"customer_lookup" => binding},
+           integrations: catalog,
+           connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+           protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+        )
+      end)
+
+    assert_receive {:"$gen_call", _from, {:mcp_initialization_budget, _, ^preparer, _}}, 1_000
+    assert :ok = stop_supervised(:budget_preparer)
+    assert {:ok, {:error, _reason}} = Task.yield(starter, 400)
+    refute_received {:test_remote_mcp_opened, _, _}
+  end
+
+  test "caller cancellation rolls back an earlier session while the next provider is blocked", %{
+    session_supervisor: sessions
+  } do
+    client = client!([])
+    lifecycle = start_supervised!({Agent, fn -> :running end}, id: :startup_lifecycle)
+    {catalog, binding} = RemoteMCPFixture.binding!(client, self(), "private")
+    {:ok, good} = Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog.checkout(catalog, binding.remote)
+
+    held = %{
+      good
+      | integration_id: "held",
+        client_config: Keyword.put(good.client_config, :test_gate_initialization, true)
+    }
+
+    {:ok, catalog} =
+      Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog.new(
+        application: %{},
+        tenants: %{"tenant-demo" => %{"records" => good, "held" => held}}
+      )
+
+    {:ok, held_remote} =
+      Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog.resolve(
+        catalog,
+        "tenant-demo",
+        "held",
+        "lookup_customer"
+      )
+
+    bindings = %{
+      "a_held" => %{binding | name: "a_held", remote: held_remote},
+      "z_ready" => %{binding | name: "z_ready"}
+    }
+
+    supervisor =
+      start_supervised!({DynamicSupervisor, name: unique_name(), strategy: :one_for_one})
+
+    tasks = start_supervised!({Task.Supervisor, name: unique_name()})
+
+    starter =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        DynamicSupervisor.start_child(
+          supervisor,
+          {IntegrationOwner,
+           activation_id: "cancel-partial",
+           session_supervisor: sessions,
+           lifecycle_owner: lifecycle,
+           tools: bindings,
+           integrations: catalog,
+           connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+           protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+        )
+      end)
+
+    assert_receive {:test_remote_mcp_initializing, initializer}, 1_000
+    [{_, integration, :supervisor, _}] = DynamicSupervisor.which_children(sessions)
+    monitor = Process.monitor(integration)
+    on_exit(fn -> send(initializer, :test_remote_mcp_initialized) end)
+    assert :ok = stop_supervised(:startup_lifecycle)
+    assert {:error, _reason} = Task.await(starter, 2_000)
+    assert_receive {:DOWN, ^monitor, :process, ^integration, _reason}, 1_000
+    assert DynamicSupervisor.count_children(sessions).active == 0
+  end
+
+  test "a failed second integration rolls back the standalone host's partial startup", %{
+    session_supervisor: sessions
+  } do
+    client = client!([])
+    {catalog, binding} = RemoteMCPFixture.binding!(client, self(), "private")
+    {:ok, good} = Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog.checkout(catalog, binding.remote)
+
+    failed = %{
+      good
+      | integration_id: "failed",
+        client_config: Keyword.put(good.client_config, :test_fail_open, true)
+    }
+
+    {:ok, catalog} =
+      Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog.new(
+        application: %{},
+        tenants: %{"tenant-demo" => %{"records" => good, "failed" => failed}}
+      )
+
+    {:ok, failed_remote} =
+      Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog.resolve(
+        catalog,
+        "tenant-demo",
+        "failed",
+        "lookup_customer"
+      )
+
+    tools = %{
+      "a_failure" => %{binding | name: "a_failure", remote: failed_remote},
+      "z_success" => %{binding | name: "z_success"}
+    }
+
+    assert {:error, _reason} =
+             start_supervised(
+               {IntegrationOwner,
+                activation_id: "partial-startup",
+                session_supervisor: sessions,
+                tools: tools,
+                integrations: catalog,
+                connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+                protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+             )
+
+    assert_receive {:test_mcp_partial_children, [{_, integration, :supervisor, _}]}
+    monitor = Process.monitor(integration)
+    assert_receive {:DOWN, ^monitor, :process, ^integration, _reason}, 1_000
+    assert DynamicSupervisor.count_children(sessions).active == 0
+  end
+
+  for type <- [:participant_transfer, :platform] do
+    @binding_type type
+    test "allows the built-in #{@binding_type} tool beside pinned MCP bindings", %{
+      session_supervisor: sessions
+    } do
+      client = client!([])
+      {catalog, binding} = RemoteMCPFixture.binding!(client, self(), "private")
+
+      transfer = %Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding{
+        name: "transfer",
+        type: @binding_type,
+        conversation_mode: :non_blocking,
+        action: nil,
+        remote: nil
+      }
+
+      assert {:ok, _owner} =
+               start_supervised(
+                 {IntegrationOwner,
+                  activation_id: "mcp-with-transfer",
+                  session_supervisor: sessions,
+                  tools: %{"customer_lookup" => binding, "transfer" => transfer},
+                  integrations: catalog,
+                  connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+                  protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+               )
+    end
+  end
+
   test "withholds readiness until scoped connection initialization finishes without invoking tools",
        %{session_supervisor: sessions} do
     client = client!([])
@@ -45,7 +243,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
         )
       end)
 
-    assert_receive {:test_remote_mcp_initializing, owner}
+    assert_receive {:test_remote_mcp_initializing, initializer}
     observer = self()
 
     query =
@@ -56,8 +254,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
       end)
 
     refute_receive {:readiness_result, _result}
-    send(owner, :test_remote_mcp_initialized)
-    assert {:ok, ^owner} = Task.await(starter)
+    send(initializer, :test_remote_mcp_initialized)
+    assert {:ok, owner} = Task.await(starter)
     assert {:ok, resource, :ready} = Task.await(query)
     assert resource.instance == owner
     assert resource.scope == {:participant, "support-agent"}

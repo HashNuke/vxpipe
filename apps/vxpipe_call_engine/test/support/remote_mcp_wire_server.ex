@@ -13,6 +13,7 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
       headers: Keyword.get(options, :headers, []),
       hold_stream: Keyword.get(options, :hold_stream, false),
       hold_invocation: Keyword.get(options, :hold_invocation, false),
+      hold_initialization: Keyword.get(options, :hold_initialization, false),
       owner: owner,
       redirect_to: Keyword.get(options, :redirect_to),
       request_label: Keyword.get(options, :request_label),
@@ -54,10 +55,25 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
          {:ok, request} <- Jason.decode(body) do
       label = state.request_label || Map.get(request, "method")
       send(state.owner, {:remote_mcp_wire_request, label, authorization(conn), request})
+
+      send(
+        state.owner,
+        {:remote_mcp_wire_session_request, label, get_req_header(conn, "mcp-session-id")}
+      )
+
       respond(conn, request, state)
     else
       _invalid -> send_resp(conn, 400, "invalid request")
     end
+  end
+
+  def call(%{method: "DELETE"} = conn, state) do
+    send(state.owner, {:remote_mcp_wire_delete, get_req_header(conn, "mcp-session-id")})
+
+    if authorized?(conn, state.authorization) and
+         Enum.all?(state.headers, fn {name, value} -> get_req_header(conn, name) == [value] end),
+       do: send_resp(conn, 200, ""),
+       else: send_resp(conn, 401, "unauthorized")
   end
 
   defp hold_stream(conn, owner) do
@@ -95,11 +111,36 @@ defmodule Vxpipe.CallEngine.RemoteMCPWireServer do
       if state.hold_invocation and request["method"] == "tools/call" do
         hold_invocation(conn, request, state)
       else
-        protocol_response(conn, request, state.session_id)
+        session_id =
+          if request["method"] == "initialize" do
+            if state.hold_initialization, do: hold_initialization(state.owner)
+            value = "wire-session-#{System.unique_integer([:positive, :monotonic])}"
+            send(state.owner, {:remote_mcp_wire_initialized, value})
+            value
+          else
+            state.session_id
+          end
+
+        protocol_response(conn, request, session_id)
       end
     else
       send_resp(conn, 401, "unauthorized")
     end
+  end
+
+  defp hold_initialization(owner) do
+    reference = make_ref()
+    monitor = Process.monitor(owner)
+    send(owner, {:remote_mcp_wire_initialization_held, self(), reference})
+
+    receive do
+      {:release_remote_mcp_initialization, ^reference} -> :ok
+      {:DOWN, ^monitor, :process, ^owner, _reason} -> :ok
+    after
+      5_000 -> :ok
+    end
+
+    Process.demonitor(monitor, [:flush])
   end
 
   defp hold_invocation(conn, request, state) do

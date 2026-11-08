@@ -15,6 +15,32 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
   @header "synthetic-saved-runtime-header"
   @key "saved-runtime-keyring-marker-123"
 
+  test "two admitted saved web calls retain independent sessions across the first hangup", c do
+    configure_admission(c.options)
+    prepared = prepare_web_call(c, source(c.connection.id))
+    first = admit_web_call(c, prepared)
+    assert_receive {:remote_mcp_wire_initialized, first_session}, 2_000
+    second = admit_web_call(c, prepare_existing_web_call(c, prepared.create_path))
+    assert_receive {:remote_mcp_wire_initialized, second_session}, 2_000
+    refute first_session == second_session
+    first_connection = owned_mcp(c, first.call)
+    second_connection = owned_mcp(c, second.call)
+    refute first_connection == second_connection
+
+    saved_tool_turn(c, first, "isolated-first")
+    assert_receive {:remote_mcp_wire_session_request, "tools/call", [^first_session]}
+    client = Vxpipe.MCP.Connection.client(first_connection)
+    monitor = Process.monitor(client)
+    close_admitted_call(c, first.call)
+    assert_receive {:DOWN, ^monitor, :process, ^client, _reason}, 1_000
+    assert_receive {:remote_mcp_wire_delete, [^first_session]}, 1_000
+    assert owned_mcp(c, second.call) == second_connection
+    saved_tool_turn(c, second, "isolated-second")
+    assert_receive {:remote_mcp_wire_session_request, "tools/call", [^second_session]}
+    close_admitted_call(c, second.call)
+    assert_receive {:remote_mcp_wire_delete, [^second_session]}, 1_000
+  end
+
   test "an admitted web call executes its saved MCP tool and observes tenant disconnect", c do
     configure_admission(c.options)
     assert {:ok, draft} = Calls.save_call_spec(c.tenant, source(c.connection.id), c.options)
@@ -338,6 +364,15 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
     {call, route}
   end
 
+  defp saved_tool_turn(c, active, id) do
+    {provider, _request} = model_input(c, active, "Find customer-42.")
+    reply_tool(provider, id, "customer-42")
+    {completion, result} = await_tool_result(c, id, active.peer, active.channel)
+    assert %{"status" => "completed"} = tool_outcome(result, id)
+    finish_text(c, active, completion, "Found customer-42.")
+  end
+
+  @tag hold_mcp_stream: true
   test "supervised saved connection retirement keeps credentials out of OTP reports", c do
     :ok =
       :logger.add_primary_filter(
@@ -383,10 +418,16 @@ defmodule Vxpipe.Console.Integration.SavedMCPRuntimeTest do
           })
 
         [{_, owner, _, _}] = Supervisor.which_children(supervisor)
+        # Finish startup's authenticated POST/GET before forcing the privacy
+        # report. Killing a DB borrower mid-query aborts this shared sandbox.
+        assert_receive {:remote_mcp_wire_request, "notifications/initialized", _, _}, 2_000
+        assert_receive {:remote_mcp_wire_stream_open, _, _}, 2_000
         monitor = Process.monitor(owner)
         send(owner, {:vxpipe_mcp_credential_revoked, key})
         assert_receive {:DOWN, ^monitor, :process, ^owner, :credential_revoked}, 2_000
         [{_, replacement, _, _}] = Supervisor.which_children(supervisor)
+        assert_receive {:remote_mcp_wire_request, "notifications/initialized", _, _}, 2_000
+        assert_receive {:remote_mcp_wire_stream_open, _, _}, 2_000
         replacement_monitor = Process.monitor(replacement)
         {:ok, connection} = Connections.lookup(key, owner: sessions)
         client = Vxpipe.MCP.Connection.client(connection)
