@@ -252,7 +252,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationSupervisorTest do
          session_supervisor: Vxpipe.CallEngine.RemoteMCPFixture.session_supervisor!(),
          activation_id: "activation-remote-worker",
          tools: %{"customer_lookup" => resolved},
-         integrations: integrations,
+         integrations: RemoteMCPFixture.source!(integrations),
          connection_provider: TestRemoteMCPConnectionProvider,
          protocol: TestRemoteMCPProtocolClient}
       )

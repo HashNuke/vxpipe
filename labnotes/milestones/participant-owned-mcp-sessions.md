@@ -150,19 +150,19 @@ room/database, with measured descendant and wire cleanup on success/failure.
 
 ### T2 — Agent activation composition and failure isolation
 
-- [ ] Red-test activation ancestry and two same-tenant admitted rooms using one
+- [x] Red-test activation ancestry and two same-tenant admitted rooms using one
   integration. Wire the local session supervisor before binding publication,
   passing only safe identity/resolver descriptors through saved child specs.
-- [ ] Deduplicate compatible aliases within an activation, preserve schema/tool
+- [x] Deduplicate compatible aliases within an activation, preserve schema/tool
   pins and per-invocation budgets, and reject conflicting effective policies.
   Native-only agents start no MCP subtree and perform no MCP storage lookup.
 - [x] Open only selected integrations under one absolute readiness budget; fail
   closed and clean every partial child/lease on cancellation, timeout or failure.
   Room authority remains responsive throughout initialization and cleanup.
-- [ ] Preserve existing activation restart/failure semantics with fresh runtime
+- [x] Preserve existing activation restart/failure semantics with fresh runtime
   incarnation identity. Old handles, results, close messages and readiness cannot
   affect a replacement. Prove one participant's failure leaves other sessions usable.
-- [ ] Verify supported MCP agents through saved and embedded catalogs; preserve
+- [x] Verify supported MCP agents through saved and embedded catalogs; preserve
   fail-closed rejection for unsupported native STS MCP configuration. Do not enable
   a new provider/tool path accidentally while moving ownership.
 
@@ -542,3 +542,18 @@ The maintenance amendment is tracked in the
   ownership item; the full credential/late-tool matrix and other acceptance
   requirements remain open. See the
   [owned-renewal labnote](../20261108-2029-owned-mcp-renewal.md).
+
+- Embedded room and participant restart options now retain an existing host catalog
+  reference, or a validated nonsecret saved resolver descriptor. Each activation
+  resolves the current source within its original initialization budget; changed
+  or unavailable sources fail recovery closed. Raw retained-state, held-lookup,
+  compatible alias sharing and conflicting policy checks pass alongside existing
+  ancestry, isolated recovery, native-only, saved WebRTC/phone and unsupported STS
+  checks. The final Call Engine lane passes 101 tests, seed 363273; authentication
+  passes 20, seed 749225; saved-call compatibility passes 22, seed 154185. All five
+  root gates pass, including 5,077 tests with zero failures and 344 excluded,
+  seed 296639. Independent Astra source re-review is approved after reproducing
+  and correcting malformed descriptor rejection. This completes the remaining
+  four T2 items: 14 of 29 implementation items are complete. Credential-change
+  composition, durable catalog jobs and final performance/manual acceptance remain
+  open. See the [embedded restart labnote](../20261108-2117-embedded-mcp-restart.md).

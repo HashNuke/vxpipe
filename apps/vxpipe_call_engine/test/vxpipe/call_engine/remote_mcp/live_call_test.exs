@@ -41,6 +41,94 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     :ok
   end
 
+  @tag :embedded_restart
+  @tag :capture_log
+  test "room and activation restart state retains a source instead of embedded credentials" do
+    marker = "synthetic-embedded-restart-credential"
+    client = start_supervised!({Agent, fn -> %{responses: [], invocations: []} end})
+    {catalog, _binding} = RemoteMCPFixture.binding!(client, self(), marker)
+    store = start_supervised!(CatalogStore)
+    :ok = CatalogStore.publish(store, catalog)
+    plan = compile_plan(store)
+
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+               mcp_catalog_store: store,
+               remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
+               remote_mcp_protocol_client: TestRemoteMCPProtocolClient
+             )
+
+    on_exit(fn -> CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id) end)
+    participant = Map.fetch!(plan.participants, "reception")
+
+    for key <- [
+          {:room_incarnation, plan.tenant_id, plan.room_id, room.incarnation_id},
+          {plan.tenant_id, plan.room_id},
+          {:participant_supervisor, plan.tenant_id, plan.room_id, participant.participant_id},
+          {:agent_activation, participant.activation_id, :supervisor}
+        ] do
+      [{process, _}] = Registry.lookup(Vxpipe.CallEngine.RoomRegistry, key)
+      refute :erlang.term_to_binary(:sys.get_state(process)) =~ marker
+    end
+  end
+
+  for change <- [:changed, :unavailable] do
+    @tag embedded_restart: true, source_change: change, capture_log: true
+    test "activation recovery fails closed when its catalog source is #{change}", context do
+      client = start_supervised!({Agent, fn -> %{responses: [], invocations: []} end})
+
+      {catalog, _binding} =
+        RemoteMCPFixture.binding!(client, self(), "private-recovery",
+          credential_generation: unique_id("credential")
+        )
+
+      store = start_supervised!(CatalogStore)
+      :ok = CatalogStore.publish(store, catalog)
+      plan = compile_plan(store)
+
+      assert {:ok, room} =
+               Vxpipe.CallEngine.TestCallStartup.start_call(plan,
+                 mcp_catalog_store: store,
+                 remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
+                 remote_mcp_protocol_client: TestRemoteMCPProtocolClient
+               )
+
+      on_exit(fn -> CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id) end)
+      attach_caller(plan, room)
+      assert_receive {:test_remote_mcp_opened, key, _config}
+      activation = Map.fetch!(plan.participants, "reception").activation_id
+
+      [{supervisor, _}] =
+        Registry.lookup(
+          Vxpipe.CallEngine.RoomRegistry,
+          {:agent_activation, activation, :supervisor}
+        )
+
+      monitor = Process.monitor(supervisor)
+
+      host =
+        Vxpipe.CallEngine.AgentActivationSupervisor.whereis_child(
+          activation,
+          :remote_mcp_sessions
+        )
+
+      assert {:ok, connection} = Vxpipe.MCP.Connections.lookup(key, owner: host)
+
+      case context.source_change do
+        :changed ->
+          {:ok, empty} = IntegrationCatalog.new([])
+          :ok = CatalogStore.publish(store, empty)
+
+        :unavailable ->
+          stop_supervised!(CatalogStore)
+      end
+
+      Process.exit(Vxpipe.MCP.Connection.client(connection), :kill)
+      assert_receive {:DOWN, ^monitor, :process, ^supervisor, _reason}, 1_000
+      refute_receive {:test_remote_mcp_opened, ^key, _config}, 100
+    end
+  end
+
   @tag :integration
   @tag :capture_log
   test "transfer and re-entry prepare independent wire sessions before retiring the source" do
@@ -62,7 +150,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
 
     assert {:ok, room} =
              CallEngine.start_call(plan,
-               mcp_catalog_store: integrations,
+               mcp_catalog_store: RemoteMCPFixture.source!(integrations),
                remote_mcp_connection_provider: Vxpipe.CallEngine.RemoteMCPWireConnectionProvider
              )
 
@@ -147,7 +235,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     second_plan = compile_plan(integrations)
 
     runtime = [
-      mcp_catalog_store: integrations,
+      mcp_catalog_store: RemoteMCPFixture.source!(integrations),
       remote_mcp_connection_provider: Vxpipe.CallEngine.RemoteMCPWireConnectionProvider
     ]
 
@@ -230,7 +318,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
 
     assert {:ok, room} =
              Vxpipe.CallEngine.TestCallStartup.start_call(plan,
-               mcp_catalog_store: integrations,
+               mcp_catalog_store: RemoteMCPFixture.source!(integrations),
                remote_mcp_connection_provider: Vxpipe.CallEngine.RemoteMCPWireConnectionProvider
              )
 
@@ -270,7 +358,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
 
       assert {:ok, room} =
                Vxpipe.CallEngine.TestCallStartup.start_call(plan,
-                 mcp_catalog_store: integrations,
+                 mcp_catalog_store: RemoteMCPFixture.source!(integrations),
                  remote_mcp_connection_provider: Vxpipe.CallEngine.RemoteMCPWireConnectionProvider
                )
 
@@ -342,7 +430,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
       assert {:ok, room} =
                CallEngine.start_call(plan,
                  call_lifecycle: [readiness_timeout_ms: readiness_timeout],
-                 mcp_catalog_store: integrations,
+                 mcp_catalog_store: RemoteMCPFixture.source!(integrations),
                  remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
                  remote_mcp_protocol_client: TestRemoteMCPProtocolClient
                )
@@ -413,7 +501,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     assert {:ok, room} =
              Vxpipe.CallEngine.TestCallStartup.start_call(plan,
                call_lifecycle: [readiness_timeout_ms: 500],
-               mcp_catalog_store: integrations,
+               mcp_catalog_store: RemoteMCPFixture.source!(integrations),
                remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
                remote_mcp_protocol_client: TestRemoteMCPProtocolClient
              )
@@ -476,7 +564,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
 
     assert {:ok, room} =
              CallEngine.start_call(plan,
-               mcp_catalog_store: integrations,
+               mcp_catalog_store: RemoteMCPFixture.source!(integrations),
                remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
                remote_mcp_protocol_client: TestRemoteMCPProtocolClient
              )
@@ -535,7 +623,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
 
     assert {:ok, room} =
              Vxpipe.CallEngine.TestCallStartup.start_call(plan,
-               mcp_catalog_store: integrations,
+               mcp_catalog_store: RemoteMCPFixture.source!(integrations),
                remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
                remote_mcp_protocol_client: TestRemoteMCPProtocolClient
              )

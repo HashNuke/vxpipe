@@ -17,7 +17,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.CatalogStoreTest do
     old_catalog = integration_catalog(old_client, "catalog-1", "customer_id")
     new_catalog = integration_catalog(new_client, "catalog-2", "account_id")
 
-    store = start_supervised!({CatalogStore, catalog: old_catalog})
+    store = start_supervised!(CatalogStore)
+    :ok = CatalogStore.publish(store, old_catalog)
     assert {:ok, old_snapshot} = CatalogStore.snapshot(store)
 
     assert {:ok, old_remote} =
@@ -41,7 +42,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.CatalogStoreTest do
         {IntegrationOwner,
          session_supervisor: Vxpipe.CallEngine.RemoteMCPFixture.session_supervisor!(),
          activation_id: "activation-old-catalog",
-         integrations: old_snapshot,
+         integrations: store,
          tools: %{"customer_lookup" => old_binding},
          connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
          protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}

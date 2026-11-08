@@ -24,7 +24,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
                 lifecycle_owner: self(),
                 initialization: {self(), started + 100},
                 tools: %{"customer_lookup" => binding},
-                integrations: catalog,
+                integrations: RemoteMCPFixture.source!(catalog),
                 connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
                 protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
              )
@@ -44,6 +44,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     tasks = start_supervised!({Task.Supervisor, name: unique_name()})
     authority = self()
 
+    source = RemoteMCPFixture.source!(catalog)
+
     starter =
       Task.Supervisor.async_nolink(tasks, fn ->
         DynamicSupervisor.start_child(
@@ -54,7 +56,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
            lifecycle_owner: authority,
            initialization: {preparer, System.monotonic_time(:millisecond) + 5_000},
            tools: %{"customer_lookup" => binding},
-           integrations: catalog,
+           integrations: source,
            connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
            protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
         )
@@ -104,6 +106,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
 
     tasks = start_supervised!({Task.Supervisor, name: unique_name()})
 
+    source = RemoteMCPFixture.source!(catalog)
+
     starter =
       Task.Supervisor.async_nolink(tasks, fn ->
         DynamicSupervisor.start_child(
@@ -113,7 +117,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
            session_supervisor: sessions,
            lifecycle_owner: lifecycle,
            tools: bindings,
-           integrations: catalog,
+           integrations: source,
            connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
            protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
         )
@@ -167,7 +171,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
                 activation_id: "partial-startup",
                 session_supervisor: sessions,
                 tools: tools,
-                integrations: catalog,
+                integrations: RemoteMCPFixture.source!(catalog),
                 connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
                 protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
              )
@@ -200,7 +204,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
                   activation_id: "mcp-with-transfer",
                   session_supervisor: sessions,
                   tools: %{"customer_lookup" => binding, "transfer" => transfer},
-                  integrations: catalog,
+                  integrations: RemoteMCPFixture.source!(catalog),
                   connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
                   protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
                )
@@ -227,6 +231,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     tasks = start_supervised!({Task.Supervisor, name: unique_name()})
     name = unique_name()
 
+    source = RemoteMCPFixture.source!(catalog)
+
     starter =
       Task.Supervisor.async_nolink(tasks, fn ->
         DynamicSupervisor.start_child(
@@ -236,7 +242,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
            activation_id: "readiness-activation",
            participant_id: "support-agent",
            tools: %{"customer_lookup" => binding},
-           integrations: catalog,
+           integrations: source,
            name: name,
            connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
            protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
@@ -268,6 +274,33 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     assert invocations(client) == []
   end
 
+  test "conflicting alias policies fail before any integration is opened", %{
+    session_supervisor: sessions
+  } do
+    client = client!([])
+    {catalog, binding} = RemoteMCPFixture.binding!(client, self(), "private")
+    source = RemoteMCPFixture.source!(catalog)
+
+    for field <- [:invocation_deadline_ms, :maximum_result_bytes] do
+      policy = Map.update!(binding.remote, field, &(&1 + 1))
+      conflict = %{binding | name: "conflicting_alias", remote: policy}
+
+      assert {:error, _} =
+               start_supervised(
+                 {IntegrationOwner,
+                  activation_id: "conflicting-policy",
+                  session_supervisor: sessions,
+                  tools: %{"customer_lookup" => binding, "conflicting_alias" => conflict},
+                  integrations: source,
+                  connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+                  protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+               )
+
+      assert DynamicSupervisor.count_children(sessions).active == 0
+      refute_received {:test_remote_mcp_opened, _, _}
+    end
+  end
+
   test "opens the scoped generation and invokes the pinned remote operation", %{
     session_supervisor: sessions
   } do
@@ -283,7 +316,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
          session_supervisor: sessions,
          activation_id: "activation-one",
          tools: %{"customer_lookup" => binding},
-         integrations: catalog,
+         integrations: RemoteMCPFixture.source!(catalog),
          connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
          protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
       )
@@ -330,7 +363,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
          session_supervisor: sessions,
          activation_id: "activation-limit",
          tools: %{"customer_lookup" => binding},
-         integrations: catalog,
+         integrations: RemoteMCPFixture.source!(catalog),
          connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
          protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
       )
@@ -360,7 +393,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
          activation_id: "activation-connection-loss",
          participant_id: "support-agent",
          tools: %{"customer_lookup" => binding},
-         integrations: catalog,
+         integrations: RemoteMCPFixture.source!(catalog),
          connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
          protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
       )
@@ -390,7 +423,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
          activation_id: "activation-revoked-credential",
          participant_id: "support-agent",
          tools: %{"customer_lookup" => binding},
-         integrations: catalog,
+         integrations: RemoteMCPFixture.source!(catalog),
          connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
          protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
       )
@@ -411,7 +444,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
                 session_supervisor: sessions,
                 activation_id: "activation-revoked-credential-reuse",
                 tools: %{"customer_lookup" => binding},
-                integrations: catalog,
+                integrations: RemoteMCPFixture.source!(catalog),
                 connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
                 protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
              )

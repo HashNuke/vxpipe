@@ -1,9 +1,15 @@
 defmodule Vxpipe.CallEngine.RemoteMCPFixture do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.RemoteMCP.{Integration, IntegrationCatalog}
+  alias Vxpipe.CallEngine.RemoteMCP.{CatalogStore, Integration, IntegrationCatalog}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.MCP.Catalog
+
+  def source!(catalog) do
+    store = ExUnit.Callbacks.start_supervised!(CatalogStore, id: {CatalogStore, make_ref()})
+    :ok = CatalogStore.publish(store, catalog)
+    store
+  end
 
   def session_supervisor! do
     reference = make_ref()

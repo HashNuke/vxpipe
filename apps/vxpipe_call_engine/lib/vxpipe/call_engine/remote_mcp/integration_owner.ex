@@ -13,7 +13,15 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
   alias Vxpipe.CallEngine.Readiness.Resource
-  alias Vxpipe.CallEngine.RemoteMCP.{Executor, Integration, IntegrationCatalog, RuntimeBinding}
+
+  alias Vxpipe.CallEngine.RemoteMCP.{
+    CatalogStore,
+    Executor,
+    Integration,
+    IntegrationCatalog,
+    RuntimeBinding
+  }
+
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.MCP.{Connection, ConnectionKey, Connections, CredentialLeases, ExMCPClient}
 
@@ -87,7 +95,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
          participant_id when is_nil(participant_id) or is_binary(participant_id) <-
            Keyword.get(options, :participant_id),
          true <- participant_id != "",
-         %IntegrationCatalog{} = integrations <- Keyword.get(options, :integrations),
+         {:ok, source} <- IntegrationCatalog.restart_source(Keyword.get(options, :integrations)),
          tools when is_map(tools) <- Keyword.get(options, :tools),
          session_supervisor when is_pid(session_supervisor) <-
            GenServer.whereis(Keyword.get(options, :session_supervisor)),
@@ -98,10 +106,18 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
              function_exported?(connection_provider, :open, 3),
          protocol when is_atom(protocol) <- Keyword.get(options, :protocol, ExMCPClient),
          true <- Code.ensure_loaded?(protocol) and function_exported?(protocol, :call_tool, 4),
-         {:ok, prepared} <- prepare(tools, integrations),
+         {:ok, deadline, owners} <- initialization_context(options),
+         {:ok, prepared} <-
+           initialization_task(
+             fn ->
+               with {:ok, catalog} <- CatalogStore.snapshot(source), do: prepare(tools, catalog)
+             end,
+             deadline,
+             owners
+           ),
          :ok <- acquire_credential_leases(prepared),
          {:ok, connections, connection_monitors} <-
-           initialize_connections(prepared, connection_provider, session_supervisor, options),
+           run_initialization(prepared, connection_provider, session_supervisor, deadline, owners),
          bindings <- runtime_bindings(prepared, connections, protocol) do
       {:ok,
        %__MODULE__{
@@ -218,14 +234,14 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
     )
   end
 
-  defp initialize_connections(prepared, provider, sessions, options) do
+  defp initialization_context(options) do
     owner = Keyword.get(options, :lifecycle_owner)
 
     with {:ok, deadline, preparer} <- initialization_budget(options),
          true <- deadline > System.monotonic_time(:millisecond),
          owners <- Enum.uniq(Enum.filter([owner, preparer], &is_pid/1)),
          true <- Enum.all?(owners, &Process.alive?/1) do
-      run_initialization(prepared, provider, sessions, deadline, owners)
+      {:ok, deadline, owners}
     else
       _unavailable -> {:error, :invalid_configuration}
     end

@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.RemoteMCPIdentityProbe do
 
   alias Vxpipe.CallEngine.RemoteMCP.{
     CatalogLoader,
+    CatalogStore,
     ConfiguredIntegration,
     IntegrationCatalog,
     IntegrationOwner
@@ -63,7 +64,9 @@ defmodule Vxpipe.CallEngine.RemoteMCPIdentityProbe do
          name: {:via, Registry, {Vxpipe.MCP.ConnectionRegistry, {:probe_host, make_ref()}}}}
       )
 
-    owner = start_owner!(supervisor, sessions, identity, catalog, binding)
+    {:ok, source} = DynamicSupervisor.start_child(supervisor, CatalogStore)
+    :ok = CatalogStore.publish(source, catalog)
+    owner = start_owner!(supervisor, sessions, identity, source, binding)
     arguments = %{identity.field_name => "value-#{index}"}
 
     {:ok, %{"content" => [%{"text" => result, "type" => "text"}]}} =
@@ -78,6 +81,7 @@ defmodule Vxpipe.CallEngine.RemoteMCPIdentityProbe do
 
     :ok = DynamicSupervisor.terminate_child(supervisor, owner)
     :ok = DynamicSupervisor.terminate_child(supervisor, sessions)
+    :ok = DynamicSupervisor.terminate_child(supervisor, source)
     :ok = DynamicSupervisor.terminate_child(supervisor, client)
   end
 

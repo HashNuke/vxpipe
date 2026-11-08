@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog do
   """
 
   alias Vxpipe.CallEngine.RemoteMCP.{Integration, ResolvedTool}
-  alias Vxpipe.MCP.{ArgumentValidator, Catalog}
+  alias Vxpipe.MCP.{ArgumentValidator, Catalog, RuntimeAuthProvider}
 
   @enforce_keys [:application, :tenants]
   defstruct @enforce_keys
@@ -36,6 +36,35 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog do
     else
       _invalid -> {:error, :invalid_integration_catalog}
     end
+  end
+
+  @doc "Retains a host catalog reference or an inline catalog containing only saved runtime descriptors."
+  def restart_source(%__MODULE__{} = catalog) do
+    scopes = [catalog.application | Map.values(catalog.tenants)]
+
+    if Enum.all?(scopes, fn integrations ->
+         Enum.all?(integrations, fn {_id, integration} -> restart_descriptor?(integration) end)
+       end),
+       do: {:ok, catalog},
+       else: {:error, :invalid_restart_source}
+  rescue
+    _invalid -> {:error, :invalid_restart_source}
+  end
+
+  def restart_source(source)
+      when is_pid(source) or (is_atom(source) and source not in [nil, true, false]),
+      do: {:ok, source}
+
+  def restart_source(_source), do: {:error, :invalid_restart_source}
+
+  defp restart_descriptor?(%Integration{client_config: config}) do
+    Keyword.keyword?(config) and
+      Enum.sort(Keyword.keys(config)) == [:authentication, :endpoint, :runtime_authentication] and
+      Keyword.get(config, :authentication) == :none and
+      RuntimeAuthProvider.restart_descriptor?(
+        Keyword.get(config, :runtime_authentication),
+        Keyword.get(config, :endpoint)
+      )
   end
 
   @spec resolve(t(), String.t(), String.t(), String.t()) ::

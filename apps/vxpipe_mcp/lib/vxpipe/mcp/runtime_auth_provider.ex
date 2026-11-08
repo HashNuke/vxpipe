@@ -40,6 +40,26 @@ defmodule Vxpipe.MCP.RuntimeAuthProvider do
 
   def init(_), do: unavailable()
 
+  @doc "Whether an unbound provider is a nonsecret descriptor suitable for retained restart options."
+  def restart_descriptor?(
+        %__MODULE__{session: nil, endpoint: endpoint, resolver: {_module, context}} = provider,
+        endpoint
+      ) do
+    match?({:ok, ^provider}, init(provider)) and
+      (context == :configured or reference_context?(context))
+  catch
+    :exit, :mcp_credentials_unavailable -> false
+  end
+
+  def restart_descriptor?(_provider, _endpoint), do: false
+
+  defp reference_context?(value) when is_pid(value) or is_reference(value), do: true
+
+  defp reference_context?(value) when is_tuple(value),
+    do: value |> Tuple.to_list() |> Enum.all?(&reference_context?/1)
+
+  defp reference_context?(_value), do: false
+
   @doc false
   def with_session(options, integration) when is_pid(integration) do
     case Keyword.fetch(options, :auth_provider) do

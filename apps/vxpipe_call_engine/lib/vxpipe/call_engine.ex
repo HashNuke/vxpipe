@@ -429,8 +429,10 @@ defmodule Vxpipe.CallEngine do
     if remote_tools?(plan) do
       {catalog_store, options} = Keyword.pop(options, :mcp_catalog_store, CatalogStore)
 
-      with {:ok, integrations} <- catalog_snapshot(catalog_store) do
-        {:ok, Keyword.put(options, :mcp_integrations, integrations)}
+      with {:ok, source} <- IntegrationCatalog.restart_source(catalog_store) do
+        {:ok, Keyword.put(options, :mcp_integrations, source)}
+      else
+        _invalid -> unavailable_catalog()
       end
     else
       {:ok, Keyword.delete(options, :mcp_integrations)}

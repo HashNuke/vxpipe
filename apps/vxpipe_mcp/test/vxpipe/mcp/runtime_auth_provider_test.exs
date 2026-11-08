@@ -13,6 +13,43 @@ defmodule Vxpipe.MCP.RuntimeAuthProviderTest do
       resolver: {RuntimeAuthFixture, {self(), result}}
     }
 
+  test "restart descriptors allow only unbound providers with nonsecret resolver contexts" do
+    for context <- [:configured, self(), make_ref(), {self(), {make_ref()}}] do
+      {:ok, provider} =
+        RuntimeAuthProvider.init(%{config(nil) | resolver: {RuntimeAuthFixture, context}})
+
+      assert RuntimeAuthProvider.restart_descriptor?(provider, provider.endpoint)
+
+      refute RuntimeAuthProvider.restart_descriptor?(
+               %{provider | session: self()},
+               provider.endpoint
+             )
+
+      refute RuntimeAuthProvider.restart_descriptor?(provider, "https://other.example.test/mcp")
+    end
+
+    for context <- [[token: "private"], %{token: "private"}, {self(), "private"}, fn -> :ok end] do
+      {:ok, provider} =
+        RuntimeAuthProvider.init(%{config(nil) | resolver: {RuntimeAuthFixture, context}})
+
+      refute RuntimeAuthProvider.restart_descriptor?(provider, provider.endpoint)
+    end
+  end
+
+  test "invalid restart descriptors return false without triggering credential exits" do
+    {:ok, provider} =
+      RuntimeAuthProvider.init(%{config(nil) | resolver: {RuntimeAuthFixture, :configured}})
+
+    for invalid <- [
+          %{provider | generation: 0},
+          %{provider | auth_method: "unknown"},
+          %{provider | endpoint: nil},
+          %{provider | resolver: {:missing_resolver, :configured}}
+        ] do
+      refute RuntimeAuthProvider.restart_descriptor?(invalid, invalid.endpoint)
+    end
+  end
+
   test "current OAuth token is resolved for each request with pinned identity" do
     assert {:ok, state} =
              RuntimeAuthProvider.init(

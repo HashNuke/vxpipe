@@ -251,7 +251,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
       activation_id
       |> agent_runtime_options()
       |> Keyword.put(:tools, %{"customer_lookup" => remote_binding})
-      |> Keyword.put(:mcp_integrations, integrations)
+      |> Keyword.put(:mcp_integrations, Vxpipe.CallEngine.RemoteMCPFixture.source!(integrations))
       |> Keyword.put(:remote_mcp_connection_provider, TestRemoteMCPConnectionProvider)
       |> Keyword.put(:remote_mcp_protocol_client, TestRemoteMCPProtocolClient)
 
@@ -356,7 +356,7 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
       activation_id
       |> agent_runtime_options()
       |> Keyword.put(:tools, tools)
-      |> Keyword.put(:mcp_integrations, integrations)
+      |> Keyword.put(:mcp_integrations, Vxpipe.CallEngine.RemoteMCPFixture.source!(integrations))
       |> Keyword.put(:remote_mcp_connection_provider, TestRemoteMCPConnectionProvider)
       |> Keyword.put(:remote_mcp_protocol_client, TestRemoteMCPProtocolClient)
       |> Keyword.put(:maximum_completed_requests, 8)
@@ -375,6 +375,13 @@ defmodule Vxpipe.CallEngine.AgentActivationSupervisorTest do
 
     assert %InvocationBinding{handler: {:remote_mcp, ^remote_owner}} = private_customer.binding
     assert %InvocationBinding{handler: {:remote_mcp, ^remote_owner}} = private_invoice.binding
+
+    sessions = Map.fetch!(children, :remote_mcp_sessions)
+    assert DynamicSupervisor.count_children(sessions).active == 1
+    bindings = :sys.get_state(remote_owner).bindings
+
+    assert Map.fetch!(bindings, "customer_lookup").connection ==
+             Map.fetch!(bindings, "invoice_lookup").connection
 
     assert :ok = Coordinator.respond(coordinator, send_text("mixed-runtime-tools"))
     assert_receive {:test_agent_runtime_stream, initial_provider, initial_request}

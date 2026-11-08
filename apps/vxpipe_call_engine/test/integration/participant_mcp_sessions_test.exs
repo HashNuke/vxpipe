@@ -146,7 +146,7 @@ defmodule Vxpipe.CallEngine.ParticipantMCPSessionsTest do
       owner: self(),
       system_prompt: "Use the selected tool.",
       tools: %{"customer_lookup" => binding},
-      mcp_integrations: catalog,
+      mcp_integrations: RemoteMCPFixture.source!(catalog),
       remote_mcp_connection_provider: RemoteMCPWireConnectionProvider,
       model_provider: TestAgentRuntimeModelProvider,
       model: %{owner: self()},

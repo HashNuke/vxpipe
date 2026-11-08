@@ -86,7 +86,8 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   defp remote_mcp_children(_activation_id, nil, _options), do: []
 
   defp remote_mcp_children(activation_id, remote_mcp_owner, options) do
-    with %IntegrationCatalog{} = integrations <- Keyword.get(options, :mcp_integrations) do
+    with {:ok, source} <-
+           IntegrationCatalog.restart_source(Keyword.get(options, :mcp_integrations)) do
       sessions = child_ref(activation_id, :remote_mcp_sessions)
 
       owner_options = [
@@ -96,7 +97,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
         initialization: Keyword.get(options, :mcp_initialization),
         participant_id: Keyword.fetch!(options, :agent_participant_id),
         tools: Keyword.fetch!(options, :tools),
-        integrations: integrations,
+        integrations: source,
         name: remote_mcp_owner
       ]
 

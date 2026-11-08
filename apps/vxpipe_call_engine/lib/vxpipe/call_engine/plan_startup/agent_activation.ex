@@ -5,7 +5,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
   alias Vxpipe.CallEngine.CallVariables.Binding
   alias Vxpipe.CallEngine.AgentRuntime.ModelContextSource
   alias Vxpipe.CallEngine.PlanStartup.AgentModel
-  alias Vxpipe.CallEngine.RemoteMCP.IntegrationCatalog
+  alias Vxpipe.CallEngine.RemoteMCP.{CatalogStore, IntegrationCatalog}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
   alias Vxpipe.CallEngine.Usage.ProviderContext
   alias Vxpipe.CallEngine.{Error, ResolvedCallPlan}
@@ -173,14 +173,17 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
         _binding -> []
       end)
 
-    case {remote_bindings, Keyword.get(options, :mcp_integrations)} do
+    source = Keyword.get(options, :mcp_integrations)
+    catalog = if remote_bindings == [], do: nil, else: source_catalog(source)
+
+    case {remote_bindings, catalog} do
       {[], _integrations} ->
         {:ok, nil}
 
-      {bindings, %IntegrationCatalog{} = integrations} ->
+      {bindings, {:ok, integrations}} ->
         case unavailable_remote_binding(bindings, integrations) do
           nil ->
-            {:ok, integrations}
+            {:ok, source}
 
           name ->
             unsupported(
@@ -197,6 +200,13 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
           "remote MCP integrations are unavailable"
         )
     end
+  end
+
+  defp source_catalog(source) do
+    with {:ok, source} <- IntegrationCatalog.restart_source(source),
+         do: CatalogStore.snapshot(source)
+  catch
+    :exit, _unavailable -> {:error, :catalog_unavailable}
   end
 
   defp unavailable_remote_binding(bindings, integrations) do

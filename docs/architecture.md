@@ -616,11 +616,14 @@ binding contains only the scoped room-variables handle and authorization identit
 workers call that binding by its exact generated name; Agent Runtime never receives the handle or
 calls the room-scoped variables process itself.
 
-For a plan containing remote MCP tools, `CallEngine.start_call/2` reads one complete current
-integration-catalog snapshot from the configured catalog store and does not accept an injected
-catalog as an authority. Plan startup verifies every pinned remote generation against that snapshot
-before creating the room. It then passes the snapshot privately through room startup to the agent
-activation. The activation conditionally starts one `RemoteMCP.IntegrationOwner` in the same
+For a plan containing remote MCP tools, `CallEngine.start_call/2` retains the host catalog-store
+reference for private embedded configuration. Plan startup verifies the selected public pins
+against its current snapshot; each activation initialization/recovery resolves that source again
+within its original readiness budget. Room and participant restart options retain the reference,
+not the private snapshot. Saved tenant catalogs may retain their validated nonsecret runtime
+resolver descriptors inline. Private inline catalogs must move to a host-owned `CatalogStore`,
+started empty and then populated through `publish/2`. The activation conditionally starts one
+`RemoteMCP.IntegrationOwner` in the same
 one-for-all generation as the Session, coordinator, invocation registry, and invocation supervisor.
 Each model descriptor carries only its local alias, public description, and pinned schema; its
 opaque handler points to that owner. The common invocation worker calls the owner, which resolves

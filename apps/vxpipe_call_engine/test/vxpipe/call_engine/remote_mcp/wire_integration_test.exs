@@ -226,7 +226,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.WireIntegrationTest do
        session_supervisor: Vxpipe.CallEngine.RemoteMCPFixture.session_supervisor!(),
        activation_id: "activation-#{suffix}",
        tools: %{"customer_lookup" => binding},
-       integrations: catalog,
+       integrations: Vxpipe.CallEngine.RemoteMCPFixture.source!(catalog),
        connection_provider: RemoteMCPWireConnectionProvider}
     )
   end

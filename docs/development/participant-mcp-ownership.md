@@ -10,6 +10,8 @@ The library requires explicit hosts; the legacy root session pool has been remov
 Call-owned renewal and token DNS now run under the exact session, including
 cancellation before shared admission. Queued catalogs and the remaining
 acceptance matrix are still pending.
+Embedded runtime restart options now preserve a host catalog-store reference;
+private snapshots are resolved within the activation's bounded initialization.
 The user requested a milestone for moving agent-used MCP connections into the
 participant's call tree. The [implementation milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md)
 tracks that work separately from the integrations-directory workflow approval.
@@ -248,6 +250,28 @@ the scoped supervisor name; each `IntegrationOwner.init/1` resolves it to the ne
 exact PID. Recovery therefore creates a fresh session scope without changing the
 logical activation ID or the existing restart limits.
 
+`IntegrationCatalog.restart_source/1` validates what can be retained through room,
+participant and activation restart options. Private embedded integrations use a
+host-owned `CatalogStore` PID or registered atom. Start that store empty and publish
+the validated catalog afterward, so its own saved child specification also stays
+free of credentials. Private inline catalogs must migrate to this existing store;
+no new configuration process type is introduced. Compilation can still read an
+inline catalog transiently because the compiled plan contains only public pins.
+
+Saved tenant catalogs retain their existing inline descriptor shape: an endpoint,
+authentication `:none`, and an unbound `RuntimeAuthProvider` with matching endpoint
+and nonsecret resolver context. Only `:configured`, PIDs, references or tuples of
+PIDs/references are accepted as that context. Extra client options, static tokens,
+arbitrary resolver payloads and callback closures are rejected on this retained
+inline path. Ordinary standalone authentication-provider initialization is unchanged.
+
+The source reference survives room startup and retained transfer options rather
+than being replaced with a private snapshot. Each owner initialization/recovery
+resolves the current source and checks the exact selected pins inside the existing
+bounded initialization task. Lookup and client opening share one original deadline;
+the binding process still owns credential leases. A missing source or changed pin
+fails closed, while an already active binding retains its pinned catalog and session.
+
 `IntegrationOwner` now requires `session_supervisor:`. Trusted connection providers
 must implement `open(key, config, owner: exact_pid)` and return a registered, ready
 handle owned by that host with the expected credential key. There is no fallback
@@ -282,8 +306,9 @@ participant trees.
 Loopback acceptance covers same-grant calls, held POST/GET peer closure on hangup
 and forced room-authority death, destination timeout with a usable source,
 successful transfer/re-entry and stale-handle rejection. Saved WebRTC calls and
-phone lanes exercise the same placement. Safe embedded restart descriptors and
-the remaining full-milestone acceptance requirements are still open. See the
+phone lanes exercise the same placement. Embedded restart-source checks also cover
+raw retained state, changed/unavailable sources and a lookup held past its original
+deadline. Remaining full-milestone acceptance is tracked separately; see the
 milestone for checkpoint gate evidence.
 
 ## Retirement and external effects
