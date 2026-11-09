@@ -1,12 +1,12 @@
 # Platform and MCP tools for native speech-to-speech
 
 Research date: 2026-11-09. Code inspected at `f9eefd6a`.
-Status: implementation started. Native startup now retains the private shared tool
-registry separately from provider schemas and dispatches host, platform, variable
-and transfer bindings through the shared invocation registry. Native allocations
-now own the same MCP owner/session components as text activations. Both paths use
-the shared blocking/non-blocking admission decision; full completion and
-conformance acceptance remains incomplete.
+Status: common implementation and local conformance pass. LLM and native STS
+participants share descriptors, validation, invocation workers, conversation
+admission, MCP ownership, completion settlement and safe usage. The 446-test
+`bin/test-shared-tools` lane includes the 31-case compiled receptionist contract.
+Final umbrella acceptance remains with the shared milestone; provider live
+interoperability remains separately owned.
 
 Planning amendment, 2026-11-09: the user's follow-up requires common internal
 implementation and behavior parity with LLM participants, including conversation
@@ -33,13 +33,13 @@ constraint. This research does not complete that work or reopen the completed
 
 | Capability | Current evidence | Remaining work |
 | --- | --- | --- |
-| Provider function definitions, incoming calls, outgoing results | Google, GPT-Live and ElevenLabs adapters contain the wire operations. | Exercise newly connected bindings through each supported adapter. |
+| Provider function definitions, incoming calls, outgoing results | Google, GPT-Live and ElevenLabs adapters contain the wire operations. | Provider live interoperability remains separately tracked. |
 | Participant `transfer` | Compiled-room Morse and GPT-Live fixture tests cover successful transfer and failure recovery. | Preserve that behavior while unifying dispatch. This evidence concerns Vxpipe participant transfer; it does not establish arbitrary PSTN transfer support. |
 | Blocking host tool | ElevenLabs compiled-room fixture executes `ping` and receives its result. | Reuse the existing execution path. |
-| Platform `get_current_time` and `hangup` | Native calls use shared validation and invocation workers. Hangup publishes its public result and rechecks source/policy before room authorization. | Include in the final cross-path conformance suite. |
-| Call-variable tools | Compiled native rooms read/update permitted variables through retained private bindings; unselected update tools are rejected. | Include in the final cross-path conformance suite. |
-| Connected MCP tools | Native allocations use the same IntegrationOwner, session supervisor and invocation handler as text activations. Controlled native calls exercise aliases, readiness, tenant isolation and teardown. Console integration cases prove saved disconnect/credential replacement, stale catalog pins and one in-flight outcome without retry. | Complete interrupted-completion and conformance acceptance under the shared milestone. |
-| Non-blocking/background tools | LLM and ordinary/duplex native fixtures share blocking/non-blocking admission, retained pending work, and consumption-qualified release. Held caller input is discarded without replay. | Complete interrupted-delivery, replay and conformance acceptance; report unsupported semantic operations explicitly. |
+| Platform `get_current_time` and `hangup` | Native calls use shared validation and invocation workers. Hangup publishes its public result and rechecks source/policy before room authorization. | Covered by common conformance and focused binding tests. |
+| Call-variable tools | Compiled native rooms read/update permitted variables through retained private bindings; unselected update tools are rejected. | Covered by common conformance and focused binding tests. |
+| Connected MCP tools | Native allocations use the same IntegrationOwner, session supervisor and invocation handler as text activations. Controlled native calls exercise aliases, readiness, tenant isolation and teardown. Console integration cases prove saved disconnect/credential replacement, stale catalog pins and one in-flight outcome without retry. | Shared completion and local conformance pass; final umbrella acceptance remains. |
+| Non-blocking/background tools | LLM and ordinary/duplex native fixtures share blocking/non-blocking admission, retained pending work, and consumption-qualified release. Held caller input is discarded without replay. | Shared interrupted delivery, bounded replay and local conformance pass; unsupported semantic operations still reject explicitly. |
 
 Native startup is composed in
 [SpeechToSpeechActivation](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/speech_to_speech_activation.ex):
@@ -62,8 +62,8 @@ validation and terminates the invalid exchange without sending a second result.
 References rejected before registry submission and IDs evicted from the bounded
 retention window are outside that duplicate-protection guarantee.
 Native results use the shared semantic session boundary and retain their completion
-lease across reversible stop-holds. Final compiled-room conformance acceptance
-still remains; dispatch alone is not full parity.
+lease across reversible stop-holds. The common compiled-room contract passes; final umbrella acceptance remains
+with the shared milestone.
 
 ## Provider protocol findings
 
@@ -167,8 +167,8 @@ The user approved the necessary existing-adapter API plumbing while requiring al
 tool behavior to stay common. Context-aware adapters must associate continuation
 with the supplied context; no context-free fallback can establish that contract.
 The earlier callbacks lacked this operation, so common probe acceptance alone is
-insufficient. Adapter protocol fixtures and common room acceptance must pass before
-closing C3. This amendment adds no vendor-specific executor or policy.
+insufficient. Both adapter protocol fixtures and common room acceptance now pass.
+This amendment adds no vendor-specific executor or policy.
 
 Ordinary and source-controlled releases both retry the existing completion lease;
 permanent source/policy loss or rejected provider delivery terminates explicitly.
@@ -207,13 +207,48 @@ The execution budget and completion lifecycle need separate acceptance:
   explicitly. Retained-ID replay and bounded eviction pass. Native tool usage now
   reuses InvocationUsage/ToolAttempt through the existing completion bridge,
   ordered before terminal results. Current bridge and activation checks prevent
-  stale attribution. Shared race suites pass; final conformance remains open.
+  stale attribution. Shared race and compiled-room conformance suites pass; final umbrella acceptance
+  remains with the shared milestone.
 
 Native transport acceptance does not prove remote execution or durable receipt.
 GPT-Live documents no separate success acknowledgement for `response.item.create`.
 Use the adapter's local acceptance and existing error/lifecycle handling; preserve
 an uncertain outcome on disconnect, and never rerun a side-effecting tool merely
 to retry result delivery. [GPT-Live continuation contract](https://developers.openai.com/api/docs/guides/live-delegation).
+
+## Common integration contract
+
+Run `bin/test-shared-tools` from a configured checkout. It selects the common
+compiled-room suite, shared invocation/LLM lifecycle tests, MCP ownership and
+startup-budget checks, and the existing local semantic adapter fixtures. It uses
+no vendor credentials. The five root checks and `bin/verify-lean` remain the final
+completion gates; this focused command does not replace them.
+
+An STS adapter must expose selected schemas without private bindings, emit bounded
+typed function calls, and accept exactly one final result through the semantic
+Session API. An origin-aware allocation implements
+`submit_input(pid, response_context, {:tool_result, call_ref, result})`; acceptance
+binds future continuation to that context while preserving older output records.
+An unsupported or invalid association must reject explicitly. Adapters implement
+wire protocol and continuation correlation; shared engine code owns authorization,
+execution, conversation mode, usage, MCP access and completion settlement.
+
+The common compiled-room fixture uses one call specification across the LLM,
+ordinary Morse and duplex Morse paths. The receptionist chain covers a selected
+tenant MCP lookup, permitted variable update, observable continued conversation,
+authorized hangup and owned-resource teardown in both conversation modes. Its
+negative cases cover denied operations, definite/uncertain remote outcomes,
+capacity recovery, duplicate identities and an LLM multi-call response with only
+part of its work admitted. Text rejection/continuation messages and native
+function results retain their respective transport contracts.
+
+The fixture reports startup, pending room-control and result-consumption timings.
+These are local synthetic checks, not production vendor percentiles. Duplex Morse
+uses its real-time clock and the test consumes synthetic PCM before accepting the
+public reply transcript. The existing IntegrationOwner/source-budget and native
+MCP transfer cases separately verify startup deadlines, bounded source/destination
+overlap, rollback and cleanup. Catalog maintenance and inbound platform MCP remain
+outside participant execution.
 
 ## Scope and performance
 

@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
   use Supervisor
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech
-  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolCompletions
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{ToolCompletions, Usage}
   alias Vxpipe.CallEngine.Id
   alias Vxpipe.CallEngine.RemoteMCP.Activation, as: RemoteActivation
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, PrivateInit}
@@ -160,9 +160,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
   end
 
   defp tool_usage(options, activation) do
-    case Keyword.get(options, :usage_context) do
-      context when is_list(context) ->
-        [call_id: Keyword.fetch!(context, :call_id), activation_id: activation]
+    case Usage.normalize_context(
+           Keyword.get(options, :usage_context),
+           Keyword.get(options, :frame_identity, %{})
+         ) do
+      %{call_id: call_id} ->
+        [call_id: call_id, activation_id: activation]
 
       nil ->
         nil

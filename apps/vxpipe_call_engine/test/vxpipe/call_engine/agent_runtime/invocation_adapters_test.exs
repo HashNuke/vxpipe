@@ -68,6 +68,33 @@ defmodule Vxpipe.CallEngine.AgentRuntime.InvocationAdaptersTest do
     refute inspect(correlation) =~ "private-result"
   end
 
+  for effect <- [:hangup, :participant_transfer_committed] do
+    test "a #{effect} completion exposes only its public result to a racing continuation" do
+      completion = %Vxpipe.CallEngine.Tool.InvocationCompletion{
+        invocation_id: "terminal-platform-call",
+        tool_name: "terminal_action",
+        conversation_mode: :blocking,
+        context: tool_context(),
+        outcome:
+          {:ok,
+           %Vxpipe.CallEngine.Tool.PlatformResult{
+             effect: unquote(effect),
+             result: %{"status" => "completed"}
+           }}
+      }
+
+      command = Vxpipe.CallEngine.Command.ContinueAgent.new(completion)
+      [_instructions, encoded] = String.split(command.content, "\n", parts: 2)
+
+      assert JSON.decode!(encoded)["outcome"] == %{
+               "status" => "completed",
+               "result" => %{"status" => "completed"}
+             }
+
+      refute encoded =~ "effect"
+    end
+  end
+
   defp start_registry do
     activation_id = "act-adapters-#{System.unique_integer([:positive])}"
 

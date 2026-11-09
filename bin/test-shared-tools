@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$project_root"
+
+exec mix test \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/shared_tool_contract_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/agent_runtime \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/tool \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/usage \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/room_authority/sts_tool_lifecycle_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/room_authority/sts_tool_identity_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/room_authority/sts_mcp_room_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/remote_mcp/integration_owner_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/remote_mcp/source_budget_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/remote_mcp/live_call_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/capability/sts_capability_origins_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/capability/gpt_live_fake_socket_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/call_engine/speech/duplex_sts_conversation_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/providers/google/sts_session_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/providers/elevenlabs/realtime_session_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/providers/elevenlabs/realtime_progress_test.exs \
+  apps/vxpipe_call_engine/test/vxpipe/providers/openai/gpt_live_session_test.exs \
+  "$@"

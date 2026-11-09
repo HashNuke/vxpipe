@@ -210,6 +210,12 @@ wait for this plan's assumed GPT-Live hosted completion. Provider-specific work
 below remains with the relevant provider milestone. Do not track duplicate work
 or check this package complete until the new milestone's relevant acceptance passes.
 
+Current common-code acceptance is implemented in the shared milestone: schema and
+binding adoption, both conversation modes, semantic single-result completion,
+MCP ownership, usage and compiled receptionist cases. Run `bin/test-shared-tools`;
+the shared milestone retains the final umbrella gate. This does not close any
+unrelated provider/hosted package below.
+
 Historical package description:
 
 Problem: `RoomAuthority.SpeechToSpeech.Tools.invocation_for/2` returns

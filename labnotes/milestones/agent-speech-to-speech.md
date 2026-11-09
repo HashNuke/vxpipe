@@ -1499,7 +1499,7 @@ the existing audio round trip. Record discoveries here before implementing.
     run finished 1,412 tests with one unrelated 100 ms Morse readiness timeout
     (30 integration exclusions); its isolated rerun passed. The full gate is
     still tracked separately and is not claimed green on that run.
-  - [ ] Apply the same public identity boundary to tools: inspection also found
+  - [x] Apply the same public identity boundary to tools: inspection also found
     `inspect(call_ref)` in public tool-call IDs and provider-turn fallback IDs
     when no audio turn exists. Give tool-only turns and tool calls room-owned
     IDs, retain matching completion/cancellation associations, and test stale,
@@ -1532,8 +1532,8 @@ the existing audio round trip. Record discoveries here before implementing.
       delayed/repeated owner messages cannot reopen settled work, active duplicate
       calls preserve their first association, overflow ends the owned allocation,
       and unknown/stale results never reach a permissive provider callback.
-      Hold retires provider associations without claiming to cancel submitted
-      engine workers. Provider events first observed after a new epoch still
+      Reversible holds retain admitted tool associations. Actual provider
+      cancellation retires delivery without cancelling submitted engine workers. Provider events first observed after a new epoch still
       require the separate upstream late-evidence isolation gate.
     - [x] Replace unowned `Task.start` execution with the existing supervised
       invocation machinery under the agent-owned STS lifecycle. Distinguish
@@ -1542,8 +1542,8 @@ the existing audio round trip. Record discoveries here before implementing.
       while already-submitted work finishes within its existing deadline and
       retains its result for subsequent reasoning. Timeout, transfer/activation
       loss and room shutdown retire local workers/timers; local termination is
-      not remote rollback. Retain the existing five-second execution budget
-      unless measured evidence requires a different contract. Test worker
+      not remote rollback. Use the shared application-configured invocation
+      budget and original operation deadline. Test worker
       survival across ordinary interruption and `DOWN` on actual owner loss.
       The tree owns `InvocationSupervisor`, `InvocationRegistry` and a private
       completion bridge; compiled-room lifecycle tests cover ancestry,
@@ -1552,18 +1552,19 @@ the existing audio round trip. Record discoveries here before implementing.
       tool lifecycle, identity and embedded transcript group passes 51/0
       (seed 0). This closes worker ownership only, not the separate running-
       acknowledgement/private-completion or binding adoption gates below.
-    - [ ] Complete runtime schema/permission checks and supported host, variable,
-      platform and MCP binding adoption. Unsupported bindings must fail explicitly,
-      not wait indefinitely for a result no executor will produce. Preserve
-      submitted invocation results for later reasoning without reviving cancelled
-      provider speech. Reuse bounded invocation records/completion leases,
-      correlated running acknowledgements, separate private completion updates
-      and blocking/non-blocking conversation admission from the approved
-      [tool execution model](../../docs/tool-execution-model.md). Verify STS provider
-      encodings independently; do not send a second ordinary result to a retired
-      provider call or publish a fake caller turn. Submitted timeout without a
-      definitive outcome is unknown, not confirmed failure. The public-ID
-      checkpoint alone does not prove this gate.
+    - [x] Complete runtime schema/permission checks and supported host, variable,
+      platform and MCP binding adoption through the common invocation registry.
+      Unsupported requests fail explicitly before side effects. Both conversation
+      modes share engine admission; native sessions receive one final result
+      through the semantic Session API with current continuation authority.
+      Reversible holds retain existing leases, permanent authority/result loss
+      terminates explicitly, and uncertain expiry remains unknown without retry.
+      Tool usage and terminal effect ordering use common records. The
+      [shared tool milestone](shared-participant-tool-execution.md) owns current
+      evidence and final umbrella acceptance. Its common compiled-room suite
+      exercises LLM and ordinary/duplex native receptionist flows, duplicate IDs,
+      partial admission, controlled outcomes and full teardown. This replaces
+      the older proposal to copy LLM running acknowledgements into native STS.
 
     Evidence: the first identity suite failed all 16 cases; three follow-up
     source/hold tests also failed before repair. Public start/completion/failure/
@@ -1851,10 +1852,10 @@ Design review, separate from implementation: [STS tool lifecycle](sts-tool-lifec
 records the tree ownership, registry leases, five-second budget and proposed
 parent-owned response seam before tests/code. This is a B/C lifecycle slice;
 the full execution/continuation tasks above remain open.
-Parent integration must also synchronize the normative provider contract's
-implementation status: record supervised host ownership, retained unconsumed
-leases and original admission-deadline checks without claiming the deferred
-model-continuation or complete schema/binding protocol.
+The shared participant tool milestone now reconciles this older host-only
+checkpoint with implemented binding adoption, semantic completion, common
+conversation admission and usage. Its final umbrella gate remains the progress
+owner; unrelated parent/provider/hosted acceptance is unchanged.
 
 - [x] Prove actual compiled-room host submission starts an Invocation-owned worker;
   enforce 16 outstanding records across retired provider associations.
@@ -1864,9 +1865,12 @@ model-continuation or complete schema/binding protocol.
   explicit activation-tree stop and room-owner loss; report timeout as unknown.
 - [x] Preserve current public IDs and exact-source/epoch/policy settlement; run
   focused room tool identity and embedded transcript regressions.
-- [ ] Parent coordination: implement correlated running acknowledgement, private
-  continuation commit receipts and blocking/nonblocking model admission. OPEN;
-  ordinary final-result delivery does not satisfy this gate.
+- [x] Parent coordination: shared blocking/nonblocking admission and retained
+  completion settlement are implemented. LLM uses its existing running/private
+  continuation protocol; native STS uses one semantic final result with current
+  context, acceptance-qualified consumption and bounded retirement. See the
+  [shared conformance suite](../../apps/vxpipe_call_engine/test/vxpipe/call_engine/shared_tool_contract_test.exs)
+  and [current milestone evidence](shared-participant-tool-execution.md#acceptance-and-evidence).
 - [x] Approved separate privacy repair: capture an actual argument-bearing
   Invocation crash under supervisor loss before editing runtime; add only
   `Tool.Invocation.format_status/1` sanitizing state/message/reason/log. Preserve

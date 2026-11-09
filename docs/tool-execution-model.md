@@ -46,8 +46,11 @@ They receive one final function result, without the text loop's interim running
 result. Local result acceptance retires transport-turn tracking; the pending
 business hold ends only after the existing registry completion lease is
 acknowledged. An undeliverable rejection terminates explicitly instead of leaving
-a provisional hold with no invocation to resolve it. Broader native completion,
-replay and conformance acceptance remains tracked in the
+a provisional hold with no invocation to resolve it. Native completions preserve
+stable tool authority across retired speech origins, retain leases through reversible
+stop-holds and terminate explicitly when authority or delivery is lost. Shared
+usage and bounded replay retention are implemented. `bin/test-shared-tools` runs
+the common compiled-room and lifecycle contract; final acceptance is tracked in the
 [shared participant milestone](../labnotes/milestones/shared-participant-tool-execution.md).
 
 Both participant paths snapshot the existing application `agent_runtime` execution

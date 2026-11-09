@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Command.ContinueAgent do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Id
-  alias Vxpipe.CallEngine.Tool.InvocationCompletion
+  alias Vxpipe.CallEngine.Tool.{InvocationCompletion, PlatformResult}
 
   @derive {Inspect, except: [:content]}
   @enforce_keys [
@@ -75,6 +75,7 @@ defmodule Vxpipe.CallEngine.Command.ContinueAgent do
       JSON.encode!(payload)
   end
 
+  defp outcome_payload({:ok, %PlatformResult{result: result}}), do: outcome_payload({:ok, result})
   defp outcome_payload({:ok, result}), do: %{"status" => "completed", "result" => result}
   defp outcome_payload({:error, :unknown}), do: %{"status" => "unknown"}
   defp outcome_payload({:error, _reason}), do: %{"status" => "failed"}

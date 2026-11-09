@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 14/20 implementation tasks complete; 2/4 checkpoints complete**.
+Status: **in progress — 19/20 implementation tasks complete; 3/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -113,7 +113,7 @@ Each task includes its smallest project-owned failing test, passing implementati
 and relevant documentation. Keep checkpoints coherent and usable. Record commands,
 results and remaining limitations below when checking items off.
 
-### C1 — Shared descriptor resolution and tool submission (4/5)
+### C1 — Shared descriptor resolution and tool submission (5/5)
 
 - [x] Preserve the compiled private descriptors alongside provider-safe schema
   projections, including injected Call Variables bindings. Test identical selected
@@ -128,7 +128,7 @@ results and remaining limitations below when checking items off.
 - [x] Apply `PlatformResult` through common room authority. Prove current-time,
   authorized hangup, successful participant transfer and failed transfer recovery;
   stale completions cannot end or transfer a replacement source.
-- [ ] Run the same compiled-room contract cases for LLM and native participants,
+- [x] Run the same compiled-room contract cases for LLM and native participants,
   preserving existing host/transfer behavior and lifecycle publication. Include
   duplicate requests and partial multi-tool admission without replaying work.
 
@@ -177,21 +177,21 @@ results and remaining limitations below when checking items off.
   session failure and activation replacement races against both participant paths.
   Preserve tool visibility, safe usage/lifecycle facts and terminal effect ordering.
 
-### C4 — Common conformance and acceptance (0/5)
+### C4 — Common conformance and acceptance (4/5)
 
-- [ ] Extend existing semantic-session and compiled-room test support into a shared
+- [x] Extend existing semantic-session and compiled-room test support into a shared
   tool contract suite. Run it against the LLM path and at least two contrasting
   local STS fixtures (existing ordinary and duplex Morse fixtures where suitable).
   Test common behavior without provider-name conditions or a new test framework.
-- [ ] Run the complete receptionist scenario through both paths: selected MCP
+- [x] Run the complete receptionist scenario through both paths: selected MCP
   lookup, permitted variable update, continued conversation, participant transfer
   or hangup, and full teardown. Include both conversation modes and controlled
   denied/failed/unknown outcomes, with no skipped parity cases.
-- [ ] Record a bounded local concurrency/latency check: invocation work does not
+- [x] Record a bounded local concurrency/latency check: invocation work does not
   block common audio/room control, MCP startup observes its deadline, transfer
   overlap remains bounded, and completed/retired calls release capacity. Compare
   equivalent LLM/native fixtures without claiming production vendor percentiles.
-- [ ] Update developer integration documentation with the mandatory common tool
+- [x] Update developer integration documentation with the mandatory common tool
   contract and conformance entry point. Reconcile the old STS tool checklist with
   passing evidence; preserve unrelated parent/provider acceptance gates. Record
   any unsupported semantic operation explicitly rather than advertising parity.
@@ -202,8 +202,37 @@ results and remaining limitations below when checking items off.
 
 ## Acceptance and evidence
 
-Usage/race acceptance closes C3 (5/5), bringing progress to 14/20 and two complete
-checkpoints. Native invocations now configure the existing ToolAttempt recorder
+Shared compiled-room conformance closes C1 and four C4 tasks: 19/20 tasks,
+three complete checkpoints. The same receptionist contract passes for LLM,
+ordinary Morse and duplex Morse in both modes: selected MCP lookup, permitted
+variable update, observable reply, authorized hangup and owned teardown. While
+MCP work is gated, nonblocking callers receive an unrelated reply and blocking
+input is discarded without later replay. Shared cases also cover denied requests,
+definite/unknown outcomes, repeated invocation identity, capacity recovery and
+one multi-call LLM response whose admitted subset survives saturation.
+
+The 31-case common suite passes (961776). Review strengthened native duplicate
+proof by replaying the same private call reference at a fresh sequence; its three
+cases pass after reproducing the old watermark-only assertion gap. The complete
+`bin/test-shared-tools` lane passes **446 tests, zero failures, eight excluded**
+(903191), covering existing text/native races, semantic adapter fixtures, MCP
+startup budgets and transfer lifetime. Quick root gates pass. A deterministic
+regression exposed an LLM terminal-result continuation trying to encode an internal
+PlatformResult; continuation now projects only its public result, preserving room
+ownership of effects. Two focused reds and the subsequent contract run verify it.
+
+The [conformance labnote](../20261109-1048-shared-tool-conformance.md) records local
+startup/control/consumption timing and verification. The pending control probe is
+bounded at 250 ms; the actual six-case observations were below one millisecond.
+All owned registries/sessions are monitored DOWN. These synthetic observations do
+not claim vendor latency or production capacity. The old parent tool-specific
+checklists are reconciled with the current single-result contract; unrelated
+provider/hosted/parent acceptance stays open. Only the final full umbrella/Lean
+acceptance and evidence synchronization remain in this milestone.
+
+The preceding usage/race checkpoint closed C3 (5/5), bringing progress at that
+point to 14/20 and two complete checkpoints. Native invocations configure the
+existing ToolAttempt recorder
 through a separate usage target. Their existing completion bridge forwards usage
 before results, preserving terminal facts across hangup and committed transfer.
 Only the exact current native bridge is authorized; retired/replaced sources
@@ -213,7 +242,8 @@ no attempt. Existing text usage defaults remain unchanged. Combined shared
 registry, usage, LLM coordinator/conversation and native race/transfer regression:
 **183 tests, zero failures** (seed `47746`). Quick root gates pass; independent
 Astra source/test review is clean. See the [usage labnote](../20261109-1039-native-tool-usage.md).
-Shared compiled-room conformance and final umbrella gates remain in C1/C4.
+Shared compiled-room conformance and final umbrella gates remained in C1/C4 at
+that checkpoint.
 
 Semantic completion closes two C3 tasks, bringing progress to 13/20. Native
 results use the existing Session command path with current continuation authority
@@ -335,10 +365,10 @@ of it checks off the new integration or parity tasks above.
 
 | Checkpoint | Progress | Implementation evidence |
 | --- | --- | --- |
-| C1 | 4/5 | Private registry, shared dispatch/validation, variable permissions, bounded rejection and scoped platform effects implemented. Held/policy-denied requests fail explicitly; retained accepted-ID replay cannot repeat work or publish another result. 156 focused regressions pass (seed 836200), plus 32 corrected room-fixture tests; clean Astra source/test review. Shared compiled-room duplicate/partial-admission acceptance remains. |
+| C1 | 5/5 | Shared resolution, validation, dispatch and scoped effects pass. Common compiled LLM/ordinary/duplex cases now cover repeated identities, rejection and partial capacity; a multi-call LLM response retains its accepted subset without replay. |
 | C2 | 5/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime pass. Native aliases, call/tenant isolation, in-flight teardown and ordinary/duplex transfer success/failure pass. Real saved disconnect/replacement and catalog-pin races now pass alongside existing LLM cases (18 tagged integration tests). |
 | C3 | 5/5 | Shared admission, execution bounds, semantic result delivery and bounded lease/ID settlement pass. Existing LLM/native race suites cover early completion, interruptions, queued cancellation, provider/activation loss and replacement. Exact native bridge usage records success/unknown and terminal hangup/transfer safely without duplicate attempts; 183 combined regressions pass. |
-| C4 | 0/5 | Pending |
+| C4 | 4/5 | Common 31-case receptionist/outcome contract and 446-test conformance lane pass; local timing/cleanup evidence and developer/parent checklist reconciliation are recorded. Final root umbrella/Lean gate remains. |
 
 First C1 checkpoint: native startup retains the existing AgentRuntime `ToolRegistry`
 with selected host and permission-derived variable bindings, separately from the

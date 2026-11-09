@@ -2,7 +2,10 @@
 
 2026-11-09: the open shared tool/lifecycle work now belongs to
 [Shared participant tool execution](shared-participant-tool-execution.md).
-That milestone owns current tasks and parity acceptance. The checkpoint limits
+That milestone owns current tasks and parity acceptance. The common implementation
+now includes all binding kinds, both conversation modes, semantic completion,
+bounded retirement and safe usage; `bin/test-shared-tools` runs its focused
+acceptance. Final umbrella status remains with that milestone. The checkpoint limits
 and proposed continuation design below are historical evidence, not new contracts
 or a second implementation checklist.
 
