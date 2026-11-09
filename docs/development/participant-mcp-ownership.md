@@ -499,6 +499,8 @@ rejects that missing owner. This milestone changes ownership for supported MCP
 execution; it does not silently claim new native STS MCP support. Keep that
 unsupported combination explicit and regression-tested. Any later STS MCP
 feature must use the same participant-lifetime contract.
+The [native STS tools research](native-sts-tools.md) describes that follow-up and
+its existing completion-plan package; it is not implemented by this milestone.
 
 ## Persistent tenant catalog maintenance
 
