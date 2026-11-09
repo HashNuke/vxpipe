@@ -267,6 +267,14 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
              input_schema: definition.parameters
            }
 
+    registry = startup.speech_to_speech.tool_registry
+
+    assert {:ok, descriptor} =
+             Vxpipe.AgentRuntime.ToolRegistry.resolve(registry, tool.name, %{"value" => "example"})
+
+    assert descriptor.binding.handler == {:host, Vxpipe.CallEngine.TestAgentTool}
+    refute inspect(startup) =~ "InvocationBinding"
+
     refute inspect(startup) =~ definition.description
     refute inspect(startup) =~ "Answer briefly."
   end

@@ -9,10 +9,79 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
   alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
   alias Vxpipe.Providers.ElevenLabs.RealtimeSession
 
+  test "native activation retains the text tool registry contract outside provider configuration" do
+    plan = %{tenant_id: "tenant", room_id: "room"}
+
+    receiver =
+      participant()
+      |> Map.merge(%{
+        participant_id: "agent",
+        activation_id: "activation",
+        variable_permissions: %{grants: %{"private-section" => :read}}
+      })
+
+    options = [call_variables: self(), incarnation_id: "incarnation"]
+
+    assert {:ok, activation, registry} =
+             SpeechToSpeechActivation.resolve(plan, receiver, options)
+
+    assert {:ok, variables} =
+             Vxpipe.CallEngine.PlanStartup.AgentActivation.variable_binding(
+               plan,
+               receiver,
+               options
+             )
+
+    assert {:ok, descriptors} =
+             Vxpipe.CallEngine.AgentRuntime.ToolDescriptors.compile(receiver.tools, variables)
+
+    assert {:ok, text_registry} = Vxpipe.AgentRuntime.ToolRegistry.new(descriptors)
+
+    for {name, arguments} <- [
+          {"echo_context", %{}},
+          {"read_variables", %{"sections" => ["private-section"]}}
+        ] do
+      assert {:ok, native} = Vxpipe.AgentRuntime.ToolRegistry.resolve(registry, name, arguments)
+
+      assert {:ok, text} =
+               Vxpipe.AgentRuntime.ToolRegistry.resolve(text_registry, name, arguments)
+
+      assert native.binding == text.binding
+    end
+
+    for candidate <- [registry, text_registry] do
+      assert {:error, :invalid_arguments} =
+               Vxpipe.AgentRuntime.ToolRegistry.resolve(candidate, "echo_context", %{
+                 "extra" => true
+               })
+
+      assert {:error, :unknown_tool} =
+               Vxpipe.AgentRuntime.ToolRegistry.resolve(candidate, "update_variable", %{})
+    end
+
+    assert Enum.map(activation.tools, & &1.name) == ["echo_context", "read_variables"]
+
+    assert {:ok, {_provider, public}, private} =
+             SpeechToSpeechRuntime.provider(
+               {Vxpipe.Providers.MorseCode.STSSession, []},
+               [],
+               activation
+             )
+
+    for value <- [activation, public, private] do
+      encoded = :erlang.term_to_binary(value)
+      refute encoded =~ "private-section"
+      refute encoded =~ "InvocationBinding"
+      refute encoded =~ "compiled_schema"
+    end
+
+    refute inspect(registry) =~ "private-section"
+  end
+
   test "ElevenLabs activation privately binds the saved key, prompt and authorized tools" do
     options = [api_key: "synthetic-elevenlabs-secret"]
     assert {:ok, ^options} = SpeechToSpeechRuntime.configure(RealtimeSession, options)
-    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant(), [])
+    assert {:ok, activation, _registry} = SpeechToSpeechActivation.resolve(nil, participant(), [])
 
     assert {:ok, {RealtimeSession, public}, private} =
              SpeechToSpeechRuntime.provider({RealtimeSession, options}, [], activation)
@@ -36,7 +105,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
   end
 
   test "ElevenLabs rejects private overrides and transport settings outside private startup" do
-    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant(), [])
+    assert {:ok, activation, _registry} = SpeechToSpeechActivation.resolve(nil, participant(), [])
 
     for options <- [
           [api_key: ""],
@@ -68,7 +137,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
   test "OpenAI activation keeps tenant auth, prompt and tools private" do
     options = [api_key: "synthetic-openai-secret", backend_model: "gpt-5.6-luna"]
     assert {:ok, ^options} = SpeechToSpeechRuntime.configure(GPTLiveSession, options)
-    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant(), [])
+    assert {:ok, activation, _registry} = SpeechToSpeechActivation.resolve(nil, participant(), [])
 
     assert {:ok, {GPTLiveSession, public}, private} =
              SpeechToSpeechRuntime.provider({GPTLiveSession, options}, [], activation)
@@ -98,7 +167,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
     assert {:error, :invalid_configuration} =
              SpeechToSpeechRuntime.configure(STSSession, api_key: "")
 
-    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant(), [])
+    assert {:ok, activation, _registry} = SpeechToSpeechActivation.resolve(nil, participant(), [])
 
     assert {:ok, {_provider, public}, private} =
              SpeechToSpeechRuntime.provider({STSSession, options}, [], activation)
@@ -109,7 +178,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
 
   test "activation carries only the pinned prompt and authorized model-visible tools privately" do
     participant = participant()
-    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant, [])
+    assert {:ok, activation, _registry} = SpeechToSpeechActivation.resolve(nil, participant, [])
 
     assert {:ok, {STSSession, public}, private} =
              SpeechToSpeechRuntime.provider(
@@ -144,7 +213,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
 
   test "empty allowlist stays empty and malformed or oversized prompt is rejected" do
     receiver = %{participant() | tools: %{}}
-    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, receiver, [])
+    assert {:ok, activation, _registry} = SpeechToSpeechActivation.resolve(nil, receiver, [])
 
     assert {:ok, {_module, _public}, private} =
              SpeechToSpeechRuntime.provider({STSSession, [api_key: "synthetic"]}, [], activation)
@@ -169,7 +238,10 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
       })
 
     options = [call_variables: self(), incarnation_id: "incarnation"]
-    assert {:ok, activation} = SpeechToSpeechActivation.resolve(plan, receiver, options)
+
+    assert {:ok, activation, _registry} =
+             SpeechToSpeechActivation.resolve(plan, receiver, options)
+
     assert Enum.map(activation.tools, & &1.name) == ["echo_context", "read_variables"]
 
     assert {:ok, {_provider, _public}, private} =
@@ -191,7 +263,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
     {_catalog, remote} = Vxpipe.CallEngine.RemoteMCPFixture.binding!(self(), self(), "private")
     receiver = %{participant() | tools: %{"customer_lookup" => remote}}
     assert {:error, :invalid_configuration} = SpeechToSpeechActivation.resolve(nil, receiver, [])
-    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant(), [])
+    assert {:ok, activation, _registry} = SpeechToSpeechActivation.resolve(nil, participant(), [])
 
     for options <- [
           [api_key: "synthetic", tools: []],

@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **planned — 0/20 implementation tasks complete; 0/4 checkpoints complete**.
+Status: **in progress — 1/20 implementation tasks complete; 0/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -108,9 +108,9 @@ Each task includes its smallest project-owned failing test, passing implementati
 and relevant documentation. Keep checkpoints coherent and usable. Record commands,
 results and remaining limitations below when checking items off.
 
-### C1 — Shared descriptor resolution and tool submission (0/5)
+### C1 — Shared descriptor resolution and tool submission (1/5)
 
-- [ ] Preserve the compiled private descriptors alongside provider-safe schema
+- [x] Preserve the compiled private descriptors alongside provider-safe schema
   projections, including injected Call Variables bindings. Test identical selected
   names and authorization for LLM and native participants; private owner handles
   and credentials must not reach provider metadata.
@@ -211,10 +211,19 @@ of it checks off the new integration or parity tasks above.
 
 | Checkpoint | Progress | Implementation evidence |
 | --- | --- | --- |
-| C1 | 0/5 | Pending |
+| C1 | 1/5 | Private registry retained separately from provider projection; 101 focused tests pass (seed 63750), clean Astra review. Dispatch remains pending. |
 | C2 | 0/5 | Pending |
 | C3 | 0/5 | Pending |
 | C4 | 0/5 | Pending |
+
+First C1 checkpoint: native startup retains the existing AgentRuntime `ToolRegistry`
+with selected host and permission-derived variable bindings, separately from the
+provider's schema-only activation. Red tests reproduced the missing registry;
+shared name/schema validation and private projection now pass. This does not yet
+route native execution through that registry. All five root gates pass with
+5,095 tests, zero failures and 371 exclusions (seed `293285`); independent
+GPT-6 Astra xhigh source and documentation reviews found no actionable issues. See the
+[implementation labnote](../20261109-0536-shared-tool-dispatch.md).
 
 ## Design review and scope reconciliation
 
@@ -240,4 +249,5 @@ both conversation modes, native result semantics, ownership and dependency order
 It identified the linked speech-provider contract's obsolete running/private
 continuation requirement; that source was corrected and re-reviewed. The current
 semantic API limits are now explicit above. No actionable findings remain.
-This is specification approval only; all 20 implementation tasks remain unchecked.
+That review was specification approval only. Subsequent runtime progress and
+verification are tracked in the task list and evidence above.

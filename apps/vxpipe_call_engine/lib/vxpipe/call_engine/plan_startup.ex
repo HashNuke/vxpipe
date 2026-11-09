@@ -518,7 +518,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         {:ok, nil}
 
       {:ok, {provider_module, _provider_config} = provider, settings} ->
-        with {:ok, activation} <- SpeechToSpeechActivation.resolve(plan, participant, options),
+        with {:ok, activation, tool_registry} <-
+               SpeechToSpeechActivation.resolve(plan, participant, options),
              {:ok, {^provider_module, runtime_options} = runtime_provider, provider_private} <-
                SpeechToSpeechRuntime.provider(provider, settings, activation),
              {:ok, usage_provider} <-
@@ -535,6 +536,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              call_id: plan.call_id,
              participant_id: participant.participant_id,
              activation_id: participant.activation_id,
+             tool_registry: tool_registry,
              provider: runtime_provider,
              provider_private: provider_private,
              usage_provider: usage_provider,

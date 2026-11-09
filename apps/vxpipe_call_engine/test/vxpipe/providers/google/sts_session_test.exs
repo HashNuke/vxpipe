@@ -646,7 +646,7 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
       }
     }
 
-    assert {:ok, activation} = SpeechToSpeechActivation.resolve(nil, participant, [])
+    assert {:ok, activation, _registry} = SpeechToSpeechActivation.resolve(nil, participant, [])
     definition = TestAgentTool.definition()
 
     expected = [

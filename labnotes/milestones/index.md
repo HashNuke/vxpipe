@@ -186,7 +186,7 @@ progress without claiming the entire milestone is complete.
 53. [x] [ElevenLabs Realtime speech-to-speech](elevenlabs-realtime-models.md) — Standalone Mini/Max STS with provider-native turn detection and no local VAD. Complete: Mini/Max native live checks, ten compiled room regressions, all common gates and clean independent GPT-6 Astra xhigh review pass. Five coherent checkpoints record the implementation and evidence.
 54. [x] [ElevenLabs progress timeouts](elevenlabs-progress-timeouts.md) — Native caller speech and progressing output have no adapter duration cap. Scoped creation, finality, cancellation and credit guards pass 145 focused tests, all root gates (4,503 tests, zero failures), Lean and clean final independent GPT-6 Astra xhigh review. Two coherent checkpoints; no local VAD.
 55. [x] [Participant-owned MCP sessions](participant-owned-mcp-sessions.md) — Complete: all 29 implementation items verified. Activation-owned sessions/renewal and durable tenant catalog maintenance pass credential-change, teardown, transfer/recovery, capacity, privacy and controlled local acceptance. Actual Cron refresh and external inbound MCP continuity pass. All five root gates pass: 5,094 tests, zero failures, 371 excluded, seed 157471; focused final lanes and independent Astra reviews are clean. Deployment and the separate directory workflow approval remain outside this milestone.
-56. [ ] [Shared tool execution for LLM and speech-to-speech participants](shared-participant-tool-execution.md) — Planned, 0/20 tasks: shared descriptor validation/submission, native participant-owned MCP sessions, common conversation/completion policy and cross-path conformance. Provider-specific implementation is excluded; both conversation modes and the existing LLM tool/MCP behavior are acceptance requirements.
+56. [ ] [Shared tool execution for LLM and speech-to-speech participants](shared-participant-tool-execution.md) — In progress, 1/20 tasks: private native descriptors/registry are retained separately from provider schemas, with shared validation and 101 focused tests passing. Dispatch, owned MCP startup, conversation/completion policy and cross-path acceptance remain. Provider-specific implementation is excluded; both conversation modes and existing LLM tool/MCP behavior are required.
 57. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 58. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
@@ -200,7 +200,7 @@ not include native STS MCP support.
 The 2026-11-09 [shared participant tool milestone](shared-participant-tool-execution.md)
 builds on that completed ownership work and the existing native session runtime.
 It takes over common tool work from the older STS completion/lifecycle companions
-and tracks implementation once, with all 20 tasks open. The user's direction is
+and its 20-task checklist owns runtime progress. The user's direction is
 common internal code and LLM/native behavioral parity, including both conversation
 modes. Provider-specific extensions and hosted acceptance remain in their own
 milestones; unfinished provider milestones do not gate this shared-code slice.
@@ -549,7 +549,8 @@ The 2026-11-09 [shared participant tool specification](shared-participant-tool-e
 has independent design/dependency approval. Review corrected the linked speech
 contract's obsolete text-style continuation requirement and clarified the current
 semantic API limits. Common implementation and both conversation modes are required;
-provider-specific work is excluded. All 20 implementation tasks remain unchecked.
+provider-specific work is excluded. All 20 implementation tasks were unchecked at
+specification approval; the ordered entry and milestone track subsequent progress.
 
 The 2026-11-08 [participant-owned MCP specification](participant-owned-mcp-sessions.md#specification-review--separate-from-implementation)
 records source/protocol research and prerequisite review separately from runtime

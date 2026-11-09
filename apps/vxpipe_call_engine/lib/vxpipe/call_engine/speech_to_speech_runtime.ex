@@ -16,7 +16,8 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
     :activation_id,
     :usage_provider
   ]
-  defstruct @enforce_keys ++ [output_speech_to_text: nil, output_speech_to_text_private: []]
+  defstruct @enforce_keys ++
+              [tool_registry: nil, output_speech_to_text: nil, output_speech_to_text_private: []]
 
   @type t :: %__MODULE__{
           provider: {module(), keyword()},
@@ -24,6 +25,7 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
           call_id: String.t(),
           participant_id: String.t(),
           activation_id: String.t() | nil,
+          tool_registry: nil | Vxpipe.AgentRuntime.ToolRegistry.t(),
           usage_provider: ProviderContext.t(),
           output_speech_to_text: nil | {module(), keyword()},
           output_speech_to_text_private: keyword()

@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.PlanStartup.SpeechToSpeechActivation do
   @moduledoc false
 
+  alias Vxpipe.AgentRuntime.ToolRegistry
   alias Vxpipe.CallEngine.AgentRuntime.ToolDescriptors
   alias Vxpipe.CallEngine.PlanStartup.AgentActivation
 
@@ -19,11 +20,11 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechToSpeechActivation do
              Keyword.delete(options, :validation_only)
            ),
          {:ok, descriptors} <- ToolDescriptors.compile(participant.tools, variables),
-         true <- length(descriptors) <= 64 do
+         {:ok, registry} <- ToolRegistry.new(descriptors) do
       tools = Enum.map(descriptors, &Map.take(&1, [:name, :description, :input_schema]))
 
       if :erlang.external_size({prompt, tools}) <= 131_072 do
-        {:ok, %__MODULE__{system_prompt: prompt, tools: tools}}
+        {:ok, %__MODULE__{system_prompt: prompt, tools: tools}, registry}
       else
         {:error, :invalid_configuration}
       end

@@ -1,7 +1,9 @@
 # Platform and MCP tools for native speech-to-speech
 
 Research date: 2026-11-09. Code inspected at `f9eefd6a`.
-Status: researched proposal; the missing behavior below is not implemented.
+Status: implementation started. Native startup now retains the private shared tool
+registry separately from provider schemas; dispatch, owned MCP startup and
+conversation/completion parity remain incomplete.
 
 Planning amendment, 2026-11-09: the user's follow-up requires common internal
 implementation and behavior parity with LLM participants, including conversation
@@ -32,14 +34,15 @@ constraint. This research does not complete that work or reopen the completed
 | Participant `transfer` | Compiled-room Morse and GPT-Live fixture tests cover successful transfer and failure recovery. | Preserve that behavior while unifying dispatch. This evidence concerns Vxpipe participant transfer; it does not establish arbitrary PSTN transfer support. |
 | Blocking host tool | ElevenLabs compiled-room fixture executes `ping` and receives its result. | Reuse the existing execution path. |
 | Platform `get_current_time` and `hangup` | Descriptors can be advertised, but STS dispatch returns `:deferred`. | Execute bindings and apply authorized platform effects. |
-| Call-variable tools | Descriptor compilation injects them, but room lookup searches the original participant tool map. | Retain and use the compiled private binding map. |
+| Call-variable tools | Native startup now retains their compiled private registry, but room lookup still searches the original participant tool map. | Use the retained registry for dispatch. |
 | Connected MCP tools | STS descriptor compilation has no remote owner and rejects MCP bindings. The STS tree has no MCP owner/session supervisor. | Add the existing owned session components and bind descriptors to the exact owner. |
 | Non-blocking/background tools | General native execution and late delivery are incomplete. | Implement common conversation policy and prove both modes under the new parity milestone; report unsupported semantic operations explicitly. |
 
 The startup gap is in
 [SpeechToSpeechActivation](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/speech_to_speech_activation.ex):
-it calls `ToolDescriptors.compile/2` without an MCP owner and keeps only public
-schema fields. The execution gap is in
+it calls `ToolDescriptors.compile/2` without an MCP owner. The first C1 checkpoint
+now preserves the compiled `ToolRegistry` on the private runtime separately from
+the provider's schema projection. The execution gap remains in
 [SpeechToSpeech.Tools](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/room_authority/speech_to_speech/tools.ex):
 `invocation_for/2` executes participant transfer and blocking host tools, leaving
 other types deferred. Advertising a schema alone does not make its tool executable.
