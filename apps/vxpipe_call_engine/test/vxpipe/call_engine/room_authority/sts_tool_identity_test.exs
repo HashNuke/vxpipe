@@ -206,7 +206,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
         :retired_epoch,
         :held_source
       ] do
-    test "#{mutation} retires completion without sending it to the provider", context do
+    test "#{mutation} withholds completion without claiming it was consumed", context do
       call = make_ref()
       state = call(context.state, context.capability, call, make_ref())
       assert_receive {:vxpipe_event, %ToolCallStarted{}}
@@ -217,7 +217,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
           "private" => "result"
         })
 
-      assert state.sts_tool_calls == %{}
+      assert Map.has_key?(state.sts_tool_calls, call)
       refute_received {:provider_tool_result, _, _}
       refute_received {:vxpipe_event, _}
     end
@@ -421,7 +421,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
 
       :ok = GenServer.call(state.media_policy_authority, {:replace, changed})
       state = complete_tool(state, context.capability, call, %{})
-      assert state.sts_tool_calls == %{}
+      assert Map.has_key?(state.sts_tool_calls, call)
       refute_received {:provider_tool_result, _, _}
       refute_received {:vxpipe_event, _}
     end

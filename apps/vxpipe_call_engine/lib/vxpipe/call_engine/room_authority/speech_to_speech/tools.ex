@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
   alias Vxpipe.AgentRuntime.ToolRegistry
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech, as: Capability
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolCompletions
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree
 
   alias Vxpipe.CallEngine.Event.{
@@ -148,12 +149,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   def handle_tool_executed(%State{} = state, capability, call_ref, outcome)
       when is_pid(capability) and is_reference(call_ref) do
     if current?(state, capability) do
-      case Map.pop(state.sts_tool_calls, call_ref) do
-        {nil, _pending} ->
+      case Map.fetch(state.sts_tool_calls, call_ref) do
+        :error ->
           state
 
-        {pending, sts_tool_calls} ->
-          state = %{state | sts_tool_calls: sts_tool_calls}
+        {:ok, pending} ->
           settle_executed_tool(state, capability, pending, call_ref, outcome)
       end
     else
@@ -209,7 +209,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
              pending.tool_call_id == lease.invocation_id
            end) do
         {call_ref, _pending} ->
-          handle_tool_executed(state, capability, call_ref, lease.completion.outcome)
+          state = handle_tool_executed(state, capability, call_ref, lease.completion.outcome)
+
+          acknowledge_settled(state, bridge, lease, call_ref)
 
         nil ->
           state
@@ -220,6 +222,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   end
 
   def handle_completion(state, _bridge, _lease), do: state
+
+  defp acknowledge_settled(state, bridge, lease, call_ref) do
+    if Map.has_key?(state.sts_tool_calls, call_ref) do
+      state
+    else
+      case ToolCompletions.acknowledge(bridge, lease) do
+        :ok -> state
+        {:error, _reason} -> exit(:tool_completion_unavailable)
+      end
+    end
+  end
 
   defp tool_context(state, turn, tool_call_id, capability, connection) do
     %ToolContext{
@@ -240,7 +253,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
          state,
          capability,
          pending,
-         _call_ref,
+         call_ref,
          {:ok, %PlatformResult{effect: :participant_transfer_committed}}
        ) do
     send(
@@ -248,7 +261,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       {:vxpipe_platform_effect, capability, pending.context, :participant_transfer_committed}
     )
 
-    state
+    %{state | sts_tool_calls: Map.delete(state.sts_tool_calls, call_ref)}
   end
 
   defp settle_executed_tool(state, capability, pending, call_ref, outcome) do
@@ -283,10 +296,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
               {event, {:error, reason}}
           end
 
-        _ = deliver_provider_tool_result(capability, call_ref, provider_result)
+        case deliver_provider_tool_result(capability, call_ref, provider_result) do
+          :ok -> :ok
+          {:error, _reason} -> exit(:tool_result_unavailable)
+        end
+
         state = EventPublisher.publish(state, connection.pid, event)
         queue_platform_effect(capability, pending, outcome, provider_result)
-        %{state | next_sequence: state.next_sequence + 1}
+
+        %{
+          state
+          | next_sequence: state.next_sequence + 1,
+            sts_tool_calls: Map.delete(state.sts_tool_calls, call_ref)
+        }
 
       :error ->
         state

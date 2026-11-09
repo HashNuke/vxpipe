@@ -216,7 +216,7 @@ of it checks off the new integration or parity tasks above.
 | --- | --- | --- |
 | C1 | 3/5 | Private registry, shared dispatch/validation, variable permissions and scoped platform effects implemented. 112 native/LLM/transfer regressions pass (seed 286573); clean second Astra code review. Revoked/unsupported rejection and shared duplicate/partial-admission acceptance remain. |
 | C2 | 3/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime implemented. Native alias, call/tenant isolation, revocation, cancellation and duplex transfer checks pass. Full saved-connection races and ordinary interrupted-transfer cleanup remain open. |
-| C3 | 0/5 | Pending |
+| C3 | 0/5 | Accepted native results now acknowledge existing registry leases, allowing more than 16 sequential completions. Rejected delivery terminates explicitly. Unresolved/interrupted scope remains retained; final discard, replay and conversation parity acceptance are still open. |
 | C4 | 0/5 | Pending |
 
 First C1 checkpoint: native startup retains the existing AgentRuntime `ToolRegistry`
@@ -267,6 +267,21 @@ dependencies. Lean build/oracle/replay passes. Independent GPT-6 Astra xhigh
 source/test/documentation review found no actionable issues and approved the
 6/20 count. These gates validate the checkpoint; C4 still requires the remaining
 behavior and conformance work before final milestone acceptance.
+
+The next settlement checkpoint uses the existing registry acknowledgement after
+local native result acceptance or an authorized terminal effect. A 20-request
+compiled-room test reproduces and fixes lifetime saturation; provider rejection
+now terminates explicitly rather than publishing successful delivery. Duplicate
+completion messages and invalid lease acknowledgements remain harmless. A review
+test reproduced consumption without delivery when speech activity changed; the
+association and lease now remain retained when scope cannot be resolved. This
+is partial C3 progress, not completion of interrupted delivery, terminal discard
+or replay acceptance. No additional checklist task is checked off.
+The final focused native/common-registry lane passes **115 tests, 0 failures**,
+seed `915194`; quick root gates and Lean pass. Clean Astra re-review confirms the
+scope-retention fix. The preceding 5,129-test root result belongs to the ownership
+checkpoint; final integrated validation is still required. See the
+[settlement labnote](../20261109-0723-shared-tool-settlement.md).
 
 ## Design review and scope reconciliation
 

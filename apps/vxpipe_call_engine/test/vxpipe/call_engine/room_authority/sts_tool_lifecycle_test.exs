@@ -60,6 +60,70 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     assert :sys.get_state(context.authority).sts_tool_calls == %{}
   end
 
+  @tag :shared_settlement
+  test "completed native tools release capacity for more than sixteen sequential requests",
+       context do
+    for _ <- 1..20 do
+      assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
+      assert_receive {:vxpipe_event, %ToolCallStarted{tool_call_id: id}}, 1_000
+      assert_receive {:vxpipe_event, %{tool_call_id: ^id} = terminal}, 1_000
+      assert %ToolCallCompleted{name: "current_time"} = terminal
+      _ = :sys.get_state(context.authority)
+    end
+
+    assert {:ok, []} = InvocationRegistry.snapshot(Tree.invocation_registry(context.capability))
+    assert leases(context) == []
+  end
+
+  @tag :settlement_review
+  test "a completion with unresolved activity scope retains its association and lease", context do
+    {worker, started} = submit(context)
+    bridge = Tree.tool_completions(context.capability)
+    :erlang.trace(bridge, true, [:send])
+
+    :sys.replace_state(context.authority, fn state ->
+      put_in(state.speech_to_speech_capability.activity_turn, %{turn_ref: make_ref()})
+    end)
+
+    send(worker, :finish)
+    assert_receive {:trace, ^bridge, :send, {:vxpipe_sts_tool_completion, ^bridge, _}, _}, 1_000
+    state = :sys.get_state(context.authority)
+    assert [lease] = leases(context)
+    assert lease.invocation_id == started.tool_call_id
+    assert map_size(state.sts_tool_calls) == 1
+    refute_received {:vxpipe_event, %ToolCallCompleted{}}
+  end
+
+  @tag :shared_settlement
+  @tag :settlement_review
+  test "a rejected native result terminates explicitly instead of publishing successful delivery",
+       context do
+    {worker, _started} = submit(context)
+    provider = CallEngine.Speech.Session.provider(:sys.get_state(context.capability).session)
+
+    # Fault injection: the provider loses its association after engine admission.
+    :sys.replace_state(provider, &%{&1 | pending_tools: %{}})
+
+    :sys.replace_state(context.authority, fn state ->
+      %{state | sts_caller_turns: %{make_ref() => %{last_text: "synthetic-private-caller-text"}}}
+    end)
+
+    original = Application.get_env(:logger, :translator_inspect_opts, [])
+    Application.put_env(:logger, :translator_inspect_opts, limit: :infinity)
+    on_exit(fn -> Application.put_env(:logger, :translator_inspect_opts, original) end)
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        monitor = Process.monitor(context.authority)
+        send(worker, :finish)
+        authority = context.authority
+        assert_receive {:DOWN, ^monitor, :process, ^authority, :tool_result_unavailable}, 1_000
+        refute_received {:vxpipe_event, %ToolCallCompleted{}}
+      end)
+
+    refute log =~ "synthetic-private-caller-text"
+  end
+
   @tag :shared_dispatch
   test "a native platform hangup publishes its result and ends the authorized room", context do
     authority = context.authority
@@ -142,8 +206,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     assert :sys.get_state(context.authority).sts_tool_calls == %{}
   end
 
-  test "actual room host work is invocation-owned and its result stays leased", context do
+  test "actual room host work is invocation-owned and accepted results release their lease",
+       context do
     {worker, started} = submit(context)
+    bridge = Tree.tool_completions(context.capability)
+    :erlang.trace(bridge, true, [:send])
     registry = Tree.invocation_registry(context.capability)
     supervisor = Tree.invocation_supervisor(context.capability)
     assert [{_, invocation, :worker, _}] = DynamicSupervisor.which_children(supervisor)
@@ -158,11 +225,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     assert_receive {:vxpipe_event, %ToolCallCompleted{} = completed}, 1_000
     assert completed.tool_call_id == started.tool_call_id
     assert completed.correlation_id == started.correlation_id
-    assert {:ok, [status]} = InvocationRegistry.snapshot(registry)
-    assert status.status == :completion_admitted
-    [lease] = leases(context)
-    assert lease.completion.outcome == {:ok, %{"retained" => true}}
-    assert lease.completion.context.tool_call_id == started.tool_call_id
+    assert completed.result == %{"retained" => true}
+    _ = :sys.get_state(context.authority)
+    assert {:ok, []} = InvocationRegistry.snapshot(registry)
+    assert leases(context) == []
+
+    assert_receive {:trace, ^bridge, :send, {:vxpipe_sts_tool_completion, ^bridge, lease}, _},
+                   1_000
+
+    send(context.authority, {:vxpipe_sts_tool_completion, bridge, lease})
+    _ = :sys.get_state(context.authority)
+    refute_received {:vxpipe_event, %ToolCallCompleted{}}
+    assert {:ok, []} = InvocationRegistry.snapshot(registry)
   end
 
   for event <- [:vxpipe_sts_tool_executed, :vxpipe_sts_tool_timeout] do
@@ -211,13 +285,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     assert :sys.get_state(context.capability).tool_calls == %{}
   end
 
-  test "five-second execution deadline kills the host worker and retains UNKNOWN", context do
+  test "five-second execution deadline kills the host worker and settles UNKNOWN", context do
     {worker, _} = submit(context)
     monitor = Process.monitor(worker)
     assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 6_000
     assert_receive {:vxpipe_event, %ToolCallFailed{reason: :unknown}}, 1_000
-    [lease] = leases(context)
-    assert lease.completion.outcome == {:error, :unknown}
+    _ = :sys.get_state(context.authority)
+    assert leases(context) == []
+    assert {:ok, []} = InvocationRegistry.snapshot(Tree.invocation_registry(context.capability))
   end
 
   for loss <- [:capability, :activation, :room_owner, :registry, :supervisor, :bridge] do

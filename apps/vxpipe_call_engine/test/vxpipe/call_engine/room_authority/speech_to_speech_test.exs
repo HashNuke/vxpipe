@@ -299,7 +299,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert_receive {:provider_tool_result, ^call_ref, %{"error" => "tool_failed"}}
   end
 
-  test "STS blocking host tools execute within bounds and complete through the room" do
+  test "STS execution retains a completion until a real provider association accepts it" do
     tools = %{
       "get_current_time" => %{
         name: "get_current_time",
@@ -334,15 +334,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert {:ok, result} = lease.completion.outcome
     assert result["timezone"] == "UTC"
 
-    state = STSTools.handle_completion(state, bridge, lease)
+    assert catch_exit(STSTools.handle_completion(state, bridge, lease)) ==
+             :tool_result_unavailable
 
-    assert_receive {:vxpipe_event,
-                    %Vxpipe.CallEngine.Event.ToolCallCompleted{
-                      name: "get_current_time",
-                      participant_id: @agent
-                    }}
+    refute_received {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallCompleted{}}
 
-    assert state.sts_tool_calls == %{}
+    assert {:error, :unavailable} =
+             Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolCompletions.acknowledge(
+               bridge,
+               %{lease | lease_id: make_ref()}
+             )
+
+    assert [lease] == GenServer.call(bridge, :leases)
   end
 
   test "STS tool cancellation settles pending calls and late results are ignored" do

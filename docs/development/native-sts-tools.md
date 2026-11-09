@@ -152,17 +152,17 @@ code, with provider sessions implementing semantic delivery rather than owning
 tool policy. An unsupported operation must fail explicitly, but rejecting every
 non-blocking binding cannot satisfy the new milestone's parity requirement.
 
-Two existing limits require focused changes:
+The execution budget and completion lifecycle need separate acceptance:
 
 - The native invocation tree hardcodes a five-second execution deadline. Align
   this with existing application-configured invocation budgets and operation
   deadlines, including transfer preparation. Keep it bounded; verify a legitimate
   slower MCP/transfer operation and expiry cleanup. Do not add environment flags.
-- `ToolCompletions` leases outcomes but never acknowledges them. The registry's
-  16-record limit consequently becomes a lifetime capacity limit for the
-  allocation. Define when native delivery is locally accepted or terminally
-  discarded, acknowledge/release through the existing registry APIs, and retain
-  only bounded replay/deduplication state. Increasing the cap does not fix this.
+- `ToolCompletions` now acknowledges through the existing registry after local
+  provider acceptance or an authorized terminal effect, releasing completed-tool
+  capacity. Rejected delivery terminates explicitly without replaying the business
+  operation. Unresolved or interrupted associations remain leased; their safe late
+  delivery, terminal discard and replay handling are still required for full parity.
 
 Native transport acceptance does not prove remote execution or durable receipt.
 GPT-Live documents no separate success acknowledgement for `response.item.create`.

@@ -9,6 +9,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolCompletions do
     GenServer.start_link(__MODULE__, options, name: Keyword.fetch!(options, :name))
   end
 
+  def acknowledge(bridge, lease) do
+    GenServer.call(bridge, {:acknowledge, lease.invocation_id, lease.lease_id}, 1_000)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     owner = Keyword.fetch!(options, :owner)
@@ -23,10 +29,19 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolCompletions do
      }}
   end
 
-  # Private engine handoff only. Reading a lease is not completion acceptance.
-  # The coordinated model-continuation seam will own commit/release operations.
+  # Reading a lease is not acceptance. The room acknowledges only after local
+  # provider acceptance or an authorized terminal effect. Unresolved scope is not acceptance.
   @impl true
   def handle_call(:leases, _from, state), do: {:reply, Map.values(state.leases), state}
+
+  def handle_call({:acknowledge, invocation_id, lease_id}, _from, state) do
+    with %{lease_id: ^lease_id} <- Map.get(state.leases, invocation_id),
+         :ok <- InvocationRegistry.acknowledge_completion(state.registry, invocation_id, lease_id) do
+      {:reply, :ok, %{state | leases: Map.delete(state.leases, invocation_id)}}
+    else
+      _unavailable -> {:reply, {:error, :unavailable}, state}
+    end
+  end
 
   @impl true
   def handle_info({:vxpipe_tool_completion_available, registry, _id}, state) do

@@ -187,6 +187,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
     assert_receive {:test_remote_mcp_initializing, initializer}, 1_000
     owner = Tree.remote_mcp_owner(context.capability)
 
+    # Consume the fixture's original ready signal before replaying the opposite
+    # ordering; otherwise that queued signal can race the deliberate delay.
+    authority = context.authority
+    capability = context.capability
+    :erlang.trace(authority, true, [:receive])
+
+    unless :sys.get_state(authority).speech_to_speech_capability.provider_ready? do
+      assert_receive {:trace, ^authority, :receive, {:vxpipe_sts_ready, ^capability}}, 1_000
+    end
+
     # Delay the provider notification independently of MCP completion.
     :sys.replace_state(context.authority, fn state ->
       put_in(state.speech_to_speech_capability.provider_ready?, false)
@@ -198,9 +208,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
     send(context.authority, {:vxpipe_remote_tools_ready, owner, "retired-activation"})
     refute :sys.get_state(context.authority).speech_to_speech_capability.tools_ready?
 
-    :erlang.trace(context.authority, true, [:receive])
     send(initializer, :test_remote_mcp_initialized)
-    authority = context.authority
 
     assert_receive {:trace, ^authority, :receive,
                     {:vxpipe_remote_tools_ready, ^owner, ^activation}},
