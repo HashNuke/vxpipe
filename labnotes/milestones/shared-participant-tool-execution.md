@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 9/20 implementation tasks complete; 0/4 checkpoints complete**.
+Status: **in progress — 10/20 implementation tasks complete; 1/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -130,7 +130,7 @@ results and remaining limitations below when checking items off.
   preserving existing host/transfer behavior and lifecycle publication. Include
   duplicate requests and partial multi-tool admission without replaying work.
 
-### C2 — Native participant-owned MCP activation (4/5)
+### C2 — Native participant-owned MCP activation (5/5)
 
 - [x] Compose the existing `IntegrationOwner` and session `DynamicSupervisor`
   under the native participant's allocation tree only when MCP tools are selected.
@@ -139,7 +139,7 @@ results and remaining limitations below when checking items off.
 - [x] Separate schema projection from executable binding readiness. Bind the exact
   owner reference during startup and enforce the original absolute readiness or
   transfer deadline across selected integrations; roll back partial startup.
-- [ ] Execute selected MCP tools through the same shared invocation handler,
+- [x] Execute selected MCP tools through the same shared invocation handler,
   tenant catalog snapshot, current authorization/credential checks and result
   normalization as LLM participants. Include aliases, stale pins and saved
   disconnect/revocation races; do not rediscover or refresh catalogs per invocation.
@@ -199,6 +199,23 @@ results and remaining limitations below when checking items off.
   implementation checkpoints under the user's standing instruction.
 
 ## Acceptance and evidence
+
+Saved-authority acceptance closes C2 (5/5), bringing progress to 10/20 and one
+complete checkpoint. Native prepared/admitted calls use Console's existing saved
+credential repository, authenticated disconnect route, local MCP wire server and
+WebRTC result publication. Disconnect or credential replacement while a call is
+submitted permits that one result and prevents later submission without retry.
+Both changes after preparation reject admission before MCP initialization. Stale
+catalog pins reject admission; fresh native arguments obey the updated saved
+schema and execute only the selected alias. Owned sessions end with the call.
+
+The new cases pass without production changes. Combined native and existing LLM
+saved-boundary, in-flight and transfer lane: **18 tests, 0 failures**, explicitly
+including the integration tag (seed `912608`). Formatting, compilation, strict
+Credo and unused dependencies pass. Independent Astra xhigh review is clean.
+No speech state machine changed. Existing Call Engine aliases, stale pins,
+isolation, result normalization and teardown tests provide the rest of C2's
+acceptance. See the [saved-authority labnote](../20261109-0928-native-saved-mcp.md).
 
 Shared execution-bounds checkpoint: both participant paths project the existing
 application settings through `Tool.InvocationConfig`. Native startup and recovery
@@ -272,7 +289,7 @@ of it checks off the new integration or parity tasks above.
 | Checkpoint | Progress | Implementation evidence |
 | --- | --- | --- |
 | C1 | 3/5 | Private registry, shared dispatch/validation, variable permissions and scoped platform effects implemented. 112 native/LLM/transfer regressions pass (seed 286573); clean second Astra code review. Revoked/unsupported rejection and shared duplicate/partial-admission acceptance remain. |
-| C2 | 4/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime implemented. Native aliases, call/tenant isolation, in-flight call/owner-loss cleanup and ordinary/duplex transfer success/failure pass. Full saved-connection races remain open. |
+| C2 | 5/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime pass. Native aliases, call/tenant isolation, in-flight teardown and ordinary/duplex transfer success/failure pass. Real saved disconnect/replacement and catalog-pin races now pass alongside existing LLM cases (18 tagged integration tests). |
 | C3 | 2/5 | Shared conversation admission and application-configured execution bounds are implemented and reviewed; prolonged MCP execution, transfer budgets, short expiry and bounded results pass. Accepted native results acknowledge existing leases, including more than 16 interrupted completions. Speech interruption and reversible transfer hold preserve accepted work. Lost provider associations terminate explicitly after the bounded outcome. Origin-aware stop-hold delivery, final discard, replay, usage observations and full race acceptance remain open. |
 | C4 | 0/5 | Pending |
 
@@ -316,9 +333,9 @@ revocation and duplex transfer. The same transfer experiment with ordinary Morse
 reproduced the existing interruption/completion-association gap: source retirement
 or failed-tool delivery could be lost at that checkpoint. The subsequent
 interruption checkpoint above fixes ordinary transfer lifetime and closes C2's
-lifetime task; the broader C3 completion contract remains open. The saved-connection
-end-to-end race task also remains open; direct credential-lease revocation alone
-does not complete it.
+lifetime task; the broader C3 completion contract remains open. At that checkpoint the saved-connection
+end-to-end race task remained open; direct credential-lease revocation alone
+did not complete it. The later saved-authority acceptance above closes that task.
 See the [ownership checkpoint labnote](../20261109-0621-shared-native-mcp.md).
 All five root checks pass for this checkpoint: **5,129 tests, 0 failures, 371
 excluded**, seed `401568`, plus formatting, compilation, strict Credo and unused
