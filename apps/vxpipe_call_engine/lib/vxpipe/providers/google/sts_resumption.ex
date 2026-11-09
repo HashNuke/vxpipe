@@ -242,10 +242,20 @@ defmodule Vxpipe.Providers.Google.STSResumption do
   end
 
   defp settled_boundary?(state) do
+    map_size(state.pending_tools) == 0 and settled_media?(state)
+  end
+
+  def tool_result_boundary?(state, call) do
+    state.ready? and is_pid(state.wire) and not state.resuming? and
+      not state.resumption_ambiguous? and state.interaction_status == :idle and
+      Map.has_key?(state.pending_tools, call) and settled_media?(state)
+  end
+
+  defp settled_media?(state) do
     not state.awaiting_model_activity? and not state.awaiting_audio_final? and
       state.model_turn_complete? and
       state.interaction_status in [:idle, :omitted] and is_nil(state.caller) and
-      map_size(state.pending_tools) == 0 and output_idle?(state)
+      output_idle?(state)
   end
 
   # An interrupted exchange may never produce model content. Its stale

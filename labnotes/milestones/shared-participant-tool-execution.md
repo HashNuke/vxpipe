@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 11/20 implementation tasks complete; 1/4 checkpoints complete**.
+Status: **in progress — 13/20 implementation tasks complete; 1/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -84,7 +84,9 @@ provide semantic events and result delivery. Provider modules own protocol
 encoding, provider call identifiers and socket/session mechanics only. Existing
 provider selection and codec differences remain; add no provider-name/model-ID
 branches for tool policy, no new model profile table, and no provider-specific
-tasks to this milestone.
+tool behavior to this milestone. The user explicitly permits existing-adapter
+API plumbing for the common typed result/context operation; execution and policy
+remain shared.
 
 Existing operations are not interchangeable: `send_tool_result` targets a private
 admitted call association; `append_history` accepts already-published caller/agent
@@ -151,19 +153,19 @@ results and remaining limitations below when checking items off.
   Reuse controlled MCP fixtures to complete a native room round trip without
   borrowing another call's session or adding maintenance work to audio processing.
 
-### C3 — Common conversation policy and completion lifecycle (2/5)
+### C3 — Common conversation policy and completion lifecycle (4/5)
 
 - [x] Enforce both conversation modes in common engine code with cross-path tests:
   blocking holds later business input until outcome consumption, non-blocking
   admits unrelated input with pending-work awareness, and a non-blocking completion
   never releases another invocation's blocking hold. Keep native turn transport
   mechanics separate from this policy.
-- [ ] Complete native delivery through the semantic session boundary: one final
+- [x] Complete native delivery through the semantic session boundary: one final
   result for a valid call, safe same-activation completion after speech interruption,
   and no result/effect delivered to a retired source. Prove provider/result failure
   preserves the outcome or terminates explicitly instead of silently continuing
   with lost work; do not resubmit accepted operations.
-- [ ] Settle completion leases through existing acknowledge/release operations
+- [x] Settle completion leases through existing acknowledge/release operations
   only on the documented local acceptance or terminal discard boundary. Keep
   consumed-ID retention bounded and prove more than 16 sequential completed tools
   work while concurrent saturation and duplicate protection remain effective.
@@ -199,6 +201,17 @@ results and remaining limitations below when checking items off.
   implementation checkpoints under the user's standing instruction.
 
 ## Acceptance and evidence
+
+Semantic completion closes two C3 tasks, bringing progress to 13/20. Native
+results use the existing Session command path with current continuation authority
+and one final result. Original tool authority survives speech-origin retirement;
+old output remains fenced. Reversible stop-holds retain the existing lease and
+both release paths retry delivery. Permanent source/policy loss or provider
+rejection terminates explicitly without repeating the business operation.
+Twenty sequential completions with retention set to four prove bounded eviction
+and retained-ID rejection. See the [completion labnote](../20261109-1000-native-tool-completion.md)
+for reproductions, adapter contract verification and review evidence. General
+race/usage and final conformance remain open.
 
 Bounded rejection closes C1's rejection task (4/5), bringing progress to 11/20.
 Fresh held/policy-denied requests fail explicitly; active duplicates preserve
@@ -310,7 +323,7 @@ of it checks off the new integration or parity tasks above.
 | --- | --- | --- |
 | C1 | 4/5 | Private registry, shared dispatch/validation, variable permissions, bounded rejection and scoped platform effects implemented. Held/policy-denied requests fail explicitly; retained accepted-ID replay cannot repeat work or publish another result. 156 focused regressions pass (seed 836200), plus 32 corrected room-fixture tests; clean Astra source/test review. Shared compiled-room duplicate/partial-admission acceptance remains. |
 | C2 | 5/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime pass. Native aliases, call/tenant isolation, in-flight teardown and ordinary/duplex transfer success/failure pass. Real saved disconnect/replacement and catalog-pin races now pass alongside existing LLM cases (18 tagged integration tests). |
-| C3 | 2/5 | Shared conversation admission and application-configured execution bounds are implemented and reviewed; prolonged MCP execution, transfer budgets, short expiry and bounded results pass. Accepted native results acknowledge existing leases, including more than 16 interrupted completions. Speech interruption and reversible transfer hold preserve accepted work. Lost provider associations terminate explicitly after the bounded outcome. Origin-aware stop-hold delivery, final discard, replay, usage observations and full race acceptance remain open. |
+| C3 | 4/5 | Shared conversation admission, execution bounds, semantic result delivery and bounded lease/ID settlement are implemented. Stop-held results retry only delivery after ordinary or source-controlled release; lost authority/provider association terminates explicitly. Fresh-context adapter fixtures and twenty completions with four retained IDs pass. General race/usage acceptance remains open. |
 | C4 | 0/5 | Pending |
 
 First C1 checkpoint: native startup retains the existing AgentRuntime `ToolRegistry`
@@ -365,15 +378,16 @@ source/test/documentation review found no actionable issues and approved the
 6/20 count. These gates validate the checkpoint; C4 still requires the remaining
 behavior and conformance work before final milestone acceptance.
 
-The next settlement checkpoint uses the existing registry acknowledgement after
+Historical settlement checkpoint (before current semantic delivery): it used the existing registry acknowledgement after
 local native result acceptance or an authorized terminal effect. A 20-request
 compiled-room test reproduces and fixes lifetime saturation; provider rejection
 now terminates explicitly rather than publishing successful delivery. Duplicate
 completion messages and invalid lease acknowledgements remain harmless. A review
 test reproduced consumption without delivery when speech activity changed; the
-association and lease now remain retained when scope cannot be resolved. This
-is partial C3 progress, not completion of interrupted delivery, terminal discard
-or replay acceptance. No additional checklist task is checked off.
+association and lease then remained retained when scope could not be resolved.
+The current semantic-delivery checkpoint above replaces indefinite unresolved
+authority with explicit termination, while preserving reversible held outcomes.
+This earlier checkpoint did not close an additional checklist task.
 The final focused native/common-registry lane passes **115 tests, 0 failures**,
 seed `915194`; quick root gates and Lean pass. Clean Astra re-review confirms the
 scope-retention fix. The preceding 5,129-test root result belongs to the ownership

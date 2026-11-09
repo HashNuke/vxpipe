@@ -12,8 +12,8 @@ Planning amendment, 2026-11-09: the user's follow-up requires common internal
 implementation and behavior parity with LLM participants, including conversation
 modes. The [shared participant tool milestone](../../labnotes/milestones/shared-participant-tool-execution.md)
 now owns implementation tasks and progress. Provider-specific findings below are
-protocol evidence; adapter extensions and new per-model policy tables are outside
-that milestone.
+protocol evidence; the user permits existing-adapter API plumbing needed by the
+shared semantic contract. New per-model tool policy remains outside the milestone.
 
 ## Conclusion
 
@@ -61,8 +61,9 @@ retained by the existing bounded registry. Replay detection precedes argument
 validation and terminates the invalid exchange without sending a second result.
 References rejected before registry submission and IDs evicted from the bounded
 retention window are outside that duplicate-protection guarantee.
-Native completion retention, input coordination and
-interrupted-result delivery still require C3; dispatch alone is not full parity.
+Native results use the shared semantic session boundary and retain their completion
+lease across reversible stop-holds. Full race/usage and conformance acceptance
+still remain; dispatch alone is not full parity.
 
 ## Provider protocol findings
 
@@ -153,6 +154,31 @@ audio path. No new cache tables, job system or cross-call session pool is needed
 
 ### 3. Complete native result settlement and bounded execution
 
+Implementation decision, 2026-11-09: route the typed
+`{:tool_result, call_ref, result}` operation through the existing Session/Channel
+command slot. For origin-aware allocations it uses `submit_input/3` with the
+currently authorized response context, without fabricating caller input. Preserve
+the original tool's stable source/allocation/policy authority separately from its
+retired speech context. A stop-held completion retains its existing lease until
+release; mute preserves its existing native acceptance semantics. Do not relabel
+old audio or rerun the operation to deliver its result.
+
+The user approved the necessary existing-adapter API plumbing while requiring all
+tool behavior to stay common. Context-aware adapters must associate continuation
+with the supplied context; no context-free fallback can establish that contract.
+The earlier callbacks lacked this operation, so common probe acceptance alone is
+insufficient. Adapter protocol fixtures and common room acceptance must pass before
+closing C3. This amendment adds no vendor-specific executor or policy.
+
+Ordinary and source-controlled releases both retry the existing completion lease;
+permanent source/policy loss or rejected provider delivery terminates explicitly.
+Google accepts a changed result context only for the exact pending call at an
+explicit idle boundary with settled caller, model and playback state and no
+resumption ambiguity. Its ordinary input and recovery quiescence remain unchanged.
+An in-progress, omitted-status or unsettled exchange cannot establish fresh
+output authority. Local protocol fixtures prove continuation attribution; these
+checks do not claim live vendor interoperability.
+
 D4 already selects one final native result per call. Do not introduce the text
 agent's interim `running` response/private continuation protocol into STS.
 Retired provider associations must never receive results meant for an earlier
@@ -176,8 +202,10 @@ The execution budget and completion lifecycle need separate acceptance:
   reversible transfer holds preserve same-source accepted work. Ordinary and
   duplex Morse transfer success/failure pass. Provider cancellation retains the
   accepted worker until its bounded outcome, then fails explicitly if its native
-  result association was lost. Unresolved authorization, terminal discard, replay
-  and origin-aware stop-hold completion remain required for full parity.
+  result association was lost. Origin-aware stop-held results now use fresh
+  continuation authority after release; permanent authorization loss terminates
+  explicitly. Retained-ID replay and bounded eviction pass. General race/usage
+  and final conformance acceptance remain required for full parity.
 
 Native transport acceptance does not prove remote execution or durable receipt.
 GPT-Live documents no separate success acknowledgement for `response.item.create`.

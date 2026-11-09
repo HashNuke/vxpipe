@@ -703,12 +703,15 @@ Blocking/non-blocking admission now uses the shared engine decision. Held caller
 PCM is acknowledged and discarded (continuous sessions receive equal-duration
 silence), and held text is rejected without replay. Local native result acceptance
 does not release a blocking hold until the registry acknowledges consumption.
-Unresolved authorization, terminal discard, replay and full completion acceptance
-remain open. An origin-aware session whose ordinary stop-hold retires its response
-context still needs a valid semantic completion path. Speech-origin validation
-and context retirement remain strict: accepting an old tool never authorizes old
-audio. Ordinary and duplex Morse transfer tests do not prove all such adapter
-semantics. Earlier checkpoint evidence remains in
+Native results now use `Session.send_tool_result/4` through the bounded command
+slot. Origin-aware adapters accept the typed result with current continuation
+context; context-free allocations use their existing result callback. A reversible
+stop-hold retains the existing lease until ordinary or source-controlled release.
+Permanent authority loss or rejected delivery terminates explicitly. Original
+tool authority is separate from retired speech context: accepting its result never
+authorizes old audio. Protocol fixtures verify fresh-context continuation and
+bounded retained-ID replay protection. General races, usage and final conformance
+remain open. Earlier checkpoint evidence remains in
 [STS tool lifecycle](../labnotes/milestones/sts-tool-lifecycle.md).
 
 Provider cancellation retires the provider call/speech association; ordinary

@@ -16,6 +16,9 @@ defmodule Vxpipe.Providers.Google.STSInput do
   def context_command({:activity, boundary}) when boundary in [:started, :ended],
     do: {:ok, {:input_activity, boundary}}
 
+  def context_command({:tool_result, call, result}) when is_reference(call),
+    do: {:ok, {:tool_result, call, result}}
+
   def context_command(_operation), do: {:error, :unsupported_operation}
 
   def open_text_turn(state) do
@@ -47,6 +50,12 @@ defmodule Vxpipe.Providers.Google.STSInput do
   def bind_context(%{interaction_context: context} = state, context, _operation)
       when is_reference(context),
       do: {:ok, state}
+
+  def bind_context(state, context, {:tool_result, call, _result}) when is_reference(context) do
+    if STSResumption.tool_result_boundary?(state, call),
+      do: {:ok, %{state | interaction_context: context}},
+      else: {:error, :busy}
+  end
 
   def bind_context(%{interaction_context: previous} = state, context, operation)
       when is_reference(previous) and is_reference(context) do

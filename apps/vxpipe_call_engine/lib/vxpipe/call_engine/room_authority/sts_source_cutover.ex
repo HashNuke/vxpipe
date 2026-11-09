@@ -339,7 +339,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSSourceCutover do
     case Capability.release(capability, epoch) do
       :ok ->
         binding = Map.put(state.speech_to_speech_capability, :input_epoch, epoch)
-        %{state | speech_to_speech_capability: binding}
+        SpeechToSpeech.Tools.redeliver_pending(%{state | speech_to_speech_capability: binding})
 
       {:error, _reason} ->
         SpeechToSpeech.stop(state)

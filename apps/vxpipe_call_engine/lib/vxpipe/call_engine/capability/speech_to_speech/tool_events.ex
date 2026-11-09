@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{Input, Output, ResponseOrigins}
-  alias Vxpipe.CallEngine.Speech.{Event, Session}
+  alias Vxpipe.CallEngine.Speech.Event
   alias Vxpipe.CallEngine.Tool.ConversationAdmission
 
   @maximum_pending 16
@@ -26,6 +26,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
           turn_ref: event.turn_ref,
           evidence: evidence(state),
           response_context: event.response_context,
+          origin_fingerprint: ResponseOrigins.tool_fingerprint(state, event.response_context),
           conversation_mode: :blocking,
           admitted?: false,
           result_accepted?: false,
@@ -62,7 +63,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
       {:ok, %{cancelled?: false, result_accepted?: false} = pending} ->
         Output.audio_route_permitted?(state, state.human_id, state.agent_id) and
           Map.delete(pending.evidence, :epoch) == Map.delete(evidence(state), :epoch) and
-          pending_origin_current?(state, pending.response_context)
+          pending_origin_current?(state, pending.origin_fingerprint)
 
       _unavailable ->
         false
@@ -101,20 +102,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
   def finish(state, _call, _owner), do: {:reply, {:error, :unauthorized}, state}
 
   def deliver_result(state, call, result, owner) when owner == state.owner do
-    provider = Session.provider(state.session)
-
-    cond do
-      not current?(state, call) ->
-        {:reply, {:error, :stale_request}, state}
-
-      not is_pid(provider) ->
-        {:reply, {:error, :unavailable}, state}
-
-      true ->
-        case apply(state.provider, :send_tool_result, [provider, call, result]) do
-          :ok -> {:reply, :ok, accept_result(state, call)}
-          {:error, _reason} = error -> {:reply, error, state}
-        end
+    if current?(state, call) do
+      case ResponseOrigins.submit(state, {:tool_result, call, result}) do
+        {:ok, state} -> {:reply, :ok, accept_result(state, call)}
+        {{:error, _reason} = error, state} -> {:reply, error, state}
+      end
+    else
+      {:reply, {:error, :stale_request}, state}
     end
   end
 
@@ -153,8 +147,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
 
   defp pending_origin_current?(%{descriptor: %{response_start?: false}}, _context), do: true
 
-  defp pending_origin_current?(state, context),
-    do: ResponseOrigins.current_tool_context?(state, context)
+  defp pending_origin_current?(state, fingerprint),
+    do: ResponseOrigins.current_tool_fingerprint?(state, fingerprint)
 
   defp origin_current?(%{descriptor: %{response_start?: false}}, _context), do: true
 

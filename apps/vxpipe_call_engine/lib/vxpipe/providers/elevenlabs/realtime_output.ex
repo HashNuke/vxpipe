@@ -10,6 +10,7 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeOutput do
       id: nil,
       turn: make_ref(),
       context: context,
+      result_context: nil,
       index: index,
       instructions: instructions,
       fixed: fixed,

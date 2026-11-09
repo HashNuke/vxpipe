@@ -23,7 +23,7 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
   def input_activity(pid, boundary), do: GenServer.call(pid, {:legacy, {:activity, boundary}})
   def input_quiescent?(pid), do: GenServer.call(pid, :input_quiescent?, 1_000)
   def interrupt(_, _), do: {:error, :unsupported_operation}
-  def send_tool_result(_, _, _), do: {:error, :unsupported_operation}
+  def send_tool_result(pid, call, result), do: GenServer.call(pid, {:tool_result, call, result})
   def close(pid), do: GenServer.stop(pid)
 
   def init(options) do
@@ -76,6 +76,11 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
 
   def handle_call({:emit, kind, fields}, _, state),
     do: {:reply, Event.emit(state.channel, kind, fields), state}
+
+  def handle_call({:tool_result, call, result}, _, state) do
+    send(state.observer, {:context_tool_result, call, result})
+    {:reply, :ok, state}
+  end
 
   def handle_call(:release, _, state) do
     GenServer.reply(state.held, state.result)
@@ -136,6 +141,18 @@ defmodule Vxpipe.CallEngine.SpeechContextProbe do
           )
 
         send(state.observer, {:early_semantics, result})
+
+      {:tool_result, call, result} ->
+        turn = make_ref()
+
+        assert_result =
+          Event.emit(state.channel, :response_started,
+            turn_ref: turn,
+            response_index: 1,
+            response_context: context
+          )
+
+        send(state.observer, {:context_tool_result, call, result, context, turn, assert_result})
 
       _ ->
         :ok

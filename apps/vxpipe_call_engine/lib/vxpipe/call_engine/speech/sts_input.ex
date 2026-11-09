@@ -53,6 +53,7 @@ defmodule Vxpipe.CallEngine.Speech.STSInput do
   @doc "Whether an input-slot command is supported for the descriptor kind."
   def supported?(%{kind: kind}, %{operation: {:push_text, _, _}}), do: kind == :sts
   def supported?(%{kind: kind}, %{operation: {:begin_opening, _, _}}), do: kind == :sts
+  def supported?(%{kind: kind}, %{operation: {:tool_result, _, _}}), do: kind == :sts
 
   def supported?(%{kind: :sts} = descriptor, %{operation: {:input_activity, _}}),
     do: descriptor.turn_control != "provider"

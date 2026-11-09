@@ -344,22 +344,38 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
           end
 
         case deliver_provider_tool_result(capability, call_ref, provider_result) do
-          :ok -> :ok
-          {:error, _reason} -> exit(:tool_result_unavailable)
+          :ok ->
+            state = EventPublisher.publish(state, connection.pid, event)
+            queue_platform_effect(capability, pending, outcome, provider_result)
+
+            %{
+              state
+              | next_sequence: state.next_sequence + 1,
+                sts_tool_calls: Map.delete(state.sts_tool_calls, call_ref)
+            }
+
+          {:error, :held} ->
+            state
+
+          {:error, _reason} ->
+            exit(:tool_result_unavailable)
         end
 
-        state = EventPublisher.publish(state, connection.pid, event)
-        queue_platform_effect(capability, pending, outcome, provider_result)
-
-        %{
-          state
-          | next_sequence: state.next_sequence + 1,
-            sts_tool_calls: Map.delete(state.sts_tool_calls, call_ref)
-        }
-
       :error ->
-        state
+        exit(:tool_result_unavailable)
     end
+  end
+
+  def redeliver_pending(state) do
+    bridge = Tree.tool_completions(state.speech_to_speech_capability.pid)
+
+    if is_pid(bridge) do
+      Enum.each(state.sts_tool_calls, fn {_call, pending} ->
+        ToolCompletions.redeliver(bridge, pending.tool_call_id)
+      end)
+    end
+
+    state
   end
 
   @doc false

@@ -6,7 +6,13 @@ defmodule Vxpipe.Providers.Google.STSCommands do
 
   def execute(command, %{response_start?: true, resuming?: true} = state)
       when is_tuple(command) and
-             elem(command, 0) in [:push_audio, :push_text, :begin_opening, :input_activity],
+             elem(command, 0) in [
+               :push_audio,
+               :push_text,
+               :begin_opening,
+               :input_activity,
+               :tool_result
+             ],
       do: {:reply, {:error, :busy}, state}
 
   def execute({:push_audio, audio}, %{ready?: true} = state) do
@@ -113,6 +119,24 @@ defmodule Vxpipe.Providers.Google.STSCommands do
 
   def execute({:input_activity, _boundary}, state),
     do: {:reply, {:error, :session_failed}, state}
+
+  def execute({:tool_result, call, result}, state) do
+    case Map.fetch(state.pending_tools, call) do
+      {:ok, %{id: id, name: name}} ->
+        with {:ok, payload} <- STS.encode_tool_result(id, name, result),
+             :ok <- state.wire_module.send_control(state.wire, payload) do
+          {:reply, :ok,
+           %{state | pending_tools: Map.delete(state.pending_tools, call)}
+           |> STSResumption.model_work()
+           |> STSResumption.await_model_activity()}
+        else
+          _failure -> {:reply, {:error, :invalid_tool_result}, state}
+        end
+
+      :error ->
+        {:reply, {:error, :stale_request}, state}
+    end
+  end
 
   defp opening_started(%{response_start?: true}, _reference, _turn), do: :ok
 

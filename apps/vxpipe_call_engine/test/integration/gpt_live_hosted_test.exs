@@ -79,7 +79,7 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
       }
     ]
 
-    {session, provider, _wire, outputs} =
+    {session, _provider, _wire, outputs} =
       start_ready_session(
         [
           tools: tools,
@@ -98,10 +98,14 @@ defmodule Vxpipe.CallEngine.Integration.GPTLiveHostedTest do
 
     submit_fixture(session, :ping)
 
-    {%Event{tool_name: "ping", call_ref: call_ref}, outputs} =
+    {%Event{tool_name: "ping", call_ref: call_ref, response_context: context}, outputs} =
       await_kind(session, :tool_call, deadline, outputs)
 
-    assert :ok = GPTLiveSession.send_tool_result(provider, call_ref, %{"status" => "ready"})
+    assert :ok =
+             Session.send_tool_result(session, call_ref, %{"status" => "ready"},
+               response_context: context
+             )
+
     {_spoken_result, outputs} = await_audio(session, deadline, outputs)
     {_spoken_completed, outputs} = await_completion(session, deadline, outputs)
     assert_settled(outputs)

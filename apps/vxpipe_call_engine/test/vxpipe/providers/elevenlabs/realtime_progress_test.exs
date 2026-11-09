@@ -181,7 +181,12 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeProgressTest do
     expire_stale(session, old)
     state = :sys.get_state(Session.provider(session))
     refute Map.has_key?(state.deadlines, {:response, token})
-    assert :ok = RealtimeSession.send_tool_result(Session.provider(session), tool.call_ref, %{})
+
+    assert :ok =
+             Session.send_tool_result(session, tool.call_ref, %{},
+               response_context: tool.response_context
+             )
+
     _ = response_token(wire)
   end
 

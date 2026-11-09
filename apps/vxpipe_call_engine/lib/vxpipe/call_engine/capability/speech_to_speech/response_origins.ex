@@ -21,21 +21,24 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
     end
   end
 
-  def current_tool_context?(state, context) do
+  def tool_fingerprint(state, context) do
     case accepted_fingerprint(state, context) do
-      {:ok, stored} ->
-        case fingerprint(state, true) do
-          {:ok, ^stored} -> true
-          _other -> false
-        end
-
-      :error ->
-        false
+      {:ok, stored} -> Map.drop(stored, [:epoch, :lifecycle_revision])
+      :error -> nil
     end
   end
 
+  def current_tool_fingerprint?(state, stored) when is_map(stored) do
+    case fingerprint(state, true) do
+      {:ok, current} -> Map.drop(current, [:epoch, :lifecycle_revision]) == stored
+      _unavailable -> false
+    end
+  end
+
+  def current_tool_fingerprint?(_state, _stored), do: false
+
   def submit(state, operation) do
-    case prepare(state) do
+    case prepare(state, operation) do
       {:ok, state, context, fingerprint} ->
         result = dispatch(state.session, operation, options(context))
         {result, if(accepted?(result), do: accept(state, context, fingerprint), else: state)}
@@ -45,13 +48,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
     end
   end
 
-  defp prepare(%{descriptor: %{response_start?: true}} = state) do
-    with {:ok, fingerprint} <- fingerprint(state) do
+  defp prepare(%{held?: true, descriptor: %{hold: :stop}}, {:tool_result, _, _}),
+    do: {:error, :held}
+
+  defp prepare(%{descriptor: %{response_start?: true}} = state, operation) do
+    allow_held? = state.descriptor.hold == :mute and match?({:tool_result, _, _}, operation)
+
+    with {:ok, fingerprint} <- fingerprint(state, allow_held?) do
       candidate(state, fingerprint)
     end
   end
 
-  defp prepare(state), do: {:ok, state, nil, nil}
+  defp prepare(state, _operation), do: {:ok, state, nil, nil}
 
   defp candidate(%{response_origins: origin} = state, fingerprint) do
     case origin.current do
@@ -105,7 +113,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
         else: state.input_epoch || direct_epoch(state)
 
     cond do
-      (state.held? and not allow_held?) or not is_reference(epoch) ->
+      (state.held? or not is_reference(epoch)) and not allow_held? ->
         {:error, :held}
 
       not present?(state, state.human_id) or not present?(state, state.agent_id) ->
@@ -159,6 +167,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins do
 
   defp dispatch(session, {:activity, boundary}, options),
     do: Session.input_activity(session, boundary, options)
+
+  defp dispatch(session, {:tool_result, call, result}, options),
+    do: Session.send_tool_result(session, call, result, options)
 
   defp direct_epoch(%{input_required?: false, session: session}), do: session.generation
   defp direct_epoch(_state), do: nil

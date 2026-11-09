@@ -204,18 +204,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
         :replaced_owner,
         :rebound_source
       ] do
-    test "#{mutation} withholds completion without claiming it was consumed", context do
+    test "#{mutation} terminates undeliverable completion without claiming consumption",
+         context do
       call = make_ref()
       state = call(context.state, context.capability, call, make_ref())
       assert_receive {:vxpipe_event, %ToolCallStarted{}}
       state = invalidate(state, unquote(mutation), context.capability)
 
-      state =
-        complete_tool(state, context.capability, call, %{
-          "private" => "result"
-        })
+      assert catch_exit(complete_tool(state, context.capability, call, %{"private" => "result"})) ==
+               :tool_result_unavailable
 
-      assert Map.has_key?(state.sts_tool_calls, call)
       refute_received {:provider_tool_result, _, _}
       refute_received {:vxpipe_event, _}
     end
@@ -429,8 +427,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
         end
 
       :ok = GenServer.call(state.media_policy_authority, {:replace, changed})
-      state = complete_tool(state, context.capability, call, %{})
-      assert Map.has_key?(state.sts_tool_calls, call)
+
+      assert catch_exit(complete_tool(state, context.capability, call, %{})) ==
+               :tool_result_unavailable
+
       refute_received {:provider_tool_result, _, _}
       refute_received {:vxpipe_event, _}
     end

@@ -303,18 +303,29 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
   end
 
   @tag :shared_settlement
+  @tag tool_limits: [maximum_completed_requests: 4]
   test "completed native tools release capacity for more than sixteen sequential requests",
        context do
-    for _ <- 1..20 do
-      assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
-      assert_receive {:vxpipe_event, %ToolCallStarted{tool_call_id: id}}, 1_000
-      assert_receive {:vxpipe_event, %{tool_call_id: ^id} = terminal}, 1_000
-      assert %ToolCallCompleted{name: "current_time"} = terminal
-      _ = :sys.get_state(context.authority)
-    end
+    ids =
+      for _ <- 1..20 do
+        assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
+        assert_receive {:vxpipe_event, %ToolCallStarted{tool_call_id: id}}, 1_000
+        assert_receive {:vxpipe_event, %{tool_call_id: ^id} = terminal}, 1_000
+        assert %ToolCallCompleted{name: "current_time"} = terminal
+        _ = :sys.get_state(context.authority)
+        id
+      end
 
-    assert {:ok, []} = InvocationRegistry.snapshot(Tree.invocation_registry(context.capability))
+    registry = Tree.invocation_registry(context.capability)
+    assert {:ok, []} = InvocationRegistry.snapshot(registry)
     assert leases(context) == []
+
+    {evicted, retained} = Enum.split(ids, -4)
+    assert length(evicted) == 16
+    for id <- evicted, do: assert(:ok = InvocationRegistry.check_new_id(registry, id))
+
+    for id <- retained,
+        do: assert({:error, :rejected} = InvocationRegistry.check_new_id(registry, id))
   end
 
   @tag :interruption_delivery
@@ -548,7 +559,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
   end
 
   @tag :cancellation_review
-  test "provider cancellation reconciles an outcome already retained by the completion bridge",
+  test "queued completion fails explicitly when provider cancellation overtakes room consumption",
        context do
     {worker, started} = submit(context)
     capability = context.capability
@@ -558,24 +569,119 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     monitor = Process.monitor(authority)
     [{_call, pending}] = Map.to_list(:sys.get_state(capability).tool_calls)
     provider = CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
-    state = :sys.get_state(authority)
-    policy = state.media_policy_authority
-    caller = state.speech_to_speech_capability.input_handle.identity.participant_id
+    :erlang.trace(capability, true, [:send])
+    :ok = :sys.suspend(authority)
 
-    # Remove policy presence without replacing the allocation, retaining the
-    # terminal outcome until cancellation arrives after its lease notification.
-    assert {:ok, _snapshot} = CallEngine.MediaPolicy.Authority.leave(policy, caller)
+    try do
+      send(worker, :finish)
+      assert_receive {:trace, ^bridge, :send, {:vxpipe_sts_tool_completion, ^bridge, _}, _}, 1_000
+      assert [lease] = leases(context)
+      assert lease.invocation_id == started.tool_call_id
 
-    send(worker, :finish)
-    assert_receive {:trace, ^bridge, :send, {:vxpipe_sts_tool_completion, ^bridge, _}, _}, 1_000
-    assert map_size(:sys.get_state(authority).sts_tool_calls) == 1
-    assert [lease] = leases(context)
-    assert lease.invocation_id == started.tool_call_id
+      assert :ok = STSSession.interrupt(provider, pending.turn_ref)
 
-    assert :ok = STSSession.interrupt(provider, pending.turn_ref)
+      assert_receive {:trace, ^capability, :send,
+                      {:vxpipe_sts_tool_event, ^capability, _,
+                       %{event: %{kind: :tool_cancelled}}}, ^authority},
+                     1_000
+    after
+      :sys.resume(authority)
+    end
+
     assert_receive {:DOWN, ^monitor, :process, ^authority, :tool_result_unavailable}, 1_000
     refute_received {:vxpipe_event, %ToolCallCompleted{}}
     refute_received {:host_started, _, _}
+  end
+
+  @tag :terminal_tool_scope
+  test "revoked result authority ends the allocation instead of retaining a completion forever",
+       context do
+    {worker, _started} = submit(context)
+    authority = context.authority
+    capability = context.capability
+    registry = Tree.invocation_registry(capability)
+    bridge = Tree.tool_completions(capability)
+    authority_monitor = Process.monitor(authority)
+    capability_monitor = Process.monitor(capability)
+    registry_monitor = Process.monitor(registry)
+    bridge_monitor = Process.monitor(bridge)
+    state = :sys.get_state(authority)
+    caller = state.speech_to_speech_capability.input_handle.identity.participant_id
+
+    assert {:ok, _snapshot} =
+             CallEngine.MediaPolicy.Authority.leave(state.media_policy_authority, caller)
+
+    send(worker, :finish)
+
+    assert_receive {:DOWN, ^authority_monitor, :process, ^authority, :tool_result_unavailable},
+                   1_000
+
+    assert_receive {:DOWN, ^capability_monitor, :process, ^capability, _reason}, 1_000
+    assert_receive {:DOWN, ^registry_monitor, :process, ^registry, _reason}, 1_000
+    assert_receive {:DOWN, ^bridge_monitor, :process, ^bridge, _reason}, 1_000
+    refute_received {:vxpipe_event, %ToolCallCompleted{}}
+    refute_received {:host_started, _, _}
+  end
+
+  for completion <- [:before_release, :after_release], source_control? <- [false, true] do
+    @tag :held_tool_completion
+    @tag source_control?: source_control?
+    test "completion #{completion} survives stop-hold with source control #{source_control?}",
+         context do
+      {worker, started} = submit(context)
+      bridge = Tree.tool_completions(context.capability)
+      :erlang.trace(bridge, true, [:send])
+      :sys.replace_state(context.authority, &CallEngine.RoomAuthority.SpeechToSpeech.hold/1)
+
+      if unquote(source_control?) do
+        assert_receive {:test_sts_source_hold, connection, scope}, 1_000
+
+        receipt = %{
+          attachment: scope.attachment,
+          token: scope.token,
+          receiver: self(),
+          old_epoch: make_ref(),
+          held_epoch: make_ref()
+        }
+
+        assert :ok = TestTransferConnection.complete_source_hold(connection, {:ok, receipt})
+      end
+
+      if unquote(completion) == :before_release do
+        send(worker, :finish)
+
+        assert_receive {:trace, ^bridge, :send, {:vxpipe_sts_tool_completion, ^bridge, _}, _},
+                       1_000
+
+        assert map_size(:sys.get_state(context.authority).sts_tool_calls) == 1
+        assert [_lease] = leases(context)
+        refute_received {:vxpipe_event, %ToolCallCompleted{}}
+      end
+
+      :sys.replace_state(context.authority, &CallEngine.RoomAuthority.SpeechToSpeech.release/1)
+
+      if unquote(source_control?) do
+        assert_receive {:test_sts_source_arm, connection, scope}, 1_000
+
+        assert :ok =
+                 TestTransferConnection.complete_source_arm(connection, {:ok, scope.active_epoch})
+
+        released =
+          TestTransferConnection.run(context.command, fn -> :sys.get_state(context.authority) end)
+
+        assert released.source_cutover == nil
+        assert is_reference(released.speech_to_speech_capability.input_epoch)
+      end
+
+      if unquote(completion) == :after_release, do: send(worker, :finish)
+      assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: id}}, 1_000
+      assert id == started.tool_call_id
+      assert :sys.get_state(context.authority).sts_tool_calls == %{}
+      assert :sys.get_state(context.capability).tool_calls == %{}
+      assert leases(context) == []
+      refute_received {:host_started, _, _}
+      refute_received {:vxpipe_event, %ToolCallCompleted{}}
+    end
   end
 
   @tag :shared_bounds
@@ -854,12 +960,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
                deadline: DateTime.add(DateTime.utc_now(), 5, :second)
              )
 
-    assert {:ok, _} = TestTransferConnection.attach(command, sink, input_track: @track)
+    assert {:ok, _} =
+             TestTransferConnection.attach(command, sink,
+               input_track: @track,
+               source_control?: Map.get(context, :source_control?, false)
+             )
+
     TestCallStartup.await_ready(plan.room_id)
 
     capability =
       RoomCapabilitySupervisor.whereis_speech_to_speech(room.incarnation_id, agent.participant_id)
 
-    %{authority: authority, capability: capability, room: room}
+    %{authority: authority, capability: capability, room: room, command: command}
   end
 end

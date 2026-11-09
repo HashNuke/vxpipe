@@ -44,6 +44,7 @@ defmodule Vxpipe.CallEngine.Speech.STSProvider do
               | {:text, reference(), String.t()}
               | {:opening, reference(), Vxpipe.CallEngine.Speech.Opening.t()}
               | {:activity, :started | :ended}
+              | {:tool_result, reference(), term()}
             ) :: :ok | {:error, :busy | :unsupported_operation | :session_failed}
   @optional_callbacks submit_input: 3
   @callback push_text(pid(), reference(), String.t()) :: :ok | {:error, atom()}
@@ -59,7 +60,11 @@ defmodule Vxpipe.CallEngine.Speech.STSProvider do
   @doc "Record text already published to the room for a future history reseed."
   @callback append_history(pid(), {:caller | :agent, String.t()}) :: :ok | {:error, atom()}
   @callback interrupt(pid(), reference()) :: :ok | {:error, atom()}
+  @doc "Native result transport for context-free allocations; origin-aware allocations use submit_input/3."
   @callback send_tool_result(pid(), reference(), term()) :: :ok | {:error, atom()}
   @callback close(pid()) :: :ok | {:error, atom()}
-  @optional_callbacks input_quiescent?: 1, set_input_hold: 2, append_history: 2
+  @optional_callbacks input_quiescent?: 1,
+                      set_input_hold: 2,
+                      append_history: 2,
+                      send_tool_result: 3
 end

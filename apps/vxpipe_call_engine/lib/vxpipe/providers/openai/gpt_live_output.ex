@@ -7,6 +7,13 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveOutput do
 
   @maximum_queued_bytes 96_000
 
+  def result_context(state, nil), do: state
+
+  def result_context(state, context) when is_reference(context) do
+    {bursts, []} = BurstResponses.input_accepted(state.bursts, context)
+    %{state | latest_context: context, bursts: bursts}
+  end
+
   def push_pcm(%{fixed_opening: opening} = state, pcm) when not is_nil(opening) do
     case GPTLiveFixedOpening.push_pcm(opening, pcm) do
       {:ok, opening} ->

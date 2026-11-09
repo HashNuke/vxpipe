@@ -44,9 +44,6 @@ defmodule Vxpipe.Providers.MorseCode.DuplexSTSSession do
   defdelegate interrupt(pid, turn_ref), to: Native
 
   @impl true
-  defdelegate send_tool_result(pid, call_ref, result), to: Native
-
-  @impl true
   defdelegate close(pid), to: Native
 
   @doc "Emit the next `ms` of clock-paced output. The adapter owns the clock."

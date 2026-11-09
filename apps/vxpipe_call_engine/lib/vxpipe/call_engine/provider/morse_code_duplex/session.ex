@@ -113,10 +113,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     do: GenServer.call(pid, {:interrupt, turn_ref}, 5_000)
 
   @impl true
-  def send_tool_result(pid, call_ref, result),
-    do: GenServer.call(pid, {:tool_result, call_ref, result}, 5_000)
-
-  @impl true
   def close(pid) do
     GenServer.call(pid, :close, 5_000)
   catch
@@ -235,9 +231,6 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
   def handle_call({:submit_input, context, {:opening, reference, opening}}, _from, state),
     do: Opening.start(state, context, reference, opening)
 
-  def handle_call({:submit_input, _context, _operation}, _from, state),
-    do: {:reply, {:error, :unsupported_operation}, state}
-
   def handle_call(:input_quiescent?, _from, state) do
     quiescent? =
       Output.idle?(state.timeline) and state.segments == %{} and state.pending_tools == %{}
@@ -281,12 +274,11 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
     end
   end
 
-  def handle_call({:tool_result, call_ref, result}, _from, state) when is_reference(call_ref) do
+  def handle_call({:submit_input, context, {:tool_result, call_ref, result}}, _from, state)
+      when is_reference(call_ref) and is_reference(context) do
     case Map.fetch(state.pending_tools, call_ref) do
       {:ok, _tool} ->
-        state = %{state | pending_tools: Map.delete(state.pending_tools, call_ref)}
-
-        case ToolReply.publish(state, result) do
+        case ToolReply.publish(state, context, call_ref, result) do
           {:ok, state} -> {:reply, :ok, state}
           {:error, reason} -> {:stop, {:shutdown, reason}, {:error, reason}, state}
         end
@@ -295,6 +287,9 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.Session do
         {:reply, {:error, :stale_request}, state}
     end
   end
+
+  def handle_call({:submit_input, _context, _operation}, _from, state),
+    do: {:reply, {:error, :unsupported_operation}, state}
 
   def handle_call({:advance, _ms}, _from, %{clock: :realtime} = state),
     do: {:reply, {:error, :unsupported_operation}, state}

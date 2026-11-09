@@ -156,10 +156,12 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSessionTest do
     assert tool.response_context == context
     assert is_reference(tool.turn_ref)
 
+    result_context = make_ref()
+
     assert :ok =
-             RealtimeSession.send_tool_result(Session.provider(session), tool.call_ref, %{
-               "ok" => true
-             })
+             Session.send_tool_result(session, tool.call_ref, %{"ok" => true},
+               response_context: result_context
+             )
 
     assert_receive {:realtime_sent, ^wire,
                     %{
@@ -174,12 +176,24 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSessionTest do
       "response" => %{"id" => "resp_1", "status" => "completed"}
     })
 
-    _token = response_token(wire)
+    token = response_token(wire)
     refute_received {:vxpipe_speech, %Event{kind: :response_started}}
     refute_received {:vxpipe_speech, %Event{kind: :output_completed}}
 
+    response_created(session, wire, token, "continuation")
+
+    deliver(session, wire, %{
+      "type" => "response.output_audio.delta",
+      "response_id" => "continuation",
+      "delta" => "AQA="
+    })
+
+    assert event(session, :response_started).response_context == result_context
+
     assert {:error, :stale_request} =
-             RealtimeSession.send_tool_result(Session.provider(session), tool.call_ref, %{})
+             Session.send_tool_result(session, tool.call_ref, %{},
+               response_context: result_context
+             )
   end
 
   test "explicit response acceptance prevents competing microphone audio until response identity is known" do
@@ -236,7 +250,11 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSessionTest do
     })
 
     tool = event(session, :tool_call)
-    assert :ok = RealtimeSession.send_tool_result(Session.provider(session), tool.call_ref, %{})
+
+    assert :ok =
+             Session.send_tool_result(session, tool.call_ref, %{},
+               response_context: tool.response_context
+             )
 
     deliver(session, wire, %{
       "type" => "response.done",
@@ -312,7 +330,11 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSessionTest do
       "response" => %{"id" => "first", "status" => "completed"}
     })
 
-    assert :ok = RealtimeSession.send_tool_result(Session.provider(session), tool.call_ref, %{})
+    assert :ok =
+             Session.send_tool_result(session, tool.call_ref, %{},
+               response_context: tool.response_context
+             )
+
     refute_received {:realtime_sent, ^wire, %{"type" => "response.create"}}
     assert :ok = Session.push_audio(session, <<2, 0>>, response_context: context)
 
@@ -352,7 +374,12 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSessionTest do
     deliver(session, wire, call)
     tool = event(session, :tool_call)
     assert tool.response_context == context
-    assert :ok = RealtimeSession.send_tool_result(Session.provider(session), tool.call_ref, %{})
+
+    assert :ok =
+             Session.send_tool_result(session, tool.call_ref, %{},
+               response_context: tool.response_context
+             )
+
     deliver(session, wire, call)
     refute_received {:vxpipe_speech, %Event{kind: :tool_call}}
     assert :ok = RealtimeSession.interrupt(Session.provider(session), tool.turn_ref)

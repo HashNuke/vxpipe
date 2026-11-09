@@ -317,6 +317,14 @@ defmodule Vxpipe.CallEngine.Speech.Session do
 
   def push_text(_allocation, _text, _options), do: {:error, :invalid_text}
 
+  @doc "Deliver one native tool result through the ordered STS command slot, without caller evidence."
+  def send_tool_result(allocation, call, result, options \\ []) when is_reference(call) do
+    with {:ok, command} <- input_command(allocation, options) do
+      command = Map.put(command, :operation, {:tool_result, call, result})
+      submit_input(allocation, command, <<>>)
+    end
+  end
+
   @doc "Admit an engine-owned opening through the bounded STS input slot, without caller evidence."
   def begin_opening(allocation, opening, options \\ []) do
     if Vxpipe.CallEngine.Speech.Opening.valid?(opening) do

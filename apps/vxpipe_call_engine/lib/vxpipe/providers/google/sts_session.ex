@@ -262,25 +262,12 @@ defmodule Vxpipe.Providers.Google.STSSession do
       else: {:reply, :ok, state}
   end
 
-  def handle_call({:send_tool_result, call_ref, result}, _from, state)
-      when is_reference(call_ref) do
-    case Map.fetch(state.pending_tools, call_ref) do
-      {:ok, %{id: id, name: name}} ->
-        case send_tool_response(state, id, name, result) do
-          :ok ->
-            {:reply, :ok,
-             %{state | pending_tools: Map.delete(state.pending_tools, call_ref)}
-             |> STSResumption.model_work()
-             |> STSResumption.await_model_activity()}
+  def handle_call({:send_tool_result, call, result}, from, %{response_start?: false} = state)
+      when is_reference(call),
+      do: STSSubmission.submit({:command, {:tool_result, call, result}}, from, state)
 
-          {:error, _reason} ->
-            {:reply, {:error, :invalid_tool_result}, state}
-        end
-
-      :error ->
-        {:reply, {:error, :stale_request}, state}
-    end
-  end
+  def handle_call({:send_tool_result, _call, _result}, _from, state),
+    do: {:reply, {:error, :unsupported_operation}, state}
 
   def handle_call(:close, _from, state) do
     if state.wire, do: state.wire_module.close(state.wire)
@@ -777,13 +764,4 @@ defmodule Vxpipe.Providers.Google.STSSession do
 
   defp interrupted_output(%{output: output}),
     do: {:ok, %{output | queue: [], interrupted?: true}}
-
-  defp send_tool_response(state, id, name, result) do
-    with {:ok, payload} <- STS.encode_tool_result(id, name, result),
-         :ok <- state.wire_module.send_control(state.wire, payload) do
-      :ok
-    else
-      _failure -> {:error, :invalid_tool_result}
-    end
-  end
 end

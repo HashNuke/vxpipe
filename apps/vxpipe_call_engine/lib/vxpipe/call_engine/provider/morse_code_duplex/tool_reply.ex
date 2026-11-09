@@ -9,8 +9,12 @@ defmodule Vxpipe.CallEngine.Provider.MorseCodeDuplex.ToolReply do
   alias Vxpipe.CallEngine.Provider.MorseCode.Encoder
   alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.Hold
   alias Vxpipe.CallEngine.Provider.MorseCodeDuplex.ReplyFlow
+  alias Vxpipe.CallEngine.Speech.Duplex.BurstResponses
 
-  def publish(state, result) do
+  def publish(state, context, call, result) do
+    {bursts, []} = BurstResponses.input_accepted(state.bursts, context)
+    state = %{state | pending_tools: Map.delete(state.pending_tools, call), bursts: bursts}
+
     with {:ok, text} <- text(state.config, result),
          {:ok, pcm} <- Encoder.encode(state.config, text) do
       Hold.queue_tool_reply(state, %{text: text, pcm: pcm})

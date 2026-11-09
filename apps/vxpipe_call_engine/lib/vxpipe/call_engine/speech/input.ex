@@ -62,13 +62,20 @@ defmodule Vxpipe.CallEngine.Speech.Input do
         {:push_text, reference, text} -> {:text, reference, text}
         {:begin_opening, reference, opening} -> {:opening, reference, opening}
         {:input_activity, boundary} -> {:activity, boundary}
+        {:tool_result, call, result} -> {:tool_result, call, result}
         nil -> {:audio, payload}
       end
 
     case module.submit_input(provider, context, operation) do
-      :ok -> :ok
-      {:error, reason} when reason in [:busy, :unsupported_operation] -> {:error, reason}
-      _failure -> {:error, :session_failed}
+      :ok ->
+        :ok
+
+      {:error, reason}
+      when reason in [:busy, :unsupported_operation, :stale_request, :invalid_tool_result] ->
+        {:error, reason}
+
+      _failure ->
+        {:error, :session_failed}
     end
   end
 
@@ -108,6 +115,19 @@ defmodule Vxpipe.CallEngine.Speech.Input do
         :ok
 
       {:error, reason} when reason in [:busy, :unsupported_operation] ->
+        {:error, reason}
+
+      _failure ->
+        {:error, :session_failed}
+    end
+  end
+
+  defp execute_provider(module, provider, %{operation: {:tool_result, call, result}}, _payload) do
+    case module.send_tool_result(provider, call, result) do
+      :ok ->
+        :ok
+
+      {:error, reason} when reason in [:busy, :unsupported_operation, :stale_request] ->
         {:error, reason}
 
       _failure ->

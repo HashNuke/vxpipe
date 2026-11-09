@@ -475,6 +475,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
           | speech_to_speech_capability:
               Map.put(state.speech_to_speech_capability, :input_epoch, epoch)
         }
+        |> Tools.redeliver_pending()
 
       _unavailable ->
         retire_caller_epoch(state)

@@ -489,17 +489,43 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSessionTest do
     assert second.response_context == context
     assert :ok = Session.ack(session, second)
 
-    provider = Session.provider(session)
-    assert :ok = GPTLiveSession.send_tool_result(provider, first.call_ref, %{"ok" => "a"})
+    result_context = make_ref()
+
+    assert :ok =
+             Session.send_tool_result(session, first.call_ref, %{"ok" => "a"},
+               response_context: result_context
+             )
+
     assert_receive {:test_gpt_live_control, ^wire, %{"type" => "response.item.create"}}
     refute_received {:test_gpt_live_control, ^wire, %{"type" => "response.create"}}
 
-    assert :ok = GPTLiveSession.send_tool_result(provider, second.call_ref, %{"ok" => "b"})
+    assert :ok =
+             Session.send_tool_result(session, second.call_ref, %{"ok" => "b"},
+               response_context: result_context
+             )
+
     assert_receive {:test_gpt_live_control, ^wire, %{"type" => "response.item.create"}}
     assert_receive {:test_gpt_live_control, ^wire, %{"type" => "response.create"}}
 
+    TestGPTLiveTransport.deliver(wire, %{
+      "type" => "session.output_audio.delta",
+      "delta" => Base.encode64(:binary.copy(<<0, 16>>, 480))
+    })
+
+    assert_receive {:vxpipe_speech,
+                    %Event{
+                      session: ^session,
+                      kind: :response_started,
+                      response_context: ^result_context
+                    } = continuation},
+                   1_000
+
+    assert :ok = Session.ack(session, continuation)
+
     assert {:error, :stale_request} =
-             GPTLiveSession.send_tool_result(provider, first.call_ref, %{})
+             Session.send_tool_result(session, first.call_ref, %{},
+               response_context: result_context
+             )
   end
 
   test "caller fragments close at an inferred audio gap without a provider turn event" do

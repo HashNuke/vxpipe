@@ -94,7 +94,7 @@ defmodule Vxpipe.CallEngine.Speech.DuplexSTSConversationTest do
     assert :ok = Session.push_text(session, "TOOL echo {}", response_context: make_ref())
     call_ref = drain_until_tool_call(session)
 
-    assert :ok = DuplexSTS.send_tool_result(provider, call_ref, %{})
+    assert :ok = Session.send_tool_result(session, call_ref, %{}, response_context: make_ref())
 
     {payloads, turns} = drive(session, provider)
 

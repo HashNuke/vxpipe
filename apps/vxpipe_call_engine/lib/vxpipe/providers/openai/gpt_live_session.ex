@@ -141,10 +141,6 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     do: GenServer.call(pid, {:interrupt, turn_ref}, 5_000)
 
   @impl true
-  def send_tool_result(pid, call_ref, result) when is_reference(call_ref),
-    do: GenServer.call(pid, {:tool_result, call_ref, result}, 5_000)
-
-  @impl true
   def close(pid) do
     GenServer.call(pid, :close, 5_000)
   catch
@@ -233,6 +229,14 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
   end
 
   @impl true
+  def handle_call({:submit_input, context, {:tool_result, call_ref, result}}, _from, state) do
+    case send_tool_result_command(state, call_ref, result, context) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, :stale_request} -> reply_retired_tool_result(state, call_ref, result, context)
+      {:error, reason} -> {:stop, {:shutdown, reason}, {:error, reason}, state}
+    end
+  end
+
   def handle_call({:submit_input, _context, _operation}, _from, %{ready?: false} = state),
     do: {:reply, {:error, :busy}, state}
 
@@ -328,14 +332,6 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     case GPTLiveOutput.interrupt(state, turn_ref) do
       {:ok, state} -> {:reply, :ok, state}
       {:error, reason} -> {:reply, {:error, reason}, state}
-    end
-  end
-
-  def handle_call({:tool_result, call_ref, result}, _from, state) do
-    case send_tool_result_command(state, call_ref, result) do
-      {:ok, state} -> {:reply, :ok, state}
-      {:error, :stale_request} -> reply_retired_tool_result(state, call_ref, result)
-      {:error, reason} -> {:stop, {:shutdown, reason}, {:error, reason}, state}
     end
   end
 
@@ -493,10 +489,10 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     end)
   end
 
-  defp reply_retired_tool_result(state, call_ref, result) do
+  defp reply_retired_tool_result(state, call_ref, result, context) do
     case GPTLiveRetiredTools.result(state.retired_tools, call_ref, result, state.ready?) do
       {:ok, retired_tools, commands} ->
-        state = %{state | retired_tools: retired_tools}
+        state = GPTLiveOutput.result_context(%{state | retired_tools: retired_tools}, context)
 
         case send_controls(state, commands) do
           :ok -> {:reply, :ok, state}
@@ -640,13 +636,16 @@ defmodule Vxpipe.Providers.OpenAI.GPTLiveSession do
     end
   end
 
-  defp send_tool_result_command(state, call_ref, result) do
+  defp send_tool_result_command(state, call_ref, result, context \\ nil) do
     with {:ok, delegation, call_id, continuation} <-
            GPTLiveDelegation.result(state.delegation, call_ref),
          {:ok, command} <- GPTLive.tool_output(call_id, result),
          :ok <- send_control(state, state.wire, command),
          {:ok, state} <-
-           apply_delegation_actions(%{state | delegation: delegation}, continuation) do
+           apply_delegation_actions(
+             GPTLiveOutput.result_context(%{state | delegation: delegation}, context),
+             continuation
+           ) do
       {:ok, state}
     else
       {:error, :stale_request} -> {:error, :stale_request}

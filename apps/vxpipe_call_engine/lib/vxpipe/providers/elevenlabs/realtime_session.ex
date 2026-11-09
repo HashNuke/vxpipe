@@ -67,10 +67,6 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
   @impl true
   def interrupt(pid, turn), do: GenServer.call(pid, {:interrupt, turn}, 5_000)
   @impl true
-  def send_tool_result(pid, ref, result),
-    do: GenServer.call(pid, {:tool_result, ref, result}, 5_000)
-
-  @impl true
   def close(pid) do
     GenServer.call(pid, :close, 5_000)
   catch
@@ -160,6 +156,10 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
   defp handle_request({:input, _context, _operation}, _from, %{ready?: false} = state),
     do: {:reply, {:error, :busy}, state}
 
+  defp handle_request({:input, context, {:tool_result, ref, result}}, _from, state)
+       when is_reference(context),
+       do: tool_result(state, context, ref, result)
+
   # Native stop events do not acknowledge consumption of every accepted PCM byte.
   # Keep one authorization origin for this allocation; cutover needs a new one.
   defp handle_request({:input, context, _operation}, _from, %{context: bound} = state)
@@ -231,11 +231,13 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
     end
   end
 
-  defp handle_request({:tool_result, ref, result}, _from, state) do
+  defp tool_result(state, context, ref, result) do
     case Map.fetch(state.tools, ref) do
       {:ok, %{id: id, token: token}} ->
         with {:ok, message} <- Realtime.tool_result(id, result),
              :ok <- send_wire(state, message),
+             response = %{Map.fetch!(state.responses, token) | result_context: context},
+             state = put_response(state, token, response),
              {:ok, state} <- continue_tools(%{state | tools: Map.delete(state.tools, ref)}, token) do
           {:reply, :ok, state}
         else
@@ -577,7 +579,7 @@ defmodule Vxpipe.Providers.ElevenLabs.RealtimeSession do
          not response.continued? and not pending? do
       enqueue(
         put_response(state, token, %{response | continued?: true}),
-        response.context,
+        response.result_context,
         nil,
         nil,
         true

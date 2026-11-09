@@ -386,6 +386,53 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
                      %{event: %{call_ref: ^old_call}}}
   end
 
+  @tag :tool_completion_origin
+  test "an admitted tool survives a reversible stop hold while its old speech stays fenced" do
+    capability = capability()
+    provider = Session.provider(:sys.get_state(capability).session)
+    assert :ok = SpeechToSpeech.push_text(capability, "look up appointment")
+    assert_receive {:context_input, origin, {:text, _, "look up appointment"}, _}
+    call = make_ref()
+
+    assert :ok =
+             GenServer.call(
+               provider,
+               {:emit, :tool_call,
+                call_ref: call,
+                turn_ref: make_ref(),
+                tool_name: "echo",
+                arguments: %{},
+                response_context: origin}
+             )
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, "agent", %{event: %{call_ref: ^call}}}
+
+    assert :ok = SpeechToSpeech.admit_tool(capability, call, :non_blocking)
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert :ok = SpeechToSpeech.push_text(capability, "unrelated conversation")
+    assert_receive {:context_input, current, {:text, _, "unrelated conversation"}, _}
+    refute current == origin
+
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"appointment" => "10:00"})
+
+    assert_receive {:context_tool_result, ^call, %{"appointment" => "10:00"}, ^current,
+                    continuation, :ok}
+
+    assert_receive {:context_output_granted, ^continuation, _output}, 1_000
+    assert :ok = SpeechToSpeech.finish_tool(capability, call)
+
+    assert {:error, :stale_request} =
+             SpeechToSpeech.send_tool_result(capability, call, %{"duplicate" => true})
+
+    refute_received {:context_tool_result, _, _, _, _, _}
+    refute_received {:context_input, _, {:text, _, _}, _}
+    old_speech = make_ref()
+    assert :ok = GenServer.call(provider, {:emit_response, origin, old_speech, 1})
+    assert_receive {:context_response_discarded, ^old_speech}
+    refute_received {:context_output_granted, ^old_speech, _}
+  end
+
   test "external caller activity gates an opted-in response until accepted end" do
     capability = capability(provider: {SpeechContextProbe, [turn_control: "external"]})
     provider = Session.provider(:sys.get_state(capability).session)

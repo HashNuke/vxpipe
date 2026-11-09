@@ -1175,35 +1175,89 @@ defmodule Vxpipe.Providers.Google.STSSessionTest do
     assert :ok = Session.ack(session, ended)
   end
 
-  test "tool calls map provider ids to bounded results and cancellations" do
-    {session, wire} = start_session()
+  for response_start? <- [false, true] do
+    @tag :shared_tool_result
+    test "tool calls with response-start #{response_start?} map ids to bounded results and cancellations" do
+      {session, wire} = start_session(response_start?: unquote(response_start?))
+      context = make_ref()
+      options = if unquote(response_start?), do: [response_context: context], else: []
+      assert :ok = Session.push_audio(session, <<0, 0>>, options)
 
+      deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
+      assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
+      assert :ok = Session.ack(session, started)
+
+      deliver(wire, %{
+        "toolCall" => %{
+          "functionCalls" => [
+            %{"id" => "provider-1", "name" => "echo", "args" => %{"text" => "hi"}}
+          ]
+        }
+      })
+
+      assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :tool_call} = call}
+      assert :ok = Session.ack(session, call)
+      assert call.tool_name == "echo"
+
+      assert :ok = Session.send_tool_result(session, call.call_ref, %{"ok" => true}, options)
+      assert_receive {:test_google_sts_control, ^wire, response}, 5_000
+      response = drain_until_tool_response(wire, response)
+      assert response =~ "provider-1"
+
+      assert {:error, :stale_request} =
+               Session.send_tool_result(session, make_ref(), %{}, options)
+
+      deliver(wire, %{"toolCallCancellation" => %{"ids" => ["provider-2"]}})
+      refute_received {:vxpipe_speech, %Event{session: ^session, kind: :tool_cancelled}}
+    end
+  end
+
+  @tag :fresh_tool_result_context
+  test "a pending tool can resume with a fresh context only after the old speech settles" do
+    {session, wire} = start_session(response_start?: true)
+    old_context = make_ref()
+    fresh_context = make_ref()
+    options = [response_context: fresh_context]
+    assert :ok = Session.push_audio(session, <<0, 0>>, response_context: old_context)
     deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_START"}})
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :speech_started} = started}
+    assert_receive {:vxpipe_speech, %Event{kind: :speech_started} = started}
     assert :ok = Session.ack(session, started)
+    deliver(wire, %{"voiceActivity" => %{"type" => "ACTIVITY_END"}})
+    assert_receive {:vxpipe_speech, %Event{kind: :turn_ended} = ended}
+    assert :ok = Session.ack(session, ended)
+    caller_final(session, wire, "CALLER")
 
     deliver(wire, %{
       "toolCall" => %{
-        "functionCalls" => [
-          %{"id" => "provider-1", "name" => "echo", "args" => %{"text" => "hi"}}
-        ]
+        "functionCalls" => [%{"id" => "pending-1", "name" => "echo", "args" => %{}}]
       }
     })
 
-    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: :tool_call} = call}
+    assert_receive {:vxpipe_speech, %Event{kind: :tool_call} = call}
+    assert call.response_context == old_context
     assert :ok = Session.ack(session, call)
-    assert call.tool_name == "echo"
 
-    provider = Session.provider(session)
-    assert :ok = STSSession.send_tool_result(provider, call.call_ref, %{"ok" => true})
+    for status <- ["IN_PROGRESS", nil] do
+      content = %{"turnComplete" => true}
+      content = if status, do: Map.put(content, "interactionStatus", status), else: content
+      deliver_sync(session, wire, %{"serverContent" => content})
+      assert {:error, :busy} = Session.send_tool_result(session, call.call_ref, %{}, options)
+    end
+
+    deliver_sync(session, wire, %{
+      "serverContent" => %{"turnComplete" => true, "interactionStatus" => "IDLE"}
+    })
+
+    assert :ok = Session.send_tool_result(session, call.call_ref, %{"ok" => true}, options)
     assert_receive {:test_google_sts_control, ^wire, response}, 5_000
-    response = drain_until_tool_response(wire, response)
-    assert response =~ "provider-1"
+    assert drain_until_tool_response(wire, response) =~ "pending-1"
+    deliver(wire, audio_message(7))
+    assert_receive {:vxpipe_speech, %Event{kind: :response_started} = response}
+    assert response.response_context == fresh_context
+    assert :ok = Session.ack(session, response)
 
-    assert {:error, :stale_request} = STSSession.send_tool_result(provider, make_ref(), %{})
-
-    deliver(wire, %{"toolCallCancellation" => %{"ids" => ["provider-2"]}})
-    refute_received {:vxpipe_speech, %Event{session: ^session, kind: :tool_cancelled}}
+    assert {:error, :stale_request} =
+             Session.send_tool_result(session, call.call_ref, %{}, options)
   end
 
   test "audio after server interruption is dropped before the next turn" do
