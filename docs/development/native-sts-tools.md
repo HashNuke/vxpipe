@@ -52,6 +52,15 @@ against the recorder and current capability. It submits the resulting binding
 to the same `InvocationRegistry` and handlers used by LLM participants. Silent
 deferral is removed. Superseded direct completion/timeout handlers and unused
 wrappers are removed; the owned invocation registry supplies production outcomes.
+Started publication follows successful registry admission. Fresh invalid or
+unselected requests receive a bounded rejection; fresh requests after input
+permission is revoked fail explicitly. Active native duplicates preserve the
+original association. Activation and private call reference determine the opaque
+invocation ID, so a completed call replay cannot execute again while its ID is
+retained by the existing bounded registry. Replay detection precedes argument
+validation and terminates the invalid exchange without sending a second result.
+References rejected before registry submission and IDs evicted from the bounded
+retention window are outside that duplicate-protection guarantee.
 Native completion retention, input coordination and
 interrupted-result delivery still require C3; dispatch alone is not full parity.
 
@@ -155,10 +164,11 @@ non-blocking binding cannot satisfy the new milestone's parity requirement.
 
 The execution budget and completion lifecycle need separate acceptance:
 
-- The native invocation tree hardcodes a five-second execution deadline. Align
-  this with existing application-configured invocation budgets and operation
-  deadlines, including transfer preparation. Keep it bounded; verify a legitimate
-  slower MCP/transfer operation and expiry cleanup. Do not add environment flags.
+- Both paths use the existing application-configured invocation budgets through
+  `Tool.InvocationConfig`, including transfer preparation's operation deadline.
+  A controlled MCP operation completes after 5.1 seconds without retry, and
+  configured expiry and capacity/result limits pass. No environment flags or
+  separate native execution settings were added.
 - `ToolCompletions` now acknowledges through the existing registry after local
   provider acceptance or an authorized terminal effect, releasing completed-tool
   capacity. Rejected delivery terminates explicitly without replaying the business

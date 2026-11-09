@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 10/20 implementation tasks complete; 1/4 checkpoints complete**.
+Status: **in progress — 11/20 implementation tasks complete; 1/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -111,7 +111,7 @@ Each task includes its smallest project-owned failing test, passing implementati
 and relevant documentation. Keep checkpoints coherent and usable. Record commands,
 results and remaining limitations below when checking items off.
 
-### C1 — Shared descriptor resolution and tool submission (3/5)
+### C1 — Shared descriptor resolution and tool submission (4/5)
 
 - [x] Preserve the compiled private descriptors alongside provider-safe schema
   projections, including injected Call Variables bindings. Test identical selected
@@ -120,7 +120,7 @@ results and remaining limitations below when checking items off.
 - [x] Route native calls through the existing shared validation, binding
   constructors and registry submission used by the text path. Cover host,
   platform, variables and participant transfer without a parallel STS executor.
-- [ ] Remove silent `:deferred` dispatch. Prove unknown names, malformed arguments,
+- [x] Remove silent `:deferred` dispatch. Prove unknown names, malformed arguments,
   denied variables, revoked permissions and unsupported operations produce bounded
   rejection before side effects, with no orphaned pending record.
 - [x] Apply `PlatformResult` through common room authority. Prove current-time,
@@ -199,6 +199,26 @@ results and remaining limitations below when checking items off.
   implementation checkpoints under the user's standing instruction.
 
 ## Acceptance and evidence
+
+Bounded rejection closes C1's rejection task (4/5), bringing progress to 11/20.
+Fresh held/policy-denied requests fail explicitly; active duplicates preserve
+their admitted association. Unknown/schema-invalid/read-only calls reject before
+side effects, and saturation publishes no started event. Existing saved-revocation
+and invalid-binding startup cases cover the remaining rejection categories.
+
+Native invocation IDs now bind activation and private call reference. Replays
+at fresh sequences or with invalid changed arguments cannot repeat accepted work
+while their IDs remain in the shared registry. Replay detection precedes descriptor
+validation and terminates without another native result or lifecycle event.
+Pre-submission rejection IDs are not retained; post-eviction lifetime deduplication
+is not claimed. C1's shared partial multi-tool contract and C3's complete
+retention/replay acceptance remain open. Focused regression: 156 tests, zero
+failures (seed `836200`), plus the corrected room fixture's 32 tests. Full Call
+Engine: **2,385 tests, zero failures, 100 excluded** (seed `370087`); Lean build,
+oracle and replay pass (seed `707748`). Independent Astra xhigh source/test/docs
+re-review is clean. See the
+[rejection labnote](../20261109-0938-native-tool-rejections.md) for reproduced
+failures and full checkpoint verification; final umbrella acceptance stays in C4.
 
 Saved-authority acceptance closes C2 (5/5), bringing progress to 10/20 and one
 complete checkpoint. Native prepared/admitted calls use Console's existing saved
@@ -288,7 +308,7 @@ of it checks off the new integration or parity tasks above.
 
 | Checkpoint | Progress | Implementation evidence |
 | --- | --- | --- |
-| C1 | 3/5 | Private registry, shared dispatch/validation, variable permissions and scoped platform effects implemented. 112 native/LLM/transfer regressions pass (seed 286573); clean second Astra code review. Revoked/unsupported rejection and shared duplicate/partial-admission acceptance remain. |
+| C1 | 4/5 | Private registry, shared dispatch/validation, variable permissions, bounded rejection and scoped platform effects implemented. Held/policy-denied requests fail explicitly; retained accepted-ID replay cannot repeat work or publish another result. 156 focused regressions pass (seed 836200), plus 32 corrected room-fixture tests; clean Astra source/test review. Shared compiled-room duplicate/partial-admission acceptance remains. |
 | C2 | 5/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime pass. Native aliases, call/tenant isolation, in-flight teardown and ordinary/duplex transfer success/failure pass. Real saved disconnect/replacement and catalog-pin races now pass alongside existing LLM cases (18 tagged integration tests). |
 | C3 | 2/5 | Shared conversation admission and application-configured execution bounds are implemented and reviewed; prolonged MCP execution, transfer budgets, short expiry and bounded results pass. Accepted native results acknowledge existing leases, including more than 16 interrupted completions. Speech interruption and reversible transfer hold preserve accepted work. Lost provider associations terminate explicitly after the bounded outcome. Origin-aware stop-hold delivery, final discard, replay, usage observations and full race acceptance remain open. |
 | C4 | 0/5 | Pending |
@@ -312,8 +332,9 @@ exercise real workers. Expanded regression lane: **112 tests, 0 failures**, seed
 removed; two failing real-room tests proved they could prematurely settle owned
 work. Format, compilation, strict Credo and unused-dependency checks pass. The
 full umbrella run for that checkpoint was interrupted; the ownership checkpoint
-below supplies the subsequent complete passing run. Full acceptance and
-C1's revoked/unsupported rejection and shared duplicate/partial-admission suite remain open.
+below supplies the subsequent complete passing run. At that checkpoint, full
+acceptance, C1's revoked/unsupported rejection and the shared
+duplicate/partial-admission suite remained open.
 
 Native MCP ownership checkpoint: both participant paths compose the same owner and
 session components and execute through the same invocation handler. Native startup

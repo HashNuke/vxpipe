@@ -726,6 +726,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     else
       {:error, :pending_tool_overflow} -> stop_unavailable(:pending_tool_overflow, state)
       {:error, :stale_tool_origin} -> stop_unavailable(:stale_tool_origin, state)
+      {:error, :tool_not_permitted} -> stop_unavailable(:tool_not_permitted, state)
       _failure -> stop_unavailable(:provider_failed, state)
     end
   end

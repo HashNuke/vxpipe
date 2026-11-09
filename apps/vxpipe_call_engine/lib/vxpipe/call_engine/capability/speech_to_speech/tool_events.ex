@@ -9,14 +9,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
 
   def forward(state, %Event{kind: :tool_call, call_ref: call} = event) do
     cond do
-      not permitted?(state) ->
+      Map.has_key?(state.tool_calls, call) ->
         {:ok, state}
+
+      not permitted?(state) ->
+        {:error, :tool_not_permitted}
 
       not origin_current?(state, event.response_context) ->
         {:error, :stale_tool_origin}
-
-      Map.has_key?(state.tool_calls, call) ->
-        {:ok, state}
 
       map_size(state.tool_calls) >= @maximum_pending ->
         {:error, :pending_tool_overflow}

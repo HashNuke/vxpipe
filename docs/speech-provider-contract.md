@@ -660,14 +660,23 @@ must match its original admission scope even if the caller epoch has changed.
 
 A room-owned scalar sequence watermark rejects repeated or delayed forwarded
 envelopes; capability replacement resets the watermark and associations. This
-does not deduplicate upstream events relabelled with fresh semantic sequences.
-Those replay cases remain an acceptance gate.
+watermark is separate from invocation identity: native requests derive an opaque
+ID from their activation and private call reference. A replay at a fresh sequence
+cannot repeat accepted work while its ID is retained in the shared registry.
+That check precedes descriptor validation and terminates an invalid repeated
+exchange without another native result or lifecycle event. Pre-submission
+rejections and IDs evicted from bounded retention are outside this guarantee.
+Started publication occurs only after successful registry admission; fresh
+invalid, unselected or saturated requests receive bounded rejection. Fresh calls
+while held or denied terminate explicitly; existing active duplicates are ignored.
 
 The current execution path uses the shared supervised invocation registry and
-workers beneath the exact STS capability tree. Its 16-record budget includes
-running work and retained terminal outcomes. Capability/tree/room-owner loss ends
-local workers. The five-second execution deadline reports unknown, not proof of
-remote rollback; application-configured native budgets remain milestone work.
+workers beneath the exact STS capability tree. Both paths use the existing
+application-configured execution time, worker capacity, consumed-ID retention and
+result limits through `Tool.InvocationConfig`, including the transfer operation's
+deadline. Capacity includes running work and retained terminal outcomes, separately
+from the 16 pending transport associations. Capability/tree/room-owner loss ends
+local workers. Execution expiry reports unknown, not proof of remote rollback.
 The private completion bridge acknowledges its lease after local provider
 acceptance or an authorized terminal transfer. This releases completed capacity;
 20 sequential normal and interrupted tools are covered by compiled-room tests.

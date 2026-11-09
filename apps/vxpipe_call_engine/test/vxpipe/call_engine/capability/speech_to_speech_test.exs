@@ -701,6 +701,33 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     refute_received {:vxpipe_sts_tool_call, _, _, _, _, _, _}
   end
 
+  for denial <- [:held, :policy] do
+    @tag :tool_rejection
+    test "a fresh tool request after #{denial} fails explicitly without forwarding work" do
+      {tree, capability, _sink} = start_contract_capability()
+      provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+      capability_monitor = Process.monitor(capability)
+      tree_monitor = Process.monitor(tree)
+
+      case unquote(denial) do
+        :held ->
+          assert :ok = SpeechToSpeech.hold(capability)
+
+        :policy ->
+          assert :ok = SpeechToSpeech.apply_policy(capability, deny_audio(@human, @agent))
+      end
+
+      assert :ok = emit_tool(provider, make_ref(), make_ref())
+      assert_receive {:vxpipe_sts_unavailable, ^capability, :tool_not_permitted}, 1_000
+
+      assert_receive {:DOWN, ^capability_monitor, :process, ^capability, :tool_not_permitted},
+                     1_000
+
+      assert_receive {:DOWN, ^tree_monitor, :process, ^tree, _reason}, 1_000
+      refute_received {:vxpipe_sts_tool_event, ^capability, _, _}
+    end
+  end
+
   @tag :conversation_admission
   test "blocking tool input discards PCM without replay after its result" do
     {_tree, capability, _sink} = start_contract_capability()
@@ -845,6 +872,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert :ok = emit_tool(provider, call, make_ref())
     assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{kind: :tool_call}}}
     assert :ok = SpeechToSpeech.hold(capability)
+    assert :ok = emit_tool(provider, call, make_ref())
+    _ = :sys.get_state(capability)
+    refute_received {:vxpipe_sts_unavailable, ^capability, _}
     assert {:error, :held} = SpeechToSpeech.push_text(capability, "later input")
     assert :ok = SpeechToSpeech.release(capability, make_ref())
     assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"ok" => true})

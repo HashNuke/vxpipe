@@ -269,12 +269,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
   end
 
   test "STS tool calls outside the agent allowlist fail closed without execution" do
-    stub = start_supervised!({Vxpipe.CallEngine.STSToolResultReceiver, self()})
-    state = state() |> with_tools(%{}) |> bind_capability(stub, @agent)
-    capability = stub
-    call_ref = make_ref()
+    {_tree, capability} = start_real_capability()
+    state = state() |> with_tools(%{}) |> bind_capability(capability, @agent)
+    {call_ref, provider_turn} = native_tool_call(capability, "evil")
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    :erlang.trace(provider, true, [:receive])
 
-    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, "turn-tool")
+    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, provider_turn)
 
     state =
       SpeechToSpeech.handle_tool_call(
@@ -282,7 +283,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
         capability,
         @agent,
         call_ref,
-        "turn-tool",
+        provider_turn,
         "evil",
         %{}
       )
@@ -296,7 +297,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
     refute_received {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallStarted{}}
     assert state.sts_tool_calls == %{}
-    assert_receive {:provider_tool_result, ^call_ref, %{"error" => "tool_failed"}}
+
+    assert_receive {:trace, ^provider, :receive,
+                    {:"$gen_call", _, {:send_tool_result, ^call_ref, %{"error" => "tool_failed"}}}}
+
+    assert :sys.get_state(capability).tool_calls == %{}
   end
 
   test "STS execution retains a completion until a real provider association accepts it" do

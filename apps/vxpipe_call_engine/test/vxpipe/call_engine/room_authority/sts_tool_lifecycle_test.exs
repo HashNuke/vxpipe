@@ -247,6 +247,61 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     assert :sys.get_state(context.authority).sts_tool_calls == %{}
   end
 
+  for {label, arguments} <- [{"same arguments", %{}}, {"invalid arguments", %{"extra" => true}}] do
+    @tag :tool_rejection
+    @tag replay_arguments: arguments
+    test "a completed private call reference with #{label} cannot start another exchange",
+         context do
+      capability = context.capability
+      authority = context.authority
+      monitor = Process.monitor(authority)
+      provider = CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+      {worker, started} = submit(context)
+      [{call, association}] = Map.to_list(:sys.get_state(provider).pending_tools)
+      send(worker, :finish)
+      assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: id}}, 1_000
+      assert id == started.tool_call_id
+      _ = :sys.get_state(context.authority)
+      :erlang.trace(provider, true, [:receive])
+
+      # Repeat the semantic request at a new channel sequence with the same private
+      # association, as a transport replay after the earlier result was consumed.
+      association = %{association | turn_ref: make_ref()}
+
+      :sys.replace_state(provider, fn state ->
+        assert :ok =
+                 CallEngine.Speech.Event.emit(state.channel, :tool_call,
+                   call_ref: call,
+                   turn_ref: association.turn_ref,
+                   tool_name: "lifecycle",
+                   arguments: context.replay_arguments
+                 )
+
+        %{state | pending_tools: Map.put(state.pending_tools, call, association)}
+      end)
+
+      assert_receive {:DOWN, ^monitor, :process, ^authority, :tool_request_rejected}, 1_000
+      refute_received {:host_started, _, _}
+      refute_received {:vxpipe_event, %ToolCallStarted{}}
+      refute_received {:vxpipe_event, %ToolCallFailed{}}
+
+      refute_received {:trace, ^provider, :receive,
+                       {:"$gen_call", _, {:send_tool_result, ^call, _}}}
+    end
+  end
+
+  @tag :tool_rejection
+  test "unknown requests settle without starting work or leaving an input hold", context do
+    assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL unknown_operation {}")
+    assert_receive {:vxpipe_event, %ToolCallFailed{reason: :unauthorized}}, 1_000
+    _ = :sys.get_state(context.authority)
+    refute_received {:host_started, _, _}
+    refute_received {:vxpipe_event, %ToolCallStarted{}}
+    assert :sys.get_state(context.capability).tool_calls == %{}
+    assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
+    assert_receive {:vxpipe_event, %ToolCallCompleted{name: "current_time"}}, 1_000
+  end
+
   @tag :shared_settlement
   test "completed native tools release capacity for more than sixteen sequential requests",
        context do
@@ -537,16 +592,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
   end
 
   @tag :shared_bounds
+  @tag :tool_rejection
   @tag conversation_mode: "non_blocking", tool_limits: [maximum_tool_invocations: 2]
   test "native admission respects configured worker capacity and recovers after consumption",
        context do
     {first, _} = submit(context)
     {second, _} = submit(context)
     assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL lifecycle {}")
-    assert_receive {:vxpipe_event, %ToolCallStarted{tool_call_id: rejected}}, 1_000
-
-    assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: ^rejected, reason: :saturated}},
-                   1_000
+    assert_receive {:vxpipe_event, %ToolCallFailed{reason: :saturated}}, 1_000
+    refute_received {:vxpipe_event, %ToolCallStarted{}}
 
     _ = :sys.get_state(context.authority)
     refute_received {:host_started, _, _}

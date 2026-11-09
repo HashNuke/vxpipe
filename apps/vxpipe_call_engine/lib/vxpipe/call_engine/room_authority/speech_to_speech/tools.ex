@@ -58,36 +58,35 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       case permitted_connection(state) do
         {connection_id, connection} ->
           turn = tool_turn(state, agent_id, provider_turn, connection_id, connection)
-          tool_call_id = Id.generate(:tool_attempt)
+          tool_call_id = native_tool_id(state.speech_to_speech_capability.activation_id, call_ref)
+          check_new_id!(capability, tool_call_id)
 
-          case admit_binding(state, agent_id, name, arguments) do
-            {:ok, binding} ->
-              pending = %{
-                agent_id: agent_id,
-                turn: turn,
-                source: state.speech_to_speech_capability,
-                tool_call_id: tool_call_id,
-                name: name,
-                binding: binding,
-                context: tool_context(state, turn, tool_call_id, capability, connection)
-              }
+          with {:ok, binding} <- admit_binding(state, agent_id, name, arguments),
+               pending = %{
+                 agent_id: agent_id,
+                 turn: turn,
+                 source: state.speech_to_speech_capability,
+                 tool_call_id: tool_call_id,
+                 name: name,
+                 binding: binding,
+                 context: tool_context(state, turn, tool_call_id, capability, connection)
+               },
+               :ok <- submit_sts_tool(capability, call_ref, binding, arguments, pending) do
+            state = %{state | sts_tool_calls: Map.put(state.sts_tool_calls, call_ref, pending)}
 
-              state = %{state | sts_tool_calls: Map.put(state.sts_tool_calls, call_ref, pending)}
+            event =
+              struct!(
+                ToolCallStarted,
+                Map.merge(agent_fields(state, connection, turn), %{
+                  tool_call_id: tool_call_id,
+                  name: name,
+                  arguments: arguments
+                })
+              )
 
-              event =
-                struct!(
-                  ToolCallStarted,
-                  Map.merge(agent_fields(state, connection, turn), %{
-                    tool_call_id: tool_call_id,
-                    name: name,
-                    arguments: arguments
-                  })
-                )
-
-              state = EventPublisher.publish(state, connection.pid, event)
-              state = %{state | next_sequence: state.next_sequence + 1}
-              maybe_execute_sts_tool(state, capability, call_ref, binding, arguments, pending)
-
+            state = EventPublisher.publish(state, connection.pid, event)
+            %{state | next_sequence: state.next_sequence + 1}
+          else
             {:error, reason} ->
               fail_sts_tool(
                 state,
@@ -105,6 +104,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       end
     else
       state
+    end
+  end
+
+  defp native_tool_id(activation, call_ref) do
+    identity = :erlang.term_to_binary({:vxpipe_native_tool, activation, call_ref})
+    <<opaque::binary-size(16), _rest::binary>> = :crypto.hash(:sha256, identity)
+    "tlatt_" <> Base.url_encode64(opaque, padding: false)
+  end
+
+  defp check_new_id!(capability, id) do
+    case InvocationRegistry.check_new_id(Tree.invocation_registry(capability), id) do
+      :ok -> :ok
+      {:error, :rejected} -> exit(:tool_request_rejected)
+      {:error, _reason} -> exit(:tool_admission_unavailable)
     end
   end
 
@@ -186,7 +199,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
   defp participant_activation(_state, _agent_id), do: nil
 
-  defp maybe_execute_sts_tool(state, capability, call_ref, binding, arguments, pending) do
+  defp submit_sts_tool(capability, call_ref, binding, arguments, pending) do
     case InvocationRegistry.submit(
            Tree.invocation_registry(capability),
            binding,
@@ -196,12 +209,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
          ) do
       {:accepted, mode} ->
         case Capability.admit_tool(capability, call_ref, mode) do
-          :ok -> state
+          :ok -> :ok
           {:error, _reason} -> exit(:tool_admission_unavailable)
         end
 
-      {:error, reason} ->
-        handle_tool_executed(state, capability, call_ref, {:error, reason})
+      {:error, :rejected} ->
+        exit(:tool_request_rejected)
+
+      {:error, _reason} = error ->
+        error
     end
   end
 

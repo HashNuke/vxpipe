@@ -53,6 +53,11 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     safe_call(registry, :snapshot, timeout)
   end
 
+  @doc false
+  @spec check_new_id(GenServer.server(), String.t()) :: :ok | {:error, :rejected | :unavailable}
+  def check_new_id(registry, invocation_id),
+    do: safe_call(registry, {:check_new_id, invocation_id})
+
   @impl Vxpipe.CallEngine.Readiness.Adapter
   def readiness(registry) do
     with {:ok, resource, status, supervisor} <- safe_call(registry, :readiness),
@@ -145,6 +150,13 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
   def handle_call(:snapshot, _from, state) do
     {:reply, {:ok, State.statuses(state)}, state}
+  end
+
+  def handle_call({:check_new_id, invocation_id}, _from, state) do
+    known? =
+      State.consumed?(state, invocation_id) or match?({:ok, _}, State.fetch(state, invocation_id))
+
+    {:reply, if(known?, do: {:error, :rejected}, else: :ok), state}
   end
 
   def handle_call({:lease_next, consumer_id}, _from, state) do
