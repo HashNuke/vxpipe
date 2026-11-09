@@ -438,7 +438,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
       model =
         if unquote(outcome) == :success, do: "test:blocked", else: "test:blocked-unavailable"
 
-      context = scene(destination: model, native_model: unquote(native_model)) |> start_room()
+      context =
+        scene(destination: model, native_model: unquote(native_model), archive?: true)
+        |> start_room()
+
       owner = Tree.remote_mcp_owner(context.capability)
       host = Tree.remote_mcp_sessions(context.capability)
       owner_monitor = Process.monitor(owner)
@@ -476,10 +479,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
         assert_receive {:vxpipe_event, %ToolCallCompleted{name: "customer_lookup"}}, 1_000
         refute_received {:DOWN, ^owner_monitor, :process, ^owner, _}
       end
+
+      expected = if unquote(outcome) == :success, do: "succeeded", else: "failed"
+
+      assert_receive {:test_archive_fact,
+                      %CallEngine.Archive.Fact{
+                        kind: :usage_observed,
+                        payload: %{"capability" => "tool", "outcome" => ^expected}
+                      }},
+                     1_000
     end
   end
 
   defp scene(options \\ []) do
+    {archive?, options} = Keyword.pop(options, :archive?, false)
     {tenant, options} = Keyword.pop(options, :tenant, "tenant-demo")
     {destination, options} = Keyword.pop(options, :destination)
     {native_model, options} = Keyword.pop(options, :native_model, "morse")
@@ -510,6 +523,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
 
     %{
       client: client,
+      archive?: archive?,
       store: store,
       plan: compile_plan(store, tenant, destination, native_model),
       result: result
@@ -517,8 +531,20 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
   end
 
   defp start_room(%{plan: plan, store: store} = scene, ready? \\ true) do
+    archive =
+      if scene.archive?,
+        do: [
+          enabled: true,
+          writer: {CallEngine.TestCollectingArchiveWriter, self()},
+          maximum_pending_facts: 64,
+          retry_delay_ms: 5,
+          drain_timeout_ms: 1_000
+        ],
+        else: []
+
     assert {:ok, room} =
              TestCallStartup.start_call(plan,
+               archive: archive,
                mcp_catalog_store: store,
                remote_mcp_connection_provider: CallEngine.TestRemoteMCPConnectionProvider,
                remote_mcp_protocol_client: CallEngine.TestRemoteMCPProtocolClient

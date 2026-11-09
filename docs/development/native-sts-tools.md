@@ -62,8 +62,8 @@ validation and terminates the invalid exchange without sending a second result.
 References rejected before registry submission and IDs evicted from the bounded
 retention window are outside that duplicate-protection guarantee.
 Native results use the shared semantic session boundary and retain their completion
-lease across reversible stop-holds. Full race/usage and conformance acceptance
-still remain; dispatch alone is not full parity.
+lease across reversible stop-holds. Final compiled-room conformance acceptance
+still remains; dispatch alone is not full parity.
 
 ## Provider protocol findings
 
@@ -204,8 +204,10 @@ The execution budget and completion lifecycle need separate acceptance:
   accepted worker until its bounded outcome, then fails explicitly if its native
   result association was lost. Origin-aware stop-held results now use fresh
   continuation authority after release; permanent authorization loss terminates
-  explicitly. Retained-ID replay and bounded eviction pass. General race/usage
-  and final conformance acceptance remain required for full parity.
+  explicitly. Retained-ID replay and bounded eviction pass. Native tool usage now
+  reuses InvocationUsage/ToolAttempt through the existing completion bridge,
+  ordered before terminal results. Current bridge and activation checks prevent
+  stale attribution. Shared race suites pass; final conformance remains open.
 
 Native transport acceptance does not prove remote execution or durable receipt.
 GPT-Live documents no separate success acknowledgement for `response.item.create`.

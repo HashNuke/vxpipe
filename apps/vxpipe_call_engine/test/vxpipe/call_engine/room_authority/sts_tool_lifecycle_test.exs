@@ -36,6 +36,54 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
   end
 
   for model <- ["morse", "morse-duplex"] do
+    for outcome <- [:succeeded, :unknown] do
+      @tag :native_tool_usage
+      @tag native_model: model, usage_archive: true
+      @tag tool_limits: [
+             tool_invocation_timeout_ms: if(outcome == :unknown, do: 500, else: 5_000)
+           ]
+      test "#{model} archives one safe invocation attempt and its #{outcome} outcome", context do
+        {worker, started} = submit(context)
+        id = started.tool_call_id
+
+        assert_receive {:test_archive_fact,
+                        %CallEngine.Archive.Fact{
+                          kind: :usage_observed,
+                          tool_call_id: ^id,
+                          payload: %{"capability" => "tool", "outcome" => "in_progress"} = began
+                        }},
+                       1_000
+
+        assert began["measurement"]["quantity"] == 1
+
+        assert began["attribution"]["activation_id"] ==
+                 :sys.get_state(context.authority).speech_to_speech_capability.activation_id
+
+        if unquote(outcome) == :succeeded,
+          do: send(worker, {:finish, %{"private_result" => "synthetic-tool-secret"}})
+
+        expected = Atom.to_string(unquote(outcome))
+
+        assert_receive {:test_archive_fact,
+                        %CallEngine.Archive.Fact{
+                          kind: :usage_observed,
+                          tool_call_id: ^id,
+                          payload: %{"capability" => "tool", "outcome" => ^expected} = ended
+                        }},
+                       1_000
+
+        assert ended["attempt_id"] == began["attempt_id"]
+        refute Map.has_key?(ended, "measurement")
+        refute inspect({began, ended}) =~ "synthetic-tool-secret"
+        assert_receive {:vxpipe_event, %{tool_call_id: ^id} = terminal}, 1_000
+        assert terminal.__struct__ in [ToolCallCompleted, ToolCallFailed]
+        _ = :sys.get_state(context.authority)
+
+        refute_received {:test_archive_fact,
+                         %CallEngine.Archive.Fact{kind: :usage_observed, tool_call_id: ^id}}
+      end
+    end
+
     @tag :conversation_admission
     @tag native_model: model
     test "#{model} blocking tool holds later input until its result is consumed", context do
@@ -250,6 +298,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
   for {label, arguments} <- [{"same arguments", %{}}, {"invalid arguments", %{"extra" => true}}] do
     @tag :tool_rejection
     @tag replay_arguments: arguments
+    @tag usage_archive: true
     test "a completed private call reference with #{label} cannot start another exchange",
          context do
       capability = context.capability
@@ -262,6 +311,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
       assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: id}}, 1_000
       assert id == started.tool_call_id
       _ = :sys.get_state(context.authority)
+
+      for outcome <- ["in_progress", "succeeded"] do
+        assert_receive {:test_archive_fact,
+                        %CallEngine.Archive.Fact{
+                          kind: :usage_observed,
+                          tool_call_id: ^id,
+                          payload: %{"outcome" => ^outcome}
+                        }},
+                       1_000
+      end
+
       :erlang.trace(provider, true, [:receive])
 
       # Repeat the semantic request at a new channel sequence with the same private
@@ -281,6 +341,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
       end)
 
       assert_receive {:DOWN, ^monitor, :process, ^authority, :tool_request_rejected}, 1_000
+
+      assert_receive {:test_archive_fact, %CallEngine.Archive.Fact{kind: :archive_stream_closed}},
+                     1_000
+
+      refute_received {:test_archive_fact,
+                       %CallEngine.Archive.Fact{kind: :usage_observed, tool_call_id: ^id}}
+
       refute_received {:host_started, _, _}
       refute_received {:vxpipe_event, %ToolCallStarted{}}
       refute_received {:vxpipe_event, %ToolCallFailed{}}
@@ -291,6 +358,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
   end
 
   @tag :tool_rejection
+  @tag usage_archive: true
   test "unknown requests settle without starting work or leaving an input hold", context do
     assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL unknown_operation {}")
     assert_receive {:vxpipe_event, %ToolCallFailed{reason: :unauthorized}}, 1_000
@@ -298,6 +366,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     refute_received {:host_started, _, _}
     refute_received {:vxpipe_event, %ToolCallStarted{}}
     assert :sys.get_state(context.capability).tool_calls == %{}
+    refute_received {:test_archive_fact, %CallEngine.Archive.Fact{kind: :usage_observed}}
     assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
     assert_receive {:vxpipe_event, %ToolCallCompleted{name: "current_time"}}, 1_000
   end
@@ -374,6 +443,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
   end
 
   @tag :shared_dispatch
+  @tag usage_archive: true
   test "a native platform hangup publishes its result and ends the authorized room", context do
     authority = context.authority
     monitor = Process.monitor(authority)
@@ -385,6 +455,32 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
                    1_000
 
     assert_receive {:DOWN, ^monitor, :process, ^authority, _reason}, 1_000
+
+    assert_receive {:test_archive_fact,
+                    %CallEngine.Archive.Fact{
+                      kind: :usage_observed,
+                      payload: %{"capability" => "tool", "outcome" => "succeeded"}
+                    }},
+                   1_000
+  end
+
+  @tag :native_tool_usage
+  test "only the current native bridge is an authorized usage source", context do
+    state = :sys.get_state(context.authority)
+    bridge = Tree.tool_completions(context.capability)
+    source = CallEngine.RoomAuthority.UsageSource
+    binding = state.speech_to_speech_capability
+
+    assert {:ok, %{participant_id: participant, activation_id: activation}} =
+             source.resolve(state, bridge)
+
+    assert participant == binding.participant_id
+    assert activation == binding.activation_id
+    assert {:error, :unauthorized} = source.resolve(state, self())
+    retired = %{state | speech_to_speech_capability: nil}
+    assert {:error, :unauthorized} = source.resolve(retired, bridge)
+    replaced = %{state | speech_to_speech_capability: %{binding | pid: self()}}
+    assert {:error, :unauthorized} = source.resolve(replaced, bridge)
   end
 
   @tag variables: ["read", "write"]
@@ -946,7 +1042,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     agent = Map.fetch!(plan.participants, plan.entry_receiver)
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
-    assert {:ok, room} = TestCallStartup.start_call(plan)
+
+    archive =
+      if Map.get(context, :usage_archive, false),
+        do: [
+          enabled: true,
+          writer: {CallEngine.TestCollectingArchiveWriter, self()},
+          maximum_pending_facts: 64,
+          retry_delay_ms: 5,
+          drain_timeout_ms: 1_000
+        ],
+        else: []
+
+    assert {:ok, room} = TestCallStartup.start_call(plan, archive: archive)
     [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
 
     assert {:ok, command} =

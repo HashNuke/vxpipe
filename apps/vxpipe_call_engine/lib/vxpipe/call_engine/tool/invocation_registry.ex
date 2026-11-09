@@ -236,7 +236,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
             InvocationUsage.settled(
               record,
-              state.lifecycle_target,
+              state.usage_target,
               state.completion_target
             )
 
@@ -267,7 +267,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
         )
 
         InvocationLifecycle.settled(state.lifecycle_target, state.completion_target, record)
-        InvocationUsage.settled(record, state.lifecycle_target, state.completion_target)
+        InvocationUsage.settled(record, state.usage_target, state.completion_target)
         notify_completion(state, record.invocation_id)
         {:noreply, state}
 
@@ -314,7 +314,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
               InvocationUsage.started(
                 record,
                 state.usage,
-                state.lifecycle_target,
+                state.usage_target,
                 state.completion_target
               )
 
@@ -384,6 +384,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
              :invocation_supervisor,
              :completion_target,
              :lifecycle_target,
+             :usage_target,
              :maximum_invocations,
              :maximum_consumed_invocations,
              :invocation_timeout_ms,
@@ -401,6 +402,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
            server_pid(Keyword.get(options, :completion_target)),
          lifecycle_target when is_nil(lifecycle_target) or is_pid(lifecycle_target) <-
            Keyword.get(options, :lifecycle_target),
+         {:ok, usage_target} <- usage_target(options, lifecycle_target),
          maximum_invocations when is_integer(maximum_invocations) and maximum_invocations > 0 <-
            Keyword.get(options, :maximum_invocations),
          maximum_consumed when is_integer(maximum_consumed) and maximum_consumed > 0 <-
@@ -417,6 +419,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
          invocation_supervisor: invocation_supervisor,
          completion_target: completion_target,
          lifecycle_target: lifecycle_target,
+         usage_target: usage_target,
          maximum_invocations: maximum_invocations,
          maximum_consumed_invocations: maximum_consumed,
          invocation_timeout_ms: invocation_timeout_ms,
@@ -466,6 +469,13 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     Resource.new(:tool_invocations, {:participant, participant_id}, __MODULE__, configuration,
       binding: activation_id
     )
+  end
+
+  defp usage_target(options, fallback) do
+    case Keyword.get(options, :usage_target, fallback) do
+      nil -> {:ok, nil}
+      target -> server_pid(target)
+    end
   end
 
   defp server_pid(server) do

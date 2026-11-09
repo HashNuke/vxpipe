@@ -16,6 +16,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry.State do
   ]
   defstruct @enforce_keys ++
               [
+                usage_target: nil,
                 readiness_resource: nil,
                 records: %{},
                 order: [],

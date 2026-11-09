@@ -149,12 +149,24 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
        name: registry,
        invocation_supervisor: supervisor,
        completion_target: completions,
+       usage_target: completions,
+       usage: tool_usage(options, activation),
        maximum_invocations: Keyword.fetch!(limits, :maximum_tool_invocations),
        maximum_consumed_invocations: Keyword.fetch!(limits, :maximum_completed_requests),
        invocation_timeout_ms: Keyword.fetch!(limits, :tool_invocation_timeout_ms),
        maximum_result_bytes: Keyword.fetch!(limits, :maximum_tool_result_bytes)}
     ]
     |> Enum.map(&Supervisor.child_spec(&1, restart: :temporary, significant: true))
+  end
+
+  defp tool_usage(options, activation) do
+    case Keyword.get(options, :usage_context) do
+      context when is_list(context) ->
+        [call_id: Keyword.fetch!(context, :call_id), activation_id: activation]
+
+      nil ->
+        nil
+    end
   end
 
   @doc false

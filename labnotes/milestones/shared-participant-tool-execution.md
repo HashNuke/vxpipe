@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 13/20 implementation tasks complete; 1/4 checkpoints complete**.
+Status: **in progress — 14/20 implementation tasks complete; 2/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -153,7 +153,7 @@ results and remaining limitations below when checking items off.
   Reuse controlled MCP fixtures to complete a native room round trip without
   borrowing another call's session or adding maintenance work to audio processing.
 
-### C3 — Common conversation policy and completion lifecycle (4/5)
+### C3 — Common conversation policy and completion lifecycle (5/5)
 
 - [x] Enforce both conversation modes in common engine code with cross-path tests:
   blocking holds later business input until outcome consumption, non-blocking
@@ -173,7 +173,7 @@ results and remaining limitations below when checking items off.
   application-configured invocation bounds, respecting operation and transfer
   deadlines. Prove a legitimate slower MCP/transfer operation, expiry as `unknown`
   where appropriate, cleanup and no automatic side-effect retry.
-- [ ] Exercise completion-before-notification, duplicate/late result, interruption,
+- [x] Exercise completion-before-notification, duplicate/late result, interruption,
   session failure and activation replacement races against both participant paths.
   Preserve tool visibility, safe usage/lifecycle facts and terminal effect ordering.
 
@@ -202,6 +202,19 @@ results and remaining limitations below when checking items off.
 
 ## Acceptance and evidence
 
+Usage/race acceptance closes C3 (5/5), bringing progress to 14/20 and two complete
+checkpoints. Native invocations now configure the existing ToolAttempt recorder
+through a separate usage target. Their existing completion bridge forwards usage
+before results, preserving terminal facts across hangup and committed transfer.
+Only the exact current native bridge is authorized; retired/replaced sources
+are rejected. Ordinary/duplex success and unknown outcomes produce one attempt
+measurement and matching terminal fact without private result data. Replay adds
+no attempt. Existing text usage defaults remain unchanged. Combined shared
+registry, usage, LLM coordinator/conversation and native race/transfer regression:
+**183 tests, zero failures** (seed `47746`). Quick root gates pass; independent
+Astra source/test review is clean. See the [usage labnote](../20261109-1039-native-tool-usage.md).
+Shared compiled-room conformance and final umbrella gates remain in C1/C4.
+
 Semantic completion closes two C3 tasks, bringing progress to 13/20. Native
 results use the existing Session command path with current continuation authority
 and one final result. Original tool authority survives speech-origin retirement;
@@ -211,7 +224,8 @@ rejection terminates explicitly without repeating the business operation.
 Twenty sequential completions with retention set to four prove bounded eviction
 and retained-ID rejection. See the [completion labnote](../20261109-1000-native-tool-completion.md)
 for reproductions, adapter contract verification and review evidence. General
-race/usage and final conformance remain open.
+race/usage was still open at that checkpoint; the usage checkpoint above completes it.
+Final conformance remains open.
 
 Bounded rejection closes C1's rejection task (4/5), bringing progress to 11/20.
 Fresh held/policy-denied requests fail explicitly; active duplicates preserve
@@ -296,7 +310,7 @@ availability. No new hosted/provider-specific work is required to close the comm
 implementation, but a known semantic incompatibility must remain an explicit
 unmet acceptance item rather than being reported as universal support.
 
-Latest interruption checkpoint: common speech interruption no longer cancels
+Historical interruption checkpoint: common speech interruption no longer cancels
 unrelated tool-only turns. Reversible transfer holds preserve same-source tool
 associations; stable source/activation and policy interval checks replace transient
 speech activity/epoch equality for accepted results. Output-origin invalidation,
@@ -308,7 +322,7 @@ Genuine provider cancellation retains the accepted worker until its bounded
 outcome, then terminates explicitly if delivery is impossible. The inverse race
 (completion retained before cancellation) was independently reported and reproduced;
 cancellation now asks the existing bridge to redeliver its retained lease, without
-resubmitting the business operation. C3 remains incomplete. See the
+resubmitting the business operation. C3 remained incomplete at that checkpoint. See the
 [interruption labnote](../20261109-0759-native-tool-interruption.md). Full umbrella
 verification after the review fix passes: **5,137 tests, 0 failures, 371 excluded**,
 seed `380795`; the other four root gates and Lean pass. Final GPT-6 Astra xhigh
@@ -323,7 +337,7 @@ of it checks off the new integration or parity tasks above.
 | --- | --- | --- |
 | C1 | 4/5 | Private registry, shared dispatch/validation, variable permissions, bounded rejection and scoped platform effects implemented. Held/policy-denied requests fail explicitly; retained accepted-ID replay cannot repeat work or publish another result. 156 focused regressions pass (seed 836200), plus 32 corrected room-fixture tests; clean Astra source/test review. Shared compiled-room duplicate/partial-admission acceptance remains. |
 | C2 | 5/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime pass. Native aliases, call/tenant isolation, in-flight teardown and ordinary/duplex transfer success/failure pass. Real saved disconnect/replacement and catalog-pin races now pass alongside existing LLM cases (18 tagged integration tests). |
-| C3 | 4/5 | Shared conversation admission, execution bounds, semantic result delivery and bounded lease/ID settlement are implemented. Stop-held results retry only delivery after ordinary or source-controlled release; lost authority/provider association terminates explicitly. Fresh-context adapter fixtures and twenty completions with four retained IDs pass. General race/usage acceptance remains open. |
+| C3 | 5/5 | Shared admission, execution bounds, semantic result delivery and bounded lease/ID settlement pass. Existing LLM/native race suites cover early completion, interruptions, queued cancellation, provider/activation loss and replacement. Exact native bridge usage records success/unknown and terminal hangup/transfer safely without duplicate attempts; 183 combined regressions pass. |
 | C4 | 0/5 | Pending |
 
 First C1 checkpoint: native startup retains the existing AgentRuntime `ToolRegistry`
@@ -367,7 +381,7 @@ revocation and duplex transfer. The same transfer experiment with ordinary Morse
 reproduced the existing interruption/completion-association gap: source retirement
 or failed-tool delivery could be lost at that checkpoint. The subsequent
 interruption checkpoint above fixes ordinary transfer lifetime and closes C2's
-lifetime task; the broader C3 completion contract remains open. At that checkpoint the saved-connection
+lifetime task; the broader C3 completion contract was still open at that checkpoint. At that checkpoint the saved-connection
 end-to-end race task remained open; direct credential-lease revocation alone
 did not complete it. The later saved-authority acceptance above closes that task.
 See the [ownership checkpoint labnote](../20261109-0621-shared-native-mcp.md).

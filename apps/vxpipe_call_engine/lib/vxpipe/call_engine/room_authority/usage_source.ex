@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.UsageSource do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Archive.Recorder
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree
   alias Vxpipe.CallEngine.RoomAuthority.{State, TextCapability}
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.{
@@ -77,7 +78,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.UsageSource do
   defp active_sts_source(%{speech_to_speech_capability: nil}, _capability), do: :error
 
   defp active_sts_source(state, capability) do
-    speech_source(state.speech_to_speech_capability, capability)
+    binding = state.speech_to_speech_capability
+
+    if capability == Tree.tool_completions(binding.pid),
+      do: source(binding),
+      else: speech_source(binding, capability)
   end
 
   defp pending_speech_source(

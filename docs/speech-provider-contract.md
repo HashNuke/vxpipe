@@ -710,8 +710,10 @@ stop-hold retains the existing lease until ordinary or source-controlled release
 Permanent authority loss or rejected delivery terminates explicitly. Original
 tool authority is separate from retired speech context: accepting its result never
 authorizes old audio. Protocol fixtures verify fresh-context continuation and
-bounded retained-ID replay protection. General races, usage and final conformance
-remain open. Earlier checkpoint evidence remains in
+bounded retained-ID replay protection. Native invocations reuse the common tool
+usage recorder; their exact current completion bridge forwards observations ahead
+of terminal results, including hangup/transfer. Shared race suites pass; final
+compiled-room conformance remains open. Earlier checkpoint evidence remains in
 [STS tool lifecycle](../labnotes/milestones/sts-tool-lifecycle.md).
 
 Provider cancellation retires the provider call/speech association; ordinary

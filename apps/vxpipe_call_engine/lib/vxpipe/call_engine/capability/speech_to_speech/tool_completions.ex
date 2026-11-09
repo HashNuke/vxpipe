@@ -57,6 +57,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolCompletions do
   end
 
   @impl true
+  def handle_info({:vxpipe_usage_observations, bridge, observations}, state)
+      when bridge == self() do
+    send(state.owner, {:vxpipe_usage_observations, self(), observations})
+    {:noreply, state}
+  end
+
   def handle_info({:vxpipe_tool_completion_available, registry, _id}, state) do
     if registry == GenServer.whereis(state.registry) do
       case InvocationRegistry.lease_next(registry, state.consumer) do
