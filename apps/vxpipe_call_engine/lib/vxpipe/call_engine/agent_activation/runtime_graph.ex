@@ -4,8 +4,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   alias Vxpipe.AgentRuntime.Session
 
   alias Vxpipe.CallEngine.AgentActivationSupervisor
-  alias Vxpipe.CallEngine.RemoteMCP.{IntegrationCatalog, IntegrationOwner}
-  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
+  alias Vxpipe.CallEngine.RemoteMCP.Activation, as: RemoteActivation
 
   alias Vxpipe.CallEngine.AgentRuntime.{
     Coordinator,
@@ -71,57 +70,38 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   end
 
   defp remote_mcp_owner(activation_id, options) do
-    if remote_mcp_tools?(Keyword.fetch!(options, :tools)) do
+    if RemoteActivation.selected?(Keyword.fetch!(options, :tools)) do
       child_ref(activation_id, :remote_mcp_owner)
     end
-  end
-
-  defp remote_mcp_tools?(tools) do
-    Enum.any?(tools, fn
-      {_name, %ToolBinding{type: :mcp}} -> true
-      _entry -> false
-    end)
   end
 
   defp remote_mcp_children(_activation_id, nil, _options), do: []
 
   defp remote_mcp_children(activation_id, remote_mcp_owner, options) do
-    with {:ok, source} <-
-           IntegrationCatalog.restart_source(Keyword.get(options, :mcp_integrations)) do
-      sessions = child_ref(activation_id, :remote_mcp_sessions)
+    sessions = child_ref(activation_id, :remote_mcp_sessions)
 
-      owner_options = [
-        activation_id: activation_id,
-        session_supervisor: sessions,
-        lifecycle_owner: Keyword.fetch!(options, :owner),
-        initialization: Keyword.get(options, :mcp_initialization),
-        participant_id: Keyword.fetch!(options, :agent_participant_id),
-        tools: Keyword.fetch!(options, :tools),
-        integrations: source,
-        name: remote_mcp_owner
-      ]
+    owner_options = [
+      activation_id: activation_id,
+      session_supervisor: sessions,
+      lifecycle_owner: Keyword.fetch!(options, :owner),
+      initialization: Keyword.get(options, :mcp_initialization),
+      participant_id: Keyword.fetch!(options, :agent_participant_id),
+      tools: Keyword.fetch!(options, :tools),
+      integrations: Keyword.get(options, :mcp_integrations),
+      name: remote_mcp_owner
+    ]
 
-      owner_options =
-        owner_options
-        |> put_optional(
-          :connection_provider,
-          Keyword.get(options, :remote_mcp_connection_provider)
-        )
-        |> put_optional(:protocol, Keyword.get(options, :remote_mcp_protocol_client))
+    owner_options =
+      owner_options
+      |> put_optional(
+        :connection_provider,
+        Keyword.get(options, :remote_mcp_connection_provider)
+      )
+      |> put_optional(:protocol, Keyword.get(options, :remote_mcp_protocol_client))
 
-      [
-        Supervisor.child_spec({DynamicSupervisor, strategy: :one_for_one, name: sessions},
-          id: :remote_mcp_sessions,
-          restart: :permanent
-        ),
-        Supervisor.child_spec({IntegrationOwner, owner_options},
-          id: :remote_mcp_owner,
-          restart: :permanent
-        )
-      ]
-    else
-      _invalid -> raise ArgumentError, "remote MCP integrations are unavailable"
-    end
+    owner_options
+    |> RemoteActivation.children()
+    |> Enum.map(&Supervisor.child_spec(&1, restart: :permanent))
   end
 
   defp coordinator_child(

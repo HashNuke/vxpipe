@@ -72,11 +72,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   @impl Vxpipe.CallEngine.Readiness.Adapter
-  def readiness(capability) do
-    GenServer.call(capability, :readiness, @call_timeout)
-  catch
-    :exit, _reason -> {:error, :unavailable}
-  end
+  defdelegate readiness(capability), to: Vxpipe.CallEngine.Capability.SpeechToSpeech.Readiness
 
   @spec push_audio(pid(), String.t(), binary()) ::
           :ok | {:error, :source_mismatch | :policy_denied | :held | :not_ready | term()}
@@ -207,6 +203,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
               Keyword.get(options, :frame_identity, %{})
             ),
           readiness: :preparing,
+          remote_mcp_owner: Keyword.get(options, :remote_mcp_owner),
           readiness_resource:
             Resource.new(
               :speech_to_speech,
@@ -269,7 +266,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   def handle_call({:bind_input, ingress}, {owner, _tag}, state) when is_pid(ingress),
     do: Input.bind(state, ingress, owner)
 
-  def handle_call(:readiness, _from, state) do
+  def handle_call(:readiness_binding, _from, state) do
     status =
       if state.output_stt != nil and not state.output_stt.ready?,
         do: :preparing,
@@ -288,7 +285,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
         state.readiness_resource
       end
 
-    {:reply, {:ok, resource, status}, state}
+    {:reply, {:ok, resource, status, state.remote_mcp_owner}, state}
   end
 
   def handle_call({:push_audio, _source, _pcm}, _from, %{held?: true} = state) do

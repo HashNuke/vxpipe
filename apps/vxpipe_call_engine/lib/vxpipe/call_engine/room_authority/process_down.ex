@@ -46,6 +46,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
     {:stop, :shutdown, ParticipantTransfer.room_failed(reason, state)}
   end
 
+  def handle(
+        monitor,
+        _reason,
+        %{speech_to_speech_monitor: monitor, speech_to_speech_ready?: false} = state
+      )
+      when is_reference(monitor),
+      do: StartupReadiness.reply({:error, :speech_to_speech_unavailable}, state)
+
   def handle(monitor, reason, state) do
     if StartupReadiness.player_down?(monitor, state) do
       StartupReadiness.reply({:error, :wait_player_unavailable}, state)

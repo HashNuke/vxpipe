@@ -26,6 +26,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     CallerTurns,
     Evidence,
     OriginRecovery,
+    ToolStartup,
     ToolEvents,
     Tools
   }
@@ -54,6 +55,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   @spec bind_capability(State.t(), pid(), String.t(), String.t() | nil) :: State.t()
   def bind_capability(%State{} = state, capability, agent_id, activation_id \\ nil)
       when is_pid(capability) and is_binary(agent_id) do
+    ToolStartup.cancel_timer(state)
+
     if state.speech_to_speech_monitor,
       do: Process.demonitor(state.speech_to_speech_monitor, [:flush])
 
@@ -63,11 +66,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
           pid: capability,
           participant_id: agent_id,
           activation_id: activation_id,
+          provider_ready?: false,
+          tools_ready?: true,
+          mcp_owner: nil,
+          mcp_deadline: nil,
+          mcp_timer: nil,
           input_epoch: nil,
           activity_turn: nil,
           monitor: nil
         },
-        speech_to_speech_monitor: nil,
+        speech_to_speech_monitor: Process.monitor(capability),
         speech_to_speech_ready?: false,
         sts_turns: %{},
         sts_output_sequence: 0,
@@ -84,15 +92,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
 
   defdelegate current?(state, candidate), to: Evidence
 
-  @spec handle_ready(State.t(), pid()) :: State.t()
-  def handle_ready(%State{} = state, capability) do
-    if current?(state, capability) and not state.speech_to_speech_ready? and
-         Map.has_key?(state.speech_to_speech_capability, :input_handle) do
-      state |> prepare_input(capability) |> OriginRecovery.restore_ready()
-    else
-      state
-    end
-  end
+  @spec handle_ready(State.t(), pid()) :: {:ok, State.t()} | {:error, atom()}
+  defdelegate handle_ready(state, capability), to: ToolStartup, as: :provider_ready
 
   defdelegate handle_activity_origin_changed(state, capability, revision), to: OriginRecovery
   defdelegate recover(state), to: OriginRecovery
@@ -340,9 +341,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   @spec handle_unavailable(State.t(), pid(), term()) :: State.t()
   def handle_unavailable(%State{} = state, capability, _reason) do
     if current?(state, capability) do
-      # The room monitors the capability only once input is prepared, so a capability lost
-      # while it is still starting would otherwise leave attached callers in silence. The
-      # monitor is dropped so its `:DOWN` cannot notify a second time.
+      # Drop the monitor so its DOWN cannot notify attached connections a second time.
       if state.speech_to_speech_monitor,
         do: Process.demonitor(state.speech_to_speech_monitor, [:flush])
 
@@ -503,6 +502,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     do: %{state | speech_to_speech_recovery: nil}
 
   def stop(%State{} = state) do
+    ToolStartup.cancel_timer(state)
     state = cancel_pending_tools(state)
     retire_sts_enforcer(state)
 
@@ -602,9 +602,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
          %{output_sink: sink} when is_pid(sink) <- connection,
          %{speech_to_speech_runtime: runtime} when not is_nil(runtime) <- state,
          {:ok, {policy, revision}} <- allocation_policy(state),
-         {:ok, started} <- start_allocation(state, connection, runtime, {policy, revision}) do
+         {:ok, started, runtime, deadline, tool_owner} <-
+           start_allocation(state, connection, runtime, {policy, revision}) do
       state
       |> bind_capability(started, runtime.participant_id, runtime.activation_id)
+      |> Map.put(:speech_to_speech_runtime, runtime)
+      |> ToolStartup.bind(started, deadline, tool_owner)
       |> Map.update!(:speech_to_speech_capability, fn binding ->
         Map.merge(binding, %{
           connection_id: connection.attach_command.connection_id,
@@ -664,7 +667,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     :exit, _reason -> {:error, :media_policy_unavailable}
   end
 
-  defp prepare_input(state, capability) do
+  @doc false
+  def prepare_input(state, capability) do
     binding = state.speech_to_speech_capability
     handle = binding.input_handle
 
@@ -687,8 +691,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
          true <- Snapshot.valid?(snapshot) do
       state = %{
         state
-        | speech_to_speech_monitor: Process.monitor(capability),
-          speech_to_speech_ready?: true,
+        | speech_to_speech_ready?: true,
           speech_to_speech_policy_revision: snapshot.revision,
           speech_to_speech_capability: Map.put(binding, :ingress, ingress)
       }
@@ -715,6 +718,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   defp retire_sts_enforcer(_state), do: :ok
 
   defp start_allocation(state, connection, runtime, {effective, revision}) do
+    deadline = ToolStartup.deadline(state, runtime)
     plan = state.participant_transfer_runtime.plan
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     human_id = caller.participant_id
@@ -728,6 +732,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
     options =
       [
         owner: self(),
+        activation_id: runtime.activation_id,
+        remote_mcp: runtime.remote_mcp,
+        mcp_initialization_deadline: deadline,
         room_history_barrier?: true,
         agent_id: runtime.participant_id,
         human_id: human_id,
@@ -749,7 +756,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         usage_context: usage_context(state, runtime)
       ] ++ output_stt_options(runtime)
 
-    RoomCapabilitySupervisor.start_speech_to_speech(state.snapshot.incarnation_id, options)
+    with {:ok, capability} <-
+           RoomCapabilitySupervisor.start_speech_to_speech(state.snapshot.incarnation_id, options),
+         do: ToolStartup.prepare(state, capability, runtime, deadline)
   end
 
   defp usage_context(state, runtime) do

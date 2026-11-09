@@ -518,7 +518,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         {:ok, nil}
 
       {:ok, {provider_module, _provider_config} = provider, settings} ->
-        with {:ok, activation, tool_registry} <-
+        with {:ok, integrations} <- AgentActivationOptions.mcp_integrations(participant, options),
+             {:ok, activation, tool_registry} <-
                SpeechToSpeechActivation.resolve(plan, participant, options),
              {:ok, {^provider_module, runtime_options} = runtime_provider, provider_private} <-
                SpeechToSpeechRuntime.provider(provider, settings, activation),
@@ -537,6 +538,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              participant_id: participant.participant_id,
              activation_id: participant.activation_id,
              tool_registry: tool_registry,
+             remote_mcp: native_remote_mcp(participant, integrations, options),
              provider: runtime_provider,
              provider_private: provider_private,
              usage_provider: usage_provider,
@@ -550,6 +552,18 @@ defmodule Vxpipe.CallEngine.PlanStartup do
       {:error, _reason} ->
         unsupported_speech_configuration(participant, :speech_to_speech)
     end
+  end
+
+  defp native_remote_mcp(_participant, nil, _options), do: nil
+
+  defp native_remote_mcp(participant, integrations, options) do
+    [
+      tools: participant.tools,
+      integrations: integrations,
+      connection_provider: Keyword.get(options, :remote_mcp_connection_provider),
+      protocol: Keyword.get(options, :remote_mcp_protocol_client)
+    ]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
   end
 
   defp speech_to_speech_usage_provider(plan, participant, provider_module, provider_config) do

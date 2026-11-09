@@ -77,6 +77,28 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
   def init(options) do
     Process.flag(:trap_exit, true)
 
+    case Keyword.pop(options, :initialization_mode, :synchronous) do
+      {:synchronous, options} ->
+        initialize(options)
+
+      {:deferred, options} ->
+        state = %__MODULE__{bindings: %{}, binding_count: 0, connection_monitors: %{}}
+        {:ok, state, {:continue, {:initialize, options}}}
+
+      _invalid ->
+        {:stop, :invalid_configuration}
+    end
+  end
+
+  @impl true
+  def handle_continue({:initialize, options}, state) do
+    case initialize(options) do
+      {:ok, ready} -> {:noreply, ready}
+      {:stop, reason} -> {:stop, reason, state}
+    end
+  end
+
+  defp initialize(options) do
     with {:ok, options} <-
            Keyword.validate(options, [
              :activation_id,
@@ -87,6 +109,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
              :name,
              :participant_id,
              :protocol,
+             :readiness_target,
              :session_supervisor,
              :tools
            ]),
@@ -119,6 +142,8 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
          {:ok, connections, connection_monitors} <-
            run_initialization(prepared, connection_provider, session_supervisor, deadline, owners),
          bindings <- runtime_bindings(prepared, connections, protocol) do
+      announce_ready(Keyword.get(options, :readiness_target), activation_id)
+
       {:ok,
        %__MODULE__{
          bindings: bindings,
@@ -131,6 +156,11 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
       _invalid -> {:stop, :invalid_configuration}
     end
   end
+
+  defp announce_ready(target, activation_id) when is_pid(target),
+    do: send(target, {:vxpipe_remote_tools_ready, self(), activation_id})
+
+  defp announce_ready(_target, _activation_id), do: :ok
 
   @impl true
   def handle_call(:readiness, _from, %{readiness_resource: nil} = state) do
@@ -162,6 +192,15 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwner do
   end
 
   def handle_info(_message, state), do: {:noreply, state}
+
+  @impl true
+  def format_status(status) do
+    status
+    |> Map.put(:state, :remote_mcp_owner)
+    |> Map.put(:message, :redacted)
+    |> Map.put(:reason, :redacted)
+    |> Map.put(:log, [])
+  end
 
   @impl true
   def terminate(_reason, %__MODULE__{bindings: bindings}) do

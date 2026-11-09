@@ -3,8 +3,9 @@
 Research date: 2026-11-09. Code inspected at `f9eefd6a`.
 Status: implementation started. Native startup now retains the private shared tool
 registry separately from provider schemas and dispatches host, platform, variable
-and transfer bindings through the shared invocation registry. Owned MCP startup
-and conversation/completion parity remain incomplete.
+and transfer bindings through the shared invocation registry. Native allocations
+now own the same MCP owner/session components as text activations. Full
+conversation/completion parity remains incomplete.
 
 Planning amendment, 2026-11-09: the user's follow-up requires common internal
 implementation and behavior parity with LLM participants, including conversation
@@ -36,14 +37,14 @@ constraint. This research does not complete that work or reopen the completed
 | Blocking host tool | ElevenLabs compiled-room fixture executes `ping` and receives its result. | Reuse the existing execution path. |
 | Platform `get_current_time` and `hangup` | Native calls use shared validation and invocation workers. Hangup publishes its public result and rechecks source/policy before room authorization. | Include in the final cross-path conformance suite. |
 | Call-variable tools | Compiled native rooms read/update permitted variables through retained private bindings; unselected update tools are rejected. | Include in the final cross-path conformance suite. |
-| Connected MCP tools | STS descriptor compilation has no remote owner and rejects MCP bindings. The STS tree has no MCP owner/session supervisor. | Add the existing owned session components and bind descriptors to the exact owner. |
+| Connected MCP tools | Native allocations use the same IntegrationOwner, session supervisor and invocation handler as text activations. Controlled native calls exercise aliases, readiness, tenant isolation, revocation and teardown. | Complete saved-connection race and interrupted-completion acceptance under the shared milestone. |
 | Non-blocking/background tools | General native execution and late delivery are incomplete. | Implement common conversation policy and prove both modes under the new parity milestone; report unsupported semantic operations explicitly. |
 
-The startup gap is in
+Native startup is composed in
 [SpeechToSpeechActivation](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/speech_to_speech_activation.ex):
-it calls `ToolDescriptors.compile/2` without an MCP owner. The first C1 checkpoint
-now preserves the compiled `ToolRegistry` on the private runtime separately from
-the provider's schema projection.
+it validates schema projections before allocation and compiles the executable
+`ToolRegistry` against the exact new MCP owner during allocation. The registry
+stays on the private runtime separately from the provider's schema projection.
 [SpeechToSpeech.Tools](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/room_authority/speech_to_speech/tools.ex)
 now resolves that registry before admission, matching participant and activation
 against the recorder and current capability. It submits the resulting binding
@@ -124,10 +125,13 @@ temporary allocation/failure semantics while enforcing the same
 
 Startup needs an ordering adjustment: schema projection may use already resolved
 catalog metadata before allocation, while executable bindings require the exact
-owned session reference. Bind that reference during tree construction and gate
-readiness on bounded initialization before calls can execute. A stable scoped
-name is sufficient; a dummy PID is not. Partial initialization must roll back with
-the allocation.
+owned session reference. The implementation binds the exact owner PID after
+lightweight tree construction and gates input on both provider and MCP readiness.
+The shared initializer runs through a deferred continuation for native allocations
+so its room-budget query cannot deadlock supervisor startup. Readiness probes run
+outside capability callbacks; failed initialization or expired recovery terminates
+through the existing room failure boundary. Partial startup rolls back with the
+allocation. Text startup retains its existing synchronous recovery contract.
 
 Reuse tenant snapshots, selected-tool pins, current credential/authorization
 checks, readiness deadlines and retirement cleanup. Destination preparation

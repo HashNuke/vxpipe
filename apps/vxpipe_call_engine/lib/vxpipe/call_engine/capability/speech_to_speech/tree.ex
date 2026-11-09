@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolCompletions
   alias Vxpipe.CallEngine.Id
+  alias Vxpipe.CallEngine.RemoteMCP.Activation, as: RemoteActivation
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, PrivateInit}
   alias Vxpipe.CallEngine.Tool.{InvocationRegistry, InvocationSupervisor}
 
@@ -40,6 +41,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
   def invocation_registry(capability), do: child(capability, :invocation_registry)
   def invocation_supervisor(capability), do: child(capability, :invocation_supervisor)
   def tool_completions(capability), do: child(capability, :tool_completions)
+  def remote_mcp_owner(capability), do: child(capability, :remote_mcp_owner)
+  def remote_mcp_sessions(capability), do: child(capability, :remote_mcp_sessions)
 
   defp child(capability, kind) do
     case parent(capability) do
@@ -55,6 +58,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
     output_stt? = Keyword.has_key?(options, :output_stt)
     output_tasks = address(self(), :output_tasks)
     options = Keyword.put(options, :output_task_supervisor, output_tasks)
+    remote_owner = if Keyword.get(options, :remote_mcp), do: address(self(), :remote_mcp_owner)
+    options = Keyword.put(options, :remote_mcp_owner, remote_owner)
 
     children = [
       {Task.Supervisor, name: output_tasks},
@@ -84,6 +89,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
 
     children =
       children ++
+        remote_mcp_children(options) ++
         invocation_children(options) ++
         [
           %{
@@ -95,6 +101,30 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
         ]
 
     Supervisor.init(children, strategy: :one_for_all, auto_shutdown: :any_significant)
+  end
+
+  defp remote_mcp_children(options) do
+    case Keyword.get(options, :remote_mcp) do
+      nil ->
+        []
+
+      remote ->
+        owner = Keyword.fetch!(options, :owner)
+
+        remote
+        |> Keyword.merge(
+          activation_id: Keyword.fetch!(options, :activation_id),
+          participant_id: Keyword.fetch!(options, :agent_id),
+          lifecycle_owner: owner,
+          initialization: {owner, Keyword.fetch!(options, :mcp_initialization_deadline)},
+          initialization_mode: :deferred,
+          readiness_target: owner,
+          session_supervisor: address(self(), :remote_mcp_sessions),
+          name: Keyword.fetch!(options, :remote_mcp_owner)
+        )
+        |> RemoteActivation.children()
+        |> Enum.map(&Supervisor.child_spec(&1, restart: :temporary, significant: true))
+    end
   end
 
   defp invocation_children(options) do
@@ -125,12 +155,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
 
   @doc false
   def start_capability(scope_name, output_scope_name, options) do
-    with {:ok, private} <- PrivateInit.claim(Keyword.fetch!(options, :provider_private)),
+    with {:ok, remote_owner} <- resolve_mcp_owner(options),
+         {:ok, private} <- PrivateInit.claim(Keyword.fetch!(options, :provider_private)),
          {:ok, output_private} <- claim_output_private(options),
          {:ok, capability} <-
            options
            |> Keyword.put(:speech_scope, CapabilityTree.scope(scope_name))
            |> Keyword.put(:provider_private, private)
+           |> Keyword.put(:remote_mcp_owner, remote_owner)
            |> Keyword.put(:output_stt_private, output_private)
            |> maybe_put_output_scope(output_scope_name)
            |> SpeechToSpeech.start_link(),
@@ -141,6 +173,19 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
              nil
            ) do
       {:ok, capability}
+    end
+  end
+
+  defp resolve_mcp_owner(options) do
+    case Keyword.get(options, :remote_mcp_owner) do
+      nil ->
+        {:ok, nil}
+
+      address ->
+        case GenServer.whereis(address) do
+          pid when is_pid(pid) -> {:ok, pid}
+          nil -> {:error, :remote_owner_unavailable}
+        end
     end
   end
 

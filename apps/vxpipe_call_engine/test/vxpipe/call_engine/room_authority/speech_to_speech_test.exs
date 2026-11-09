@@ -182,6 +182,63 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     refute_received {:vxpipe_event, _event}
   end
 
+  @tag :startup_monitor
+  test "binding observes capability loss before provider and tool readiness" do
+    capability = start_supervised!({Agent, fn -> :starting end})
+    state = state() |> bind_capability(capability, @agent)
+    monitor = state.speech_to_speech_monitor
+    assert is_reference(monitor)
+    refute state.speech_to_speech_ready?
+    assert :ok = stop_supervised(Agent)
+    assert_receive {:DOWN, ^monitor, :process, ^capability, reason}, 1_000
+
+    assert {:stop, :startup_unavailable, _failed} =
+             Vxpipe.CallEngine.RoomAuthority.ProcessDown.handle(monitor, reason, state)
+  end
+
+  @tag :startup_failure
+  test "late readiness terminates a recovery allocation instead of leaving a silent room" do
+    deadline = System.monotonic_time(:millisecond) - 1
+    state = %{state() | startup_ready?: true}
+    binding = Map.merge(state.speech_to_speech_capability, %{mcp_deadline: deadline})
+    state = %{state | speech_to_speech_capability: binding}
+
+    assert {:stop, :startup_unavailable, _failed} =
+             SpeechToSpeech.Events.handle({:vxpipe_sts_ready, self()}, state)
+  end
+
+  @tag :startup_failure
+  test "an early or stale readiness timeout cannot terminate a preparing allocation" do
+    deadline = System.monotonic_time(:millisecond) + 5_000
+    state = state()
+    binding = Map.merge(state.speech_to_speech_capability, %{mcp_deadline: deadline})
+    state = %{state | speech_to_speech_capability: binding}
+
+    assert {:noreply, ^state} = SpeechToSpeech.ToolStartup.timeout(state, self(), deadline)
+    assert {:noreply, ^state} = SpeechToSpeech.ToolStartup.timeout(state, self(), deadline - 1)
+  end
+
+  @tag :startup_failure
+  test "provider failure before recovery readiness terminates the room" do
+    state = %{state() | startup_ready?: true}
+
+    assert {:stop, :startup_unavailable, _failed} =
+             SpeechToSpeech.Events.handle(
+               {:vxpipe_sts_unavailable, self(), :provider_failed},
+               state
+             )
+  end
+
+  @tag :startup_failure
+  test "stopping a preparing allocation cancels its readiness timer" do
+    state = state()
+    timer = Process.send_after(self(), :obsolete_readiness_timeout, 60_000)
+    on_exit(fn -> Process.cancel_timer(timer) end)
+    binding = Map.put(state.speech_to_speech_capability, :mcp_timer, timer)
+    _state = SpeechToSpeech.stop(%{state | speech_to_speech_capability: binding})
+    assert Process.read_timer(timer) == false
+  end
+
   test "STS tool calls publish agent-attributed tool events" do
     state =
       state()
@@ -746,7 +803,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
       | speech_to_speech_capability: Map.delete(state.speech_to_speech_capability, :input_handle)
     }
 
-    assert SpeechToSpeech.handle_ready(unbound, capability) == unbound
+    assert {:ok, unbound} = SpeechToSpeech.handle_ready(unbound, capability)
+    assert unbound.speech_to_speech_capability.provider_ready?
     assert SpeechToSpeech.ready?(unbound) == false
 
     assert {:ok, _state} = SpeechToSpeech.interrupt(%{state | speech_to_speech_capability: nil})

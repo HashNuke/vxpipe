@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 3/20 implementation tasks complete; 0/4 checkpoints complete**.
+Status: **in progress — 6/20 implementation tasks complete; 0/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -130,13 +130,13 @@ results and remaining limitations below when checking items off.
   preserving existing host/transfer behavior and lifecycle publication. Include
   duplicate requests and partial multi-tool admission without replaying work.
 
-### C2 — Native participant-owned MCP activation (0/5)
+### C2 — Native participant-owned MCP activation (3/5)
 
-- [ ] Compose the existing `IntegrationOwner` and session `DynamicSupervisor`
+- [x] Compose the existing `IntegrationOwner` and session `DynamicSupervisor`
   under the native participant's allocation tree only when MCP tools are selected.
   Reuse common ownership construction where needed; preserve native temporary-tree
   failure semantics and the text path's existing recovery policy.
-- [ ] Separate schema projection from executable binding readiness. Bind the exact
+- [x] Separate schema projection from executable binding readiness. Bind the exact
   owner reference during startup and enforce the original absolute readiness or
   transfer deadline across selected integrations; roll back partial startup.
 - [ ] Execute selected MCP tools through the same shared invocation handler,
@@ -147,7 +147,7 @@ results and remaining limitations below when checking items off.
   isolation; successful transfer retires only the source after commit, while
   destination failure leaves the source usable. Call end/owner loss fences and
   terminates all owned MCP work under the existing cleanup budget.
-- [ ] Prove catalog maintenance and inbound platform MCP remain independent.
+- [x] Prove catalog maintenance and inbound platform MCP remain independent.
   Reuse controlled MCP fixtures to complete a native room round trip without
   borrowing another call's session or adding maintenance work to audio processing.
 
@@ -215,7 +215,7 @@ of it checks off the new integration or parity tasks above.
 | Checkpoint | Progress | Implementation evidence |
 | --- | --- | --- |
 | C1 | 3/5 | Private registry, shared dispatch/validation, variable permissions and scoped platform effects implemented. 112 native/LLM/transfer regressions pass (seed 286573); clean second Astra code review. Revoked/unsupported rejection and shared duplicate/partial-admission acceptance remain. |
-| C2 | 0/5 | Pending |
+| C2 | 3/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime implemented. Native alias, call/tenant isolation, revocation, cancellation and duplex transfer checks pass. Full saved-connection races and ordinary interrupted-transfer cleanup remain open. |
 | C3 | 0/5 | Pending |
 | C4 | 0/5 | Pending |
 
@@ -237,9 +237,36 @@ exercise real workers. Expanded regression lane: **112 tests, 0 failures**, seed
 `286573`. Obsolete direct completion/timeout handlers and unused wrappers are
 removed; two failing real-room tests proved they could prematurely settle owned
 work. Format, compilation, strict Credo and unused-dependency checks pass. The
-full umbrella run was interrupted for this change and remains an integration gate;
-full acceptance and
+full umbrella run for that checkpoint was interrupted; the ownership checkpoint
+below supplies the subsequent complete passing run. Full acceptance and
 C1's revoked/unsupported rejection and shared duplicate/partial-admission suite remain open.
+
+Native MCP ownership checkpoint: both participant paths compose the same owner and
+session components and execute through the same invocation handler. Native startup
+projects schema metadata before allocation, then binds its exact owner PID; input
+waits for both speech-provider and MCP readiness. Gated initialization leaves room
+and capability control responsive. Initial startup retains its absolute budget;
+recovery uses the application readiness timeout. Failed/late readiness terminates
+through existing room failure handling. Crash logs redact deferred private options.
+Catalog publication remains outside the call tree, and the protocol fixture
+rejects discovery during native execution. No inbound platform MCP or maintenance
+job implementation changed.
+
+Focused native/text startup, owner, budget and transfer lane: **116 tests, 0
+failures, 8 excluded**, seed `961998`. The native room cases cover aliases,
+notification ordering, cancellation, exact ownership, tenant isolation, credential
+revocation and duplex transfer. The same transfer experiment with ordinary Morse
+reproduced the existing interruption/completion-association gap: source retirement
+or failed-tool delivery can be lost. That remains C3 work and leaves C2's full
+transfer-lifetime task unchecked. The saved-connection end-to-end race task also
+remains open; direct credential-lease revocation alone does not complete it.
+See the [ownership checkpoint labnote](../20261109-0621-shared-native-mcp.md).
+All five root checks pass for this checkpoint: **5,129 tests, 0 failures, 371
+excluded**, seed `401568`, plus formatting, compilation, strict Credo and unused
+dependencies. Lean build/oracle/replay passes. Independent GPT-6 Astra xhigh
+source/test/documentation review found no actionable issues and approved the
+6/20 count. These gates validate the checkpoint; C4 still requires the remaining
+behavior and conformance work before final milestone acceptance.
 
 ## Design review and scope reconciliation
 

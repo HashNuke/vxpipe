@@ -24,16 +24,13 @@ defmodule Vxpipe.AgentRuntime.ToolDescriptor do
   def new(attributes) when is_list(attributes) do
     with {:ok, attributes} <-
            Keyword.validate(attributes, [:name, :description, :input_schema, :binding]),
-         {:ok, name} <- validate_name(Keyword.get(attributes, :name)),
-         {:ok, description} <- validate_description(Keyword.get(attributes, :description)),
-         {:ok, input_schema, compiled_schema} <-
-           validate_schema(Keyword.get(attributes, :input_schema)),
+         {:ok, projection, compiled_schema} <- validate_projection(attributes),
          {:ok, binding} <- validate_binding(Keyword.get(attributes, :binding)) do
       {:ok,
        %__MODULE__{
-         name: name,
-         description: description,
-         input_schema: input_schema,
+         name: projection.name,
+         description: projection.description,
+         input_schema: projection.input_schema,
          binding: binding,
          compiled_schema: compiled_schema
        }}
@@ -44,6 +41,25 @@ defmodule Vxpipe.AgentRuntime.ToolDescriptor do
   end
 
   def new(_attributes), do: {:error, :invalid_descriptor}
+
+  @doc "Validates schema metadata without requiring or returning an executable binding."
+  def project(attributes) when is_list(attributes) do
+    with {:ok, attributes} <- Keyword.validate(attributes, [:name, :description, :input_schema]),
+         {:ok, projection, _compiled_schema} <- validate_projection(attributes) do
+      {:ok, projection}
+    end
+  end
+
+  def project(_attributes), do: {:error, :invalid_descriptor}
+
+  defp validate_projection(attributes) do
+    with {:ok, name} <- validate_name(Keyword.get(attributes, :name)),
+         {:ok, description} <- validate_description(Keyword.get(attributes, :description)),
+         {:ok, input_schema, compiled_schema} <-
+           validate_schema(Keyword.get(attributes, :input_schema)) do
+      {:ok, %{name: name, description: description, input_schema: input_schema}, compiled_schema}
+    end
+  end
 
   defp validate_name(name) when is_binary(name) and byte_size(name) <= @max_name_bytes do
     if Regex.match?(@name_pattern, name), do: {:ok, name}, else: {:error, :invalid_name}

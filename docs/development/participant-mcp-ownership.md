@@ -492,15 +492,16 @@ and maintenance runs independently of call/audio processing. Real provider
 handshake time and session limits remain the main deployment-specific capacity
 constraints; this small local run cannot establish production percentiles.
 
-The present ReqLLM activation path owns `IntegrationOwner`. The native STS path
-[compiles descriptors without a remote owner](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/speech_to_speech_activation.ex),
-and [remote binding construction](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/tool/invocation_binding.ex)
-rejects that missing owner. This milestone changes ownership for supported MCP
-execution; it does not silently claim new native STS MCP support. Keep that
-unsupported combination explicit and regression-tested. Any later STS MCP
-feature must use the same participant-lifetime contract.
-The [native STS tools research](native-sts-tools.md) describes that follow-up and
-its existing completion-plan package; it is not implemented by this milestone.
+The completed ownership milestone originally covered ReqLLM activations. The
+subsequent [shared participant tool milestone](../../labnotes/milestones/shared-participant-tool-execution.md)
+now composes the same IntegrationOwner and session DynamicSupervisor under native
+STS allocations. Native startup projects schemas before allocation, binds the
+executable registry to its exact owner PID, and waits for both provider and MCP
+readiness. It preserves the native tree's temporary failure policy and the text
+tree's existing recovery policy. Catalog maintenance and inbound platform MCP
+remain outside these trees. See [native STS tools](native-sts-tools.md) for the
+implemented boundary and remaining conversation/completion acceptance; this
+ownership evidence alone does not establish full LLM/native behavior parity.
 
 ## Persistent tenant catalog maintenance
 

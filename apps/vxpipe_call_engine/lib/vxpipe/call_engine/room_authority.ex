@@ -646,6 +646,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   def handle_info(message, state)
       when elem(message, 0) in [
              :vxpipe_sts_ready,
+             :vxpipe_remote_tools_ready,
+             :vxpipe_sts_readiness_timeout,
              :vxpipe_sts_activity_origin_changed,
              :vxpipe_sts_speech_started,
              :vxpipe_sts_input_event,

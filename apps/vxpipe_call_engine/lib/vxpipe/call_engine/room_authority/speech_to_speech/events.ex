@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
   @moduledoc false
   alias Vxpipe.CallEngine.RoomAuthority.{CallerIdle, SpeechToSpeech, StartupReadiness}
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ToolStartup
 
   def handle(
         {:vxpipe_sts_reseed_room_barrier, capability, reference},
@@ -16,8 +17,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
 
   def handle({:vxpipe_sts_ready, capability}, state) do
     if SpeechToSpeech.current?(state, capability) do
-      state = SpeechToSpeech.handle_ready(state, capability)
-      StartupReadiness.reply(StartupReadiness.ready(state), state)
+      ready(SpeechToSpeech.handle_ready(state, capability), state)
     else
       {:noreply, state}
     end
@@ -86,6 +86,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
     {:noreply, SpeechToSpeech.handle_tool_event(state, capability, agent_id, evidence)}
   end
 
+  def handle({:vxpipe_remote_tools_ready, owner, activation}, state) do
+    ready(ToolStartup.tools_ready(state, owner, activation), state)
+  end
+
+  def handle({:vxpipe_sts_readiness_timeout, capability, deadline}, state) do
+    ToolStartup.timeout(state, capability, deadline)
+  end
+
   def handle({:vxpipe_sts_tool_completion, bridge, lease}, state) do
     {:noreply,
      Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools.handle_completion(state, bridge, lease)}
@@ -99,9 +107,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
   end
 
   def handle({:vxpipe_sts_unavailable, capability, reason}, state) do
-    state = SpeechToSpeech.handle_unavailable(state, capability, reason)
-    {:noreply, CallerIdle.reconcile(state)}
+    if SpeechToSpeech.current?(state, capability) and not state.speech_to_speech_ready? do
+      StartupReadiness.reply({:error, :speech_to_speech_unavailable}, state)
+    else
+      state = SpeechToSpeech.handle_unavailable(state, capability, reason)
+      {:noreply, CallerIdle.reconcile(state)}
+    end
   end
 
   def handle(_invalid, state), do: {:noreply, state}
+
+  defp ready({:ok, state}, _previous),
+    do: StartupReadiness.reply(StartupReadiness.ready(state), state)
+
+  defp ready({:error, _reason} = error, state), do: StartupReadiness.reply(error, state)
 end

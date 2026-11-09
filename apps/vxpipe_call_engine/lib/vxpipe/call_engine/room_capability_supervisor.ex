@@ -125,6 +125,9 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
           name: speech_to_speech_ref(incarnation_id, agent_id)
         ] ++
           Keyword.take(options, [
+            :activation_id,
+            :remote_mcp,
+            :mcp_initialization_deadline,
             :human_id,
             :input_required?,
             :sink,

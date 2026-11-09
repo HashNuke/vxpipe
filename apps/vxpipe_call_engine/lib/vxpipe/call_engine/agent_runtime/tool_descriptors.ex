@@ -26,19 +26,38 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
   def compile(bindings, variable_binding, remote_owner)
       when is_map(bindings) and
              (is_nil(variable_binding) or is_struct(variable_binding, VariablesBinding)) do
-    with {:ok, tool_descriptors} <- compile_bindings(bindings, remote_owner),
+    descriptors(bindings, variable_binding, &descriptor(&1, remote_owner))
+  end
+
+  def compile(_bindings, _variable_binding, _remote_owner), do: {:error, :invalid_tool_binding}
+
+  @doc "Validates provider-safe schemas without constructing an executable MCP binding."
+  def project(bindings, variable_binding \\ nil)
+
+  def project(bindings, variable_binding)
+      when is_map(bindings) and
+             (is_nil(variable_binding) or is_struct(variable_binding, VariablesBinding)) do
+    with {:ok, descriptors} <- descriptors(bindings, variable_binding, &projection_descriptor/1) do
+      if length(Enum.uniq_by(descriptors, & &1.name)) == length(descriptors),
+        do: {:ok, Enum.map(descriptors, &Map.take(&1, [:name, :description, :input_schema]))},
+        else: {:error, :invalid_tool_binding}
+    end
+  end
+
+  def project(_bindings, _variable_binding), do: {:error, :invalid_tool_binding}
+
+  defp descriptors(bindings, variable_binding, build_descriptor) do
+    with {:ok, tool_descriptors} <- compile_bindings(bindings, build_descriptor),
          {:ok, variable_descriptors} <- compile_variable_bindings(variable_binding) do
       {:ok, Enum.sort_by(tool_descriptors ++ variable_descriptors, & &1.name)}
     end
   end
 
-  def compile(_bindings, _variable_binding, _remote_owner), do: {:error, :invalid_tool_binding}
-
-  defp compile_bindings(bindings, remote_owner) do
+  defp compile_bindings(bindings, build_descriptor) do
     bindings
     |> Enum.sort_by(fn {name, _binding} -> name end)
     |> Enum.reduce_while({:ok, []}, fn entry, result ->
-      compile_binding(entry, remote_owner, result)
+      compile_binding(entry, build_descriptor, result)
     end)
     |> case do
       {:ok, descriptors} -> {:ok, Enum.reverse(descriptors)}
@@ -48,17 +67,17 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
 
   defp compile_binding(
          {name, %ToolBinding{name: name} = resolved},
-         remote_owner,
+         build_descriptor,
          {:ok, descriptors}
        )
        when is_binary(name) do
-    case descriptor(resolved, remote_owner) do
+    case build_descriptor.(resolved) do
       {:ok, descriptor} -> {:cont, {:ok, [descriptor | descriptors]}}
-      {:error, :invalid_tool_binding} = error -> {:halt, error}
+      {:error, _reason} -> {:halt, {:error, :invalid_tool_binding}}
     end
   end
 
-  defp compile_binding(_entry, _remote_owner, {:ok, _descriptors}),
+  defp compile_binding(_entry, _build_descriptor, {:ok, _descriptors}),
     do: {:halt, {:error, :invalid_tool_binding}}
 
   defp descriptor(%ToolBinding{name: name, type: :host, action: action} = resolved, _remote_owner) do
@@ -95,17 +114,11 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
   end
 
   defp descriptor(
-         %ToolBinding{name: name, type: :mcp, remote: %ResolvedTool{} = remote} = resolved,
+         %ToolBinding{type: :mcp, remote: %ResolvedTool{}} = resolved,
          remote_owner
        ) do
     with {:ok, binding} <- InvocationBinding.from_remote(resolved, remote_owner),
-         {:ok, descriptor} <-
-           ToolDescriptor.new(
-             name: name,
-             description: remote_description(remote.description, name),
-             input_schema: remote.input_schema,
-             binding: binding
-           ) do
+         {:ok, descriptor} <- remote_descriptor(resolved, binding) do
       {:ok, descriptor}
     else
       _invalid -> {:error, :invalid_tool_binding}
@@ -141,6 +154,31 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptors do
   end
 
   defp descriptor(%ToolBinding{}, _remote_owner), do: {:error, :invalid_tool_binding}
+
+  defp projection_descriptor(%ToolBinding{
+         name: name,
+         type: :mcp,
+         remote: %ResolvedTool{} = remote
+       }) do
+    ToolDescriptor.project(
+      name: name,
+      description: remote_description(remote.description, name),
+      input_schema: remote.input_schema
+    )
+  end
+
+  defp projection_descriptor(resolved), do: descriptor(resolved, nil)
+
+  defp remote_descriptor(%ToolBinding{name: name, remote: remote}, binding) do
+    ToolDescriptor.new(
+      name: name,
+      description: remote_description(remote.description, name),
+      input_schema: remote.input_schema,
+      binding: binding
+    )
+  rescue
+    _exception -> {:error, :invalid_tool_binding}
+  end
 
   defp remote_description("", name), do: "Call #{name}."
   defp remote_description(description, _name), do: description

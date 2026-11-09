@@ -110,6 +110,26 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolDescriptorsTest do
              ToolDescriptors.compile(%{"customer_lookup" => remote_binding})
   end
 
+  @tag :schema_projection
+  test "projects selected schemas before MCP ownership without creating executable bindings" do
+    {_integrations, remote} = RemoteMCPFixture.binding!(self(), self(), "private")
+    bindings = %{"customer_lookup" => remote}
+    variables = variable_binding()
+    assert {:ok, projection} = ToolDescriptors.project(bindings, variables)
+    assert {:ok, executable} = ToolDescriptors.compile(bindings, variables, self())
+    assert projection == Enum.map(executable, &Map.take(&1, [:name, :description, :input_schema]))
+
+    assert Enum.all?(
+             projection,
+             &(Enum.sort(Map.keys(&1)) == [:description, :input_schema, :name])
+           )
+
+    assert {:error, :invalid_tool_binding} = ToolDescriptors.compile(bindings, variables)
+
+    assert {:error, :invalid_tool_binding} =
+             ToolDescriptors.project(%{"wrong_name" => remote}, variables)
+  end
+
   test "an MCP tool without its optional description uses only its public alias" do
     {:ok, catalog} =
       Vxpipe.MCP.Catalog.new([

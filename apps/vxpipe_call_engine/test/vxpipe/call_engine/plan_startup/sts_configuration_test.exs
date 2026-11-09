@@ -259,10 +259,21 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
     refute JSON.encode!(group) =~ "update_variable"
   end
 
-  test "unavailable remote owner and unsupported overrides fail without leaking configuration" do
+  test "remote schema preparation does not create an executable registry without its owner" do
     {_catalog, remote} = Vxpipe.CallEngine.RemoteMCPFixture.binding!(self(), self(), "private")
     receiver = %{participant() | tools: %{"customer_lookup" => remote}}
-    assert {:error, :invalid_configuration} = SpeechToSpeechActivation.resolve(nil, receiver, [])
+    assert {:ok, activation, nil} = SpeechToSpeechActivation.resolve(nil, receiver, [])
+    assert [%{name: "customer_lookup", input_schema: schema}] = activation.tools
+    assert schema == remote.remote.input_schema
+    refute JSON.encode!(activation.tools) =~ "private"
+
+    assert Enum.all?(
+             activation.tools,
+             &(Enum.sort(Map.keys(&1)) == [:description, :input_schema, :name])
+           )
+  end
+
+  test "unsupported overrides fail without leaking configuration" do
     assert {:ok, activation, _registry} = SpeechToSpeechActivation.resolve(nil, participant(), [])
 
     for options <- [

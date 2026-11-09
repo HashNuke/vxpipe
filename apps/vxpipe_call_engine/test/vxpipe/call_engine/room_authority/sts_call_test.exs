@@ -287,8 +287,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallTest do
              )
 
     assert_receive {:vxpipe_sts_ready, ^capability}
-    result = Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.handle_ready(result, capability)
-    assert result.speech_to_speech_capability == nil
+
+    assert {:error, :speech_to_speech_unavailable} =
+             Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.handle_ready(result, capability)
+
     assert_receive {:sts_policy_registration_rejected, capability, tree}
     capability_monitor = Process.monitor(capability)
     tree_monitor = Process.monitor(tree)
@@ -400,7 +402,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSCallTest do
 
     assert connection_id == command.connection_id
     assert_receive {:vxpipe_sts_ready, ^capability}
-    installed = Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.handle_ready(installed, capability)
+
+    assert {:ok, installed} =
+             Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.handle_ready(installed, capability)
+
     assert installed.speech_to_speech_ready?
 
     assert Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.stop(installed).speech_to_speech_capability ==

@@ -9,6 +9,74 @@ defmodule Vxpipe.CallEngine.RemoteMCP.IntegrationOwnerTest do
     %{session_supervisor: RemoteMCPFixture.session_supervisor!()}
   end
 
+  test "deferred initialization failures redact private options from crash logs" do
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        owner =
+          start_supervised!(
+            {IntegrationOwner,
+             activation_id: "failed-native-startup",
+             initialization_mode: :deferred,
+             integrations: "synthetic-private-integration-configuration"}
+          )
+
+        monitor = Process.monitor(owner)
+        assert_receive {:DOWN, ^monitor, :process, ^owner, _reason}, 1_000
+      end)
+
+    refute log =~ "synthetic-private-integration-configuration"
+    assert log =~ "redacted"
+  end
+
+  @tag :deferred_initialization
+  test "deferred initialization releases supervisor startup and announces exact owner readiness",
+       %{
+         session_supervisor: sessions
+       } do
+    client = client!([])
+
+    {catalog, binding} =
+      RemoteMCPFixture.binding!(client, self(), "private",
+        client_config: [
+          test_client: client,
+          test_observer: self(),
+          test_gate_initialization: true
+        ]
+      )
+
+    deadline = System.monotonic_time(:millisecond) + 3_000
+
+    owner =
+      start_supervised!(
+        {IntegrationOwner,
+         activation_id: "native-startup",
+         participant_id: "native-agent",
+         session_supervisor: sessions,
+         lifecycle_owner: self(),
+         initialization: {self(), deadline},
+         initialization_mode: :deferred,
+         readiness_target: self(),
+         tools: %{"customer_lookup" => binding},
+         integrations: RemoteMCPFixture.source!(catalog),
+         connection_provider: Vxpipe.CallEngine.TestRemoteMCPConnectionProvider,
+         protocol: Vxpipe.CallEngine.TestRemoteMCPProtocolClient}
+      )
+
+    assert_receive {:"$gen_call", from,
+                    {:mcp_initialization_budget, "native-startup", preparer, ^deadline}},
+                   1_000
+
+    assert preparer == self()
+    GenServer.reply(from, {:ok, deadline, preparer})
+    assert_receive {:test_remote_mcp_initializing, initializer}, 1_000
+    assert DynamicSupervisor.count_children(sessions).active == 0
+    refute_received {:vxpipe_remote_tools_ready, _, _}
+    send(initializer, :test_remote_mcp_initialized)
+    assert_receive {:vxpipe_remote_tools_ready, ^owner, "native-startup"}, 1_000
+    assert {:ok, _resource, :ready} = IntegrationOwner.readiness(owner)
+    assert DynamicSupervisor.count_children(sessions).active == 1
+  end
+
   test "waiting for the room budget respects the original startup deadline", %{
     session_supervisor: sessions
   } do
