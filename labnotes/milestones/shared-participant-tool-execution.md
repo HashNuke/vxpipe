@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 7/20 implementation tasks complete; 0/4 checkpoints complete**.
+Status: **in progress — 8/20 implementation tasks complete; 0/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -151,9 +151,9 @@ results and remaining limitations below when checking items off.
   Reuse controlled MCP fixtures to complete a native room round trip without
   borrowing another call's session or adding maintenance work to audio processing.
 
-### C3 — Common conversation policy and completion lifecycle (0/5)
+### C3 — Common conversation policy and completion lifecycle (1/5)
 
-- [ ] Enforce both conversation modes in common engine code with cross-path tests:
+- [x] Enforce both conversation modes in common engine code with cross-path tests:
   blocking holds later business input until outcome consumption, non-blocking
   admits unrelated input with pending-work awareness, and a non-blocking completion
   never releases another invocation's blocking hold. Keep native turn transport
@@ -200,6 +200,28 @@ results and remaining limitations below when checking items off.
 
 ## Acceptance and evidence
 
+Shared admission checkpoint: LLM and native participants now use the same
+conversation-mode reducer. Ordinary and duplex native rooms prove blocking input
+hold, nonblocking pending work and independent mixed-mode consumption. Native
+forwarding provisionally holds input until room admission resolves; local provider
+acceptance precedes registry acknowledgement and release. Held PCM is acknowledged
+and discarded (continuous sessions receive silence); held text is never replayed.
+External/hybrid activity suppression lasts through the utterance's matching end.
+A real hybrid room test proves local onset observation preserves provider onset.
+This closes C3's conversation-mode task only; completion, replay, shared budgets
+and the full race/conformance matrix remain open.
+
+Independent GPT-6 Astra xhigh review found three defects, each reproduced before
+fixing: undeliverable rejection orphaning a provisional hold, accepted sibling
+transport-turn retention, and production hybrid tail-PCM leakage. All seven focused
+review/activity cases pass (seed `507778`), as does the full Call Engine suite:
+**2,376 tests, 0 failures, 100 excluded** (seed `226773`). Re-review reports no
+remaining actionable findings. See the
+[admission labnote](../20261109-0827-shared-tool-admission.md).
+All five root completion checks pass: **5,158 tests, 0 failures, 371 excluded**
+(seed `226773`), plus formatting, warnings-as-errors compilation, strict Credo
+and unused-dependency checks. Lean build/oracle/replay passes (seed `671547`).
+
 The exit is all 20 tasks with cross-path evidence for both conversation modes,
 owned MCP teardown and the runnable receptionist scenario. An adapter-independent
 test suite proves common engine behavior; it does not establish a vendor's live
@@ -234,7 +256,7 @@ of it checks off the new integration or parity tasks above.
 | --- | --- | --- |
 | C1 | 3/5 | Private registry, shared dispatch/validation, variable permissions and scoped platform effects implemented. 112 native/LLM/transfer regressions pass (seed 286573); clean second Astra code review. Revoked/unsupported rejection and shared duplicate/partial-admission acceptance remain. |
 | C2 | 4/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime implemented. Native aliases, call/tenant isolation, in-flight call/owner-loss cleanup and ordinary/duplex transfer success/failure pass. Full saved-connection races remain open. |
-| C3 | 0/5 | Accepted native results acknowledge existing leases, including more than 16 interrupted completions. Speech interruption and reversible transfer hold preserve accepted work. Lost provider associations terminate explicitly after the bounded outcome. Origin-aware stop-hold delivery, final discard, replay and conversation parity acceptance remain open. |
+| C3 | 1/5 | Shared blocking/nonblocking admission, provisional hold, consumption-qualified release and PCM/activity discard are implemented and reviewed. Accepted native results acknowledge existing leases, including more than 16 interrupted completions. Speech interruption and reversible transfer hold preserve accepted work. Lost provider associations terminate explicitly after the bounded outcome. Origin-aware stop-hold delivery, final discard, replay, shared budgets and full race acceptance remain open. |
 | C4 | 0/5 | Pending |
 
 First C1 checkpoint: native startup retains the existing AgentRuntime `ToolRegistry`

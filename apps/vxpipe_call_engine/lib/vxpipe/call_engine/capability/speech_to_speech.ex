@@ -136,6 +136,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  def admit_tool(capability, call, mode),
+    do: GenServer.call(capability, {:admit_tool, call, mode}, @call_timeout)
+
+  def finish_tool(capability, call),
+    do: GenServer.call(capability, {:finish_tool, call}, @call_timeout)
+
   @spec send_tool_result(pid(), reference(), term()) :: :ok | {:error, term()}
   def send_tool_result(capability, call_ref, result)
       when is_pid(capability) and is_reference(call_ref) do
@@ -216,6 +222,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
           origin_lifecycle_revision: make_ref(),
           response_origins: ResponseOrigins.new(),
           external_activity_origin: nil,
+          activity_admission: :idle,
           pending_turns: [],
           tool_turns: MapSet.new(),
           tool_calls: %{},
@@ -304,7 +311,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   end
 
   def handle_call({:push_text, text}, _from, state) do
-    {result, state} = ResponseOrigins.submit(state, {:text, text})
+    {result, state} = Input.submit_text(state, text)
 
     case result do
       {:ok, _handle} -> {:reply, :ok, state}
@@ -342,23 +349,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     {:reply, {:error, :invalid_policy}, state}
   end
 
-  def handle_call({:send_tool_result, call_ref, result}, _from, state) do
-    provider = Session.provider(state.session)
+  def handle_call({:admit_tool, call, mode}, {owner, _tag}, state),
+    do: ToolEvents.admit(state, call, mode, owner)
 
-    cond do
-      not ToolEvents.current?(state, call_ref) ->
-        {:reply, {:error, :stale_request}, ToolEvents.drop(state, call_ref)}
+  def handle_call({:finish_tool, call}, {owner, _tag}, state),
+    do: ToolEvents.finish(state, call, owner)
 
-      not is_pid(provider) ->
-        {:reply, {:error, :unavailable}, state}
-
-      true ->
-        case apply(state.provider, :send_tool_result, [provider, call_ref, result]) do
-          :ok -> {:reply, :ok, ToolEvents.drop(state, call_ref)}
-          {:error, _reason} = error -> {:reply, error, state}
-        end
-    end
-  end
+  def handle_call({:send_tool_result, call, result}, {owner, _tag}, state),
+    do: ToolEvents.deliver_result(state, call, result, owner)
 
   @impl true
   def handle_info(

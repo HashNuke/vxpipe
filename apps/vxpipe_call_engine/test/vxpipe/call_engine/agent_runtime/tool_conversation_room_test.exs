@@ -244,7 +244,81 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
                     }}
   end
 
-  defp compile_plan(conversation_mode \\ nil) do
+  test "a nonblocking completion cannot release a second blocking invocation" do
+    plan = compile_plan(nil, true)
+
+    {:ok, _} =
+      Registry.register(CallEngine.RoomRegistry, {CallEngine.STSLifecycleTool, plan.room_id}, nil)
+
+    connection = "conn-agent-runtime-mixed-modes"
+    {room, caller} = start_room(plan, connection)
+    initial = send_text(plan, room, caller, connection, "Start both checks.")
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+
+    assert {:ok, background_call} =
+             ToolCall.new(id: "background", name: "background", arguments: %{})
+
+    assert {:ok, blocking_call} =
+             ToolCall.new(id: "blocking", name: "wait_for_test", arguments: %{})
+
+    assert {:ok, response} =
+             ModelResponse.new(text: "", tool_calls: [background_call, blocking_call])
+
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:host_started, background, _}, 1_000
+    assert_receive {:test_blocking_tool_started, blocking}, 1_000
+    assert_receive {:test_agent_runtime_stream, acknowledger, request}, 1_000
+
+    assert Enum.map(request.pending_invocations, & &1.invocation_id) |> Enum.sort() == [
+             "background",
+             "blocking"
+           ]
+
+    reply_with_text(acknowledger, "Both checks are running.")
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: initial_id}}, 1_000
+    assert initial_id == initial.correlation_id
+
+    send(background, :finish)
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "background"}}, 1_000
+    assert_receive {:test_agent_runtime_stream, completion_provider, completion}, 1_000
+
+    assert Enum.any?(
+             completion.pending_invocations,
+             &(&1.invocation_id == "blocking" and &1.status == :running)
+           )
+
+    reply_with_text(completion_provider, "The background check completed.")
+    completion_id = completion.correlation.correlation_id
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^completion_id}}, 1_000
+
+    held = send_text(plan, room, caller, connection, "This input must not be replayed.")
+    held_id = held.correlation_id
+
+    assert_receive {:vxpipe_event,
+                    %TextOutput{
+                      correlation_id: ^held_id,
+                      text: "Please hold while I finish the current request."
+                    }},
+                   1_000
+
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^held_id}}, 1_000
+    refute_received {:test_agent_runtime_stream, _, _}
+
+    send(blocking, :release_test_tool)
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "blocking"}}, 1_000
+    assert_receive {:test_agent_runtime_stream, finisher, final_request}, 1_000
+    reply_with_text(finisher, "Both checks completed.")
+    final_id = final_request.correlation.correlation_id
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^final_id}}, 1_000
+    refute_received {:test_agent_runtime_stream, _, _}
+
+    send_text(plan, room, caller, connection, "New input after completion.")
+    assert_receive {:test_agent_runtime_stream, next_provider, next_request}, 1_000
+    assert next_request.pending_invocations == []
+    reply_with_text(next_provider, "Ready.")
+  end
+
+  defp compile_plan(conversation_mode \\ nil, mixed? \\ false) do
     tool = %{type: "host", tool: "wait_for_test"}
 
     tool =
@@ -274,6 +348,17 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
       limits: %{max_duration_ms: 60_000}
     }
 
+    input =
+      if mixed? do
+        put_in(input, [:participants, "receiver", :tools, "background"], %{
+          type: "host",
+          tool: "background",
+          conversation_mode: "non_blocking"
+        })
+      else
+        input
+      end
+
     assert {:ok, call_spec} =
              CallSpec.new(input, resource_id: "tool-mode-call-spec", revision: 1)
 
@@ -293,7 +378,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
              )
 
     registries = %{
-      host_tools: %{"wait_for_test" => TestBlockingTool}
+      host_tools: %{
+        "wait_for_test" => TestBlockingTool,
+        "background" => CallEngine.STSBackgroundTool
+      }
     }
 
     assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, registries)

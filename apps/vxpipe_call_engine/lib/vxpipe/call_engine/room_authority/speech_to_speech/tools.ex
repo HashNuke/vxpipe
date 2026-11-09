@@ -194,8 +194,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
            pending.context,
            pending.tool_call_id
          ) do
-      {:accepted, _mode} -> state
-      {:error, reason} -> handle_tool_executed(state, capability, call_ref, {:error, reason})
+      {:accepted, mode} ->
+        case Capability.admit_tool(capability, call_ref, mode) do
+          :ok -> state
+          {:error, _reason} -> exit(:tool_admission_unavailable)
+        end
+
+      {:error, reason} ->
+        handle_tool_executed(state, capability, call_ref, {:error, reason})
     end
   end
 
@@ -228,9 +234,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       state
     else
       case ToolCompletions.acknowledge(bridge, lease) do
-        :ok -> state
+        :ok -> finish_admission(state, lease, call_ref)
         {:error, _reason} -> exit(:tool_completion_unavailable)
       end
+    end
+  end
+
+  defp finish_admission(
+         state,
+         %{
+           completion: %{outcome: {:ok, %PlatformResult{effect: :participant_transfer_committed}}}
+         },
+         _call
+       ),
+       do: state
+
+  defp finish_admission(state, _lease, call) do
+    case Capability.finish_tool(state.speech_to_speech_capability.pid, call) do
+      :ok -> state
+      {:error, _reason} -> exit(:tool_completion_unavailable)
     end
   end
 
@@ -393,7 +415,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
         })
       )
 
-    _ = deliver_provider_tool_result(capability, call_ref, {:error, reason})
+    case deliver_provider_tool_result(capability, call_ref, {:error, reason}) do
+      :ok -> :ok
+      {:error, _reason} -> exit(:tool_result_unavailable)
+    end
+
     state = EventPublisher.publish(state, connection.pid, event)
     %{state | next_sequence: state.next_sequence + 1}
   end

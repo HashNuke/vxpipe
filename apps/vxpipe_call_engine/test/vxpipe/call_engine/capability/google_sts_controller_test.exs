@@ -384,7 +384,11 @@ defmodule Vxpipe.CallEngine.Capability.GoogleSTSControllerTest do
                    1_000
 
     deliver(context, interaction_end("IDLE"))
-    assert_new_origin_busy(context, first_context)
+    assert :ok = SpeechToSpeech.release(capability, make_ref())
+    assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<1, 0>>)
+    _ = :sys.get_state(wire)
+    refute_received {:test_google_sts_audio, ^wire, <<1, 0>>}
+    assert :sys.get_state(context.provider).interaction_context == first_context
   end
 
   test "opted-in ambiguous interrupted caller blocks a new wire origin" do

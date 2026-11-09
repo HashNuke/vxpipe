@@ -11,12 +11,14 @@ defmodule Vxpipe.CallEngine.SpeechSTSContractProvider do
   @impl true
   def configure(options) do
     {input_transcript?, options} = Keyword.pop(options, :input_transcript, true)
+    {output_shape, options} = Keyword.pop(options, :output_shape, :turns)
     {output_settlement, options} = Keyword.pop(options, :output_settlement, :transcript_end)
 
     with {:ok, descriptor} <- MorseSTS.configure(options),
          descriptor = %{
            descriptor
            | input_transcript?: input_transcript?,
+             output_shape: output_shape,
              output_settlement: output_settlement
          },
          :ok <- Descriptor.validate(descriptor) do

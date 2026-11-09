@@ -346,13 +346,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
           %{evidence | identity: %{evidence.identity | connection_id: "other"}},
           %{evidence | audio_interval: 1}
         ] do
-      assert tool_event(context.state, context.capability, invalid) == context.state
+      assert catch_exit(tool_event(context.state, context.capability, invalid)) ==
+               :tool_admission_unavailable
     end
 
     denied = %{policy() | effective: %{policy().effective | audio_routes: %{}}}
 
-    assert ToolEvents.handle(context.state, context.capability, @agent, evidence, denied) ==
-             context.state
+    assert catch_exit(
+             ToolEvents.handle(context.state, context.capability, @agent, evidence, denied)
+           ) ==
+             :tool_admission_unavailable
 
     refute_received {:vxpipe_event, _}
   end

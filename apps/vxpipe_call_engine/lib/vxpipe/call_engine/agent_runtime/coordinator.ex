@@ -9,7 +9,6 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
 
   alias Vxpipe.CallEngine.AgentRuntime.{
     CompletionContinuation,
-    ConversationAdmission,
     Readiness
   }
 
@@ -26,6 +25,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator do
   }
 
   alias Vxpipe.CallEngine.Command.SendText
+  alias Vxpipe.CallEngine.Tool.ConversationAdmission
   alias Vxpipe.CallEngine.Telemetry
 
   @call_timeout 5_000

@@ -16,7 +16,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
 
   alias Vxpipe.CallEngine.Tool.InvocationRegistry
   alias Vxpipe.CallEngine.{TestAudioOutputSink, TestCallStartup, TestTransferConnection}
-  alias Vxpipe.Providers.MorseCode.STSSession
+  alias Vxpipe.Providers.MorseCode.{STSSession, DuplexSTSSession}
 
   @track %{track_id: "microphone", codec: :linear16, sample_rate: 16_000, channels: 1}
 
@@ -24,11 +24,196 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     original = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
 
     settings =
-      Keyword.put(original, :speech_to_speech, providers: %{STSSession => [enabled: true]})
+      Keyword.put(original, :speech_to_speech,
+        providers: %{STSSession => [enabled: true], DuplexSTSSession => [enabled: true]}
+      )
 
     Application.put_env(:vxpipe_call_engine, CallEngine.Application, settings)
     on_exit(fn -> Application.put_env(:vxpipe_call_engine, CallEngine.Application, original) end)
     room(context)
+  end
+
+  for model <- ["morse", "morse-duplex"] do
+    @tag :conversation_admission
+    @tag native_model: model
+    test "#{model} blocking tool holds later input until its result is consumed", context do
+      {worker, started} = submit(context)
+
+      assert {:error, :held} =
+               SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
+
+      refute_received {:vxpipe_event, %ToolCallStarted{name: "current_time"}}
+      send(worker, :finish)
+      assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: id}}, 1_000
+      assert id == started.tool_call_id
+      _ = :sys.get_state(context.authority)
+      refute_received {:vxpipe_event, %ToolCallStarted{name: "current_time"}}
+      assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
+      assert_receive {:vxpipe_event, %ToolCallCompleted{name: "current_time"}}, 1_000
+    end
+
+    @tag :conversation_admission
+    @tag native_model: model, conversation_mode: "non_blocking"
+    test "#{model} nonblocking tool permits unrelated input while retaining pending work",
+         context do
+      {worker, started} = submit(context)
+      assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
+      assert_receive {:vxpipe_event, %ToolCallCompleted{name: "current_time"}}, 1_000
+      _ = :sys.get_state(context.authority)
+
+      assert {:ok, [pending]} =
+               InvocationRegistry.snapshot(Tree.invocation_registry(context.capability))
+
+      assert pending.invocation_id == started.tool_call_id
+      assert pending.conversation_mode == :non_blocking
+      assert pending.status == :running
+      send(worker, :finish)
+
+      assert_receive {:vxpipe_event, %ToolCallCompleted{name: "lifecycle", tool_call_id: id}},
+                     1_000
+
+      assert id == started.tool_call_id
+      _ = :sys.get_state(context.authority)
+      assert leases(context) == []
+    end
+
+    @tag :conversation_admission
+    @tag native_model: model
+    test "#{model} nonblocking completion cannot release another tool's blocking hold", context do
+      {background, background_started} = submit(context, "background")
+      {blocking, blocking_started} = submit(context)
+      send(background, :finish)
+      assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: background_id}}, 1_000
+      assert background_id == background_started.tool_call_id
+
+      assert {:error, :held} =
+               SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
+
+      send(blocking, :finish)
+      assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: blocking_id}}, 1_000
+      assert blocking_id == blocking_started.tool_call_id
+      _ = :sys.get_state(context.authority)
+      refute_received {:vxpipe_event, %ToolCallStarted{name: "current_time"}}
+      assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
+      assert_receive {:vxpipe_event, %ToolCallCompleted{name: "current_time"}}, 1_000
+    end
+  end
+
+  @tag :conversation_admission
+  test "blocking input stays held between local result acceptance and registry consumption",
+       context do
+    {worker, _started} = submit(context)
+    capability = context.capability
+    authority = context.authority
+    registry = Tree.invocation_registry(capability)
+    :erlang.trace(authority, true, [:send])
+    :ok = :sys.suspend(capability)
+
+    try do
+      send(worker, :finish)
+
+      assert_receive {:trace, ^authority, :send, {:"$gen_call", _, {:send_tool_result, _, _}},
+                      ^capability},
+                     1_000
+
+      :ok = :sys.suspend(registry)
+
+      try do
+        :ok = :sys.resume(capability)
+        assert_receive {:vxpipe_event, %ToolCallCompleted{name: "lifecycle"}}, 1_000
+        assert {:error, :held} = SpeechToSpeech.push_text(capability, "TOOL current_time {}")
+      after
+        :sys.resume(registry)
+      end
+    after
+      :sys.resume(capability)
+    end
+
+    _ = :sys.get_state(authority)
+    assert :ok = SpeechToSpeech.push_text(capability, "TOOL current_time {}")
+    assert_receive {:vxpipe_event, %ToolCallCompleted{name: "current_time"}}, 1_000
+  end
+
+  @tag :conversation_admission
+  test "forwarded requests provisionally hold input until room admission resolves", context do
+    capability = context.capability
+    authority = context.authority
+    :erlang.trace(capability, true, [:send])
+    :ok = :sys.suspend(authority)
+
+    try do
+      assert :ok = SpeechToSpeech.push_text(capability, "TOOL lifecycle {}")
+
+      assert_receive {:trace, ^capability, :send, {:vxpipe_sts_tool_event, ^capability, _, _},
+                      ^authority},
+                     1_000
+
+      assert {:error, :held} = SpeechToSpeech.push_text(capability, "TOOL current_time {}")
+      refute_received {:host_started, _, _}
+    after
+      :sys.resume(authority)
+    end
+
+    assert_receive {:host_started, worker, _}, 1_000
+    send(worker, :finish)
+    assert_receive {:vxpipe_event, %ToolCallCompleted{name: "lifecycle"}}, 1_000
+  end
+
+  @tag :conversation_admission
+  test "stale forwarded scope fails explicitly without orphaning a provisional hold", context do
+    capability = context.capability
+    authority = context.authority
+    monitor = Process.monitor(authority)
+    :erlang.trace(capability, true, [:send])
+    :ok = :sys.suspend(authority)
+
+    try do
+      assert :ok = SpeechToSpeech.push_text(capability, "TOOL lifecycle {}")
+
+      assert_receive {:trace, ^capability, :send, {:vxpipe_sts_tool_event, ^capability, _, _},
+                      ^authority},
+                     1_000
+
+      :sys.replace_state(authority, fn state ->
+        put_in(state.speech_to_speech_capability.input_epoch, make_ref())
+      end)
+    after
+      :sys.resume(authority)
+    end
+
+    assert_receive {:DOWN, ^monitor, :process, ^authority, :tool_admission_unavailable}, 1_000
+    refute_received {:host_started, _, _}
+  end
+
+  @tag :admission_review
+  test "an undeliverable rejection cannot strand a provisional blocker", context do
+    capability = context.capability
+    authority = context.authority
+    monitor = Process.monitor(authority)
+    provider = CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    :erlang.trace(capability, true, [:send])
+    :ok = :sys.suspend(authority)
+
+    try do
+      assert :ok = SpeechToSpeech.push_text(capability, "TOOL unselected {}")
+
+      assert_receive {:trace, ^capability, :send,
+                      {:vxpipe_sts_tool_event, ^capability, _,
+                       %{event: %{kind: :tool_call, turn_ref: turn}}}, ^authority},
+                     1_000
+
+      assert :ok = STSSession.interrupt(provider, turn)
+
+      assert_receive {:trace, ^capability, :send,
+                      {:vxpipe_sts_tool_event, ^capability, _,
+                       %{event: %{kind: :tool_cancelled}}}, ^authority},
+                     1_000
+    after
+      :sys.resume(authority)
+    end
+
+    assert_receive {:DOWN, ^monitor, :process, ^authority, :tool_result_unavailable}, 1_000
+    refute_received {:host_started, _, _}
   end
 
   @tag :shared_dispatch
@@ -148,6 +333,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
                    1_000
 
     assert sections == %{"intake" => %{"revision" => 0, "value" => %{"note" => "known"}}}
+    _ = :sys.get_state(context.authority)
 
     update = %{
       "section_name" => "intake",
@@ -163,6 +349,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
              )
 
     assert_receive {:vxpipe_event, %ToolCallCompleted{name: "update_variable"}}, 1_000
+    _ = :sys.get_state(context.authority)
 
     assert :ok =
              SpeechToSpeech.push_text(
@@ -175,6 +362,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
                    1_000
 
     assert updated == %{"intake" => %{"revision" => 1, "value" => %{"note" => "updated"}}}
+    _ = :sys.get_state(context.authority)
 
     assert :ok =
              SpeechToSpeech.push_text(
@@ -376,6 +564,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     end
   end
 
+  @tag conversation_mode: "non_blocking"
   test "interruption preserves concurrent workers and each completion frees its own capacity",
        context do
     pending =
@@ -446,17 +635,22 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     refute_receive {:host_started, _, _}
   end
 
-  defp submit(context) do
-    assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL lifecycle {}")
-    assert_receive {:vxpipe_event, %ToolCallStarted{} = started}, 1_000
+  defp submit(context, name \\ "lifecycle") do
+    assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL " <> name <> " {}")
+    assert_receive {:vxpipe_event, %ToolCallStarted{name: ^name} = started}, 1_000
     assert_receive {:host_started, worker, tool_context}, 1_000
     assert tool_context.tool_call_id == started.tool_call_id
     assert tool_context.correlation_id == started.correlation_id
+    _ = :sys.get_state(context.authority)
     {worker, started}
   end
 
   defp room(context) do
-    speech = %{provider: "morse", model: "morse", options: %{unit_duration_ms: 20}}
+    speech = %{
+      provider: "morse",
+      model: Map.get(context, :native_model, "morse"),
+      options: %{unit_duration_ms: 20}
+    }
 
     source = %{
       schema_version: "20260915.01",
@@ -474,7 +668,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
           type: "agent",
           prompt: "Test tools.",
           tools: %{
-            "lifecycle" => %{type: "host", tool: "lifecycle"},
+            "lifecycle" => %{
+              type: "host",
+              tool: "lifecycle",
+              conversation_mode: Map.get(context, :conversation_mode, "blocking")
+            },
+            "background" => %{type: "host", tool: "background", conversation_mode: "non_blocking"},
             "current_time" => %{type: "platform", tool: "get_current_time"},
             "end_call" => %{type: "platform", tool: "hangup"}
           },
@@ -533,7 +732,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
 
     assert {:ok, plan} =
              CallSpecCompiler.compile(spec, invocation, %{
-               host_tools: %{"lifecycle" => CallEngine.STSLifecycleTool}
+               host_tools: %{
+                 "lifecycle" => CallEngine.STSLifecycleTool,
+                 "background" => CallEngine.STSBackgroundTool
+               }
              })
 
     {:ok, _} =

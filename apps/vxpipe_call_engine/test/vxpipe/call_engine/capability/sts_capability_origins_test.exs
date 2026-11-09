@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
   alias Vxpipe.CallEngine.{SpeechContextProbe, TestAudioOutputSink}
 
   test "opted-in audio, typed text and activity share a pre-input origin until epoch changes" do
-    capability = capability()
+    capability = capability(provider: {SpeechContextProbe, [turn_control: "external"]})
 
     assert :ok = SpeechToSpeech.push_audio(capability, "caller", <<0, 0>>)
     assert_receive {:context_input, first, {:audio, <<0, 0>>}, _}
@@ -387,7 +387,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
   end
 
   test "external caller activity gates an opted-in response until accepted end" do
-    capability = capability()
+    capability = capability(provider: {SpeechContextProbe, [turn_control: "external"]})
     provider = Session.provider(:sys.get_state(capability).session)
     turn = make_ref()
 
@@ -402,7 +402,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
   end
 
   test "hold retires a queued response even while external activity remains unresolved" do
-    capability = capability()
+    capability = capability(provider: {SpeechContextProbe, [turn_control: "external"]})
     provider = Session.provider(:sys.get_state(capability).session)
     turn = make_ref()
 
@@ -436,7 +436,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
   end
 
   test "a queued response is discarded when output policy is revoked, not replayed on regrant" do
-    capability = capability()
+    capability = capability(provider: {SpeechContextProbe, [turn_control: "external"]})
     provider = Session.provider(:sys.get_state(capability).session)
     turn = make_ref()
 
@@ -540,7 +540,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
   end
 
   test "replacing an input epoch retires its queued response" do
-    capability = capability()
+    capability = capability(provider: {SpeechContextProbe, [turn_control: "external"]})
     provider = Session.provider(:sys.get_state(capability).session)
     turn = make_ref()
 
@@ -555,7 +555,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
   end
 
   test "the bounded response queue recovers capacity after origin retirement" do
-    capability = capability()
+    capability = capability(provider: {SpeechContextProbe, [turn_control: "external"]})
     provider = Session.provider(:sys.get_state(capability).session)
 
     assert :ok = SpeechToSpeech.input_activity(capability, :started)
@@ -594,7 +594,7 @@ defmodule Vxpipe.CallEngine.Capability.STSCapabilityOriginsTest do
   end
 
   test "replacing an activity epoch does not gate a fresh response" do
-    capability = capability()
+    capability = capability(provider: {SpeechContextProbe, [turn_control: "external"]})
     provider = Session.provider(:sys.get_state(capability).session)
     turn = make_ref()
 

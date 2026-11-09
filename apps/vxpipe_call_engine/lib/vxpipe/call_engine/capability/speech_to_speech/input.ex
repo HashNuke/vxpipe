@@ -3,7 +3,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
 
   alias Vxpipe.CallEngine.Media.{AudioFrame, STSIngress}
   alias Vxpipe.CallEngine.MediaPolicy.{Effective, Snapshot}
-  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Output
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{Output, ToolEvents}
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.ResponseOrigins
   alias Vxpipe.CallEngine.Speech.Session
 
@@ -47,11 +47,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
 
   def bind(state, _ingress, _owner), do: {:reply, {:error, :wrong_owner}, state}
 
-  def hold(%{input: nil} = state), do: %{state | held?: true, input_epoch: nil, caller_turns: %{}}
+  def hold(%{input: nil} = state),
+    do: %{state | held?: true, input_epoch: nil, caller_turns: %{}, activity_admission: :idle}
 
   def hold(state) do
     _ = STSIngress.hold(state.input)
-    %{state | held?: true, input_epoch: nil, caller_turns: %{}}
+    %{state | held?: true, input_epoch: nil, caller_turns: %{}, activity_admission: :idle}
   end
 
   def input_quiescent?(%{descriptor: %{turn_control: mode}, session: session})
@@ -100,26 +101,40 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
 
   def close_rotated_origin(%{input: ingress} = state) when is_pid(ingress) do
     case STSIngress.hold(ingress) do
-      :ok -> {:ok, %{state | held?: true, input_epoch: nil, caller_turns: %{}}}
-      {:error, _reason} = error -> error
+      :ok ->
+        {:ok,
+         %{state | held?: true, input_epoch: nil, caller_turns: %{}, activity_admission: :idle}}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
   def close_rotated_origin(state),
-    do: {:ok, %{state | held?: true, input_epoch: nil, caller_turns: %{}}}
+    do:
+      {:ok,
+       %{state | held?: true, input_epoch: nil, caller_turns: %{}, activity_admission: :idle}}
 
-  def submit_audio(
-        %{opening_playing?: true, descriptor: %{output_shape: :continuous}} = state,
-        pcm
-      ) do
-    # Continuous providers need a running input clock to generate an opening.
-    # Replace caller samples with equal-duration silence; never replay the input.
-    silence = :binary.copy(<<0>>, byte_size(pcm))
-    ResponseOrigins.submit(state, {:audio, silence})
+  def submit_text(state, text) do
+    if ToolEvents.holding?(state),
+      do: {{:error, :held}, state},
+      else: ResponseOrigins.submit(state, {:text, text})
   end
 
-  def submit_audio(%{opening_playing?: true} = state, _pcm), do: {:ok, state}
-  def submit_audio(state, pcm), do: ResponseOrigins.submit(state, {:audio, pcm})
+  def submit_audio(state, pcm) do
+    if state.opening_playing? or state.activity_admission == :suppressed or
+         ToolEvents.holding?(state) do
+      if state.descriptor.output_shape == :continuous do
+        # Keep a continuous provider's clock running without admitting caller
+        # samples. Acknowledged held input is discarded, never replayed.
+        ResponseOrigins.submit(state, {:audio, :binary.copy(<<0>>, byte_size(pcm))})
+      else
+        {:ok, state}
+      end
+    else
+      ResponseOrigins.submit(state, {:audio, pcm})
+    end
+  end
 
   def deliver(state, ingress, reference, frame, revision, epoch) do
     {result, state} =
@@ -204,19 +219,37 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Input do
   def submit_activity(state, boundary) do
     if Output.audio_route_permitted?(state, state.human_id, state.agent_id) and
          Output.audio_route_permitted?(state, state.agent_id, state.human_id) do
-      if state.opening_playing?,
-        do: {:ok, state},
-        else: submit_permitted_activity(state, boundary)
+      cond do
+        state.opening_playing? ->
+          {:ok, state}
+
+        boundary == :started and
+            (ToolEvents.holding?(state) or state.activity_admission == :suppressed) ->
+          {:ok, %{state | activity_admission: :suppressed}}
+
+        boundary == :ended and state.activity_admission == :suppressed ->
+          {:ok, %{state | activity_admission: :idle}}
+
+        true ->
+          submit_permitted_activity(state, boundary)
+      end
     else
       {{:error, :policy_denied}, state}
     end
   end
+
+  # Hybrid onset belongs to the provider. Observe selected STT onset locally so
+  # a tool-held utterance stays suppressed through its matching end.
+  defp submit_permitted_activity(%{descriptor: %{turn_control: "hybrid"}} = state, :started),
+    do: {:ok, %{state | activity_admission: :open}}
 
   defp submit_permitted_activity(state, boundary) do
     {result, state} = ResponseOrigins.submit(state, {:activity, boundary})
 
     case result do
       :ok ->
+        state = %{state | activity_admission: if(boundary == :started, do: :open, else: :idle)}
+
         state =
           case {state.descriptor.response_start?, boundary} do
             {true, :started} ->

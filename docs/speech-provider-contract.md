@@ -443,7 +443,9 @@ audio. Human STT and STS have independent bounded input delivery. Policy, source
 hold and handoff must fence the old allocation's authority before new input is accepted.
 For room calls, selected human STT is the first candidate external activity source:
 external mode forwards its admitted start/end, while hybrid takes provider onset
-and forwards its admitted end. Provider-controlled mode receives no external
+and forwards its admitted end. The common capability also observes hybrid STT
+start locally, so an utterance suppressed by a blocking tool remains suppressed
+until its end; it does not send a provider start command. Provider-controlled mode receives no external
 boundaries even when human STT supplies caller text. A room selection of external
 or hybrid control without human STT must fail startup until another activity
 source is explicitly designed and proven. The selected entry caller's STT now
@@ -687,8 +689,12 @@ Native completion leases need settlement at a defined local acceptance or
 terminal discard boundary; merely sending a message is not acceptance, and speech
 interruption alone does not authorize discarding an outcome for an active
 participant. Use existing acknowledge/release operations and bounded consumed-ID
-retention. Normal accepted delivery and terminal transfer now settle leases;
-unresolved authorization, terminal discard, replay and conversation coordination
+retention. Normal accepted delivery and terminal transfer now settle leases.
+Blocking/non-blocking admission now uses the shared engine decision. Held caller
+PCM is acknowledged and discarded (continuous sessions receive equal-duration
+silence), and held text is rejected without replay. Local native result acceptance
+does not release a blocking hold until the registry acknowledges consumption.
+Unresolved authorization, terminal discard, replay and full completion acceptance
 remain open. An origin-aware session whose ordinary stop-hold retires its response
 context still needs a valid semantic completion path. Speech-origin validation
 and context retirement remain strict: accepting an old tool never authorizes old

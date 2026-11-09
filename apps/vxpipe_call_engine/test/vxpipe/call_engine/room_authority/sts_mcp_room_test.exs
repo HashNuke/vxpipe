@@ -419,6 +419,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
       else
         assert_receive {:vxpipe_event, %CallEngine.Event.ToolCallFailed{name: "transfer"}}, 2_000
         assert Tree.remote_mcp_owner(context.capability) == owner
+        _ = :sys.get_state(context.authority)
 
         assert :ok =
                  SpeechToSpeech.push_text(

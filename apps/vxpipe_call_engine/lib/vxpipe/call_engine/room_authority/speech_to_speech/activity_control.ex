@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ActivityControl do
          {:ok, binding} <- current(state, connection_id, signal),
          true <- is_reference(signal.turn_ref),
          nil <- Map.get(binding, :activity_turn) do
-      case admit_start(mode, binding, signal) do
+      case STSIngress.activity(binding.ingress, :started, binding.input_epoch, intervals(signal)) do
         :ok ->
           turn = %{
             source: connection_id,
@@ -48,12 +48,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ActivityControl do
     else
       _not_current -> state
     end
-  end
-
-  defp admit_start("hybrid", _binding, _signal), do: :ok
-
-  defp admit_start("external", binding, signal) do
-    STSIngress.activity(binding.ingress, :started, binding.input_epoch, intervals(signal))
   end
 
   defp current(state, connection_id, signal) do

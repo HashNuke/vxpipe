@@ -593,6 +593,70 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
     settle_and_assert_reply(context, output)
   end
 
+  @tag :admission_review
+  test "hybrid room suppresses the tail of an utterance started during a blocking tool" do
+    context =
+      room(true, false, %{"lifecycle" => %{type: "host", tool: "lifecycle"}}, :morse, "hybrid")
+
+    assert {:ok, _} =
+             Registry.register(
+               CallEngine.RoomRegistry,
+               {CallEngine.STSLifecycleTool, context.command.room_id},
+               nil
+             )
+
+    assert :ok =
+             CallEngine.Capability.SpeechToSpeech.push_text(
+               context.capability,
+               "TOOL lifecycle {}"
+             )
+
+    assert_receive {:host_started, worker, _}, 1_000
+    state = :sys.get_state(context.authority)
+    connection = Map.fetch!(state.connections, context.command.connection_id)
+
+    assert {:ok, %{activity_origin: origin}} =
+             SpeechToText.input_binding(connection.speech_to_text.capability)
+
+    signal = %Signal{
+      kind: :turn_started,
+      provider_sequence: 1,
+      allocation_generation: origin.allocation_generation,
+      turn_ref: make_ref(),
+      audio_input_interval: origin.audio_input_interval,
+      audio_output_interval: origin.audio_output_interval
+    }
+
+    :sys.replace_state(
+      context.authority,
+      &ActivityControl.start(&1, context.command.connection_id, signal)
+    )
+
+    _ = :sys.get_state(context.capability)
+    send(worker, :finish)
+    assert_receive {:vxpipe_event, %ToolCallCompleted{name: "lifecycle"}}, 1_000
+    _ = :sys.get_state(context.authority)
+
+    <<pcm::binary-size(320), _rest::binary>> = context.pcm
+    push_sts(%{context | pcm: pcm})
+    refute :sys.get_state(context.provider).input_dirty?
+    refute :sys.get_state(context.provider).external_started?
+
+    :sys.replace_state(
+      context.authority,
+      &ActivityControl.finish(&1, context.command.connection_id, signal)
+    )
+
+    :sys.replace_state(
+      context.authority,
+      &ActivityControl.start(&1, context.command.connection_id, %{signal | turn_ref: make_ref()})
+    )
+
+    push_sts(%{context | pcm: pcm}, 1)
+    assert :sys.get_state(context.provider).input_dirty?
+    refute :sys.get_state(context.provider).external_started?
+  end
+
   test "external room hold retires an idle STS allocation before old STT evidence can control a new epoch" do
     context = room(true, false, %{}, :morse, "external")
     before_hold = :sys.get_state(context.authority)
@@ -1536,7 +1600,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTranscriptModesTest do
 
     assert {:ok, plan} =
              CallSpecCompiler.compile(spec, invocation, %{
-               host_tools: %{"echo_context" => CallEngine.STSContextTool}
+               host_tools: %{
+                 "echo_context" => CallEngine.STSContextTool,
+                 "lifecycle" => CallEngine.STSLifecycleTool
+               }
              })
 
     plan

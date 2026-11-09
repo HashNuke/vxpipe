@@ -26,6 +26,30 @@ Tool bindings have a separate conversation mode:
 | `blocking` | independent supervised worker | blocked |
 | `non_blocking` | independent supervised worker | admitted |
 
+LLM and native speech-to-speech participants use the same
+`Tool.ConversationAdmission` decision: any unconsumed blocking invocation holds
+later business input. A non-blocking completion cannot release another tool's
+hold. LLM admission reads the existing invocation snapshot; native admission uses
+its bounded pending call associations, without a registry call for every audio
+frame. A native request provisionally blocks input until room authority accepts
+its selected mode or returns a rejection.
+
+Native held text returns `:held`; held caller audio is acknowledged and discarded,
+with equal-duration silence supplied when a continuous session needs its input
+clock. Discarded input is never replayed. External/hybrid utterances whose start
+was suppressed stay suppressed through their end, even when the tool finishes
+mid-utterance. Hybrid STT onset is observed locally for admission; the provider
+still owns onset and receives only the selected end boundary.
+
+Native function calls remain in the model session while non-blocking work runs.
+They receive one final function result, without the text loop's interim running
+result. Local result acceptance retires transport-turn tracking; the pending
+business hold ends only after the existing registry completion lease is
+acknowledged. An undeliverable rejection terminates explicitly instead of leaving
+a provisional hold with no invocation to resolve it. Broader native completion,
+replay and timeout acceptance remains tracked in the
+[shared participant milestone](../labnotes/milestones/shared-participant-tool-execution.md).
+
 There is no inline execution alternative behind this setting. `conversation_mode` changes
 only Call Engine conversation admission after submission; it does not change how or where the
 operation runs. The engine-owned tool-definition contract therefore has no execution-mode field;

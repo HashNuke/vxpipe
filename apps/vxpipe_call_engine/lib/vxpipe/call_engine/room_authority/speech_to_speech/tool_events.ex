@@ -52,7 +52,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ToolEvents do
           state
       end
     else
-      state
+      exit(:tool_admission_unavailable)
     end
   end
 

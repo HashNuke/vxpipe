@@ -2,7 +2,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
   @moduledoc false
 
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{Input, Output, ResponseOrigins}
-  alias Vxpipe.CallEngine.Speech.Event
+  alias Vxpipe.CallEngine.Speech.{Event, Session}
+  alias Vxpipe.CallEngine.Tool.ConversationAdmission
 
   @maximum_pending 16
 
@@ -24,7 +25,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
         pending = %{
           turn_ref: event.turn_ref,
           evidence: evidence(state),
-          response_context: event.response_context
+          response_context: event.response_context,
+          conversation_mode: :blocking,
+          admitted?: false,
+          result_accepted?: false,
+          cancelled?: false
         }
 
         send_event(state, pending.evidence, event)
@@ -40,9 +45,12 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
 
   def forward(state, %Event{kind: :tool_cancelled, call_ref: call} = event) do
     case Map.fetch(state.tool_calls, call) do
-      {:ok, pending} ->
+      {:ok, %{result_accepted?: false} = pending} ->
         send_event(state, pending.evidence, event)
-        {:ok, drop(state, call)}
+        {:ok, put_pending(state, call, %{pending | cancelled?: true})}
+
+      {:ok, _accepted} ->
+        {:ok, state}
 
       :error ->
         {:ok, state}
@@ -51,29 +59,91 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
 
   def current?(state, call) do
     case Map.fetch(state.tool_calls, call) do
-      {:ok, pending} ->
+      {:ok, %{cancelled?: false, result_accepted?: false} = pending} ->
         Output.audio_route_permitted?(state, state.human_id, state.agent_id) and
           Map.delete(pending.evidence, :epoch) == Map.delete(evidence(state), :epoch) and
           pending_origin_current?(state, pending.response_context)
 
-      :error ->
+      _unavailable ->
         false
     end
   end
 
-  def drop(state, call) do
-    case Map.pop(state.tool_calls, call) do
-      {nil, _calls} ->
-        state
+  def holding?(state) do
+    state.tool_calls
+    |> Map.values()
+    |> Enum.map(& &1.conversation_mode)
+    |> ConversationAdmission.decide_modes()
+    |> Kernel.!=(:admit)
+  end
 
-      {pending, calls} ->
-        turns =
-          if Enum.any?(calls, fn {_call, other} -> other.turn_ref == pending.turn_ref end),
-            do: state.tool_turns,
-            else: MapSet.delete(state.tool_turns, pending.turn_ref)
+  def admit(state, call, mode, owner)
+      when owner == state.owner and mode in [:blocking, :non_blocking] do
+    case Map.fetch(state.tool_calls, call) do
+      {:ok, %{admitted?: false} = pending} ->
+        {:reply, :ok,
+         put_pending(state, call, %{pending | admitted?: true, conversation_mode: mode})}
 
-        %{state | tool_calls: calls, tool_turns: turns}
+      _unavailable ->
+        {:reply, {:error, :stale_request}, state}
     end
+  end
+
+  def admit(state, _call, _mode, _owner), do: {:reply, {:error, :unauthorized}, state}
+
+  def finish(state, call, owner) when owner == state.owner do
+    case Map.fetch(state.tool_calls, call) do
+      {:ok, %{admitted?: true, result_accepted?: true}} -> {:reply, :ok, drop(state, call)}
+      _unavailable -> {:reply, {:error, :stale_request}, state}
+    end
+  end
+
+  def finish(state, _call, _owner), do: {:reply, {:error, :unauthorized}, state}
+
+  def deliver_result(state, call, result, owner) when owner == state.owner do
+    provider = Session.provider(state.session)
+
+    cond do
+      not current?(state, call) ->
+        {:reply, {:error, :stale_request}, state}
+
+      not is_pid(provider) ->
+        {:reply, {:error, :unavailable}, state}
+
+      true ->
+        case apply(state.provider, :send_tool_result, [provider, call, result]) do
+          :ok -> {:reply, :ok, accept_result(state, call)}
+          {:error, _reason} = error -> {:reply, error, state}
+        end
+    end
+  end
+
+  def deliver_result(state, _call, _result, _owner),
+    do: {:reply, {:error, :unauthorized}, state}
+
+  defp accept_result(state, call) do
+    case Map.fetch!(state.tool_calls, call) do
+      %{admitted?: true} = pending ->
+        put_pending(state, call, %{pending | result_accepted?: true})
+
+      _rejected_before_admission ->
+        drop(state, call)
+    end
+  end
+
+  defp put_pending(state, call, pending) do
+    put_calls(state, Map.put(state.tool_calls, call, pending))
+  end
+
+  def drop(state, call), do: put_calls(state, Map.delete(state.tool_calls, call))
+
+  defp put_calls(state, calls) do
+    turns =
+      calls
+      |> Enum.reject(fn {_call, tool} -> tool.result_accepted? or tool.cancelled? end)
+      |> MapSet.new(fn {_call, tool} -> tool.turn_ref end)
+
+    %{state | tool_calls: calls, tool_turns: turns}
   end
 
   def retire(state), do: %{state | tool_calls: %{}, tool_turns: MapSet.new()}

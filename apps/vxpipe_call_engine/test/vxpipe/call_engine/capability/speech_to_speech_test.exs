@@ -597,11 +597,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
                     %{event: %{kind: :tool_call, call_ref: call}}}
 
+    assert :ok = SpeechToSpeech.admit_tool(capability, call, :non_blocking)
     push_morse(capability, "HI")
     assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, speech_turn, _}
     assert {:ok, _played} = SpeechToSpeech.interrupt(capability)
     assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^speech_turn, _, _, _}
     assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"ok" => true})
+    assert :ok = SpeechToSpeech.finish_tool(capability, call)
 
     refute_received {:vxpipe_sts_tool_event, ^capability, @agent,
                      %{event: %{kind: :tool_cancelled}}}
@@ -690,9 +692,131 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
 
     assert terminal > sequence
     assert map_size(original) == 1
-    assert Map.keys(:sys.get_state(capability).tool_calls) == [marker]
+    calls = :sys.get_state(capability).tool_calls
+    assert map_size(calls) == 2
+    assert Map.fetch!(calls, call).cancelled?
+    assert Map.has_key?(calls, marker)
+    assert {:error, :held} = SpeechToSpeech.push_text(capability, "later input")
     refute_received {:vxpipe_sts_tool_event, ^capability, _, _}
     refute_received {:vxpipe_sts_tool_call, _, _, _, _, _, _}
+  end
+
+  @tag :conversation_admission
+  test "blocking tool input discards PCM without replay after its result" do
+    {_tree, capability, _sink} = start_contract_capability()
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    call = make_ref()
+    assert :ok = emit_tool(provider, call, make_ref())
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{call_ref: ^call}}}
+    before = :binary.copy(<<1, 0>>, 320)
+    later = :binary.copy(<<2, 0>>, 320)
+    assert :ok = SpeechToSpeech.push_audio(capability, @human, before)
+    assert GenServer.call(provider, :inputs) == []
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{})
+    assert :ok = SpeechToSpeech.push_audio(capability, @human, later)
+    assert GenServer.call(provider, :inputs) == [{:audio, later}]
+  end
+
+  for mode <- ["external", "hybrid"] do
+    @tag :activity_admission
+    test "#{mode} suppresses a held utterance through its end even after tool consumption" do
+      {_tree, capability, _sink} = start_contract_capability(turn_control: unquote(mode))
+      provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+      call = make_ref()
+      assert :ok = emit_tool(provider, call, make_ref())
+      assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{call_ref: ^call}}}
+      assert :ok = SpeechToSpeech.input_activity(capability, :started)
+      assert :ok = SpeechToSpeech.push_audio(capability, @human, <<1, 0>>)
+      assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{})
+      assert :ok = SpeechToSpeech.push_audio(capability, @human, <<2, 0>>)
+      assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+      assert GenServer.call(provider, :inputs) == []
+      assert :ok = SpeechToSpeech.input_activity(capability, :started)
+      assert :ok = SpeechToSpeech.push_audio(capability, @human, <<3, 0>>)
+      assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+
+      onset = if unquote(mode) == "external", do: [activity: :started], else: []
+      assert GenServer.call(provider, :inputs) == onset ++ [audio: <<3, 0>>, activity: :ended]
+    end
+
+    @tag :activity_admission
+    test "#{mode} forwards the end of previously admitted activity while a tool is blocking" do
+      {_tree, capability, _sink} = start_contract_capability(turn_control: unquote(mode))
+      provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+      assert :ok = SpeechToSpeech.input_activity(capability, :started)
+      assert :ok = emit_tool(provider, make_ref(), make_ref())
+      assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{kind: :tool_call}}}
+      assert :ok = SpeechToSpeech.input_activity(capability, :ended)
+      onset = if unquote(mode) == "external", do: [activity: :started], else: []
+      assert GenServer.call(provider, :inputs) == onset ++ [activity: :ended]
+    end
+  end
+
+  @tag :conversation_admission
+  test "blocking continuous sessions receive silence while caller PCM is discarded" do
+    {_tree, capability, _sink} = start_contract_capability(output_shape: :continuous)
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    call = make_ref()
+    assert :ok = emit_tool(provider, call, make_ref())
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{call_ref: ^call}}}
+    pcm = :binary.copy(<<1, 0>>, 320)
+    assert :ok = SpeechToSpeech.push_audio(capability, @human, pcm)
+    assert GenServer.call(provider, :inputs) == [{:audio, :binary.copy(<<0>>, byte_size(pcm))}]
+  end
+
+  @tag :conversation_admission
+  test "only the owner releases admitted input after one accepted native result" do
+    {_tree, capability, _sink} = start_contract_capability()
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    call = make_ref()
+    assert :ok = emit_tool(provider, call, make_ref())
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{call_ref: ^call}}}
+    tasks = start_supervised!({Task.Supervisor, name: {:global, {__MODULE__, make_ref()}}})
+
+    task =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        SpeechToSpeech.admit_tool(capability, call, :non_blocking)
+      end)
+
+    assert {:error, :unauthorized} = Task.await(task)
+    assert :ok = SpeechToSpeech.admit_tool(capability, call, :blocking)
+    assert {:error, :stale_request} = SpeechToSpeech.finish_tool(capability, call)
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"ok" => true})
+    assert_receive {:contract_tool_result, ^call, %{"ok" => true}}
+
+    assert {:error, :stale_request} =
+             SpeechToSpeech.send_tool_result(capability, call, %{"duplicate" => true})
+
+    task =
+      Task.Supervisor.async_nolink(tasks, fn -> SpeechToSpeech.finish_tool(capability, call) end)
+
+    assert {:error, :unauthorized} = Task.await(task)
+    assert {:error, :held} = SpeechToSpeech.push_text(capability, "still held")
+    assert :ok = SpeechToSpeech.hold(capability)
+    assert :ok = SpeechToSpeech.finish_tool(capability, call)
+    assert {:error, :held} = SpeechToSpeech.push_text(capability, "transfer hold remains")
+    assert :ok = SpeechToSpeech.release(capability)
+    assert :ok = SpeechToSpeech.push_text(capability, "new input")
+    refute_received {:contract_tool_result, _, _}
+  end
+
+  @tag :admission_review
+  test "rejected sibling does not retain a transport turn whose admitted result was accepted" do
+    {_tree, capability, _sink} = start_contract_capability()
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    turn = make_ref()
+    first = make_ref()
+    second = make_ref()
+    assert :ok = emit_tool(provider, first, turn)
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{call_ref: ^first}}}
+    assert :ok = SpeechToSpeech.admit_tool(capability, first, :blocking)
+    assert :ok = emit_tool(provider, second, turn)
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{call_ref: ^second}}}
+    assert :ok = SpeechToSpeech.send_tool_result(capability, first, %{"ok" => true})
+    assert :ok = SpeechToSpeech.send_tool_result(capability, second, %{"error" => "tool_failed"})
+    assert :sys.get_state(capability).tool_turns == MapSet.new()
+    assert {:error, :held} = SpeechToSpeech.push_text(capability, "still awaiting consumption")
+    assert :ok = SpeechToSpeech.finish_tool(capability, first)
   end
 
   test "unknown results never reach a permissive provider" do
@@ -1304,6 +1428,41 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
 
     assert :ok = Vxpipe.CallEngine.MediaPolicy.Enforcer.apply(ingress, denied, 500)
     _ = :sys.get_state(capability)
+  end
+
+  @tag :conversation_admission
+  test "discarded blocking frames acknowledge ingress and advance its input sequence" do
+    %{capability: capability, ingress: ingress, epoch: epoch} = bound_external_capability()
+    assert :ok = SpeechToSpeech.push_text(capability, "TOOL echo {}")
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{kind: :tool_call}}}
+    identity = :sys.get_state(ingress).identity
+    assert {:ok, format} = SpeechToSpeech.input_format(capability)
+
+    frame =
+      struct!(
+        Vxpipe.CallEngine.Media.AudioFrame,
+        Map.merge(
+          identity,
+          Map.merge(format, %{
+            track_id: "microphone",
+            sequence_number: 1,
+            timestamp: 320,
+            received_at: System.monotonic_time(:millisecond),
+            payload: :binary.copy(<<1, 0>>, 320),
+            source_epoch: epoch
+          })
+        )
+      )
+
+    :erlang.trace(capability, true, [:send])
+    assert :ok = Vxpipe.CallEngine.Media.STSIngress.push(ingress, frame)
+
+    assert_receive {:trace, ^capability, :send, {:vxpipe_sts_input_result, ^capability, _, :ok},
+                    ^ingress},
+                   1_000
+
+    assert :sys.get_state(capability).input_sequence == 1
+    assert %{queued: 0, in_flight?: false} = Vxpipe.CallEngine.Media.STSIngress.stats(ingress)
   end
 
   defp bound_external_capability do

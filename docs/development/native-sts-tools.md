@@ -4,8 +4,9 @@ Research date: 2026-11-09. Code inspected at `f9eefd6a`.
 Status: implementation started. Native startup now retains the private shared tool
 registry separately from provider schemas and dispatches host, platform, variable
 and transfer bindings through the shared invocation registry. Native allocations
-now own the same MCP owner/session components as text activations. Full
-conversation/completion parity remains incomplete.
+now own the same MCP owner/session components as text activations. Both paths use
+the shared blocking/non-blocking admission decision; full completion and
+conformance acceptance remains incomplete.
 
 Planning amendment, 2026-11-09: the user's follow-up requires common internal
 implementation and behavior parity with LLM participants, including conversation
@@ -38,7 +39,7 @@ constraint. This research does not complete that work or reopen the completed
 | Platform `get_current_time` and `hangup` | Native calls use shared validation and invocation workers. Hangup publishes its public result and rechecks source/policy before room authorization. | Include in the final cross-path conformance suite. |
 | Call-variable tools | Compiled native rooms read/update permitted variables through retained private bindings; unselected update tools are rejected. | Include in the final cross-path conformance suite. |
 | Connected MCP tools | Native allocations use the same IntegrationOwner, session supervisor and invocation handler as text activations. Controlled native calls exercise aliases, readiness, tenant isolation, revocation and teardown. | Complete saved-connection race and interrupted-completion acceptance under the shared milestone. |
-| Non-blocking/background tools | General native execution and late delivery are incomplete. | Implement common conversation policy and prove both modes under the new parity milestone; report unsupported semantic operations explicitly. |
+| Non-blocking/background tools | LLM and ordinary/duplex native fixtures share blocking/non-blocking admission, retained pending work, and consumption-qualified release. Held caller input is discarded without replay. | Complete interrupted-delivery, replay and shared-budget acceptance; report unsupported semantic operations explicitly. |
 
 Native startup is composed in
 [SpeechToSpeechActivation](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/speech_to_speech_activation.ex):

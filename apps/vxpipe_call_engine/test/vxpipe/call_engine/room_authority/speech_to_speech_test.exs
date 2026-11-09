@@ -246,9 +246,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
     {_tree, capability} = start_real_capability()
     state = bind_capability(state, capability, @agent)
-    call_ref = make_ref()
+    {call_ref, provider_turn} = native_tool_call(capability, "echo_context")
 
-    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, "turn-tool")
+    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, provider_turn)
 
     state =
       SpeechToSpeech.handle_tool_call(
@@ -256,7 +256,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
         capability,
         @agent,
         call_ref,
-        "turn-tool",
+        provider_turn,
         "echo_context",
         %{}
       )
@@ -312,9 +312,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     state = state() |> with_tools(tools)
     {_tree, capability} = start_real_capability()
     state = bind_capability(state, capability, @agent)
-    call_ref = make_ref()
+    {call_ref, provider_turn} = native_tool_call(capability, "get_current_time")
 
-    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, "turn-tool")
+    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, provider_turn)
 
     state =
       SpeechToSpeech.handle_tool_call(
@@ -322,13 +322,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
         capability,
         @agent,
         call_ref,
-        "turn-tool",
+        provider_turn,
         "get_current_time",
         %{}
       )
 
     assert_receive {:vxpipe_event,
                     %Vxpipe.CallEngine.Event.ToolCallStarted{name: "get_current_time"}}
+
+    provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    :sys.replace_state(provider, &%{&1 | pending_tools: %{}})
 
     assert_receive {:vxpipe_sts_tool_completion, bridge, lease}, 1_000
     assert {:ok, result} = lease.completion.outcome
@@ -355,9 +358,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
     {_tree, capability} = start_real_capability()
     state = bind_capability(state, capability, @agent)
-    call_ref = make_ref()
+    {call_ref, provider_turn} = native_tool_call(capability, "echo_context")
 
-    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, "turn-tool")
+    state = SpeechToSpeech.handle_turn_started(state, capability, @agent, provider_turn)
 
     state =
       SpeechToSpeech.handle_tool_call(
@@ -365,7 +368,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
         capability,
         @agent,
         call_ref,
-        "turn-tool",
+        provider_turn,
         "echo_context",
         %{}
       )
@@ -1090,6 +1093,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
   defp pcm_chunks(<<chunk::binary-size(320), rest::binary>>), do: [chunk | pcm_chunks(rest)]
   defp pcm_chunks(<<>>), do: []
   defp pcm_chunks(tail), do: [tail]
+
+  defp native_tool_call(capability, name) do
+    assert :ok =
+             Vxpipe.CallEngine.Capability.SpeechToSpeech.push_text(
+               capability,
+               "TOOL " <> name <> " {}"
+             )
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_call, call_ref: call, turn_ref: turn}}}
+
+    {call, turn}
+  end
 
   defp context_tool do
     %{
