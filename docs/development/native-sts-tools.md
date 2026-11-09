@@ -5,7 +5,7 @@ Status: common implementation and local conformance pass. LLM and native STS
 participants share descriptors, validation, invocation workers, conversation
 admission, MCP ownership, completion settlement and safe usage. The 446-test
 `bin/test-shared-tools` lane includes the 31-case compiled receptionist contract.
-Final umbrella acceptance remains with the shared milestone; provider live
+All five root gates and Lean pass; the shared milestone is complete. Provider live
 interoperability remains separately owned.
 
 Planning amendment, 2026-11-09: the user's follow-up requires common internal
@@ -21,12 +21,12 @@ Provider-native speech sessions can use Vxpipe platform tools and connected MCP
 tools through their function-calling interfaces. Much of the machinery already
 exists: provider codecs, supervised invocation workers, participant transfer,
 tool descriptors, tenant catalog snapshots, and participant-owned MCP sessions.
-The work is to connect these components to the native STS activation and complete
-its result settlement.
+The common implementation connects these components to the native STS activation
+and settles its results through the shared semantic session boundary.
 
 The new milestone takes over [Package 1 of the existing STS completion plan](../../labnotes/milestones/agent-sts-completion-plan.md#package-1-sts-tool-bindings)
 under the user's common-code/parity direction, retaining D4's single native result
-constraint. This research does not complete that work or reopen the completed
+constraint. Its checklist records implementation acceptance independently of the
 [participant MCP ownership milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md).
 
 ## What works and what is missing
@@ -34,11 +34,11 @@ constraint. This research does not complete that work or reopen the completed
 | Capability | Current evidence | Remaining work |
 | --- | --- | --- |
 | Provider function definitions, incoming calls, outgoing results | Google, GPT-Live and ElevenLabs adapters contain the wire operations. | Provider live interoperability remains separately tracked. |
-| Participant `transfer` | Compiled-room Morse and GPT-Live fixture tests cover successful transfer and failure recovery. | Preserve that behavior while unifying dispatch. This evidence concerns Vxpipe participant transfer; it does not establish arbitrary PSTN transfer support. |
-| Blocking host tool | ElevenLabs compiled-room fixture executes `ping` and receives its result. | Reuse the existing execution path. |
+| Participant `transfer` | Compiled-room Morse and GPT-Live fixture tests cover successful transfer and failure recovery through shared invocation dispatch. | This evidence concerns Vxpipe participant transfer; it does not establish arbitrary PSTN transfer support. |
+| Blocking host tool | ElevenLabs compiled-room fixture executes `ping` and receives its result through shared invocation dispatch. | Covered by existing host binding and lifecycle checks. |
 | Platform `get_current_time` and `hangup` | Native calls use shared validation and invocation workers. Hangup publishes its public result and rechecks source/policy before room authorization. | Covered by common conformance and focused binding tests. |
 | Call-variable tools | Compiled native rooms read/update permitted variables through retained private bindings; unselected update tools are rejected. | Covered by common conformance and focused binding tests. |
-| Connected MCP tools | Native allocations use the same IntegrationOwner, session supervisor and invocation handler as text activations. Controlled native calls exercise aliases, readiness, tenant isolation and teardown. Console integration cases prove saved disconnect/credential replacement, stale catalog pins and one in-flight outcome without retry. | Shared completion and local conformance pass; final umbrella acceptance remains. |
+| Connected MCP tools | Native allocations use the same IntegrationOwner, session supervisor and invocation handler as text activations. Controlled native calls exercise aliases, readiness, tenant isolation and teardown. Console integration cases prove saved disconnect/credential replacement, stale catalog pins and one in-flight outcome without retry. | Shared completion, local conformance and final umbrella acceptance pass. |
 | Non-blocking/background tools | LLM and ordinary/duplex native fixtures share blocking/non-blocking admission, retained pending work, and consumption-qualified release. Held caller input is discarded without replay. | Shared interrupted delivery, bounded replay and local conformance pass; unsupported semantic operations still reject explicitly. |
 
 Native startup is composed in
@@ -62,8 +62,8 @@ validation and terminates the invalid exchange without sending a second result.
 References rejected before registry submission and IDs evicted from the bounded
 retention window are outside that duplicate-protection guarantee.
 Native results use the shared semantic session boundary and retain their completion
-lease across reversible stop-holds. The common compiled-room contract passes; final umbrella acceptance remains
-with the shared milestone.
+lease across reversible stop-holds. The common compiled-room contract and final
+umbrella/Lean acceptance pass, as recorded in the shared milestone.
 
 ## Provider protocol findings
 
@@ -81,7 +81,7 @@ Do not infer late-result support from a provider name or enable another model
 without its corresponding implementation and acceptance tests. [Google model/tool
 matrix](https://aistudio.google.com/docs/live-api/tools).
 
-## Recommended execution path
+## Common execution path
 
 ```mermaid
 flowchart LR
@@ -207,8 +207,8 @@ The execution budget and completion lifecycle need separate acceptance:
   explicitly. Retained-ID replay and bounded eviction pass. Native tool usage now
   reuses InvocationUsage/ToolAttempt through the existing completion bridge,
   ordered before terminal results. Current bridge and activation checks prevent
-  stale attribution. Shared race and compiled-room conformance suites pass; final umbrella acceptance
-  remains with the shared milestone.
+  stale attribution. Shared race and compiled-room conformance suites pass, along
+  with final umbrella/Lean acceptance in the shared milestone.
 
 Native transport acceptance does not prove remote execution or durable receipt.
 GPT-Live documents no separate success acknowledgement for `response.item.create`.

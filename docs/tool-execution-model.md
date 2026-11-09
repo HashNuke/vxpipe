@@ -50,7 +50,7 @@ a provisional hold with no invocation to resolve it. Native completions preserve
 stable tool authority across retired speech origins, retain leases through reversible
 stop-holds and terminate explicitly when authority or delivery is lost. Shared
 usage and bounded replay retention are implemented. `bin/test-shared-tools` runs
-the common compiled-room and lifecycle contract; final acceptance is tracked in the
+the common compiled-room and lifecycle contract; passing final acceptance is recorded in the
 [shared participant milestone](../labnotes/milestones/shared-participant-tool-execution.md).
 
 Both participant paths snapshot the existing application `agent_runtime` execution

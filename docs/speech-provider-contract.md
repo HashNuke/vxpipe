@@ -713,8 +713,8 @@ authorizes old audio. Protocol fixtures verify fresh-context continuation and
 bounded retained-ID replay protection. Native invocations reuse the common tool
 usage recorder; their exact current completion bridge forwards observations ahead
 of terminal results, including hangup/transfer. Shared race and compiled-room conformance
-suites pass through `bin/test-shared-tools`; final umbrella acceptance remains
-with the shared milestone. Earlier checkpoint evidence remains in
+suites pass through `bin/test-shared-tools`; final umbrella/Lean acceptance passes
+in the completed shared milestone. Earlier checkpoint evidence remains in
 [STS tool lifecycle](../labnotes/milestones/sts-tool-lifecycle.md).
 
 Provider cancellation retires the provider call/speech association; ordinary

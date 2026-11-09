@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 19/20 implementation tasks complete; 3/4 checkpoints complete**.
+Status: **complete — 20/20 implementation tasks complete; 4/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -177,7 +177,7 @@ results and remaining limitations below when checking items off.
   session failure and activation replacement races against both participant paths.
   Preserve tool visibility, safe usage/lifecycle facts and terminal effect ordering.
 
-### C4 — Common conformance and acceptance (4/5)
+### C4 — Common conformance and acceptance (5/5)
 
 - [x] Extend existing semantic-session and compiled-room test support into a shared
   tool contract suite. Run it against the LLM path and at least two contrasting
@@ -195,16 +195,25 @@ results and remaining limitations below when checking items off.
   contract and conformance entry point. Reconcile the old STS tool checklist with
   passing evidence; preserve unrelated parent/provider acceptance gates. Record
   any unsupported semantic operation explicitly rather than advertising parity.
-- [ ] Pass the five root completion checks and the Lean lane for any changed
+- [x] Pass the five root completion checks and the Lean lane for any changed
   speech/source-cutover state machine; complete focused source/design review and
   synchronize task counts, evidence and the index. Commit and push coherent
   implementation checkpoints under the user's standing instruction.
 
 ## Acceptance and evidence
 
-Shared compiled-room conformance closes C1 and four C4 tasks: 19/20 tasks,
-three complete checkpoints. The same receptionist contract passes for LLM,
-ordinary Morse and duplex Morse in both modes: selected MCP lookup, permitted
+Final acceptance closes all 20 tasks and all four checkpoints. On implementation
+commit `c172cd30`, the five root checks pass: formatting, warnings-as-errors
+compilation, strict Credo, the full umbrella suite (**5,213 tests, zero failures,
+376 excluded**, seed `112460`) and unused-dependency validation. `bin/verify-lean`
+passes its nine-job build, oracle drift check and Elixir replay (one test, zero
+failures; seed `290521`). The 446-test shared conformance lane and independent
+GPT-6 Astra xhigh source/test review also pass. No deployment or provider live
+acceptance is claimed by this common-code milestone.
+
+Shared compiled-room conformance closed C1 and four C4 tasks. The same receptionist
+contract passes for LLM, ordinary Morse and duplex Morse in both modes: selected
+MCP lookup, permitted
 variable update, observable reply, authorized hangup and owned teardown. While
 MCP work is gated, nonblocking callers receive an unrelated reply and blocking
 input is discarded without later replay. Shared cases also cover denied requests,
@@ -227,8 +236,13 @@ bounded at 250 ms; the actual six-case observations were below one millisecond.
 All owned registries/sessions are monitored DOWN. These synthetic observations do
 not claim vendor latency or production capacity. The old parent tool-specific
 checklists are reconciled with the current single-result contract; unrelated
-provider/hosted/parent acceptance stays open. Only the final full umbrella/Lean
-acceptance and evidence synchronization remain in this milestone.
+provider/hosted/parent acceptance stays open. Full umbrella/Lean acceptance now
+passes as recorded above.
+
+### Earlier checkpoint evidence
+
+The following entries preserve progress and limitations at each earlier checkpoint;
+they do not override the completed status and current acceptance above.
 
 The preceding usage/race checkpoint closed C3 (5/5), bringing progress at that
 point to 14/20 and two complete checkpoints. Native invocations configure the
@@ -368,7 +382,7 @@ of it checks off the new integration or parity tasks above.
 | C1 | 5/5 | Shared resolution, validation, dispatch and scoped effects pass. Common compiled LLM/ordinary/duplex cases now cover repeated identities, rejection and partial capacity; a multi-call LLM response retains its accepted subset without replay. |
 | C2 | 5/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime pass. Native aliases, call/tenant isolation, in-flight teardown and ordinary/duplex transfer success/failure pass. Real saved disconnect/replacement and catalog-pin races now pass alongside existing LLM cases (18 tagged integration tests). |
 | C3 | 5/5 | Shared admission, execution bounds, semantic result delivery and bounded lease/ID settlement pass. Existing LLM/native race suites cover early completion, interruptions, queued cancellation, provider/activation loss and replacement. Exact native bridge usage records success/unknown and terminal hangup/transfer safely without duplicate attempts; 183 combined regressions pass. |
-| C4 | 4/5 | Common 31-case receptionist/outcome contract and 446-test conformance lane pass; local timing/cleanup evidence and developer/parent checklist reconciliation are recorded. Final root umbrella/Lean gate remains. |
+| C4 | 5/5 | Common 31-case receptionist/outcome contract and 446-test conformance lane pass; local timing/cleanup evidence and developer/parent checklist reconciliation are recorded. All five root gates pass (5,213 tests, zero failures, 376 excluded), along with Lean and independent Astra review. |
 
 First C1 checkpoint: native startup retains the existing AgentRuntime `ToolRegistry`
 with selected host and permission-derived variable bindings, separately from the

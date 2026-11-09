@@ -213,7 +213,7 @@ or check this package complete until the new milestone's relevant acceptance pas
 Current common-code acceptance is implemented in the shared milestone: schema and
 binding adoption, both conversation modes, semantic single-result completion,
 MCP ownership, usage and compiled receptionist cases. Run `bin/test-shared-tools`;
-the shared milestone retains the final umbrella gate. This does not close any
+the shared milestone also passes final umbrella/Lean acceptance. This does not close any
 unrelated provider/hosted package below.
 
 Historical package description:

@@ -86,3 +86,17 @@ capability/usage regression pass used seed 125396. Root format, warnings-as-erro
 compile, strict Credo and unused-dependency checks pass on the corrected source.
 Astra's final source/test/documentation review has no actionable findings. The
 fresh full umbrella and Lean command is running; this checkpoint remains 19/20.
+
+The conformance checkpoint is committed and pushed as `c172cd30`. Final root
+acceptance now passes on that implementation: 5,213 tests, zero failures and
+376 excluded (112460). All five root gates pass. `bin/verify-lean` passes its
+nine-job build, generated-oracle drift check and Elixir replay (one test, zero
+failures; 290521). The milestone and index are synchronized to 20/20 tasks and
+4/4 checkpoints; current integration docs point to the completed acceptance.
+The original research's now-delivered dispatch notes are reconciled. Historical
+checkpoint evidence is explicitly separated from current status. Deployment and
+vendor live acceptance remain outside this milestone.
+
+Final GPT-6 Astra xhigh documentation/evidence review is approved with no
+actionable findings. Local Markdown targets and the exact 20-complete/zero-open
+implementation count are verified; this final checkpoint changes documentation only.
