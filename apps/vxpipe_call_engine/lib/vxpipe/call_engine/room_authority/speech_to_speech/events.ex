@@ -86,17 +86,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Events do
     {:noreply, SpeechToSpeech.handle_tool_event(state, capability, agent_id, evidence)}
   end
 
-  def handle({:vxpipe_sts_tool_executed, capability, call_ref, outcome}, state) do
-    {:noreply, SpeechToSpeech.handle_tool_executed(state, capability, call_ref, outcome)}
-  end
-
   def handle({:vxpipe_sts_tool_completion, bridge, lease}, state) do
     {:noreply,
      Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools.handle_completion(state, bridge, lease)}
-  end
-
-  def handle({:vxpipe_sts_tool_timeout, capability, call_ref}, state) do
-    {:noreply, SpeechToSpeech.handle_tool_timeout(state, capability, call_ref)}
   end
 
   # Output-STT recognition problems are observability only at the room

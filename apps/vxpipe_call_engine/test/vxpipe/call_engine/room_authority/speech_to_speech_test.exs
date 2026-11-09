@@ -185,19 +185,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
   test "STS tool calls publish agent-attributed tool events" do
     state =
       state()
-      |> with_plan(%{"echo" => %{name: "echo", type: :mcp, conversation_mode: :non_blocking}})
+      |> with_tools(context_tool())
 
-    capability = self()
+    {_tree, capability} = start_real_capability()
+    state = bind_capability(state, capability, @agent)
     call_ref = make_ref()
 
     state = SpeechToSpeech.handle_turn_started(state, capability, @agent, "turn-tool")
 
     state =
-      SpeechToSpeech.handle_tool_call(state, capability, @agent, call_ref, "turn-tool", "echo", %{
-        "text" => "hi"
-      })
+      SpeechToSpeech.handle_tool_call(
+        state,
+        capability,
+        @agent,
+        call_ref,
+        "turn-tool",
+        "echo_context",
+        %{}
+      )
 
-    assert_receive {:vxpipe_event, %_{name: "echo", participant_id: @agent}}
+    assert_receive {:vxpipe_event, %_{name: "echo_context", participant_id: @agent}}
 
     state = SpeechToSpeech.handle_tool_cancelled(state, capability, @agent, call_ref)
     assert_receive {:vxpipe_event, %_{participant_id: @agent}}
@@ -206,7 +213,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
 
   test "STS tool calls outside the agent allowlist fail closed without execution" do
     stub = start_supervised!({Vxpipe.CallEngine.STSToolResultReceiver, self()})
-    state = state() |> with_plan(%{}) |> bind_capability(stub, @agent)
+    state = state() |> with_tools(%{}) |> bind_capability(stub, @agent)
     capability = stub
     call_ref = make_ref()
 
@@ -245,7 +252,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
       }
     }
 
-    state = state() |> with_plan(tools)
+    state = state() |> with_tools(tools)
     {_tree, capability} = start_real_capability()
     state = bind_capability(state, capability, @agent)
     call_ref = make_ref()
@@ -284,11 +291,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
   test "STS tool cancellation settles pending calls and late results are ignored" do
     state =
       state()
-      |> with_plan(%{"echo" => %{name: "echo", type: :mcp, conversation_mode: :non_blocking}})
+      |> with_tools(context_tool())
 
-    stub = start_supervised!({Agent, fn -> :ok end})
-    state = bind_capability(state, stub, @agent)
-    capability = stub
+    {_tree, capability} = start_real_capability()
+    state = bind_capability(state, capability, @agent)
     call_ref = make_ref()
 
     state = SpeechToSpeech.handle_turn_started(state, capability, @agent, "turn-tool")
@@ -300,7 +306,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
         @agent,
         call_ref,
         "turn-tool",
-        "echo",
+        "echo_context",
         %{}
       )
 
@@ -311,21 +317,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallCancelled{}}
     assert state.sts_tool_calls == %{}
 
-    unchanged = SpeechToSpeech.handle_tool_executed(state, capability, call_ref, {:ok, %{}})
+    unchanged = STSTools.handle_tool_executed(state, capability, call_ref, {:ok, %{}})
     assert unchanged == state
     refute_received {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallCompleted{}}
   end
 
   test "mute hold preserves a room-owned pending tool and delivers its result while held" do
-    tools = %{"echo" => %{name: "echo", type: :mcp, conversation_mode: :non_blocking}}
+    tools = context_tool()
     {_tree, capability} = start_real_capability(duplex?: true)
-    state = state() |> with_plan(tools) |> bind_capability(capability, @agent)
+    state = state() |> with_tools(tools) |> bind_capability(capability, @agent)
     provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
 
     assert :ok =
              Vxpipe.CallEngine.Capability.SpeechToSpeech.push_text(
                capability,
-               "TOOL echo {\"text\":\"hi\"}"
+               "TOOL echo_context {\"text\":\"hi\"}"
              )
 
     assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
@@ -338,7 +344,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
         @agent,
         call_ref,
         "tool-turn",
-        "echo",
+        "echo_context",
         %{}
       )
 
@@ -349,10 +355,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     assert held.speech_to_speech_capability.input_epoch == nil
 
     settled =
-      SpeechToSpeech.handle_tool_executed(held, capability, call_ref, {:ok, %{"text" => "OK"}})
+      STSTools.handle_tool_executed(held, capability, call_ref, {:ok, %{"text" => "OK"}})
 
     assert settled.sts_tool_calls == %{}
-    assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.ToolCallCompleted{name: "echo"}}
+
+    assert_receive {:vxpipe_event,
+                    %Vxpipe.CallEngine.Event.ToolCallCompleted{name: "echo_context"}}
+
     assert :sys.get_state(provider).held_tool_replies != []
   end
 
@@ -949,7 +958,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
     state
   end
 
-  defp bind_capability(state, capability, agent_id, activation_id \\ nil) do
+  defp bind_capability(state, capability, agent_id, activation_id \\ "activation-sts") do
     state = SpeechToSpeech.bind_capability(state, capability, agent_id, activation_id)
     source = Map.fetch!(state.connections, @human_connection)
 
@@ -984,6 +993,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
            [
              owner: self(),
              agent_id: @agent,
+             activation_id: "activation-sts",
              human_id: @human,
              provider:
                if(Keyword.get(options, :duplex?, false),
@@ -1020,19 +1030,36 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeechTest do
   defp pcm_chunks(<<>>), do: []
   defp pcm_chunks(tail), do: [tail]
 
-  defp with_plan(state, tools) do
-    plan = %{
-      participants: %{
-        "agent-key" => %{
-          kind: :agent,
-          participant_id: @agent,
-          activation_id: "activation-sts",
-          tools: tools
-        }
-      },
-      entry_caller: "human-key"
+  defp context_tool do
+    %{
+      "echo_context" => %{
+        name: "echo_context",
+        type: :host,
+        conversation_mode: :non_blocking,
+        action: Vxpipe.CallEngine.STSContextTool
+      }
+    }
+  end
+
+  defp with_tools(state, tools) do
+    bindings =
+      Map.new(tools, fn {name, binding} ->
+        {name, struct!(Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding, binding)}
+      end)
+
+    {:ok, descriptors} = Vxpipe.CallEngine.AgentRuntime.ToolDescriptors.compile(bindings)
+    {:ok, registry} = Vxpipe.AgentRuntime.ToolRegistry.new(descriptors)
+
+    runtime = %Vxpipe.CallEngine.SpeechToSpeechRuntime{
+      provider: {Vxpipe.Providers.MorseCode.STSSession, []},
+      provider_private: [],
+      call_id: state.snapshot.room_id,
+      participant_id: @agent,
+      activation_id: "activation-sts",
+      usage_provider: nil,
+      tool_registry: registry
     }
 
-    %{state | participant_transfer_runtime: %{plan: plan, startup_options: []}}
+    %{state | speech_to_speech_runtime: runtime}
   end
 end

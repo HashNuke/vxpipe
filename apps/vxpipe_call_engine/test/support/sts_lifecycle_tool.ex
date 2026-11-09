@@ -29,6 +29,9 @@ defmodule Vxpipe.CallEngine.STSLifecycleTool do
 
       :finish ->
         {:ok, %{"retained" => true}}
+
+      {:finish, result} when is_map(result) ->
+        {:ok, result}
     end
   end
 end

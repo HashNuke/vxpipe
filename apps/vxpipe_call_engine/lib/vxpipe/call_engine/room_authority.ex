@@ -498,12 +498,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     {:noreply, ToolCalls.failed(state, capability, command, call, reason)}
   end
 
-  def handle_info({:vxpipe_platform_effect, capability, context, :hangup}, state) do
-    case EndCall.authorize(capability, context, state) do
-      :ok -> {:stop, {:shutdown, :agent_hangup}, state}
-      {:error, %Error{}} -> {:noreply, state}
-    end
-  end
+  def handle_info({:vxpipe_sts_platform_effect, capability, scope, :hangup}, state),
+    do: EndCall.sts_tool_hangup(capability, scope, state)
+
+  def handle_info({:vxpipe_platform_effect, capability, context, :hangup}, state),
+    do: EndCall.tool_hangup(capability, context, state)
 
   def handle_info(
         {:vxpipe_platform_effect, capability, %ToolContext{} = context,
@@ -656,11 +655,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
              :vxpipe_sts_turn_completed,
              :vxpipe_sts_interrupted,
              :vxpipe_sts_tool_event,
-             :vxpipe_sts_tool_call,
-             :vxpipe_sts_tool_cancelled,
-             :vxpipe_sts_tool_executed,
              :vxpipe_sts_tool_completion,
-             :vxpipe_sts_tool_timeout,
              :vxpipe_sts_output_stt_unavailable,
              :vxpipe_sts_unavailable
            ] do
@@ -680,6 +675,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   def handle_info({:DOWN, monitor, :process, _pid, reason}, state),
     do: Vxpipe.CallEngine.RoomAuthority.ProcessDown.handle(monitor, reason, state)
+
+  def handle_info(_message, state), do: {:noreply, state}
 
   defp current_source_ingress?(state, ingress, identity) do
     connection = Map.get(state.connections, Map.get(identity, :connection_id))

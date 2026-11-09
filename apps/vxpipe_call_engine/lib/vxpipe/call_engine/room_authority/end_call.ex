@@ -3,7 +3,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.EndCall do
 
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.CallEngine.RoomAuthority.{SpeechToSpeech, State, TextCapability}
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools, as: STSTools
   alias Vxpipe.CallEngine.Tool.Context
+
+  def sts_tool_hangup(capability, scope, state) do
+    if STSTools.platform_effect_current?(state, capability, scope),
+      do: tool_hangup(capability, scope.context, state),
+      else: {:noreply, state}
+  end
+
+  def tool_hangup(capability, context, state) do
+    case authorize(capability, context, state) do
+      :ok -> {:stop, {:shutdown, :agent_hangup}, state}
+      {:error, %Error{}} -> {:noreply, state}
+    end
+  end
 
   @spec remote_hangup(String.t(), State.t()) ::
           {:stop, {:shutdown, :remote_hangup}, :ok, State.t()}

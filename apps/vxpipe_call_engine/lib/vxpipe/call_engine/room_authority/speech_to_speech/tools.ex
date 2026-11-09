@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   @moduledoc "Room-owned authorization, execution and settlement of STS tool calls."
 
+  alias Vxpipe.AgentRuntime.ToolRegistry
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech, as: Capability
   alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree
 
@@ -12,14 +13,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   }
 
   alias Vxpipe.CallEngine.Id
-  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
+  alias Vxpipe.CallEngine.SpeechToSpeechRuntime
   alias Vxpipe.CallEngine.RoomAuthority.{EventPublisher, State}
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence
   alias Vxpipe.CallEngine.Tool.Context, as: ToolContext
 
   alias Vxpipe.CallEngine.Tool.{
     CompletionLease,
-    InvocationBinding,
     InvocationRegistry,
     PlatformResult
   }
@@ -59,7 +59,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
           turn = tool_turn(state, agent_id, provider_turn, connection_id, connection)
           tool_call_id = Id.generate(:tool_attempt)
 
-          case admit_binding(state, agent_id, name) do
+          case admit_binding(state, agent_id, name, arguments) do
             {:ok, binding} ->
               pending = %{
                 agent_id: agent_id,
@@ -135,30 +135,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       }
   end
 
-  defp admit_binding(state, agent_id, name) do
+  defp admit_binding(state, agent_id, name, arguments) do
     if map_size(state.sts_tool_calls) >= @maximum_pending do
       {:error, :busy}
     else
-      case agent_tool_binding(state, agent_id, name) do
-        {:ok, binding} -> {:ok, binding}
-        :error -> {:error, :unauthorized}
-      end
-    end
-  end
-
-  @doc """
-  Delivers an externally produced result for a pending authorized STS tool call.
-
-  Unknown or already-settled call references are ignored so late results can
-  never revive fenced speech.
-  """
-  @spec deliver_tool_result(State.t(), pid(), reference(), term()) :: State.t()
-  def deliver_tool_result(%State{} = state, capability, call_ref, result)
-      when is_pid(capability) and is_reference(call_ref) do
-    if current?(state, capability) do
-      handle_tool_executed(state, capability, call_ref, {:ok, result})
-    else
-      state
+      agent_tool_binding(state, agent_id, name, arguments)
     end
   end
 
@@ -180,66 +161,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
     end
   end
 
-  @spec handle_tool_timeout(State.t(), pid(), reference()) :: State.t()
-  def handle_tool_timeout(%State{} = state, capability, call_ref)
-      when is_pid(capability) and is_reference(call_ref) do
-    if current?(state, capability) do
-      case Map.pop(state.sts_tool_calls, call_ref) do
-        {nil, _pending} ->
-          state
-
-        {pending, sts_tool_calls} ->
-          state = %{state | sts_tool_calls: sts_tool_calls}
-          settle_executed_tool(state, capability, pending, call_ref, {:error, :timeout})
-      end
+  defp agent_tool_binding(%State{} = state, agent_id, name, arguments) do
+    with %SpeechToSpeechRuntime{
+           participant_id: ^agent_id,
+           activation_id: activation,
+           tool_registry: %ToolRegistry{} = registry
+         } <- state.speech_to_speech_runtime,
+         true <- is_binary(activation) and participant_activation(state, agent_id) == activation,
+         true <- state.speech_to_speech_capability.activation_id == activation,
+         {:ok, descriptor} <- ToolRegistry.resolve(registry, name, arguments) do
+      {:ok, descriptor.binding}
     else
-      state
-    end
-  end
-
-  defp agent_tool_binding(%State{participant_transfer_runtime: nil}, _agent_id, _name), do: :error
-
-  defp agent_tool_binding(%State{} = state, agent_id, name) do
-    plan = state.participant_transfer_runtime.plan
-    participants = Map.get(plan, :participants) || %{}
-
-    participants
-    |> Map.values()
-    |> Enum.find_value(:error, fn participant ->
-      participant_id = Map.get(participant, :participant_id)
-      kind = Map.get(participant, :kind)
-      tools = Map.get(participant, :tools) || %{}
-
-      if participant_id == agent_id and kind == :agent do
-        case Map.fetch(tools, name) do
-          {:ok, binding} -> {:ok, binding}
-          :error -> :error
-        end
-      else
-        false
-      end
-    end)
-    |> case do
-      {:ok, binding} -> scope_binding_to_activation(state, agent_id, binding)
-      :error -> :error
-      false -> :error
-    end
-  end
-
-  defp scope_binding_to_activation(
-         %State{speech_to_speech_runtime: nil} = _state,
-         _agent_id,
-         binding
-       ),
-       do: {:ok, binding}
-
-  defp scope_binding_to_activation(%State{} = state, agent_id, binding) do
-    runtime_activation = state.speech_to_speech_runtime.activation_id
-
-    if is_nil(runtime_activation) or participant_activation(state, agent_id) == runtime_activation do
-      {:ok, binding}
-    else
-      :error
+      {:error, :invalid_arguments} -> {:error, :invalid_arguments}
+      _unavailable -> {:error, :unauthorized}
     end
   end
 
@@ -253,40 +187,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   defp participant_activation(_state, _agent_id), do: nil
 
   defp maybe_execute_sts_tool(state, capability, call_ref, binding, arguments, pending) do
-    case invocation_for(binding, pending.name) do
-      {:ok, invocation} ->
-        case InvocationRegistry.submit(
-               Tree.invocation_registry(capability),
-               invocation,
-               arguments,
-               pending.context,
-               pending.tool_call_id
-             ) do
-          {:accepted, _mode} -> state
-          {:error, reason} -> handle_tool_executed(state, capability, call_ref, {:error, reason})
-        end
-
-      {:error, reason} ->
-        handle_tool_executed(state, capability, call_ref, {:error, reason})
-
-      :deferred ->
-        state
-    end
-  end
-
-  defp invocation_for(%ToolBinding{type: :participant_transfer} = binding, _name),
-    do: InvocationBinding.from_participant_transfer(binding)
-
-  defp invocation_for(binding, name) do
-    if executable_host_tool?(binding) do
-      {:ok,
-       %InvocationBinding{
-         name: name,
-         conversation_mode: Map.get(binding, :conversation_mode),
-         handler: {:host, Map.get(binding, :action)}
-       }}
-    else
-      :deferred
+    case InvocationRegistry.submit(
+           Tree.invocation_registry(capability),
+           binding,
+           arguments,
+           pending.context,
+           pending.tool_call_id
+         ) do
+      {:accepted, _mode} -> state
+      {:error, reason} -> handle_tool_executed(state, capability, call_ref, {:error, reason})
     end
   end
 
@@ -311,16 +220,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
   end
 
   def handle_completion(state, _bridge, _lease), do: state
-
-  defp executable_host_tool?(binding) when is_map(binding) do
-    action = Map.get(binding, :action)
-
-    Map.get(binding, :type) == :host and Map.get(binding, :conversation_mode) == :blocking and
-      is_atom(action) and match?({:module, _}, :code.ensure_loaded(action)) and
-      function_exported?(action, :execute, 2)
-  end
-
-  defp executable_host_tool?(_binding), do: false
 
   defp tool_context(state, turn, tool_call_id, capability, connection) do
     %ToolContext{
@@ -386,12 +285,33 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
         _ = deliver_provider_tool_result(capability, call_ref, provider_result)
         state = EventPublisher.publish(state, connection.pid, event)
+        queue_platform_effect(capability, pending, outcome, provider_result)
         %{state | next_sequence: state.next_sequence + 1}
 
       :error ->
         state
     end
   end
+
+  @doc false
+  def platform_effect_current?(state, capability, scope) do
+    current?(state, capability) and match?({:ok, _connection}, pending_connection(state, scope))
+  end
+
+  defp queue_platform_effect(
+         capability,
+         pending,
+         {:ok, %PlatformResult{effect: :hangup}},
+         {:ok, _result}
+       ) do
+    scope = Map.take(pending, [:source, :evidence, :context])
+    send(self(), {:vxpipe_sts_platform_effect, capability, scope, :hangup})
+  end
+
+  defp queue_platform_effect(_capability, _pending, _outcome, _result), do: :ok
+
+  defp bound_tool_result({:ok, %PlatformResult{result: result}}),
+    do: bound_tool_result({:ok, result})
 
   defp bound_tool_result({:ok, result}) when is_map(result) do
     try do

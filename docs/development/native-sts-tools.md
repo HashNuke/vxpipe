@@ -2,8 +2,9 @@
 
 Research date: 2026-11-09. Code inspected at `f9eefd6a`.
 Status: implementation started. Native startup now retains the private shared tool
-registry separately from provider schemas; dispatch, owned MCP startup and
-conversation/completion parity remain incomplete.
+registry separately from provider schemas and dispatches host, platform, variable
+and transfer bindings through the shared invocation registry. Owned MCP startup
+and conversation/completion parity remain incomplete.
 
 Planning amendment, 2026-11-09: the user's follow-up requires common internal
 implementation and behavior parity with LLM participants, including conversation
@@ -33,8 +34,8 @@ constraint. This research does not complete that work or reopen the completed
 | Provider function definitions, incoming calls, outgoing results | Google, GPT-Live and ElevenLabs adapters contain the wire operations. | Exercise newly connected bindings through each supported adapter. |
 | Participant `transfer` | Compiled-room Morse and GPT-Live fixture tests cover successful transfer and failure recovery. | Preserve that behavior while unifying dispatch. This evidence concerns Vxpipe participant transfer; it does not establish arbitrary PSTN transfer support. |
 | Blocking host tool | ElevenLabs compiled-room fixture executes `ping` and receives its result. | Reuse the existing execution path. |
-| Platform `get_current_time` and `hangup` | Descriptors can be advertised, but STS dispatch returns `:deferred`. | Execute bindings and apply authorized platform effects. |
-| Call-variable tools | Native startup now retains their compiled private registry, but room lookup still searches the original participant tool map. | Use the retained registry for dispatch. |
+| Platform `get_current_time` and `hangup` | Native calls use shared validation and invocation workers. Hangup publishes its public result and rechecks source/policy before room authorization. | Include in the final cross-path conformance suite. |
+| Call-variable tools | Compiled native rooms read/update permitted variables through retained private bindings; unselected update tools are rejected. | Include in the final cross-path conformance suite. |
 | Connected MCP tools | STS descriptor compilation has no remote owner and rejects MCP bindings. The STS tree has no MCP owner/session supervisor. | Add the existing owned session components and bind descriptors to the exact owner. |
 | Non-blocking/background tools | General native execution and late delivery are incomplete. | Implement common conversation policy and prove both modes under the new parity milestone; report unsupported semantic operations explicitly. |
 
@@ -42,10 +43,15 @@ The startup gap is in
 [SpeechToSpeechActivation](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/speech_to_speech_activation.ex):
 it calls `ToolDescriptors.compile/2` without an MCP owner. The first C1 checkpoint
 now preserves the compiled `ToolRegistry` on the private runtime separately from
-the provider's schema projection. The execution gap remains in
-[SpeechToSpeech.Tools](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/room_authority/speech_to_speech/tools.ex):
-`invocation_for/2` executes participant transfer and blocking host tools, leaving
-other types deferred. Advertising a schema alone does not make its tool executable.
+the provider's schema projection.
+[SpeechToSpeech.Tools](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/room_authority/speech_to_speech/tools.ex)
+now resolves that registry before admission, matching participant and activation
+against the recorder and current capability. It submits the resulting binding
+to the same `InvocationRegistry` and handlers used by LLM participants. Silent
+deferral is removed. Superseded direct completion/timeout handlers and unused
+wrappers are removed; the owned invocation registry supplies production outcomes.
+Native completion retention, input coordination and
+interrupted-result delivery still require C3; dispatch alone is not full parity.
 
 ## Provider protocol findings
 

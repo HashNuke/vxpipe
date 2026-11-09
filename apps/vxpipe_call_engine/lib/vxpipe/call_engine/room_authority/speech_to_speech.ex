@@ -331,9 +331,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
               ),
               to: Tools
 
-  defdelegate deliver_tool_result(state, capability, call_ref, result), to: Tools
-  defdelegate handle_tool_executed(state, capability, call_ref, outcome), to: Tools
-  defdelegate handle_tool_timeout(state, capability, call_ref), to: Tools
   defdelegate handle_tool_cancelled(state, capability, agent_id, call_ref), to: Tools
 
   defdelegate handle_tool_event(state, capability, agent_id, evidence),

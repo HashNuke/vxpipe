@@ -130,9 +130,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
 
   test "a room mute keeps a tool in flight and speaks its result after release" do
     tools = %{
-      "echo_context" => %{
+      "lifecycle" => %{
         type: "host",
-        tool: "echo_context",
+        tool: "lifecycle",
         conversation_mode: "non_blocking"
       }
     }
@@ -143,10 +143,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
     assert :ok =
              CallEngine.Capability.SpeechToSpeech.push_text(
                context.capability,
-               "TOOL echo_context {}"
+               "TOOL lifecycle {}"
              )
 
     assert_receive {:vxpipe_event, %ToolCallStarted{}}, 5_000
+    assert_receive {:host_started, worker, _tool_context}, 1_000
     state = :sys.get_state(context.authority)
     [{call_ref, _pending}] = Map.to_list(state.sts_tool_calls)
 
@@ -158,18 +159,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
     assert :sys.get_state(provider).hold_log == [{:hold, :started}]
     refute :sys.get_state(context.ingress).open?
 
-    settled =
-      :sys.replace_state(context.authority, fn state ->
-        CallEngine.RoomAuthority.SpeechToSpeech.deliver_tool_result(
-          state,
-          context.capability,
-          call_ref,
-          %{"text" => "OK"}
-        )
-      end)
-
-    assert settled.sts_tool_calls == %{}
+    send(worker, {:finish, %{"text" => "OK"}})
     assert_receive {:vxpipe_event, %ToolCallCompleted{}}, 5_000
+    assert :sys.get_state(context.authority).sts_tool_calls == %{}
     assert :sys.get_state(provider).held_tool_replies != []
     refute_received {:test_audio_output, _, _}
 
@@ -255,9 +247,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
 
   test "an admitted tool survives caller overlap and speaks its result" do
     tools = %{
-      "echo_context" => %{
+      "lifecycle" => %{
         type: "host",
-        tool: "echo_context",
+        tool: "lifecycle",
         conversation_mode: "non_blocking"
       }
     }
@@ -271,11 +263,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
     assert :ok =
              CallEngine.Capability.SpeechToSpeech.push_text(
                context.capability,
-               "TOOL echo_context {}"
+               "TOOL lifecycle {}"
              )
 
     assert_receive {:vxpipe_event, %ToolCallStarted{}}, 5_000
-    [{call_ref, _pending}] = Map.to_list(:sys.get_state(context.authority).sts_tool_calls)
+    assert_receive {:host_started, worker, _tool_context}, 1_000
+    assert map_size(:sys.get_state(context.authority).sts_tool_calls) == 1
 
     assert {:ok, tone} = Encoder.encode(context.config, "I")
     push_sts(context, tone, div(byte_size(context.pcm), 320))
@@ -288,18 +281,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
 
     assert correlation_id == started.correlation_id
 
-    settled =
-      :sys.replace_state(context.authority, fn state ->
-        CallEngine.RoomAuthority.SpeechToSpeech.deliver_tool_result(
-          state,
-          context.capability,
-          call_ref,
-          %{"text" => "OK"}
-        )
-      end)
-
-    assert settled.sts_tool_calls == %{}
+    send(worker, {:finish, %{"text" => "OK"}})
     assert_receive {:vxpipe_event, %ToolCallCompleted{}}, 5_000
+    assert :sys.get_state(context.authority).sts_tool_calls == %{}
 
     output = collect_output(sink, [])
     settle_output(sink, output)
@@ -361,8 +345,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSDuplexCallTest do
 
     assert {:ok, plan} =
              CallSpecCompiler.compile(spec, invocation, %{
-               host_tools: %{"echo_context" => CallEngine.STSContextTool}
+               host_tools: %{"lifecycle" => CallEngine.STSLifecycleTool}
              })
+
+    {:ok, _} =
+      Registry.register(CallEngine.RoomRegistry, {CallEngine.STSLifecycleTool, plan.room_id}, nil)
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     agent = Map.fetch!(plan.participants, plan.entry_receiver)

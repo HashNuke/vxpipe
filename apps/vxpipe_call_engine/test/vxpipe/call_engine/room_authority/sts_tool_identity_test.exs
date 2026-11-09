@@ -2,7 +2,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
   use ExUnit.Case, async: true
 
   alias Vxpipe.CallEngine.Archive.Recorder
+  alias Vxpipe.AgentRuntime.ToolRegistry
+  alias Vxpipe.CallEngine.AgentRuntime.ToolDescriptors
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree
   alias Vxpipe.CallEngine.Command.AttachConnection
+  alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
 
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechStarted,
@@ -14,14 +18,35 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
 
   alias Vxpipe.CallEngine.Room.Snapshot
   alias Vxpipe.CallEngine.RoomAuthority.{SpeechToSpeech, State}
-  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ToolEvents
+  alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.{ToolEvents, Tools}
   alias Vxpipe.CallEngine.STSInputHandle
+  alias Vxpipe.CallEngine.SpeechToSpeechRuntime
+  alias Vxpipe.CallEngine.Tool.{InvocationRegistry, InvocationSupervisor}
 
   @agent "agent"
   @source "source"
+  @activation "activation"
 
   setup do
     capability = start_supervised!({Vxpipe.CallEngine.STSToolResultReceiver, self()})
+    {:ok, _} = Registry.register(Vxpipe.CallEngine.RoomRegistry, {Tree, :parent, capability}, nil)
+
+    supervisor =
+      start_supervised!({InvocationSupervisor, activation_id: @activation, maximum_children: 16})
+
+    start_supervised!(
+      {InvocationRegistry,
+       name:
+         {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {Tree, self(), :invocation_registry}}},
+       activation_id: @activation,
+       invocation_supervisor: supervisor,
+       completion_target: self(),
+       maximum_invocations: 16,
+       maximum_consumed_invocations: 16,
+       invocation_timeout_ms: 5_000,
+       maximum_result_bytes: 65_536}
+    )
+
     authority = start_supervised!({Vxpipe.CallEngine.TestSTSPolicySnapshot, policy()})
     %{capability: capability, state: %{state(capability) | media_policy_authority: authority}}
   end
@@ -34,12 +59,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
       assert_receive {:vxpipe_event, %ToolCallStarted{} = started}
       assert_public_ids(started, call, turn)
 
-      state = SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{"ok" => true})
+      state = complete_tool(state, context.capability, call, %{"ok" => true})
       assert_receive {:vxpipe_event, %ToolCallCompleted{} = completed}
       assert ids(completed) == ids(started)
       assert_receive {:provider_tool_result, ^call, %{"ok" => true}}
       assert state.sts_tool_calls == %{}
-      assert SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{}) == state
+      assert complete_tool(state, context.capability, call, %{}) == state
       refute_received {:provider_tool_result, _, _}
       refute_received {:vxpipe_event, _}
     end
@@ -129,12 +154,30 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
              "other-agent",
              call,
              make_ref(),
-             "echo",
+             "echo_context",
              %{}
            ) == context.state
 
     refute_received {:vxpipe_event, _}
     refute_received {:provider_tool_result, _, _}
+  end
+
+  @tag :registry_scope
+  test "a private registry cannot authorize work from a different capability activation",
+       context do
+    state = %{
+      context.state
+      | speech_to_speech_capability: %{
+          context.state.speech_to_speech_capability
+          | activation_id: "retired-activation"
+        }
+    }
+
+    state = call(state, context.capability, make_ref(), make_ref())
+    assert_receive {:vxpipe_event, %ToolCallFailed{reason: :unauthorized}}
+    refute_received {:vxpipe_event, %ToolCallStarted{}}
+    assert state.sts_tool_calls == %{}
+    assert {:ok, []} = InvocationRegistry.snapshot(Tree.invocation_registry(context.capability))
   end
 
   test "unknown and wrong-agent cancellations cannot fabricate or settle events", context do
@@ -170,7 +213,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
       state = invalidate(state, unquote(mutation), context.capability)
 
       state =
-        SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{
+        complete_tool(state, context.capability, call, %{
           "private" => "result"
         })
 
@@ -203,7 +246,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
     assert_receive {:vxpipe_event, %ToolCallStarted{}}
     state = SpeechToSpeech.bind_capability(state, self(), @agent)
     assert state.sts_tool_calls == %{}
-    assert SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{}) == state
+    assert complete_tool(state, context.capability, call, %{}) == state
     refute_received {:provider_tool_result, _, _}
   end
 
@@ -245,7 +288,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
     assert_public_ids(failed, call, turn)
   end
 
-  for reason <- [:timeout, :invalid_result] do
+  for reason <- [:unknown, :invalid_result] do
     test "#{reason} preserves the started public IDs and settles only once", context do
       call = make_ref()
       state = call(context.state, context.capability, call, make_ref())
@@ -253,20 +296,26 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
 
       state =
         case unquote(reason) do
-          :timeout ->
-            SpeechToSpeech.handle_tool_timeout(state, context.capability, call)
+          :unknown ->
+            expire_tool(state, context.capability, call)
 
           :invalid_result ->
-            SpeechToSpeech.deliver_tool_result(state, context.capability, call, "not an object")
+            complete_tool(state, context.capability, call, "not an object")
         end
 
       assert_receive {:vxpipe_event, %ToolCallFailed{reason: reason} = failed}
       assert reason == unquote(reason)
       assert ids(failed) == ids(started)
-      assert_receive {:provider_tool_result, ^call, %{"error" => "tool_failed"}}
+
+      expected_result =
+        if unquote(reason) == :unknown,
+          do: %{"status" => "unknown"},
+          else: %{"error" => "tool_failed"}
+
+      assert_receive {:provider_tool_result, ^call, ^expected_result}
       assert state.sts_tool_calls == %{}
-      assert SpeechToSpeech.handle_tool_timeout(state, context.capability, call) == state
-      assert SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{}) == state
+      assert expire_tool(state, context.capability, call) == state
+      assert complete_tool(state, context.capability, call, %{}) == state
       refute_received {:provider_tool_result, _, _}
       refute_received {:vxpipe_event, _}
     end
@@ -277,7 +326,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
     evidence = tool_evidence(context.state, call, 10)
     state = tool_event(context.state, context.capability, evidence)
     assert_receive {:vxpipe_event, %ToolCallStarted{} = started}
-    state = SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{})
+    state = complete_tool(state, context.capability, call, %{})
     assert_receive {:vxpipe_event, %ToolCallCompleted{} = completed}
     assert_receive {:provider_tool_result, ^call, %{}}
     assert ids(completed) == ids(started)
@@ -332,8 +381,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
 
     assert {:noreply, state} =
              Events.handle(
-               {:vxpipe_sts_tool_call, context.capability, @agent, make_ref(), make_ref(), "echo",
-                %{}},
+               {:vxpipe_sts_tool_call, context.capability, @agent, make_ref(), make_ref(),
+                "echo_context", %{}},
                context.state
              )
 
@@ -351,7 +400,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
     assert state.speech_to_speech_capability.input_epoch == nil
     assert state.sts_tool_sequence == 1
     assert_receive {:vxpipe_event, %ToolCallCancelled{}}
-    assert SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{}) == state
+    assert complete_tool(state, context.capability, call, %{}) == state
     refute_received {:provider_tool_result, _, _}
   end
 
@@ -371,7 +420,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
         end
 
       :ok = GenServer.call(state.media_policy_authority, {:replace, changed})
-      state = SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{})
+      state = complete_tool(state, context.capability, call, %{})
       assert state.sts_tool_calls == %{}
       refute_received {:provider_tool_result, _, _}
       refute_received {:vxpipe_event, _}
@@ -384,7 +433,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
         call = make_ref()
         state = tool_event(state, context.capability, tool_evidence(state, call, sequence))
         assert_receive {:vxpipe_event, %ToolCallStarted{}}
-        state = SpeechToSpeech.deliver_tool_result(state, context.capability, call, %{})
+        state = complete_tool(state, context.capability, call, %{})
         assert_receive {:vxpipe_event, %ToolCallCompleted{}}
         assert_receive {:provider_tool_result, ^call, %{}}
         assert state.sts_tool_calls == %{}
@@ -397,8 +446,67 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
     assert replacement.sts_tool_calls == %{}
   end
 
-  defp tool_event(state, capability, evidence),
-    do: ToolEvents.handle(state, capability, @agent, evidence, policy())
+  @tag :shared_effects
+  test "an admitted hangup publishes only its public result before the room effect", context do
+    {state, effect} = settle_hangup(context)
+
+    assert {:stop, {:shutdown, :agent_hangup}, ^state} =
+             Vxpipe.CallEngine.RoomAuthority.handle_info(effect, state)
+  end
+
+  for change <- [:rebound_source, :retired_epoch, :held_source, :denied_policy, :regranted_policy] do
+    @tag :shared_effects
+    test "#{change} fences a queued hangup effect", context do
+      {state, effect} = settle_hangup(context)
+
+      state = invalidate_effect(state, unquote(change), context.capability)
+
+      assert {:noreply, ^state} = Vxpipe.CallEngine.RoomAuthority.handle_info(effect, state)
+    end
+  end
+
+  defp invalidate_effect(state, :denied_policy, _capability) do
+    denied = %{policy() | effective: %{policy().effective | audio_routes: %{}}}
+    :ok = GenServer.call(state.media_policy_authority, {:replace, denied})
+    state
+  end
+
+  defp invalidate_effect(state, :regranted_policy, _capability) do
+    :ok = GenServer.call(state.media_policy_authority, {:replace, %{policy() | revision: 2}})
+    state
+  end
+
+  defp invalidate_effect(state, change, capability), do: invalidate(state, change, capability)
+
+  defp settle_hangup(context) do
+    call = make_ref()
+    evidence = tool_evidence(context.state, call, 1)
+    evidence = %{evidence | event: %{evidence.event | tool_name: "end_call"}}
+    state = tool_event(context.state, context.capability, evidence)
+    assert_receive {:vxpipe_event, %ToolCallStarted{name: "end_call"}}
+
+    outcome =
+      {:ok,
+       %Vxpipe.CallEngine.Tool.PlatformResult{effect: :hangup, result: %{"status" => "ending"}}}
+
+    state = Tools.handle_tool_executed(state, context.capability, call, outcome)
+    assert_receive {:provider_tool_result, ^call, %{"status" => "ending"}}
+    assert_receive {:vxpipe_event, %ToolCallCompleted{result: %{"status" => "ending"}}}
+    assert_receive {:vxpipe_sts_platform_effect, _, _, :hangup} = effect
+    assert state.sts_tool_calls == %{}
+    {state, effect}
+  end
+
+  defp complete_tool(state, capability, call, result),
+    do: Tools.handle_tool_executed(state, capability, call, {:ok, result})
+
+  defp expire_tool(state, capability, call),
+    do: Tools.handle_tool_executed(state, capability, call, {:error, :unknown})
+
+  defp tool_event(state, capability, evidence) do
+    next = ToolEvents.handle(state, capability, @agent, evidence, policy())
+    drain_invocations(state, next, capability)
+  end
 
   defp tool_evidence(state, call, sequence) do
     %{
@@ -410,7 +518,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
         call_ref: call,
         turn_ref: make_ref(),
         sequence: sequence,
-        tool_name: "echo",
+        tool_name: "echo_context",
         arguments: %{}
       }
     }
@@ -429,8 +537,29 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
     }
   end
 
-  defp call(state, capability, call, turn),
-    do: SpeechToSpeech.handle_tool_call(state, capability, @agent, call, turn, "echo", %{})
+  defp call(state, capability, call, turn) do
+    next =
+      SpeechToSpeech.handle_tool_call(state, capability, @agent, call, turn, "echo_context", %{})
+
+    drain_invocations(state, next, capability)
+  end
+
+  # These tests control room publication separately from execution. Consume the
+  # actual worker's result so identity tests do not depend on retained capacity.
+  defp drain_invocations(previous, next, capability) do
+    registry = Tree.invocation_registry(capability)
+
+    for {call, pending} <- next.sts_tool_calls,
+        not Map.has_key?(previous.sts_tool_calls, call) do
+      id = pending.tool_call_id
+      assert_receive {:vxpipe_tool_completion_available, ^registry, ^id}, 1_000
+      assert {:ok, lease} = InvocationRegistry.lease_next(registry, "identity-test")
+      assert lease.invocation_id == id
+      assert :ok = InvocationRegistry.acknowledge_completion(registry, id, lease.lease_id)
+    end
+
+    next
+  end
 
   defp ids(event),
     do: {event.tool_call_id, event.command_id, event.correlation_id, event.connection_id}
@@ -507,13 +636,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
       attach_command: command
     }
 
-    state = State.new(%Recorder{port: nil, participant_activations: %{}}, snapshot, %{})
+    state =
+      State.new(
+        %Recorder{port: nil, participant_activations: %{@agent => @activation}},
+        snapshot,
+        %{}
+      )
 
     state =
       SpeechToSpeech.bind_capability(
         %{state | connections: %{@source => source}},
         capability,
-        @agent
+        @agent,
+        @activation
       )
 
     binding =
@@ -524,17 +659,37 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
         input_handle: STSInputHandle.new(command, self())
       })
 
-    tool = %{name: "echo", type: :mcp, conversation_mode: :non_blocking}
+    tool = %ToolBinding{
+      name: "echo_context",
+      type: :host,
+      action: Vxpipe.CallEngine.STSContextTool,
+      conversation_mode: :blocking
+    }
 
-    participants =
-      Map.new([@agent, "other-agent"], fn id ->
-        {id, %{kind: :agent, participant_id: id, tools: %{"echo" => tool}}}
-      end)
+    hangup = %ToolBinding{
+      name: "end_call",
+      type: :platform,
+      action: Vxpipe.CallEngine.Tool.Hangup,
+      conversation_mode: :blocking
+    }
+
+    {:ok, descriptors} = ToolDescriptors.compile(%{"echo_context" => tool, "end_call" => hangup})
+    {:ok, registry} = ToolRegistry.new(descriptors)
+
+    runtime = %SpeechToSpeechRuntime{
+      provider: {Vxpipe.Providers.MorseCode.STSSession, []},
+      provider_private: [],
+      call_id: snapshot.room_id,
+      participant_id: @agent,
+      activation_id: @activation,
+      usage_provider: nil,
+      tool_registry: registry
+    }
 
     %{
       state
       | speech_to_speech_capability: binding,
-        participant_transfer_runtime: %{plan: %{participants: participants}}
+        speech_to_speech_runtime: runtime
     }
   end
 end

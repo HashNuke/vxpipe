@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 1/20 implementation tasks complete; 0/4 checkpoints complete**.
+Status: **in progress — 3/20 implementation tasks complete; 0/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -93,6 +93,9 @@ tool associations or close an allocation, so it cannot automatically serve as a
 business-tool hold. C3 must prove the required semantics at the common boundary;
 these existing APIs alone are not evidence of parity.
 
+Remove superseded implementation paths as their replacements land; this pre-launch
+application does not need legacy compatibility branches.
+
 Use existing modules first. Extract a small shared function/module only where
 both callers need it. No second LLM/Jido decision loop, generalized workflow
 framework, new queue, catalog schema, shared cross-call MCP pool or new protocol
@@ -108,19 +111,19 @@ Each task includes its smallest project-owned failing test, passing implementati
 and relevant documentation. Keep checkpoints coherent and usable. Record commands,
 results and remaining limitations below when checking items off.
 
-### C1 — Shared descriptor resolution and tool submission (1/5)
+### C1 — Shared descriptor resolution and tool submission (3/5)
 
 - [x] Preserve the compiled private descriptors alongside provider-safe schema
   projections, including injected Call Variables bindings. Test identical selected
   names and authorization for LLM and native participants; private owner handles
   and credentials must not reach provider metadata.
-- [ ] Route native calls through the existing shared validation, binding
+- [x] Route native calls through the existing shared validation, binding
   constructors and registry submission used by the text path. Cover host,
   platform, variables and participant transfer without a parallel STS executor.
 - [ ] Remove silent `:deferred` dispatch. Prove unknown names, malformed arguments,
   denied variables, revoked permissions and unsupported operations produce bounded
   rejection before side effects, with no orphaned pending record.
-- [ ] Apply `PlatformResult` through common room authority. Prove current-time,
+- [x] Apply `PlatformResult` through common room authority. Prove current-time,
   authorized hangup, successful participant transfer and failed transfer recovery;
   stale completions cannot end or transfer a replacement source.
 - [ ] Run the same compiled-room contract cases for LLM and native participants,
@@ -211,7 +214,7 @@ of it checks off the new integration or parity tasks above.
 
 | Checkpoint | Progress | Implementation evidence |
 | --- | --- | --- |
-| C1 | 1/5 | Private registry retained separately from provider projection; 101 focused tests pass (seed 63750), clean Astra review. Dispatch remains pending. |
+| C1 | 3/5 | Private registry, shared dispatch/validation, variable permissions and scoped platform effects implemented. 112 native/LLM/transfer regressions pass (seed 286573); clean second Astra code review. Revoked/unsupported rejection and shared duplicate/partial-admission acceptance remain. |
 | C2 | 0/5 | Pending |
 | C3 | 0/5 | Pending |
 | C4 | 0/5 | Pending |
@@ -224,6 +227,19 @@ route native execution through that registry. All five root gates pass with
 5,095 tests, zero failures and 371 exclusions (seed `293285`); independent
 GPT-6 Astra xhigh source and documentation reviews found no actionable issues. See the
 [implementation labnote](../20261109-0536-shared-tool-dispatch.md).
+
+Second C1 checkpoint: native calls resolve the exact activation's retained registry
+and submit its binding directly to the common invocation workers. Platform aliases,
+public hangup results and queued effect authorization pass, as do variable read,
+update and denied selection. Existing successful/failed native transfer and LLM
+platform/transfer cases remain green. Identity and duplex mute/overlap fixtures now
+exercise real workers. Expanded regression lane: **112 tests, 0 failures**, seed
+`286573`. Obsolete direct completion/timeout handlers and unused wrappers are
+removed; two failing real-room tests proved they could prematurely settle owned
+work. Format, compilation, strict Credo and unused-dependency checks pass. The
+full umbrella run was interrupted for this change and remains an integration gate;
+full acceptance and
+C1's revoked/unsupported rejection and shared duplicate/partial-admission suite remain open.
 
 ## Design review and scope reconciliation
 

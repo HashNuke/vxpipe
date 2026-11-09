@@ -20,7 +20,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
 
   @track %{track_id: "microphone", codec: :linear16, sample_rate: 16_000, channels: 1}
 
-  setup do
+  setup context do
     original = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
 
     settings =
@@ -28,7 +28,118 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
 
     Application.put_env(:vxpipe_call_engine, CallEngine.Application, settings)
     on_exit(fn -> Application.put_env(:vxpipe_call_engine, CallEngine.Application, original) end)
-    room()
+    room(context)
+  end
+
+  @tag :shared_dispatch
+  test "a native platform alias completes through the owned invocation worker", context do
+    assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL current_time {}")
+    assert_receive {:vxpipe_event, %ToolCallStarted{name: "current_time"} = started}, 1_000
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{name: "current_time", result: %{"timezone" => "UTC"}} =
+                      completed},
+                   1_000
+
+    assert completed.tool_call_id == started.tool_call_id
+    assert completed.correlation_id == started.correlation_id
+    assert :sys.get_state(context.authority).sts_tool_calls == %{}
+  end
+
+  @tag :shared_dispatch
+  test "native host arguments are rejected before invocation or public started events", context do
+    assert :ok = SpeechToSpeech.push_text(context.capability, ~s(TOOL lifecycle {"extra":true}))
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallFailed{name: "lifecycle", reason: :invalid_arguments}},
+                   1_000
+
+    refute_received {:host_started, _, _}
+    refute_received {:vxpipe_event, %ToolCallStarted{}}
+    assert {:ok, []} = InvocationRegistry.snapshot(Tree.invocation_registry(context.capability))
+    assert :sys.get_state(context.authority).sts_tool_calls == %{}
+  end
+
+  @tag :shared_dispatch
+  test "a native platform hangup publishes its result and ends the authorized room", context do
+    authority = context.authority
+    monitor = Process.monitor(authority)
+    assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL end_call {}")
+    assert_receive {:vxpipe_event, %ToolCallStarted{name: "end_call"}}, 1_000
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{name: "end_call", result: %{"status" => "ending"}}},
+                   1_000
+
+    assert_receive {:DOWN, ^monitor, :process, ^authority, _reason}, 1_000
+  end
+
+  @tag variables: ["read", "write"]
+  @tag :shared_variables
+  test "native tools read and update only the participant's permitted variables", context do
+    assert :ok =
+             SpeechToSpeech.push_text(
+               context.capability,
+               ~s(TOOL read_variables {"sections":["intake"]})
+             )
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{name: "read_variables", result: %{"sections" => sections}}},
+                   1_000
+
+    assert sections == %{"intake" => %{"revision" => 0, "value" => %{"note" => "known"}}}
+
+    update = %{
+      "section_name" => "intake",
+      "variable_name" => "note",
+      "value" => "updated",
+      "expected_revision" => 0
+    }
+
+    assert :ok =
+             SpeechToSpeech.push_text(
+               context.capability,
+               "TOOL update_variable " <> JSON.encode!(update)
+             )
+
+    assert_receive {:vxpipe_event, %ToolCallCompleted{name: "update_variable"}}, 1_000
+
+    assert :ok =
+             SpeechToSpeech.push_text(
+               context.capability,
+               ~s(TOOL read_variables {"sections":["intake"]})
+             )
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{name: "read_variables", result: %{"sections" => updated}}},
+                   1_000
+
+    assert updated == %{"intake" => %{"revision" => 1, "value" => %{"note" => "updated"}}}
+
+    assert :ok =
+             SpeechToSpeech.push_text(
+               context.capability,
+               ~s(TOOL read_variables {"sections":["private"]})
+             )
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{name: "read_variables", result: %{"error" => _}}},
+                   1_000
+  end
+
+  @tag variables: ["read"]
+  @tag :shared_variables
+  test "native read-only participants cannot invoke the unselected variable update tool",
+       context do
+    assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL update_variable {}")
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallFailed{name: "update_variable", reason: :unauthorized}},
+                   1_000
+
+    refute_received {:vxpipe_event, %ToolCallStarted{}}
+    assert {:ok, []} = InvocationRegistry.snapshot(Tree.invocation_registry(context.capability))
+    assert :sys.get_state(context.authority).sts_tool_calls == %{}
   end
 
   test "actual room host work is invocation-owned and its result stays leased", context do
@@ -53,6 +164,32 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     assert lease.completion.outcome == {:ok, %{"retained" => true}}
     assert lease.completion.context.tool_call_id == started.tool_call_id
   end
+
+  for event <- [:vxpipe_sts_tool_executed, :vxpipe_sts_tool_timeout] do
+    @tag :obsolete_tool_events
+    test "obsolete #{event} messages cannot settle owned invocations", context do
+      {worker, started} = submit(context)
+      [{call, _pending}] = Map.to_list(:sys.get_state(context.authority).sts_tool_calls)
+      send(context.authority, obsolete_message(unquote(event), context.capability, call))
+      state = :sys.get_state(context.authority)
+      assert Map.has_key?(state.sts_tool_calls, call)
+      refute_received {:vxpipe_event, %ToolCallCompleted{}}
+      refute_received {:vxpipe_event, %ToolCallFailed{}}
+      send(worker, :finish)
+
+      assert_receive {:vxpipe_event,
+                      %ToolCallCompleted{tool_call_id: id, result: %{"retained" => true}}},
+                     1_000
+
+      assert id == started.tool_call_id
+    end
+  end
+
+  defp obsolete_message(:vxpipe_sts_tool_executed, capability, call),
+    do: {:vxpipe_sts_tool_executed, capability, call, {:ok, %{"forged" => true}}}
+
+  defp obsolete_message(:vxpipe_sts_tool_timeout, capability, call),
+    do: {:vxpipe_sts_tool_timeout, capability, call}
 
   test "ordinary provider association interruption preserves accepted work and private outcome",
        context do
@@ -200,7 +337,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     {worker, started}
   end
 
-  defp room do
+  defp room(context) do
     speech = %{provider: "morse", model: "morse", options: %{unit_duration_ms: 20}}
 
     source = %{
@@ -218,7 +355,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
         "assistant" => %{
           type: "agent",
           prompt: "Test tools.",
-          tools: %{"lifecycle" => %{type: "host", tool: "lifecycle"}},
+          tools: %{
+            "lifecycle" => %{type: "host", tool: "lifecycle"},
+            "current_time" => %{type: "platform", tool: "get_current_time"},
+            "end_call" => %{type: "platform", tool: "hangup"}
+          },
           transfers: [],
           first_message: %{mode: "wait_for_input"},
           capabilities: %{speech_to_speech: speech}
@@ -226,11 +367,48 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
       }
     }
 
+    permissions = Map.get(context, :variables, [])
+
+    source =
+      if permissions == [] do
+        source
+      else
+        source
+        |> Map.put(:call_variables, %{
+          sections: %{
+            "intake" => %{
+              schema: %{
+                "type" => "object",
+                "properties" => %{"note" => %{"type" => "string"}},
+                "additionalProperties" => false
+              }
+            },
+            "private" => %{
+              schema: %{
+                "type" => "object",
+                "properties" => %{"note" => %{"type" => "string"}},
+                "additionalProperties" => false
+              }
+            }
+          }
+        })
+        |> put_in([:participants, "assistant", :variable_permissions], %{"intake" => permissions})
+      end
+
     assert {:ok, spec} = CallSpec.new(source, resource_id: "sts-lifecycle", revision: 1)
+
+    initial =
+      if permissions == [],
+        do: %{},
+        else: %{"intake" => %{"note" => "known"}, "private" => %{"note" => "hidden"}}
 
     assert {:ok, invocation} =
              CallInvocation.new(
-               %{call_spec: %{id: "sts-lifecycle", revision: 1}, transport: %{type: "web"}},
+               %{
+                 call_spec: %{id: "sts-lifecycle", revision: 1},
+                 transport: %{type: "web"},
+                 initial_variables: initial
+               },
                tenant_id: "tenant-sts-lifecycle",
                actor_id: "actor"
              )
