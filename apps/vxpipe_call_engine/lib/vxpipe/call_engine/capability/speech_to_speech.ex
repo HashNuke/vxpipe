@@ -36,7 +36,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
       fence_output: 2,
       finish_output_stt_input: 1,
       settle_fenced_output: 2,
-      interrupt_provider: 2,
       stop_unavailable: 2,
       audio_route_permitted?: 3
     ]
@@ -120,13 +119,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
     GenServer.call(capability, :hold, @call_timeout)
   catch
     :exit, _reason -> {:error, :unavailable}
-  end
-
-  @spec hold_mode(pid()) :: :mute | :stop
-  def hold_mode(capability) when is_pid(capability) do
-    GenServer.call(capability, :hold_mode, @call_timeout)
-  catch
-    :exit, _reason -> :stop
   end
 
   @spec apply_policy(pid(), term()) :: :ok | {:error, term()}
@@ -258,11 +250,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
   @impl true
   def handle_call(:input_format, _from, state), do: {:reply, Input.format(state), state}
 
-  def handle_call(:hold_mode, _from, state) do
-    {:reply, if(state.descriptor && state.descriptor.hold == :mute, do: :mute, else: :stop),
-     state}
-  end
-
   def handle_call({:bind_input, ingress}, {owner, _tag}, state) when is_pid(ingress),
     do: Input.bind(state, ingress, owner)
 
@@ -337,7 +324,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
 
   def handle_call(:interrupt, _from, state) do
     {played_ms, state} = fence_output(state)
-    state = interrupt_tool_turns(state)
     {:reply, {:ok, played_ms}, state}
   end
 
@@ -761,10 +747,5 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech do
       true ->
         :ok
     end
-  end
-
-  defp interrupt_tool_turns(state) do
-    Enum.each(state.tool_turns, &interrupt_provider(state, &1))
-    state
   end
 end

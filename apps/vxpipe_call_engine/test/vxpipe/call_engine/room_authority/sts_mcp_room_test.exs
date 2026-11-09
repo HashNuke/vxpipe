@@ -305,6 +305,55 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
     assert length(Agent.get(context.client, & &1.invocations)) == 1
   end
 
+  for loss <- [:call, :owner] do
+    test "#{loss} loss ends all owned in-flight native MCP resources" do
+      context = scene() |> start_room()
+      observer = self()
+      Agent.update(context.client, &%{&1 | responses: [{:wait, observer, {:ok, context.result}}]})
+      assert_receive {:test_remote_mcp_open_options, key, _}, 1_000
+      owner = Tree.remote_mcp_owner(context.capability)
+      host = Tree.remote_mcp_sessions(context.capability)
+      assert {:ok, connection} = Vxpipe.MCP.Connections.lookup(key, owner: host)
+      client = Vxpipe.MCP.Connection.client(connection)
+
+      assert :ok =
+               SpeechToSpeech.push_text(
+                 context.capability,
+                 ~s(TOOL customer_lookup {"customer_id":"42"})
+               )
+
+      assert_receive {:test_remote_mcp_invocation_started, worker}, 1_000
+
+      monitors =
+        Enum.map([owner, host, client, context.capability, worker], &{&1, Process.monitor(&1)})
+
+      case unquote(loss) do
+        :call ->
+          assert :ok =
+                   CallEngine.end_call(
+                     context.plan.tenant_id,
+                     context.plan.room_id,
+                     context.room.incarnation_id
+                   )
+
+        :owner ->
+          Process.exit(owner, :kill)
+      end
+
+      for {pid, monitor} <- monitors do
+        assert_receive {:DOWN, ^monitor, :process, ^pid, _reason}, 1_000
+      end
+
+      assert {:error, :tool_failed} =
+               CallEngine.RemoteMCP.IntegrationOwner.execute(owner, "customer_lookup", %{
+                 "customer_id" => "late"
+               })
+
+      assert length(Agent.get(context.client, & &1.invocations)) == 1
+      refute_received {:vxpipe_event, %ToolCallCompleted{name: "customer_lookup"}}
+    end
+  end
+
   test "tenant catalogs and call sessions stay separate while snapshots are refreshed" do
     first = scene(tenant: "tenant-one") |> start_room()
     second = scene(tenant: "tenant-two") |> start_room()
@@ -337,12 +386,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
              Agent.get(second.client, & &1.invocations)
   end
 
-  for outcome <- [:success, :failure] do
-    test "native MCP ownership survives preparation and follows transfer #{outcome}" do
+  for outcome <- [:success, :failure], native_model <- ["morse", "morse-duplex"] do
+    @tag :interruption_delivery
+    test "#{native_model} MCP ownership survives preparation and follows transfer #{outcome}" do
       model =
         if unquote(outcome) == :success, do: "test:blocked", else: "test:blocked-unavailable"
 
-      context = scene(destination: model, native_model: "morse-duplex") |> start_room()
+      context = scene(destination: model, native_model: unquote(native_model)) |> start_room()
       owner = Tree.remote_mcp_owner(context.capability)
       host = Tree.remote_mcp_sessions(context.capability)
       owner_monitor = Process.monitor(owner)

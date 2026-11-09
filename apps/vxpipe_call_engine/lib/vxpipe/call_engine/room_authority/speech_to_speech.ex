@@ -427,17 +427,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
   def hold(%State{} = state, reason) when reason in [:transfer, :policy] do
     state = STSSourceCutover.hold(state, reason)
     capability = state.speech_to_speech_capability.pid
-    mute? = reason == :transfer and Capability.hold_mode(capability) == :mute
     hold_result = Capability.hold(capability)
 
     cond do
       ActivityControl.mode(state) in ["external", "hybrid"] ->
         stop(state)
 
-      mute? and hold_result == :ok ->
-        state
-        |> Map.update!(:speech_to_speech_capability, &Map.put(&1, :hold_mode, :mute))
-        |> retire_caller_epoch()
+      reason == :transfer and hold_result == :ok ->
+        retire_caller_epoch(state)
 
       true ->
         state |> cancel_pending_tools() |> retire_caller_epoch()

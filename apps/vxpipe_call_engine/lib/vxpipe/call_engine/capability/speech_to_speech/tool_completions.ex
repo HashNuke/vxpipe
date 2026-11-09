@@ -15,6 +15,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolCompletions do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  def redeliver(bridge, invocation_id),
+    do: GenServer.cast(bridge, {:redeliver, invocation_id})
+
   @impl true
   def init(options) do
     owner = Keyword.fetch!(options, :owner)
@@ -41,6 +44,16 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolCompletions do
     else
       _unavailable -> {:reply, {:error, :unavailable}, state}
     end
+  end
+
+  @impl true
+  def handle_cast({:redeliver, invocation_id}, state) do
+    case Map.fetch(state.leases, invocation_id) do
+      {:ok, lease} -> send(state.owner, {:vxpipe_sts_tool_completion, self(), lease})
+      :error -> :ok
+    end
+
+    {:noreply, state}
   end
 
   @impl true

@@ -573,28 +573,38 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
                     _interval, _}
   end
 
-  test "interrupting a tool turn forwards cancellation and keeps old speech fenced" do
+  @tag :interruption_delivery
+  test "interrupting speech preserves a tool-only turn for its final result" do
     {_tree, capability, _sink} = start_capability(policy: unrestricted())
-
-    assert :ok = SpeechToSpeech.push_text(capability, "TOOL echo {\"text\":\"hi\"}")
-
-    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
-                    %{
-                      event: %{
-                        kind: :tool_call,
-                        call_ref: call_ref,
-                        turn_ref: turn_ref,
-                        tool_name: "echo"
-                      }
-                    }}
-
-    assert {:ok, _played} = SpeechToSpeech.interrupt(capability)
+    assert :ok = SpeechToSpeech.push_text(capability, ~s(TOOL echo {"text":"hi"}))
 
     assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
-                    %{event: %{kind: :tool_cancelled, call_ref: ^call_ref}}}
+                    %{event: %{kind: :tool_call, call_ref: call_ref}}}
 
-    assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^turn_ref, _, _, _}
+    assert {:ok, 0} = SpeechToSpeech.interrupt(capability)
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call_ref, %{"ok" => true})
     assert {:error, :stale_request} = SpeechToSpeech.send_tool_result(capability, call_ref, %{})
+
+    refute_received {:vxpipe_sts_tool_event, ^capability, @agent,
+                     %{event: %{kind: :tool_cancelled}}}
+  end
+
+  @tag :interruption_delivery
+  test "interrupting active speech leaves a distinct tool association usable" do
+    {_tree, capability, _sink} = start_capability(policy: unrestricted())
+    assert :ok = SpeechToSpeech.push_text(capability, ~s(TOOL echo {}))
+
+    assert_receive {:vxpipe_sts_tool_event, ^capability, @agent,
+                    %{event: %{kind: :tool_call, call_ref: call}}}
+
+    push_morse(capability, "HI")
+    assert_receive {:vxpipe_sts_turn_started, ^capability, @agent, speech_turn, _}
+    assert {:ok, _played} = SpeechToSpeech.interrupt(capability)
+    assert_receive {:vxpipe_sts_interrupted, ^capability, @agent, ^speech_turn, _, _, _}
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"ok" => true})
+
+    refute_received {:vxpipe_sts_tool_event, ^capability, @agent,
+                     %{event: %{kind: :tool_cancelled}}}
   end
 
   test "owner loss ends the owned capability tree" do
@@ -703,17 +713,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeechTest do
     refute_received {:contract_tool_result, _, _}
   end
 
-  test "hold retires tool associations and fences late results after release" do
+  @tag :interruption_delivery
+  test "reversible hold preserves a tool association without reopening caller input" do
     {_tree, capability, _sink} = start_contract_capability()
     provider = Vxpipe.CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
     call = make_ref()
     assert :ok = emit_tool(provider, call, make_ref())
     assert_receive {:vxpipe_sts_tool_event, ^capability, @agent, %{event: %{kind: :tool_call}}}
     assert :ok = SpeechToSpeech.hold(capability)
-    assert :sys.get_state(capability).tool_calls == %{}
+    assert {:error, :held} = SpeechToSpeech.push_text(capability, "later input")
     assert :ok = SpeechToSpeech.release(capability, make_ref())
-    assert {:error, :stale_request} = SpeechToSpeech.send_tool_result(capability, call, %{})
-    refute_received {:contract_tool_result, _, _}
+    assert :ok = SpeechToSpeech.send_tool_result(capability, call, %{"ok" => true})
+    assert_receive {:contract_tool_result, ^call, %{"ok" => true}}
   end
 
   defp start_contract_capability(provider_options \\ []) do

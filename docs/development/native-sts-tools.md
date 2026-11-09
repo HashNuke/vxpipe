@@ -161,8 +161,12 @@ The execution budget and completion lifecycle need separate acceptance:
 - `ToolCompletions` now acknowledges through the existing registry after local
   provider acceptance or an authorized terminal effect, releasing completed-tool
   capacity. Rejected delivery terminates explicitly without replaying the business
-  operation. Unresolved or interrupted associations remain leased; their safe late
-  delivery, terminal discard and replay handling are still required for full parity.
+  operation. Common speech interruption now preserves tool-only associations, and
+  reversible transfer holds preserve same-source accepted work. Ordinary and
+  duplex Morse transfer success/failure pass. Provider cancellation retains the
+  accepted worker until its bounded outcome, then fails explicitly if its native
+  result association was lost. Unresolved authorization, terminal discard, replay
+  and origin-aware stop-hold completion remain required for full parity.
 
 Native transport acceptance does not prove remote execution or durable receipt.
 GPT-Live documents no separate success acknowledgement for `response.item.create`.

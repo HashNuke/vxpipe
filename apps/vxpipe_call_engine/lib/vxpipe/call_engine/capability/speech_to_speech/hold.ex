@@ -30,7 +30,6 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Hold do
   def hold(state) do
     state = Input.hold(state)
     state = %{state | origin_lifecycle_revision: make_ref(), input_turns: MapSet.new()}
-    state = state |> interrupt_tool_turns() |> ToolEvents.retire()
 
     case Output.retire_stale_pending(state) do
       {:ok, state} ->

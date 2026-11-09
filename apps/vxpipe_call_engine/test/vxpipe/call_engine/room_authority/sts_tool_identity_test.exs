@@ -202,9 +202,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
   for mutation <- [
         :missing_source,
         :replaced_owner,
-        :rebound_source,
-        :retired_epoch,
-        :held_source
+        :rebound_source
       ] do
     test "#{mutation} withholds completion without claiming it was consumed", context do
       call = make_ref()
@@ -359,7 +357,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
     refute_received {:vxpipe_event, _}
   end
 
-  test "cancellation retires only its original scope, including after an epoch change", context do
+  test "provider cancellation retains only its matching admitted invocation after epoch change",
+       context do
     call = make_ref()
     evidence = tool_evidence(context.state, call, 1)
     state = tool_event(context.state, context.capability, evidence)
@@ -369,9 +368,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
     assert tool_event(state, context.capability, wrong).sts_tool_calls == state.sts_tool_calls
     state = invalidate(state, :retired_epoch, context.capability)
     state = tool_event(state, context.capability, cancel)
-    assert state.sts_tool_calls == %{}
+    assert Map.fetch!(state.sts_tool_calls, call).delivery_unavailable?
     assert state.sts_tool_sequence == 2
     assert tool_event(state, context.capability, evidence) == state
+
+    assert catch_exit(complete_tool(state, context.capability, call, %{})) ==
+             :tool_result_unavailable
+
     refute_received {:vxpipe_event, _}
     refute_received {:provider_tool_result, _, _}
   end
@@ -390,18 +393,21 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolIdentityTest do
     refute_received {:vxpipe_event, _}
   end
 
-  test "room hold retires provider associations even without a provider cancellation", context do
+  test "room transfer hold keeps an accepted tool association across caller epoch retirement",
+       context do
     call = make_ref()
     state = tool_event(context.state, context.capability, tool_evidence(context.state, call, 1))
     assert_receive {:vxpipe_event, %ToolCallStarted{}}
     state = SpeechToSpeech.hold(state)
     assert_receive :sts_receiver_held
-    assert state.sts_tool_calls == %{}
+    assert Map.has_key?(state.sts_tool_calls, call)
     assert state.speech_to_speech_capability.input_epoch == nil
     assert state.sts_tool_sequence == 1
-    assert_receive {:vxpipe_event, %ToolCallCancelled{}}
-    assert complete_tool(state, context.capability, call, %{}) == state
-    refute_received {:provider_tool_result, _, _}
+    state = complete_tool(state, context.capability, call, %{"ok" => true})
+    assert state.sts_tool_calls == %{}
+    assert_receive {:provider_tool_result, ^call, %{"ok" => true}}
+    assert_receive {:vxpipe_event, %ToolCallCompleted{}}
+    refute_received {:vxpipe_event, %ToolCallCancelled{}}
   end
 
   for change <- [:denied, :regranted, :absent, :unavailable] do

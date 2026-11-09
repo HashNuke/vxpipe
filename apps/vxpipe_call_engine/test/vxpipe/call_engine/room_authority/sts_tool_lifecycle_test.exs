@@ -75,23 +75,19 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     assert leases(context) == []
   end
 
-  @tag :settlement_review
-  test "a completion with unresolved activity scope retains its association and lease", context do
+  @tag :interruption_delivery
+  test "unrelated speech activity does not strand an admitted tool completion", context do
     {worker, started} = submit(context)
-    bridge = Tree.tool_completions(context.capability)
-    :erlang.trace(bridge, true, [:send])
 
     :sys.replace_state(context.authority, fn state ->
       put_in(state.speech_to_speech_capability.activity_turn, %{turn_ref: make_ref()})
     end)
 
     send(worker, :finish)
-    assert_receive {:trace, ^bridge, :send, {:vxpipe_sts_tool_completion, ^bridge, _}, _}, 1_000
-    state = :sys.get_state(context.authority)
-    assert [lease] = leases(context)
-    assert lease.invocation_id == started.tool_call_id
-    assert map_size(state.sts_tool_calls) == 1
-    refute_received {:vxpipe_event, %ToolCallCompleted{}}
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: id}}, 1_000
+    assert id == started.tool_call_id
+    assert :sys.get_state(context.authority).sts_tool_calls == %{}
+    assert leases(context) == []
   end
 
   @tag :shared_settlement
@@ -265,24 +261,76 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
   defp obsolete_message(:vxpipe_sts_tool_timeout, capability, call),
     do: {:vxpipe_sts_tool_timeout, capability, call}
 
-  test "ordinary provider association interruption preserves accepted work and private outcome",
-       context do
+  @tag :interruption_delivery
+  test "speech interruption preserves accepted work and delivers its final result", context do
     {worker, started} = submit(context)
-    bridge = Tree.tool_completions(context.capability)
-    :erlang.trace(bridge, true, [:send])
     assert {:ok, 0} = SpeechToSpeech.interrupt(context.capability)
-    assert_receive {:vxpipe_event, %ToolCallCancelled{tool_call_id: id}}, 1_000
-    assert id == started.tool_call_id
     send(worker, :probe)
     assert_receive {:host_running, ^worker}
     send(worker, :finish)
-    assert_receive {:trace, ^bridge, :send, {:vxpipe_sts_tool_completion, ^bridge, _}, _}, 1_000
-    _ = :sys.get_state(context.authority)
-    [lease] = leases(context)
-    assert lease.invocation_id == started.tool_call_id
-    assert lease.completion.outcome == {:ok, %{"retained" => true}}
-    refute_received {:vxpipe_event, %ToolCallCompleted{}}
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: id}}, 1_000
+    assert id == started.tool_call_id
+    assert :sys.get_state(context.authority).sts_tool_calls == %{}
     assert :sys.get_state(context.capability).tool_calls == %{}
+    assert leases(context) == []
+    refute_received {:vxpipe_event, %ToolCallCancelled{}}
+    refute_received {:host_started, _, _}
+  end
+
+  @tag :provider_cancellation
+  test "provider cancellation preserves accepted work and fails explicitly if result delivery is lost",
+       context do
+    {worker, _started} = submit(context)
+    capability = context.capability
+    authority = context.authority
+    monitor = Process.monitor(authority)
+    [{_call, pending}] = Map.to_list(:sys.get_state(capability).tool_calls)
+    provider = CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    :erlang.trace(capability, true, [:send])
+    assert :ok = STSSession.interrupt(provider, pending.turn_ref)
+
+    assert_receive {:trace, ^capability, :send,
+                    {:vxpipe_sts_tool_event, ^capability, _, %{event: %{kind: :tool_cancelled}}},
+                    ^authority},
+                   1_000
+
+    send(worker, :probe)
+    assert_receive {:host_running, ^worker}
+    send(worker, :finish)
+    assert_receive {:DOWN, ^monitor, :process, ^authority, :tool_result_unavailable}, 1_000
+    refute_received {:vxpipe_event, %ToolCallCompleted{}}
+    refute_received {:host_started, _, _}
+  end
+
+  @tag :cancellation_review
+  test "provider cancellation reconciles an outcome already retained by the completion bridge",
+       context do
+    {worker, started} = submit(context)
+    capability = context.capability
+    authority = context.authority
+    bridge = Tree.tool_completions(capability)
+    :erlang.trace(bridge, true, [:send])
+    monitor = Process.monitor(authority)
+    [{_call, pending}] = Map.to_list(:sys.get_state(capability).tool_calls)
+    provider = CallEngine.Speech.Session.provider(:sys.get_state(capability).session)
+    state = :sys.get_state(authority)
+    policy = state.media_policy_authority
+    caller = state.speech_to_speech_capability.input_handle.identity.participant_id
+
+    # Remove policy presence without replacing the allocation, retaining the
+    # terminal outcome until cancellation arrives after its lease notification.
+    assert {:ok, _snapshot} = CallEngine.MediaPolicy.Authority.leave(policy, caller)
+
+    send(worker, :finish)
+    assert_receive {:trace, ^bridge, :send, {:vxpipe_sts_tool_completion, ^bridge, _}, _}, 1_000
+    assert map_size(:sys.get_state(authority).sts_tool_calls) == 1
+    assert [lease] = leases(context)
+    assert lease.invocation_id == started.tool_call_id
+
+    assert :ok = STSSession.interrupt(provider, pending.turn_ref)
+    assert_receive {:DOWN, ^monitor, :process, ^authority, :tool_result_unavailable}, 1_000
+    refute_received {:vxpipe_event, %ToolCallCompleted{}}
+    refute_received {:host_started, _, _}
   end
 
   test "five-second execution deadline kills the host worker and settles UNKNOWN", context do
@@ -328,51 +376,46 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     end
   end
 
-  test "interrupted running work remains bounded even when all provider associations retire",
+  test "interruption preserves concurrent workers and each completion frees its own capacity",
        context do
-    workers =
+    pending =
       for _ <- 1..16 do
-        {worker, _} = submit(context)
+        {worker, started} = submit(context)
         assert {:ok, 0} = SpeechToSpeech.interrupt(context.capability)
-        assert_receive {:vxpipe_event, %ToolCallCancelled{}}, 1_000
-        worker
+        {worker, started.tool_call_id}
       end
 
     assert DynamicSupervisor.count_children(Tree.invocation_supervisor(context.capability)).active ==
              16
 
-    assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL lifecycle {}")
-    assert_receive {:vxpipe_event, %ToolCallFailed{reason: :saturated}}, 1_000
-    refute_received {:host_started, _, _}
-
-    for worker <- workers do
-      monitor = Process.monitor(worker)
+    for {worker, id} <- pending do
       send(worker, :finish)
-      assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}, 1_000
-    end
-  end
-
-  test "retired provider calls do not free the 16-invocation execution budget", context do
-    bridge = Tree.tool_completions(context.capability)
-    assert is_pid(bridge)
-    :erlang.trace(bridge, true, [:send])
-
-    for _ <- 1..16 do
-      {worker, _} = submit(context)
-      assert {:ok, 0} = SpeechToSpeech.interrupt(context.capability)
-      assert_receive {:vxpipe_event, %ToolCallCancelled{}}, 1_000
-      send(worker, :finish)
-      assert_receive {:trace, ^bridge, :send, {:vxpipe_sts_tool_completion, ^bridge, _}, _}, 1_000
+      assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: ^id}}, 1_000
       _ = :sys.get_state(context.authority)
     end
 
-    assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL lifecycle {}")
-    assert_receive {:vxpipe_event, %ToolCallFailed{reason: :saturated}}, 1_000
-    refute_received {:host_started, _, _}
-    assert length(leases(context)) == 16
+    assert leases(context) == []
+    {worker, started} = submit(context)
+    send(worker, :finish)
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: id}}, 1_000
+    assert id == started.tool_call_id
+    refute_received {:vxpipe_event, %ToolCallCancelled{}}
+  end
 
-    assert DynamicSupervisor.count_children(Tree.invocation_supervisor(context.capability)).active ==
-             0
+  test "more than sixteen interrupted tools deliver and release their completion leases",
+       context do
+    for _ <- 1..20 do
+      {worker, started} = submit(context)
+      assert {:ok, 0} = SpeechToSpeech.interrupt(context.capability)
+      send(worker, :finish)
+      assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: id}}, 1_000
+      assert id == started.tool_call_id
+      _ = :sys.get_state(context.authority)
+    end
+
+    assert leases(context) == []
+    assert {:ok, []} = InvocationRegistry.snapshot(Tree.invocation_registry(context.capability))
+    refute_received {:vxpipe_event, %ToolCallCancelled{}}
   end
 
   defp leases(context) do

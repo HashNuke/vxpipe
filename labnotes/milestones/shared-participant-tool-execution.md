@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 6/20 implementation tasks complete; 0/4 checkpoints complete**.
+Status: **in progress — 7/20 implementation tasks complete; 0/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -130,7 +130,7 @@ results and remaining limitations below when checking items off.
   preserving existing host/transfer behavior and lifecycle publication. Include
   duplicate requests and partial multi-tool admission without replaying work.
 
-### C2 — Native participant-owned MCP activation (3/5)
+### C2 — Native participant-owned MCP activation (4/5)
 
 - [x] Compose the existing `IntegrationOwner` and session `DynamicSupervisor`
   under the native participant's allocation tree only when MCP tools are selected.
@@ -143,7 +143,7 @@ results and remaining limitations below when checking items off.
   tenant catalog snapshot, current authorization/credential checks and result
   normalization as LLM participants. Include aliases, stale pins and saved
   disconnect/revocation races; do not rediscover or refresh catalogs per invocation.
-- [ ] Prove separate ownership for simultaneous participants/calls and tenant
+- [x] Prove separate ownership for simultaneous participants/calls and tenant
   isolation; successful transfer retires only the source after commit, while
   destination failure leaves the source usable. Call end/owner loss fences and
   terminates all owned MCP work under the existing cleanup budget.
@@ -207,6 +207,24 @@ availability. No new hosted/provider-specific work is required to close the comm
 implementation, but a known semantic incompatibility must remain an explicit
 unmet acceptance item rather than being reported as universal support.
 
+Latest interruption checkpoint: common speech interruption no longer cancels
+unrelated tool-only turns. Reversible transfer holds preserve same-source tool
+associations; stable source/activation and policy interval checks replace transient
+speech activity/epoch equality for accepted results. Output-origin invalidation,
+queued-effect checks, dirty external/hybrid input fencing and close-for-cutover
+remain intact. Ordinary and duplex transfer success/failure now pass, together
+with explicit in-flight call/owner-loss teardown. This closes C2's lifetime task.
+
+Genuine provider cancellation retains the accepted worker until its bounded
+outcome, then terminates explicitly if delivery is impossible. The inverse race
+(completion retained before cancellation) was independently reported and reproduced;
+cancellation now asks the existing bridge to redeliver its retained lease, without
+resubmitting the business operation. C3 remains incomplete. See the
+[interruption labnote](../20261109-0759-native-tool-interruption.md). Full umbrella
+verification after the review fix passes: **5,137 tests, 0 failures, 371 excluded**,
+seed `380795`; the other four root gates and Lean pass. Final GPT-6 Astra xhigh
+source/test/documentation review reports no remaining actionable findings.
+
 Research baseline only: at `f9eefd6a`, 34 focused existing tests passed; a separate
 one-test probe reproduced platform dispatch remaining pending. The
 [research labnote](../20261109-0258-native-sts-tools.md) records this evidence. None
@@ -215,8 +233,8 @@ of it checks off the new integration or parity tasks above.
 | Checkpoint | Progress | Implementation evidence |
 | --- | --- | --- |
 | C1 | 3/5 | Private registry, shared dispatch/validation, variable permissions and scoped platform effects implemented. 112 native/LLM/transfer regressions pass (seed 286573); clean second Astra code review. Revoked/unsupported rejection and shared duplicate/partial-admission acceptance remain. |
-| C2 | 3/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime implemented. Native alias, call/tenant isolation, revocation, cancellation and duplex transfer checks pass. Full saved-connection races and ordinary interrupted-transfer cleanup remain open. |
-| C3 | 0/5 | Accepted native results now acknowledge existing registry leases, allowing more than 16 sequential completions. Rejected delivery terminates explicitly. Unresolved/interrupted scope remains retained; final discard, replay and conversation parity acceptance are still open. |
+| C2 | 4/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime implemented. Native aliases, call/tenant isolation, in-flight call/owner-loss cleanup and ordinary/duplex transfer success/failure pass. Full saved-connection races remain open. |
+| C3 | 0/5 | Accepted native results acknowledge existing leases, including more than 16 interrupted completions. Speech interruption and reversible transfer hold preserve accepted work. Lost provider associations terminate explicitly after the bounded outcome. Origin-aware stop-hold delivery, final discard, replay and conversation parity acceptance remain open. |
 | C4 | 0/5 | Pending |
 
 First C1 checkpoint: native startup retains the existing AgentRuntime `ToolRegistry`
@@ -257,9 +275,11 @@ failures, 8 excluded**, seed `961998`. The native room cases cover aliases,
 notification ordering, cancellation, exact ownership, tenant isolation, credential
 revocation and duplex transfer. The same transfer experiment with ordinary Morse
 reproduced the existing interruption/completion-association gap: source retirement
-or failed-tool delivery can be lost. That remains C3 work and leaves C2's full
-transfer-lifetime task unchecked. The saved-connection end-to-end race task also
-remains open; direct credential-lease revocation alone does not complete it.
+or failed-tool delivery could be lost at that checkpoint. The subsequent
+interruption checkpoint above fixes ordinary transfer lifetime and closes C2's
+lifetime task; the broader C3 completion contract remains open. The saved-connection
+end-to-end race task also remains open; direct credential-lease revocation alone
+does not complete it.
 See the [ownership checkpoint labnote](../20261109-0621-shared-native-mcp.md).
 All five root checks pass for this checkpoint: **5,129 tests, 0 failures, 371
 excluded**, seed `401568`, plus formatting, compilation, strict Credo and unused

@@ -642,26 +642,34 @@ events with channel sequence, exact input identity, input epoch and source audio
 interval. Legacy unqualified tool-owner tuples cannot admit or cancel work.
 Admission requires the current agent, exact source, open input epoch and current
 audio permission; both boundaries recheck association evidence before delivering
-a result. Source loss, replacement, hold, epoch retirement or a revoked/regranted
-audio interval suppresses late provider delivery and public settlement.
+a result. Source loss, replacement or a revoked/regranted audio interval suppresses
+late provider delivery and public settlement. Accepted tool work is independent
+of caller input epochs and transient speech activity. A successful reversible
+transfer hold preserves its association while retiring caller input; close-for-
+cutover and unsafe external/hybrid holds still retire the allocation.
 
-Cancellation retains its original admission scope: it may retire that matching
-association after epoch change, but cannot publish under the new source/epoch.
-Hold retires provider associations even when the provider emits no cancellation.
+Engine-requested speech interruption fences active audio without explicitly
+interrupting unrelated tool-only turns. Genuine provider cancellation invalidates
+the matching transport association, but keeps the accepted invocation until its
+bounded outcome. If no valid result path remains, completion terminates the room
+explicitly without repeating the business operation. A committed transfer instead
+retires the source through its authorized terminal effect. Cancellation evidence
+must match its original admission scope even if the caller epoch has changed.
+
 A room-owned scalar sequence watermark rejects repeated or delayed forwarded
-envelopes after settlement; capability replacement resets the watermark and
-associations. This avoids an unbounded set of completed call IDs. It does not
-deduplicate upstream events that adapters relabel with fresh semantic sequences,
-or establish safety for old evidence first observed after a new input epoch.
-Those upstream cases remain explicit acceptance gates.
+envelopes; capability replacement resets the watermark and associations. This
+does not deduplicate upstream events relabelled with fresh semantic sequences.
+Those replay cases remain an acceptance gate.
 
-The current host execution path uses the existing supervised Invocation registry
-and workers beneath the exact STS capability tree. Its 16-record budget includes
-running work and retained terminal outcomes after provider associations retire.
-Ordinary interruption leaves accepted work running; capability/tree/room-owner
-loss ends local workers. The five-second execution deadline reports unknown,
-not proof of remote rollback. An engine-private bridge retains completion leases;
-public delivery or an ordinary provider result does not consume them.
+The current execution path uses the shared supervised invocation registry and
+workers beneath the exact STS capability tree. Its 16-record budget includes
+running work and retained terminal outcomes. Capability/tree/room-owner loss ends
+local workers. The five-second execution deadline reports unknown, not proof of
+remote rollback; application-configured native budgets remain milestone work.
+The private completion bridge acknowledges its lease after local provider
+acceptance or an authorized terminal transfer. This releases completed capacity;
+20 sequential normal and interrupted tools are covered by compiled-room tests.
+Provider rejection fails explicitly rather than falsely publishing completion.
 
 The original absolute submission deadline applies before and after preparation
 and again when the worker handles begin. A timed-out submission cannot become a
@@ -679,10 +687,14 @@ Native completion leases need settlement at a defined local acceptance or
 terminal discard boundary; merely sending a message is not acceptance, and speech
 interruption alone does not authorize discarding an outcome for an active
 participant. Use existing acknowledge/release operations and bounded consumed-ID
-retention. The current bridge does not yet settle these leases, so its retained
-completions still occupy capacity for the allocation lifetime. That is an open
-implementation gap, not a requirement to add text-model commit receipts. Earlier
-checkpoint evidence remains in [STS tool lifecycle](../labnotes/milestones/sts-tool-lifecycle.md).
+retention. Normal accepted delivery and terminal transfer now settle leases;
+unresolved authorization, terminal discard, replay and conversation coordination
+remain open. An origin-aware session whose ordinary stop-hold retires its response
+context still needs a valid semantic completion path. Speech-origin validation
+and context retirement remain strict: accepting an old tool never authorizes old
+audio. Ordinary and duplex Morse transfer tests do not prove all such adapter
+semantics. Earlier checkpoint evidence remains in
+[STS tool lifecycle](../labnotes/milestones/sts-tool-lifecycle.md).
 
 Provider cancellation retires the provider call/speech association; ordinary
 speech interruption does not authorize cancellation of an already-submitted

@@ -2,6 +2,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ToolEvents do
   @moduledoc "Ordered admission and retirement of source-qualified STS tool evidence."
 
   alias Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.{Evidence, Tools}
+  alias Vxpipe.CallEngine.Capability.SpeechToSpeech.{ToolCompletions, Tree}
   alias Vxpipe.CallEngine.Speech.Event
 
   def handle(state, capability, agent, evidence),
@@ -58,25 +59,29 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ToolEvents do
   defp apply_event(
          state,
          capability,
-         agent,
+         _agent,
          %{event: %Event{kind: :tool_cancelled, call_ref: call, sequence: sequence}} = evidence,
-         policy
+         _policy
        )
        when is_reference(call) do
-    cancel_matching(state, capability, agent, call, sequence, evidence, policy)
-  end
-
-  defp apply_event(state, _capability, _agent, _evidence, _policy), do: state
-
-  defp cancel_matching(state, capability, agent, call, sequence, evidence, policy) do
     case Map.get(state.sts_tool_calls, call) do
-      %{evidence: admitted} ->
+      %{evidence: admitted} = pending ->
         if admitted == scope(evidence) do
-          state = %{state | sts_tool_sequence: sequence}
+          # The transport association is lost, but the accepted operation still
+          # owns its bounded worker and outcome. Completion must fail explicitly
+          # if there is no valid result path; never resubmit business work.
+          ToolCompletions.redeliver(Tree.tool_completions(capability), pending.tool_call_id)
 
-          if Evidence.tool_scope_current?(state, evidence, policy),
-            do: Tools.handle_tool_cancelled(state, capability, agent, call),
-            else: %{state | sts_tool_calls: Map.delete(state.sts_tool_calls, call)}
+          %{
+            state
+            | sts_tool_sequence: sequence,
+              sts_tool_calls:
+                Map.put(
+                  state.sts_tool_calls,
+                  call,
+                  Map.put(pending, :delivery_unavailable?, true)
+                )
+          }
         else
           state
         end
@@ -85,6 +90,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.ToolEvents do
         state
     end
   end
+
+  defp apply_event(state, _capability, _agent, _evidence, _policy), do: state
 
   defp scope(evidence), do: Map.take(evidence, [:identity, :epoch, :audio_interval])
 end

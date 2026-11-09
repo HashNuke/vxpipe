@@ -52,14 +52,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
   def current?(state, call) do
     case Map.fetch(state.tool_calls, call) do
       {:ok, pending} ->
-        if state.descriptor.hold == :mute do
-          Output.audio_route_permitted?(state, state.human_id, state.agent_id) and
-            Map.delete(pending.evidence, :epoch) == Map.delete(evidence(state), :epoch) and
-            ResponseOrigins.current_tool_context?(state, pending.response_context)
-        else
-          permitted?(state) and pending.evidence == evidence(state) and
-            origin_current?(state, pending.response_context)
-        end
+        Output.audio_route_permitted?(state, state.human_id, state.agent_id) and
+          Map.delete(pending.evidence, :epoch) == Map.delete(evidence(state), :epoch) and
+          pending_origin_current?(state, pending.response_context)
 
       :error ->
         false
@@ -85,6 +80,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.ToolEvents do
 
   defp permitted?(state),
     do: not state.held? and Output.audio_route_permitted?(state, state.human_id, state.agent_id)
+
+  defp pending_origin_current?(%{descriptor: %{response_start?: false}}, _context), do: true
+
+  defp pending_origin_current?(state, context),
+    do: ResponseOrigins.current_tool_context?(state, context)
 
   defp origin_current?(%{descriptor: %{response_start?: false}}, _context), do: true
 

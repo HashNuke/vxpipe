@@ -264,6 +264,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
     %{state | sts_tool_calls: Map.delete(state.sts_tool_calls, call_ref)}
   end
 
+  defp settle_executed_tool(
+         _state,
+         _capability,
+         %{delivery_unavailable?: true},
+         _call_ref,
+         _outcome
+       ),
+       do: exit(:tool_result_unavailable)
+
   defp settle_executed_tool(state, capability, pending, call_ref, outcome) do
     case pending_connection(state, pending) do
       {:ok, connection} ->
@@ -317,7 +326,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
 
   @doc false
   def platform_effect_current?(state, capability, scope) do
-    current?(state, capability) and match?({:ok, _connection}, pending_connection(state, scope))
+    current?(state, capability) and pending_source_current?(state, scope) and
+      permitted_connection(state) != nil and
+      Evidence.tool_scope_current?(state, scope.evidence)
   end
 
   defp queue_platform_effect(
@@ -433,7 +444,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
     end
   end
 
-  defp pending_source_current?(%{speech_to_speech_capability: %{hold_mode: :mute} = current}, %{
+  defp pending_source_current?(%{speech_to_speech_capability: current}, %{
          source: source
        }) do
     Map.take(source, [
@@ -454,21 +465,10 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Tools do
       ])
   end
 
-  defp pending_source_current?(state, pending),
-    do: pending.source == state.speech_to_speech_capability
-
-  defp pending_source_connection(%{speech_to_speech_capability: %{hold_mode: :mute}} = state),
-    do: agent_connection(state)
-
-  defp pending_source_connection(state), do: permitted_connection(state)
-
-  defp pending_policy_current?(%{speech_to_speech_capability: %{hold_mode: :mute}} = state, %{
-         evidence: evidence
-       }),
-       do: Evidence.pending_tool_scope_current?(state, evidence)
+  defp pending_source_connection(state), do: agent_connection(state)
 
   defp pending_policy_current?(state, %{evidence: evidence}),
-    do: Evidence.tool_scope_current?(state, evidence)
+    do: Evidence.pending_tool_scope_current?(state, evidence)
 
   defp pending_policy_current?(_state, _pending), do: true
 

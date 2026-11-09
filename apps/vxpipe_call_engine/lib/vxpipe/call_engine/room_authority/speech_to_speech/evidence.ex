@@ -46,7 +46,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech.Evidence do
 
   def tool_scope_current?(_state, _evidence, _policy), do: false
 
-  # A tool already admitted by the room can finish across a mute hold. Its
+  # A tool already admitted by the room can finish across a reversible hold. Its
   # original input epoch is retired, while source identity and policy still
   # have to match the currently bound caller.
   def pending_tool_scope_current?(state, evidence) do
