@@ -47,8 +47,18 @@ result. Local result acceptance retires transport-turn tracking; the pending
 business hold ends only after the existing registry completion lease is
 acknowledged. An undeliverable rejection terminates explicitly instead of leaving
 a provisional hold with no invocation to resolve it. Broader native completion,
-replay and timeout acceptance remains tracked in the
+replay and conformance acceptance remains tracked in the
 [shared participant milestone](../labnotes/milestones/shared-participant-tool-execution.md).
+
+Both participant paths snapshot the existing application `agent_runtime` execution
+settings through `Tool.InvocationConfig`: `tool_invocation_timeout_ms`,
+`maximum_tool_invocations`, `maximum_completed_requests` (consumed-ID retention),
+and `maximum_tool_result_bytes`. Defaults are 30 seconds, four concurrent workers,
+32 consumed IDs and 16,384 result bytes. A participant with transfer selected gets
+at least its transfer-attempt deadline plus one second. MCP's own operation bound
+can shorten that budget; an uncertain expiry never automatically retries the
+business operation. Native transport association and message bounds remain
+separate safety limits.
 
 There is no inline execution alternative behind this setting. `conversation_mode` changes
 only Call Engine conversation admission after submission; it does not change how or where the

@@ -1,6 +1,6 @@
 # Shared tool execution for LLM and speech-to-speech participants
 
-Status: **in progress — 8/20 implementation tasks complete; 0/4 checkpoints complete**.
+Status: **in progress — 9/20 implementation tasks complete; 0/4 checkpoints complete**.
 Requested 2026-11-09. This document is the progress owner for shared native STS
 tool/MCP integration. Writing or reviewing it does not implement the feature.
 
@@ -151,7 +151,7 @@ results and remaining limitations below when checking items off.
   Reuse controlled MCP fixtures to complete a native room round trip without
   borrowing another call's session or adding maintenance work to audio processing.
 
-### C3 — Common conversation policy and completion lifecycle (1/5)
+### C3 — Common conversation policy and completion lifecycle (2/5)
 
 - [x] Enforce both conversation modes in common engine code with cross-path tests:
   blocking holds later business input until outcome consumption, non-blocking
@@ -167,7 +167,7 @@ results and remaining limitations below when checking items off.
   only on the documented local acceptance or terminal discard boundary. Keep
   consumed-ID retention bounded and prove more than 16 sequential completed tools
   work while concurrent saturation and duplicate protection remain effective.
-- [ ] Replace the native hardcoded five-second execution budget with shared
+- [x] Replace the native hardcoded five-second execution budget with shared
   application-configured invocation bounds, respecting operation and transfer
   deadlines. Prove a legitimate slower MCP/transfer operation, expiry as `unknown`
   where appropriate, cleanup and no automatic side-effect retry.
@@ -199,6 +199,23 @@ results and remaining limitations below when checking items off.
   implementation checkpoints under the user's standing instruction.
 
 ## Acceptance and evidence
+
+Shared execution-bounds checkpoint: both participant paths project the existing
+application settings through `Tool.InvocationConfig`. Native startup and recovery
+retain those settings for the same registry/supervisor used by text activations;
+transfer keeps its operation deadline plus one second. Configured short expiry
+reports `unknown`, ends the worker and consumes the lease without retry. Configured
+capacity and result bounds pass. A gated MCP call completes normally after 5.1
+seconds from exactly one business submission; transfer succeeds with the preserved
+31-second budget despite a configured 100 ms ordinary tool timeout.
+
+The five behavior cases were reproduced before implementation. Focused regression:
+133 tests, zero failures (seed `26644`). Complete Call Engine, AgentRuntime and
+Console suites: **3,039 tests, 0 failures, 224 excluded** (seed `628682`). Formatting,
+compilation, strict Credo, unused dependencies and Lean pass. Independent Astra
+xhigh source/test/documentation review is clean. This closes C3 bounds only (9/20);
+the final full umbrella gate remains part of C4. See the
+[bounds labnote](../20261109-0911-shared-tool-bounds.md).
 
 Shared admission checkpoint: LLM and native participants now use the same
 conversation-mode reducer. Ordinary and duplex native rooms prove blocking input
@@ -256,7 +273,7 @@ of it checks off the new integration or parity tasks above.
 | --- | --- | --- |
 | C1 | 3/5 | Private registry, shared dispatch/validation, variable permissions and scoped platform effects implemented. 112 native/LLM/transfer regressions pass (seed 286573); clean second Astra code review. Revoked/unsupported rejection and shared duplicate/partial-admission acceptance remain. |
 | C2 | 4/5 | Shared owner/session construction, exact-PID binding, bounded readiness and independent catalog lifetime implemented. Native aliases, call/tenant isolation, in-flight call/owner-loss cleanup and ordinary/duplex transfer success/failure pass. Full saved-connection races remain open. |
-| C3 | 1/5 | Shared blocking/nonblocking admission, provisional hold, consumption-qualified release and PCM/activity discard are implemented and reviewed. Accepted native results acknowledge existing leases, including more than 16 interrupted completions. Speech interruption and reversible transfer hold preserve accepted work. Lost provider associations terminate explicitly after the bounded outcome. Origin-aware stop-hold delivery, final discard, replay, shared budgets and full race acceptance remain open. |
+| C3 | 2/5 | Shared conversation admission and application-configured execution bounds are implemented and reviewed; prolonged MCP execution, transfer budgets, short expiry and bounded results pass. Accepted native results acknowledge existing leases, including more than 16 interrupted completions. Speech interruption and reversible transfer hold preserve accepted work. Lost provider associations terminate explicitly after the bounded outcome. Origin-aware stop-hold delivery, final discard, replay, usage observations and full race acceptance remain open. |
 | C4 | 0/5 | Pending |
 
 First C1 checkpoint: native startup retains the existing AgentRuntime `ToolRegistry`

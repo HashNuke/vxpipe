@@ -7,6 +7,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
   alias Vxpipe.CallEngine.PlanStartup.AgentModel
   alias Vxpipe.CallEngine.RemoteMCP.{CatalogStore, IntegrationCatalog}
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
+  alias Vxpipe.CallEngine.Tool.InvocationConfig
   alias Vxpipe.CallEngine.Usage.ProviderContext
   alias Vxpipe.CallEngine.{Error, ResolvedCallPlan}
 
@@ -106,23 +107,20 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
       activation_id: receiver.activation_id,
       agent_participant_id: receiver.participant_id,
       call_id: plan.call_id,
-      tool_invocation_timeout_ms: tool_invocation_timeout(plan, receiver, settings),
-      maximum_tool_invocations: Keyword.fetch!(settings, :maximum_tool_invocations),
       owner: owner,
       system_prompt: receiver.prompt,
       variable_binding: variable_binding,
-      maximum_completed_requests: Keyword.fetch!(settings, :maximum_completed_requests),
       maximum_model_context_bytes:
         Keyword.get(settings, :maximum_model_context_bytes, 256 * 1_024),
       model_context_timeout_ms: Keyword.get(settings, :model_context_timeout_ms, 1_000),
       context_compaction: Keyword.get(settings, :context_compaction, false),
       maximum_output_bytes: Keyword.fetch!(settings, :maximum_output_bytes),
       maximum_pending_requests: Keyword.fetch!(settings, :maximum_pending_requests),
-      maximum_tool_result_bytes: Keyword.fetch!(settings, :maximum_tool_result_bytes),
       request_timeout_ms: Keyword.fetch!(settings, :request_timeout_ms)
     ]
 
     base
+    |> Keyword.merge(InvocationConfig.for_participant(plan, receiver, settings))
     |> put_optional(
       :model_context_source,
       ModelContextSource.new(variable_binding, Keyword.get(options, :transfer_reason))
@@ -147,23 +145,6 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
       deadline when is_integer(deadline) -> {self(), deadline}
       _none -> nil
     end
-  end
-
-  defp tool_invocation_timeout(plan, receiver, settings) do
-    configured = Keyword.fetch!(settings, :tool_invocation_timeout_ms)
-
-    if transfer_tool?(receiver) do
-      max(configured, plan.transfer_policy.attempt_timeout_ms + 1_000)
-    else
-      configured
-    end
-  end
-
-  defp transfer_tool?(receiver) do
-    Enum.any?(receiver.tools, fn
-      {_name, %ToolBinding{type: :participant_transfer}} -> true
-      _binding -> false
-    end)
   end
 
   def mcp_integrations(receiver, options) do

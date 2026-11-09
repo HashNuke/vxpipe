@@ -731,6 +731,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpeechToSpeech do
         owner: self(),
         activation_id: runtime.activation_id,
         remote_mcp: runtime.remote_mcp,
+        tool_invocation_options: runtime.tool_invocation_options,
         mcp_initialization_deadline: deadline,
         room_history_barrier?: true,
         agent_id: runtime.participant_id,

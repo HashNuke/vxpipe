@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
 
   @track %{track_id: "microphone", codec: :linear16, sample_rate: 16_000, channels: 1}
 
-  setup do
+  setup context do
     original = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
 
     settings =
@@ -23,6 +23,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
         providers: %{STSSession => [enabled: true], DuplexSTSSession => [enabled: true]}
       )
       |> Keyword.update!(:agent_runtime, fn settings ->
+        settings = Keyword.merge(settings, Map.get(context, :tool_limits, []))
+
         Keyword.put(
           settings,
           :fixture,
@@ -67,6 +69,50 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
 
     assert :ok = CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
     assert_receive {:DOWN, ^monitor, :process, ^session, _reason}, 1_000
+  end
+
+  @tag :shared_bounds
+  test "a legitimate MCP invocation can finish beyond the former five-second native limit" do
+    context = scene() |> start_room()
+    result = context.result
+    observer = self()
+    Agent.update(context.client, &%{&1 | responses: [{:wait, observer, {:ok, result}}]})
+
+    assert :ok =
+             SpeechToSpeech.push_text(
+               context.capability,
+               ~s(TOOL customer_lookup {"customer_id":"42"})
+             )
+
+    assert_receive {:test_remote_mcp_invocation_started, worker}, 1_000
+    monitor = Process.monitor(worker)
+    Process.send_after(worker, :release_test_remote_mcp, 5_100)
+
+    assert_receive {:vxpipe_event, %ToolCallCompleted{name: "customer_lookup", result: ^result}},
+                   7_000
+
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}, 1_000
+    _ = :sys.get_state(context.authority)
+    assert [_single_attempt] = Agent.get(context.client, & &1.invocations)
+  end
+
+  @tag :shared_bounds
+  @tag tool_limits: [tool_invocation_timeout_ms: 100]
+  test "native transfer keeps its operation budget when the configured tool timeout is shorter" do
+    context = scene(destination: "test:blocked") |> start_room()
+    registry = Tree.invocation_registry(context.capability)
+    timeout = :sys.get_state(registry).invocation_timeout_ms
+    assert timeout == context.plan.transfer_policy.attempt_timeout_ms + 1_000
+
+    assert :ok =
+             SpeechToSpeech.push_text(
+               context.capability,
+               ~s(TOOL transfer {"destination":"billing"})
+             )
+
+    assert_receive {:test_agent_runtime_model_preparing, preparer}, 1_000
+    send(preparer, :release_test_agent_runtime_model)
+    assert_receive {:vxpipe_event, %ToolCallCompleted{name: "transfer"}}, 2_000
   end
 
   @tag :mcp_readiness

@@ -127,6 +127,7 @@ defmodule Vxpipe.CallEngine.RoomCapabilitySupervisor do
           Keyword.take(options, [
             :activation_id,
             :remote_mcp,
+            :tool_invocation_options,
             :mcp_initialization_deadline,
             :human_id,
             :input_required?,

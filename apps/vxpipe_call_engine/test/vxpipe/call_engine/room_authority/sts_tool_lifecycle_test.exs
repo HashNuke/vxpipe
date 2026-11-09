@@ -24,9 +24,11 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     original = Application.fetch_env!(:vxpipe_call_engine, CallEngine.Application)
 
     settings =
-      Keyword.put(original, :speech_to_speech,
+      original
+      |> Keyword.put(:speech_to_speech,
         providers: %{STSSession => [enabled: true], DuplexSTSSession => [enabled: true]}
       )
+      |> Keyword.update!(:agent_runtime, &Keyword.merge(&1, Map.get(context, :tool_limits, [])))
 
     Application.put_env(:vxpipe_call_engine, CallEngine.Application, settings)
     on_exit(fn -> Application.put_env(:vxpipe_call_engine, CallEngine.Application, original) end)
@@ -521,11 +523,51 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     refute_received {:host_started, _, _}
   end
 
-  test "five-second execution deadline kills the host worker and settles UNKNOWN", context do
+  @tag :shared_bounds
+  @tag tool_limits: [tool_invocation_timeout_ms: 100]
+  test "configured execution deadline kills the host worker and settles UNKNOWN", context do
     {worker, _} = submit(context)
     monitor = Process.monitor(worker)
-    assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 6_000
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 1_000
     assert_receive {:vxpipe_event, %ToolCallFailed{reason: :unknown}}, 1_000
+    _ = :sys.get_state(context.authority)
+    assert leases(context) == []
+    assert {:ok, []} = InvocationRegistry.snapshot(Tree.invocation_registry(context.capability))
+    refute_received {:host_started, _, _}
+  end
+
+  @tag :shared_bounds
+  @tag conversation_mode: "non_blocking", tool_limits: [maximum_tool_invocations: 2]
+  test "native admission respects configured worker capacity and recovers after consumption",
+       context do
+    {first, _} = submit(context)
+    {second, _} = submit(context)
+    assert :ok = SpeechToSpeech.push_text(context.capability, "TOOL lifecycle {}")
+    assert_receive {:vxpipe_event, %ToolCallStarted{tool_call_id: rejected}}, 1_000
+
+    assert_receive {:vxpipe_event, %ToolCallFailed{tool_call_id: ^rejected, reason: :saturated}},
+                   1_000
+
+    _ = :sys.get_state(context.authority)
+    refute_received {:host_started, _, _}
+    send(first, :finish)
+    assert_receive {:vxpipe_event, %ToolCallCompleted{name: "lifecycle"}}, 1_000
+    _ = :sys.get_state(context.authority)
+    {third, _} = submit(context)
+    send(second, :finish)
+    send(third, :finish)
+    assert_receive {:vxpipe_event, %ToolCallCompleted{name: "lifecycle"}}, 1_000
+    assert_receive {:vxpipe_event, %ToolCallCompleted{name: "lifecycle"}}, 1_000
+    _ = :sys.get_state(context.authority)
+  end
+
+  @tag :shared_bounds
+  @tag tool_limits: [maximum_tool_result_bytes: 128]
+  test "native outcomes use the configured common result limit", context do
+    {worker, _} = submit(context)
+    send(worker, {:finish, %{"payload" => String.duplicate("x", 256)}})
+    assert_receive {:vxpipe_event, %ToolCallFailed{reason: :invalid_result}}, 1_000
+    refute_received {:vxpipe_event, %ToolCallCompleted{}}
     _ = :sys.get_state(context.authority)
     assert leases(context) == []
     assert {:ok, []} = InvocationRegistry.snapshot(Tree.invocation_registry(context.capability))
@@ -564,7 +606,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSToolLifecycleTest do
     end
   end
 
-  @tag conversation_mode: "non_blocking"
+  @tag conversation_mode: "non_blocking", tool_limits: [maximum_tool_invocations: 16]
   test "interruption preserves concurrent workers and each completion frees its own capacity",
        context do
     pending =

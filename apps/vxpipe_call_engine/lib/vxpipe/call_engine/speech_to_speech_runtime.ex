@@ -19,6 +19,7 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
   defstruct @enforce_keys ++
               [
                 tool_registry: nil,
+                tool_invocation_options: nil,
                 remote_mcp: nil,
                 output_speech_to_text: nil,
                 output_speech_to_text_private: []
@@ -31,6 +32,7 @@ defmodule Vxpipe.CallEngine.SpeechToSpeechRuntime do
           participant_id: String.t(),
           activation_id: String.t() | nil,
           tool_registry: nil | Vxpipe.AgentRuntime.ToolRegistry.t(),
+          tool_invocation_options: nil | keyword(),
           remote_mcp: nil | keyword(),
           usage_provider: ProviderContext.t(),
           output_speech_to_text: nil | {module(), keyword()},

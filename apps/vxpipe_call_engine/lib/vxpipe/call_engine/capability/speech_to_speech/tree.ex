@@ -8,7 +8,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
   alias Vxpipe.CallEngine.Id
   alias Vxpipe.CallEngine.RemoteMCP.Activation, as: RemoteActivation
   alias Vxpipe.CallEngine.Speech.{CapabilityTree, PrivateInit}
-  alias Vxpipe.CallEngine.Tool.{InvocationRegistry, InvocationSupervisor}
+  alias Vxpipe.CallEngine.Tool.{InvocationConfig, InvocationRegistry, InvocationSupervisor}
 
   def start_link(options), do: Supervisor.start_link(__MODULE__, options)
 
@@ -132,9 +132,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
     supervisor = address(self(), :invocation_supervisor)
     registry = address(self(), :invocation_registry)
     completions = address(self(), :tool_completions)
+    limits = Keyword.get(options, :tool_invocation_options) || InvocationConfig.defaults()
 
     [
-      {InvocationSupervisor, activation_id: activation, name: supervisor, maximum_children: 16},
+      {InvocationSupervisor,
+       activation_id: activation,
+       name: supervisor,
+       maximum_children: Keyword.fetch!(limits, :maximum_tool_invocations)},
       {ToolCompletions,
        name: completions,
        registry: registry,
@@ -145,10 +149,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToSpeech.Tree do
        name: registry,
        invocation_supervisor: supervisor,
        completion_target: completions,
-       maximum_invocations: 16,
-       maximum_consumed_invocations: 16,
-       invocation_timeout_ms: 5_000,
-       maximum_result_bytes: 65_536}
+       maximum_invocations: Keyword.fetch!(limits, :maximum_tool_invocations),
+       maximum_consumed_invocations: Keyword.fetch!(limits, :maximum_completed_requests),
+       invocation_timeout_ms: Keyword.fetch!(limits, :tool_invocation_timeout_ms),
+       maximum_result_bytes: Keyword.fetch!(limits, :maximum_tool_result_bytes)}
     ]
     |> Enum.map(&Supervisor.child_spec(&1, restart: :temporary, significant: true))
   end

@@ -14,6 +14,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
   alias Vxpipe.CallEngine.OpeningAudio.Settings, as: OpeningAudioSettings
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.Tool.PlatformCatalog
+  alias Vxpipe.CallEngine.Tool.InvocationConfig
   alias Vxpipe.CallEngine.Usage.ProviderContext
 
   alias Vxpipe.CallEngine.{
@@ -518,6 +519,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         {:ok, nil}
 
       {:ok, {provider_module, _provider_config} = provider, settings} ->
+        tool_settings = Keyword.get_lazy(options, :agent_runtime, &InvocationConfig.defaults/0)
+
         with {:ok, integrations} <- AgentActivationOptions.mcp_integrations(participant, options),
              {:ok, activation, tool_registry} <-
                SpeechToSpeechActivation.resolve(plan, participant, options),
@@ -538,6 +541,8 @@ defmodule Vxpipe.CallEngine.PlanStartup do
              participant_id: participant.participant_id,
              activation_id: participant.activation_id,
              tool_registry: tool_registry,
+             tool_invocation_options:
+               InvocationConfig.for_participant(plan, participant, tool_settings),
              remote_mcp: native_remote_mcp(participant, integrations, options),
              provider: runtime_provider,
              provider_private: provider_private,
