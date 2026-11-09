@@ -3,6 +3,13 @@
 Research date: 2026-11-09. Code inspected at `f9eefd6a`.
 Status: researched proposal; the missing behavior below is not implemented.
 
+Planning amendment, 2026-11-09: the user's follow-up requires common internal
+implementation and behavior parity with LLM participants, including conversation
+modes. The [shared participant tool milestone](../../labnotes/milestones/shared-participant-tool-execution.md)
+now owns implementation tasks and progress. Provider-specific findings below are
+protocol evidence; adapter extensions and new per-model policy tables are outside
+that milestone.
+
 ## Conclusion
 
 Provider-native speech sessions can use Vxpipe platform tools and connected MCP
@@ -12,9 +19,9 @@ tool descriptors, tenant catalog snapshots, and participant-owned MCP sessions.
 The work is to connect these components to the native STS activation and complete
 its result settlement.
 
-This refines [Package 1 of the existing STS completion plan](../../labnotes/milestones/agent-sts-completion-plan.md#package-1-sts-tool-bindings).
-Use that package and its D4 conversation contract when implementing. This research
-does not complete that package or reopen the completed
+The new milestone takes over [Package 1 of the existing STS completion plan](../../labnotes/milestones/agent-sts-completion-plan.md#package-1-sts-tool-bindings)
+under the user's common-code/parity direction, retaining D4's single native result
+constraint. This research does not complete that work or reopen the completed
 [participant MCP ownership milestone](../../labnotes/milestones/participant-owned-mcp-sessions.md).
 
 ## What works and what is missing
@@ -27,7 +34,7 @@ does not complete that package or reopen the completed
 | Platform `get_current_time` and `hangup` | Descriptors can be advertised, but STS dispatch returns `:deferred`. | Execute bindings and apply authorized platform effects. |
 | Call-variable tools | Descriptor compilation injects them, but room lookup searches the original participant tool map. | Retain and use the compiled private binding map. |
 | Connected MCP tools | STS descriptor compilation has no remote owner and rejects MCP bindings. The STS tree has no MCP owner/session supervisor. | Add the existing owned session components and bind descriptors to the exact owner. |
-| Non-blocking/background tools | General native execution and model-specific late delivery are incomplete. | Apply D4 admission restrictions; add native asynchronous support separately where implemented and verified. |
+| Non-blocking/background tools | General native execution and late delivery are incomplete. | Implement common conversation policy and prove both modes under the new parity milestone; report unsupported semantic operations explicitly. |
 
 The startup gap is in
 [SpeechToSpeechActivation](../../apps/vxpipe_call_engine/lib/vxpipe/call_engine/plan_startup/speech_to_speech_activation.ex):
@@ -126,9 +133,11 @@ audio path. No new cache tables, job system or cross-call session pool is needed
 D4 already selects one final native result per call. Do not introduce the text
 agent's interim `running` response/private continuation protocol into STS.
 Retired provider associations must never receive results meant for an earlier
-source. For this slice, reject `non_blocking` bindings where the exact model has
-no implemented late-result mechanism. Native asynchronous calling can follow
-without delaying basic platform/MCP support.
+source. The earlier research recommendation was to defer native background tools.
+The user's follow-up instead requires both conversation modes in common engine
+code, with provider sessions implementing semantic delivery rather than owning
+tool policy. An unsupported operation must fail explicitly, but rejecting every
+non-blocking binding cannot satisfy the new milestone's parity requirement.
 
 Two existing limits require focused changes:
 
@@ -191,7 +200,7 @@ the platform gap: `get_current_time` emitted `ToolCallStarted`, remained pending
 and created no registry invocation after a room mailbox barrier (**1 test,
 0 failures**, seed `381112`; the test asserts the existing defect).
 
-Implementation should use red-green checkpoints in the existing package:
+Implementation uses red-green checkpoints in the new shared milestone, covering:
 
 1. Platform current-time and hangup, variables and transfer through a compiled
    native room; invalid arguments and unsupported modes fail explicitly.
@@ -202,10 +211,10 @@ Implementation should use red-green checkpoints in the existing package:
 3. More than 16 sequential completed tools remain usable; bounded concurrency,
    slow invocation expiry, duplicate calls, interruption and retired-source
    results behave as specified without repeating effects.
-4. Provider-wire fixtures for each supported adapter, followed by a separately
-   tagged live check on each exact advertised model before claiming operational
-   native MCP support. Verify a tool round trip followed by spoken continuation,
-   plus terminal transfer/hangup behavior.
+4. A common conformance suite and compiled-room scenarios across LLM and contrasting
+   native session fixtures, covering both conversation modes, tool continuation
+   and terminal transfer/hangup. Vendor-wire/live checks remain evidence for their
+   provider integration milestones; they are not new provider-specific tasks here.
 
 No runtime behavior or deployment was changed by this research. The production
 changes will require the repository's full completion checks and the Lean lane

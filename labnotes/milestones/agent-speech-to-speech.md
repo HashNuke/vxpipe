@@ -142,6 +142,16 @@ Design sources: [speech provider contract](../../docs/speech-provider-contract.m
 
 ## Consolidated planning sources — 2026-10-09
 
+2026-11-09 scope amendment: [Shared participant tool execution](shared-participant-tool-execution.md)
+owns the common tool/MCP binding, conversation-policy and completion work formerly
+tracked in completion-plan Package 1 and the open tool-lifecycle companion. Its
+user-requested shared implementation and LLM behavior parity supersede the older
+blanket native non-blocking rejection/per-model-policy proposal; the single native
+result contract remains. Tool-related boxes below remain historical unmet evidence
+until reconciled against that milestone's passing checks. Other A–F scope and
+provider acceptance remain here, without making this whole milestone a prerequisite
+for the extracted common-code slice.
+
 Supporting plans: [completion packages](agent-sts-completion-plan.md) and
 [supervised STS tool lifecycle](sts-tool-lifecycle.md). This milestone retains the
 active A–F checklist, approved scope and acceptance gates. The 2026-09-27 package

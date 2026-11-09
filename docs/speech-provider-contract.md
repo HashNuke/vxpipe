@@ -670,20 +670,27 @@ removed without an accepted invocation record. Formatted invocation crash/status
 reports redact arguments and diagnostic messages; privileged raw VM inspection
 is not protected by this formatter.
 
-This remains incomplete adoption: correlated running acknowledgement, private
-continuation commit receipts, blocking/nonblocking model admission, full schema
-checks and supported tool-binding coverage are milestone tasks. Until commit
-receipts exist, retained completions occupy capacity for the allocation lifetime.
-The existing active-call final-result path is an incremental implementation, not
-acceptance of the final conversation protocol. See [STS tool lifecycle](../labnotes/milestones/sts-tool-lifecycle.md).
+2026-11-09 scope amendment: [Shared participant tool execution](../labnotes/milestones/shared-participant-tool-execution.md)
+owns the remaining common binding/schema, conversation-policy and completion work.
+LLM/native participants share business behavior and invocation authority, while
+STS returns one final native result for a valid exchange. Do not introduce the
+text loop's running acknowledgement or private-continuation message sequence.
+Native completion leases need settlement at a defined local acceptance or
+terminal discard boundary; merely sending a message is not acceptance, and speech
+interruption alone does not authorize discarding an outcome for an active
+participant. Use existing acknowledge/release operations and bounded consumed-ID
+retention. The current bridge does not yet settle these leases, so its retained
+completions still occupy capacity for the allocation lifetime. That is an open
+implementation gap, not a requirement to add text-model commit receipts. Earlier
+checkpoint evidence remains in [STS tool lifecycle](../labnotes/milestones/sts-tool-lifecycle.md).
 
 Provider cancellation retires the provider call/speech association; ordinary
 speech interruption does not authorize cancellation of an already-submitted
 engine invocation. The approved [tool execution model](tool-execution-model.md)
 requires bounded supervised execution and retained private completion, with
 local workers ended on activation/room loss and uncertain submitted timeouts
-reported as unknown. STS adoption of that complete execution/continuation
-protocol remains open; a provider cancellation is not proof of remote rollback.
+reported as unknown. Shared STS execution/conversation parity remains open;
+a provider cancellation is not proof of remote rollback.
 
 #### Output permission, credit and settlement
 

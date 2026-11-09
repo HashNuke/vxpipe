@@ -1,5 +1,11 @@
 # STS tool execution ownership
 
+2026-11-09: the open shared tool/lifecycle work now belongs to
+[Shared participant tool execution](shared-participant-tool-execution.md).
+That milestone owns current tasks and parity acceptance. The checkpoint limits
+and proposed continuation design below are historical evidence, not new contracts
+or a second implementation checklist.
+
 > Relocated from `docs/sts-tool-lifecycle.md` on 2026-10-09. First recorded source commit: `176be9d272a5` (2026-09-22T20:41:18+00:00).
 > Supporting plan/evidence companion. [agent-speech-to-speech](agent-speech-to-speech.md) owns current scope, implementation checklists and acceptance; [the index](index.md) owns order. This is not a new independently ordered milestone.
 > This preserves the supervised-invocation checkpoint and its earlier running-ack/private-continuation proposal. The completion plan's D4 records later direction for one native result and model-specific late-result admission. The old proposal is not a new implementation requirement. Invocation ownership, supervision and local evidence remain useful; the owner's open contracts need reconciliation before implementation.

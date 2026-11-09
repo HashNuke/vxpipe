@@ -97,7 +97,13 @@ session. With the new `hold` fact:
 (Gemini, GPT-Live delegation) instead require exactly one native function
 result per call.
 
-Agreed direction (user, 2026-09-27):
+2026-11-09 amendment: [shared participant tool execution](shared-participant-tool-execution.md)
+retains the single native result constraint and takes over common tool policy.
+The user's newer direction requires both conversation modes with LLM behavior
+parity in shared internal code. The model-table implementation and blanket
+non-blocking rejection proposed below do not govern the new milestone.
+
+Historical agreed direction (user, 2026-09-27):
 
 - **Single result per call by default.** The provider receives one native
   result when the invocation ends, and that result is the continuation. The
@@ -193,6 +199,18 @@ subsection, so the top of the file says where the milestone stands now.
 Acceptance: a reviewer can read the open-box list and see only real work.
 
 ## Package 1: STS tool bindings
+
+**Transferred 2026-11-09:** [Shared participant tool execution](shared-participant-tool-execution.md)
+now owns implementation tasks and acceptance for this package's common tool/MCP
+work. The user requires shared internal implementation and LLM behavior parity;
+the old per-model-table tasks and blanket non-blocking rejection below are
+historical proposals, not the new implementation plan. Single-result native wire
+semantics remain. The new slice uses existing runtime prerequisites and does not
+wait for this plan's assumed GPT-Live hosted completion. Provider-specific work
+below remains with the relevant provider milestone. Do not track duplicate work
+or check this package complete until the new milestone's relevant acceptance passes.
+
+Historical package description:
 
 Problem: `RoomAuthority.SpeechToSpeech.Tools.invocation_for/2` returns
 `:deferred` for every binding that is not a blocking host tool or a
