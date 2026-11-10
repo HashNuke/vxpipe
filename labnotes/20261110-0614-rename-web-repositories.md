@@ -36,7 +36,9 @@ Headless Chrome loaded both the built homepage and English documentation page.
 With GitHub access restored, completed the previously authorized catalog webhook
 registration on `HashNuke/vxpipe`: hook `709735353`, active push events, JSON,
 TLS verification, and the existing Railway signing secret transferred in memory
-without printing or persisting it. GitHub ping delivery returned 200. A real push
-delivery will be checked when these documentation updates are pushed.
+without printing or persisting it. GitHub ping delivery returned 200. Push
+delivery `b38654aa-dcce-11f1-8d7f-bee4a969bf6a` for commit `816b945c` returned
+202. Railway logged one failed import attempt, then completed the automatic
+retry at 06:19:53 UTC. Automatic GitHub-to-catalog refresh is verified.
 
 Reference: [Cloudflare partial Worker update](https://developers.cloudflare.com/api/resources/workers/subresources/beta/subresources/workers/methods/edit/).

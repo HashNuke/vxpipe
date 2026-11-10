@@ -47,10 +47,10 @@ SUCCESS and its startup import completed. The live API serves all sixteen entrie
 
 GitHub push webhook `709735353` is registered on `HashNuke/vxpipe`, with JSON
 delivery, TLS verification and the publisher's existing signing secret. GitHub's
-initial ping returned 200. A manually signed push also returned 202 and its queued
-refresh completed. The standalone integration checkout has been deleted after
-verifying its migration; deletion of the old remote awaits GitHub's `delete_repo`
-permission. There is no runtime fallback or synchronization with the old repository.
+initial ping returned 200; a real push returned 202 and the worker completed its
+refresh after one automatic retry. The standalone integration checkout has been
+deleted after verifying its migration; deletion of the old remote awaits GitHub's
+`delete_repo` permission. There is no runtime fallback or synchronization with it.
 
 ## Verification
 
