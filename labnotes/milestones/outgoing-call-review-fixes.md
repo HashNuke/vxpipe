@@ -134,7 +134,7 @@ persistence constraint migration so a later machine classification retains `answ
 Human outgoing handlers remain out of scope pending a separate join design. Same-key
 failed starts replay their original nonretryable 503; another attempt needs a new key.
 The concurrency and migration decisions are recorded in
-[outgoing runtime](../../docs/outgoing-call-runtime.md#review-correction-physical-answer-dial-concurrency-and-failure-replay).
+[outgoing runtime](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/outgoing-call-runtime.md#review-correction-physical-answer-dial-concurrency-and-failure-replay).
 This design review is separate from implementation and live acceptance progress.
 
 ## Verification evidence (2026-10-06)

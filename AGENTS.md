@@ -230,7 +230,7 @@ bin/verify-lean
 
 It builds the Lean models under `verification/`, fails on oracle drift, and
 replays the modelled transitions against the Elixir implementation. See
-[docs/development/formal-verification.md](docs/development/formal-verification.md).
+[formal verification](docs/en/development/testing.md#formal-verification).
 
 For documentation-only changes, verify the changed documentation and use
 proportionate checks when it changes generated configuration.

@@ -64,5 +64,5 @@ The existing uncommitted authentication planning documents are preserved and ext
 
 Review starts at `?path=/story/vxpipe-console-authentication-full-journey--superadmin`.
 Run `bin/storybook`; the current checkout uses port 6009. See the
-[review guide](../docs/development/authentication-storybook.md) for flows and mock limits.
+[review guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/authentication-storybook.md) for flows and mock limits.
 Backend checkpoints and the deferred user UI review remain open at this checkpoint.

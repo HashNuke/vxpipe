@@ -4,13 +4,13 @@ Status: complete 2026-10-08. Checkpoints V, P, L, K, S, U, C, W and Z are implem
 Prerequisites: [Tenant Call Specs and API-key administration](tenant-call-specs-and-api-keys.md),
 [Operator login and admin dashboard](operator-login-and-admin-dashboard.md),
 [Operator admin Storybook](operator-admin-storybook.md) and the
-[call direction schema](../../docs/call-spec-direction.md).
+[call direction schema](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/call-spec-direction.md).
 Sources: the earlier Callpipe flow editor (`ui/src/workspace/pages/flow-editor/` and
 `docs/specs/page-flow-editor.md` in the Callpipe repository), the
 [call-spec design](../20260905-0405-call-definition-design.md),
-[Console React routing](../../docs/development/console-react-routing.md),
-[React styling contract](../../docs/development/react-component-styling.md),
-[operator API-key authoring](../../docs/operator-api-key-authoring.md) and the
+[Console React routing](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/console-react-routing.md),
+[React styling contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/react-component-styling.md),
+[operator API-key authoring](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/operator-api-key-authoring.md) and the
 [review labnote](../20261008-0721-call-spec-editor-review.md).
 
 ## Runnable outcome
@@ -401,7 +401,7 @@ error for an invalid source instead of a bare `invalid_call_spec`.
   URL or number in an invalid field does not appear in the response. `private_data?` rejections
   keep a path and a fixed reason.
 - [x] **V5 — Docs.** Update the error table in
-  [operator API-key authoring](../../docs/operator-api-key-authoring.md) with the new body and an example.
+  [operator API-key authoring](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/operator-api-key-authoring.md) with the new body and an example.
 - [x] **Exit V.** Gateway suite, root gates and the existing save/publish/outgoing API tests pass;
   responses carry exactly one error, as the validator is fail-fast.
 
@@ -472,7 +472,7 @@ run, with one recommended default.
 
 Checkpoint L progress: all 108 Agent Runtime tests pass (eight excluded, seed
 256901). Local OpenRouter measurements and the no-cache decision are recorded in
-[the catalog decision](../../docs/llm-model-catalog.md). All five root gates pass; the default umbrella suite passes
+[the catalog decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/llm-model-catalog.md). All five root gates pass; the default umbrella suite passes
 3,352 tests, zero failures, 120 excluded (seed 226406). No live tests ran.
 
 ## Checkpoint K — Provider and model listing endpoints
@@ -551,7 +551,7 @@ error placement and catalog-driven seed are implemented. All 73 shared backend
 validation cases pass; the full frontend suite passes 349 tests, type check and
 lint. All five root gates pass, including 3,448 default tests, zero failures and
 120 excluded (seed 197178), after synchronizing the existing Cartesia room test
-with startup readiness. No live tests ran. See the [source-model decision](../../docs/call-spec-editor-source.md).
+with startup readiness. No live tests ran. See the [source-model decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/call-spec-editor-source.md).
 
 ## Checkpoint U — Editor in Storybook
 
@@ -698,7 +698,7 @@ Outcome: operators create, edit, save and publish call specs in `/admin`.
 
 - [x] **W1 — Routes.** Add `/admin/tenants/:tenantKey/call-specs/new` and `/:callSpecId`
   (`?revision=N` read-only) to the React Router table and update
-  [Console React routing](../../docs/development/console-react-routing.md).
+  [Console React routing](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/console-react-routing.md).
 - [x] **W2 — API client.** Typed functions for C's endpoints and K's listings, following the
   abort, stale-response and session-expiry handling already used in `adminApi.ts`.
 - [x] **W3 — List integration.** **New call spec** action and row links on `TenantCallSpecsPage`.
@@ -783,7 +783,7 @@ Outcome: operators create, edit, save and publish call specs in `/admin`.
 - Server-owned identity follow-up: API/CLI updates cannot create a spec under a
   caller-selected ID. Creation assigns a public UUID internally. Routing tests
   exercise a server-issued UUID; stored legacy IDs are not rewritten. See the
-  [identity correction](../../docs/operator-api-key-authoring.md#server-owned-identity-correction-2026-10-09)
+  [identity correction](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/operator-api-key-authoring.md#server-owned-identity-correction-2026-10-09)
   and [implementation labnote](../20261009-0416-server-owned-spec-ids.md).
   Verification alongside the integer-preservation follow-up passed 511 frontend
   tests, TypeScript, lint and all five root gates: 3,464 tests, zero failures,
@@ -802,7 +802,7 @@ Outcome: operators create, edit, save and publish call specs in `/admin`.
   201 and the call entered `running`. It used a synthetic credential, waited for
   input and received no input or provider generation request. This replaces live
   provider execution as explicitly authorized; no live tests ran.
-- The [operator guide](../../docs/call-spec-editor-guide.md) documents the workflow,
+- The [operator guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/call-spec-editor-guide.md) documents the workflow,
   immutable revisions, recovery, source export, model/voice abstraction and API.
   Final frontend checks pass 503 tests in 66 files, TypeScript and lint; production
   assets build. All five final root gates pass: 3,458 tests, zero failures, 120

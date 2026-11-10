@@ -3,7 +3,7 @@
 > Relocated from `docs/existing-provider-credentials.md` on 2026-10-09. First recorded source commit: `0ff30b79e1a0` (2026-09-15T23:55:48+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260915-2351-existing-provider-inventory](20260915-2351-existing-provider-inventory.md).
-> Maintained contracts/progress: [provider-integration-packages](../docs/provider-integration-packages.md), [provider-credential-storage](../docs/provider-credential-storage.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [provider-integration-packages](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-integration-packages.md), [provider-credential-storage](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-credential-storage.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 > Its removed provider-module links are source evidence at the cited `b5917ae` baseline, not current file locations.
 
 ## Scope and evidence
@@ -56,7 +56,7 @@ Checkpoint 5 supplies the existing Zenmux API-key shape from tenant storage, inl
 provider/model translation, the supported nested native routing data and focused request checks.
 Public options still cannot replace credentials or redirect credential-bearing requests.
 The [current translator](../apps/vxpipe_agent_runtime/lib/vxpipe/agent_runtime/provider_selection.ex)
-supports Google, Zenmux and direct OpenAI. See the [inline example](../docs/inline-provider-selections.md#provider-translation)
+supports Google, Zenmux and direct OpenAI. See the [inline example](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/inline-provider-selections.md#provider-translation)
 and [checkpoint evidence](20260916-0033-zenmux-tenant-credentials.md).
 
 The [public room-startup regression](../apps/vxpipe_call_engine/test/vxpipe/call_engine/call_spec_driven_call_test.exs)
@@ -85,6 +85,6 @@ boundaries. Platform S3 credentials remain platform configuration and are unrela
 
 The inventory compares the reference source tree, existing project tests and the current closed
 catalog. It corrects the milestone's speculative OpenAI/OpenRouter examples and the stale profile
-setup instructions in [context compaction](../docs/context-compaction.md#provider-native-fallback).
+setup instructions in [context compaction](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/context-compaction.md#provider-native-fallback).
 The [inventory labnotes](20260915-2351-existing-provider-inventory.md) record independent
 review and documentation checks. Recording this inventory completes no provider migration.

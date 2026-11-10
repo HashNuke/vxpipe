@@ -7,7 +7,7 @@ Prerequisites: [Call debug console](call-debug-console.md),
 [Platform bootstrap and demo tenant](platform-bootstrap-and-demo-tenant.md), and the existing
 [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md).
 Sources: [First-use design](developer-console-and-onboarding.md#first-use-flow),
-[Operator's Bench](../../DESIGN.md), [inline call specs](../../docs/inline-provider-selections.md).
+[Operator's Bench](../../DESIGN.md), [inline call specs](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/inline-provider-selections.md).
 
 ## Consolidated planning sources — 2026-10-09
 
@@ -69,7 +69,7 @@ requirements. Refresh, partial failure and restart preserve completed work.
   encrypted persistence without requiring an upstream probe, so providers without a safe test can
   still be configured. A test result applies only to that draft at that time; it does not claim that
   every model, voice or call path works. See the
-  [credential testing and storage contract](../../docs/provider-credential-validation.md).
+  [credential testing and storage contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-credential-validation.md).
 - Catalog entries have stable IDs/version/content digests, purpose, participants, requirement
   metadata and a checked-in inline call spec. Supported selections use the current schema and
   existing provider catalog; no provider keys, route IDs or tenant IDs live in portable templates.

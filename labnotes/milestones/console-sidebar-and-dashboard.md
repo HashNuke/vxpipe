@@ -12,8 +12,8 @@ Read [Console authentication and user management](console-authentication-and-use
 and [Platform and tenant services](platform-and-tenant-services.md). Authentication,
 existing tenant scope enforcement and resource pages are available. Unfinished
 onboarding is covered for layout compatibility, not an implementation dependency.
-The [navigation decision/API contract](../../docs/console-sidebar-navigation.md)
-and [authorization design](../../docs/console-authentication-and-authorization.md)
+The [navigation decision/API contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-sidebar-navigation.md)
+and [authorization design](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-authentication-and-authorization.md)
 define the implemented contracts. The user deferred UI review until completion.
 
 ## Checkpoint A — Reviewable proposal
@@ -103,7 +103,7 @@ Proposal verification: 18 focused navigation tests and all 682 frontend tests pa
 TypeScript, lint, Storybook and Console builds pass. All five umbrella gates pass,
 including 3,749 tests with no failures (132 excluded). Chrome inspection covered
 desktop/phone, both themes, searchable selection, focus restoration and logout.
-See the [review guide](../../docs/development/sidebar-navigation-storybook.md) and
+See the [review guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/sidebar-navigation-storybook.md) and
 [checkpoint labnote](../20261013-1023-sidebar-dashboard-proposal.md).
 These totals describe the proposal checkpoint; production evidence is recorded below.
 
@@ -506,7 +506,7 @@ API Keys is the parent of key creation. Keep one tenant context per view.
 User request: “we dont need public ID for API references. internal primary key is
 what we should use. simplify. because this is over-engineering.”
 
-Design review: [identity decision](../../docs/call-spec-identity.md) specifies the
+Design review: [identity decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/call-spec-identity.md) specifies the
 wire format, tenant authorization, allocation and breaking migration. Relational
 links remain intact; no alias layer. Prerequisite: existing revision/authoring
 storage and Console navigation.
@@ -565,7 +565,7 @@ Access and Full Platform Access; require a searchable tenant picker for tenant
 keys; show Tenant in a separate list column; implement UI and backend together.
 API-key management permissions must be separate and support tenant scope.
 
-Design review: [access contract](../../docs/api-key-access.md). Prerequisites:
+Design review: [access contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/api-key-access.md). Prerequisites:
 identity grants/membership caps, tenant credential storage and Settings shell.
 Implement permission/storage contracts before endpoints and UI; inbound MCP is a
 separate server capability, with the single-endpoint direction recorded above.

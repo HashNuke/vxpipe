@@ -50,4 +50,4 @@ and unchanged source/caller responsibilities. Current verification is documentat
 only; no outbound call, message playback, or runtime test was performed.
 
 Related: [call-spec design](../20260905-0405-call-definition-design.md),
-[architecture](../../docs/architecture.md), and [gap review](../20260906-1452-call-spec-gap-review.md).
+[architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md), and [gap review](../20260906-1452-call-spec-gap-review.md).

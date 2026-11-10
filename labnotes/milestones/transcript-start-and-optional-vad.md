@@ -22,12 +22,12 @@ Implemented prerequisites:
 [Tenant provider configuration](tenant-provider-credentials-and-platform-configuration.md),
 and [Call spec editor](call-spec-editor.md).
 
-Design sources: [Speech-start decision](../../docs/stt-speech-start-detection.md),
-[Speech provider contract](../../docs/speech-provider-contract.md),
-[Speech authoring guide](../../docs/speech-integration-guide.md),
-[Scoped ownership](../../docs/speech-session-ownership.md),
-[Current Scribe implementation](../../docs/elevenlabs-stt-session.md),
-[Inline provider selections](../../docs/inline-provider-selections.md),
+Design sources: [Speech-start decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/stt-speech-start-detection.md),
+[Speech provider contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md),
+[Speech authoring guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-integration-guide.md),
+[Scoped ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md),
+[Current Scribe implementation](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/elevenlabs-stt-session.md),
+[Inline provider selections](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/inline-provider-selections.md),
 and [latency evidence](../20261011-0333-scribe-partial-latency.md).
 
 This slice does not depend on unfinished STS provider acceptance, AI gateway

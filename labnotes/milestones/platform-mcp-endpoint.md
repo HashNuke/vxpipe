@@ -42,11 +42,11 @@ Implementation tasks remain unchecked until their acceptance evidence is recorde
   completed identity policy, protected accounts and transaction/session safeguards.
 - [MCP client integration](mcp-client-library.md): pinned ExMCP dependency/profile;
   outbound acceptance does not establish server acceptance.
-- [Platform MCP design](../../docs/platform-mcp.md): authoritative tool/argument,
+- [Platform MCP design](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/platform-mcp.md): authoritative tool/argument,
   pagination, key matrix, proposed REST routes and call/user behavior contracts.
-- [API-key access](../../docs/api-key-access.md),
-  [HTTP authoring/admission](../../docs/operator-api-key-authoring.md), and
-  [identity policy](../../docs/console-authentication-and-authorization.md).
+- [API-key access](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/api-key-access.md),
+  [HTTP authoring/admission](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/operator-api-key-authoring.md), and
+  [identity policy](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-authentication-and-authorization.md).
 - Primary MCP transport/lifecycle/tools/authorization specifications linked in the
   design document; propose the existing `2025-11-25` profile pending the local probe.
 
@@ -87,7 +87,7 @@ public Elixir operation with their actual authenticated actor.
   as canonical product API, browser authentication/UI helper, or temporary legacy
   alias. Include services, roles and key management even though they are not MCP
   tools. Record canonical route, owner, schema, credential policy and migration.
-  Evidence: [complete route inventory](../../docs/product-api-inventory.md), reviewed
+  Evidence: [complete route inventory](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/product-api-inventory.md), reviewed
   against Console/Gateway routes and frontend fetch modules. Non-MCP machine grants
   remain default-deny until explicitly defined; inventory is not route migration.
 - [x] Select existing Calls/Identity/application functions as the shared operation
@@ -162,7 +162,7 @@ directly, without an HTTP loopback request or controller invocation.
 - [x] Authenticate every HTTP request from one Bearer header. Reject absent,
   invalid/revoked keys and fail closed on unavailable storage. No query/body keys
   or browser-cookie substitute; never retain raw keys in session/process state.
-- [x] Implement the [authentication wire contract](../../docs/platform-mcp.md#authentication-contract-and-client-compatibility):
+- [x] Implement the [authentication wire contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/platform-mcp.md#authentication-contract-and-client-compatibility):
   400 for malformed/duplicate credentials, 401 with Bearer challenge for missing
   or invalid keys, 403 for insufficient authority, and 503 for unavailable key
   storage. No OAuth metadata/login redirects or fabricated token exchange.
@@ -173,7 +173,7 @@ directly, without an HTTP loopback request or controller invocation.
   discovery and independently check invocation; isolate concurrent principals.
 - [x] Define schemas, structured/text results, public error mapping, annotations,
   sanitized telemetry and no automatic mutation retries. Document concrete limits.
-- [x] Implement the [argument/result contracts](../../docs/platform-mcp.md#argument-and-result-details)
+- [x] Implement the [argument/result contracts](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/platform-mcp.md#argument-and-result-details)
   as per-tool schemas: required fields, typed defaults, null handling and safe
   projections. Public tenant arguments/memberships use `tenant_key`, not the
   internal `tenant_id`; preserve existing REST/Console wire shapes at adapters.
@@ -337,7 +337,7 @@ run remains part of the overall milestone acceptance.
 Depends on call creation. Runnable slice: hang up a prepared, admitting, ringing or
 running local call through REST/MCP and observe its owned resources terminate.
 
-Implementation design: [durable whole-call hangup](../../docs/call-hangup-lifecycle.md).
+Implementation design: [durable whole-call hangup](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/call-hangup-lifecycle.md).
 The design records admission ordering, cancellation intent, exact-incarnation
 completion evidence and recovery. Its review does not complete runtime tasks.
 
@@ -1002,7 +1002,7 @@ Depends on all required capability checkpoints and supporting workflows.
   passes/omissions rather than using outbound acceptance as inbound proof.
   Evidence: `bin/test-platform-mcp` passed all seven groups using SDK 1.30.0 and
   conformance 0.1.16. The three selected official scenarios use a labeled loopback
-  synthetic-header adapter. See [acceptance scope](../../docs/development/platform-mcp-acceptance.md);
+  synthetic-header adapter. See [acceptance scope](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/platform-mcp-acceptance.md);
   the SDK invokes all 17 tools with real stores; active-call parity is verified
   separately.
 Expanded reference-client evidence (2026-10-15): all 17 tools passed on each of

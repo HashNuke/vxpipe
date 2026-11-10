@@ -55,34 +55,34 @@ No runtime feature milestone blocks documenting the behavior already present.
 - [x] HTTP API and platform MCP.
 - [x] Operations and troubleshooting.
 - [x] Development workflow and documentation authoring.
-- [ ] Architecture.
-- [ ] Call runtime and lifecycle.
-- [ ] Speech and media runtime.
-- [ ] Agent runtime, tools and outbound MCP.
-- [ ] Identity, persistence and security boundaries.
-- [ ] Adding providers and integrations.
-- [ ] Console and client development.
-- [ ] Testing and verification.
+- [x] Architecture.
+- [x] Call runtime and lifecycle.
+- [x] Speech and media runtime.
+- [x] Agent runtime, tools and outbound MCP.
+- [x] Identity, persistence and security boundaries.
+- [x] Adding providers and integrations.
+- [x] Console and client development.
+- [x] Testing and verification.
 
 ### Consolidation and website
 
-- [ ] Reconcile conflicting old claims against code, including call-spec IDs,
+- [x] Reconcile conflicting old claims against code, including call-spec IDs,
   current ReqLLM runtime, speech start, shared tools and MCP ownership.
-- [ ] Remove superseded docs, preserve useful JSON references/experiment outside
+- [x] Remove superseded docs, preserve useful JSON references/experiment outside
   handbook prose, and repair repository links.
-- [ ] Import localized Markdown/assets into the website with deterministic links
+- [x] Import localized Markdown/assets into the website with deterministic links
   and ordering; retain the marketing homepage.
-- [ ] Add Mermaid support and confirm a rendered SVG on desktop and mobile.
+- [x] Add Mermaid support and confirm a rendered SVG on desktop and mobile.
 - [ ] Add branch-selected publication and its restricted credential; document
   the merge-time branch switch and a failed-build recovery procedure.
 
 ### Acceptance
 
-- [ ] Check every handbook page's frontmatter, local links and code examples
+- [x] Check every handbook page's frontmatter, local links and code examples
   against source; identify intended delivery behavior explicitly.
-- [ ] Build the website and check generated routes, links and downloadable assets.
+- [x] Build the website and check generated routes, links and downloadable assets.
   Run the website's existing relevant checks; add no tests that merely mirror prose.
-- [ ] Inspect navigation, representative guides, code blocks, diagram and search in
+- [x] Inspect navigation, representative guides, code blocks, diagram and search in
   a rendered browser on desktop/mobile, including console errors.
 - [ ] Verify an actual `docs` push runs publication, updates the website repository,
   completes Cloudflare's build and serves the changed page. Record commit/build

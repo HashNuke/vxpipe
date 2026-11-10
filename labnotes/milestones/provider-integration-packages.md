@@ -9,10 +9,10 @@ Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
 [Telnyx calls](telnyx-calls.md), and
 [Tenant-scoped provider credentials](tenant-provider-credentials-and-platform-configuration.md).
 
-Design sources: [provider integration packages](../../docs/provider-integration-packages.md),
-[speech provider contract](../../docs/speech-provider-contract.md),
-[provider credential testing](../../docs/provider-credential-validation.md), and
-[gateway/console boundary](../../docs/gateway-console-boundary.md).
+Design sources: [provider integration packages](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-integration-packages.md),
+[speech provider contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md),
+[provider credential testing](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-credential-validation.md), and
+[gateway/console boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md).
 
 ## Runnable outcome
 

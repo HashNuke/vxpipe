@@ -367,7 +367,7 @@ runnable checkpoints and failure/browser checks. Planning alone completes none o
 
 ## React styling and shadcn distribution
 
-The [React component styling decision](../../docs/development/react-component-styling.md) replaces the prototype's
+The [React component styling decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/react-component-styling.md) replaces the prototype's
 package-wide handwritten stylesheet with Tailwind v4 utilities colocated in component TSX and a
 small semantic-token stylesheet. The [official registry model](https://ui.shadcn.com/docs/registry)
 supports custom components, dependencies, variables and CSS additions alongside the npm workspace.

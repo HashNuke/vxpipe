@@ -69,4 +69,4 @@ For now, planned tests only prove the approved no-automatic-retry baseline and
 distinct later invocations. No runtime changes or tests were made for this issue.
 
 Related: [call-spec design](../20260905-0405-call-definition-design.md),
-[architecture](../../docs/architecture.md), and [G4 review](../20260906-1452-call-spec-gap-review.md#g4--p1-partly-resolved-tool-cancellation-does-not-roll-back-an-external-action).
+[architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md), and [G4 review](../20260906-1452-call-spec-gap-review.md#g4--p1-partly-resolved-tool-cancellation-does-not-roll-back-an-external-action).

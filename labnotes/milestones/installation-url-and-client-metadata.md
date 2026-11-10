@@ -2,8 +2,8 @@
 
 Prerequisites: [Console authentication](console-authentication-and-user-management.md),
 [MCP OAuth](mcp-oauth.md) and the reviewed
-[Installation URL stories](../../docs/development/installation-url-storybook.md).
-Contract: [Installation URL](../../docs/installation-url.md).
+[Installation URL stories](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/installation-url-storybook.md).
+Contract: [Installation URL](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/installation-url.md).
 
 Runnable slice: persisted first-run URL/account setup and Superadmin settings,
 public CIMD/DCR metadata foundation and current-origin telephony/MCP consumers.

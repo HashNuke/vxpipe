@@ -5,7 +5,7 @@ defmodule Vxpipe.Console.MCPListedConnectionTest do
   alias Vxpipe.Console.IntegrationsDirectory.Request
 
   @example Path.expand(
-             "../../../../../docs/development/integrations-directory.example.json",
+             "../../../../../docs/assets/integrations/integrations-directory.example.json",
              __DIR__
            )
 

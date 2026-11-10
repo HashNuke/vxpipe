@@ -3,7 +3,7 @@
 > Relocated from `docs/credential-reader-boundaries.md` on 2026-10-09. First recorded source commit: `1ccc822a54c1` (2026-09-15T22:21:37+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260915-2203-audit-credential-readers](20260915-2203-audit-credential-readers.md).
-> Maintained contracts/progress: [provider-credential-storage](../docs/provider-credential-storage.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [provider-credential-storage](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-credential-storage.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 ## Decision
 
@@ -97,4 +97,4 @@ Focused results and independent review are recorded in the
 [destination labnotes](20260915-2250-destination-credential-boundaries.md).
 
 Carrier ownership, removed static options and exact public-origin behavior are documented in
-[tenant telephony services](../docs/tenant-telephony-services.md#live-readers-and-platform-callback-origin).
+[tenant telephony services](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tenant-telephony-services.md#live-readers-and-platform-callback-origin).

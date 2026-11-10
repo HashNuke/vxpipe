@@ -3,7 +3,7 @@
 > Relocated from `docs/native-tts-deadline-findings.md` on 2026-10-09. First recorded source commit: `642779e0afe9` (2026-09-20T07:41:06+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260919-2159-repair-tts-handoff](20260919-2159-repair-tts-handoff.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Checkpoint D was paused under the user's tested-instability rule and resumed
 after explicit approval of the proposed fix. Focused, load and all five umbrella

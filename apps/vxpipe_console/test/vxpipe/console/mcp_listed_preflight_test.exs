@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.MCPListedPreflightTest do
   alias Vxpipe.Console.IntegrationsDirectory.{Cache, Request}
 
   @example Path.expand(
-             "../../../../../docs/development/integrations-directory.example.json",
+             "../../../../../docs/assets/integrations/integrations-directory.example.json",
              __DIR__
            )
 

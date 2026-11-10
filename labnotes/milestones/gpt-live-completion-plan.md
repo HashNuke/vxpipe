@@ -456,7 +456,7 @@ an accepted final caller transcript after the router approves its route to
 the virtual agent, or a playback-settled agent transcript after delivery to
 the human connection. The capability then calls the session callback. Only
 room-authorized caller text and delivered agent text enter history. The
-room-boundary correction is recorded in [the decision](../../docs/gpt-live-room-history.md).
+room-boundary correction is recorded in [the decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gpt-live-room-history.md).
 On a lost session, the provider waits for a speech-channel, capability and
 room publication barrier before taking its bounded snapshot. The reconnect
 deadline includes that wait; failure to complete it fails reseed.

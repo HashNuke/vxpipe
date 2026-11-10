@@ -350,7 +350,7 @@ umbrella completion gates pass; evidence is recorded in the
 
 Pre-delivery incremental-policy correction (2026-09-13): the user requested applying
 only the service changes implied by the new permissions. The
-[incremental policy decision](../../docs/incremental-media-policy.md) supersedes the
+[incremental policy decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/incremental-media-policy.md) supersedes the
 revision-wide reset behavior described in the historical checkpoints above.
 
 - [x] Review permission scopes, stale-data rejection, admission ordering, and bounded

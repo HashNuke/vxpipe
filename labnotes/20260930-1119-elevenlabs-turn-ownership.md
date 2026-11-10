@@ -3,10 +3,10 @@
 > Relocated from `docs/elevenlabs-turn-ownership.md` on 2026-10-09. First recorded source commit: `45d125ccb727` (2026-09-30T11:19:05+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260930-1042-elevenlabs-turn-contracts](20260930-1042-elevenlabs-turn-contracts.md).
-> Maintained contracts/progress: [elevenlabs-stt-session](../docs/elevenlabs-stt-session.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [elevenlabs-stt-session](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/elevenlabs-stt-session.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: Historical feasibility proposal, updated 2026-10-01. The
-[allocation-owned session checkpoint](../docs/elevenlabs-stt-session.md) now implements
+[allocation-owned session checkpoint](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/elevenlabs-stt-session.md) now implements
 and admits the STT-only local acoustic composition and passes its selected
 two-turn live case. Scoped services, compiled room turns and Console STT
 integration now have local acceptance. Configured-service long-input live room
@@ -151,7 +151,7 @@ also permits automatic buffered commits in manual mode. The
 does not identify speech-start or distinguish the cause of a commit. A segment
 therefore cannot establish room barge-in or definitive input turn completion.
 
-The [existing STT contract](../docs/speech-provider-contract.md#stt) requires genuine
+The [existing STT contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md#stt) requires genuine
 speech-start and endpoint evidence. The current descriptor validator accepts
 provider endpointing only. Scribe is not registered as conversational STT, and
 the passing selected live protocol test does not satisfy that admission rule.

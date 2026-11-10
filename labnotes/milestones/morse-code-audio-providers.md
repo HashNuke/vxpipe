@@ -2,7 +2,7 @@
 
 Status: complete as of 2026-09-09. Specification review: approved (2026-09-08).
 Prerequisites: [Call-Spec-driven call](call-spec-driven-call.md). This early optional provider slice does not become a semantic prerequisite for later production features.
-Sources: User-requested local testing/verification addition; [provider capability boundary](../../docs/architecture.md); [International Morse code, ITU-R M.1677-1](https://www.itu.int/rec/R-REC-M.1677-1-200910-I/en). Verify the normative timing/alphabet against the recommendation during implementation.
+Sources: User-requested local testing/verification addition; [provider capability boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md); [International Morse code, ITU-R M.1677-1](https://www.itu.int/rec/R-REC-M.1677-1-200910-I/en). Verify the normative timing/alphabet against the recommendation during implementation.
 
 ## Runnable outcome
 
@@ -172,7 +172,7 @@ pass with `136 tests, 0 failures (1 excluded)`.
 Current configuration note (2026-09-15): the following checkpoint records historical
 verification. The tenant-provider cutover removes its environment switches and profile branches.
 Select Morse inline and explicitly configure the host transport; the current deterministic
-round-trip command is in [development](../../docs/development/local-development.md#local-fixtures).
+round-trip command is in [development](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/local-development.md#local-fixtures).
 
 Implementation evidence, checkpoint 9 (2026-09-09): added the opt-in development
 `VXPIPE_DEV_SPEECH_PROFILE=morse` setting. Combined with the existing local model fixture, it

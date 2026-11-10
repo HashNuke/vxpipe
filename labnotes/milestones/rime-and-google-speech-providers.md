@@ -8,11 +8,11 @@ Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
 [Provider integration packages](provider-integration-packages.md), and
 [Tenant-scoped provider credentials](tenant-provider-credentials-and-platform-configuration.md).
 
-Design sources: [speech provider contract](../../docs/speech-provider-contract.md),
+Design sources: [speech provider contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md),
 [provider comparison](../20260919-0858-speech-provider-comparison.md), and
-[provider integration packages](../../docs/provider-integration-packages.md). The Deepgram API refinement
-is recorded in [voice selection](../../docs/deepgram-voice-selection.md). The Google adapter decision and
-verification are in [Google speech integration](../../docs/google-speech-integration.md).
+[provider integration packages](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-integration-packages.md). The Deepgram API refinement
+is recorded in [voice selection](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/deepgram-voice-selection.md). The Google adapter decision and
+verification are in [Google speech integration](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/google-speech-integration.md).
 
 ## Runnable outcome
 
@@ -122,6 +122,6 @@ states were inspected. The post-fix four-scheduler, 16-session synthetic run com
 Google TTS and 320/320 Google STT turns. A live saved-credential renewal probe admitted 73/73
 PCM chunks, switched to a prepared socket and returned two starts and two final turns. The dev
 database still has one platform credential each for Deepgram, Google, Rime and Telnyx, all at
-version 1. The [Google decision](../../docs/google-speech-integration.md) records the provider lifetime
+version 1. The [Google decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/google-speech-integration.md) records the provider lifetime
 limit and measurements. Rime and Deepgram were committed as `718bb9b4` and `8be51b54`; Google
 is the final provider checkpoint for this milestone.

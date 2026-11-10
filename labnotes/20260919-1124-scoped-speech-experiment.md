@@ -3,11 +3,11 @@
 > Relocated from `docs/scoped-speech-experiment.md` on 2026-10-09. First recorded source commit: `4cfaa5280722` (2026-09-19T18:24:00+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260919-1711-scoped-speech-experiment](20260919-1711-scoped-speech-experiment.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: pre-approval experiment, 2026-09-19. Baseline recorded before continuing checkpoint R;
 zero of nine checkpoints accepted. Production migration remains pending its revised gates.
-This records executable evidence for the [ownership proposal](../docs/speech-session-ownership.md),
+This records executable evidence for the [ownership proposal](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md),
 separately from acceptance of the [implementation milestone](milestones/simpler-speech-integrations.md).
 
 ## Question and experiment boundary

@@ -2,7 +2,7 @@
 
 Status: complete (2026-09-10). Specification review: approved (2026-09-08).
 Prerequisites: [Prepared admission](prepared-call-admission.md); [Background tools](background-tool-conversation.md).
-Sources: [Current opening-audio contract](../../docs/opening-audio-contract.md); [greetings](../20260905-0405-call-definition-design.md#first-message-behavior--approved-g7-decision); [timers](../20260905-0405-call-definition-design.md#startup-idle-tool-waiting-and-duration--approved-r27r30).
+Sources: [Current opening-audio contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/opening-audio-contract.md); [greetings](../20260905-0405-call-definition-design.md#first-message-behavior--approved-g7-decision); [timers](../20260905-0405-call-definition-design.md#startup-idle-tool-waiting-and-duration--approved-r27r30).
 
 ## Runnable outcome
 
@@ -10,13 +10,13 @@ A caller hears optional configured opening audio before normal conversation. The
 
 The tenant-credential milestone supersedes this milestone's historical profile representation with
 inline selections in schema `20260915.01`. Its current call spec/authentication contract is in
-[Opening audio](../../docs/opening-audio-contract.md); lifecycle and playout acceptance below remain in force.
+[Opening audio](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/opening-audio-contract.md); lifecycle and playout acceptance below remain in force.
 
 ## Specification
 
 - Optional call-level opening_audio accepts a supported file URL or fixed text with its own required `text_to_speech` capability-profile reference (schema `20260913.01`). Resolve and supervise opening TTS independently of every participant/default voice; an initial human receiver works without any agent. No LLM-generated notice, variable interpolation, or fallback voice. Cache by exact text/output settings/provider/model/voice and tenant/profile binding without secrets.
 - Capabilities may warm up during opening playback but receive no participant audio until actual playout completion. Neither downloaded/enqueued audio nor provider readiness opens the gate. Do not record/replay blocked audio; incomplete playback cannot silently release it. Omission adds no opening delay.
-- The [opening-audio contract](../../docs/opening-audio-contract.md) specifies source format, fetch/cache, transport completion and failure behavior. Text with an absent/unavailable opening TTS profile fails explicitly. File playback requires no TTS. Failed/incomplete playback ends the attempt with input closed; no text barge-in is admitted.
+- The [opening-audio contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/opening-audio-contract.md) specifies source format, fetch/cache, transport completion and failure behavior. Text with an absent/unavailable opening TTS profile fails explicitly. File playback requires no TTS. Failed/incomplete playback ends the attempt with input closed; no text barge-in is admitted.
 - Each agent's first activation chooses wait, fixed greeting, or generated greeting; wait for opening completion and readiness. Re-entry does not replay greeting. Hard hangup/closing wording is agent instructions, not a platform speak-then-end/drain workflow.
 - Required startup readiness defaults 30s after join/start attempt, fails early on terminal errors; deliberate opening playback is not a 30s file limit. Genuine caller-idle notification defaults 15s, excluding opening, own speech, holding/dialing/tool wait; instructions choose action, no automatic repeated nudge/hangup.
 - limits.max_duration_ms defaults 1800000, call spec > tenant > app > platform, pinned per call from actual started_at; includes human-only/held time without reset on transfer. No unapproved unlimited mode/grace warning. Date/current-time tool uses permitted instructions/application time context; no timezone hierarchy or personalization engine.
@@ -76,7 +76,7 @@ Text openings now require `text_to_speech` in schema `20260913.01`; no legacy in
 retained. The compiler pins a dedicated profile and runtime starts/releases its own TTS capability.
 Human entry, separate greeting/opening voices, failure handling, cache binding isolation and stored
 plan reconstruction are covered. Current contract and migration guidance live in
-[the opening-audio contract](../../docs/opening-audio-contract.md).
+[the opening-audio contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/opening-audio-contract.md).
 
 Final verification for this refinement: all five root gates pass, including 1,013 umbrella tests
 with zero failures. Focused persistence reconstruction passes, and the 14-test opening runtime

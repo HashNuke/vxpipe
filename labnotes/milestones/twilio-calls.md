@@ -5,7 +5,7 @@ Status: complete (2026-10-06). Specification review: approved (2026-09-08).
 Credential configuration update (2026-09-16): new legs now resolve encrypted tenant service
 records; existing owners retain their initialized configuration. The earlier application-scope
 lookup/configuration evidence below is historical and superseded. See
-[tenant telephony setup](../../docs/tenant-telephony-services.md). This changes credential readers only;
+[tenant telephony setup](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tenant-telephony-services.md). This changes credential readers only;
 this milestone still owns its original carrier/audio acceptance.
 
 Prerequisites: [Telnyx/common telephony slice](telnyx-calls.md), including its tested provider-neutral adapter contract.

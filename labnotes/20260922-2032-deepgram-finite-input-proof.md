@@ -3,12 +3,12 @@
 > Relocated from `docs/deepgram-finite-input-proof.md` on 2026-10-09. First recorded source commit: `0187f1b4e40b` (2026-09-22T20:32:57+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260922-1934-deepgram-finite-input](20260922-1934-deepgram-finite-input.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [agent-speech-to-speech](milestones/agent-speech-to-speech.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [agent-speech-to-speech](milestones/agent-speech-to-speech.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Initial research checkpoint, 2026-09-22, against `aa67912c`, committed as
 `75dba0ac` without runtime changes. Subsequent local transport work is recorded
 below; it does not establish hosted acceptance. The
-[finite recognition contract](../docs/output-recognition-settlement.md)
+[finite recognition contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/output-recognition-settlement.md)
 requires every final segment followed by ordered `input_finished`; a successful
 callback, a conversation endpoint or elapsed time cannot substitute for that proof.
 

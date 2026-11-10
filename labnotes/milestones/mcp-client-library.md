@@ -10,7 +10,7 @@ The umbrella locks the `vxp` integration branch at `0bfd0ae`. Agent-runtime mode
 exposure belongs to the later live-MCP milestone, not this library.
 Prerequisites: none beyond the existing umbrella. No agent runtime, room, database,
 telephony or model provider is required for this standalone checkpoint.
-Sources: [ExMCP package](https://hex.pm/packages/ex_mcp); [ExMCP client](https://hexdocs.pm/ex_mcp/ExMCP.Client.html); [runtime/tool-binding decision](../../docs/reqllm-agent-runtime.md); [approved remote profile](../20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle); [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports); [official client conformance framework](https://github.com/modelcontextprotocol/conformance); [harness integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md); [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything).
+Sources: [ExMCP package](https://hex.pm/packages/ex_mcp); [ExMCP client](https://hexdocs.pm/ex_mcp/ExMCP.Client.html); [runtime/tool-binding decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/reqllm-agent-runtime.md); [approved remote profile](../20260905-0405-call-definition-design.md#initial-remote-protocol-and-input-validation--approved-r22r23); [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle); [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports); [official client conformance framework](https://github.com/modelcontextprotocol/conformance); [harness integration guide](https://github.com/modelcontextprotocol/conformance/blob/main/SDK_INTEGRATION.md); [Everything reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/everything).
 
 ## Runnable outcome
 
@@ -202,7 +202,7 @@ Implementation evidence:
   unmodified official scenarios plus the corrected recovery action. The pinned opt-in
   runner and tagged integration lane reproduce MCP `2025-11-25` initialization and one
   discovered/validated `tools/call`; the full scenario matrix and internal API are recorded in
-  [MCP client conformance profile](../../docs/development/mcp-client-conformance.md).
+  [MCP client conformance profile](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-client-conformance.md).
 - The focused behavior tests were observed red before implementation and are green with the
   default child suite (27 tests, 0 failures, three integration tests excluded). The opt-in
   lane passes all three wrapper tests: the two unmodified harness scenarios each score 1/1,

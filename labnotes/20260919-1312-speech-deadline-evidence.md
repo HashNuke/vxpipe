@@ -3,7 +3,7 @@
 > Relocated from `docs/speech-deadlines-and-failure-containment.md` on 2026-10-09. First recorded source commit: `4751bed7a05c` (2026-09-19T20:12:44+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260919-1927-finish-speech-ownership](20260919-1927-finish-speech-ownership.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 This completes the next ownership work after the [adoption authority repair](20260919-1220-speech-adoption-fix.md).
 The implementation remains isolated from production room speech consumers. Checkpoint R's

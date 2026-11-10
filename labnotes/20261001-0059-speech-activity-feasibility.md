@@ -3,7 +3,7 @@
 > Relocated from `docs/speech-activity-feasibility.md` on 2026-10-09. First recorded source commit: `8efe486e6537` (2026-10-01T00:59:27+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20261001-0037-speech-activity-feasibility](20261001-0037-speech-activity-feasibility.md), [20261001-0153-local-speech-activity](20261001-0153-local-speech-activity.md).
-> Maintained contracts/progress: [elevenlabs-stt-session](../docs/elevenlabs-stt-session.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [elevenlabs-stt-session](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/elevenlabs-stt-session.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: Local runtime implementation, 2026-10-01. This informs
 [ElevenLabs caller STT](20260930-1119-elevenlabs-turn-ownership.md) and

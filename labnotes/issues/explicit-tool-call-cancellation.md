@@ -59,4 +59,4 @@ Live MCP cancellation interoperability would need separate integration checks.
 No runtime behavior has been implemented or tested for this proposal.
 
 Related: [call-spec design](../20260905-0405-call-definition-design.md),
-[architecture](../../docs/architecture.md), and [G4 review](../20260906-1452-call-spec-gap-review.md#g4--p1-partly-resolved-tool-cancellation-does-not-roll-back-an-external-action).
+[architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md), and [G4 review](../20260906-1452-call-spec-gap-review.md#g4--p1-partly-resolved-tool-cancellation-does-not-roll-back-an-external-action).

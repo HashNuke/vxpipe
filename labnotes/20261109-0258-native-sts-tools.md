@@ -31,7 +31,7 @@ Documentation only; no deployment, provider API invocation or runtime change.
   integration slice, rather than broadly redesigning execution.
 
 Durable findings, official sources and acceptance scope are in
-[native STS tools](../docs/development/native-sts-tools.md).
+[native STS tools](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/native-sts-tools.md).
 
 ## Research method and evidence
 

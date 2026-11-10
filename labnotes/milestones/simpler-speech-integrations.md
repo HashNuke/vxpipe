@@ -37,19 +37,19 @@ acceptance in other milestones is not a prerequisite for changing the speech bou
 Design sources:
 [complexity audit and complete-workflow revision](../20260920-0041-speech-complexity-audit.md),
 [isolated topology proof](../20260920-0041-speech-topology-experiment.md),
-[revised ownership proposal](../../docs/speech-session-ownership.md),
-[semantic contract](../../docs/speech-provider-contract.md),
+[revised ownership proposal](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md),
+[semantic contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md),
 [WebRTC Opus stereo decision](../issues/webrtc-opus-stereo-input.md),
 [provider comparison](../20260919-0858-speech-provider-comparison.md),
-[provider authoring guide](../../docs/speech-integration-guide.md),
-[architecture](../../docs/architecture.md),
-[inline selections](../../docs/inline-provider-selections.md),
+[provider authoring guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-integration-guide.md),
+[architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md),
+[inline selections](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/inline-provider-selections.md),
 [current platform/tenant credential inheritance](platform-and-tenant-services.md),
-[readiness resources](../../docs/readiness-resource-contract.md),
-[typed interruption](../../docs/typed-turn-interruption.md),
-[spoken barge-in](../../docs/spoken-barge-in.md),
-[opening contract](../../docs/opening-audio-contract.md),
-[transport privacy](../../docs/speech-transport-privacy.md), and
+[readiness resources](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/readiness-resource-contract.md),
+[typed interruption](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/typed-turn-interruption.md),
+[spoken barge-in](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/spoken-barge-in.md),
+[opening contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/opening-audio-contract.md),
+[transport privacy](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-transport-privacy.md), and
 [resolved egress-buffer issue](../issues/tts-egress-buffer.md).
 
 ## Runnable outcome
@@ -70,7 +70,7 @@ is demonstrated using a synthetic provider with no persistent connection or star
 
 ## Contract and scope
 
-The [design](../../docs/speech-provider-contract.md#proposed-author-facing-interface) proposes four
+The [design](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md#proposed-author-facing-interface) proposes four
 required STT functions and five TTS functions: configuration, supervised startup, audio input
 or speak/cancel, and close. Configuration returns a descriptor instead of several metadata
 callbacks. Providers emit typed semantic results through a bounded channel private to their allocation.
@@ -753,7 +753,7 @@ See [implementation labnotes](../20260919-1559-semantic-morse-stt.md) and
 [verification labnotes](../20260919-1624-speech-startup-isolation.md).
 
 Replan review on 2026-09-19 is separate from implementation progress. The
-[ownership proposal](../../docs/speech-session-ownership.md) closes the owner/lease/consumer, queued
+[ownership proposal](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md) closes the owner/lease/consumer, queued
 cancellation, stale-stop, readiness, parentage, failure-domain, deadline-lifetime and
 private-init-retention gaps found during GPT-6 Astra xhigh review.
 See the [replan labnote](../20260919-1646-replan-speech-ownership.md). The new R

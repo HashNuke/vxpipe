@@ -85,7 +85,7 @@ tool-less request. Conservative encoded-byte accounting includes every normalize
 input class and explicit envelope margins; context/output limits come from the
 validated ReqLLM model/options. Unsupported native options fail configuration,
 while a supported Zenmux routing policy passes through unchanged. See
-[model-context compaction](../../docs/context-compaction.md). The Session now prepares and
+[model-context compaction](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/context-compaction.md). The Session now prepares and
 commits a safe summary before every
 inference/tool-continuation round, and terminating it kills blocked compaction
 work. Call Engine passes its application setting into every agent activation. A

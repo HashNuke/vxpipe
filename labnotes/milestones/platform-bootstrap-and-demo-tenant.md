@@ -7,7 +7,7 @@ Prerequisites: [Tenant administration](tenant-call-specs-and-api-keys.md),
 The index delivers this after the [debug console](call-debug-console.md) so the first provisioned
 call has a usable destination; its storage/auth implementation does not depend on UI internals.
 Sources: [Developer console design](developer-console-and-onboarding.md),
-[Tenant control plane](../../docs/tenant-control-plane.md), [Provider storage](../../docs/provider-credential-storage.md).
+[Tenant control plane](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tenant-control-plane.md), [Provider storage](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-credential-storage.md).
 
 The 2026-09-19 [platform and tenant services plan](platform-and-tenant-services.md)
 extends the tenant-only contracts below with explicit platform inheritance and tenant
@@ -28,7 +28,7 @@ The platform-key and demo-bootstrap gates below remain independently tracked;
 the services follow-up does not establish a durable installation/demo identity.
 A3 implements trusted key bootstrap/replacement/revocation, authenticated platform
 status and operator/tenant call-spec HTTP writes. See the
-[operator-key contract](../../docs/operator-api-key-authoring.md).
+[operator-key contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/operator-api-key-authoring.md).
 
 ## Consolidated planning sources — 2026-10-09
 

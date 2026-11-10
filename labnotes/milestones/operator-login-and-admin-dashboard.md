@@ -13,8 +13,8 @@ Prerequisites: completed and user-approved
 host slices of the in-progress [Call debug console](call-debug-console.md). Its pending live-call
 controls and RTVI/WebRTC adapters do not block operator login or historical browsing.
 Sources: [Developer console design](developer-console-and-onboarding.md),
-[Gateway/Console boundary](../../docs/gateway-console-boundary.md), and
-[Call-details model](../../docs/debug-console-call-details-model.md).
+[Gateway/Console boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md), and
+[Call-details model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/debug-console-call-details-model.md).
 
 ## Runnable outcome
 
@@ -322,7 +322,7 @@ Post-checkpoint credential-management follow-up (2026-09-18): the approved Servi
 uses provider-owned names, server-generated masked previews and stable-ID credential replacement.
 The inventory read remains metadata-only because writes persist bounded non-secret last-four hints;
 raw payloads are still never returned. The replacement path locks and re-encrypts the complete
-payload at an incremented version. See [Console credential management](../../docs/console-credential-management.md)
+payload at an incremented version. See [Console credential management](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-credential-management.md)
 for the revised contract and rejected alternatives. This does not add provider-side validation or
 change Telnyx public service metadata through the credential form.
 
@@ -331,7 +331,7 @@ call spec and revision, the two operator-facing states `ongoing`/`ended`, and lo
 time. The API no longer publishes archive or inspection-only lifecycle metadata in list rows;
 persistence retains stable newest-first paging. The URL-backed call-spec filter is now searchable,
 and the primary populated Storybook state exercises pagination. See
-[Console call directory](../../docs/console-call-directory.md) for the contract and rejected alternatives.
+[Console call directory](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-call-directory.md) for the contract and rejected alternatives.
 
 ## Checkpoint 7 — Open live and historical call details
 

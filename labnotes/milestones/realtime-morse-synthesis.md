@@ -8,9 +8,9 @@ The hosted Morse provider synthesizes over ElevenLabs' single-context input
 WebSocket and recognizes over its realtime STT protocol. Vxpipe uses both
 through its existing adapter. Prerequisites: the completed
 [hosted provider](remote-morse-code-audio.md),
-[speech contract](../../docs/speech-provider-contract.md), and
-[session ownership](../../docs/speech-session-ownership.md).
-The [current design](../../docs/remote-morse-code-audio.md) owns rationale;
+[speech contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), and
+[session ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md).
+The [current design](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/remote-morse-code-audio.md) owns rationale;
 [checkpoint labnotes](../20261015-0500-realtime-morse-synthesis.md) own evidence.
 
 ## Approved contracts

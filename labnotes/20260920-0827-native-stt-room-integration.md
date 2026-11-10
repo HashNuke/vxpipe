@@ -3,7 +3,7 @@
 > Relocated from `docs/native-stt-room-integration.md` on 2026-10-09. First recorded source commit: `29d15a7eb45f` (2026-09-20T15:27:25+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260920-1528-native-deepgram-stt](20260920-1528-native-deepgram-stt.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 ## Decision
 

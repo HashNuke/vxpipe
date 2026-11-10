@@ -3,7 +3,7 @@
 > Relocated from `docs/speech-provider-expansion.md` on 2026-10-09. First recorded source commit: `43a6dbefa84d` (2026-09-30T06:48:47+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260930-0353-provider-expansion-gateway](20260930-0353-provider-expansion-gateway.md).
-> Maintained contracts/progress: [elevenlabs-stt-session](../docs/elevenlabs-stt-session.md), [provider-expansion-and-ai-gateway](milestones/provider-expansion-and-ai-gateway.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [elevenlabs-stt-session](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/elevenlabs-stt-session.md), [provider-expansion-and-ai-gateway](milestones/provider-expansion-and-ai-gateway.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Local design review and speech provider checkpoints, 2026-09-30. This document informs
 [provider expansion](milestones/provider-expansion-and-ai-gateway.md).
@@ -15,8 +15,8 @@ and shared room checks pass; final milestone acceptance is complete under the
 approved STT/TTS scope.
 The user-approved 2026-10-01 scope limits ElevenLabs to STT/TTS; hosted-agent STS
 is deferred. The existing
-[speech contract](../docs/speech-provider-contract.md) and
-[session ownership](../docs/speech-session-ownership.md) remain authoritative.
+[speech contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md) and
+[session ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md) remain authoritative.
 
 ## Shared boundaries
 
@@ -184,7 +184,7 @@ See [checkpoint evidence](20260930-0911-elevenlabs-request-tts.md).
 
 ## ElevenLabs STT: local acoustic turn authority
 
-The [allocation-owned session](../docs/elevenlabs-stt-session.md) now supplies explicit
+The [allocation-owned session](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/elevenlabs-stt-session.md) now supplies explicit
 STT-only local acoustic onset and gap endpoints, with Scribe manual recognition.
 Its manifest declares STT alongside TTS; published calls resolve one encrypted
 tenant/platform API-key service privately. Compiled room and Console checks

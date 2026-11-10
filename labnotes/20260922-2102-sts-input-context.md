@@ -3,7 +3,7 @@
 > Relocated from `docs/sts-input-context.md` on 2026-10-09. First recorded source commit: `46322435801e` (2026-09-22T21:02:55+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260922-2045-sts-input-context](20260922-2045-sts-input-context.md), [20260922-2103-early-sts-events](20260922-2103-early-sts-events.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [agent-speech-to-speech](milestones/agent-speech-to-speech.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [agent-speech-to-speech](milestones/agent-speech-to-speech.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: input-only boundary implemented; 74 focused checks pass. Parent response
 integration and full lifecycle acceptance remain open.

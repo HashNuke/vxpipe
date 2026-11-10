@@ -48,3 +48,30 @@ verified delivery command.
   quickstart now uses the actual managed playground and explicitly provisions its
   `default` bindings (Console bindings use provider names). No sample-prototype
   behavior is presented as a production call launcher.
+
+- All 22 handbook chapters are drafted with current contracts and concise rationale.
+  Architecture and activation ownership use two Mermaid diagrams.
+- Moved the four unchanged directory JSON references into `docs/assets/integrations`.
+  The production validator and existing tests read those assets, so their paths
+  move together. This is a mechanical reference change; no new tests are added.
+  Existing required code checks will run before this checkpoint is complete.
+
+- Consolidated all 115 old Markdown documents into the 22-page handbook. Removed
+  superseded prose; retained historical evidence through 516 pinned links across
+  117 reference files. Moved the experiment to labnotes/experiments; four JSON
+  references are byte-identical at their new asset paths.
+- All handbook frontmatter, relative files and heading fragments checked. Generated
+  site links/anchors and four asset downloads checked without errors.
+- Website import/build and all 11 existing tests pass; Wrangler deployment dry-run
+  passes. Desktop (1440px) and mobile (390px) Chrome inspection found a theme issue:
+  nested installation links disappeared on mobile and long pagination labels
+  overflowed. Flattened those navigation entries and allowed labels to wrap;
+  confirmed navigation, search, diagram rendering and ordinary-page lazy loading.
+  Impeccable's scoped UI detector reports no findings. No new automated tests.
+- Canonical format, warnings-as-errors compilation and strict Credo pass. The full
+  umbrella suite is still running; its Call Engine lane has one failure in the
+  untouched STS transfer-resumption test (held error after tool failure).
+  Follow-up verification will record whether it reproduces.
+- Configured DOCS_PUBLISH_BRANCH=docs. Website deploy key ID 169410306 has write
+  access only to HashNuke/vxpipe-web; its private key is stored solely in the
+  source repository's Actions secret. No personal token was copied.

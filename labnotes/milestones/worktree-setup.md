@@ -9,7 +9,7 @@ Prerequisites: the existing database/configuration contracts from
 [Tenant-scoped provider credentials and platform configuration](tenant-provider-credentials-and-platform-configuration.md)
 and the runner from [Outgoing calls and two-call live telephony](outgoing-calls-and-live-telephony.md)
 with [Outgoing call review fixes](outgoing-call-review-fixes.md).
-Sources: [development guide](../../docs/development/local-development.md), [live telephony harness](../../docs/development/live-telephony-harness.md),
+Sources: [development guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/local-development.md), [live telephony harness](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-telephony-harness.md),
 [platform settings](../../env.sample), and
 [research labnotes](../20261008-0959-worktree-setup-research.md).
 This developer-tooling slice does not depend on unfinished operator onboarding,
@@ -179,7 +179,7 @@ root/linked discovery, explicit overrides and copied metadata refusal. Actual ro
 and child dev/test startup selects the intended DBs. Probe rows in both databases
 survive rerun. Two fresh worktrees have distinct database names and ownership
 comments; each passes 214 Persistence tests with 12 live cases excluded, concurrently.
-See the [isolation decision](../../docs/development/worktree-isolation.md).
+See the [isolation decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/worktree-isolation.md).
 
 Exit: on the prepared machine, two initialized worktrees can run database-backed
 focused tests using plain `mix test`, without shell activation or shared DB state.
@@ -239,7 +239,7 @@ system-temp path, then passes with synchronized overlapping lifetimes. Both fres
 worktrees pass 30 Providers tests and 214 Persistence tests concurrently. The two
 acceptance runs start at 12:02:17 UTC; Persistence executions overlap from 12:03:27
 through 12:03:53 UTC. Other mutable test paths and ordinary listeners were audited;
-see [checkout isolation](../../docs/development/worktree-isolation.md).
+see [checkout isolation](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/worktree-isolation.md).
 
 ## Checkpoint 5 — Run development tools side by side
 
@@ -346,7 +346,7 @@ HTTP tests passed. No source was changed in either checkout during its full run.
   credentials are used; the real live credential file is never accessed.
 - Concurrent acceptance exposed and corrected temporary-file collisions, startup
   and teardown assertion races, archive-test capacity, speech-tree shutdown
-  handling and [obsolete speech after handoff recovery](../../docs/stale-speech-output.md).
+  handling and [obsolete speech after handoff recovery](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/stale-speech-output.md).
   Earlier failed/interrupted runs are recorded in the
   [implementation labnotes](../20261008-1110-worktree-setup-implementation.md),
   not counted as passing acceptance.
@@ -498,10 +498,10 @@ No independent-agent review or implemented acceptance is claimed.
 
 ## References
 
-Repository sources: [development guide](../../docs/development/local-development.md),
-[live provider tests](../../docs/development/live-provider-tests.md),
-[live telephony harness](../../docs/development/live-telephony-harness.md),
-[formal verification](../../docs/development/formal-verification.md), [platform settings](../../env.sample).
+Repository sources: [development guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/local-development.md),
+[live provider tests](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-provider-tests.md),
+[live telephony harness](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-telephony-harness.md),
+[formal verification](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/formal-verification.md), [platform settings](../../env.sample).
 
 External contracts checked during research:
 [Git worktree semantics](https://git-scm.com/docs/git-worktree),

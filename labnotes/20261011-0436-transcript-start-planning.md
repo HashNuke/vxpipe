@@ -7,7 +7,7 @@ with optional local VAD for any STT model, and automatic ElevenLabs Scribe VAD
 commits. This checkpoint changes planning and documentation only. The earlier
 uncommitted skipped measurement and its labnote are preserved.
 
-Created the durable [decision](../docs/stt-speech-start-detection.md) and
+Created the durable [decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/stt-speech-start-detection.md) and
 [implementation milestone](milestones/transcript-start-and-optional-vad.md), and
 linked them from the docs README and milestone index. The new milestone stays
 unchecked. Its direct prerequisites already pass historical acceptance; their

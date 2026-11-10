@@ -11,10 +11,10 @@ Prerequisites: [Telnyx calls](telnyx-calls.md), [Twilio through the common telep
 contract](twilio-calls.md) (adapter, incoming and transfer dialing), [prepared call
 admission](prepared-call-admission.md), [tenant call specs and API keys](tenant-call-specs-and-api-keys.md),
 [tenant-scoped provider credentials](tenant-provider-credentials-and-platform-configuration.md).
-Sources: [live telephony harness decision](../../docs/development/live-telephony-harness.md),
-[tenant telephony services](../../docs/tenant-telephony-services.md), [opt-in live provider
-tests](../../docs/development/live-provider-tests.md), [G2 admission routes](../20260906-1452-call-spec-gap-review.md#g2--resolved-for-the-initial-scope-admission-authentication-and-entry-roles),
-[architecture: initial outbound machine detection](../../docs/architecture.md).
+Sources: [live telephony harness decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-telephony-harness.md),
+[tenant telephony services](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tenant-telephony-services.md), [opt-in live provider
+tests](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-provider-tests.md), [G2 admission routes](../20260906-1452-call-spec-gap-review.md#g2--resolved-for-the-initial-scope-admission-authentication-and-entry-roles),
+[architecture: initial outbound machine detection](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md).
 
 ## Runnable outcome
 
@@ -141,7 +141,7 @@ Content-Type: application/json
 
 ### Live test tooling: `bin/livetests`
 
-As decided in the [harness decision](../../docs/development/live-telephony-harness.md):
+As decided in the [harness decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-telephony-harness.md):
 
 - `bin/livetests run [mix test args]` replaces `bin/test-live-providers` with the same child-only
   credential loading, placeholder clearing and ambient-credential isolation. With no arguments it
@@ -494,7 +494,7 @@ public endpoint test (1 test, zero failures, seed 530653), then were stopped. Te
 authentication works and its public key has valid 32-byte Ed25519 encoding; the key's account
 match remains unverified until real signed callbacks arrive. Twilio REST discovery works, so
 the purchase blocker is the reported compliance restriction. See the
-[verification table](../../docs/development/live-telephony-harness.md#provisioning-verification-2026-10-04) and
+[verification table](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-telephony-harness.md#provisioning-verification-2026-10-04) and
 [labnote](../20261004-2330-telephony-provisioning-check.md).
 
 At this recheck, checkpoint C's real-account gate remained unchecked. Checkpoints D and E remained open. The next
@@ -520,7 +520,7 @@ plan defaults, storage metadata and uniqueness changes. Legacy sources continue 
 publish and run; new incoming source runs, outgoing publication creates no inbound route,
 and the ring deadline changes the deterministic preparation digest. All three livetests
 shell suites passed with fake carriers. Both updated JSON examples parsed successfully.
-See the [direction reference](../../docs/call-spec-direction.md) and
+See the [direction reference](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/call-spec-direction.md) and
 [checkpoint labnote](../20261004-2326-outgoing-direction-schema.md).
 
 The selected public endpoint test also passed through the normal runner and carrier preflight
@@ -546,7 +546,7 @@ Red-green evidence: 64 focused engine tests and 27 Gateway tests, zero failures.
 compile with warnings as errors, strict Credo and unused dependency checks passed. Full
 umbrella verification for this runtime checkpoint passed: 3,078 tests, zero failures. See the
 [runtime labnote](../20261004-2357-outgoing-room-runtime.md).
-The [runtime decision](../../docs/outgoing-call-runtime.md) records ownership, uncertain submission
+The [runtime decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/outgoing-call-runtime.md) records ownership, uncertain submission
 cleanup and the rejected transfer/synchronous-dial alternatives.
 
 D3 stays unchecked until native STS generated opening and the remaining runtime contracts
@@ -566,7 +566,7 @@ after database rollback. Focused regressions passed: Calls 28 tests, Persistence
 tests, zero failures. HTTP/runtime submission acknowledgement remains unimplemented,
 so D5's acceptance tasks remain unchecked. See the
 [admission labnotes](../20261005-0037-outgoing-call-admission.md) and
-[runtime decision](../../docs/outgoing-call-runtime.md). All root gates now pass for this slice: 3,088 tests, zero failures, 98 excluded,
+[runtime decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/outgoing-call-runtime.md). All root gates now pass for this slice: 3,088 tests, zero failures, 98 excluded,
 seed 303119 across nine applications; format, compilation with warnings as errors,
 strict Credo and unused dependency checks passed. No live calls ran.
 
@@ -585,7 +585,7 @@ five PostgreSQL workflow tests. Root format, warnings-as-errors compile, strict 
 unused dependency checks passed. The full root run passed across all nine applications:
 3,104 tests, zero failures, 98 excluded, seed 755205. D5 is complete. Lean build, oracle and
 Elixir replay passed after the cutover fixture adjustment. See the [HTTP labnotes](../20261005-0102-outgoing-http-submission.md)
-and [runtime decision](../../docs/outgoing-call-runtime.md). No carrier calls ran; D3 native STS,
+and [runtime decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/outgoing-call-runtime.md). No carrier calls ran; D3 native STS,
 D6 outcome/timestamp projection was accepted in the following checkpoint; E remains open.
 
 ## D6 acceptance: outgoing lifecycle projection (2026-10-05)
@@ -602,8 +602,8 @@ timestamp without an answered outcome; closure clocks retain microseconds.
 Existing call-details/inspection endpoints expose `outgoing_outcome`, `dial_submitted_at`,
 `answered_at` and `dial_ended_at`, with no request keys or provider payloads. Incoming inspection
 retains its call-object shape. Projection is asynchronous, so fields can remain null until
-evidence is stored. The [runtime contract](../../docs/outgoing-call-runtime.md#outgoing-lifecycle-projection),
-[API guide](../../docs/operator-api-key-authoring.md#starting-an-outgoing-call), direction reference and
+evidence is stored. The [runtime contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/outgoing-call-runtime.md#outgoing-lifecycle-projection),
+[API guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/operator-api-key-authoring.md#starting-an-outgoing-call), direction reference and
 [complete outgoing example](../../examples/call-specs/outgoing-morse.json) are updated.
 The example parses and compiles through the real capability registry without provider requests.
 
@@ -625,7 +625,7 @@ Turn Morse generated/fixed openings now wait for callee media, speak once, and p
 agent evidence without a fake caller turn. Google fixture coverage includes both response
 profiles, generated opening, exact provider-transcript validation before fixed output,
 interruption, missing/different text, bounded assembly and rejection of a replacement cue.
-84 focused tests pass (seed 34032). See the [native opening decision](../../docs/native-sts-opening.md)
+84 focused tests pass (seed 34032). See the [native opening decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/native-sts-opening.md)
 and its [labnotes](../20261005-0227-native-sts-opening.md) for red/green evidence
 and limitations. All final root gates pass: 3,134 tests, zero failures, 98 excluded,
 seed 269987; strict Credo checks 1,193 files with no issues. Final Lean build/oracle/replay
@@ -643,7 +643,7 @@ an acoustic burst closes and its aligned transcript exactly matches the requeste
 within captured PCM duration. Missing/altered text, interruption, connection loss, bounds
 or deadline failures release no unverified audio. Verified output still requires ordinary
 room admission and credits; no hidden model/TTS or fake caller input is introduced.
-The [opening decision](../../docs/native-sts-opening.md) records the acoustic-boundary and provider
+The [opening decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/native-sts-opening.md) records the acoustic-boundary and provider
 transcript limits; [duplex labnotes](../20261005-0318-duplex-sts-opening.md)
 record red/green evidence and refactoring.
 
@@ -736,7 +736,7 @@ media start. Engine ends only the exact tenant/room/incarnation through its trus
 `end_call/3` operation; ordinary supervision closes the archive. Twilio's owned bidirectional
 stream stop is normalized as terminal only after account/call/stream validation. Generic
 socket disconnect and Telnyx stream-stop behavior retain their existing semantics. See the
-[hangup decision](../../docs/carrier-hangup-lifecycle.md).
+[hangup decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/carrier-hangup-lifecycle.md).
 
 Focused evidence: 19 Engine lifecycle tests, 43 Gateway carrier/decoder/ingress tests, and
 20 lifecycle/platform-tool tests on the final policy extraction pass. Strict Credo, formatting,
@@ -753,5 +753,5 @@ This does not prove immediate startup availability; ordinary selected runs can f
 health before dialing. No paid test is automatically retried. See the
 [final checkpoint labnotes](../20261005-0927-carrier-hangup-lifecycle.md).
 
-See [selected commands and evidence](../../docs/development/live-telephony-harness.md#e-implementation-and-live-evidence-2026-10-05)
+See [selected commands and evidence](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-telephony-harness.md#e-implementation-and-live-evidence-2026-10-05)
 and the [acceptance labnotes](../20261005-0347-live-telephony-acceptance.md).

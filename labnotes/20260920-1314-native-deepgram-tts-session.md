@@ -3,7 +3,7 @@
 > Relocated from `docs/native-deepgram-tts-session.md` on 2026-10-09. First recorded source commit: `e1d3353fab00` (2026-09-20T20:14:29+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260920-1912-native-deepgram-tts](20260920-1912-native-deepgram-tts.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: checkpoint F accepted, 2026-09-20. The controlled local-wire, cancellation, failure,
 isolation, bounded-load and hosted semantic-session lanes pass.

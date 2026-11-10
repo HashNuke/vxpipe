@@ -12,7 +12,7 @@ F's final opt-in interoperability gate in
 
 Run one tagged, explicitly enabled integration lane against the real GPT-Live
 WebSocket using the existing `GPTLiveSession` and speech session boundary.
-The repository-wide [live provider test plan](../../docs/development/live-provider-tests.md)
+The repository-wide [live provider test plan](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-provider-tests.md)
 distinguishes this direct protocol check from a configured-service call. The
 manual phone pass must use the effective tenant or platform service selected
 through the normal call path.
@@ -100,5 +100,5 @@ when `--include integration` is used. `--only live_openai` selects both; with
 configuration validates locally without a network call.
 The authorized hosted results will be recorded here and in the checkpoint
 labnotes when available. The unresolved items in
-[the duplex profile](../../docs/sts-duplex-profile.md) remain unverified until the
+[the duplex profile](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-duplex-profile.md) remain unverified until the
 corresponding hosted or phone observation is recorded.

@@ -3,7 +3,7 @@
 > Relocated from `docs/native-stt-contract.md` on 2026-10-09. First recorded source commit: `935d554f4c40` (2026-09-19T20:48:44+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260919-2013-native-stt-contract](20260919-2013-native-stt-contract.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Checkpoint A completes the standalone STT boundary on top of R's scoped lifetime
 and deadline handling. Production rooms continue to use legacy speech until the

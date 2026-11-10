@@ -8,21 +8,21 @@ interruptions, and call visibility so you can focus on what your agents do.
 
 ## Quickstart
 
-Docker release coming soon; this command is a preview.
+Run the current application from a source checkout:
 
 ```shell
-docker run --rm -p 4000:4000 --env-file .env \
-  vxpipe/vxpipe
+bin/setup
+bin/dev
 ```
 
-Platform settings come from `env.sample`; provision provider credentials per tenant in PostgreSQL.
-
-Then open the [voice console](http://localhost:4000/pipecat-console).
+Open the Console URL printed by setup. Follow [Getting started](docs/en/usage/getting-started.md)
+for prerequisites, saved provider credentials and a first voice call.
 
 ## Get started
 
-- **[Docker delivery plan](labnotes/milestones/container-quickstart-plan.md)** — planned packaging; a verified Docker installation is not available yet.
-- **[Get started with Elixir](docs/getting-started-elixir.md)** — run from source and explore components for your own Elixir applications.
+- **[Documentation](docs/en/index.md)** — usage, configuration and development.
+- **[Docker](docs/en/usage/install/docker.md)** and **[Railway](docs/en/usage/install/railway.md)** — intended packaged installation; release artifacts are still pending.
+- **[Architecture](docs/en/development/architecture.md)** — application boundaries and reusable Elixir components.
 
 ## License
 

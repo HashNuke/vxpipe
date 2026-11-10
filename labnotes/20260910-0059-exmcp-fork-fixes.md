@@ -3,7 +3,7 @@
 > Relocated from `docs/ex_mcp-fixes.md` on 2026-10-09. First recorded source commit: `222e3dc983dc` (2026-09-10T00:59:47+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260909-1932-mcp-client-conformance](20260909-1932-mcp-client-conformance.md).
-> Maintained contracts/progress: [MCP client conformance](../docs/development/mcp-client-conformance.md) and [MCP client milestone](milestones/mcp-client-library.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [MCP client conformance](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-client-conformance.md) and [MCP client milestone](milestones/mcp-client-library.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: all fix branches and the `vxp` integration branch are published at
 `HashNuke/ex_mcp`. Vxpipe consumes `vxp` through its public HTTPS URL and locks commit

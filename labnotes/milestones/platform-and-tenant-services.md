@@ -61,7 +61,7 @@ It does not restore environment-based provider credentials or implicit failure f
   provider probe. **Save** performs local schema validation and encrypted persistence separately.
   Saving remains available when a provider has no supported test, and does not create new
   `last_validated_at` evidence. See the
-  [credential testing and storage contract](../../docs/provider-credential-validation.md).
+  [credential testing and storage contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-credential-validation.md).
 
 ## Telnyx credentials, verification and routing
 
@@ -219,7 +219,7 @@ checkpoint before carrier work; it does not add a new provider or recipe catalog
 
 Carrier design review, 2026-09-19: C will be delivered in reviewed C1/C2/C3 commits for
 effective application bindings, scoped ingress, and Console configuration respectively.
-The [scoped Telnyx binding decision](../../docs/scoped-telnyx-service-bindings.md) records the
+The [scoped Telnyx binding decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/scoped-telnyx-service-bindings.md) records the
 legacy compatibility boundary, selected-owner identity and acceptance order.
 C3 is split into credential/URL setup (C3a) and tenant application configuration
 (C3b). C3b is delivered as an operator API/durable-route checkpoint (C3b1), then its
@@ -306,7 +306,7 @@ Key storage, protected output, authority separation and disposable-database
 HTTP/restart exercises pass. The authoring routes now reject tenant writes using
 platform-only services and accept them once the tenant configures its own services;
 the combined umbrella suite passes 1,754 tests with 40 exclusions. All root static
-gates pass. See the [key and authoring contract](../../docs/operator-api-key-authoring.md),
+gates pass. See the [key and authoring contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/operator-api-key-authoring.md),
 [key lifecycle labnotes](../20260919-0803-operator-key-authoring.md) and
 [HTTP authoring labnotes](../20260919-0821-authorize-http-spec-writes.md).
 
@@ -381,7 +381,7 @@ Checkpoint C1 implementation:
   covers 1,770 tests with one obsolete field-set assertion; its correction passes the
   complete 116-test Calls suite. All remaining umbrella applications pass, including
   the 700 engine and 446 Gateway tests. Root static gates pass. No UI changed in C1.
-  See [binding configuration](../../docs/scoped-telnyx-service-bindings.md) and
+  See [binding configuration](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/scoped-telnyx-service-bindings.md) and
   [C1 evidence](../20260919-0930-scoped-telnyx-bindings.md).
 
 Checkpoint C2 implementation:

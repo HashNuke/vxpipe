@@ -46,7 +46,7 @@
 - Implementation has not started. This design review ran while the preceding Zenmux startup
   correction's umbrella regression was in progress; no second Mix process ran alongside it.
 - Independent design review found no further blocker after the locking and rollout corrections.
-  The [durable design](../docs/platform-credential-reencryption.md) records the decision and
+  The [durable design](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/platform-credential-reencryption.md) records the decision and
   rejected alternatives. This review changes no checkpoint implementation count.
 
 ## Storage implementation

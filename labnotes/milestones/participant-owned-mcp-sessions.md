@@ -9,7 +9,7 @@ application-configured expiry, `refresh_scheduled_at` and `refreshed_at`.
 
 ## Prerequisites and design sources
 
-Read the [ownership decision](../../docs/development/participant-mcp-ownership.md),
+Read the [ownership decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/participant-mcp-ownership.md),
 including its dependency-worker findings, rejected alternatives and shutdown
 limitations. It defines the proposed change to the historical shared-client
 design in [Remote MCP tools](remote-mcp-tools.md) and
@@ -26,10 +26,10 @@ does not supply it. That approval is not a technical prerequisite for isolated
 ownership work on its already implemented runtime. No unfinished STS provider,
 onboarding, delivery or retention milestone is added as a prerequisite.
 
-Also read [saved-runtime authority](../../docs/development/saved-mcp-runtime.md),
-[current transport credentials](../../docs/development/mcp-runtime-transport.md),
-[tool outcomes](../../docs/tool-execution-model.md) and
-[Gateway/Console ownership](../../docs/gateway-console-boundary.md).
+Also read [saved-runtime authority](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/saved-mcp-runtime.md),
+[current transport credentials](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-runtime-transport.md),
+[tool outcomes](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tool-execution-model.md) and
+[Gateway/Console ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md).
 
 ## Runnable outcome
 
@@ -203,7 +203,7 @@ have explicit lifetimes. Both management and ongoing calls still work independen
 ### T3b — Durable tenant catalog refresh jobs
 
 Depends on the T1 operation-owned client and T3 current-credential boundaries.
-Follow the [queue/timestamp contract](../../docs/development/participant-mcp-ownership.md#persistent-tenant-catalog-maintenance).
+Follow the [queue/timestamp contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/participant-mcp-ownership.md#persistent-tenant-catalog-maintenance).
 
 - [x] Red-test tenant-owned catalog freshness and due-selection rules. Add
   nullable UTC microsecond `refresh_scheduled_at` and `refreshed_at` with an indexed, bounded

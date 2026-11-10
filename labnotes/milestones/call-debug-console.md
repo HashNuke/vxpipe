@@ -10,8 +10,8 @@ Pending live-carrier acceptance is not required to build this browser surface.
 Sources: [Developer console design](developer-console-and-onboarding.md),
 [RTVI call-variable projection](rtvi-call-variable-projection.md),
 [debug-console metrics](debug-console-metrics.md),
-[call-details model](../../docs/debug-console-call-details-model.md),
-[Gateway/Console boundary](../../docs/gateway-console-boundary.md), [Operator's Bench](../../DESIGN.md).
+[call-details model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/debug-console-call-details-model.md),
+[Gateway/Console boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md), [Operator's Bench](../../DESIGN.md).
 
 ## Consolidated planning sources — 2026-10-09
 
@@ -74,7 +74,7 @@ when the call ends. The same console will run Getting Started examples.
   direct RTVI decoding, RTCPeerConnection, Pipecat-specific React hooks/types, tenant API fetches
   or Console imports. Client has no React/Phoenix/app dependency; shared public types belong
   to client exports. Author component styling with Tailwind v4 utilities and semantic CSS
-  variables under the [React styling contract](../../docs/development/react-component-styling.md). The npm build emits
+  variables under the [React styling contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/react-component-styling.md). The npm build emits
   compiled CSS; shadcn registry items install the same editable TSX source and required tokens.
 - Console provides admission/inspection through adapters/callbacks. Neither reusable boundary
   hard-codes sample/setup URLs or requires platform/tenant/provider keys. Ephemeral admission

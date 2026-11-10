@@ -2,7 +2,7 @@
 
 > Relocated from `docs/call-spec-gap-review.md` on 2026-10-09. First recorded source commit: `f94375ea5680` (2026-09-06T14:52:41+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
-> Maintained contracts/progress: [architecture](../docs/architecture.md), [call-spec-direction](../docs/call-spec-direction.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md), [call-spec-direction](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/call-spec-direction.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Reviewed: 2026-09-06 UTC
 Last updated: 2026-09-08 UTC
@@ -44,7 +44,7 @@ retry; a later agent-requested tool call is a separate invocation.
 Every tool uses one application-level supervised submission, running acknowledgement, and
 later conversation update for every model provider, not inline execution or native async
 branches. Local tool bindings default to blocking later caller conversation and may explicitly
-select `non_blocking`; see the [tool execution model](../docs/tool-execution-model.md).
+select `non_blocking`; see the [tool execution model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tool-execution-model.md).
 Late confirmations are deferred as external events that a future gateway
 mechanism could route to an active call room/agent, not current MCP reconciliation.
 Generic platform confirmation is excluded for now: agent instructions handle
@@ -1184,7 +1184,7 @@ while retaining private executor bindings; no generated tenant modules/atoms, pr
 dependency APIs, or generic model-visible endpoint/tool dispatcher. Call Engine owns
 authorization and connects the private binding to `vxpipe_mcp`; neither library depends on
 the other. Standalone ExMCP conformance remains independent. See the
-[runtime decision](../docs/reqllm-agent-runtime.md) and
+[runtime decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/reqllm-agent-runtime.md) and
 [superseded Jido evidence](20260908-1637-jido-tool-execution.md).
 Use the [official specification](https://modelcontextprotocol.io/specification/2025-11-25)
 and [lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)

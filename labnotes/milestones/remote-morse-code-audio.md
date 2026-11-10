@@ -5,7 +5,7 @@ The baseline below records its original acceptance scope. Subsequent public
 hosting uses `https://morsecode.vxpipe.com` without authentication. The user has
 now requested WebSocket TTS; its changed contract and acceptance are tracked in
 [Realtime Morse synthesis](realtime-morse-synthesis.md). See the updated
-[design](../../docs/remote-morse-code-audio.md) for current behavior.
+[design](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/remote-morse-code-audio.md) for current behavior.
 Scope simplified at the user's request. This replaces the earlier goal of
 complete ElevenLabs speech API parity: the service performs existing Morse TTS/STT operations over
 the network, using the relevant ElevenLabs request and response conventions.
@@ -40,12 +40,12 @@ as requirements. Do not add a new abstraction or compatibility framework.
 
 ## Sources and prerequisites
 
-- [Design decision](../../docs/remote-morse-code-audio.md).
+- [Design decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/remote-morse-code-audio.md).
 - [Local Morse providers](morse-code-audio-providers.md).
 - [Provider integration packages](provider-integration-packages.md).
 - [Tenant provider credentials](tenant-provider-credentials-and-platform-configuration.md).
-- [Speech contract](../../docs/speech-provider-contract.md) and
-  [session ownership](../../docs/speech-session-ownership.md).
+- [Speech contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md) and
+  [session ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md).
 
 The existing room lifecycle, permission system and provider supervision remain
 the owners of their behavior. Add focused evidence for the new network boundary;

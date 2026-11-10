@@ -92,7 +92,7 @@ session. With the new `hold` fact:
 - **Alternative:** implement provider input reset for Morse STS as well.
 
 **D4: STS tool conversation semantics.** The
-[tool execution model](../../docs/tool-execution-model.md) describes text agents: a
+[tool execution model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tool-execution-model.md) describes text agents: a
 `running` acknowledgement, then a private continuation turn. STS providers
 (Gemini, GPT-Live delegation) instead require exactly one native function
 result per call.

@@ -75,12 +75,12 @@ no packaging/retention hold and do not require new provider authentication suppo
 
 Source baseline: `9eb35a4` (approved design), plus the user-approved Morse and internal
 MCP-library additions and historical Jido runtime selection documented during planning on
-2026-09-08. The 2026-09-10 [runtime decision](../../docs/reqllm-agent-runtime.md) inserts a separate
+2026-09-08. The 2026-09-10 [runtime decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/reqllm-agent-runtime.md) inserts a separate
 ReqLLM-based agent-runtime package before live MCP tools; ExMCP continues to supply the
 protocol client behind `vxpipe_mcp`. The subsequent user-requested
 observability additions introduce an early observable sample call and later call inspection;
 the original milestones retain their filenames and relative order.
-The approved [gateway/console boundary](../../docs/gateway-console-boundary.md) keeps the gateway
+The approved [gateway/console boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md) keeps the gateway
 reusable and assigns Phoenix/dashboard/sample ownership to `vxpipe_console` /
 `Vxpipe.Console`. It changes these slices' application ownership, not their count or order.
 
@@ -91,7 +91,7 @@ and Deepgram one direction at a time. The [provider comparison](../20260919-0858
 covers Cartesia, AssemblyAI, Rime, ElevenLabs and Gemini without adding those integrations.
 Research is complete. The earlier global prototype's startup-isolation regression and
 [evidence](../20260919-1124-speech-startup-isolation.md) remain recorded. The [revised ownership
-plan](../../docs/speech-session-ownership.md) defines scoped execution. The accepted implementation order
+plan](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md) defines scoped execution. The accepted implementation order
 is R → A → D → B → C → F → E → G; H remains.
 
 Speech integration is **9 of 9 checkpoints complete**. Morse and Deepgram STT and TTS now use
@@ -121,7 +121,7 @@ the standalone MCP client/conformance entry is an enabling checkpoint for its li
 slice, not an end-to-end call feature. Dependencies inside a milestone are its direct prerequisites;
 the list gives a conservative total order, even where independent work is possible.
 Read the [call-spec design](../20260905-0405-call-definition-design.md),
-[decision register](../20260906-1452-call-spec-gap-review.md), and [architecture](../../docs/architecture.md).
+[decision register](../20260906-1452-call-spec-gap-review.md), and [architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md).
 Current approved decisions supersede historical proposals retained in the labnote.
 
 Keep every implementation checkbox unchecked until the corresponding work and evidence
@@ -188,10 +188,10 @@ progress without claiming the entire milestone is complete.
 55. [x] [Participant-owned MCP sessions](participant-owned-mcp-sessions.md) — Complete: all 29 implementation items verified. Activation-owned sessions/renewal and durable tenant catalog maintenance pass credential-change, teardown, transfer/recovery, capacity, privacy and controlled local acceptance. Actual Cron refresh and external inbound MCP continuity pass. All five root gates pass: 5,094 tests, zero failures, 371 excluded, seed 157471; focused final lanes and independent Astra reviews are clean. Deployment and the separate directory workflow approval remain outside this milestone.
 56. [x] [Shared tool execution for LLM and speech-to-speech participants](shared-participant-tool-execution.md) — Complete: 20/20 tasks and 4/4 checkpoints. LLM and native speech participants share tool/MCP execution, both conversation modes, semantic completion, bounded retention and usage. The 446-test common lane covers ordinary/duplex receptionist behavior, controlled outcomes, repeated identities, partial admission and teardown. All five root gates pass (5,213 tests, zero failures, 376 excluded; seed 112460), plus Lean and clean independent Astra review. Provider live acceptance and deployment remain separately owned.
 57. [ ] [Consolidated handbook and publication](consolidated-handbook-and-publication.md) — Publish the canonical English usage/development handbook from this repository to vxpipe-web; Docker and Railway chapters describe planned delivery.
-58. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+58. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/hashnuke/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
 59. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
-The 2026-11-08 [participant MCP ownership decision](../../docs/development/participant-mcp-ownership.md)
+The 2026-11-08 [participant MCP ownership decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/participant-mcp-ownership.md)
 adds a runtime lifecycle slice after the implemented saved-MCP work and before
 delivery. The integrations-directory milestone's outstanding user workflow approval
 remains separate; it is not supplied by this research or a technical dependency
@@ -226,7 +226,7 @@ do not block it. Local design/dependency review is recorded separately from impl
 independent code-review evidence. Same-day clarifications define protected Superadmin/Admin roles,
 configurable ordinary permission bundles and fixed privileged-account rules. Calls/specs
 are tenant-scoped; platform services and users are installation-scoped. The approved Tenant Manager and Tenant Member templates are documented
-in the [decision document](../../docs/console-authentication-and-authorization.md).
+in the [decision document](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-authentication-and-authorization.md).
 
 ## Pre-delivery review hold
 
@@ -282,7 +282,7 @@ not a change to either milestone's approved scope or completion state. Retention
 the final milestone.
 
 The 2026-09-13 pre-delivery review requests
-[incremental media policy application](../../docs/incremental-media-policy.md): preserve
+[incremental media policy application](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/incremental-media-policy.md): preserve
 unchanged services during membership revisions. The live-mixing and human-transfer
 milestones track the speech and audio checkpoints; this does not change milestone
 ordering or lift the packaging/retention hold.
@@ -386,7 +386,7 @@ The subsequent independent-opening-TTS checkpoint uses schema `20260913.01`: tex
 require their own profile and work with a human initial receiver, with no inherited voice.
 Recording checks cover both text/file openings and announcement egress as well as caller audio.
 All five root gates pass; the final umbrella suite reports 1,013 tests and zero failures. See
-[the current contract and migration guidance](../../docs/opening-audio-contract.md).
+[the current contract and migration guidance](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/opening-audio-contract.md).
 
 ## Common implementation and verification gates
 
@@ -606,7 +606,7 @@ in their own review sections; no independent-agent or implementation verificatio
 | [Simpler speech integrations](simpler-speech-integrations.md#specification-review) | Complete; R/A/D/B/C/F/E/G/H accepted; 9/9 | Native room STT/TTS, opening and private-transfer speech use scoped semantic sessions. Closed provider-map configuration, all-consumer activation, interruption/replacement, rendered inspection, provider checks and bounded final loads are recorded. The post-audit sink interruption repair passes all five root gates with 1,961 tests, zero failures and 42 excluded (seed 0); Astra reviewed. |
 | [Agent speech-to-speech](agent-speech-to-speech.md#specification-review-and-planning-evidence) | Full A–F scope selected; planned | Google, OpenAI and ElevenLabs documentation plus reference-source inspection established STS ownership, transcript, turn control, interruption, policy, cancellation, model-history and session-lifetime gates. Transcript selection is separate from turn control; egress evidence is qualified. Focused red-green checks accompany implementation, with integrated calls, UI, bounded load, review and umbrella gates grouped after the full workflow. Google hosted acceptance remains separately authorized and gated. No implementation or paid-provider verification is claimed. |
 | [GPT-Live speech-to-speech](gpt-live-speech-to-speech.md#specification-review) | Specification frozen 2026-09-25; A–E locally verified; F hosted acceptance open | OpenAI GPT-Live guides and two open-source client implementations established the duplex gaps: no turn or interruption events, untimed continuous output, delegated tools and no resumption handle. Descriptor facts, adapter-side inference, provider-owned barge-in and reseeded continuity address them. Checkpoints A–C establish the contract, Morse duplex local provider, and compiled-room behavior. D verifies the OpenAI adapter against a fake socket. E verifies bounded room-published history reseeding and room-owned transfer, including concurrent publication ordering. F enables one-key OpenAI setup and has local load, review and an opt-in hosted harness. The 2026-10-06 phone slice verifies protected openings, native input and 48 kHz output through a real carrier pair; the remaining hosted phone scenarios keep acceptance open. |
-| [Outgoing calls and two-call live telephony](outgoing-calls-and-live-telephony.md#specification-review) | Reviewed with the user 2026-10-04 (30 s ring default, optional client Idempotency-Key, per-tenant limits deferred) | Tailscale, Telnyx OpenAPI and Twilio trial research in the [harness decision](../../docs/development/live-telephony-harness.md); internal admission, connection-intent and outbound-connector reading recorded in the labnote. |
+| [Outgoing calls and two-call live telephony](outgoing-calls-and-live-telephony.md#specification-review) | Reviewed with the user 2026-10-04 (30 s ring default, optional client Idempotency-Key, per-tenant limits deferred) | Tailscale, Telnyx OpenAPI and Twilio trial research in the [harness decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-telephony-harness.md); internal admission, connection-intent and outbound-connector reading recorded in the labnote. |
 | [Embedded and container delivery](embedded-and-container-delivery.md#specification-review) | Approved; boundary and distribution follow-ups reviewed | milestone_review_a approved the initial draft; subsequent local reviews cover gateway-only embedding, console composition, built assets, the 2026-09-13 Docker-first README/image naming and Elixir library requirements, and the 2026-09-16 developer-setup prerequisites/same-image demo checks. The 2026-09-19 speech plan adds a locally reviewed prerequisite before publishing the embedded interface. The packaging hold remains. |
 | [Worktree setup and concurrent development](worktree-setup.md#specification-review) | Complete; locally reviewed 2026-10-08 | Six implementation checkpoints complete. Reviewed database/configuration dependencies, branch-lifetime live ownership, explicit release, repeatable bootstrap, port/session isolation and concurrent acceptance. Two complete overlapping umbrella suites and rendered/synthetic acceptance pass; no independent-agent review or real live execution is claimed. |
 
@@ -687,7 +687,7 @@ the separate console, retaining gateway reuse; dashboard/authentication implemen
 choices remain explicit. The affected specifications record a focused ownership/dependency
 review; all 23 entries retained their order and implementation status. See the
 [observability planning log](../20260908-1725-observability-milestone-plan.md)
-and [gateway/console decision](../../docs/gateway-console-boundary.md).
+and [gateway/console decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md).
 
 The 2026-09-10 runtime decision adds one intermediate slice, bringing the index to 24.
 It preserves the completed Jido-backed evidence but selects a separate internal ReqLLM
@@ -695,7 +695,7 @@ runtime for forward work, avoiding a Jido fork or missing extension dependency. 
 milestone precedes live MCP, which retains its completed enabling checkboxes and now consumes
 the runtime's private executor boundary. Planning inspected ReqLLM 1.22.0 and Legion 0.5.0;
 no runtime, provider, dependency-removal, or browser evidence is claimed. See the
-[runtime decision](../../docs/reqllm-agent-runtime.md) and
+[runtime decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/reqllm-agent-runtime.md) and
 [planning labnote](../20260910-0934-reqllm-agent-runtime.md).
 
 The 2026-09-13 pre-delivery follow-up adds the transfer readiness and wait-sound proposal,

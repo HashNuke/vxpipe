@@ -6,7 +6,7 @@ defmodule Vxpipe.Console.MCPTargetCancellationTest do
   alias Vxpipe.Identity.Principal
   @tenant "AAAAAAAAAAAAAAAA"
   @example Path.expand(
-             "../../../../../docs/development/integrations-directory.example.json",
+             "../../../../../docs/assets/integrations/integrations-directory.example.json",
              __DIR__
            )
 

@@ -3,7 +3,7 @@
 > Relocated from `docs/morse-duplex-scripted-reseed.md` on 2026-10-09. First recorded source commit: `1baf3af8cf5b` (2026-09-26T22:18:14+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260926-2145-morse-scripted-reseed](20260926-2145-morse-scripted-reseed.md).
-> Maintained contracts/progress: [live-provider-tests](../docs/development/live-provider-tests.md), [speech-provider-contract](../docs/speech-provider-contract.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [live-provider-tests](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-provider-tests.md), [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 ## Decision
 

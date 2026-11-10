@@ -7,9 +7,9 @@ Status: complete — 2026-10-15.
 Call capabilities retain their realtime provider connection across utterances
 and turns. Prerequisites are the completed semantic speech/provider packages,
 Rime/Google speech integration, and realtime Morse synthesis. The
-[decision](../../docs/persistent-speech-sessions.md),
-[provider contract](../../docs/speech-provider-contract.md), and
-[ownership contract](../../docs/speech-session-ownership.md) define boundaries.
+[decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/persistent-speech-sessions.md),
+[provider contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), and
+[ownership contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md) define boundaries.
 The user's new requirement supersedes the earlier acceptance of per-utterance
 request transports. Historical milestones remain evidence of their old scope.
 

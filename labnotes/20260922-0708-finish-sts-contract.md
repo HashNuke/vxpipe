@@ -79,7 +79,7 @@ repository and preserved. No commit was requested or created.
 ## Decisions and limits
 
 The durable decision and rejected alternatives are in
-[`docs/sts-output-admission.md`](../docs/sts-output-admission.md). The exact
+[`docs/sts-output-admission.md`](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-output-admission.md). The exact
 protocol and a runnable independent-provider example are linked from the speech
 author guide. Corrected the milestone's earlier all-fixed claim and annotated
 the historical repair note rather than erasing the failed repair history.

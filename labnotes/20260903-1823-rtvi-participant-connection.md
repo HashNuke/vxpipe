@@ -3,7 +3,7 @@
 > Relocated from `docs/rtvi-participant-connection.md` on 2026-10-09. First recorded source commit: `e45fc002a039` (2026-09-03T18:23:58+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260903-1740-connect-rtvi-participant](20260903-1740-connect-rtvi-participant.md).
-> Maintained contracts/progress: [architecture](../docs/architecture.md), [native-webrtc-testing](../docs/development/native-webrtc-testing.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md), [native-webrtc-testing](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/native-webrtc-testing.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: Implemented bounded vertical slice
 

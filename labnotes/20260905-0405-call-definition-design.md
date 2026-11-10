@@ -1995,7 +1995,7 @@ Every selected tool is executed in a separate activation-owned worker. A binding
 `conversation_mode` is `blocking` or `non_blocking`; omission resolves to `blocking`.
 Blocking governs later caller-turn admission while the worker is pending, not worker placement.
 The value is pinned per local binding and is not a model argument or client override. See the
-durable [tool execution model](../docs/tool-execution-model.md).
+durable [tool execution model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tool-execution-model.md).
 
 Transfer remains derived from `transfers`, and variable tools remain derived from
 variable permissions; neither needs a duplicate entry in `tools`. Tool aliases
@@ -4399,7 +4399,7 @@ vxpipe_artifacts (when the recording slice begins)
   -> implements artifact/publisher ports without entering the room hot path
 ```
 
-The [gateway/console boundary](../docs/gateway-console-boundary.md), approved on
+The [gateway/console boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md), approved on
 2026-09-08, is additive: do not convert, rename or regenerate the gateway. Hosts
 can consume its reusable Plug/protocol runtime without the console or Phoenix;
 the standalone listener remains an alternative to mounting into a host endpoint.

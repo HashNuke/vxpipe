@@ -3,7 +3,7 @@
 > Relocated from `docs/deterministic-text-turn.md` on 2026-10-09. First recorded source commit: `957fa978561e` (2026-09-03T18:51:52+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260903-1833-text-turn-roundtrip](20260903-1833-text-turn-roundtrip.md).
-> Maintained contracts/progress: [architecture](../docs/architecture.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: Implemented bounded vertical slice
 

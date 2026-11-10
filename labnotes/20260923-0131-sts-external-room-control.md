@@ -3,7 +3,7 @@
 > Relocated from `docs/sts-external-room-control.md` on 2026-10-09. First recorded source commit: `7914ac6b755d` (2026-09-23T01:31:11+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260923-0121-external-room-control](20260923-0121-external-room-control.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [agent-speech-to-speech](milestones/agent-speech-to-speech.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [agent-speech-to-speech](milestones/agent-speech-to-speech.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: partial room implementation. Compiled Morse external/hybrid response
 control and selected-origin replacement have focused local proof. Controller

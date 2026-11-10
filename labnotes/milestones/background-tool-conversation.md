@@ -6,7 +6,7 @@ Forward-runtime note (2026-09-10): Jido-specific mechanisms below remain histori
 implementation evidence. The [ReqLLM agent-runtime milestone](reqllm-agent-runtime.md)
 must reproduce the approved acknowledgement, cancellation, completion-mailbox and private
 continuation behavior before Jido is removed. The subsequently selected
-[tool execution model](../../docs/tool-execution-model.md) generalizes supervised submission to every
+[tool execution model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tool-execution-model.md) generalizes supervised submission to every
 tool. This milestone's runnable conversation behavior becomes the explicit `non_blocking`
 mode; bindings otherwise default to blocking later caller turns. The completed evidence below
 still describes the implementation at the time it was collected.

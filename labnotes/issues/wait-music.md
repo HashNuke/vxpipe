@@ -46,4 +46,4 @@ and unchanged startup, tool, and whole-call time limits. The current checkpoint
 adds documentation only; no audio playback or browser checks were performed.
 
 Related: [call-spec design](../20260905-0405-call-definition-design.md),
-[architecture](../../docs/architecture.md), and [gap review](../20260906-1452-call-spec-gap-review.md).
+[architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md), and [gap review](../20260906-1452-call-spec-gap-review.md).

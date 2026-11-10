@@ -3,14 +3,14 @@
 > Relocated from `docs/jido-tool-execution.md` on 2026-10-09. First recorded source commit: `4feff0a96082` (2026-09-08T16:37:36+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260908-1344-jido-ai-evaluation](20260908-1344-jido-ai-evaluation.md).
-> Maintained contracts/progress: [reqllm-agent-runtime](../docs/reqllm-agent-runtime.md), [tool-execution-model](../docs/tool-execution-model.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [reqllm-agent-runtime](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/reqllm-agent-runtime.md), [tool-execution-model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tool-execution-model.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Date: 2026-09-08. Status: superseded on 2026-09-10 for forward implementation.
 
 The Jido-backed implementation and investigation below remain factual evidence for completed
 milestones. Vxpipe will not maintain a Jido fork or wait on its missing runtime data-tool
 interface. The selected forward path is the separate
-[ReqLLM agent runtime](../docs/reqllm-agent-runtime.md), implemented before live MCP tools. That
+[ReqLLM agent runtime](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/reqllm-agent-runtime.md), implemented before live MCP tools. That
 milestone must preserve the completed behavior before Jido dependencies are removed.
 
 ## Superseded decision

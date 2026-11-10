@@ -3,14 +3,14 @@
 > Relocated from `docs/speech-startup-isolation.md` on 2026-10-09. First recorded source commit: `4cfaa5280722` (2026-09-19T18:24:00+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260919-1624-speech-startup-isolation](20260919-1624-speech-startup-isolation.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: baseline recorded before continuing checkpoint R on 2026-09-19; zero of nine
 checkpoints accepted. The user requires test evidence before treating a design concern as a
 stability defect. This document records that evidence; it does not approve the current session
 implementation.
 
-The subsequent [ownership replan](../docs/speech-session-ownership.md) proposes room-scoped speech
+The subsequent [ownership replan](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md) proposes room-scoped speech
 trees, asynchronous local initialization and admission-time deadlines. The historical
 measurements below remain unchanged; the proposed fix has not been implemented or verified.
 

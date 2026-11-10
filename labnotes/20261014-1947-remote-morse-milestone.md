@@ -11,7 +11,7 @@ Date: 2026-10-14. Scope: research/design and milestone documentation only.
   unrelated ElevenLabs products. No application implementation or deployment was
   requested in this first task.
 - Added the [milestone](milestones/remote-morse-code-audio.md) before delivery and
-  the [design document](../docs/remote-morse-code-audio.md). All implementation
+  the [design document](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/remote-morse-code-audio.md). All implementation
   boxes remain unchecked; the index grows from 47 to 48 specifications.
 
 ## Inspection and research

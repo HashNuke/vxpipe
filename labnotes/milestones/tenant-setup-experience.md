@@ -96,7 +96,7 @@ Evidence: `Vxpipe.Calls.Administration.authenticate/4` checks exact membership;
 The Gateway authenticates call admission with that same scope. The existing
 trusted issuance command accepts a name (up to 256 characters) and explicit grants,
 returns the plaintext once, and persists only a digest. See
-[tenant control-plane operations](../../docs/tenant-control-plane.md).
+[tenant control-plane operations](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tenant-control-plane.md).
 
 The `admin` grant is not evidence that every tenant-management HTTP endpoint
 exists. Current issuance/revocation remain trusted OTP/CLI operations. Storybook
@@ -126,7 +126,7 @@ modal opts into it. It presents **Test credentials** and **Save** as separate ac
 Testing is read-only and retains the draft for correction or saving. Save remains
 available when credential testing is unsupported. Storybook callbacks simulate those
 operations; the production contract is documented in
-[Provider credential testing and storage](../../docs/provider-credential-validation.md).
+[Provider credential testing and storage](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-credential-validation.md).
 
 Rime supports Coda TTS. Google AI Studio offers LLM, while
 Deepgram offers STT and TTS. Telnyx and Twilio offer telephony. Provider product
@@ -147,7 +147,7 @@ Deepgram defaults:
 - TTS: `flux-hannah-en`
 
 The demo call specs use `model: "flux"` and `options.voice: "haley"`; Deepgram constructs the
-wire model as described in [voice selection](../../docs/deepgram-voice-selection.md). The listed TTS model is
+wire model as described in [voice selection](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/deepgram-voice-selection.md). The listed TTS model is
 the catalog's display default.
 
 Rime defaults to Coda TTS with the `astra` speaker at 24 kHz. Its prepared WebSocket accepts

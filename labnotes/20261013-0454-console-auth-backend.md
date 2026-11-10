@@ -11,7 +11,7 @@ files in that commit. No further commit has been requested.
   controllers still construct `InstallationOperator.authority()`, so a router-only
   guard would not enforce tenant permissions at the domain boundary.
 - Recorded the action/owner map in
-  [Console route inventory](../docs/console-authentication-route-inventory.md).
+  [Console route inventory](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-authentication-route-inventory.md).
 - Added a focused failing Console test for exact route-to-permission mapping,
   then implemented `RoutePermission`; three tests pass. Corrected a test that
   initially marked an explicit sample route unknown. The mapping is not yet

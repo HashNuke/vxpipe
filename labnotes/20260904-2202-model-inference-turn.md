@@ -3,7 +3,7 @@
 > Relocated from `docs/model-inference-turn.md` on 2026-10-09. First recorded source commit: `dd72d07ca7ab` (2026-09-04T22:02:07+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260904-2127-llm-integration](20260904-2127-llm-integration.md).
-> Maintained contracts/progress: [reqllm-agent-runtime](../docs/reqllm-agent-runtime.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [reqllm-agent-runtime](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/reqllm-agent-runtime.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: Implemented bounded vertical slice
 
@@ -85,7 +85,7 @@ Credentials have a separate lifecycle. Inline Google selections resolve encrypte
 bindings through a host-injected credential source during capability preparation. Global
 provider environment keys are not read. The resulting private snapshot belongs to that
 activation and is excluded from prepared plans, commands, events and inspection. See
-[inline provider selections](../docs/inline-provider-selections.md) for the current contract.
+[inline provider selections](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/inline-provider-selections.md) for the current contract.
 
 ## Context ownership and bounds
 

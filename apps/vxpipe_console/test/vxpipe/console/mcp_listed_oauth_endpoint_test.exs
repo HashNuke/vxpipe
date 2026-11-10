@@ -11,7 +11,7 @@ defmodule Vxpipe.Console.MCPListedOAuthEndpointTest do
   @resource "https://calendar.example.test/mcp"
   @issuer "https://auth.example.test"
   @example Path.expand(
-             "../../../../../docs/development/integrations-directory.example.json",
+             "../../../../../docs/assets/integrations/integrations-directory.example.json",
              __DIR__
            )
 

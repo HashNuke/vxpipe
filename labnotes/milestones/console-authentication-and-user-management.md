@@ -11,11 +11,11 @@ Prerequisites: completed [Operator login and admin dashboard](operator-login-and
 The unfinished parent bootstrap/demo and Getting Started milestones are not blockers;
 authentication setup must not require a demo tenant. The index places this before delivery.
 
-Sources: [Authentication and authorization decision](../../docs/console-authentication-and-authorization.md),
-[Gateway/Console boundary](../../docs/gateway-console-boundary.md),
-[Operator API-key authoring](../../docs/operator-api-key-authoring.md),
-[Demo binding](../../docs/demo-tenant-binding.md), and
-[Tenant control plane](../../docs/tenant-control-plane.md).
+Sources: [Authentication and authorization decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-authentication-and-authorization.md),
+[Gateway/Console boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md),
+[Operator API-key authoring](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/operator-api-key-authoring.md),
+[Demo binding](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/demo-tenant-binding.md), and
+[Tenant control plane](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tenant-control-plane.md).
 
 ## Runnable outcome and requested contracts
 
@@ -67,7 +67,7 @@ permission prerequisites, membership caps and the complete protected route inven
 | `/admin/roles/new` | Create an ordinary permission-based role. |
 | `/admin/roles/:role_id` | View/edit an ordinary role; view built-ins read-only. |
 
-The [decision's route contract](../../docs/console-authentication-and-authorization.md#console-pages-and-urls)
+The [decision's route contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-authentication-and-authorization.md#console-pages-and-urls)
 defines per-page access. IDs are public UUIDs. Logout uses `POST /auth/logout`.
 Email is only the login identifier. No email verification, invitations, magic links,
 forgot-password pages or mailed reset tokens. Creation/reset uses administrator-entered
@@ -95,7 +95,7 @@ an interaction preview and never substitutes for server-side authorization.
 - [ ] User reviews the Storybook UI/functionality (deferred; backend authorized to proceed).
 
 Stories: `Vxpipe / Console / Authentication / Full journey`, `Components`, and `Pages`.
-See the [review guide](../../docs/development/authentication-storybook.md).
+See the [review guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/authentication-storybook.md).
 Evidence: [UI implementation labnote](../20261013-0423-authentication-storybook-ui.md).
 All five root gates, 610 frontend tests, TypeScript, lint and both builds pass.
 The original UI checkpoint evidence above is historical. Final backend acceptance and
@@ -200,7 +200,7 @@ or edit permitted resources with clear UI affordances.
   and distinguish all-tenant/mixed/no-tenant roles. Keep changes pending until form save.
   Test selections across search pages, duplicate/deleted tenants, role changes, empty
   assignments, read-only viewers, failed saves and atomic assignment replacement. See
-  the [interaction proposal](../../docs/console-authentication-and-authorization.md#tenant-access-on-the-user-form).
+  the [interaction proposal](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-authentication-and-authorization.md#tenant-access-on-the-user-form).
 - [x] Red-test role filtering before pagination/counts, combined search, valid empty
   results and invalid filters. Include All roles, Superadmin, Admin and custom-role
   options using public role IDs. Provide minimal option metadata to `users.read`
@@ -347,8 +347,8 @@ first setup, user creation, tenant assignment, password reset, replacement-passw
 and session invalidation in another browser context.
 
 See [backend labnotes](../20261013-0454-console-auth-backend.md),
-[operational instructions](../../docs/development/console-authentication-operations.md),
-and the [route inventory](../../docs/console-authentication-route-inventory.md).
+[operational instructions](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/console-authentication-operations.md),
+and the [route inventory](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-authentication-route-inventory.md).
 Final evidence: the umbrella run exercised 3,749 tests across ten applications
 (132 intentionally excluded integration/live cases). Its sole failure was an existing
 transfer-test synchronization race, corrected without production speech changes; the

@@ -4,7 +4,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Page do
   alias Vxpipe.Console.IntegrationsDirectory.Request
 
   @schema_path Path.expand(
-                 "../../../../../../docs/development/integrations-directory.schema.json",
+                 "../../../../../../docs/assets/integrations/integrations-directory.schema.json",
                  __DIR__
                )
   @external_resource @schema_path

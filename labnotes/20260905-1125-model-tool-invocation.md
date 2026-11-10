@@ -3,7 +3,7 @@
 > Relocated from `docs/model-tool-invocation.md` on 2026-10-09. First recorded source commit: `43a27fa82936` (2026-09-05T11:25:13+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260905-1106-model-tool-invocation](20260905-1106-model-tool-invocation.md).
-> Maintained contracts/progress: [tool-execution-model](../docs/tool-execution-model.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [tool-execution-model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tool-execution-model.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: Implemented bounded vertical slice
 

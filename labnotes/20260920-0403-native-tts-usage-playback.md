@@ -3,7 +3,7 @@
 > Relocated from `docs/native-tts-usage-playback.md` on 2026-10-09. First recorded source commit: `63d73185e32c` (2026-09-20T11:03:36+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260920-0921-tts-cancellation-contracts](20260920-0921-tts-cancellation-contracts.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: checkpoint D4 implementation candidate, 2026-09-20. Focused tests and the
 isolated 1/8/32-scope load pass after repairing accounting-flow defects found by

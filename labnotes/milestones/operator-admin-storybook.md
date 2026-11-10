@@ -5,8 +5,8 @@ production integration on 2026-09-17. Requested and independently reviewed 2026-
 Prerequisites: the private React package and completed component/model slices of the in-progress
 [Call debug console](call-debug-console.md).
 Sources: [Developer console design](developer-console-and-onboarding.md),
-[React styling contract](../../docs/development/react-component-styling.md), and
-[Call-details model](../../docs/debug-console-call-details-model.md).
+[React styling contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/react-component-styling.md), and
+[Call-details model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/debug-console-call-details-model.md).
 
 ## Runnable outcome
 

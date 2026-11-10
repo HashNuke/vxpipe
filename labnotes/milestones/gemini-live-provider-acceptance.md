@@ -8,11 +8,11 @@ The broader [agent STS milestone](agent-speech-to-speech.md) remains incomplete.
 Prerequisites: the implemented Google STS adapter and protected openings in
 [agent speech-to-speech](agent-speech-to-speech.md), the registry/credential
 contracts in [provider integration packages](provider-integration-packages.md),
-and the [live telephony harness](../../docs/development/live-telephony-harness.md).
+and the [live telephony harness](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-telephony-harness.md).
 Reference: [GPT-Live acceptance](gpt-live-speech-to-speech.md).
-Design sources: [semantic speech contract](../../docs/speech-provider-contract.md),
-[Google speech integration](../../docs/google-speech-integration.md),
-[protected openings](../../docs/protected-agent-openings.md).
+Design sources: [semantic speech contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md),
+[Google speech integration](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/google-speech-integration.md),
+[protected openings](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/protected-agent-openings.md).
 
 ## Approved contracts and design review
 
@@ -200,7 +200,7 @@ Exactly zero microphone PCM does not manufacture an unresolved caller obligation
 Missing/unsafe handles still fail explicitly; unsupported history reconstruction
 cannot silently start a new conversation. No dependency or shared-room contract
 change is needed. Details and rejected alternatives are in
-[Gemini Live session lifecycle](../../docs/gemini-live-session-lifecycle.md).
+[Gemini Live session lifecycle](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gemini-live-session-lifecycle.md).
 
 Follow-up wire-contract design review, before the corresponding fixes: the real
 endpoint sends `turnComplete` without `interactionStatus`, and its session tokens
@@ -347,7 +347,7 @@ carrier behavior and exposes the remaining qualified-attribution dependency.
 
 - `ambiguous_input`: a competing caller onset no longer fails the session. The earlier caller
   and the next final are settled without text; the room treats an empty final as settled
-  evidence. See [the controller doc](../../docs/google-sts-controller.md). Red tests in the Google
+  evidence. See [the controller doc](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/google-sts-controller.md). Red tests in the Google
   controller and room STS suites. Live phone re-verification is blocked: Twilio's API reports
   the account as not active.
 - Fixed-opening verification failed live sessions when the transcript followed

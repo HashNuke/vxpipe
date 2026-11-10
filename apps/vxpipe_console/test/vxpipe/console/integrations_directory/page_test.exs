@@ -3,7 +3,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.PageTest do
 
   alias Vxpipe.Console.IntegrationsDirectory.{Page, Request}
 
-  @examples Path.expand("../../../../../../docs/development", __DIR__)
+  @examples Path.expand("../../../../../../docs/assets/integrations", __DIR__)
 
   test "rejects unavailable adapters and incompatible rows without changing server pagination" do
     page =

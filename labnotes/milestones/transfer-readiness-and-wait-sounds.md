@@ -18,8 +18,8 @@ Prerequisites: [Call lifecycle and opening audio](opening-audio-and-call-lifecyc
 [Human web transfers](human-web-transfers.md), [Common phone transfers](telnyx-calls.md),
 and [Usage observations](usage-and-billing-observations.md).
 Design sources: [approved transfer contract](../20260905-0405-call-definition-design.md#transfer-success-and-failure--approved-g8-baseline),
-[opening playback contract](../../docs/opening-audio-contract.md),
-[incremental policy application](../../docs/incremental-media-policy.md), and the user's 2026-09-13
+[opening playback contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/opening-audio-contract.md),
+[incremental policy application](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/incremental-media-policy.md), and the user's 2026-09-13
 request for complete readiness, independent wait playback, and an audible connection cue.
 
 ## Runnable outcome
@@ -704,7 +704,7 @@ their lease while requiring the refreshed request to remove or replace missing s
 subscriber still requested cannot become ready. A looping player drops only a lost sink when another
 remains; final-sink loss and finite-cue failure retain their existing failure behavior. See the
 [reconnection labnote](../20260915-0730-transfer-listener-reconnection.md) and
-[policy ownership decision](../../docs/incremental-media-policy.md#connection-owned-enforcers).
+[policy ownership decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/incremental-media-policy.md#connection-owned-enforcers).
 
 The native regression also freezes the handoff worker during attachment and requires immediate
 connection/output hold. RoomAuthority sends a room-monitor-fenced pending notification before
@@ -861,7 +861,7 @@ this delivery plan.
 ### Acceptance evidence map
 
 The owning checks below cover the common requirements above. The passing current root run executes
-their original modules; the [native verification guide](../../docs/development/native-webrtc-testing.md) gives focused commands
+their original modules; the [native verification guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/native-webrtc-testing.md) gives focused commands
 and distinguishes controlled providers, real WebRTC traffic and live carrier evidence.
 
 | Contract | Owning evidence |
@@ -949,7 +949,7 @@ resource still validates its actual policy diff. Reusing the existing leases avo
 unaffected provider. The general preparation caller retains immediate cleanup on failure. New owner
 processes, broader failure retries and longer deadlines were rejected; the existing owner/deadline
 protocol is sufficient. This closes an initial graph gap without changing milestone order or scope.
-See [incremental media policy](../../docs/incremental-media-policy.md) for the decision and implications.
+See [incremental media policy](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/incremental-media-policy.md) for the decision and implications.
 
 ### Audience refresh during destination construction review
 
@@ -989,9 +989,9 @@ during active model/tool requests is committed as `01a2469`. Policy-aware initia
 allocation is committed as `b047624`. These supplied the base for the now-accepted human web
 checkpoint; the remaining delivery slices keep their own acceptance tasks above.
 
-The durable [readiness resource contract](../../docs/readiness-resource-contract.md) records ownership,
+The durable [readiness resource contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/readiness-resource-contract.md) records ownership,
 identity, preparation/adoption and cleanup rules. The
-[incremental policy contract](../../docs/incremental-media-policy.md) remains authoritative: readiness or
+[incremental policy contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/incremental-media-policy.md) remains authoritative: readiness or
 waiting must not restart any unaffected participant or room capability.
 
 ### Human handoff integration
@@ -1085,7 +1085,7 @@ require decoded audio and completion, then accept another caller turn. A live br
 before acceptance now recovers spoken responses and retains the original peer beyond the former
 failure point. See the [recovery audio labnote](../20260914-1915-human-recovery-audio.md).
 
-The subsequent [admission lifecycle fix](../../docs/transfer-admission-lifecycle.md) releases the exact
+The subsequent [admission lifecycle fix](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/transfer-admission-lifecycle.md) releases the exact
 private destination reservation on unused-session expiry, claimant loss or connection termination.
 History and consumed tokens remain intact; a partial unique index excludes concurrent active
 admissions, and a late release cannot affect a newer token. The existing destination-loss WebRTC
@@ -1136,7 +1136,7 @@ The tenant-credential verification subsequently reproduced a separate shutdown-o
 the policy authority could exit before RoomAuthority recorded adopted speech loss. RoomAuthority
 now monitors that policy child and records pending transfer failure before closing the incarnation.
 Deterministic policy-first speech loss and direct policy loss during release cover the ordering;
-see [policy failure ownership](../../docs/room-policy-failure-ownership.md) and its
+see [policy failure ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/room-policy-failure-ownership.md) and its
 [checkpoint evidence](../20260915-2122-handoff-speech-failure.md).
 Rejected barriers and policy death during the commit request also emit their terminal failure fact.
 All five root gates pass: 1,510 tests, zero failures and 30 exclusions, seed 235296. This result does
@@ -1245,7 +1245,7 @@ the focused red/green evidence and the removed UI detour.
   instrumented full-file and final root runs passed, but the cause remains unresolved. Keep it
   in the first slice's failure acceptance; no recovery deadline was extended.
 
-See [native WebRTC testing](../../docs/development/native-webrtc-testing.md) for commands and the exact audio/protocol
+See [native WebRTC testing](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/native-webrtc-testing.md) for commands and the exact audio/protocol
 boundary, and the [native speech labnote](../20260914-2103-native-morse-handoff.md) for
 codec experiments, fixture corrections and verification evidence.
 
@@ -1283,7 +1283,7 @@ records the bounded unsuccessful reproduction and separate audio failure.
 The [preparation policy labnote](../20260914-2155-handoff-preparation-policy.md)
 records the failing regression, unsuccessful retry-after-cleanup approach, retained-lease fix and
 verification. The ownership contract is documented under
-[prospective room preparation](../../docs/readiness-resource-contract.md#preparing-the-prospective-room).
+[prospective room preparation](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/readiness-resource-contract.md#preparing-the-prospective-room).
 
 ### Policy changes after adoption
 

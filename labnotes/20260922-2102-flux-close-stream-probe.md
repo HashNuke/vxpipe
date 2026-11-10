@@ -3,7 +3,7 @@
 > Relocated from `docs/flux-close-stream-probe.md` on 2026-10-09. First recorded source commit: `46c158856b23` (2026-09-22T21:02:24+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260922-2041-flux-close-probe](20260922-2041-flux-close-probe.md).
-> Maintained contracts/progress: [live-provider-tests](../docs/development/live-provider-tests.md), [speech-provider-contract](../docs/speech-provider-contract.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [live-provider-tests](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-provider-tests.md), [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Decision, 2026-09-22: add test-only evidence collection, not a hosted finite-input
 profile. The [protocol research](20260922-2032-deepgram-finite-input-proof.md) and approved

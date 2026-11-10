@@ -57,7 +57,7 @@ spoken through the configured Deepgram path.
 
 ## Manual tool-call test
 
-1. Follow [provider credential setup](../../../docs/provider-credential-storage.md) to provision
+1. Follow [provider credential setup](../../../docs/en/development/security-and-persistence.md) to provision
    Google and Deepgram for one tenant. Set `VXPIPE_DEV_TENANT` to its public key alongside the
    platform encryption settings in the ignored repository-root `.env`.
 2. From the repository root, run `bin/dev`.
@@ -106,7 +106,7 @@ ordinary negotiated audio tracks for private briefing and active room media.
 
 The default browser sample uses its provisioned Google/Deepgram tenant. Local model and Morse
 selections are explicit inline call spec fields with host-configured adapters; environment
-profile switches are removed. See [local fixtures](../../../docs/development/local-development.md#local-fixtures)
+profile switches are removed. See [local fixtures](../../../docs/en/development/local-development.md)
 for the deterministic direct-PCM voice test. It verifies local STT and audible Morse output
 without provider credentials. Browser microphone RTP is Opus, while Morse STT takes linear16.
 

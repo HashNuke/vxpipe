@@ -18,10 +18,10 @@ existing recorded audio and the provider test runner; no real telephony.
 - Existing [agent STS boundary](agent-speech-to-speech.md),
   [provider packages](provider-integration-packages.md), and
   [persistent sessions](persistent-speech-sessions.md).
-- [Semantic provider contract](../../docs/speech-provider-contract.md),
-  [author guide](../../docs/speech-integration-guide.md),
-  [output admission](../../docs/sts-output-admission.md), and
-  [scoped ownership](../../docs/speech-session-ownership.md).
+- [Semantic provider contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md),
+  [author guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-integration-guide.md),
+  [output admission](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-output-admission.md), and
+  [scoped ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md).
 - ElevenLabs [Realtime compatibility guide](https://elevenlabs.io/docs/eleven-agents/guides/openai-realtime-compatibility)
   and [client-secret API](https://elevenlabs.io/docs/api-reference/conversations/create-client-secret).
 

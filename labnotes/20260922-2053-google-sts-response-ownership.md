@@ -3,7 +3,7 @@
 > Relocated from `docs/google-sts-response-ownership.md` on 2026-10-09. First recorded source commit: `9b8508b935de` (2026-09-22T20:53:25+00:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260922-2016-google-response-ownership](20260922-2016-google-response-ownership.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [agent-speech-to-speech](milestones/agent-speech-to-speech.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [agent-speech-to-speech](milestones/agent-speech-to-speech.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Status: the bounded response-state owner, shared exact-start admission queue
 and local opted-in Google controller adoption are implemented and verified with
@@ -24,7 +24,7 @@ premature renewal, not lost or mixed responses.
 
 The [pinned ADK receiver](https://github.com/google/adk-python/blob/8164341ec5dc7d21d405e553c51cb0bd41cc7afa/src/google/adk/models/gemini_llm_connection.py)
 surfaces interaction status for prompts spanning several model turns. The
-[controller profile](../docs/google-sts-controller.md) records the corresponding codec
+[controller profile](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/google-sts-controller.md) records the corresponding codec
 evidence. Do not fabricate another caller end, send a placeholder, replay input,
 or infer that local playback ended the upstream model response.
 

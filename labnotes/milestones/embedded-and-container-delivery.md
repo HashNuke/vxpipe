@@ -2,8 +2,8 @@
 
 Status: not implemented; held until the user completes the pre-delivery platform and sample review. Specification review: approved (2026-09-08).
 Prerequisites: [Getting Started/example calls](getting-started-and-example-calls.md), including its debug-console and platform-bootstrap prerequisites; [Simpler speech integrations](simpler-speech-integrations.md); [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries and the [pre-delivery review hold](index.md#pre-delivery-review-hold) before beginning release work. Whole-call retention deliberately follows delivery as the final milestone.
-Sources: [Container/OTP architecture](../../docs/architecture.md#configuration-and-container-boundary); [canonical call spec boundary](../20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
-See also the approved [gateway/console boundary](../../docs/gateway-console-boundary.md).
+Sources: [Container/OTP architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md#configuration-and-container-boundary); [canonical call spec boundary](../20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
+See also the approved [gateway/console boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md).
 
 ## Consolidated planning sources — 2026-10-09
 
@@ -11,7 +11,7 @@ The [planned Docker quickstart](container-quickstart-plan.md) now lives beside t
 milestone rather than appearing as an implemented installation guide. This milestone
 retains the explicit pre-delivery hold and its unchecked release/acceptance gates.
 
-The eventual verified guide must cover pulling the released `vxpipe/vxpipe` tag,
+The eventual verified guide must cover pulling the released `ghcr.io/hashnuke/vxpipe` tag,
 configuring platform settings and encrypted tenant credentials, starting the service
 with HTTP plus WebRTC/telephony media networking, then opening Console and completing
 a first call. Verify tag, entrypoint, exact environment names, minimal configuration,
@@ -19,13 +19,13 @@ database bootstrap/migration and port/network requirements against the actual bu
 artifact on a clean host. The source's example HTTP port 4000 is planned, not a verified
 release setting. Platform keyring material remains separate from PostgreSQL; deployment
 configuration has no JSON/TOML loader, while call specs may use JSON. Until packaging is
-accepted, link the supported [source/Elixir path](../../docs/getting-started-elixir.md).
+accepted, link the supported [source/Elixir path](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/getting-started-elixir.md).
 Relocation does not publish an image, release the hold or satisfy a delivery gate.
 
 ## Runnable outcome
 
 Docker is the primary packaged distribution. The same approved call flow runs in
-the `vxpipe/vxpipe` image using platform environment settings and encrypted tenant records, and the
+the `ghcr.io/hashnuke/vxpipe` image using platform environment settings and encrypted tenant records, and the
 components can also be consumed as libraries within an Elixir host application.
 Operators can migrate/bootstrap, check readiness, join through configured ingress
 and shut down without silently losing or resurrecting work.
@@ -39,7 +39,7 @@ user explicitly releases that hold.
 
 ## Specification
 
-- Use the organization namespace `vxpipe` for the image, with `vxpipe/vxpipe` as
+- Use GitHub Container Registry under the source repository owner, with `ghcr.io/hashnuke/vxpipe` as
   the planned image repository. The GitHub source repository remains
   `HashNuke/vxpipe`; image naming does not require a GitHub repository transfer.
   Select and verify the concrete release tag and registry publishing setup during
@@ -84,7 +84,7 @@ user explicitly releases that hold.
 - [ ] Add container build/run instructions with safe platform env and tenant provisioning examples and no real
   secrets; verify licenses and required notices for the pinned direct and transitive
   dependencies before distributing the image.
-- [ ] Lead the root README with tested Docker instructions for `vxpipe/vxpipe`,
+- [ ] Lead the root README with tested Docker instructions for `ghcr.io/hashnuke/vxpipe`,
   retain `HashNuke/vxpipe` as the source repository, and document Elixir library
   consumption with a runnable host example. Keep the source-development quick
   start in the development guide once the Docker quick start replaces it.
@@ -160,7 +160,7 @@ This is specification evidence only; implementation and runtime verification rem
 ### Distribution and README review (2026-09-13)
 
 Local review of the user's packaging clarification establishes Docker as the
-primary distribution, `vxpipe/vxpipe` as the planned image name, and
+primary distribution, `ghcr.io/hashnuke/vxpipe` as the planned image name, and
 `HashNuke/vxpipe` as the unchanged source repository. Elixir library consumption
 remains a supported delivery path. The README keeps its product/quick-start role;
 packaging acceptance now explicitly covers the Docker instructions and linked

@@ -7,7 +7,7 @@ verified.
 Prerequisites: [Call-Spec-driven call](call-spec-driven-call.md),
 [Call Variables](call-variables-and-tool-visibility.md), and
 [background-tool conversation](background-tool-conversation.md).
-Sources: [runtime decision](../../docs/reqllm-agent-runtime.md),
+Sources: [runtime decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/reqllm-agent-runtime.md),
 [prior Jido investigation](../20260908-1637-jido-tool-execution.md), and
 [ReqLLM documentation](https://hexdocs.pm/req_llm).
 
@@ -85,7 +85,7 @@ process or dependency is used.
   never selects inline execution.
   The current compiler supports this field on authored host and MCP selections; generated
   Call Variables tools take the default until a later policy override is explicitly designed.
-  Follow the [tool execution model](../../docs/tool-execution-model.md).
+  Follow the [tool execution model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tool-execution-model.md).
 - Before every provider generation in either conversation mode, obtain a bounded payload-free
   pending-invocation snapshot from a Call Engine context-source contract. Supply it as trusted
   ephemeral model context, never as another committed tool result. Conversation history records

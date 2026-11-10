@@ -3,7 +3,7 @@
 > Relocated from `docs/speech-adoption-fix.md` on 2026-10-09. First recorded source commit: `f1e3d71990d2` (2026-09-19T19:20:01+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260919-1858-adoption-authority-fix](20260919-1858-adoption-authority-fix.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 The 2026-09-19 isolated R implementation allowed an obsolete preparation lease to
 close an adopted speech allocation. The regression test observed tree termination

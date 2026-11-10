@@ -55,7 +55,7 @@ Reception prepares a human web destination. That person privately hears permitte
 ## Manual verification
 
 1. Configure and migrate `VXPIPE_DB_URL`, provision tenant Google/Deepgram credentials using
-   [credential setup](../../docs/provider-credential-storage.md), set `VXPIPE_DEV_TENANT`, then start `bin/dev`.
+   [credential setup](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-credential-storage.md), set `VXPIPE_DEV_TENANT`, then start `bin/dev`.
 2. Open `/admin/samples/pipecat-console`, create a room, connect the Pipecat caller console, and ask to be
    transferred to human support with a concise purpose.
 3. Open `/admin/samples/transfer` in a second browser/device and connect within the 30-second attempt deadline.
@@ -152,7 +152,7 @@ See the [failure investigation](../20260913-1906-human-transfer-failure.md).
 
 Pre-delivery incremental-policy correction (2026-09-13): the user requested applying
 only the service changes implied by the new permissions. The
-[incremental policy decision](../../docs/incremental-media-policy.md) supersedes the
+[incremental policy decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/incremental-media-policy.md) supersedes the
 revision-wide reset behavior described in the historical checkpoints above.
 
 - [x] Review permission scopes, stale-data rejection, admission ordering, and bounded

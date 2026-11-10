@@ -11,9 +11,9 @@ events and stalled delivery, using provider events and engine acknowledgements.
 No local VAD is introduced.
 
 Prerequisite: [ElevenLabs Realtime speech-to-speech](elevenlabs-realtime-models.md).
-Contracts: [Realtime adapter](../../docs/elevenlabs-realtime-models.md),
-[speech provider contract](../../docs/speech-provider-contract.md), and
-[output admission](../../docs/sts-output-admission.md).
+Contracts: [Realtime adapter](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/elevenlabs-realtime-models.md),
+[speech provider contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), and
+[output admission](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-output-admission.md).
 
 ## Tasks and acceptance
 

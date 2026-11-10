@@ -28,7 +28,7 @@ opening text preparation. Current speech capabilities are room capability childr
 supervision also owns activation work. Opening generation already has a room incarnation.
 Existing global speech connection/output task supervisors still serve the old paths.
 
-The revised [ownership proposal](../docs/speech-session-ownership.md) keeps speech beneath
+The revised [ownership proposal](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md) keeps speech beneath
 the room capability tree, with separate temporary trees per connection or participant/purpose.
 Every shared ancestor admits lightweight children only. Blocking provider work executes
 asynchronously inside its allocation. Standalone use requires an explicit local scope.

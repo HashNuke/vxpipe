@@ -19,16 +19,16 @@ folder; their refinement remains deferred.
 
 | Previous path | Current document |
 | --- | --- |
-| `docs/development.md` | [Local development](../docs/development/local-development.md) |
-| `docs/worktree-isolation.md` | [Checkout isolation](../docs/development/worktree-isolation.md) |
-| `docs/live-provider-tests.md` | [Live provider tests](../docs/development/live-provider-tests.md) |
-| `docs/live-telephony-harness.md` | [Live telephony harness](../docs/development/live-telephony-harness.md) |
-| `docs/native-webrtc-testing.md` | [Native WebRTC testing](../docs/development/native-webrtc-testing.md) |
-| `docs/sts-comparative-call-load.md` | [STS comparative call load](../docs/development/sts-comparative-call-load.md) |
-| `docs/formal-verification.md` | [Formal verification](../docs/development/formal-verification.md) |
-| `docs/mcp-client-conformance.md` | [MCP client conformance](../docs/development/mcp-client-conformance.md) |
-| `docs/console-react-routing.md` | [Console React routing](../docs/development/console-react-routing.md) |
-| `docs/react-component-styling.md` | [React component styling](../docs/development/react-component-styling.md) |
+| `docs/development.md` | [Local development](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/local-development.md) |
+| `docs/worktree-isolation.md` | [Checkout isolation](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/worktree-isolation.md) |
+| `docs/live-provider-tests.md` | [Live provider tests](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-provider-tests.md) |
+| `docs/live-telephony-harness.md` | [Live telephony harness](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-telephony-harness.md) |
+| `docs/native-webrtc-testing.md` | [Native WebRTC testing](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/native-webrtc-testing.md) |
+| `docs/sts-comparative-call-load.md` | [STS comparative call load](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/sts-comparative-call-load.md) |
+| `docs/formal-verification.md` | [Formal verification](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/formal-verification.md) |
+| `docs/mcp-client-conformance.md` | [MCP client conformance](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-client-conformance.md) |
+| `docs/console-react-routing.md` | [Console React routing](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/console-react-routing.md) |
+| `docs/react-component-styling.md` | [React component styling](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/react-component-styling.md) |
 
 ## Link repair and preservation
 

@@ -117,5 +117,49 @@ Keep code identifiers and URLs unchanged when translating.
 The website imports canonical content into `src/content/docs/<lang>/docs/`.
 Do not edit those generated copies. Publication is selected by the application
 repository's `DOCS_PUBLISH_BRANCH` variable: `docs` during this work, then `main`
-after merge. The publication implementation and its end-to-end verification are
-tracked in the [handbook milestone](../../../labnotes/milestones/consolidated-handbook-and-publication.md).
+after merge.
+
+From the sibling website checkout, preview canonical edits with:
+
+```shell
+npm ci
+npm run docs:import -- ../vxpipe/docs
+npm run build
+npm run preview
+```
+
+The importer preserves the landing page, converts handbook links to site routes,
+copies shared assets and pins source-code links to the source Git revision. Commit
+the canonical changes before publishing so those source links resolve. The
+generated `src/content/docs-source.json` records that revision.
+
+## Publish and recover documentation
+
+The `Publish documentation` GitHub workflow imports and builds a documentation
+push from the selected branch, then commits the generated files to
+`HashNuke/vxpipe-web` on `main`. Its existing Cloudflare Workers Builds integration
+deploys that website commit. The workflow uses a write-enabled deploy key scoped
+to the website repository, stored as `DOCS_WEBSITE_DEPLOY_KEY` in the canonical
+repository's Actions secrets. Rotate the matching website deploy key and source
+secret together.
+
+After merging this documentation work, switch the publishing source:
+
+```shell
+gh variable set DOCS_PUBLISH_BRANCH --repo HashNuke/vxpipe --body main
+```
+
+This setting does not merge branches. Push a documentation change on `main` to
+publish from it; once the workflow is on the default branch, it can also be run
+manually through GitHub Actions.
+
+For a failed publication, inspect the `Publish documentation` run in the source
+repository. An import/build failure leaves the website branch unchanged. Fix
+broken links, frontmatter or build errors in their owning repository, then push
+the correction or rerun the failed run with `gh run rerun RUN_ID --failed --repo
+HashNuke/vxpipe`. A concurrent website push can reject the publisher's push; rerun
+to import onto the latest website revision. Never force-push generated content.
+
+After publication succeeds, check the website commit's Cloudflare build separately.
+A successful import is not proof of a successful hosted deployment. Confirm the
+changed page on the public site and compare the recorded source revision.

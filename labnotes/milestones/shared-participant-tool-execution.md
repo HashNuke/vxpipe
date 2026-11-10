@@ -19,11 +19,11 @@ without its own dispatcher, MCP client, tenant policy or completion policy.
 
 ## Prerequisites and design sources
 
-Read the [native STS tools research](../../docs/development/native-sts-tools.md),
-[tool execution model](../../docs/tool-execution-model.md),
-[participant MCP ownership design](../../docs/development/participant-mcp-ownership.md),
-[saved MCP authority](../../docs/development/saved-mcp-runtime.md), and
-[speech provider contract](../../docs/speech-provider-contract.md).
+Read the [native STS tools research](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/native-sts-tools.md),
+[tool execution model](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tool-execution-model.md),
+[participant MCP ownership design](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/participant-mcp-ownership.md),
+[saved MCP authority](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/saved-mcp-runtime.md), and
+[speech provider contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md).
 
 Reuse the implemented [ReqLLM runtime](reqllm-agent-runtime.md),
 [background tool execution](background-tool-conversation.md),

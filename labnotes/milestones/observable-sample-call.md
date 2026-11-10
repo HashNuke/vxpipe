@@ -4,8 +4,8 @@ Status: complete as of 2026-09-09. The Phoenix Console owns the dashboard and
 React/esbuild sample assets, while the reusable gateway remains independent of Phoenix
 and UI dependencies.
 Prerequisites: [Call-Spec-driven call](call-spec-driven-call.md).
-Sources: [Security and observability](../../docs/architecture.md#security-and-observability);
-[Gateway/console boundary](../../docs/gateway-console-boundary.md);
+Sources: [Security and observability](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md#security-and-observability);
+[Gateway/console boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md);
 [Telemetry handler execution](https://hexdocs.pm/telemetry/telemetry.html#attach/4);
 [LiveDashboard candidate](https://hexdocs.pm/phoenix_live_dashboard/Phoenix.LiveDashboard.html).
 

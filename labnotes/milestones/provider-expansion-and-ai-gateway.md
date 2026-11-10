@@ -14,10 +14,10 @@ Prerequisites: [Provider integration packages](provider-integration-packages.md)
 [Rime and Google speech providers](rime-and-google-speech-providers.md),
 [Tenant provider credentials](tenant-provider-credentials-and-platform-configuration.md).
 Design sources: [Platform and tenant services](platform-and-tenant-services.md),
-[Provider packages](../../docs/provider-integration-packages.md),
+[Provider packages](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-integration-packages.md),
 [Speech provider comparison](../20260919-0858-speech-provider-comparison.md),
 [Cartesia and ElevenLabs contracts](../20260930-0648-speech-provider-expansion.md), and
-[Live provider tests](../../docs/development/live-provider-tests.md).
+[Live provider tests](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/live-provider-tests.md).
 The [ElevenLabs input turn proposal](../20260930-1119-elevenlabs-turn-ownership.md) records
 boundary ownership and unresolved design gates; it is not an implemented milestone.
 The [remote agent ownership checkpoint](../20260930-2255-elevenlabs-agent-ownership.md) separates
@@ -433,7 +433,7 @@ capability is advertised.
 
 ## Allocation-owned Scribe session checkpoint — 2026-10-01
 
-The [session decision](../../docs/elevenlabs-stt-session.md) admits explicit STT-only
+The [session decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/elevenlabs-stt-session.md) admits explicit STT-only
 `local_gap` provenance without changing STS controller rules. Real packaged
 acoustic inference supplies onset and silence endpoints. Recognition retains old
 turn references, bounds queued PCM/turns and waits for manual settlement rather

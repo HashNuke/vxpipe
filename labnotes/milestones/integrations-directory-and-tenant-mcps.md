@@ -36,10 +36,10 @@ it does not provide the outbound connection grant implemented here. Do not creat
 another inbound server or move Console callback identity to the telephony Gateway.
 
 Authoritative new proposal:
-[consumption and custom MCP decisions](../../docs/development/integrations-directory-consumption.md).
-Also read the [API handoff](../../docs/development/integrations-directory-api.md),
-[tenant MCP architecture](../../docs/tenant-mcp-integrations.md) and
-[Storybook guide](../../docs/development/mcp-services-storybook.md). Where older
+[consumption and custom MCP decisions](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/integrations-directory-consumption.md).
+Also read the [API handoff](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/integrations-directory-api.md),
+[tenant MCP architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/tenant-mcp-integrations.md) and
+[Storybook guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-services-storybook.md). Where older
 proposals differ, the consumption document and this milestone take precedence.
 Existing incomplete onboarding/delivery milestones do not block this slice.
 
@@ -326,7 +326,7 @@ platform exclusion. Existing native connection/update/override tests remain gree
   pass, and the external directory release now passes hosted acceptance. T0/T8
   retain the separate user workflow approval gate.
 
-See [UI contracts](../../docs/development/integrations-ui.md) and
+See [UI contracts](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/integrations-ui.md) and
 [checkpoint evidence](../20261107-0309-review-integrations-ui.md).
 
 ### T4 — Tenant MCP records and static/anonymous connection lifecycle
@@ -341,7 +341,7 @@ independently of T1–T3 behind unexposed operations.
   conflict checks, revocation and bounded storage re-encryption. Nine focused
   persistence/cipher tests pass. Authorized Calls operations and session/CSRF-protected
   Console endpoints are now wired; end-to-end persistence acceptance remains open.
-  See [storage boundary](../../docs/development/tenant-mcp-storage.md).
+  See [storage boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/tenant-mcp-storage.md).
 - [x] Validate static authentication inputs and implement isolated transient MCP
   checks with bounded lifetime and caller-death cleanup. A real local HTTP fixture
   proves initialization/tools discovery without tool invocation (seed 806205).
@@ -471,7 +471,7 @@ Depends on T4/T4a and existing Console Installation URL/CIMD foundation.
   its optional initial token. Own-client shows advertised grants, authentication
   and signing choices, exact Console callback, active credential fields and
   grant-specific request parameters. Saved OAuth labels and catalog-only testing
-  preserve existing credentials. See [UI contract](../../docs/development/mcp-oauth-ui.md).
+  preserve existing credentials. See [UI contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-oauth-ui.md).
 - [x] Preserve tenant directory location through browser consent and add optional
   five-minute tab-local nonsecret draft recovery bound to actor/tenant/attempt.
   Require current authorized inventory before success feedback; consume once,
@@ -496,7 +496,7 @@ Depends on T4/T4a and existing Console Installation URL/CIMD foundation.
 - [x] Review installed ExMCP callback/transaction ownership and add a private S256
   authorization-request builder with fixed Console callback/resource and protected
   OAuth query fields. Three focused tests pass; see
-  [outbound OAuth decision](../../docs/development/tenant-mcp-oauth.md).
+  [outbound OAuth decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/tenant-mcp-oauth.md).
 - [x] Inspect installed ExMCP support and adapt its discovery/authorization interfaces;
   record gaps before adding protocol code. Support protected-resource metadata,
   OAuth/OIDC issuer discovery, existing registration, CIMD, then DCR negotiation.
@@ -673,7 +673,7 @@ returns to the same tenant/category, then discovers tools before marking connect
   implemented; the rendered custom/listed flows and callback-created grant renewal
   pass the separate acceptance lanes recorded above, with independent Astra review.
 
-See [browser-flow contracts](../../docs/development/mcp-oauth-browser-flow.md) and
+See [browser-flow contracts](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-oauth-browser-flow.md) and
 [review evidence](../20261107-0143-review-mcp-oauth-flow.md). Backend fixtures do not
 establish rendered browser or external provider interoperability acceptance.
 
@@ -760,7 +760,7 @@ proposal and obtaining scope agreement, not quietly claiming this milestone pass
   [callbacks](../20261107-0819-verify-oauth-node-callbacks.md) and
   [rotation](../20261107-0832-verify-mcp-key-rotation.md).
 
-See [renewal contracts](../../docs/development/mcp-oauth-renewal.md) and
+See [renewal contracts](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-oauth-renewal.md) and
 [review evidence](../20261107-0208-review-mcp-renewal.md). Admission is per application
 instance; per-connection durable claims provide the cross-instance fence.
 
@@ -770,7 +770,7 @@ Depends on T1/T2 directory resolution and T4/T5/T6 connection/authentication con
 Listing resolution/discovery, snapshot storage, static connection management and
 locked static/OAuth forms are implemented. OAuth flows bind accepted configuration;
 saved-registration discovery advice has passed checkpoint verification. Authenticated browser and retained-ID recovery acceptance remain open.
-See [lookup and snapshot contracts](../../docs/development/listed-mcp-connections.md).
+See [lookup and snapshot contracts](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/listed-mcp-connections.md).
 
 - [x] Reuse the existing directory page cache for bounded directory/entry/revision
   references and add those references to remote MCP inventory rows. Reject
@@ -1030,7 +1030,7 @@ Depends on T4; OAuth methods additionally depend on T5/T6.
   Loopback HTTP observes initial, renewed reconnect and latest DELETE tokens;
   revoked POST/GET/DELETE tests verify no DNS. Full runtime acceptance and cross-node
   revocation acceptance remain open. See the transport decision in
-  [outbound OAuth](../../docs/development/tenant-mcp-oauth.md).
+  [outbound OAuth](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/tenant-mcp-oauth.md).
 - [x] Add saved-record compilation snapshots and wire CallPlanCompiler, shared by
   publication and preparation, to use them for MCP selections. No credential reads
   or refresh occur; native-only specs do not query MCP storage. Validate tenant,
@@ -1116,7 +1116,7 @@ is repeatable and does not silently share or delete existing credentials.
   admitted-room execution; cross-node browser callbacks and T8 release remain open.
   See [audit and correction](../20261107-1200-verify-held-mcp-responses.md).
 
-See [saved runtime contracts](../../docs/development/saved-mcp-runtime.md) and
+See [saved runtime contracts](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/saved-mcp-runtime.md) and
 [checkpoint evidence](../20261107-0242-review-mcp-cutover.md).
 
 #### Runtime transport credential checkpoint (2026-11-07)
@@ -1135,7 +1135,7 @@ See [saved runtime contracts](../../docs/development/saved-mcp-runtime.md) and
   fences and both grant types. Cross-node browser callback and final release gates
   remain open.
 
-See [transport contracts](../../docs/development/mcp-runtime-transport.md) and
+See [transport contracts](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-runtime-transport.md) and
 [review evidence](../20261107-0224-review-mcp-transport.md). This checkpoint extends
 the committed resolver/renewal boundary. Per-admission and independent-node
 transport acceptance pass in the follow-up checkpoints below; this does not close
@@ -1544,7 +1544,7 @@ and all related Storybooks.
   listed identity, partial/multiple-issuer discovery and cross-node callback gates
   remain open. See
   [browser evidence](../20261107-1108-integrations-browser-acceptance.md) and
-  [runner guide](../../docs/development/mcp-browser-acceptance.md).
+  [runner guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-browser-acceptance.md).
 - [x] Complete fresh-checkout MCP dependency preparation in setup and CI. The
   isolated browser checkout reproduced ExMCP compilation before Plug was built;
   include dependency children when compiling the patched ExMCP. The focused fix
@@ -1724,7 +1724,7 @@ and all related Storybooks.
   during refresh, wrong-tenant grant operations, exact deadline equality, and
   invalid/oversized refresh completion rollback at the persistence boundary.
   All 57 focused MCP persistence tests pass; see the
-  [storage runbook](../../docs/development/mcp-oauth-storage.md) and
+  [storage runbook](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-oauth-storage.md) and
   [checkpoint evidence](../20261107-0132-review-mcp-oauth-storage.md).
 
 - [x] Do not suggest browser OAuth when all advertised token authentication
@@ -1746,7 +1746,7 @@ and all related Storybooks.
   browser handoff. Distinguish optional RFC scope metadata from the chosen
   interoperability policy; do not silently assume every registration is usable.
   Eight red regressions reproduced these issues; 40 focused tests now pass. See
-  [protocol boundary](../../docs/development/mcp-oauth-protocol.md) and
+  [protocol boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-oauth-protocol.md) and
   [review evidence](../20261107-0113-review-mcp-oauth.md).
 
 - [x] Reject recognized credential query parameters before discovery or connection
@@ -1784,7 +1784,7 @@ and all related Storybooks.
 - [x] Enforce the preflight deadline when accepting a queued result, not only when
   handling the timer message. A suspended-runner regression reproduced late
   success and now returns the fixed timeout. See the
-  [discovery decision](../../docs/development/mcp-discovery.md) and
+  [discovery decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-discovery.md) and
   [checkpoint evidence](../20261107-0031-review-mcp-discovery.md).
 
 - [x] Correct the MCP connection-row SQL constraint to reject connected rows with
@@ -1842,7 +1842,7 @@ and all related Storybooks.
   cleanup has a separate bounded budget. All 26 scoped tests and the 137-test MCP
   suite pass; static gates pass. See the
   [check checkpoint](../20261106-2354-review-mcp-checks.md) and
-  [lifecycle decision](../../docs/development/mcp-connection-checks.md).
+  [lifecycle decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/mcp-connection-checks.md).
 
 - [x] Strengthen directory cache evidence after adversarial review: acknowledge
   the second pending caller before releasing the first fetch, fail a refresh of

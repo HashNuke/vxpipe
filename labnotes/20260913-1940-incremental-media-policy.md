@@ -11,7 +11,7 @@ The room still has one monotonic admission revision. Each source/recipient path
 also keeps the last revision that changed its relevant permissions. This avoids
 relabeling buffered data as newly permitted content, while preventing unrelated
 revisions from invalidating healthy streams. See
-[the decision](../docs/incremental-media-policy.md) for scopes and alternatives.
+[the decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/incremental-media-policy.md) for scopes and alternatives.
 
 ## Speech checkpoint
 

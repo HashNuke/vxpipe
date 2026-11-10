@@ -1,7 +1,7 @@
 # Incremental audio policy
 
 This checkpoint applies the shared
-[permission interval contract](../docs/incremental-media-policy.md) to Gateway
+[permission interval contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/incremental-media-policy.md) to Gateway
 normalization/output and the engine mixer/recording queues.
 
 ## Implementation and regression evidence

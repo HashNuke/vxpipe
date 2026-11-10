@@ -5,7 +5,7 @@ lifecycle and processing runtime.
 
 ## Speech provider authoring
 
-The [speech integration guide](../../docs/speech-integration-guide.md) defines the public STT and
+The [speech integration guide](../../docs/en/development/providers-and-integrations.md) defines the public STT and
 TTS behaviours, descriptor and event rules, private credential flow, bounded audio credit,
 cancellation lifecycle, closed production registration, and exact conformance commands. Its
 complete minimal TTS provider is compiled from test support and run by the shared contract suite.
@@ -22,7 +22,7 @@ dot plus an end gap; it does not use the Morse encoder to supply its expected re
 
 The [original startup-isolation defect](../../labnotes/20260919-1124-speech-startup-isolation.md) and latency
 measurements remain recorded. The new API requires the explicit local scopes described in
-the [ownership plan](../../docs/speech-session-ownership.md); its isolated held-start and
+the [ownership plan](../../docs/en/development/speech-runtime.md); its isolated held-start and
 adoption tests pass. Checkpoints R and A are accepted; native TTS D has completed its standalone
 slices, and room STT integration is in progress. See the
 [native STT verification](../../labnotes/20260919-1348-native-stt-contract.md) for contract, load and regression
@@ -181,7 +181,7 @@ still contains no WebRTC or RTVI types.
 
 The call-spec-driven compiler's current schema is `20260915.01`. It selects upstream
 providers and provider-local models inline, with tenant credentials supplied at capability
-creation through an injected source. See [inline selections](../../docs/inline-provider-selections.md). It retains web human transfer
+creation through an injected source. See [inline selections](../../docs/en/usage/configuration.md). It retains web human transfer
 destinations alongside the normal call-wide `media_policy` and each participant's optional
 `while_present` contribution. A human transfer destination uses an exact web
 `receive`/`transfer` connection intent, may configure one fixed `transfer_notice`, and makes the
@@ -321,7 +321,7 @@ terminal duration, completion handoff, and bounded worker/mailbox pressure. Its 
 memory bytes, and run queue without entering a room callback. Configure the sampling cadence
 under the call-engine application setting `telemetry: [sample_interval_ms: 1_000]`.
 Durations use Erlang `:native` units; event names and exact observation boundaries are
-documented in [the architecture](../../docs/architecture.md#security-and-observability).
+documented in [the architecture](../../docs/en/development/architecture.md).
 Runtime request cancellation is reported as a terminal `:cancelled` model outcome with its
 first-output observation preserved; it is not counted as provider unavailability.
 
@@ -433,7 +433,7 @@ in the process emitting the event, so it must only perform bounded local work. T
 collector must bound its mailbox or apply admission before forwarding data to a network,
 database, or metrics backend. Durations are in Erlang `:native` units; convert them with
 `System.convert_time_unit/3`. The exact measurements, bounded metadata, and observation
-boundaries are listed in [the architecture](../../docs/architecture.md#security-and-observability).
+boundaries are listed in [the architecture](../../docs/en/development/architecture.md).
 
 ## Installation
 

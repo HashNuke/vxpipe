@@ -3,7 +3,7 @@
 > Relocated from `docs/speech-provider-comparison.md` on 2026-10-09. First recorded source commit: `6fffc066d474` (2026-09-19T15:58:27+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260919-1534-simplify-speech-integrations](20260919-1534-simplify-speech-integrations.md).
-> Maintained contracts/progress: [provider-integration-packages](../docs/provider-integration-packages.md), [speech-integration-guide](../docs/speech-integration-guide.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [provider-integration-packages](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-integration-packages.md), [speech-integration-guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-integration-guide.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Researched 2026-09-19 from the linked official documentation. This is a comparison of API
 contracts, not latency/quality benchmarking or evidence that these providers are integrated.
@@ -14,8 +14,8 @@ Recommendation: a small semantic session API works for standalone streaming STT 
 provided it explicitly separates transcript stability, turn completion, synthesis completion,
 playback completion and cancellation isolation. Batch transcription and conversational
 speech-to-speech sessions need distinct contracts. See the
-[design](../docs/speech-provider-contract.md), [implementation milestone](milestones/simpler-speech-integrations.md)
-and [provider authoring guide](../docs/speech-integration-guide.md).
+[design](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [implementation milestone](milestones/simpler-speech-integrations.md)
+and [provider authoring guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-integration-guide.md).
 
 ## Comparison
 
@@ -143,7 +143,7 @@ realtime-agent decision; this milestone does not replace Vxpipe's model loop.
 The later [dedicated Live transcription guide](https://ai.google.dev/gemini-api/docs/live-api/live-transcribe)
 documents a transcription-specific model that emits `voiceActivity` and input transcription
 without owning Vxpipe's agent response. Local probes verified two starts and two final turns on
-one session. The [Google speech integration](../docs/google-speech-integration.md) records the separate
+one session. The [Google speech integration](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/google-speech-integration.md) records the separate
 STT decision, lifetime limit and implementation evidence. This newer capability changes the
 earlier comparison's STT conclusion without making prompted audio understanding a live STT API.
 

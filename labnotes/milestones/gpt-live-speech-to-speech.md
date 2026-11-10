@@ -19,7 +19,7 @@ entry stays unchecked until the acceptance checks below pass.
 carry regulatory notices. Text agents retain caller input for processing after
 playback; STS drops it. Continuous providers receive synthetic silence to retain
 their clock. All STS sink PCM is converted to 48 kHz; provider credit and recognition
-retain the native format. The [contract decision](../../docs/protected-agent-openings.md)
+retain the native format. The [contract decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/protected-agent-openings.md)
 records alternatives and implications.
 
 Local design review of this amendment (separate from implementation evidence):
@@ -66,10 +66,10 @@ Prerequisites: [Agent speech-to-speech](agent-speech-to-speech.md) (the
 provider-controlled STS contract, room publication and Morse STS) and
 [Tenant-scoped provider credentials](tenant-provider-credentials-and-platform-configuration.md).
 
-Design sources: [speech provider contract](../../docs/speech-provider-contract.md),
-[speech integration guide](../../docs/speech-integration-guide.md),
-[STS output admission](../../docs/sts-output-admission.md),
-[STS context restoration](../../docs/sts-context-restoration.md), OpenAI's
+Design sources: [speech provider contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md),
+[speech integration guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-integration-guide.md),
+[STS output admission](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-output-admission.md),
+[STS context restoration](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-context-restoration.md), OpenAI's
 [GPT-Live session guide](https://developers.openai.com/api/docs/guides/live-conversations)
 and [delegation and tools guide](https://developers.openai.com/api/docs/guides/live-delegation).
 
@@ -2272,7 +2272,7 @@ Open findings: R1-4, R10-2. Package 4 (hold by muting) is next.
   caller text requires an approved route to the virtual agent, and agent text
   requires delivery to the human connection. A failed router, held caller,
   stale turn, or rejected route sends no acknowledgment. The
-  [decision record](../../docs/gpt-live-room-history.md) explains the boundary.
+  [decision record](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gpt-live-room-history.md) explains the boundary.
 - Red-green tests caught the early append, missing room acknowledgments,
   router suppression, and missing virtual-agent candidate before each fix.
   The focused fake GPT-Live, Morse lifecycle, room, and publisher tests pass.
@@ -2294,7 +2294,7 @@ Open findings: R1-4, R10-2. Package 4 (hold by muting) is next.
   snapshot history. The room replies only for its current capability. The
   existing GPT-Live reseed deadline includes this wait; Morse has a bounded
   four-second wait. The decision and ordering proof are recorded in
-  [room history](../../docs/gpt-live-room-history.md).
+  [room history](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gpt-live-room-history.md).
 - A suspended-capability red test first showed GPT-Live connecting before a
   queued publication acknowledgment. A second red test showed it connecting
   before the room completed publication. Both pass after the two-hop barrier.
@@ -2379,7 +2379,7 @@ failed once. The continuation below records the subsequent harness clock repair 
 ### Continuation: protected openings and phone output
 
 The user decision above is implemented at the room/capability boundary; see
-[the approved contract and alternatives](../../docs/protected-agent-openings.md).
+[the approved contract and alternatives](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/protected-agent-openings.md).
 Text input waits in a bounded room queue until matching opening playback completes.
 STS caller PCM and external activity are discarded. Continuous STS providers receive
 same-duration synthetic silence to preserve the audio clock; turn-based providers

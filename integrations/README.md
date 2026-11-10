@@ -81,4 +81,4 @@ Only the top-level `integrations/*.json` files are published. The `schema/`,
 The publisher imports the catalog from one pinned commit of `HashNuke/vxpipe`
 `main`; its existing signed push notifications queue catalog refreshes.
 Catalog changes do not require rebuilding the publisher binary. See
-[the source ownership and cutover notes](../docs/development/integrations-catalog-source.md).
+[the source ownership and cutover notes](../docs/en/development/providers-and-integrations.md).

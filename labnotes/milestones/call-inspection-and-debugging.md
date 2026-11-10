@@ -9,8 +9,8 @@ reviewed locally on 2026-09-08 and completed on 2026-09-09.
 Prerequisites: [Observable sample call](observable-sample-call.md);
 [Asynchronous history](asynchronous-call-history.md), including its tenant admission,
 Call Variables and background-tool prerequisites.
-Sources: [Security and observability](../../docs/architecture.md#security-and-observability);
-[Gateway/console boundary](../../docs/gateway-console-boundary.md);
+Sources: [Security and observability](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md#security-and-observability);
+[Gateway/console boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md);
 [History ownership](asynchronous-call-history.md); [Variables and private tool projections](call-variables-and-tool-visibility.md).
 
 ## Runnable outcome

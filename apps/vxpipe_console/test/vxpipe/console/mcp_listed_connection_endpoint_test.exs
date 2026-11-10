@@ -9,7 +9,7 @@ defmodule Vxpipe.Console.MCPListedConnectionEndpointTest do
   alias Vxpipe.Persistence.MCP.ConnectionStore
   @endpoint Vxpipe.Console.Endpoint
   @example Path.expand(
-             "../../../../../docs/development/integrations-directory.example.json",
+             "../../../../../docs/assets/integrations/integrations-directory.example.json",
              __DIR__
            )
 

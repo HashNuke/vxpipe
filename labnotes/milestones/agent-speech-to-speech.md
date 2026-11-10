@@ -42,7 +42,7 @@ delayed-onset double-interruption fix. Those focused checks do not close the
 final acceptance gates. Google handle-based reconnection is now covered by
 local protocol tests (`labnotes/20260922-1142-google-sts-resumption.md`), without
 historical audio replay. Fresh-session context reconstruction is only a
-[feasibility proposal](../../docs/sts-context-restoration.md), not implemented recovery.
+[feasibility proposal](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-context-restoration.md), not implemented recovery.
 The earlier runtime checkpoint passed all root format, compile, strict Credo,
 unused-lock and test checks (2,166 tests, zero failures, 42 excluded; seed 0).
 This does not close the remaining implementation or acceptance work below.
@@ -117,7 +117,7 @@ remain open. Google output-buffer/tail checkpoint `3b1fa264` has 43
 focused passing checks and all five post-commit root gates pass (2,205 tests,
 zero failures, 42 excluded, seed 0). This does not resolve the intermittent
 handoff findings or complete the remaining milestone gates.
-[The input-routing decision](../../docs/sts-input-routing.md) now
+[The input-routing decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-input-routing.md) now
 records separate input/output descriptor formats and the bounded, independently
 credited `Media.STSIngress` primitive. Its 12 focused checks cover identity,
 format, age/sequence, bounds, policy/hold, timeout, cleanup and status redaction;
@@ -134,11 +134,11 @@ Prerequisites: [Simpler speech integrations](simpler-speech-integrations.md),
 [Rime and Google speech providers](rime-and-google-speech-providers.md). The
 existing LLM + TTS mode remains a supported peer mode, not a compatibility path.
 
-Design sources: [speech provider contract](../../docs/speech-provider-contract.md),
-[speech integration guide](../../docs/speech-integration-guide.md),
-[provider integration packages](../../docs/provider-integration-packages.md),
-[Google speech integration](../../docs/google-speech-integration.md), and
-[speech session ownership](../../docs/speech-session-ownership.md).
+Design sources: [speech provider contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md),
+[speech integration guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-integration-guide.md),
+[provider integration packages](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/provider-integration-packages.md),
+[Google speech integration](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/google-speech-integration.md), and
+[speech session ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md).
 
 ## Consolidated planning sources — 2026-10-09
 
@@ -246,8 +246,8 @@ The checkpoint-A output contract uses consumer-authorized
 PCM credit path, and `:output_completed` correlated to both output and provider
 turn references. Only acknowledged completion plus bounded local playback
 settlement releases the slot. Input admission does not authorize output. See
-[STS output admission](../../docs/sts-output-admission.md) for the decision and
-[the author guide](../../docs/speech-integration-guide.md#authorizing-and-settling-sts-output)
+[STS output admission](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-output-admission.md) for the decision and
+[the author guide](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-integration-guide.md#authorizing-and-settling-sts-output)
 for the exact protocol. Tool-call events carry bounded JSON arguments and the
 provider turn association; room authorization and execution remain checkpoint C.
 
@@ -1448,7 +1448,7 @@ the existing audio round trip. Record discoveries here before implementing.
   two failures). Caller identity, sequence/epoch, denial, late-text, bounded-state,
   explicit overflow cleanup and idempotent-release checks now pass; the broader
   146-test STS group passes with seed 0. See
-  [caller publication decision](../../docs/sts-caller-publication.md) and
+  [caller publication decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-caller-publication.md) and
   `labnotes/20260922-1514-sts-caller-publication.md`. This is provider-controlled
   embedded proof, not complete native/hold/transfer acceptance.
 - [ ] Keep provider references private: assign room-owned public command/turn
@@ -1489,7 +1489,7 @@ the existing audio round trip. Record discoveries here before implementing.
     before granting the next queued start. Exact sequence on text/terminal
     messages is required if a private turn reference is later reused. This is
     owner-message retirement, not upstream provider deduplication or Google
-    cross-origin proof; see [decision](../../docs/sts-agent-output-retirement.md).
+    cross-origin proof; see [decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/sts-agent-output-retirement.md).
     Verification: a focused room red recreated the second public start after
     completion. The 12 room identity tests, 203 affected capability/controller/
     room tests and 27 embedded room/lifecycle tests pass. A 25-turn retirement
@@ -2245,7 +2245,7 @@ No new provider advertisement or billable call is authorized by these tasks.
   Successful-recognition design review: `finish_input/1` acceptance and the first
   `turn_ended` do not prove the complete finite stream. The approved scoped seam
   needs a fieldless ordered STT `input_finished` event, bounded aggregation and
-  successful-generation retirement. See [decision and rejected alternatives](../../docs/output-recognition-settlement.md).
+  successful-generation retirement. See [decision and rejected alternatives](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/output-recognition-settlement.md).
   This is separate from implementation progress, hosted proof and parent-owned
   Google/controller or handoff work.
   Refactor review after 46 focused tests passed: terminal aggregation adds enough
@@ -2899,7 +2899,7 @@ Submitted invocation outcomes must still survive privately for later reasoning.
       Missing or deprecated status is not an implicit idle in this conservative
       profile. Fresh setup with no conversational work remains eligible for the
       existing private-handle path. Actual subsequent response ownership remains
-      required and open; see [the controller decision](../../docs/google-sts-controller.md).
+      required and open; see [the controller decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/google-sts-controller.md).
 
       Response-ownership design review (2026-09-22, proposal): current caller-end
       initiation and one mutable buffer cannot represent multiple model responses
@@ -3075,7 +3075,7 @@ Submitted invocation outcomes must still survive privately for later reasoning.
   resumed setup contain the exact authorized JSON schemas and pinned instruction;
   malformed private setup fails before connecting. Unsupported MCP activation
   ownership fails explicitly, as do unavailable variable bindings and oversized
-  configuration. See [Google configuration decision](../../docs/google-speech-integration.md#private-sts-activation-configuration)
+  configuration. See [Google configuration decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/google-speech-integration.md#private-sts-activation-configuration)
   and `labnotes/20260922-1650-google-activation-config.md`. Public Google selection,
   hosted interoperability and overall milestone acceptance remain incomplete.
   Parent integration: `e5cb0993` and `13969fdc` preserve both reviewed checkpoints
@@ -3241,7 +3241,7 @@ zero failures, 42 excluded, seed 0. See
   each mode must pass actual admitted room audio and public completion. Synthetic
   sink playback describes paced PCM consumption, never human hearing. Final load
   acceptance depends on integrated lifecycle behavior and a quiet measurement window.
-  Harness evidence: [method and commands](../../docs/development/sts-comparative-call-load.md) and
+  Harness evidence: [method and commands](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/sts-comparative-call-load.md) and
   `labnotes/20260922-1610-comparative-call-load.md`. Three two-call smoke modes
   pass; each observes five complete turns, two interruptions and one healthy
   post-fault call. The subsequent coordinated ten-call run at `5792d797` passes

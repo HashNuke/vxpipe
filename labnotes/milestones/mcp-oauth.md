@@ -5,9 +5,9 @@ public HTTP API keys remain unchanged. Not deployed.
 
 Prerequisites: [Platform MCP endpoint](platform-mcp-endpoint.md),
 [Console authentication](console-authentication-and-user-management.md).
-Design: [MCP OAuth](../../docs/mcp-oauth.md),
-[existing MCP protocol/tools](../../docs/platform-mcp.md),
-[Identity policy](../../docs/console-authentication-and-authorization.md).
+Design: [MCP OAuth](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/mcp-oauth.md),
+[existing MCP protocol/tools](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/platform-mcp.md),
+[Identity policy](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/console-authentication-and-authorization.md).
 
 User contract: make Vxpipe the OAuth provider for MCP, replace MCP API-key auth,
 retain ExMCP, use Boruta if experiments establish fit, avoid overengineering,
@@ -130,7 +130,7 @@ those before public HTTP exposure. Research is not implementation acceptance.
   reuse rejection. Wrong resource still succeeds inside Boruta, confirming the
   required Vxpipe boundary. Normal library startup passed. Dependency resolution
   against a copy of the repository lock added 12 packages and changed no existing
-  entries. Reproducer: [Boruta probe](../../docs/experiments/boruta-probe.exs), run
+  entries. Reproducer: [Boruta probe](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/experiments/boruta-probe.exs), run
   `elixir docs/experiments/boruta-probe.exs` outside Mix. It uses synthetic in-memory
   data and is not evidence of PostgreSQL atomicity or production authorization.
 - No exposed OAuth flow or browser evidence yet.

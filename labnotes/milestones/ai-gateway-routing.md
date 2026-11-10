@@ -8,7 +8,7 @@ Prerequisites: [Provider integration packages](provider-integration-packages.md)
 [Tenant provider credentials](tenant-provider-credentials-and-platform-configuration.md),
 and [Provider expansion](provider-expansion-and-ai-gateway.md).
 Design sources: [Platform and tenant services](platform-and-tenant-services.md),
-[Speech session ownership](../../docs/speech-session-ownership.md).
+[Speech session ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md).
 
 ## Decision and rationale
 

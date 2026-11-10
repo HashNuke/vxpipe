@@ -199,7 +199,10 @@ defmodule Vxpipe.Console.MCPConnectionsEndpointTest do
 
   test "listed discovery reuses the tenant route and rejects changed directory proposals" do
     page =
-      Path.expand("../../../../../docs/development/integrations-directory.example.json", __DIR__)
+      Path.expand(
+        "../../../../../docs/assets/integrations/integrations-directory.example.json",
+        __DIR__
+      )
       |> File.read!()
       |> JSON.decode!()
       |> Map.put(

@@ -3,7 +3,7 @@
 > Relocated from `docs/native-tts-request-admission.md` on 2026-10-09. First recorded source commit: `642779e0afe9` (2026-09-20T07:41:06+07:00).
 > Historical research/implementation archive. Original status, failures, proposals and acceptance claims below describe their recorded checkpoints; relocation does not update or reapprove them.
 > Related task records: [20260919-2322-pending-tts-acceptance](20260919-2322-pending-tts-acceptance.md).
-> Maintained contracts/progress: [speech-provider-contract](../docs/speech-provider-contract.md), [speech-session-ownership](../docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
+> Maintained contracts/progress: [speech-provider-contract](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-provider-contract.md), [speech-session-ownership](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/speech-session-ownership.md), [simpler-speech-integrations](milestones/simpler-speech-integrations.md). Detailed contract refinements are deferred to the separately reviewed documentation work.
 
 Checkpoint D is paused after the early-admission implementation reproduced an
 existing cancellation regression. This records the next request-lifecycle decision,
