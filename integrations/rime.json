@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "Rime",
+  "summary": "Speak with Rime Coda.",
+  "website_url": "https://www.rime.ai/",
+  "documentation_url": "https://docs.rime.ai/",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "rime"
+  },
+  "icon_url": "https://cdn.prod.website-files.com/6a4d70b04f64b0fe572eff71/6a554ed17f2b9d0f80597943_rime_LinkedIn_profile.png"
+}

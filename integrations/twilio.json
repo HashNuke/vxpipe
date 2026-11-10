@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "Twilio",
+  "summary": "Connect phone calls with Twilio.",
+  "website_url": "https://www.twilio.com/en-us",
+  "documentation_url": "https://www.twilio.com/docs/voice",
+  "categories": [
+    {
+      "id": "telephony",
+      "name": "Telephony"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "twilio"
+  },
+  "icon_url": "https://www.twilio.com/content/dam/twilio-com/core-assets/social/apple-touch-icon.png"
+}

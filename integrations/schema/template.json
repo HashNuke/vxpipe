@@ -1,0 +1,27 @@
+{
+  "$schema": "./schema.json",
+  "schema_version": 1,
+  "categories": [
+    {
+      "id": "calendar",
+      "name": "Calendar"
+    }
+  ],
+  "availability": "available",
+  "kind": "mcp",
+  "name": "Example Calendar",
+  "website_url": "https://calendar.example.com/",
+  "icon_url": "https://calendar.example.com/icon.svg",
+  "documentation_url": "https://calendar.example.com/docs/mcp",
+  "connection": {
+    "type": "mcp",
+    "transport": "streamable_http",
+    "endpoint": "https://calendar.example.com/mcp",
+    "authentication": {
+      "type": "oauth2",
+      "registration": "discover"
+    }
+  },
+  "setup_url": "https://calendar.example.com/setup/mcp",
+  "setup_notes": "Register an OAuth client before connecting."
+}

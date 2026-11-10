@@ -1,0 +1,25 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "categories": [
+    {
+      "id": "calendar",
+      "name": "Calendar"
+    }
+  ],
+  "availability": "available",
+  "kind": "mcp",
+  "name": "Cal.com",
+  "website_url": "https://cal.com/",
+  "icon_url": "https://cal.com/icon.png?icon.21cs49n_hfly4.png?dpl=dpl_ApYSnvqv1Gwt5tmbvnsPr6wCht5D",
+  "documentation_url": "https://cal.com/docs/mcp-server",
+  "connection": {
+    "type": "mcp",
+    "transport": "streamable_http",
+    "endpoint": "https://mcp.cal.com/mcp",
+    "authentication": {
+      "type": "oauth2",
+      "registration": "discover"
+    }
+  }
+}

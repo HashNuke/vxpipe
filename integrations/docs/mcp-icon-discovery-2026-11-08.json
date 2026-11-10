@@ -1,0 +1,33 @@
+{
+  "checked_on": "2026-11-08",
+  "reason": "Release import reproduced a stale Cal.com deployment-qualified icon URL. All 16 official landing pages were rechecked with the publisher icon CLI; only Cal.com changed. The remaining 14 supplied icons are still declared, and MorseCode API still has no usable declared icon.",
+  "method": "Official landing-page favicon discovery and downloaded image inspection using the publisher icon CLI; prefer safe SVG, then largest raster.",
+  "integrations": {
+    "calcom": {
+      "candidates_best_first": [
+        {
+          "url": "https://cal.com/icon.png?icon.21cs49n_hfly4.png?dpl=dpl_nTZdQB7iVQea1ZEGiiFkZvC6SZUp",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 512,
+          "height": 512
+        },
+        {
+          "url": "https://cal.com/apple-icon.png?apple-icon.3ttu6-hm-t9l0.png?dpl=dpl_nTZdQB7iVQea1ZEGiiFkZvC6SZUp",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "url": "https://cal.com/favicon.ico?favicon.35f88jqwdm24o.ico?dpl=dpl_nTZdQB7iVQea1ZEGiiFkZvC6SZUp",
+          "format": "ico",
+          "content_type": "image/vnd.microsoft.icon",
+          "width": 48,
+          "height": 48
+        }
+      ],
+      "landing_page": "https://cal.com/"
+    }
+  }
+}

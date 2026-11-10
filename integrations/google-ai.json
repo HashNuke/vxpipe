@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "Google AI Studio",
+  "summary": "Connect Gemini language, transcription, speech synthesis, and live speech.",
+  "website_url": "https://ai.google.dev/",
+  "documentation_url": "https://ai.google.dev/gemini-api/docs",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "google"
+  },
+  "icon_url": "https://www.gstatic.com/devrel-devsite/prod/v0bdbebc1f01a38de21004f32be4e375582bd633675ce8e19f11ee677174d47b4/googledevai/images/touchicon-180-new.png"
+}

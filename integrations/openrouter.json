@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "OpenRouter",
+  "summary": "Choose language models through OpenRouter.",
+  "website_url": "https://openrouter.ai/",
+  "documentation_url": "https://openrouter.ai/docs/quickstart",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "openrouter"
+  },
+  "icon_url": "https://openrouter.ai/favicon/glyph.png"
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "DeepSeek",
+  "summary": "Connect DeepSeek language models.",
+  "website_url": "https://www.deepseek.com/",
+  "documentation_url": "https://api-docs.deepseek.com/",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "deepseek"
+  },
+  "icon_url": "https://www.deepseek.com/favicon.ico"
+}

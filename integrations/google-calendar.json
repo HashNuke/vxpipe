@@ -1,0 +1,26 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "categories": [
+    {
+      "id": "calendar",
+      "name": "Calendar"
+    }
+  ],
+  "availability": "preview",
+  "kind": "mcp",
+  "name": "Google Calendar",
+  "website_url": "https://workspace.google.com/products/calendar/",
+  "icon_url": "https://www.gstatic.com/images/branding/googleg_gradient/1x/googleg_gradient_standard_20dp.png",
+  "documentation_url": "https://developers.google.com/workspace/calendar/api/guides/configure-mcp-server",
+  "connection": {
+    "type": "mcp",
+    "transport": "streamable_http",
+    "endpoint": "https://calendarmcp.googleapis.com/mcp/v1",
+    "authentication": {
+      "type": "oauth2",
+      "registration": "preregistered"
+    }
+  },
+  "setup_notes": "Requires Google Workspace Developer Preview access, enabled Calendar APIs and your own Google Cloud OAuth client."
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "Zenmux",
+  "summary": "Connect a language model through Zenmux.",
+  "website_url": "https://zenmux.ai/",
+  "documentation_url": "https://zenmux.ai/docs/",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "zenmux"
+  },
+  "icon_url": "https://cdn.marmot-cloud.com/storage/tbox-router/2025/08/18/mplTJpZ/big-logo.svg"
+}

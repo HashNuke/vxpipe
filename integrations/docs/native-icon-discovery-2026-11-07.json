@@ -1,0 +1,307 @@
+{
+  "checked_on": "2026-11-07",
+  "method": "Official landing-page declared favicon discovery and image inspection using the directory publisher icon CLI. Highest-ranked usable candidate selected; missing MorseCode icon omitted.",
+  "notes": [
+    "OpenAI marketing and platform pages returned HTTP 403; the accessible official developer landing page supplies a declared 48px PNG.",
+    "Unsafe Zenmux SVG candidate rejected by the publisher; the other declared safe SVG is selected.",
+    "Fresh full-catalog revalidation on 2026-11-07 found stale Deepgram and Google AI deployment URLs. Both were replaced by their currently declared highest-ranked usable candidates; the other supplied icons remain declared and MorseCode still declares none."
+  ],
+  "providers": {
+    "deepgram": {
+      "candidates_best_first": [
+        {
+          "url": "https://deepgram.com/icon.svg?icon.00lfopy0jhbm2.svg",
+          "format": "svg",
+          "content_type": "image/svg+xml",
+          "width": 0,
+          "height": 0
+        },
+        {
+          "url": "https://deepgram.com/apple-icon.png?apple-icon.03qoq60n2nud1.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "url": "https://deepgram.com/favicon.ico?favicon.0gg4t88icbwee.ico",
+          "format": "ico",
+          "content_type": "image/vnd.microsoft.icon",
+          "width": 48,
+          "height": 48
+        }
+      ],
+      "landing_page": "https://deepgram.com/"
+    },
+    "rime": {
+      "candidates_best_first": [
+        {
+          "url": "https://cdn.prod.website-files.com/6a4d70b04f64b0fe572eff71/6a554ed17f2b9d0f80597943_rime_LinkedIn_profile.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 512,
+          "height": 512
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/6a4d70b04f64b0fe572eff71/6a554ed1d15c3d0c3c534c99_rime_LinkedIn_profile.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 192,
+          "height": 192
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/6a4d70b04f64b0fe572eff71/6a554ed19761c1c2ee195b98_rime_LinkedIn_profile.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/6a4d70b04f64b0fe572eff71/6a554ed1cd40ff6dea2d0a0c_rime_LinkedIn_profile.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 48,
+          "height": 48
+        },
+        {
+          "url": "https://cdn.prod.website-files.com/6a4d70b04f64b0fe572eff71/6a554ed164ebbebdec8f30d9_rime_LinkedIn_profile.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 32,
+          "height": 32
+        }
+      ],
+      "landing_page": "https://www.rime.ai/"
+    },
+    "cartesia": {
+      "candidates_best_first": [
+        {
+          "url": "https://www.cartesia.ai/favicon.svg",
+          "format": "svg",
+          "content_type": "image/svg+xml",
+          "width": 0,
+          "height": 0
+        },
+        {
+          "url": "https://www.cartesia.ai/apple-touch-icon.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "url": "https://www.cartesia.ai/favicon.ico",
+          "format": "ico",
+          "content_type": "image/vnd.microsoft.icon",
+          "width": 48,
+          "height": 48
+        },
+        {
+          "url": "https://www.cartesia.ai/favicon-32.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 32,
+          "height": 32
+        },
+        {
+          "url": "https://www.cartesia.ai/favicon-16.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 16,
+          "height": 16
+        }
+      ],
+      "landing_page": "https://www.cartesia.ai/"
+    },
+    "elevenlabs": {
+      "candidates_best_first": [
+        {
+          "url": "https://elevenlabs.io/icon.svg?c23f5371fdd26632",
+          "format": "svg",
+          "content_type": "image/svg+xml",
+          "width": 0,
+          "height": 0
+        },
+        {
+          "url": "https://elevenlabs.io/apple-icon.png?6592732ab34b1d42",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "url": "https://elevenlabs.io/favicon.ico?9c55860cee08706b",
+          "format": "ico",
+          "content_type": "image/vnd.microsoft.icon",
+          "width": 48,
+          "height": 48
+        }
+      ],
+      "landing_page": "https://elevenlabs.io/"
+    },
+    "morse_code_api": {
+      "candidates_best_first": [],
+      "landing_page": "https://morsecode.vxpipe.com/"
+    },
+    "google": {
+      "candidates_best_first": [
+        {
+          "url": "https://www.gstatic.com/devrel-devsite/prod/v0bdbebc1f01a38de21004f32be4e375582bd633675ce8e19f11ee677174d47b4/googledevai/images/touchicon-180-new.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "url": "https://www.gstatic.com/devrel-devsite/prod/v0bdbebc1f01a38de21004f32be4e375582bd633675ce8e19f11ee677174d47b4/googledevai/images/favicon-new.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 24,
+          "height": 24
+        }
+      ],
+      "landing_page": "https://ai.google.dev/"
+    },
+    "openai": {
+      "candidates_best_first": [
+        {
+          "url": "https://developers.openai.com/favicon.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 48,
+          "height": 48
+        }
+      ],
+      "landing_page": "https://developers.openai.com/"
+    },
+    "zenmux": {
+      "candidates_best_first": [
+        {
+          "url": "https://cdn.marmot-cloud.com/storage/tbox-router/2025/08/18/mplTJpZ/big-logo.svg",
+          "format": "svg",
+          "content_type": "image/svg+xml",
+          "width": 0,
+          "height": 0
+        },
+        {
+          "url": "https://cdn.marmot-cloud.com/storage/zenmux/2026/05/18/hS6eMZ1/zenmux-white.svg",
+          "format": "",
+          "content_type": "",
+          "width": 0,
+          "height": 0,
+          "error": "unsafe SVG attribute style"
+        }
+      ],
+      "landing_page": "https://zenmux.ai/"
+    },
+    "deepseek": {
+      "candidates_best_first": [
+        {
+          "url": "https://www.deepseek.com/favicon.ico",
+          "format": "ico",
+          "content_type": "image/vnd.microsoft.icon",
+          "width": 225,
+          "height": 225
+        }
+      ],
+      "landing_page": "https://www.deepseek.com/"
+    },
+    "openrouter": {
+      "candidates_best_first": [
+        {
+          "url": "https://openrouter.ai/favicon/glyph.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 512,
+          "height": 512
+        },
+        {
+          "url": "https://openrouter.ai/apple-touch-icon.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        }
+      ],
+      "landing_page": "https://openrouter.ai/"
+    },
+    "fireworks": {
+      "candidates_best_first": [
+        {
+          "url": "https://fireworks.ai/icon.svg?26fd47f5c5eddcac",
+          "format": "svg",
+          "content_type": "image/svg+xml",
+          "width": 0,
+          "height": 0
+        },
+        {
+          "url": "https://fireworks.ai/icon0.svg?26fd47f5c5eddcac",
+          "format": "svg",
+          "content_type": "image/svg+xml",
+          "width": 0,
+          "height": 0
+        },
+        {
+          "url": "https://fireworks.ai/apple-icon.png?7a21affc7a2d4744",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "url": "https://fireworks.ai/icon1.png?b09f78588ed6cb1d",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 96,
+          "height": 96
+        },
+        {
+          "url": "https://fireworks.ai/favicon.ico",
+          "format": "ico",
+          "content_type": "image/vnd.microsoft.icon",
+          "width": 16,
+          "height": 16
+        }
+      ],
+      "landing_page": "https://fireworks.ai/"
+    },
+    "telnyx": {
+      "candidates_best_first": [
+        {
+          "url": "https://telnyx.com/favicon.ico",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 750,
+          "height": 750
+        }
+      ],
+      "landing_page": "https://telnyx.com/"
+    },
+    "twilio": {
+      "candidates_best_first": [
+        {
+          "url": "https://www.twilio.com/content/dam/twilio-com/core-assets/social/apple-touch-icon.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "url": "https://www.twilio.com/content/dam/twilio-com/core-assets/social/favicon-32x32.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 32,
+          "height": 32
+        },
+        {
+          "url": "https://www.twilio.com/content/dam/twilio-com/core-assets/social/favicon-16x16.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 16,
+          "height": 16
+        }
+      ],
+      "landing_page": "https://www.twilio.com/en-us"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "Cartesia",
+  "summary": "Transcribe with Ink and speak with Sonic.",
+  "website_url": "https://www.cartesia.ai/",
+  "documentation_url": "https://docs.cartesia.ai/get-started/overview",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "cartesia"
+  },
+  "icon_url": "https://www.cartesia.ai/favicon.svg"
+}

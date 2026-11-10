@@ -1,0 +1,77 @@
+{
+  "checked_on": "2026-11-07",
+  "reason": "The prior Cal.com icon is no longer declared; inspect current MCP landing-page candidates before the full catalog import.",
+  "integrations": {
+    "calendly": {
+      "candidates_best_first": [
+        {
+          "url": "https://calendly.com/media/favicon/icon.svg",
+          "format": "svg",
+          "content_type": "image/svg+xml",
+          "width": 0,
+          "height": 0
+        },
+        {
+          "url": "https://calendly.com/media/favicon/apple-touch-icon.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "url": "https://calendly.com/favicon.ico",
+          "format": "ico",
+          "content_type": "image/vnd.microsoft.icon",
+          "width": 48,
+          "height": 48
+        },
+        {
+          "url": "https://calendly.com/media/favicon/icon-32x32.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 32,
+          "height": 32
+        }
+      ],
+      "landing_page": "https://calendly.com/"
+    },
+    "google-calendar": {
+      "candidates_best_first": [
+        {
+          "url": "https://www.gstatic.com/images/branding/googleg_gradient/1x/googleg_gradient_standard_20dp.png",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 20,
+          "height": 20
+        }
+      ],
+      "landing_page": "https://workspace.google.com/products/calendar/"
+    },
+    "calcom": {
+      "candidates_best_first": [
+        {
+          "url": "https://cal.com/icon.png?icon.21cs49n_hfly4.png?dpl=dpl_CUATeNQ4hvxuFJwvNphcWAPQSCzb",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 512,
+          "height": 512
+        },
+        {
+          "url": "https://cal.com/apple-icon.png?apple-icon.3ttu6-hm-t9l0.png?dpl=dpl_CUATeNQ4hvxuFJwvNphcWAPQSCzb",
+          "format": "png",
+          "content_type": "image/png",
+          "width": 180,
+          "height": 180
+        },
+        {
+          "url": "https://cal.com/favicon.ico?favicon.35f88jqwdm24o.ico?dpl=dpl_CUATeNQ4hvxuFJwvNphcWAPQSCzb",
+          "format": "ico",
+          "content_type": "image/vnd.microsoft.icon",
+          "width": 48,
+          "height": 48
+        }
+      ],
+      "landing_page": "https://cal.com/"
+    }
+  }
+}

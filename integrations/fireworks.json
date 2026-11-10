@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "Fireworks AI",
+  "summary": "Connect serverless language models on Fireworks AI.",
+  "website_url": "https://fireworks.ai/",
+  "documentation_url": "https://docs.fireworks.ai/getting-started/introduction",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "fireworks"
+  },
+  "icon_url": "https://fireworks.ai/icon.svg?26fd47f5c5eddcac"
+}

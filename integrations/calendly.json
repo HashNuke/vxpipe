@@ -1,0 +1,25 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "categories": [
+    {
+      "id": "calendar",
+      "name": "Calendar"
+    }
+  ],
+  "availability": "available",
+  "kind": "mcp",
+  "name": "Calendly",
+  "website_url": "https://calendly.com/",
+  "icon_url": "https://calendly.com/media/favicon/icon.svg",
+  "documentation_url": "https://developer.calendly.com/docs/mcp/calendly-mcp-server",
+  "connection": {
+    "type": "mcp",
+    "transport": "streamable_http",
+    "endpoint": "https://mcp.calendly.com",
+    "authentication": {
+      "type": "oauth2",
+      "registration": "dcr"
+    }
+  }
+}

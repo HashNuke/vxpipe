@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "Telnyx",
+  "summary": "Connect phone calls with Telnyx.",
+  "website_url": "https://telnyx.com/",
+  "documentation_url": "https://developers.telnyx.com/docs/voice/overview",
+  "categories": [
+    {
+      "id": "telephony",
+      "name": "Telephony"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "telnyx"
+  },
+  "icon_url": "https://telnyx.com/favicon.ico"
+}

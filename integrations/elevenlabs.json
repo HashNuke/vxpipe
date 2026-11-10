@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "ElevenLabs",
+  "summary": "Transcribe with Scribe, synthesize speech, and converse with ElevenLabs Realtime.",
+  "website_url": "https://elevenlabs.io/",
+  "documentation_url": "https://elevenlabs.io/docs/overview/intro",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "elevenlabs"
+  },
+  "icon_url": "https://elevenlabs.io/icon.svg?c23f5371fdd26632"
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "Deepgram",
+  "summary": "Listen and speak with one service.",
+  "website_url": "https://deepgram.com/",
+  "documentation_url": "https://developers.deepgram.com/home",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "deepgram"
+  },
+  "icon_url": "https://deepgram.com/icon.svg?icon.00lfopy0jhbm2.svg"
+}

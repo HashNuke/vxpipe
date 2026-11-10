@@ -1,0 +1,21 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "MorseCode API",
+  "summary": "Generate and recognize Morse tones with one service.",
+  "website_url": "https://morsecode.vxpipe.com/",
+  "documentation_url": "https://morsecode.vxpipe.com/llms.txt",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "morse_code_api"
+  }
+}

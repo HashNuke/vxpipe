@@ -1,0 +1,22 @@
+{
+  "$schema": "schema/schema.json",
+  "schema_version": 1,
+  "name": "OpenAI",
+  "summary": "Connect GPT language models and live speech with one API key.",
+  "website_url": "https://developers.openai.com/",
+  "documentation_url": "https://developers.openai.com/api/docs",
+  "categories": [
+    {
+      "id": "ai",
+      "name": "AI models"
+    }
+  ],
+  "minimum_vxpipe_version": "0.1.0",
+  "availability": "available",
+  "kind": "provider",
+  "connection": {
+    "type": "builtin",
+    "provider_id": "openai"
+  },
+  "icon_url": "https://developers.openai.com/favicon.png"
+}
