@@ -75,3 +75,31 @@ verified delivery command.
 - Configured DOCS_PUBLISH_BRANCH=docs. Website deploy key ID 169410306 has write
   access only to HashNuke/vxpipe-web; its private key is stored solely in the
   source repository's Actions secret. No personal token was copied.
+
+## Publication and final verification
+
+- Canonical consolidation committed as `0bee1abf`; website importer/presentation
+  as `086adbc`; publication workflow as `16f3b38e`. All pushed.
+- [Publication run 42840418903](https://github.com/HashNuke/vxpipe/actions/runs/42840418903)
+  succeeded from `docs`, imported all 22 pages, built the website and created
+  website commit `422c38f`. Its source metadata records `16f3b38e`. The local
+  website checkout was fast-forwarded to that generated commit.
+- Repeated import is byte-identical. Generated HTML checks cover all 22 pages,
+  internal destinations/fragments and four JSON downloads: no broken links.
+  Desktop/mobile Chrome shows both Mermaid SVGs without page overflow. Ordinary
+  guides do not load Mermaid core. Search finds the handbook, code blocks expose
+  copy controls, the landing page renders and browser error output is empty.
+- Root checks: format, compile with warnings as errors, strict Credo and unused
+  dependency check pass. Full umbrella run: 5,213 tests, one failure, 376 excluded.
+  The failure is the existing STS failed-transfer resumption assertion returning
+  `{:error, :held}`. The same assertion failed in the earlier integration-move
+  run before this documentation work. The focused six-test STS transfer file
+  passes with the same seed (570288). All Console tests, including moved schema
+  consumers, pass. No speech behavior or test was changed to hide that result.
+- Cloudflare successfully built/deployed generated website commit `422c38f`:
+  [build 7fc5824c-6c60-4a1b-bac5-d97d2076eaee](https://dash.cloudflare.com/98ceddea8225e2c34f6ccbdd842aa6be/workers/services/view/vxpipe-docs/production/builds/7fc5824c-6c60-4a1b-bac5-d97d2076eaee),
+  version `dd7e2122-3aec-4e05-9430-e2f6e8030120`. The initial website commit also
+  deployed successfully. No Vxpipe application deployment was performed.
+- Hosted-page verification remains pending: the check exposes its dashboard URL,
+  not a public site URL. Requested that URL from the user; retain the final
+  acceptance checkbox until the actual hosted page is inspected.

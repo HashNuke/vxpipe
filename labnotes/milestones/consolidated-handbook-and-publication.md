@@ -1,6 +1,8 @@
 # Consolidated handbook and publication
 
-Status: implementation in progress. Approved scope: 2026-11-10.
+Status: handbook and automatic publication implemented; Cloudflare deployment
+verified. Final hosted-page inspection awaits the public site URL. Approved scope:
+2026-11-10.
 
 ## Outcome and prerequisites
 
@@ -73,7 +75,7 @@ No runtime feature milestone blocks documenting the behavior already present.
 - [x] Import localized Markdown/assets into the website with deterministic links
   and ordering; retain the marketing homepage.
 - [x] Add Mermaid support and confirm a rendered SVG on desktop and mobile.
-- [ ] Add branch-selected publication and its restricted credential; document
+- [x] Add branch-selected publication and its restricted credential; document
   the merge-time branch switch and a failed-build recovery procedure.
 
 ### Acceptance
