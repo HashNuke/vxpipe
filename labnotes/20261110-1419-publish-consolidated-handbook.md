@@ -41,3 +41,10 @@ verified delivery command.
 - Locale JSON parses; all eight pages have title, description and sidebar metadata.
   Cross-page link verification waits for the remaining chapters. No runtime changed.
 - Remaining handbook chapters, importer, consolidation and publication are pending.
+
+- Usage checkpoint: all 12 usage pages drafted. Checked call-spec schema/ID,
+  canonical API routes, key/session separation, credential resolution and Oban
+  timestamp implementation. The source editor does not launch test calls; the
+  quickstart now uses the actual managed playground and explicitly provisions its
+  `default` bindings (Console bindings use provider names). No sample-prototype
+  behavior is presented as a production call launcher.

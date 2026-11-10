@@ -48,12 +48,12 @@ No runtime feature milestone blocks documenting the behavior already present.
 - [x] Core concepts.
 - [x] Configuration.
 - [x] Accounts, tenants and access.
-- [ ] Integrations and credentials.
-- [ ] Call specs and variables.
-- [ ] Telephony and transfers.
-- [ ] Agents, tools and MCPs.
-- [ ] HTTP API and platform MCP.
-- [ ] Operations and troubleshooting.
+- [x] Integrations and credentials.
+- [x] Call specs and variables.
+- [x] Telephony and transfers.
+- [x] Agents, tools and MCPs.
+- [x] HTTP API and platform MCP.
+- [x] Operations and troubleshooting.
 - [x] Development workflow and documentation authoring.
 - [ ] Architecture.
 - [ ] Call runtime and lifecycle.

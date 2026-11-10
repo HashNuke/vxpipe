@@ -1,0 +1,195 @@
+---
+title: HTTP API and platform MCP
+description: Authenticate external clients, author call specs and create or control calls.
+sidebar:
+  order: 10
+---
+
+The product HTTP API lives under `/api`. Console uses the same product operations
+as external clients. Platform MCP at `/mcp` invokes those underlying Elixir
+operations directly, with its own protocol and OAuth authentication.
+
+## Authentication
+
+External HTTP clients send `Authorization: Bearer <Vxpipe API key>`. Browser
+clients use their login session and CSRF protection on writes. An Authorization
+header selects key authentication; an invalid key never falls back to a cookie.
+Standalone Gateway supports keys without the Console session adapter.
+
+Some operations are **session-only**. They reject any Authorization header, even
+with a valid cookie or platform key. Authentication never removes tenant or
+role checks. Use HTTPS outside local development; keys are not URL parameters.
+
+| Key type | Machine API scope |
+| --- | --- |
+| Create & Join Calls | Discover its tenant and create/join/end that tenant's calls. |
+| Full Tenant Access | Those call operations plus its tenant's call-spec authoring/catalogs. |
+| Full Platform Access | Supported operations across tenants, including account operations below. Session-only operations remain excluded. |
+
+Responses are private/no-store. Key revocation applies to subsequent requests.
+Use `error.code` for handling failures; some endpoints additionally include
+`message`, `retryable` and `details`. Do not infer that all mutations are safe to
+retry from an HTTP status alone.
+
+## Tenants, specs and provider catalogs
+
+In the tables below, `T` means `/api/tenants/:tenant_key`.
+
+| Method and path | Input / result |
+| --- | --- |
+| `GET /api/tenants` | Optional `q`, `page`, `page_size`; `{items,pagination}` for visible tenants. |
+| `GET T` | `{tenant_key,name,created_at}`. |
+| `GET T/call-specs` | `page`, `page_size`; `{tenant,call_specs,pagination}`. |
+| `GET T/call-specs/:id` | Optional integer `revision`; `{call_spec}` with source, selected/latest/published revisions and routes. |
+| `POST T/call-specs` | Exactly `{source: <call-spec object>}`; 201 with a saved revision. |
+| `PUT T/call-specs/:id` | Same body; 201 with a new immutable revision of the existing spec. |
+| `POST T/call-specs/:id/revisions/:revision/publish` | Empty object; 200 with the publication result. |
+| `GET T/providers` | Required `capability`; safe provider/credential-availability metadata. |
+| `GET T/providers/:provider/models` | Required `capability`; supported models, voices and options. |
+
+Tenant discovery accepts all three key types. Spec/catalog reads and writes need
+Full Tenant or Full Platform access, or the equivalent browser permission.
+Spec IDs are decimal strings, such as `"123"`; tenant keys are separate public
+identifiers. Reading a spec defaults to its latest saved revision, which may not
+be published. Source is returned as `source`; compiled plans and secrets are not.
+
+Directory pagination defaults to page 1, size 25, with a maximum size of 50.
+An empty first page has total/total_pages zero; a later nonexistent page is an
+error. Unknown parameters are rejected. Tenant `q` is a trimmed case-insensitive
+name/key search, up to 120 characters. Filtering and authorization precede paging.
+
+Provider capabilities include `model_inference`, `speech_to_text`,
+`text_to_speech` and `speech_to_speech`. Catalogs are local metadata, not live
+provider requests. They return `{providers}` or `{models}` unless pagination is
+requested, which selects `{items,pagination}`.
+
+## Create and join a call
+
+```http
+POST /api/tenants/TENANT_KEY/call-specs/123/calls
+Authorization: Bearer YOUR_VXPIPE_API_KEY
+Content-Type: application/json
+Idempotency-Key: receptionist-attempt-1
+
+{"variables":{}}
+```
+
+The body accepts optional `variables` and `to` (an E.164 destination when required
+by an outgoing spec). A new call returns 201:
+
+```json
+{"call":{"id":"CALL_ID","call_spec_id":"123","revision":1,"state":"prepared","outgoing_outcome":null}}
+```
+
+A web spec is prepared without starting media or issuing a token. An outgoing
+spec starts dial submission; acknowledgement does not mean answered. Incoming
+carrier-only specs return `unsupported_call_entry` here because the carrier owns
+their admission path.
+
+The optional idempotency key is nonblank UTF-8, at most 256 bytes. Replaying the
+same tenant/spec/variables/destination returns the same call with 200, even after
+republication. Changed input returns 409 `idempotency_conflict`. An uncertain or
+failed outgoing replay does not dial again. After a lost response, reuse the
+original key and input; a fresh key creates a distinct attempt.
+
+For a browser call, obtain a single-use token:
+
+```http
+POST /api/tenants/TENANT_KEY/calls/CALL_ID/join-tokens
+Authorization: Bearer YOUR_VXPIPE_API_KEY
+Content-Type: application/json
+
+{"join_token_ttl_seconds":300}
+```
+
+The result contains `call_id`, `participant_key` and
+`join_token: {token,expires_at}`. TTL defaults to 300 seconds and allows 300–86400.
+Optional `participant_key` selects an eligible web participant from the pinned
+revision; omission selects only an eligible web entry. Ended/failed calls cannot
+issue usable tokens. Treat the token as a secret and redeem it through the
+[client admission flow](../development/console-and-clients.md#client-boundaries).
+
+## End a call
+
+`POST T/calls/:call_id/hangup` accepts `{}` and uses the same call authority.
+HTTP 200 returns `{call_id,status}`, where `ending` means cleanup was accepted
+and `ended` requires terminal evidence. Repetition is safe, but an uncertain
+503 `call_hangup_unknown` is not a successful completion and is not an instruction
+for an automatic mutation loop. Cancellation intent remains durable.
+
+## Accounts
+
+Full Platform keys and appropriately authorized browser users can use:
+
+| Route | Contract |
+| --- | --- |
+| `GET /api/users` | `page`, `page_size`, optional email `query` and `role_id`; `{users,pagination}`. |
+| `GET /api/users/:id` | `{user}`. |
+| `POST /api/users` | `email`, `password`, `password_confirmation`, `role_id`, optional `memberships`. |
+| `PATCH /api/users/:id` | Nonempty subset of `email`, `role_id`, `memberships`, `enabled`. No password/null fields. |
+| `POST /api/users/:id/disable` | `{}`; disables and revokes sessions. |
+| `GET /api/role-options` | Paginated `{roles,pagination}`; role identity/name/kind, not editable grants. |
+
+Membership input uses `{tenant_key,access}` with `read` or `read_write`.
+`memberships: []` clears assignments. The HTTP user projection retains `roleId`
+and `memberships[].tenantId`; that `tenantId` is a public tenant key. Passwords
+are input-only. Account-category restrictions and the last-Superadmin rule still
+apply; tenant keys cannot administer accounts.
+
+## Browser-session operations
+
+These canonical families require a current Console session and appropriate
+resource permissions. Writes also require CSRF. They have no implicit API-key or
+MCP grant:
+
+| Area | Routes |
+| --- | --- |
+| Tenant creation | `POST /api/tenants` with `{name}`; no automatic API key. |
+| Installation URL | `GET/PATCH /api/installation`; update `{public_url,revision}`. |
+| Onboarding | `POST /api/onboarding/demo-tenant`, `/api/onboarding/demo-tenant/samples`. |
+| Sample calls | `POST /api/samples/calls`, `/api/samples/transfers`; explicit tenant/call targets. |
+| Access keys | `GET/POST /api/api-keys`, `GET /api/api-keys/tenants`, `DELETE /api/api-keys/:id`. Creation returns the secret once. |
+| Provider bindings | `GET /api/platform/services`, `GET T/service-bindings`, `GET T/services`, `GET T/credentials`. |
+| Provider credentials | `POST` to `/api/platform/credentials` or `T/credentials`; `/test` tests without saving; `PATCH/DELETE .../:credential_id`. |
+| Telephony applications | `GET/POST T/telephony-applications`, `PATCH .../:service_id`. |
+| Phone picker | `GET T/telephony-services/:service/numbers`; `search`, opaque provider `page`, optional `call_spec_id`. |
+| MCP connections | `GET/POST T/mcp-connections`, `GET/PATCH/DELETE .../:id`, `POST .../:id/reconnect`, `POST T/mcp-discovery`. |
+| Call inspection | `GET T/calls`, `/calls/spec-options`, `/calls/:call_id`, `/calls/:call_id/inspection`. |
+| Call artifacts | `GET T/calls/:call_id/details/:publication_id`, `/recordings/:artifact_id`. |
+| Role administration | `/api/roles` and its role-specific operations. |
+| Password reset | `POST /api/users/:id/reset-password`. |
+| Connected external MCP clients | `GET /api/account/connections`, `DELETE /api/account/connections/:id`. |
+
+Credential create/test input is `{provider,name?,values}`; replacement is
+`{provider,values}`. Values follow the provider's closed schema, never appear in
+read responses, and are separate from telephony metadata. MCP updates carry the
+observed generation; refresh uses `{generation,refresh_tools:true}`. See
+[Integrations](integrations.md) for reconnect and readiness semantics.
+
+Call inspection is PostgreSQL-backed and reports archive completeness honestly.
+Recording downloads support HTTP byte ranges. These reads do not grant control
+over a live participant. The source of truth for exact fields and authorization
+is the [Console router](../../../apps/vxpipe_console/lib/vxpipe/console/router.ex)
+and [Gateway HTTP adapters](../../../apps/vxpipe_gateway/lib/vxpipe/gateway/http).
+
+## Connect an external MCP client
+
+Configure an OAuth-capable MCP client with `https://YOUR_HOST/mcp`. Complete
+Console login and consent. Do not attach a static Vxpipe API key. The client acts
+within the user's current role, tenant access and approved grant.
+
+The tool catalog exposes:
+
+- Tenants: `list_tenants`, `get_tenant`.
+- Specs/catalogs: `list_call_specs`, `get_call_spec`, `create_call_spec`,
+  `update_call_spec`, `publish_call_spec_revision`, `list_providers`,
+  `list_provider_models`.
+- Calls: `create_call`, `create_join_token`, `hangup_call`.
+- Accounts: `list_users`, `create_user`, `update_user`, `disable_user`,
+  `list_role_options`.
+
+Discovery filters tools by permission, and each invocation rechecks authority.
+MCP uses `call_spec_definition` where HTTP uses `source`; both reach the same
+authoring workflow. Remove an authorized client through the account's connections
+page to revoke its grant. This inbound platform endpoint is separate from
+[tenant MCP connections used inside calls](agents-and-tools.md).
