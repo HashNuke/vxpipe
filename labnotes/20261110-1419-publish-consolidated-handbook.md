@@ -103,3 +103,25 @@ verified delivery command.
 - Hosted-page verification remains pending: the check exposes its dashboard URL,
   not a public site URL. Requested that URL from the user; retain the final
   acceptance checkbox until the actual hosted page is inspected.
+
+## Hosted acceptance completed
+
+The user supplied the public Worker URL. Chrome loaded the hosted architecture
+page, rendered its Mermaid SVG and confirmed source links pinned to `16f3b38e`.
+The separately requested Worker rename now exposes the handbook at
+https://vxpipe-web.akash-98c.workers.dev/en/docs/ with the same Worker identity.
+All 22 page routes and four JSON downloads return HTTP 200 through browser fetch.
+Python's default HTTP client received Cloudflare error 1010; ordinary Chrome
+navigation and browser fetch succeeded, without changing Cloudflare protections.
+
+Website commit `2e2bbc5` addresses the user's wrapped-link background, line-height
+and font-size feedback. Its Cloudflare build
+`030f6684-a583-4a89-b2c3-b55c11e957bd` succeeded on the renamed `vxpipe-web` service,
+version `dd163776-1822-482c-9446-f75d687f035d`. Live Chrome confirms 14px sidebar
+links/headings, 19.6px link line-height, a growing two-line hover row and contained
+text. Local desktop/mobile browser checks and all 11 existing website tests pass.
+
+[Canonical CI run 42841140567](https://github.com/HashNuke/vxpipe/actions/runs/42841140567)
+passed on `1cf2b8e7`, including the umbrella suite and Console checks. The earlier
+local timing failure remains recorded above rather than being erased by this run.
+All handbook acceptance gates now pass; the milestone and index are complete.

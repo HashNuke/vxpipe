@@ -42,3 +42,17 @@ delivery `b38654aa-dcce-11f1-8d7f-bee4a969bf6a` for commit `816b945c` returned
 retry at 06:19:53 UTC. Automatic GitHub-to-catalog refresh is verified.
 
 Reference: [Cloudflare partial Worker update](https://developers.cloudflare.com/api/resources/workers/subresources/beta/subresources/workers/methods/edit/).
+
+## Cloudflare rename completed — 2026-11-10
+
+After the user authorized Wrangler's device login, renamed the existing Worker
+`vxpipe-docs` to `vxpipe-web` with a name-only PATCH. Worker identity
+`8628f213d46a477d8e1a6fcad5d8acf5` is unchanged; an in-memory settings comparison
+confirmed other settings were preserved. The new public URL is
+https://vxpipe-web.akash-98c.workers.dev/ and Wrangler configuration already uses
+that name. Credentials were obtained through Wrangler and used only in memory.
+
+Website commit `2e2bbc5` triggered `Workers Builds: vxpipe-web` and deployed
+successfully, proving the GitHub build connection survived the rename. Chrome
+loaded the new URL, all 22 handbook pages and four asset downloads. This closes
+the Cloudflare rename portion of this record.
