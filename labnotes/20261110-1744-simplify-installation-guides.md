@@ -33,3 +33,14 @@
   a one-off link check; `git diff --check` passed.
 - These checks validate documentation and presentation, not application container
   startup. No Vxpipe runtime deployment or container packaging was performed.
+
+## Publication
+
+- Canonical documentation commit: `299937dd` on `docs`.
+- Website commit: `7b30bdb` on `HashNuke/vxpipe-web` `main`.
+- [Documentation publication run](https://github.com/HashNuke/vxpipe/actions/runs/42869509227)
+  succeeded. Cloudflare build `e49da886-334f-419b-bdd0-3418a77eb354` succeeded.
+- The hosted Getting started page renders both cards. Docker and Railway return
+  HTTP 200, use `ghcr.io/vxpipe/vxpipe`, and omit planned-delivery notices. The
+  Getting started page has no source setup commands. Hosted Chrome inspection
+  reported no errors.
