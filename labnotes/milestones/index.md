@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 58 milestone specifications: 45 complete and 13 incomplete. Milestone 17, Telnyx calls and
+Status: 59 milestone specifications: 45 complete and 14 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -187,8 +187,9 @@ progress without claiming the entire milestone is complete.
 54. [x] [ElevenLabs progress timeouts](elevenlabs-progress-timeouts.md) — Native caller speech and progressing output have no adapter duration cap. Scoped creation, finality, cancellation and credit guards pass 145 focused tests, all root gates (4,503 tests, zero failures), Lean and clean final independent GPT-6 Astra xhigh review. Two coherent checkpoints; no local VAD.
 55. [x] [Participant-owned MCP sessions](participant-owned-mcp-sessions.md) — Complete: all 29 implementation items verified. Activation-owned sessions/renewal and durable tenant catalog maintenance pass credential-change, teardown, transfer/recovery, capacity, privacy and controlled local acceptance. Actual Cron refresh and external inbound MCP continuity pass. All five root gates pass: 5,094 tests, zero failures, 371 excluded, seed 157471; focused final lanes and independent Astra reviews are clean. Deployment and the separate directory workflow approval remain outside this milestone.
 56. [x] [Shared tool execution for LLM and speech-to-speech participants](shared-participant-tool-execution.md) — Complete: 20/20 tasks and 4/4 checkpoints. LLM and native speech participants share tool/MCP execution, both conversation modes, semantic completion, bounded retention and usage. The 446-test common lane covers ordinary/duplex receptionist behavior, controlled outcomes, repeated identities, partial admission and teardown. All five root gates pass (5,213 tests, zero failures, 376 excluded; seed 112460), plus Lean and clean independent Astra review. Provider live acceptance and deployment remain separately owned.
-57. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-58. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+57. [ ] [Consolidated handbook and publication](consolidated-handbook-and-publication.md) — Publish the canonical English usage/development handbook from this repository to vxpipe-web; Docker and Railway chapters describe planned delivery.
+58. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `vxpipe/vxpipe`, with components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+59. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 The 2026-11-08 [participant MCP ownership decision](../../docs/development/participant-mcp-ownership.md)
 adds a runtime lifecycle slice after the implemented saved-MCP work and before
