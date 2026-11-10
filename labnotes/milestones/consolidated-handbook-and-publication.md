@@ -30,9 +30,11 @@ No runtime feature milestone blocks documenting the behavior already present.
   active references; retain dated evidence through labnotes or pinned Git history,
   without publishing an archive of superseded designs.
 - Publish two installation guides under `usage/install`: Docker and Railway.
-  Use `ghcr.io/hashnuke/vxpipe` as the intended image repository. Label unbuilt
-  packaging and unverified hosting instructions clearly; link the runnable source
-  workflow. This task neither packages nor deploys the Vxpipe application.
+  Use `ghcr.io/vxpipe/vxpipe` as the image repository, with source remaining at
+  `HashNuke/vxpipe`. Getting started offers installation cards; source setup belongs
+  in Development. Per the 2026-11-10 follow-up, keep delivery status and pending
+  acceptance in milestones, outside the public installation instructions.
+  This task neither packages nor deploys the Vxpipe application.
 - Render Mermaid as SVG in the website; use diagrams only where they clarify
   ownership or flow. Ordinary pages should not load the diagram renderer.
 - Keep publishing credentials scoped to writing the website repository. Never
@@ -80,7 +82,7 @@ No runtime feature milestone blocks documenting the behavior already present.
 ### Acceptance
 
 - [x] Check every handbook page's frontmatter, local links and code examples
-  against source; identify intended delivery behavior explicitly.
+  against source; record unverified container delivery behavior in its milestone.
 - [x] Build the website and check generated routes, links and downloadable assets.
   Run the website's existing relevant checks; add no tests that merely mirror prose.
 - [x] Inspect navigation, representative guides, code blocks, diagram and search in
@@ -90,6 +92,15 @@ No runtime feature milestone blocks documenting the behavior already present.
   evidence before checking off this milestone and its index entry.
 
 ## Design review — 2026-11-10
+
+Installation follow-up: a Markdown list inside a small HTML wrapper lets the
+website render the requested Railway/Docker cards without adding MDX or changing
+the importer. Source instructions move to the existing development chapter.
+Public setup prose omits planning status at the user's request; the separate
+delivery milestone retains its hold, image publication and live acceptance work.
+The `vxpipe` organization can own the image while `HashNuke/vxpipe` keeps the source;
+publishing permissions must be checked separately during container delivery.
+No new dependency or milestone ordering change is required.
 
 The initial inventory covers 120 source files. Splitting installation makes 22
 published pages. No extra architecture folder, provider-specific guide tree,

@@ -8,20 +8,14 @@ interruptions, and call visibility so you can focus on what your agents do.
 
 ## Quickstart
 
-Run the current application from a source checkout:
-
-```shell
-bin/setup
-bin/dev
-```
-
-Open the Console URL printed by setup. Follow [Getting started](docs/en/index.md)
-for prerequisites, saved provider credentials and a first voice call.
+Choose [Railway](docs/en/usage/install/railway.md) or
+[Docker](docs/en/usage/install/docker.md), then follow
+[Getting started](docs/en/index.md) to connect providers and set up your first call.
 
 ## Get started
 
 - **[Documentation](docs/en/index.md)** — usage, configuration and development.
-- **[Docker](docs/en/usage/install/docker.md)** and **[Railway](docs/en/usage/install/railway.md)** — intended packaged installation; release artifacts are still pending.
+- **[Development workflow](docs/en/development/local-development.md)** — source setup, local tools and contributing.
 - **[Architecture](docs/en/development/architecture.md)** — application boundaries and reusable Elixir components.
 
 ## License

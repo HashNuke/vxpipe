@@ -5,14 +5,15 @@
 > This is a planned quickstart specification, not a runnable Docker installation guide. Image/tag/entrypoint/environment/media networking need verification against a built artifact. Packaging is unimplemented and remains subject to the owner's explicit pre-delivery review hold. The source/Elixir path remains available.
 
 Docker is the primary way Vxpipe will be packaged for standalone deployment.
-The planned image is `ghcr.io/hashnuke/vxpipe`; the source repository remains
+The planned image is `ghcr.io/vxpipe/vxpipe`; the source repository remains
 [`HashNuke/vxpipe`](https://github.com/HashNuke/vxpipe).
 
 ## Availability
 
-Container packaging is not implemented yet. The README shows the planned command
-shape, not a verified Docker installation for this checkout. To try Vxpipe now, follow
-[Get started with Elixir](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/getting-started-elixir.md#run-the-voice-demo).
+Container packaging is not implemented yet. The public installation guides describe
+the target setup; their commands still need acceptance against a built release.
+The README links those guides. The runnable checkout workflow lives in
+[Development workflow](../../docs/en/development/local-development.md).
 
 This guide will provide the image tag, configuration, provider-key setup, and
 commands to start your first call when the Docker package is ready. The
@@ -33,7 +34,7 @@ the built image.
 
 ## What the completed guide will cover
 
-1. Pull the released `ghcr.io/hashnuke/vxpipe` image.
+1. Pull the released `ghcr.io/vxpipe/vxpipe` image.
 2. Configure your call and supply provider credentials.
 3. Start Vxpipe with the required HTTP and voice-media networking.
 4. Open the Console and make your first call.

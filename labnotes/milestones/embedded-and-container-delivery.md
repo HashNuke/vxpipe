@@ -25,7 +25,7 @@ Relocation does not publish an image, release the hold or satisfy a delivery gat
 ## Runnable outcome
 
 Docker is the primary packaged distribution. The same approved call flow runs in
-the `ghcr.io/hashnuke/vxpipe` image using platform environment settings and encrypted tenant records, and the
+the `ghcr.io/vxpipe/vxpipe` image using platform environment settings and encrypted tenant records, and the
 components can also be consumed as libraries within an Elixir host application.
 Operators can migrate/bootstrap, check readiness, join through configured ingress
 and shut down without silently losing or resurrecting work.
@@ -39,11 +39,20 @@ user explicitly releases that hold.
 
 ## Specification
 
-- Use GitHub Container Registry under the source repository owner, with `ghcr.io/hashnuke/vxpipe` as
+The 2026-11-10 documentation follow-up changes the image namespace from
+`ghcr.io/hashnuke/vxpipe` to `ghcr.io/vxpipe/vxpipe`. The user keeps implementation
+status in milestones, so the public Railway/Docker guides describe setup without
+planning notices. Their `VERSION` placeholder, release migration command and
+networking still require verification against the built artifact. This edit
+does not release the packaging hold or satisfy the unchecked delivery gates.
+
+- Use GitHub Container Registry under the `vxpipe` organization, with `ghcr.io/vxpipe/vxpipe` as
   the planned image repository. The GitHub source repository remains
   `HashNuke/vxpipe`; image naming does not require a GitHub repository transfer.
   Select and verify the concrete release tag and registry publishing setup during
   packaging implementation; the planned name is not evidence of a published image.
+  The publisher needs permission in the `vxpipe` organization independently of
+  source repository access; verify cross-owner authentication and public pulls.
 - Build one production artifact that defaults to production behavior. Verify the same image
   with demo mode off and with `VXPIPE_DEMO=1`: only the latter exposes the authenticated setup
   checklist/example catalog. The flag changes no build/runtime environment, database selection,
@@ -84,7 +93,7 @@ user explicitly releases that hold.
 - [ ] Add container build/run instructions with safe platform env and tenant provisioning examples and no real
   secrets; verify licenses and required notices for the pinned direct and transitive
   dependencies before distributing the image.
-- [ ] Lead the root README with tested Docker instructions for `ghcr.io/hashnuke/vxpipe`,
+- [ ] Lead the root README with tested Docker instructions for `ghcr.io/vxpipe/vxpipe`,
   retain `HashNuke/vxpipe` as the source repository, and document Elixir library
   consumption with a runnable host example. Keep the source-development quick
   start in the development guide once the Docker quick start replaces it.

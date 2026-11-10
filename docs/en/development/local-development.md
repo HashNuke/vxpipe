@@ -60,7 +60,7 @@ mix test test/vxpipe/call_engine/provider/morse_code/room_round_trip_test.exs
 ```
 
 The browser sample uses its configured providers; it does not silently switch to
-fixtures. See [Getting started](../index.md) for a provider-backed call.
+fixtures. Use the provider-backed playground below for a voice call.
 
 Silero VAD uses Ortex. On macOS the project disables Cargo release stripping for
 that dependency to avoid malformed native-library string tables. If a checkout
@@ -72,6 +72,38 @@ mix deps.compile ortex --force
 MIX_ENV=test mix deps.compile ortex --force
 mix test apps/vxpipe_call_engine/test/vxpipe/call_engine/speech/silero_test.exs
 ```
+
+## Provider-backed playground
+
+The managed playground is also available when `VXPIPE_DEV_TENANT` selects a tenant
+with saved Google and Deepgram credentials named `default`. Console-created
+provider bindings normally use the provider name, so provision the playground's
+explicit default bindings from a terminal at the repository root:
+
+```shell
+set -a
+. ./.env
+set +a
+mix vxpipe.provider_credential.provision \
+  --tenant TENANT_KEY --provider google < protected-google-credential.json
+mix vxpipe.provider_credential.provision \
+  --tenant TENANT_KEY --provider deepgram < protected-deepgram-credential.json
+```
+
+Use the tenant key from its Console URL. Each protected input file contains
+`{"api_key":"REPLACE_WITH_PROVIDER_KEY"}` with that provider's real key; keep the
+files outside source control. Provision only missing default bindings; the
+command does not silently replace an existing one. Set `VXPIPE_DEV_TENANT` to
+that tenant key in the checkout's ignored `.env` and restart `bin/dev`.
+
+After logging in, open `/admin/samples/pipecat-console`, choose **Create room**,
+then **Connect**. Ask “What time is it?” to exercise a platform tool, or “Transfer
+me to billing” to try the sample agent handoff. Verify a spoken exchange and its
+transcript: text alone does not prove microphone input or audible playback.
+Stop the call when finished.
+
+For a credential-free development check, use the local Morse fixture lane in
+[Local fixtures](#local-fixtures).
 
 ## Repository map
 
