@@ -39,11 +39,17 @@ existing explicit environment override. Configure a signed JSON push webhook on
 `GITHUB_WEBHOOK_SECRET`. Retire the old repository's hook after verifying import.
 The publisher's own code repository remains `HashNuke/vxpipe-integrations-web`.
 
-The source change does not deploy or alter hosted configuration. GitHub CLI is
-unauthenticated in the migration environment, so webhook configuration was not
-performed. The old repository is a historical snapshot with a contribution
-redirect; keeping it available lets existing deployments finish their explicit
-cutover. There is no runtime fallback or synchronization with it.
+On 2026-11-10, the production `integrations-api` service in Railway project
+`vxpipe-integrations-web` was deployed from publisher commit `2632e67`, with
+`DEFINITIONS_REPOSITORY=HashNuke/vxpipe`, `DEFINITIONS_BRANCH=main` and
+`AUTO_SYNC=true`. Deployment `96624ef4-91a8-4237-be1e-4c54314c02bd` reached
+SUCCESS and its startup import completed. The live API serves all sixteen entries.
+
+Registering the GitHub webhook remains pending GitHub authentication. A manually
+signed push request returned 202 and its queued refresh completed; this verifies
+the receiver, but does not establish automatic GitHub delivery. The old repository
+is a historical snapshot with a contribution redirect. There is no runtime
+fallback or synchronization with it.
 
 ## Verification
 
@@ -53,5 +59,5 @@ recorded Cal.com favicon refresh. The existing publisher successfully imports
 all sixteen definitions and their assets into a fresh local catalog, and its
 binary builds successfully. The
 [migration labnote](../../labnotes/20261110-0458-consolidate-integration-definitions.md)
-records the results. No new automated tests are added for this repository move,
-and no hosted cutover is claimed.
+records the results, including the subsequent deployment and remaining webhook
+setup. No new automated tests are added for this repository move.

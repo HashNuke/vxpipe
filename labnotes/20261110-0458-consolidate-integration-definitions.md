@@ -45,3 +45,32 @@ then retire the old source webhook. GitHub CLI authentication is unavailable,
 so live webhook configuration was not performed. No Railway deployment or live
 configuration changes were made. The detailed cutover is recorded in the
 publisher's operations guide and the main source-ownership document.
+
+## Authorized production deployment — 2026-11-10
+
+The user subsequently authorized updating and deploying the integrations app.
+Updated only the production catalog source variables to `HashNuke/vxpipe`, branch
+`main`, with `AUTO_SYNC=true`. Preserved storage, credentials, the existing volume
+and the publisher's own source repository. Uploaded publisher commit `2632e67`
+with the Railway CLI because this service uses local uploads; Railway MCP managed
+configuration and verified deployment state and runtime logs.
+
+- Deployment `96624ef4-91a8-4237-be1e-4c54314c02bd` reached SUCCESS.
+- Startup refresh completed. Health/readiness return 200, the live integration
+  list contains sixteen entries, and category/search requests return 200.
+- Published catalog revision changed from
+  `7d5e4d161e0c03e1423f691e15adc9c67ea30cf9ad37b8d0a15ebe5cc71cba7c` to
+  `924a55dfab31ad066904798ac6521678e49e9703052fa996c83bde79f112fce2`.
+- A manual signed push notification for `HashNuke/vxpipe` returned 202. Logs
+  confirm completion of `manual-cutover-dd2cb381-b678-4d93-afb1-269661956271`.
+  This verifies the deployed receiver and queue, not delivery from GitHub.
+- Browser inspection loaded the public API documentation. Chrome initially
+  required `--no-sandbox` in this host environment. An initial Python urllib
+  icon HEAD request returned 403; curl HEAD requests returned 200 for Cal.com,
+  OpenAI and Telnyx, and Chrome rendered Cal.com's 512×512 PNG successfully.
+
+GitHub CLI is unauthenticated and the GitHub plugin is not connected. Started
+the CLI device sign-in flow with webhook administration scope and requested user
+sign-in while completing deployment. Creating the new repository hook and
+retiring any old hook remain pending authentication. No new tests or runtime
+code were added for deployment.
