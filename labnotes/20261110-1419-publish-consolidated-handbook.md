@@ -31,4 +31,13 @@ verified delivery command.
 
 ## Progress
 
-- Planning checkpoint prepared. Handbook, importer and publication are pending.
+- Planning committed/pushed as `0f510e25`.
+- First eight pages written: index, getting started, Docker, Railway, concepts,
+  configuration, administration and development workflow. Checked current runtime
+  configuration, account/router/CLI contracts and sample frontend/source docs.
+- Confirmed `/healthz` is an unconditional HTTP liveness response, not dependency
+  readiness. Current `.tool-versions` selects Node 26; documentation links the file
+  instead of perpetuating the old Node 24 prerequisite.
+- Locale JSON parses; all eight pages have title, description and sidebar metadata.
+  Cross-page link verification waits for the remaining chapters. No runtime changed.
+- Remaining handbook chapters, importer, consolidation and publication are pending.

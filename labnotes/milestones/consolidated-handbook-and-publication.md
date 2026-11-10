@@ -41,20 +41,20 @@ No runtime feature milestone blocks documenting the behavior already present.
 
 ### Handbook
 
-- [ ] Index and two reading paths.
-- [ ] Getting started.
-- [ ] Install with Docker (planned delivery contract).
-- [ ] Install on Railway (planned delivery contract).
-- [ ] Core concepts.
-- [ ] Configuration.
-- [ ] Accounts, tenants and access.
+- [x] Index and two reading paths.
+- [x] Getting started.
+- [x] Install with Docker (planned delivery contract).
+- [x] Install on Railway (planned delivery contract).
+- [x] Core concepts.
+- [x] Configuration.
+- [x] Accounts, tenants and access.
 - [ ] Integrations and credentials.
 - [ ] Call specs and variables.
 - [ ] Telephony and transfers.
 - [ ] Agents, tools and MCPs.
 - [ ] HTTP API and platform MCP.
 - [ ] Operations and troubleshooting.
-- [ ] Development workflow and documentation authoring.
+- [x] Development workflow and documentation authoring.
 - [ ] Architecture.
 - [ ] Call runtime and lifecycle.
 - [ ] Speech and media runtime.
