@@ -21,3 +21,10 @@ Getting started to replace the redundant documentation contents page.
 
 Publish the website navigation change before pushing the canonical move so the
 source publication workflow imports into a site that understands the new route.
+
+Published canonical commit `7bd1662c` and website commit `1147451`. Source
+publication run `42850786020` and Cloudflare build
+`ce29affd-5ae6-4852-a1b9-e83bfdee20e5` succeeded. Live Chrome confirms the new hero,
+Getting started at `/en/docs/`, exactly 21 sidebar page links, and only Usage and
+Development groups. Built HTML has no broken page/anchor links; the old separate
+guide route is absent. Both repositories were clean after publication.
