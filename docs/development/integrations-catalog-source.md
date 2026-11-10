@@ -45,11 +45,12 @@ On 2026-11-10, the production `integrations-api` service in Railway project
 `AUTO_SYNC=true`. Deployment `96624ef4-91a8-4237-be1e-4c54314c02bd` reached
 SUCCESS and its startup import completed. The live API serves all sixteen entries.
 
-Registering the GitHub webhook remains pending GitHub authentication. A manually
-signed push request returned 202 and its queued refresh completed; this verifies
-the receiver, but does not establish automatic GitHub delivery. The old repository
-is a historical snapshot with a contribution redirect. There is no runtime
-fallback or synchronization with it.
+GitHub push webhook `709735353` is registered on `HashNuke/vxpipe`, with JSON
+delivery, TLS verification and the publisher's existing signing secret. GitHub's
+initial ping returned 200. A manually signed push also returned 202 and its queued
+refresh completed. The standalone integration checkout has been deleted after
+verifying its migration; deletion of the old remote awaits GitHub's `delete_repo`
+permission. There is no runtime fallback or synchronization with the old repository.
 
 ## Verification
 
@@ -59,5 +60,7 @@ recorded Cal.com favicon refresh. The existing publisher successfully imports
 all sixteen definitions and their assets into a fresh local catalog, and its
 binary builds successfully. The
 [migration labnote](../../labnotes/20261110-0458-consolidate-integration-definitions.md)
-records the results, including the subsequent deployment and remaining webhook
-setup. No new automated tests are added for this repository move.
+records the deployment results; the
+[repository cleanup labnote](../../labnotes/20261110-0614-rename-web-repositories.md)
+records webhook registration and repository retirement. No new automated tests
+are added for this repository move.

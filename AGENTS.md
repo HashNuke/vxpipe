@@ -8,7 +8,9 @@ and isolated databases/ports. Safe to rerun; optional `--with-lean`.
 This checkout and its supporting repositories share the same parent directory.
 The integration directory definitions live in this repository's `integrations/`.
 Resolve supporting checkouts relative to this repository: `../vxpipe-integrations-web`
-contains the directory publisher/API, and `../vxpipe-docs` contains the documentation site.
+contains the directory publisher/API. The `../vxpipe-docs` checkout contains the
+website and documentation from `HashNuke/vxpipe-web` (its local directory retains
+the previous name).
 Look for other supporting repositories alongside these under `../`.
 
 ## Project hygiene
