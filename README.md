@@ -15,7 +15,7 @@ bin/setup
 bin/dev
 ```
 
-Open the Console URL printed by setup. Follow [Getting started](docs/en/usage/getting-started.md)
+Open the Console URL printed by setup. Follow [Getting started](docs/en/index.md)
 for prerequisites, saved provider credentials and a first voice call.
 
 ## Get started

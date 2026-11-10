@@ -60,7 +60,7 @@ mix test test/vxpipe/call_engine/provider/morse_code/room_round_trip_test.exs
 ```
 
 The browser sample uses its configured providers; it does not silently switch to
-fixtures. See [Getting started](../usage/getting-started.md) for a provider-backed call.
+fixtures. See [Getting started](../index.md) for a provider-backed call.
 
 Silero VAD uses Ortex. On macOS the project disables Cargo release stripping for
 that dependency to avoid malformed native-library string tables. If a checkout

@@ -1,20 +1,16 @@
 # Documentation table of contents
 
-The canonical handbook has **22 English pages** under `en/`: 12 usage guides,
-nine development guides and one index. Architecture belongs in development.
+The canonical handbook has **21 English pages** under `en/`: Getting started at the
+root, 11 further usage guides and nine development guides. Architecture belongs in development.
 `locales.json` selects `en` as the default; future translations mirror these paths.
 
 Website import copies the localized pages and `assets/` into `vxpipe-web`.
 This file is repository navigation and is not a published page. Publication and
 acceptance progress live in the [handbook milestone](../labnotes/milestones/consolidated-handbook-and-publication.md).
 
-## Handbook
-
-- [Vxpipe documentation](en/index.md)
-
 ## Usage
 
-- [Getting started](en/usage/getting-started.md)
+- [Getting started](en/index.md)
 - [Install with Docker](en/usage/install/docker.md)
 - [Install on Railway](en/usage/install/railway.md)
 - [Core concepts](en/usage/concepts.md)

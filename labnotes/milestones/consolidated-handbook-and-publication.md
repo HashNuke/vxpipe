@@ -42,7 +42,7 @@ No runtime feature milestone blocks documenting the behavior already present.
 
 ### Handbook
 
-- [x] Index and two reading paths.
+- [x] Getting started at the handbook root, with Usage and Development navigation.
 - [x] Getting started.
 - [x] Install with Docker (planned delivery contract).
 - [x] Install on Railway (planned delivery contract).
@@ -113,8 +113,13 @@ Source publication run `42840418903` succeeded and produced website commit
 renaming the same Worker to `vxpipe-web`; website commit `2e2bbc5` deployed through
 the retained build connection and fixes wrapped sidebar rows and typography.
 
-The [published handbook](https://vxpipe-web.akash-98c.workers.dev/en/docs/) serves
-all 22 pages and four reference downloads. Chrome verification covers actual
+The initial [published handbook](https://vxpipe-web.akash-98c.workers.dev/en/docs/)
+served all 22 pages and four reference downloads. Chrome verification covers actual
 content, pinned source links, Mermaid rendering and the updated sidebar. Existing
 website tests pass; canonical CI run `42841140567` also passes. Publication remains
 selected from `docs`, with the switch to `main` documented for after merge.
+
+Reader feedback removed the redundant contents-only landing page: Getting started
+now lives at `docs/en/index.md` and `/en/docs/`, first under Usage. The standalone
+Documentation sidebar group is removed. This leaves 21 pages; canonical links and
+the website import follow the new location.
