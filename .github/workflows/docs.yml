@@ -1,0 +1,65 @@
+name: Publish documentation
+
+on:
+  push:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-documentation
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref_name == (vars.DOCS_PUBLISH_BRANCH || 'main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out canonical documentation
+        uses: actions/checkout@v7
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Check out the website
+        uses: actions/checkout@v7
+        with:
+          repository: HashNuke/vxpipe-web
+          ref: main
+          path: site
+          ssh-key: ${{ secrets.DOCS_WEBSITE_DEPLOY_KEY }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Import and build the handbook
+        working-directory: site
+        run: |
+          npm ci
+          npm run docs:import -- ../source/docs
+          npm run build
+
+      - name: Publish generated content
+        working-directory: site
+        env:
+          DOCS_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          git add -- src/content/docs src/content/docs-locales.json src/content/docs-source.json public/docs-assets
+          if git diff --cached --quiet; then
+            echo 'Documentation is already current.'
+            exit 0
+          fi
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Publish handbook from vxpipe ${DOCS_SOURCE_SHA:0:8}"
+          git push origin HEAD:main
