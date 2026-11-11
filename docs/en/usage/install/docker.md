@@ -62,8 +62,8 @@ This binds port 4000 on the host's loopback interface. Point the host's HTTPS
 reverse proxy at `http://127.0.0.1:4000`. If the proxy runs in Docker, connect both
 containers to a shared network and use the application container's port.
 
-Check `https://voice.example.com/healthz`, then open the Console and follow
-[Getting started](../../index.md#set-up-your-installation). The health endpoint
+Check `https://voice.example.com/healthz`, then open the Console and
+[create your first account](../administration.md#first-account). The health endpoint
 checks the HTTP handler; verify a real call to check providers and media.
 
 Telephony requires reachable HTTPS/WSS callbacks. Browser calls also require a

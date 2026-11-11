@@ -65,7 +65,7 @@ Set the [healthcheck path](https://docs.railway.com/deployments/healthchecks) to
 `/healthz`. It returns HTTP 200 when the HTTP handler is running; it does not test
 PostgreSQL, provider authorization or call readiness.
 
-Open the Console and follow [Getting started](../../index.md#set-up-your-installation).
+Open the Console and [create your first account](../administration.md#first-account).
 Before accepting callers, check account setup, credential saving, a published call
 spec, bidirectional audio, a tool invocation, transfers and hangup.
 
