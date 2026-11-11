@@ -17,8 +17,8 @@ caddy_path="$(command -v caddy)"
 
 "$docker_path" build --file "$service_sources/Dockerfile" \
   --build-arg "APP_UID=$(id -u)" --build-arg "APP_GID=$(id -g)" \
-  --tag vxpipe-qa:local "$release"
-"$caddy_path" validate --config "$service_sources/Caddyfile" --adapter caddyfile
+  --tag vxpipe:local "$release"
+"$caddy_path" validate --config "$service_sources/vxpipe.caddy" --adapter caddyfile
 
 rendered="$(mktemp -d)"
 trap 'rm -rf -- "$rendered"' EXIT
@@ -29,18 +29,22 @@ import sys
 
 source, target, *values = sys.argv[1:]
 keys = ["CHECKOUT", "USER", "GROUP", "UID", "GID", "DOCKER", "CADDY"]
-for name in ["vxpipe-qa.service", "vxpipe-qa-proxy.service"]:
+for name in ["vxpipe.service", "caddy.service"]:
     content = (Path(source) / name).read_text()
     for key, value in zip(keys, values, strict=True):
         content = content.replace("@" + key + "@", value)
     (Path(target) / name).write_text(content)
 PY
 
-systemd-analyze verify "$rendered/vxpipe-qa.service" "$rendered/vxpipe-qa-proxy.service"
-sudo install -d -m 755 /etc/vxpipe-qa
-sudo install -m 644 "$service_sources/Caddyfile" /etc/vxpipe-qa/Caddyfile
-sudo install -m 644 "$rendered/vxpipe-qa.service" "$rendered/vxpipe-qa-proxy.service" /etc/systemd/system/
+systemd-analyze verify "$rendered/vxpipe.service" "$rendered/caddy.service"
+sudo install -d -m 755 /etc/caddy/sites-enabled
+if ! sudo test -e /etc/caddy/Caddyfile; then
+  sudo install -m 644 "$service_sources/Caddyfile" /etc/caddy/Caddyfile
+fi
+sudo install -m 644 "$service_sources/vxpipe.caddy" /etc/caddy/sites-enabled/vxpipe.caddy
+sudo "$caddy_path" validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo install -m 644 "$rendered/vxpipe.service" "$rendered/caddy.service" /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable vxpipe-qa.service vxpipe-qa-proxy.service
-sudo systemctl restart vxpipe-qa.service
-sudo systemctl reload-or-restart vxpipe-qa-proxy.service
+sudo systemctl enable vxpipe.service caddy.service
+sudo systemctl restart vxpipe.service
+sudo systemctl reload-or-restart caddy.service

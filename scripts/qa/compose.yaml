@@ -1,10 +1,10 @@
-name: vxpipe-qa
+name: vxpipe
 
 services:
   app:
-    image: vxpipe-qa:local
+    image: vxpipe:local
     pull_policy: never
-    container_name: vxpipe-qa
+    container_name: vxpipe
     user: "${VXPIPE_QA_UID:-1000}:${VXPIPE_QA_GID:-1000}"
     env_file: ../../.env
     environment:

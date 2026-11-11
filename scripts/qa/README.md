@@ -10,12 +10,18 @@ MIX_ENV=prod mix release vxpipe --overwrite
 scripts/qa/install-services
 ```
 
-The installer packages the existing release as `vxpipe-qa:local`, installs both
+The installer packages the existing release as `vxpipe:local`, installs both
 units in `/etc/systemd/system`, enables them at boot and starts them:
 
-- `vxpipe-qa.service` runs migrations, then the `vxpipe-qa` Docker container.
-- `vxpipe-qa-proxy.service` runs Caddy for `https://vitrum.vxpipe.com` and redirects
-  HTTP to HTTPS. Its certificate state stays in `/var/lib/vxpipe-qa-proxy`.
+- `vxpipe.service` runs migrations, then the `vxpipe` Docker container.
+- `caddy.service` runs the shared Caddy server and redirects HTTP to HTTPS.
+  Its certificate state stays in `/var/lib/caddy`.
+
+Caddy imports site files from `/etc/caddy/sites-enabled/*.caddy`. The installer
+updates only `vxpipe.caddy`, serving `https://vitrum.vxpipe.com`; it preserves an
+existing root Caddyfile and other services' site files. Add another site's config
+to that directory and run `sudo systemctl reload caddy.service` to serve it.
+Caddy's service lifecycle is independent of Vxpipe.
 
 Compose supplies the checkout's `.env` to the container at runtime. The image
 build context contains only the assembled release. The service files contain
@@ -30,14 +36,14 @@ QA host settings, not a portable image build for other operating systems.
 Systemd owns restart behavior. To inspect or restart the services:
 
 ```sh
-sudo systemctl status vxpipe-qa.service vxpipe-qa-proxy.service
-sudo systemctl restart vxpipe-qa.service
-sudo journalctl -u vxpipe-qa.service -n 50
-docker stats --no-stream vxpipe-qa
+sudo systemctl status vxpipe.service caddy.service
+sudo systemctl restart vxpipe.service
+sudo journalctl -u vxpipe.service -n 50
+docker stats --no-stream vxpipe
 ```
 
 For database migrations in the running container:
 
 ```sh
-docker exec vxpipe-qa /app/bin/migrate
+docker exec vxpipe /app/bin/migrate
 ```
