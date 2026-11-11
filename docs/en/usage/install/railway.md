@@ -57,9 +57,17 @@ browser WebRTC still needs its own reachable media path.
 
 ## Deploy and check
 
-Use the release's migration command as a Railway pre-deploy step. Run migrations
-before the new application version starts, and use the image's default entrypoint
-for the application service.
+Set the [pre-deploy command](https://docs.railway.com/deployments/pre-deploy-command)
+to:
+
+```shell
+/app/bin/migrate
+```
+
+It uses the application environment to apply the database migrations bundled with
+that image. It creates the schema on an empty database and applies pending
+migrations on upgrades. A nonzero exit stops deployment. Use the image's default
+entrypoint for the application service.
 
 Set the [healthcheck path](https://docs.railway.com/deployments/healthchecks) to
 `/healthz`. It returns HTTP 200 when the HTTP handler is running; it does not test

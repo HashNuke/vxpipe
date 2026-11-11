@@ -64,10 +64,16 @@ manager or container environment. The release does not load `.env` automatically
 Create the PostgreSQL database first, then apply its migrations before starting:
 
 ```shell
-_build/prod/rel/vxpipe/bin/vxpipe eval \
-  '{:ok, _, _} = Ecto.Migrator.with_repo(Vxpipe.Persistence.Repo, fn repo -> Ecto.Migrator.run(repo, :up, all: true) end)'
+_build/prod/rel/vxpipe/bin/migrate
 _build/prod/rel/vxpipe/bin/vxpipe start
 ```
+
+`bin/migrate` uses the Phoenix-generated release helper in `vxpipe_persistence`.
+It applies the migrations bundled from
+[`priv/repo/migrations`](../../../apps/vxpipe_persistence/priv/repo/migrations),
+without starting the Console or background jobs. Completed versions are recorded
+in PostgreSQL's `schema_migrations` table; subsequent runs apply pending versions.
+A migration failure returns a nonzero exit status.
 
 These commands run the packaged release without Mix. Put an HTTPS reverse proxy
 in front of its internal `PORT`, set `APP_HOST` to the public hostname without a

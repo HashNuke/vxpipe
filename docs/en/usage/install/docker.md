@@ -43,13 +43,40 @@ Keep these values across deployments and back up the keyring separately from
 PostgreSQL. See [Configuration](../configuration.md) for object storage and other
 optional settings. Add provider credentials through Console after startup.
 
-## Start the container
+## Migrate the database
 
-Run database migrations with the command supplied by your release before starting
-the application against a new or upgraded database.
+Create the PostgreSQL database named in `DATABASE_URL`, then run this command
+from the Docker host before starting or upgrading Vxpipe:
 
 ```shell
 docker pull ghcr.io/vxpipe/vxpipe:VERSION
+docker run --rm \
+  --env-file ./vxpipe.env \
+  --entrypoint /app/bin/migrate \
+  ghcr.io/vxpipe/vxpipe:VERSION
+```
+
+Docker runs `/app/bin/migrate` inside a temporary container and removes the
+container when it exits. The PostgreSQL data remains. Nothing needs installing
+on the host beyond Docker. If PostgreSQL is in another container, add the same
+`--network` option used by the application so both can reach it.
+
+The image contains the versioned migrations from `vxpipe_persistence`. On a new
+database they create the tables and indexes; on later runs Ecto applies only
+versions missing from `schema_migrations`. Use the same image version and database
+settings for migration and application startup. Start the app only if the command
+succeeds; a migration error produces a nonzero exit status.
+
+For an already-running container named `vxpipe`, the equivalent command using
+that container's installed version and environment is:
+
+```shell
+docker exec vxpipe /app/bin/migrate
+```
+
+## Start the container
+
+```shell
 docker run --detach \
   --name vxpipe \
   --restart unless-stopped \

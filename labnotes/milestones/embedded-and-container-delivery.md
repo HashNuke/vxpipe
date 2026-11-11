@@ -28,9 +28,28 @@ The user explicitly requested a production release in the `qa` worktree. This
 authorizes the named umbrella release, compiled assets, local service and HTTPS
 ingress independently of the full container-delivery milestone. See the
 [QA release labnote](../20261111-0641-run-qa-release.md) for verification.
-The container entrypoint, convenient packaged migration command, image publishing
-and clean-host acceptance remain unchecked. The local service currently invokes
-`Ecto.Migrator` through the release's `eval` command before starting the app.
+The container entrypoint, image publishing and clean-host acceptance remain
+unchecked. The packaged migration command is covered by the following checkpoint.
+
+## Release migration command checkpoint — 2026-11-11
+
+Design review: the user approved `bin/migrate` and asked to use Phoenix's existing
+release generator. The named umbrella release is its prerequisite. Persistence
+owns the generated helper and Repo configuration; root release overlays own the
+script. Migrations come from the bundled persistence `priv/repo/migrations`, with
+an existing PostgreSQL database required. The command exits nonzero on failure
+and does not start application supervisors. The container release root is `/app`,
+so the image command is `/app/bin/migrate`.
+
+- [x] Generate the standard Phoenix migration helper and wrapper, adapting the
+  application/module and release names for this umbrella.
+- [x] Verify the built artifact against an empty disposable database, on repeat
+  invocation and on connection failure; verify invocation from a Docker host.
+- [x] Document Docker host commands, Railway pre-deploy configuration and the
+  source of the schema migrations.
+
+See the [migration packaging labnote](../20261111-0720-package-release-migrations.md).
+This checkpoint does not publish an image or complete container acceptance.
 
 ## Runnable outcome
 
