@@ -22,6 +22,16 @@ configuration has no JSON/TOML loader, while call specs may use JSON. Until pack
 accepted, link the supported [source/Elixir path](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/getting-started-elixir.md).
 Relocation does not publish an image, release the hold or satisfy a delivery gate.
 
+## Local production release checkpoint — 2026-11-11
+
+The user explicitly requested a production release in the `qa` worktree. This
+authorizes the named umbrella release, compiled assets, local service and HTTPS
+ingress independently of the full container-delivery milestone. See the
+[QA release labnote](../20261111-0641-run-qa-release.md) for verification.
+The container entrypoint, convenient packaged migration command, image publishing
+and clean-host acceptance remain unchecked. The local service currently invokes
+`Ecto.Migrator` through the release's `eval` command before starting the app.
+
 ## Runnable outcome
 
 Docker is the primary packaged distribution. The same approved call flow runs in

@@ -234,7 +234,7 @@ storage_bucket = nonempty_env.("STORAGE_BUCKET")
 artifact_storage = [
   bucket: storage_bucket,
   region: nonempty_env.("AWS_REGION"),
-  endpoint: nonempty_env.("AWS_ENDPOINT")
+  endpoint: nonempty_env.("AWS_ENDPOINT_URL_S3") || nonempty_env.("AWS_ENDPOINT_URL")
 ]
 
 if nonempty_env.("AWS_SESSION_TOKEN") do
@@ -248,7 +248,7 @@ if database_enabled? && storage_bucket do
         options
 
       {:error, _reason} ->
-        raise "invalid STORAGE_BUCKET / AWS_REGION / AWS_ENDPOINT configuration"
+        raise "invalid STORAGE_BUCKET / AWS_REGION / AWS_ENDPOINT_URL_S3 / AWS_ENDPOINT_URL configuration"
     end
 
   publication_writer =

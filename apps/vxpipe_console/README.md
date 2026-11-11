@@ -56,7 +56,7 @@ VXPIPE_DB_URL=postgres://user:password@database/vxpipe
 VXPIPE_RECORDING_ENABLED=true
 STORAGE_BUCKET=vxpipe-call-artifacts
 AWS_REGION=us-east-1
-# AWS_ENDPOINT=http://127.0.0.1:9000
+# AWS_ENDPOINT_URL_S3=http://127.0.0.1:9000
 ```
 
 The endpoint is optional and must be a root HTTP(S) origin; it enables path-style
@@ -76,10 +76,11 @@ to the same S3-compatible bucket used for recordings:
 VXPIPE_DB_URL=postgres://user:password@database/vxpipe
 STORAGE_BUCKET=vxpipe-call-artifacts
 AWS_REGION=us-east-1
-# AWS_ENDPOINT=http://127.0.0.1:9000
+# AWS_ENDPOINT_URL_S3=http://127.0.0.1:9000
 ```
 
-Both writers and recording playback use `STORAGE_BUCKET`, `AWS_REGION` and `AWS_ENDPOINT`.
+Both writers and recording playback use `STORAGE_BUCKET`, `AWS_REGION` and
+`AWS_ENDPOINT_URL_S3` (falling back to `AWS_ENDPOINT_URL` when absent or blank).
 The former per-artifact S3 variables are removed and ignored. A configured database and bucket enable post-commit
 finalization plus pending-revision recovery; without either one, automatic publication remains
 disabled. The endpoint accepts only a root HTTP(S) origin and uses path-style access. ExAws obtains

@@ -6,6 +6,7 @@ defmodule Vxpipe.MixProject do
       apps_path: "apps",
       version: File.read!(Path.join(__DIR__, "VERSION")) |> String.trim(),
       start_permanent: Mix.env() == :prod,
+      releases: [vxpipe: [applications: [vxpipe_console: :permanent]]],
       listeners: [Phoenix.CodeReloader],
       deps: deps(),
       aliases: aliases()

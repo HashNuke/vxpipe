@@ -50,6 +50,30 @@ This uses the machine's Tailscale address and certificates. Public carrier
 callbacks require the separate ingress arrangement described under
 [Testing and verification](testing.md#live-telephony).
 
+## Run a production release
+
+After preparing the checkout, build the assets and named umbrella release:
+
+```shell
+MIX_ENV=prod mix assets.deploy
+MIX_ENV=prod mix release vxpipe
+```
+
+Supply the [runtime configuration](../usage/configuration.md) through your service
+manager or container environment. The release does not load `.env` automatically.
+Create the PostgreSQL database first, then apply its migrations before starting:
+
+```shell
+_build/prod/rel/vxpipe/bin/vxpipe eval \
+  '{:ok, _, _} = Ecto.Migrator.with_repo(Vxpipe.Persistence.Repo, fn repo -> Ecto.Migrator.run(repo, :up, all: true) end)'
+_build/prod/rel/vxpipe/bin/vxpipe start
+```
+
+These commands run the packaged release without Mix. Put an HTTPS reverse proxy
+in front of its internal `PORT`, set `APP_HOST` to the public hostname without a
+scheme, and configure the proxy to redirect HTTP to HTTPS. Development asset
+watchers and Storybook are not part of this release.
+
 ## Local fixtures
 
 The local Morse provider exercises audio without external credentials:

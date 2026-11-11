@@ -33,8 +33,15 @@ live in [`config/config.exs`](../../../config/config.exs).
 | `VXPIPE_MCP_RESOURCE_URL` | Optional explicit resource audience for inbound platform MCP; defaults to the public origin plus `/mcp`. |
 | `VXPIPE_INTEGRATIONS_DIRECTORY_ORIGIN` | Optional HTTPS origin for the public integration directory. Normally use the bundled default. |
 | `STORAGE_BUCKET` | Optional shared S3 bucket for recordings and call-detail publications. Requires persistence. |
-| `AWS_REGION`, `AWS_ENDPOINT` | Region (default `us-east-1`) and optional S3-compatible endpoint. |
+| `AWS_REGION` | Object-storage region; defaults to `us-east-1`. Use `auto` for Cloudflare R2. |
+| `AWS_ENDPOINT_URL` | Optional S3-compatible endpoint URL, including `http://` or `https://`. Omit for AWS S3. |
+| `AWS_ENDPOINT_URL_S3` | S3-specific endpoint URL. Takes precedence over `AWS_ENDPOINT_URL`; an empty value falls back to the global endpoint. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Optional object-storage credentials. Otherwise ExAws uses its credential chain. Session token is needed only for temporary credentials. |
+
+For Cloudflare R2, set `AWS_ENDPOINT_URL_S3` to
+`https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, `AWS_REGION` to `auto`, and
+`STORAGE_BUCKET` to the bucket name. Use the bucket's R2 S3 access key and secret.
+The endpoint is the account's S3 API URL, without a bucket path.
 
 Both encryption variables must be supplied together. Omitting both permits
 credential-free operation, but saved secrets cannot be provisioned or resolved.

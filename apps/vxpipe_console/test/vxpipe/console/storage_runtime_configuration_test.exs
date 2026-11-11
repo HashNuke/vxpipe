@@ -6,7 +6,7 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
 
   @runtime Path.expand("../../../../../config/runtime.exs", __DIR__)
   @development Path.expand("../../../../../config/dev.exs", __DIR__)
-  @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE STORAGE_BUCKET AWS_REGION AWS_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+  @variables ~w(VXPIPE_DB_URL DATABASE_URL VXPIPE_DB_POOL_SIZE DB_POOL_SIZE STORAGE_BUCKET AWS_REGION AWS_ENDPOINT_URL AWS_ENDPOINT_URL_S3 AWS_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
     AWS_SESSION_TOKEN VXPIPE_RECORDING_ENABLED VXPIPE_DATABASE_URL VXPIPE_DATABASE_POOL_SIZE
     VXPIPE_RECORDING_S3_BUCKET VXPIPE_RECORDING_S3_REGION VXPIPE_RECORDING_S3_ENDPOINT
     VXPIPE_CALL_DETAILS_S3_BUCKET VXPIPE_CALL_DETAILS_S3_REGION VXPIPE_CALL_DETAILS_S3_ENDPOINT
@@ -51,7 +51,7 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
   test "recording, playback and publication share the configured artifact destination" do
     System.put_env("STORAGE_BUCKET", "shared-artifacts")
     System.put_env("AWS_REGION", "eu-west-2")
-    System.put_env("AWS_ENDPOINT", "http://objects.example.test:9000")
+    System.put_env("AWS_ENDPOINT_URL", "http://objects.example.test:9000")
     System.put_env("VXPIPE_RECORDING_ENABLED", "true")
     seed_retired_settings()
 
@@ -74,6 +74,61 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
 
     assert {CallDetailsWriter, [document_store_options: ^destination]} =
              Keyword.fetch!(recovery, :publication_artifact_writer)
+  end
+
+  test "the S3 endpoint overrides the global endpoint for publication and recording playback" do
+    System.put_env("STORAGE_BUCKET", "shared-artifacts")
+    System.put_env("AWS_REGION", "auto")
+    System.put_env("AWS_ENDPOINT_URL", "https://global.example.test")
+    System.put_env("AWS_ENDPOINT_URL_S3", "https://account.r2.cloudflarestorage.com")
+    System.put_env("VXPIPE_RECORDING_ENABLED", "true")
+
+    for environment <- [:dev, :prod] do
+      host = if environment == :dev, do: "127.0.0.1", else: "console.example.test"
+      System.put_env("APP_HOST", host)
+      configuration = Config.Reader.read!(@runtime, env: environment)
+      destination = publication_destination(configuration)
+      request = destination |> Keyword.fetch!(:client_options) |> Keyword.fetch!(:request_options)
+      assert Keyword.fetch!(request, :host) == "account.r2.cloudflarestorage.com"
+      assert Keyword.fetch!(request, :region) == "auto"
+      assert Keyword.fetch!(request, :scheme) == "https://"
+      assert Keyword.fetch!(request, :virtual_host) == false
+
+      if environment == :dev do
+        assert {:ok, ^destination} =
+                 configuration
+                 |> setting(:vxpipe_console, :recording)
+                 |> RecordingConfiguration.playback()
+      end
+    end
+  end
+
+  test "an absent or blank S3 endpoint falls back to the global endpoint" do
+    System.put_env("APP_HOST", "console.example.test")
+    System.put_env("STORAGE_BUCKET", "shared-artifacts")
+    System.put_env("AWS_ENDPOINT_URL", "https://global.example.test")
+
+    for value <- [nil, "", "   "] do
+      if value,
+        do: System.put_env("AWS_ENDPOINT_URL_S3", value),
+        else: System.delete_env("AWS_ENDPOINT_URL_S3")
+
+      destination = @runtime |> Config.Reader.read!(env: :prod) |> publication_destination()
+      request = destination |> Keyword.fetch!(:client_options) |> Keyword.fetch!(:request_options)
+      assert Keyword.fetch!(request, :host) == "global.example.test"
+    end
+  end
+
+  test "an invalid selected S3 endpoint fails without falling back to the global endpoint" do
+    System.put_env("APP_HOST", "console.example.test")
+    System.put_env("STORAGE_BUCKET", "shared-artifacts")
+    System.put_env("AWS_ENDPOINT_URL", "https://global.example.test")
+    System.put_env("AWS_ENDPOINT_URL_S3", "https://private-user:private-password@invalid.test")
+
+    error = assert_raise RuntimeError, fn -> Config.Reader.read!(@runtime, env: :prod) end
+    assert Exception.message(error) =~ "AWS_ENDPOINT_URL_S3"
+    refute Exception.message(error) =~ "private-password"
+    refute Exception.message(error) =~ "private-user"
   end
 
   test "a shared bucket enables publication without enabling recording" do
@@ -111,10 +166,15 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
   test "an invalid shared endpoint fails safely instead of using a retired destination" do
     System.put_env("APP_HOST", "console.example.test")
     System.put_env("STORAGE_BUCKET", "shared-artifacts")
-    System.put_env("AWS_ENDPOINT", "http://private-user:private-password@objects.example.test")
+
+    System.put_env(
+      "AWS_ENDPOINT_URL",
+      "http://private-user:private-password@objects.example.test"
+    )
+
     seed_retired_settings()
     error = assert_raise RuntimeError, fn -> Config.Reader.read!(@runtime, env: :prod) end
-    assert Exception.message(error) =~ "AWS_ENDPOINT"
+    assert Exception.message(error) =~ "AWS_ENDPOINT_URL"
     refute Exception.message(error) =~ "private-password"
     refute Exception.message(error) =~ "private-user"
   end
@@ -133,6 +193,8 @@ defmodule Vxpipe.Console.StorageRuntimeConfigurationTest do
   end
 
   defp seed_retired_settings do
+    System.put_env("AWS_ENDPOINT", "http://retired.example.test:9999")
+
     for prefix <- ["VXPIPE_RECORDING_S3", "VXPIPE_CALL_DETAILS_S3"] do
       System.put_env(prefix <> "_BUCKET", "retired-" <> String.downcase(prefix))
       System.put_env(prefix <> "_REGION", "ap-south-1")
