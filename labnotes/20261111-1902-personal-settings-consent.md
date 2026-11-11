@@ -118,3 +118,22 @@ approval must not be presented as a completed client token exchange.
   No answer yet. Replacing the callback with a receipt breaks delivery; moving
   the callback into another window can break client opener assumptions. Kept the
   compatible original-window 302 and have not introduced receipt infrastructure.
+
+## QA release checkpoint
+
+- Pushed personal settings as `dff7f912` and branding/shared consent as `a85f1991`
+  on `qa`. Main was not modified. The final Storybook build also passes after the
+  shared stylesheet rename; the final focused UI selection passes ten cases.
+- Built production assets and the OTP release from QA, rebuilt `vxpipe:local`
+  using only the assembled release context, and restarted `vxpipe.service`.
+  No environment file was read. Existing systemd runtime configuration remains
+  responsible for supplying the application's environment.
+- Vitrum health returns `ok`; both Vxpipe and Caddy system services are active.
+  Public `admin.js`, `oauth.js` and `oauth.css` hashes match the assembled release.
+  The public login page renders in Chrome. A Python HTTP fetch returned 403;
+  ordinary curl and Chrome succeeded, so the deployment check used those clients.
+- Running image: `sha256:02a642537529181ca1240f8b91e7633bda2af47a5e9f79cb6a25b706094e51ff`.
+  Container limit remains 1 GiB, observed usage about 322 MiB after restart.
+  The rollback-only browser VM and temporary Storybook server were stopped.
+- This deploy includes personal settings, connection revocation and production
+  consent branding. It does not claim the pending completion receipts are live.
