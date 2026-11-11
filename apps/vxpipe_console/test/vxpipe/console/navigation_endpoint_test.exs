@@ -462,6 +462,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     for path <- [
           "/tenants",
           "/account",
+          "/account/connections",
           "/t/#{@key}/dashboard",
           "/t/#{@key}/calls",
           "/t/#{@key}/services"
@@ -475,6 +476,21 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     for path <- ["/users", "/roles", "/platform/services", "/t/#{@key}/call-specs"] do
       assert conn |> recycle() |> get(path) |> response(403)
     end
+  end
+
+  test "personal settings deep links require a session but no administrative grants" do
+    member([], %{})
+    conn = login()
+
+    for path <- ["/account", "/account/connections"] do
+      assert conn |> recycle() |> get(path) |> html_response(200) =~ "/assets/admin.js"
+      anonymous = build_conn() |> get("https://localhost" <> path)
+      assert redirected_to(anonymous) == "/auth/login"
+      assert Plug.Conn.get_session(anonymous, "vxpipe_return_path") == path
+    end
+
+    assert conn |> recycle() |> get("/users") |> response(403)
+    assert conn |> recycle() |> get("/roles") |> response(403)
   end
 
   test "legacy page redirects preserve filters and keep editor/inspector and API URLs intact" do
@@ -504,6 +520,7 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
           "/tenants",
           "/my-tenants",
           "/account",
+          "/account/connections",
           "/users",
           "/roles",
           "/platform/services",

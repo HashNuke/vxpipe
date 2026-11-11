@@ -126,12 +126,41 @@ defmodule Vxpipe.Persistence.OAuthBrowserTest do
     assert {:ok, []} = Browser.list_grants(other.principal)
     assert {:error, :not_found} = Browser.revoke_grant(other.principal, issued.grant_id)
     assert {:ok, _} = Store.authenticate(token.access_token, OAuthFixtures.resource())
+
+    # Revocation must not disturb another connection, including another user's
+    # grant for the same registered client.
+    retained =
+      for owner <- [ctx, Map.merge(ctx, other)] do
+        request = begin!(owner)
+        {:ok, _} = Browser.consent(request, owner.binding, owner.principal)
+
+        {:ok, grant} =
+          Browser.complete_authorization(request, owner.binding, owner.principal, :approve)
+
+        {:ok, credentials} =
+          Store.exchange(
+            OAuthFixtures.exchange(ctx.client.client_id, grant.code),
+            OAuthFixtures.resource()
+          )
+
+        {owner.principal, grant.grant_id, credentials}
+      end
+
     assert :ok = Browser.revoke_grant(ctx.principal, issued.grant_id)
 
     assert {:error, :invalid_token} =
              Store.authenticate(token.access_token, OAuthFixtures.resource())
 
-    assert {:ok, []} = Browser.list_grants(ctx.principal)
+    assert {:error, :invalid_grant} =
+             Store.exchange(
+               OAuthFixtures.refresh(ctx.client.client_id, token.refresh_token),
+               OAuthFixtures.resource()
+             )
+
+    for {principal, id, credentials} <- retained do
+      assert {:ok, [%{public_id: ^id}]} = Browser.list_grants(principal)
+      assert {:ok, _} = Store.authenticate(credentials.access_token, OAuthFixtures.resource())
+    end
   end
 
   test "pending requests have a browser quota and store no raw binding or request token", ctx do

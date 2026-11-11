@@ -1,6 +1,7 @@
 # Personal settings and MCP consent
 
-Status: planned; Storybook designs exist, production acceptance is pending.
+Status: in progress; personal settings and connection management are implemented
+and locally verified. CIMD/DCR branding and consent/completion remain pending.
 Do not mark this milestone or its index entry complete from preview evidence.
 
 ## Runnable slice and prerequisites
@@ -69,13 +70,12 @@ Design sources: the user-reviewed `OAuthConsentStory`, `Account` and
 
 ## Current implementation boundary
 
-The existing production self-account page and per-user list/revoke API are
-implemented. The shared `ConnectedClients` component now asks for confirmation;
-that component is used by the existing account page as well as the previews.
+The self-account page and separate `/account/connections` page use Settings →
+For you in production code. The preview flag and embedded account list are
+removed. Shared `ConnectedClients` confirmation uses the real per-user API;
+Storybook supplies an in-memory adapter to the same page/components.
 
-The separate connections page, “For you” navigation and updated consent/outcomes
-are demonstrated in Storybook. `previewPersonalSettings` is explicitly enabled by
-story harnesses only; the production router/sidebar cutover is still pending.
+Updated consent/outcomes are still demonstrated only in Storybook.
 Production consent still sends its existing HTTP 302 to the registered callback.
 The metadata pipeline currently discards CIMD `logo_uri`, rejects that optional
 field in DCR, and does not expose the website/logo fields to consent rendering.
@@ -86,34 +86,34 @@ this presentation extension.
 
 ### Personal settings routing and self-account editing
 
-- [ ] Red-test Settings availability for signed-in users with zero administrative
+- [x] Red-test Settings availability for signed-in users with zero administrative
   grants, zero tenant assignments and ordinary member/Admin/Superadmin roles.
-- [ ] Wire authenticated direct-load and client-side `/account/connections`
+- [x] Wire authenticated direct-load and client-side `/account/connections`
   routes, with refresh/deep-link coverage and ordinary login/session-expiry
   behavior. No platform permission check may gate either personal page.
-- [ ] Promote the preview sidebar layout to production and remove the preview
+- [x] Promote the preview sidebar layout to production and remove the preview
   flag after the routes exist. Remove the main-app account link and retain only
   authorized administrative links. Verify desktop/mobile active destinations.
-- [ ] Keep `/account` focused on self-account editing; move the embedded client
+- [x] Keep `/account` focused on self-account editing; move the embedded client
   list to `/account/connections`. Reuse existing form/password validation and
   preserve email updates, current-password errors, pending/failure behavior and
   password-change session revocation. Do not substitute an admin user-write API.
-- [ ] Test attempted foreign-user targeting and direct access to forbidden admin
+- [x] Test attempted foreign-user targeting and direct access to forbidden admin
   pages still fail; personal access must not broaden platform authorization.
-- [ ] Commit this runnable slice with tests, docs and checkpoint evidence.
+- [x] Commit this runnable slice with tests, docs and checkpoint evidence.
 
 ### Connection management and revocation
 
-- [ ] Wire the standalone page to the real session-bound list/revoke API, retaining
+- [x] Wire the standalone page to the real session-bound list/revoke API, retaining
   the shared confirmation component and its tested cancellation behavior.
-- [ ] Verify list isolation and revocation ownership with two real users; confirm
+- [x] Verify list isolation and revocation ownership with two real users; confirm
   only the selected grant is revoked and its refresh/access/session operations
   can no longer authorize subsequent requests. Preserve other connections.
-- [ ] Cover loading, empty, list failure/retry, pending confirm, failed revocation,
+- [x] Cover loading, empty, list failure/retry, pending confirm, failed revocation,
   expired session, duplicate submission and navigation/refresh after success.
-- [ ] Verify keyboard focus, cancellation, announcements and readable desktop,
+- [x] Verify keyboard focus, cancellation, announcements and readable desktop,
   narrow mobile and light-theme layouts against actual backend responses.
-- [ ] Commit the working page and reconcile Storybook with production behavior.
+- [x] Commit the working page and reconcile Storybook with production behavior.
 
 ### CIMD/DCR branding and consent
 
@@ -163,8 +163,9 @@ this presentation extension.
   frontend tests, TypeScript, lint and Storybook/assets builds pass.
 - [ ] Inspect actual app and Storybook on desktop/mobile with agent-browser;
   verify ordinary members can find both personal pages and cannot see admin links.
-- [ ] Run all root completion checks: format, warnings-as-errors compilation,
-  strict Credo, tests and unused dependencies. Investigate project-owned failures
+- [ ] Run root format, warnings-as-errors compilation, strict Credo and
+  unused-dependency checks, plus focused tests as explicitly requested by the
+  user for this implementation. Do not run a full suite. Investigate project-owned failures
   and record accurate rerun evidence; no live-provider credentials are needed.
 - [ ] Review the final implementation for ownership, permission boundaries and
   OAuth callback continuity; synchronize handbook, stories and checkpoint notes.
@@ -186,6 +187,11 @@ metadata wording to retain the existing required client name while treating the
 website and logo as optional. These are specification reviews, not production
 acceptance.
 
-Implementation acceptance: none recorded for this milestone. Storybook and shared
-component evidence belongs in the linked personal-settings labnote, not in checked
-production tasks above.
+2026-11-11 implementation checkpoint: production personal routes/sidebar and the
+session-bound connection page verified with focused frontend, endpoint and
+real-database tests. A rollback-only browser session exercised a member without
+grants/assignments, a separate Superadmin, revocation/reload/isolation, mobile
+navigation, wrong-password retry, email persistence and password-change sign-out.
+Storybook light/failure states and the app assets build passed; root static checks
+passed. See [checkpoint evidence](../20261111-1902-personal-settings-consent.md).
+The milestone stays unchecked until the remaining consent/protocol gates pass.

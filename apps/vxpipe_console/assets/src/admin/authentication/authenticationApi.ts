@@ -45,6 +45,7 @@ export function isForbidden(error: unknown): boolean {
 }
 
 function errorMessage(status: number, code: unknown): string {
+  if (status === 422 && code === "invalid_current_password") return "Current password is incorrect. Try again.";
   if (status === 422 && code === "invalid_public_url") return "Enter a valid HTTPS URL. HTTP is allowed for localhost.";
   if (status === 403) return "Your role does not allow this action.";
   if (status === 401 && code === "invalid_credentials")

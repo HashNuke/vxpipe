@@ -122,7 +122,7 @@ const userPage = (users: unknown[]) => ({
   pagination: { page: 1, page_size: 25, total: users.length, total_pages: 1 },
 });
 
-function sessionFetch(role = superadminRole, user = owner) {
+function sessionFetch(role: typeof superadminRole | typeof memberRole = superadminRole, user: typeof owner | typeof member = owner) {
   const fetchImpl: Mock<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>> = vi.fn(
     (input: RequestInfo | URL) => {
       const path = String(input);
@@ -174,6 +174,62 @@ test("account route saves email with current-password confirmation and CSRF", as
     email: "new.owner@example.test",
     current_password: "an example passphrase",
   });
+  expect(await screen.findByText("Account updated.")).toBeVisible();
+});
+
+test.each([
+  ["Superadmin", superadminRole, owner],
+  ["Admin", adminRole, { ...owner, roleId: adminRole.id }],
+  ["member", memberRole, member],
+  ["unassigned member", { ...memberRole, grants: [] }, { ...member, memberships: [] }],
+])("%s can directly load personal connections and navigate to their account", async (_name, role, user) => {
+  window.history.replaceState({}, "", "/account/connections");
+  const base = sessionFetch(role, user);
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+    String(input) === "/api/account/connections" ? response({ connections: [] }) : base(input, init));
+  render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
+  expect(await screen.findByRole("heading", { name: "Your connections" })).toBeVisible();
+  expect(await screen.findByText("No connected clients.")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Your connections" })).toHaveAttribute("aria-current", "page");
+  expect(screen.queryByRole("link", { name: "My account" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("link", { name: "Your account" }));
+  expect(await screen.findByRole("heading", { name: "Your account" })).toBeVisible();
+  expect(screen.getByLabelText("Email")).toHaveValue(user.email);
+  expect(screen.queryByRole("heading", { name: "Connected clients" })).not.toBeInTheDocument();
+  expect(fetchImpl.mock.calls.filter(([url]) => String(url) === "/api/account/connections")).toHaveLength(1);
+  if (!role.kind) expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
+});
+
+test("connections list expiry invokes the ordinary session-expiry handler", async () => {
+  window.history.replaceState({}, "", "/account/connections");
+  const base = sessionFetch();
+  const expired = vi.fn();
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+    String(input) === "/api/account/connections" ? response({ error: { code: "session_required" } }, 401) : base(input, init));
+  render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} onSessionExpired={expired} />);
+  await waitFor(() => expect(expired).toHaveBeenCalledOnce());
+});
+
+test("an incorrect current password preserves the account form and allows retry", async () => {
+  window.history.replaceState({}, "", "/account");
+  const base = sessionFetch();
+  let attempts = 0;
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === "/admin/api/account") return ++attempts === 1
+      ? response({ error: { code: "invalid_current_password" } }, 422) : noContent();
+    return base(input, init);
+  });
+  const expired = vi.fn();
+  render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} onSessionExpired={expired} />);
+  fireEvent.change(await screen.findByLabelText("Email"), { target: { value: "edited@example.test" } });
+  fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "incorrect password" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Current password is incorrect");
+  expect(expired).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("Email")).toHaveValue("edited@example.test");
+  expect(screen.getByLabelText("Current password")).toHaveValue("");
+  fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "correct password" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(await screen.findByText("Account updated.")).toBeVisible();
 });
 
@@ -657,10 +713,7 @@ test("read-only members get a capability-derived workspace without creation cont
     "/t/acme_demo_000001/calls",
   );
   expect(screen.queryByRole("link", { name: "Platform Integrations" })).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "My account" })).toHaveAttribute(
-    "href",
-    "/account",
-  );
+  expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/account");
   expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Roles" })).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Platform Integrations" })).not.toBeInTheDocument();
@@ -699,9 +752,9 @@ test("sidebar exposes account and platform links matching authority", async () =
   render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
 
   expect(await screen.findByRole("heading", { name: "Tenants" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "My account" })).toHaveAttribute("href", "/account");
   fireEvent.click(screen.getByRole("link", { name: "Settings" }));
   await screen.findByRole("link", { name: "Back to tenants" });
+  expect(screen.getByRole("link", { name: "Your account" })).toHaveAttribute("href", "/account");
   expect(screen.queryByRole("combobox", { name: "Switch tenant" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("href", "/users");
   expect(screen.getByRole("link", { name: "Roles" })).toHaveAttribute("href", "/roles");

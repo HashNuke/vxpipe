@@ -74,6 +74,7 @@ defmodule Vxpipe.Console.RequireUser do
   defp permitted?(_principal, ["admin"]), do: true
   defp permitted?(_principal, [directory]) when directory in ["tenants", "my-tenants"], do: true
   defp permitted?(_principal, ["t", _tenant, "dashboard"]), do: true
+  defp permitted?(_principal, ["account", "connections"]), do: true
 
   defp permitted?(principal, ["t", tenant, "services", _category]),
     do: tenant?(principal, "tenant_services.read", tenant)

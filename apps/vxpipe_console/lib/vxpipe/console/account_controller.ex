@@ -14,7 +14,7 @@ defmodule Vxpipe.Console.AccountController do
            Map.get(params, "password_confirmation")
          ) do
       {:ok, user} -> json(conn, %{user: UserManagementPayload.user(user)})
-      {:error, :invalid_credentials} -> error(conn, 401, "invalid_credentials")
+      {:error, :invalid_credentials} -> error(conn, 422, "invalid_current_password")
       {:error, :unavailable} -> error(conn, 503, "unavailable")
       {:error, _reason} -> error(conn, 422, "invalid_account")
     end

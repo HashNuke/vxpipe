@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { AuthenticationApi } from "./authenticationApi";
 import { ConnectedClients } from "./ConnectedClients";
@@ -51,4 +51,29 @@ test("cancelling revocation leaves access unchanged without sending a delete", a
   expect(trigger).toHaveFocus();
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(screen.getByText("Research client")).toBeVisible();
+});
+
+test("Escape cancels before confirmation and pending revocation submits once", async () => {
+  let finish!: (response: Response) => void;
+  const deletion = new Promise<Response>((resolve) => { finish = resolve; });
+  const fetch = vi.fn().mockResolvedValueOnce(Response.json({ connections: [connection] })).mockReturnValueOnce(deletion);
+  render(<ConnectedClients api={new AuthenticationApi("csrf", fetch)} />);
+  const trigger = await screen.findByRole("button", { name: "Revoke access for Research client" });
+  trigger.focus();
+  fireEvent.click(trigger);
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  fireEvent.click(trigger);
+  const confirm = within(screen.getByRole("dialog")).getByRole("button", { name: "Revoke access" });
+  fireEvent.click(confirm);
+  fireEvent.click(confirm);
+  expect(confirm).toBeDisabled();
+  expect(fetch).toHaveBeenCalledTimes(2);
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  expect(screen.getByRole("dialog")).toBeVisible();
+  await act(async () => { finish(new Response(null, { status: 204 })); });
+  expect(screen.getByRole("status")).toHaveFocus();
+  expect(screen.getByText("No connected clients.")).toBeVisible();
 });

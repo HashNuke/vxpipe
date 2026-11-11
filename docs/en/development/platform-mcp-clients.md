@@ -117,8 +117,9 @@ Storybook navigation paths reach the separate Your connections page, using an
 in-memory adapter for the real component. Revocation requires confirmation; a
 successful revoke removes only the selected client and announces the result,
 while failure keeps it listed and leaves the dialog available for retry.
-Production already provides that section inside `/account`; the standalone
-`/account/connections` page is currently a Storybook proposal.
+Production exposes the standalone `/account/connections` page under Settings →
+For you. `/account` contains only the self-account form. Both use the same shared
+components as Storybook; production connects them to the session-bound APIs.
 
 ### Optional client branding
 
@@ -141,12 +142,16 @@ renderer, and decide the image-loading policy before using this presentation.
 
 ### Personal settings follow-through
 
-The Settings sidebar preview now groups **Your account** and **Your connections**
+The Settings sidebar groups **Your account** and **Your connections**
 under **For you**, below the administrative links the user may access. Ordinary
 members retain these personal destinations even without any administrative
 permissions. Account editing and connection management are separate pages, and
 revocation asks for confirmation before submitting. The confirmation uses the
-shared component; the new sidebar and standalone route remain preview-only.
+shared component. Both authenticated routes are available without platform
+administrative permissions, and the main sidebar's Settings entry falls back to
+Your account when no administrative destination is available. Self-account
+writes and connection list/revoke operations derive ownership from the current
+session; they do not accept a target user from the page.
 
 The [Personal settings and MCP consent milestone](../../../labnotes/milestones/personal-settings-and-mcp-consent.md)
 tracks the production route/sidebar cutover, self-account behavior, CIMD/DCR

@@ -79,7 +79,7 @@ import { CallSpecEditorRoute } from "./CallSpecEditorRoute";
 import { IntegrationsApp } from "./IntegrationsApp";
 import { parseBindingDirectory } from "./admin/serviceBindingsApi";
 import { AccessFrame } from "./admin/authentication/AccessFrame";
-import { ConnectedClients } from "./admin/authentication/ConnectedClients";
+import { ConnectedClientsPage } from "./admin/authentication/ConnectedClientsPage";
 import { AccountPage } from "./admin/authentication/AccountPage";
 import { AuthPage } from "./admin/authentication/AuthPage";
 import { AuthenticationApi, AuthenticationError, isForbidden, isSessionExpired } from "./admin/authentication/authenticationApi";
@@ -154,6 +154,7 @@ export function App(props: AppProps) {
         <Route path="/auth/login" element={<ConfiguredRoute render={(props) => <AuthenticationRoute {...props} mode="login" />} />} />
         <Route path="/auth/recover" element={<ConfiguredRoute render={(props) => <AuthenticationRoute {...props} mode="recover" />} />} />
         <Route element={<ConfiguredRoute render={props => <ConsoleNavigation {...props} />} />}>
+        <Route path="/account/connections" element={<ConfiguredRoute render={(props) => <ConnectionsRoute {...props} />} />} />
         <Route path="/account" element={<ConfiguredRoute render={(props) => <AccountRoute {...props} />} />} />
         <Route path="/users/new" element={<ConfiguredRoute render={(props) => <UserNewRoute {...props} />} />} />
         <Route path="/users/:id/reset-password" element={<ConfiguredRoute render={(props) => <ResetPasswordRoute {...props} />} />} />
@@ -375,6 +376,19 @@ function UsersRoute(props: AppProps) {
   );
 }
 
+function ConnectionsRoute(props: AppProps) {
+  const api = useAuthenticationApi(props);
+  const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
+  const { session, sessionState } = useAccessSession(api, onSessionExpired);
+
+  return <AccessShell api={api} session={session} sessionState={sessionState}
+    path="/account/connections" statusLabel="Loading connections…"
+    unavailableTitle="Connections unavailable"
+    unavailableMessage="Your connections could not be loaded. Try again shortly.">
+    {() => <ConnectedClientsPage api={api} onSessionExpired={onSessionExpired} />}
+  </AccessShell>;
+}
+
 function AccountRoute(props: AppProps) {
   const api = useAuthenticationApi(props);
   const onSessionExpired = props.onSessionExpired ?? redirectExpiredSession;
@@ -396,7 +410,6 @@ function AccountRoute(props: AppProps) {
           key={user.id}
           user={user}
           role={role}
-          connectedClients={<ConnectedClients api={api} onSessionExpired={onSessionExpired} />}
           onSave={async (email, currentPassword, newPassword, confirmation) => {
             try {
               await api.updateAccount(email, currentPassword, newPassword, confirmation);

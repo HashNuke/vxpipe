@@ -8,7 +8,7 @@ const meta = {
   title: "Vxpipe/Console/Settings/Your connections",
   args: { ...accessMeta.args, initialPath: "/account/connections", connectionsScenario: "connected" },
   argTypes: { ...accessMeta.argTypes, connectionsScenario: { control: "select", options: ["connected", "empty", "loading", "unavailable", "revoke-failure", "revoking"] } },
-  parameters: { docs: { description: { component: "Connected clients and revocation with an in-memory API adapter. Uses the production ConnectedClients component. The Settings sidebar and standalone page are proposed here; production currently exposes this section inside the account page. No real credentials are revoked." } } },
+  parameters: { docs: { description: { component: "The production Settings sidebar, connections page and revocation confirmation with an in-memory API adapter. No real credentials are revoked." } } },
   render: (args) => <AuthenticationStory key={JSON.stringify(args)} {...args} />,
 } satisfies Meta<typeof AuthenticationStory>;
 export default meta;

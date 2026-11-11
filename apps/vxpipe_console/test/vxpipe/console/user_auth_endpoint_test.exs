@@ -398,6 +398,7 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
       signed_in
       |> recycle()
       |> patch("https://localhost/admin/api/account", %{
+        "user_id" => "another-user",
         "email" => "new@example.test",
         "current_password" => "long-password"
       })
@@ -412,7 +413,7 @@ defmodule Vxpipe.Console.UserAuthEndpointTest do
         "current_password" => "wrong-password"
       })
 
-    assert json_response(denied, 401) == %{"error" => %{"code" => "invalid_credentials"}}
+    assert json_response(denied, 422) == %{"error" => %{"code" => "invalid_current_password"}}
   end
 
   test "logout failure retains the session and reports unavailable" do

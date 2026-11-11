@@ -71,7 +71,7 @@ test("canonical dashboard uses the shared rail, server capabilities and real lin
   const rail = await screen.findByRole("complementary", { name: "Console navigation" });
   expect(within(rail).getByRole("combobox", { name: "Switch tenant" })).toHaveTextContent("Acme");
   expect(within(rail).getByRole("link", { name: "Calls" })).toHaveAttribute("href", `/t/${key}/calls`);
-  expect(within(rail).getByRole("link", { name: "My account" })).toHaveAttribute("href", "/account");
+  expect(within(rail).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/account");
   expect(screen.queryByRole("navigation", { name: "Platform" })).not.toBeInTheDocument();
   expect(screen.getByText("No calls yet")).toBeVisible();
   expect(screen.queryByText(key)).not.toBeInTheDocument();

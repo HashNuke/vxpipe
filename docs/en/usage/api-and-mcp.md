@@ -197,6 +197,12 @@ The tool catalog exposes:
 
 Discovery filters tools by permission, and each invocation rechecks authority.
 MCP uses `call_spec_definition` where HTTP uses `source`; both reach the same
-authoring workflow. Remove an authorized client through the account's connections
-page to revoke its grant. This inbound platform endpoint is separate from
+authoring workflow. Open **Settings → Your connections** (`/account/connections`)
+to review authorized clients. Choose **Revoke access**, then confirm the named
+client to revoke its grant. Other connections remain unchanged. Every signed-in
+user can access this page and **Your account** (`/account`), even without
+administrative permissions or tenant assignments. Your account manages your own
+email and password; changing your password signs out your sessions.
+
+This inbound platform endpoint is separate from
 [tenant MCP connections used inside calls](agents-and-tools.md).

@@ -154,6 +154,7 @@ defmodule Vxpipe.Console.Router do
     get "/getting-started", Vxpipe.Console.CanonicalPageController, :index
     get "/my-tenants", Vxpipe.Console.CanonicalPageController, :index
     get "/account", Vxpipe.Console.CanonicalPageController, :index
+    get "/account/connections", Vxpipe.Console.CanonicalPageController, :index
     get "/users", Vxpipe.Console.CanonicalPageController, :index
     get "/users/new", Vxpipe.Console.CanonicalPageController, :index
     get "/users/:id", Vxpipe.Console.CanonicalPageController, :index
