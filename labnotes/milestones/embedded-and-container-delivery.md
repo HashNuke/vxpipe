@@ -1,6 +1,6 @@
 # Embedded and container delivery
 
-Status: not implemented; held until the user completes the pre-delivery platform and sample review. Specification review: approved (2026-09-08).
+Status: partially implemented for local QA; full embedded/container delivery remains incomplete. Specification review: approved (2026-09-08).
 Prerequisites: [Getting Started/example calls](getting-started-and-example-calls.md), including its debug-console and platform-bootstrap prerequisites; [Simpler speech integrations](simpler-speech-integrations.md); [Tenant credentials/platform configuration](tenant-provider-credentials-and-platform-configuration.md); [Context compaction/native fallback](context-compaction-and-native-fallback.md); [Call inspection/debugging](call-inspection-and-debugging.md), and their prerequisites; complete the earlier index entries and the [pre-delivery review hold](index.md#pre-delivery-review-hold) before beginning release work. Whole-call retention deliberately follows delivery as the final milestone.
 Sources: [Container/OTP architecture](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/architecture.md#configuration-and-container-boundary); [canonical call spec boundary](../20260905-0405-call-definition-design.md#canonical-representation); [application ownership](../20260905-0405-call-definition-design.md#umbrella-application-and-ecto-boundaries).
 See also the approved [gateway/console boundary](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/gateway-console-boundary.md).
@@ -28,8 +28,8 @@ The user explicitly requested a production release in the `qa` worktree. This
 authorizes the named umbrella release, compiled assets, local service and HTTPS
 ingress independently of the full container-delivery milestone. See the
 [QA release labnote](../20261111-0641-run-qa-release.md) for verification.
-The container entrypoint, image publishing and clean-host acceptance remain
-unchecked. The packaged migration command is covered by the following checkpoint.
+Image publishing and clean-host acceptance remain unchecked. The packaged
+migration command and local QA container services are covered below.
 
 ## Release migration command checkpoint — 2026-11-11
 
@@ -51,6 +51,22 @@ so the image command is `/app/bin/migrate`.
 See the [migration packaging labnote](../20261111-0720-package-release-migrations.md).
 This checkpoint does not publish an image or complete container acceptance.
 
+## QA container services checkpoint — 2026-11-11
+
+The user authorized running the existing QA release in a 1 GiB container, with
+both the application and Caddy managed by the system systemd instance. Design
+review: package the already assembled Ubuntu 26.04 release, preserve host
+networking and PostgreSQL peer authentication, and let systemd own restarts.
+The configuration and installer live under [scripts/qa](../../scripts/qa/README.md).
+
+- [x] Build the local runtime image and verify packaged native speech inference.
+- [x] Install and enable the app and Caddy system services; replace the user service.
+- [x] Verify migrations, HTTPS, HTTP redirects and the container's 1 GiB cgroup limit.
+
+See the [system-services labnote](../20261111-0906-install-qa-services.md).
+The image is local to the QA host; publishing, a portable build pipeline and the
+remaining embedded/container acceptance gates are still incomplete.
+
 ## Runnable outcome
 
 Docker is the primary packaged distribution. The same approved call flow runs in
@@ -61,7 +77,8 @@ and shut down without silently losing or resurrecting work.
 
 ## Implementation hold
 
-Do not begin Docker/image packaging as part of the current implementation run. First finish and
+Beyond the explicitly authorized local QA checkpoints above, do not begin the
+remaining distribution work as part of the current implementation run. First finish and
 exercise the pre-packaging framework and platform through the runnable samples, then let the user
 review that working system and choose any fixes or changes. Begin this milestone only after the
 user explicitly releases that hold.

@@ -1,0 +1,19 @@
+name: vxpipe-qa
+
+services:
+  app:
+    image: vxpipe-qa:local
+    pull_policy: never
+    container_name: vxpipe-qa
+    user: "${VXPIPE_QA_UID:-1000}:${VXPIPE_QA_GID:-1000}"
+    env_file: ../../.env
+    environment:
+      RELEASE_DISTRIBUTION: none
+      RELEASE_NODE: vxpipe_qa
+    network_mode: host
+    volumes:
+      - /var/run/postgresql:/var/run/postgresql:ro
+    mem_limit: 1g
+    memswap_limit: 1g
+    stop_grace_period: 60s
+    restart: "no"

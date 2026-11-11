@@ -1,0 +1,25 @@
+[Unit]
+Description=Vxpipe QA container
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=@USER@
+Group=@GROUP@
+SupplementaryGroups=docker
+WorkingDirectory=@CHECKOUT@
+Environment=VXPIPE_QA_UID=@UID@
+Environment=VXPIPE_QA_GID=@GID@
+ExecStartPre=@DOCKER@ compose --ansi never -f @CHECKOUT@/scripts/qa/compose.yaml run --rm --no-deps --entrypoint /app/bin/migrate app
+ExecStart=@DOCKER@ compose --ansi never -f @CHECKOUT@/scripts/qa/compose.yaml up --no-build --abort-on-container-exit --exit-code-from app app
+ExecStop=@DOCKER@ compose --ansi never -f @CHECKOUT@/scripts/qa/compose.yaml stop --timeout 60 app
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=90
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
