@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 59 milestone specifications: 46 complete and 13 incomplete. Milestone 17, Telnyx calls and
+Status: 60 milestone specifications: 47 complete and 13 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -187,9 +187,17 @@ progress without claiming the entire milestone is complete.
 54. [x] [ElevenLabs progress timeouts](elevenlabs-progress-timeouts.md) — Native caller speech and progressing output have no adapter duration cap. Scoped creation, finality, cancellation and credit guards pass 145 focused tests, all root gates (4,503 tests, zero failures), Lean and clean final independent GPT-6 Astra xhigh review. Two coherent checkpoints; no local VAD.
 55. [x] [Participant-owned MCP sessions](participant-owned-mcp-sessions.md) — Complete: all 29 implementation items verified. Activation-owned sessions/renewal and durable tenant catalog maintenance pass credential-change, teardown, transfer/recovery, capacity, privacy and controlled local acceptance. Actual Cron refresh and external inbound MCP continuity pass. All five root gates pass: 5,094 tests, zero failures, 371 excluded, seed 157471; focused final lanes and independent Astra reviews are clean. Deployment and the separate directory workflow approval remain outside this milestone.
 56. [x] [Shared tool execution for LLM and speech-to-speech participants](shared-participant-tool-execution.md) — Complete: 20/20 tasks and 4/4 checkpoints. LLM and native speech participants share tool/MCP execution, both conversation modes, semantic completion, bounded retention and usage. The 446-test common lane covers ordinary/duplex receptionist behavior, controlled outcomes, repeated identities, partial admission and teardown. All five root gates pass (5,213 tests, zero failures, 376 excluded; seed 112460), plus Lean and clean independent Astra review. Provider live acceptance and deployment remain separately owned.
-57. [x] [Consolidated handbook and publication](consolidated-handbook-and-publication.md) — Complete: 21 English usage/development pages, shared assets, Mermaid and automatic source-to-website publication. Cloudflare deployment and hosted browser acceptance pass; installation choices lead to Docker and Railway guides. Container acceptance remains in the next milestone.
-58. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README.
-59. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+57. [x] [Consolidated handbook and publication](consolidated-handbook-and-publication.md) — Complete: 21 English usage/development pages, shared assets, Mermaid and automatic source-to-website publication. Cloudflare deployment and hosted browser acceptance pass; installation choices lead to Docker and Railway guides. Container acceptance remains in the delivery milestone.
+58. [ ] [Voice agent input and output guardrails](voice-agent-guardrails.md) — Research/specification complete; implementation not started. Participant questions and confidence thresholds, inherited evaluator selection, Jev/OpenAI Decisions, input feedback or standard responses, bounded output regeneration, and permitted transcript/debug evidence. Native speech-to-speech is deferred.
+59. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README.
+60. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+
+The 2026-11-11 [guardrail research and decision](../../docs/design/voice-agent-guardrails.md)
+adds participant input/output checks after their implemented runtime, provider,
+editor, history and shared-tool prerequisites. It reuses the existing debug
+inspection host without depending on unfinished live interaction controls. The
+milestone records a local design/dependency review separately from implementation;
+its acceptance gates remain unchecked. Delivery and retention holds are unchanged.
 
 The 2026-11-08 [participant MCP ownership decision](https://github.com/HashNuke/vxpipe/blob/1914be98/docs/development/participant-mcp-ownership.md)
 adds a runtime lifecycle slice after the implemented saved-MCP work and before
@@ -573,6 +581,7 @@ in their own review sections; no independent-agent or implementation verificatio
 
 | Milestone | Review status | Evidence |
 | --- | --- | --- |
+| [Voice agent input and output guardrails](voice-agent-guardrails.md#specification-review) | Research/specification complete; locally reviewed | First-party API documentation, three anonymized source snapshots and current Vxpipe boundaries support the proposed contracts. Dependency order, complete-output gating, response-only retries, model history, thresholds, failure/cancellation, and permitted transcript/debug evidence were reviewed. No implementation or hosted verification is claimed. |
 | [Call-Spec-driven one-agent call](call-spec-driven-call.md#specification-review) | Reviewed; subset clarified | Prior agent review approved AgentServer readiness/teardown boundaries. Released-package probe verified repeated rounds and exposed alias loss; initial static keys must match Action names until the public binding extension exists. |
 | [Observable sample call](observable-sample-call.md#specification-review) | Complete; locally reviewed | Phoenix Console, mounted reusable gateway, bounded payload-free telemetry, live diagnostics, deterministic success/failure evidence, embedded-host event contract and Console-owned release assets are implemented and verified. |
 | [Local Morse-code audio providers](morse-code-audio-providers.md#specification-review) | Complete; independently reviewed | Real audio, independent fixtures, bounded streaming, explicit transport limits, closed selection, direct-PCM room round trip and optional credential-free sample profile are implemented and verified. |
