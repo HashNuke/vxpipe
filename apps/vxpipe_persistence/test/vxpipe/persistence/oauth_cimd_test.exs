@@ -15,6 +15,7 @@ defmodule Vxpipe.Persistence.OAuthCIMDTest do
       "application_type" => "native",
       "redirect_uris" => ["http://127.0.0.1/callback", "http://localhost/callback"],
       "logo_uri" => "https://client.example/logo.png",
+      "client_uri" => "https://client.example/about",
       "token_endpoint_auth_method" => "none"
     }
 
@@ -35,6 +36,9 @@ defmodule Vxpipe.Persistence.OAuthCIMDTest do
     assert {:ok, consent} = Browser.consent(request, ctx.binding, ctx.principal)
     assert consent.client_name == "CIMD client"
     assert consent.client_id == @client
+    assert consent.logo_uri == ctx.document["logo_uri"]
+    assert consent.client_uri == ctx.document["client_uri"]
+    assert consent.user_email == ctx.user.email
 
     assert {:ok, issued} =
              Browser.complete_authorization(request, ctx.binding, ctx.principal, :approve)
@@ -77,6 +81,25 @@ defmodule Vxpipe.Persistence.OAuthCIMDTest do
     configure(ctx.document, self(), {127, 0, 0, 1})
     assert {:error, :invalid_client} = begin(ctx)
     assert Repo.aggregate(Client, :count) == 0
+  end
+
+  test "a branding refresh invalidates consent displayed with the previous logo", ctx do
+    assert {:ok, request} = begin(ctx)
+    assert {:ok, _} = Browser.consent(request, ctx.binding, ctx.principal)
+
+    Repo.one!(Client)
+    |> Ecto.Changeset.change(metadata_expires_at: DateTime.add(DateTime.utc_now(), -1))
+    |> Repo.update!()
+
+    configure(Map.put(ctx.document, "logo_uri", "https://client.example/new-logo.png"), self())
+    assert {:ok, fresh} = begin(ctx)
+    assert {:error, :invalid_request} = Browser.consent(request, ctx.binding, ctx.principal)
+
+    assert {:error, :invalid_request} =
+             Browser.complete_authorization(request, ctx.binding, ctx.principal, :approve)
+
+    assert {:ok, %{logo_uri: "https://client.example/new-logo.png"}} =
+             Browser.consent(fresh, ctx.binding, ctx.principal)
   end
 
   test "expired metadata is fetched again and a changed redirect cannot be approved", ctx do

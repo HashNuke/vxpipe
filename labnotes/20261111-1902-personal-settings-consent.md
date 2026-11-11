@@ -74,3 +74,47 @@ No environment files were read. Existing checkout setup/dependencies were reused
 Implement optional CIMD/DCR branding and the shared reviewed consent presentation.
 Record the OAuth completion/callback transport decision before changing redirects;
 approval must not be presented as a completed client token exchange.
+
+## Branding and production consent
+
+- Red: standard branding was rejected/dropped (two Identity and three Persistence
+  failures); the actual server renderer lacked the shared UI entry (one Console
+  failure). Added shared presentation tests before implementation. New optional
+  HTTPS metadata now survives CIMD/DCR validation, storage and consent DTOs.
+- URLs are bounded using the existing URL boundary, reject embedded credentials,
+  and cannot inject active schemes. Old missing/unsafe optional metadata is
+  omitted from presentation. The existing metadata digest includes branding;
+  a logo-only refresh rejects approval of the prior displayed request. No schema
+  migration, network proxy or new dependency was added.
+- Extracted the reviewed React presentation into `OAuthConsent`, used by the real
+  page and Storybook. The backend supplies the user email, actual permission and
+  tenant ceiling, and the same grant duration used when storing grants. Kept
+  the approved permission descriptions and layout. A browser check exposed raw
+  reserved user permission keys in headings; a focused red test drove readable
+  labels while retaining exact keys in Connection details.
+- The production form remains an ordinary authenticated POST with CSRF and the
+  chosen decision. It does not intercept the callback. A no-JavaScript native
+  form remains available with the same authority and exact client/callback data.
+  The reviewed outcome screens still belong to the Storybook flow.
+- Green: 10 Identity, 18 Persistence, 13 Console, 10 shared UI/Storybook tests;
+  TypeScript, changed-file ESLint, assets/Storybook builds and root format,
+  warnings-as-errors compilation, Credo and unused-dependency checks pass.
+  No full suite was run.
+- Real Chrome validation used synthetic users in a rollback-only test database
+  and separate loopback Vxpipe/client HTTP listeners. Both CIMD and DCR delivered
+  code/state/issuer to the original client window, exchanged S256 codes, initialized
+  MCP, listed tools, invoked `list_tenants`, refreshed and retained the MCP session,
+  then rejected access after revocation (401) and code replay (400). Denial for
+  both delivered `access_denied` with original state/issuer. The CIMD peer uses
+  the existing DNS/HTTP test adapter seam to serve local metadata; this does not
+  bypass production validation or claim a third-party interoperability run.
+- Desktop 1440, mobile 390, actual no-permission member and Superadmin consent,
+  missing/broken logos and Storybook light mode were inspected. No horizontal
+  overflow or JavaScript exceptions observed. One browser wait used an unsupported
+  text-selector form; the callback had already succeeded. The temporary peer's
+  unhandled favicon requests did not affect any protocol checks.
+- Completion UX is the remaining decision. Asked whether to retain the original
+  tab callback with a separate Vxpipe receipt, or keep one tab with direct return.
+  No answer yet. Replacing the callback with a receipt breaks delivery; moving
+  the callback into another window can break client opener assumptions. Kept the
+  compatible original-window 302 and have not introduced receipt infrastructure.

@@ -39,6 +39,10 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
          %{
            client_name: client.metadata["client_name"],
            client_id: client.metadata_url || client.public_id,
+           client_uri: branding_uri(client.metadata["client_uri"]),
+           logo_uri: branding_uri(client.metadata["logo_uri"]),
+           user_email: context.user.email,
+           grant_lifetime_seconds: Store.grant_lifetime_seconds(),
            redirect_uri: request.params["redirect_uri"],
            resource: request.resource,
            authority: request.snapshot["authority"]
@@ -237,6 +241,8 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
        }}
 
   defp json_snapshot(snapshot), do: snapshot |> JSON.encode!() |> JSON.decode!()
+
+  defp branding_uri(value), do: if(Profile.branding_uri?(value), do: value)
 
   defp opaque?(value) when is_binary(value) and byte_size(value) == 43,
     do: Regex.match?(~r/\A[A-Za-z0-9_-]+\z/, value)

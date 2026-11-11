@@ -21,6 +21,9 @@ defmodule Vxpipe.Persistence.OAuth.Store do
 
   alias Vxpipe.Persistence.Repo
 
+  @grant_lifetime_seconds 2_592_000
+  def grant_lifetime_seconds, do: @grant_lifetime_seconds
+
   @impl true
   def register_client(metadata) do
     with {:ok, metadata} <- Profile.registration(metadata) do
@@ -141,7 +144,7 @@ defmodule Vxpipe.Persistence.OAuth.Store do
         user_id: context.user_id,
         client_id: params["client_id"],
         resource: resource,
-        expires_at: DateTime.add(Transaction.now(), 2_592_000)
+        expires_at: DateTime.add(Transaction.now(), @grant_lifetime_seconds)
       })
 
     Repo.insert!(struct!(Grant, attrs), Transaction.options())

@@ -1,7 +1,8 @@
 # Personal settings and MCP consent
 
 Status: in progress; personal settings and connection management are implemented
-and locally verified. CIMD/DCR branding and consent/completion remain pending.
+and locally verified. CIMD/DCR branding and shared consent are implemented;
+completion-screen integration remains pending.
 Do not mark this milestone or its index entry complete from preview evidence.
 
 ## Runnable slice and prerequisites
@@ -75,12 +76,12 @@ For you in production code. The preview flag and embedded account list are
 removed. Shared `ConnectedClients` confirmation uses the real per-user API;
 Storybook supplies an in-memory adapter to the same page/components.
 
-Updated consent/outcomes are still demonstrated only in Storybook.
-Production consent still sends its existing HTTP 302 to the registered callback.
-The metadata pipeline currently discards CIMD `logo_uri`, rejects that optional
-field in DCR, and does not expose the website/logo fields to consent rendering.
-The existing CIMD fetch/cache/security behavior is implemented and must survive
-this presentation extension.
+Production and Storybook now share the reviewed consent component. Validated
+CIMD/DCR branding, actual user/authority and grant lifetime reach the production
+page; existing clients need no migration. The native consent form preserves the
+existing HTTP 302 to the registered callback. Completion screens remain previews
+until their browser-window behavior is decided. Existing CIMD fetch/cache/security
+behavior is retained.
 
 ## Implementation checkpoints
 
@@ -117,24 +118,24 @@ this presentation extension.
 
 ### CIMD/DCR branding and consent
 
-- [ ] Red-test standard optional branding through CIMD validation/cache and DCR
+- [x] Red-test standard optional branding through CIMD validation/cache and DCR
   registration, persistence, presentation DTOs and the actual consent renderer.
   Existing unbranded clients and old stored records must remain usable.
-- [ ] Validate and bound optional values at the trust boundary; render all names
+- [x] Validate and bound optional values at the trust boundary; render all names
   as text. Retain existing client-ID, redirect-URI, public-client, PKCE, resource,
   metadata-digest, cache and SSRF controls. Branding is not evidence of trust.
-- [ ] Carry accepted `client_uri` and `logo_uri` into consent. Use the approved
+- [x] Carry accepted `client_uri` and `logo_uri` into consent. Use the approved
   HTTPS link/image policy (no embedded user credentials), no-referrer rendering,
   bounded image layout and Plug fallback for absent/invalid/broken logos. Resolve
   CSP/image-loading requirements without adding unrestricted backend URL fetching.
-- [ ] Include presentation metadata in the pending-consent consistency checks so
+- [x] Include presentation metadata in the pending-consent consistency checks so
   stale or replaced metadata cannot silently change what a user approved.
-- [ ] Replace current consent presentation with the reviewed design, including
+- [x] Replace current consent presentation with the reviewed design, including
   correct grants/tenants/expiry, all-tenant/no-action cases, accessible metadata
   details and the Settings → Your connections link.
-- [ ] Verify CIMD and DCR with deterministic local HTTP peers; keep network/live
+- [x] Verify CIMD and DCR with deterministic local HTTP peers; keep network/live
   interoperability cases explicitly tagged and excluded from default tests.
-- [ ] Commit the branding/consent slice with migration or compatibility evidence.
+- [x] Commit the branding/consent slice with migration or compatibility evidence.
 
 ### OAuth completion and protocol continuity
 
@@ -195,3 +196,12 @@ navigation, wrong-password retry, email persistence and password-change sign-out
 Storybook light/failure states and the app assets build passed; root static checks
 passed. See [checkpoint evidence](../20261111-1902-personal-settings-consent.md).
 The milestone stays unchecked until the remaining consent/protocol gates pass.
+
+2026-11-11 branding/consent checkpoint: Identity (10), Persistence (18), Console
+(13) and shared UI/Storybook (10) focused cases pass, along with TypeScript,
+changed-file ESLint, assets/Storybook builds and root static gates. The actual
+rollback-only HTTP/browser flow passes CIMD and DCR approval/denial, exchange,
+MCP invocation, refresh, revoke and replay rejection. Desktop, mobile, light,
+all-tenant and no-permission presentation checked. The client receives and displays
+its callback page; Vxpipe outcome receipts are not yet integrated. See the same
+checkpoint labnote for the pending browser-experience choice.

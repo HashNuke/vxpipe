@@ -3,7 +3,7 @@ defmodule Vxpipe.Identity.OAuth.Profile do
 
   alias Vxpipe.Identity.ApiKeyActor
 
-  @registration ~w(client_name redirect_uris grant_types response_types token_endpoint_auth_method scope client_uri application_type)
+  @registration ~w(client_name redirect_uris grant_types response_types token_endpoint_auth_method scope client_uri logo_uri application_type)
   @authorization ~w(response_type client_id redirect_uri resource scope state code_challenge code_challenge_method)
   @code ~w(grant_type client_id redirect_uri resource code code_verifier)
   @refresh ~w(grant_type client_id refresh_token resource scope)
@@ -132,12 +132,16 @@ defmodule Vxpipe.Identity.OAuth.Profile do
 
   def redirect_uri?(_value), do: false
 
+  @doc "Bounded HTTPS presentation metadata; no user credentials or active URL schemes."
+  def branding_uri?(value),
+    do: redirect_uri?(value) and URI.parse(value).scheme == "https"
+
   defp valid_registration?(params) do
     name?(params["client_name"]) and redirects?(params["redirect_uris"]) and
       grants?(Map.get(params, "grant_types", @grants)) and
       Map.get(params, "response_types", ["code"]) == ["code"] and
       Map.get(params, "token_endpoint_auth_method", "none") == "none" and scope?(params) and
-      optional_client_uri?(params["client_uri"]) and
+      optional_branding_uri?(params["client_uri"]) and optional_branding_uri?(params["logo_uri"]) and
       Map.get(params, "application_type") in [nil, "native", "web"]
   end
 
@@ -186,8 +190,8 @@ defmodule Vxpipe.Identity.OAuth.Profile do
 
   defp grants?(_values), do: false
 
-  defp optional_client_uri?(nil), do: true
-  defp optional_client_uri?(uri), do: redirect_uri?(uri)
+  defp optional_branding_uri?(nil), do: true
+  defp optional_branding_uri?(uri), do: branding_uri?(uri)
 
   defp challenge?(value) when is_binary(value) and byte_size(value) == 43 do
     case Base.url_decode64(value, padding: false) do

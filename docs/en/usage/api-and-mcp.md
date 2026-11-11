@@ -182,8 +182,11 @@ Clients can identify themselves with a hosted Client ID Metadata Document (CIMD)
 or use dynamic client registration (DCR). Vxpipe advertises both in its OAuth
 discovery document. Native clients may choose an available port for a registered
 literal-loopback callback; the callback host, path and query must still match.
-The consent page shows the CIMD client ID URL so you can check which client is
-requesting access.
+The consent page shows the client name, optional website/logo, signed-in account,
+permissions and tenant scope. Expand **Connection details** to inspect the exact
+client ID and return address. Branding does not mean Vxpipe endorses the client.
+Allow or deny returns you to the client. Approved access lasts 30 days and can be
+revoked earlier.
 
 The tool catalog exposes:
 

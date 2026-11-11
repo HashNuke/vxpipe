@@ -18,6 +18,38 @@ defmodule Vxpipe.Persistence.OAuthBrowserTest do
     Map.merge(fixture, %{client: client, binding: Transaction.random()})
   end
 
+  test "DCR branding reaches consent while old unbranded or unsafe stored URLs remain usable",
+       ctx do
+    {:ok, client} =
+      Store.register_client(
+        Map.merge(OAuthFixtures.registration(), %{
+          "client_uri" => "https://client.example/about",
+          "logo_uri" => "https://client.example/logo.png"
+        })
+      )
+
+    branded = %{ctx | client: client}
+    id = begin!(branded)
+    assert {:ok, consent} = Browser.consent(id, ctx.binding, ctx.principal)
+    assert consent.client_uri == "https://client.example/about"
+    assert consent.logo_uri == "https://client.example/logo.png"
+    assert consent.user_email == ctx.user.email
+    assert consent.grant_lifetime_seconds == 2_592_000
+
+    row = Repo.get!(Client, ctx.client.client_id)
+
+    for metadata <- [row.metadata, Map.put(row.metadata, "logo_uri", "javascript:alert(1)")] do
+      row |> Ecto.Changeset.change(metadata: metadata) |> Repo.update!()
+      request = begin!(ctx)
+      assert {:ok, old} = Browser.consent(request, ctx.binding, ctx.principal)
+      assert old.logo_uri == nil
+      assert old.client_uri == nil
+
+      assert {:ok, _} =
+               Browser.complete_authorization(request, ctx.binding, ctx.principal, :approve)
+    end
+  end
+
   test "consent is browser/session bound and approval produces exactly one usable code", ctx do
     id = begin!(ctx)
     assert {:error, :invalid_request} = Browser.consent(id, Transaction.random(), ctx.principal)

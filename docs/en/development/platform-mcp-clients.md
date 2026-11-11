@@ -24,8 +24,8 @@ A CIMD client ID is an exact HTTPS URL with a non-root path. Userinfo, query,
 fragment and dot segments are rejected. The fetched JSON must repeat that exact
 identifier and provide a client name and supported redirect URIs. Public-client
 authentication is `none`; shared secrets, client assertions and key metadata are
-outside this profile. Informational extensions such as a logo are ignored rather
-than fetched or rendered.
+outside this profile. Optional `client_uri` and `logo_uri` are retained after
+HTTPS validation; unrelated informational extensions are ignored.
 
 Only supported HTTPS and literal-loopback redirect URIs are retained. A document
 may advertise other callback forms, but they cannot be used with Vxpipe. Loopback
@@ -83,18 +83,22 @@ refresh results, rejected redirects, private targets and oversized documents.
 The persistence cases exercise the real Boruta adapters and database records;
 network responses are controlled fixtures, with no third-party credentials.
 
-## Consent design preview
+## Consent presentation and callback ownership
 
 Storybook includes **Vxpipe → Console → Authentication → MCP authorization**.
 Run `bin/storybook`, then open **Review Request**. **Allow Flow** and **Deny Flow**
-exercise the buttons and show the proposed completion screens. Other stories cover DCR,
+exercise the buttons and show the proposed completion screens. Consent shares
+`OAuthConsent` with the production page. Other stories cover DCR,
 missing/broken logos, all-tenant access, no permissions, unavailable requests,
 long names and the light theme. The account, tenant and authority are fixtures.
 
-The proposal keeps the Console visual system and adds client branding, a visible
-account identity, plain-language permissions, explicit tenant scope, and an
-expandable section for exact identifiers and callback details. Both decisions
-remain available without preselecting consent.
+The production page uses the Console visual system, client branding, signed-in
+account identity, readable permission labels, explicit tenant scope and expandable
+exact identifiers/callback details. The backend supplies the current authority
+snapshot and grant lifetime; Storybook alone supplies synthetic values. Mixed
+all-tenant/assigned-tenant authority lists its exact all-tenant actions separately.
+Both decisions remain available without preselecting consent. A native HTML form
+preserves the authenticated CSRF-protected POST and works without JavaScript.
 
 Today, `AuthorizationController.decide/2` sends a **302 redirect** to the validated
 client callback. Approval includes `code`, denial includes `error=access_denied`,
@@ -128,17 +132,36 @@ The [MCP CIMD example](https://modelcontextprotocol.io/specification/2025-11-25/
 uses the same fields. Name, website and logo describe the client; they do not
 prove that Vxpipe has verified or endorsed it.
 
-The preview uses the supplied Codex metadata. It renders an HTTPS logo with no
+The Codex Storybook fixture uses supplied public metadata. Production accepts the
+same branding fields from either registration method. It renders an HTTPS logo with no
 referrer and falls back to the shared Lucide `Plug` icon if the logo is absent,
 invalid, or fails to load. The website is optional; DCR does not need to provide
 either optional branding field. The remote logo remains an external image
 dependency, with the fallback available offline.
 
-This is a Storybook proposal only. Production currently strips `logo_uri` from
-CIMD, rejects it as an unknown DCR registration field, and does not expose
-`client_uri` in the consent view model. Production adoption must explicitly
-validate and retain the optional branding metadata, expose it to the consent
-renderer, and decide the image-loading policy before using this presentation.
+Branding URLs are limited to 2,048 bytes, HTTPS and no embedded credentials,
+fragments or control characters. New invalid metadata is rejected at registration
+or discovery; invalid optional URLs in existing stored records are omitted from
+presentation. Missing branding remains valid. Names render as text. Browsers load
+logos directly with `no-referrer`; Vxpipe does not proxy arbitrary logo URLs. The
+page CSP permits these HTTPS images, and the bounded logo box handles load failures.
+Branding participates in the existing metadata digest, so changing only a logo
+also invalidates pending consent. The JSON metadata column needs no migration.
+
+A rollback-only local-browser check exercised both DCR and CIMD through actual
+HTTP authorization, callback delivery, S256 exchange, an MCP tool invocation,
+refresh and revocation. Reusing the code returned 400; using the revoked token
+returned 401. Denial returned the original state and issuer. The local CIMD peer
+uses the existing test DNS/HTTP adapter seam; public-address validation remains
+enabled in production. Focused Identity, Persistence, Console and shared UI tests
+cover branding rejection, old records, digest drift and rendered authority.
+
+The completion-screen choice remains open: the client owns the callback page.
+Replacing its redirect with a Vxpipe receipt loses code/error delivery; moving the
+callback to a new window can break browser clients that rely on their original
+window/opener. The current implementation preserves the original-window 302.
+A separate receipt would require an explicit browser experience decision; no new
+receipt store, session cookie or callback transport has been introduced.
 
 ### Personal settings follow-through
 

@@ -12,16 +12,22 @@ defmodule Vxpipe.Console.OAuth.ConsentPage do
         <meta name="color-scheme" content="dark" />
         <link rel="icon" href="data:," />
         <link rel="stylesheet" href="/assets/admin-ui.css" />
+        <link rel="stylesheet" href="/assets/oauth.css" />
         <title>Connect client · Vxpipe</title>
       </head>
-      <body class="vx-admin access-ui">
+      <body>
+        <div id="oauth-root" data-consent={Jason.encode!(@consent)} data-request-id={@id} data-csrf-token={@csrf_token}></div>
+        <script type="module" src="/assets/oauth.js"></script>
+        <noscript>
+        <div class="vx-admin access-ui">
         <main class="access-auth oauth-consent">
           <p class="access-auth-mark">Vxpipe · MCP connection</p>
           <h1>Connect {@consent.client_name}</h1>
+          <p>Signed in as {@consent.user_email}</p>
           <p class="access-lead">This client is asking to act on your behalf through the Vxpipe API. Only continue if you started this connection and trust the client.</p>
           <dl class="oauth-destinations">
-            <dt :if={Vxpipe.Identity.OAuth.Profile.metadata_url?(Map.get(@consent, :client_id))}>Client ID</dt>
-            <dd :if={Vxpipe.Identity.OAuth.Profile.metadata_url?(Map.get(@consent, :client_id))}>{@consent.client_id}</dd>
+            <dt>Client ID</dt>
+            <dd>{@consent.client_id}</dd>
             <dt>API</dt><dd>{@consent.resource}</dd>
             <dt>Return to</dt><dd>{@consent.redirect_uri}</dd>
           </dl>
@@ -39,13 +45,15 @@ defmodule Vxpipe.Console.OAuth.ConsentPage do
             <h2>Assigned tenants</h2>
             <ul class="oauth-permissions"><li :for={{tenant, access} <- Enum.sort(@consent.authority["assigned_tenants"])}>{tenant} — {access_label(access)}</li></ul>
           </div>
-          <p class="access-muted">You can revoke this connection from Your account at any time. Access ends after 30 days unless you connect again.</p>
+          <p class="access-muted">You can revoke this connection from Settings → Your connections at any time. Access ends after {div(@consent.grant_lifetime_seconds, 86_400)} days unless you connect again.</p>
           <form action={"/oauth/authorize/" <> @id} method="post" class="access-form">
             <input type="hidden" name="_csrf_token" value={@csrf_token} />
             <button class="oauth-approve" type="submit" name="decision" value="approve">Allow connection</button>
             <button class="oauth-deny" type="submit" name="decision" value="deny">Deny</button>
           </form>
         </main>
+        </div>
+        </noscript>
       </body>
     </html>
     """

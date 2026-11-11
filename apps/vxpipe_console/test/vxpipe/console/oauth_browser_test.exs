@@ -73,6 +73,17 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
     end
   end
 
+  test "consent mounts the reviewed UI with real branding and authority" do
+    body = signed_consent() |> html_response(200)
+    assert body =~ ~s(src="/assets/oauth.js")
+    assert body =~ ~s(id="oauth-root")
+    assert body =~ "https://client.example/logo.png"
+    assert body =~ "https://client.example/about"
+    assert body =~ "owner@example.test"
+    assert body =~ "2592000"
+    assert body =~ "tenants.read"
+  end
+
   test "authorization uses the current installation host and resource" do
     options = Application.fetch_env!(:vxpipe_console, :oauth)
 
@@ -307,6 +318,10 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
         {:ok,
          %{
            client_name: "Research client",
+           client_uri: "https://client.example/about",
+           logo_uri: "https://client.example/logo.png",
+           user_email: "owner@example.test",
+           grant_lifetime_seconds: 2_592_000,
            client_id: "https://client.example/oauth/client.json",
            redirect_uri: "https://client.example/callback?existing=keep",
            resource: @resource,

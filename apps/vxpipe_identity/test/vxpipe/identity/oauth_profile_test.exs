@@ -9,6 +9,42 @@ defmodule Vxpipe.Identity.OAuth.ProfileTest do
   @verifier String.duplicate("a", 43)
   @challenge :crypto.hash(:sha256, @verifier) |> Base.url_encode64(padding: false)
 
+  test "DCR and CIMD retain optional HTTPS branding without extending the security profile" do
+    branding = %{
+      "client_name" => "Research client",
+      "redirect_uris" => [@redirect],
+      "client_uri" => "https://client.example/about",
+      "logo_uri" => "https://client.example/logo.png"
+    }
+
+    assert {:ok, registered} = Profile.registration(branding)
+    assert registered["logo_uri"] == branding["logo_uri"]
+    assert registered["client_uri"] == branding["client_uri"]
+    id = "https://client.example/oauth/client.json"
+    assert {:ok, ^registered} = Profile.client_metadata(Map.put(branding, "client_id", id), id)
+  end
+
+  test "optional branding rejects unsafe or unbounded URLs at registration" do
+    for field <- ["client_uri", "logo_uri"],
+        value <- [
+          "http://127.0.0.1/logo.png",
+          "https://user:password@client.example/logo.png",
+          "javascript:alert(1)",
+          "data:image/png;base64,AA==",
+          "https://client.example/\\logo.png",
+          "https://client.example/logo.png\n",
+          "https://client.example/" <> String.duplicate("a", 2_048),
+          ["https://client.example/logo.png"]
+        ] do
+      assert {:error, :invalid_client_metadata} =
+               Profile.registration(%{
+                 "client_name" => "Client",
+                 "redirect_uris" => [@redirect],
+                 field => value
+               })
+    end
+  end
+
   test "Codex native registration metadata is accepted" do
     assert {:ok, metadata} =
              Profile.registration(%{
