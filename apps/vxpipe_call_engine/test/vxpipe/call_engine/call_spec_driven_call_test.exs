@@ -73,6 +73,14 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     plan = compile_plan_from(room_id, source)
     assert plan.direction == :incoming
+
+    # Registered first so this runs after the startup helper's own cleanup.
+    on_exit(fn ->
+      assert Registry.select(Vxpipe.CallEngine.RoomRegistry, [
+               {{{:room_incarnation, plan.tenant_id, plan.room_id, :_}, :_, :_}, [], [true]}
+             ]) == []
+    end)
+
     assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     attach_caller(plan, room, caller, "conn-new-incoming")

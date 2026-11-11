@@ -1,5 +1,5 @@
 defmodule Vxpipe.CallEngine.TestCallStartup do
-  @moduledoc "Setup acknowledgements for tests whose subject starts after initial preparation."
+  @moduledoc "Test-owned room startup, teardown and preparation acknowledgements."
 
   import ExUnit.Assertions
   alias Vxpipe.CallEngine
@@ -7,8 +7,26 @@ defmodule Vxpipe.CallEngine.TestCallStartup do
 
   def start_call(plan, options \\ []) do
     with {:ok, room} <- CallEngine.start_call(plan, options) do
+      stop_on_exit(plan, room)
       await_prepared(plan)
       {:ok, room}
+    end
+  end
+
+  defp stop_on_exit(plan, room) do
+    key = {:room_incarnation, plan.tenant_id, plan.room_id, room.incarnation_id}
+
+    case Registry.lookup(Vxpipe.CallEngine.RoomRegistry, key) do
+      [{pid, _}] ->
+        ExUnit.Callbacks.on_exit(fn ->
+          # The test may already have ended this room. Retain the PID rather
+          # than looking up an ID that a later incarnation could reuse.
+          result = DynamicSupervisor.terminate_child(Vxpipe.CallEngine.RoomSupervisor, pid)
+          assert result in [:ok, {:error, :not_found}]
+        end)
+
+      [] ->
+        :ok
     end
   end
 

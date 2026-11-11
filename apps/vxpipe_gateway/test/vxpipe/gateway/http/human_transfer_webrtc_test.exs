@@ -1630,621 +1630,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     @tag wait_mode: wait_mode, last_ready: last_ready, loss_at: loss_at
     @tag gateway_release_loss: last_ready == :destination and loss_at == :release
-    test "human handoff gates #{last_ready} and #{outcome} with #{wait_mode} waits",
-         %{
-           wait_mode: mode,
-           last_ready: last_ready,
-           loss_at: loss_at
-         } do
-      alias Vxpipe.CallEngine.MediaPolicy.Authority
-
-      recording_change = if loss_at in [:recording_denied, :recording_unrelated], do: loss_at
-      loss_at = if recording_change, do: nil, else: loss_at
-      {wait_sounds, options} = wait_configuration(mode)
-      writer_readiness = :atomics.new(1, [])
-
-      plan =
-        compile_plan(
-          wait_sounds: wait_sounds,
-          observer_speech_to_text?: true,
-          observer_policy: %{},
-          restriction_policy:
-            if(recording_change == :recording_unrelated, do: %{}, else: %{record_audio: false})
-        )
-
-      caller = Map.fetch!(plan.participants, "caller")
-      support = Map.fetch!(plan.participants, "human-support")
-      observer = Map.fetch!(plan.participants, "observer")
-
-      assert {:ok, room} =
-               CallEngine.start_call(
-                 plan,
-                 Keyword.put(options, :recording,
-                   enabled: true,
-                   targets: [:full_mix, :individual_tracks],
-                   writer:
-                     {CallEngine.TestRecordingWriter,
-                      observer: self(), readiness: writer_readiness},
-                   maximum_pull_frames: 20
-                 )
-               )
-
-      if mode == :custom_url,
-        do:
-          assert_receive(
-            {:test_opening_audio_fetch, "https://media.example.com/handoff.wav", _},
-            1_000
-          )
-
-      stop_room_on_exit(plan)
-      assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
-      source_monitor = Process.monitor(source_tts)
-
-      TestTextToSpeechTransport.deliver_control(
-        source_tts,
-        ~s({"type":"Connected","request_id":"source-ready"})
-      )
-
-      caller_client =
-        plan
-        |> issue_session(room, caller.participant_id)
-        |> then(&connect(&1.session_id, "chat"))
-
-      assert {:ok, join} =
-               CallEngine.Command.JoinParticipant.new(
-                 tenant_id: plan.tenant_id,
-                 actor_id: plan.actor_id,
-                 room_id: plan.room_id,
-                 participant_id: observer.participant_id,
-                 role: :human,
-                 deadline: DateTime.add(DateTime.utc_now(), 5, :second)
-               )
-
-      assert {:ok, _participant} = CallEngine.join_participant(join)
-
-      observer_client =
-        plan
-        |> issue_session(room, observer.participant_id)
-        |> then(&connect(&1.session_id, "chat", false))
-
-      assert_receive {:test_stt_transport_started, remaining_stt, _}, 2_000
-
-      restriction_client =
-        if recording_change do
-          restriction = Map.fetch!(plan.participants, "recording-restriction")
-
-          assert {:ok, restriction_join} =
-                   CallEngine.Command.JoinParticipant.new(
-                     tenant_id: plan.tenant_id,
-                     actor_id: plan.actor_id,
-                     room_id: plan.room_id,
-                     participant_id: restriction.participant_id,
-                     role: :human,
-                     deadline: DateTime.add(DateTime.utc_now(), 5, :second)
-                   )
-
-          assert {:ok, _} = CallEngine.join_participant(restriction_join)
-
-          client =
-            plan
-            |> issue_session(room, restriction.participant_id)
-            |> then(&connect(&1.session_id, "chat", false))
-
-          policy_authority = Authority.whereis(room.incarnation_id)
-          assert {:ok, _} = Authority.leave(policy_authority, restriction.participant_id)
-          client
-        end
-
-      :ok = :atomics.put(writer_readiness, 1, 2)
-
-      recovers? = last_ready == :destination and loss_at == :preparation
-      assert :ok = send_rtvi_text(caller_client, "ready-transfer", recovers?)
-      assert_receive {:test_agent_runtime_stream, source_provider, _}, 2_000
-
-      assert {:ok, call} =
-               ToolCall.new(
-                 id: "ready-human-transfer",
-                 name: "transfer",
-                 arguments: %{
-                   "destination" => "human-support",
-                   "reason" => "Please connect human support."
-                 }
-               )
-
-      assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
-      send(source_provider, {:test_agent_runtime_response, {:ok, response}})
-      assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
-
-      TestTextToSpeechTransport.deliver_control(
-        briefing_tts,
-        ~s({"type":"Connected","request_id":"briefing-ready"})
-      )
-
-      briefing_monitor = Process.monitor(briefing_tts)
-
-      if recovers? do
-        assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
-        assert {:ok, acknowledgement} = ModelResponse.new(text: "I am connecting support.")
-        send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
-      end
-
-      # Every existing listener waits from authorization, before the destination connects.
-      for audience_client <- [caller_client, observer_client] do
-        case mode do
-          mode when mode in [:silent_caller, :silent_all] ->
-            refute_audio(audience_client, 150)
-
-          mode when mode in [:custom_url, :live_url] ->
-            await_tone(audience_client, 250, 2_000)
-
-          :defaults ->
-            assert audience_client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
-        end
-      end
-
-      assert :ok = send_rtvi_text(caller_client, "before-destination")
-
-      assert %{"type" => "error-response", "id" => "before-destination"} =
-               await_sideband(caller_client, "error-response", 2_000)
-
-      support_client =
-        plan
-        |> issue_session(room, support.participant_id)
-        |> then(&connect(&1.session_id, "vxpipe"))
-
-      %{"data" => %{"attempt_id" => attempt_id}} =
-        await_sideband(support_client, "transfer.preparation", 5_000)
-
-      [{room_authority, _}] =
-        Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
-
-      {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(room_authority)
-      connection = Map.fetch!(binding.connections, support_client.connection_id).pid
-      observer_binding = Map.fetch!(binding.connections, observer_client.connection_id)
-      {:ok, observer_media} = GenServer.call(observer_binding.pid, :vxpipe_connection_readiness)
-      policy = Authority.snapshot(binding.policy_authority)
-      assert_receive {:test_tts_control, ^briefing_tts, _speak}, 2_000
-      assert_receive {:test_tts_control, ^briefing_tts, _flush}, 2_000
-
-      assert :ok = send_acceptance(support_client, "accept-before-briefing", attempt_id)
-
-      assert %{"id" => "accept-before-briefing", "type" => "error"} =
-               await_sideband(support_client, "error", 2_000)
-
-      assert :sys.get_state(room_authority).pending_participant_transfer.accepted? == false
-
-      TestTextToSpeechTransport.deliver_control(
-        briefing_tts,
-        ~s({"type":"SpeechStarted","request_id":"req","speech_id":"readiness-briefing"})
-      )
-
-      TestTextToSpeechTransport.deliver_audio(briefing_tts, :binary.copy(<<1, 0>>, 960))
-
-      TestTextToSpeechTransport.deliver_control(
-        briefing_tts,
-        ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"readiness-briefing"})
-      )
-
-      assert support_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
-
-      assert %{"data" => %{"attempt_id" => ^attempt_id}} =
-               await_sideband(support_client, "transfer.acceptance_ready", 2_000)
-
-      assert_receive {:DOWN, ^briefing_monitor, :process, ^briefing_tts, _reason}, 1_000
-
-      assert :ok = send_acceptance(support_client, "accept-ready-support", attempt_id)
-
-      assert_receive {:test_stt_transport_started, joining_stt, _}, 2_000
-      %{"data" => progress} = await_sideband(support_client, "transfer.progress", 2_000)
-      assert progress["attempt_id"] == attempt_id
-      assert progress["phase"] == "preparing"
-      assert "speech_to_text" in progress["blockers"]
-      assert is_integer(progress["elapsed_ms"]) and progress["elapsed_ms"] >= 0
-      assert Enum.sort(Map.keys(progress)) == ["attempt_id", "blockers", "elapsed_ms", "phase"]
-
-      case mode do
-        :silent_all ->
-          refute_audio(support_client, 150)
-
-        mode when mode in [:custom_url, :live_url] ->
-          await_tone(support_client, 250, 2_000)
-
-        _default_joining ->
-          assert support_client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
-      end
-
-      # A private microphone must not feed either the provider or the eventual room.
-      send_tone(support_client, 1_500, 1)
-      refute_tone(caller_client, 1_500, 200)
-      refute_receive {:test_stt_audio, ^joining_stt, _audio}, 100
-      {:ok, private} = GenServer.call(connection, :vxpipe_connection_readiness)
-      assert private.attachment.admission == :transfer_preparation
-      assert Authority.snapshot(binding.policy_authority) == policy
-      refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 100
-      assert :ok = send_rtvi_text(caller_client, "held-turn")
-
-      assert %{"type" => "error-response", "id" => "held-turn"} =
-               await_sideband(caller_client, "error-response", 2_000)
-
-      refute_receive {:test_agent_runtime_stream, _model,
-                      %{correlation: %{correlation_id: "held-turn"}}},
-                     100
-
-      releases = %{
-        destination: fn ->
-          TestSpeechToTextTransport.deliver(
-            joining_stt,
-            ~s({"type":"Connected","request_id":"ready-human-stt","sequence_id":0})
-          )
-        end,
-        participant: fn ->
-          TestSpeechToTextTransport.deliver(
-            remaining_stt,
-            ~s({"type":"Connected","request_id":"ready-remaining-stt","sequence_id":0})
-          )
-        end,
-        recording: fn -> :atomics.put(writer_readiness, 1, 0) end
-      }
-
-      for {kind, ready} <- releases, kind != last_ready, do: ready.()
-      blocker = if last_ready == :recording, do: "recording", else: "speech_to_text"
-
-      assert %{"attempt_id" => ^attempt_id} =
-               await_transfer_progress(caller_client, "preparing", [blocker])
-
-      assert :ok = send_rtvi_text(caller_client, "held-for-last-resource")
-
-      assert %{"id" => "held-for-last-resource"} =
-               await_sideband(caller_client, "error-response", 2_000)
-
-      send_tone(observer_client, 1_750, 1)
-      refute_tone(caller_client, 1_750, 100)
-      refute_tone(support_client, 1_750, 100)
-      refute_receive {:test_stt_audio, ^remaining_stt, _held_input}, 100
-      refute_receive {:test_stt_audio, ^joining_stt, _held_input}, 100
-      refute_receive {:test_recording_chunk, _, _private_audio}, 100
-      refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 100
-      assert Authority.snapshot(binding.policy_authority) == policy
-
-      if loss_at do
-        authority_monitor = Process.monitor(room_authority)
-
-        connection_monitors =
-          Enum.map(binding.connections, fn {_id, bound} ->
-            {bound.pid, Process.monitor(bound.pid)}
-          end)
-
-        fail_resource = fn ->
-          case last_ready do
-            kind when kind in [:destination, :participant] ->
-              transport = if kind == :destination, do: joining_stt, else: remaining_stt
-
-              connection_id =
-                if kind == :destination,
-                  do: support_client.connection_id,
-                  else: observer_client.connection_id
-
-              if loss_at == :preparation do
-                monitor = Process.monitor(transport)
-                TestSpeechToTextTransport.disconnect(transport, :test_handoff_loss)
-                assert_receive {:DOWN, ^monitor, :process, ^transport, _reason}, 1_000
-              else
-                capability =
-                  :sys.get_state(room_authority).connections
-                  |> Map.fetch!(connection_id)
-                  |> Map.fetch!(:speech_to_text)
-                  |> Map.fetch!(:capability)
-
-                receipt = observe_stt_loss(room_authority, capability)
-                assert :ok = :sys.suspend(capability)
-                monitor = Process.monitor(transport)
-
-                try do
-                  TestSpeechToTextTransport.disconnect(transport, :test_handoff_loss)
-                  assert_receive {:DOWN, ^monitor, :process, ^transport, _reason}, 1_000
-                  refute_receive {:room_stt_loss_received, ^receipt}, 0
-                after
-                  :sys.resume(capability)
-                end
-
-                assert_receive {:room_stt_loss_received, ^receipt}, 1_000
-              end
-
-            :recording ->
-              :atomics.put(writer_readiness, 1, 1)
-          end
-        end
-
-        if loss_at == :preparation do
-          fail_resource.()
-        else
-          token = pause_native_gate(connection, loss_at)
-          Map.fetch!(releases, last_ready).()
-          assert_receive {:native_gate_waiting, ^token}, 2_000
-
-          try do
-            assert :sys.get_state(private.output).held? == (loss_at != :release)
-            fail_resource.()
-          after
-            send(connection, {:continue_native_gate, token})
-          end
-        end
-
-        if recovers? do
-          # The failed destination is being disconnected; the retained caller owns
-          # the reliable recovery-status assertion.
-          assert %{"reason" => failure_reason} =
-                   await_transfer_progress(caller_client, "recovering")
-
-          # The speech owner can report provider loss directly, or the readiness
-          # collector can observe the failed media binding first.
-          assert failure_reason in ["speech_to_text_unavailable", "media_unavailable"]
-
-          await_recovered(room_authority, System.monotonic_time(:millisecond) + 2_000)
-
-          assert %{"phase" => "recovered", "reason" => ^failure_reason} =
-                   await_transfer_progress(caller_client, "recovered")
-
-          refute_receive {:DOWN, ^authority_monitor, :process, ^room_authority, _reason}, 50
-          refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _reason}, 50
-          assert {:ok, recovered} = CallEngine.RoomAuthority.readiness_binding(room_authority)
-          assert recovered.room == binding.room
-
-          assert recovered.connections ==
-                   Map.delete(binding.connections, support_client.connection_id)
-
-          for peer <- [caller_client, observer_client] do
-            actor = Map.fetch!(recovered.connections, peer.connection_id).pid
-            assert :sys.get_state(actor).handoff_gate == nil
-          end
-
-          assert_receive {:test_agent_runtime_stream, response_provider, _}, 2_000
-          assert {:ok, response} = ModelResponse.new(text: "We can continue.")
-          send(response_provider, {:test_agent_runtime_response, {:ok, response}})
-
-          assert %{"data" => %{"text" => "We can continue."}} =
-                   await_sideband(observer_client, "bot-output", 2_000)
-
-          assert :sys.get_state(observer_binding.pid).rtvi_turn_state.active_spoken_output == nil
-          assert_receive {:test_tts_control, ^source_tts, speak}, 2_000
-          assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "We can continue."}
-          assert_receive {:test_tts_control, ^source_tts, _flush}, 2_000
-          deliver_voice_tone(source_tts, "whole-room-recovery", 1_500)
-          assert_handoff_audio_order(caller_client, 1_500, nil)
-          # Synthesized replies use the requesting caller's output. Verify the
-          # remaining listener's cue against the room audio it actually receives.
-          send_tone(caller_client, 500, 1)
-          assert_handoff_audio_order(observer_client, 500, nil)
-          refute_receive {:test_stt_audio, ^remaining_stt, _held_input}, 100
-          send_tone(observer_client, 1_750, 11)
-          await_tone(caller_client, 1_750, 2_000)
-          assert_receive {:test_stt_audio, ^remaining_stt, _conversation}, 2_000
-
-          for participant_id <- [caller.participant_id, observer.participant_id] do
-            assert_receive {:test_recording_writer_opened, _writer, _recorder,
-                            %{participant_id: ^participant_id, stream_id: stream_id}},
-                           2_000
-
-            assert_receive {:test_recording_chunk, ^stream_id, chunk}, 2_000
-            assert byte_size(chunk.payload) > 0
-          end
-
-          refute_receive {:test_stt_transport_started, _replacement, _}, 50
-          refute_receive {:test_tts_transport_started, _replacement, _}, 50
-          refute_native_activation(support_client, System.monotonic_time(:millisecond) + 100)
-        else
-          assert_receive {:DOWN, ^authority_monitor, :process, ^room_authority, reason}, 2_000
-          assert reason in [:shutdown, :handoff_recovery_failed, :handoff_release_failed]
-
-          for {actor, monitor} <- connection_monitors do
-            assert_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 2_000
-          end
-
-          for peer <- [caller_client, observer_client, support_client] do
-            refute_native_activation(peer, System.monotonic_time(:millisecond) + 100)
-          end
-
-          refute_receive {:test_stt_transport_started, _replacement, _}, 50
-          refute_receive {:test_tts_transport_started, _redial, _}, 50
-          assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _reason}, 2_000
-        end
-      else
-        adoption_pause =
-          if mode == :silent_all and last_ready == :destination,
-            do: pause_native_gate(connection, :adopt)
-
-        retained_recording_stream =
-          if recording_change do
-            support_id = support.participant_id
-
-            assert_receive {:test_recording_writer_opened, private_writer, private_writer,
-                            %{participant_id: ^support_id, stream_id: stream_id}},
-                           2_000
-
-            writer_monitor = Process.monitor(private_writer)
-            pending = :sys.get_state(room_authority).pending_participant_transfer
-            token = pause_native_gate(connection, :adopt)
-            restriction = Map.fetch!(plan.participants, "recording-restriction")
-
-            try do
-              assert {:ok, _} =
-                       Authority.admit(binding.policy_authority, restriction.participant_id)
-
-              if recording_change == :recording_denied do
-                assert_receive {:DOWN, ^writer_monitor, :process, ^private_writer, _}, 2_000
-              else
-                Map.fetch!(releases, last_ready).()
-              end
-
-              assert_receive {:native_gate_waiting, ^token}, 2_000
-              refreshed = :sys.get_state(room_authority).pending_participant_transfer
-              assert refreshed.task.pid == pending.task.pid
-              assert refreshed.deadline_ms == pending.deadline_ms
-              assert {:ok, current} = CallEngine.RoomAuthority.readiness_binding(room_authority)
-              assert current.room == binding.room
-              source_id = Map.fetch!(plan.participants, "reception").participant_id
-
-              assert Map.fetch!(current.participants, source_id) ==
-                       Map.fetch!(binding.participants, source_id)
-
-              if recording_change == :recording_unrelated do
-                refute_receive {:DOWN, ^writer_monitor, :process, ^private_writer, _}, 0
-
-                refute_receive {:test_recording_writer_opened, _replacement, _source,
-                                %{participant_id: ^support_id}},
-                               0
-              end
-            after
-              send(connection, {:continue_native_gate, token})
-            end
-
-            stream_id
-          else
-            Map.fetch!(releases, last_ready).()
-            nil
-          end
-
-        adopted_listener =
-          if adoption_pause do
-            assert_receive {:native_gate_waiting, ^adoption_pause}, 2_000
-
-            phase = :sys.get_state(room_authority).pending_participant_transfer.task.pid
-
-            assert {:ok, %{worker: %Task{pid: worker}}} =
-                     CallEngine.RoomAuthority.ParticipantTransfer.Phase.scope(phase)
-
-            # Let adoption acknowledge within its existing deadline, but hold the
-            # worker before it can certify the inventory. Negotiate the new output
-            # fully so this case isolates membership from transport startup.
-            assert :erlang.suspend_process(worker)
-            send(connection, {:continue_native_gate, adoption_pause})
-
-            try do
-              plan
-              |> issue_session(room, caller.participant_id)
-              |> then(&connect(&1.session_id, "chat", false))
-            after
-              :erlang.resume_process(worker)
-            end
-          end
-
-        for phase <- ["cue", "releasing"] do
-          assert %{"data" => %{"attempt_id" => ^attempt_id, "blockers" => []}} =
-                   await_sideband(support_client, "transfer.progress", 5_000, phase)
-        end
-
-        assert %{"data" => %{"attempt_id" => ^attempt_id}} =
-                 await_sideband(support_client, "transfer.active", 5_000)
-
-        {:ok, admitted} = GenServer.call(connection, :vxpipe_connection_readiness)
-        assert admitted.attachment.admission == :main
-        assert admitted.output == private.output
-        assert admitted.room_input == private.room_input
-        assert admitted.room_output == private.room_output
-        assert admitted.attachment.media_ingress == private.attachment.media_ingress
-        refute_receive {:test_stt_transport_started, _replacement, _}, 100
-        assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 2_000
-        assert {:ok, final} = CallEngine.RoomAuthority.readiness_binding(room_authority)
-        assert final.attempt == nil
-        assert final.room == binding.room
-        assert Map.fetch!(final.connections, observer_client.connection_id) == observer_binding
-
-        assert {:ok, retained_observer} =
-                 GenServer.call(observer_binding.pid, :vxpipe_connection_readiness)
-
-        assert retained_observer.output == observer_media.output
-        assert retained_observer.room_input == observer_media.room_input
-        assert retained_observer.room_output == observer_media.room_output
-        assert {:ok, _binding, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(connection)
-
-        refute_receive {:test_stt_audio, ^joining_stt, _held_or_private_audio}, 100
-        refute_receive {:test_recording_chunk, _stream, _private_audio}, 100
-        refute_receive {:test_opening_audio_fetch, _url, _limits}
-
-        # Inspect the queued cue and subsequent conversation together: no wait may follow
-        # the cue, and no cue may follow the first conversation frame on either peer.
-        wait_frequency = if mode in [:custom_url, :live_url], do: 250
-        send_tone(caller_client, 500, 1)
-        assert_handoff_audio_order(support_client, 500, wait_frequency)
-        assert_handoff_audio_order(observer_client, 500, wait_frequency)
-
-        if restriction_client,
-          do: assert_handoff_audio_order(restriction_client, 500, wait_frequency)
-
-        send_tone(support_client, 1_500, 11)
-        assert_handoff_audio_order(caller_client, 1_500, wait_frequency)
-
-        if adopted_listener,
-          do: assert_handoff_audio_order(adopted_listener, 1_500, wait_frequency)
-
-        assert_receive {:test_stt_audio, ^joining_stt, _conversation_audio}, 2_000
-        refute_receive {:test_stt_audio, ^remaining_stt, _held_audio}, 100
-        send_tone(observer_client, 1_750, 11)
-        await_tone(caller_client, 1_750, 2_000)
-        await_tone(support_client, 1_750, 2_000)
-        assert_receive {:test_stt_audio, ^remaining_stt, _conversation_audio}, 2_000
-        caller_id = caller.participant_id
-        support_id = support.participant_id
-
-        if recording_change == :recording_denied do
-          assert :atomics.get(writer_readiness, 1) == 2
-
-          assert {:ok, resources} =
-                   CallEngine.RoomRecording.readiness_resources(binding.room.recording)
-
-          refute Enum.any?(resources, &(&1.kind == :recording_writer))
-          refute_receive {:test_recording_chunk, _stream, _chunk}, 100
-        else
-          for participant_id <- [caller_id, support_id, observer.participant_id] do
-            stream_id =
-              if recording_change == :recording_unrelated and participant_id == support_id do
-                retained_recording_stream
-              else
-                assert_receive {:test_recording_writer_opened, _writer, _recorder,
-                                %{participant_id: ^participant_id, stream_id: opened_stream}},
-                               2_000
-
-                opened_stream
-              end
-
-            assert_receive {:test_recording_chunk, ^stream_id, chunk}, 2_000
-            assert byte_size(chunk.payload) > 0
-          end
-        end
-
-        for {event, sequence} <- [{"StartOfTurn", 1}, {"EndOfTurn", 2}] do
-          TestSpeechToTextTransport.deliver(
-            joining_stt,
-            JSON.encode!(%{
-              "type" => "TurnInfo",
-              "request_id" => "ready-human-stt",
-              "sequence_id" => sequence,
-              "event" => event,
-              "turn_index" => 0,
-              "audio_window_start" => 0.0,
-              "audio_window_end" => 1.0,
-              "transcript" => "The support agent is connected.",
-              "words" => [],
-              "end_of_turn_confidence" => 0.8,
-              "trigger" => "model"
-            })
-          )
-        end
-
-        support_id = support.participant_id
-
-        assert %{"data" => %{"user_id" => ^support_id, "final" => false}} =
-                 await_sideband(caller_client, "user-transcription", 5_000)
-
-        assert %{
-                 "data" => %{
-                   "text" => "The support agent is connected.",
-                   "user_id" => ^support_id,
-                   "final" => true
-                 }
-               } =
-                 await_sideband(caller_client, "user-transcription", 5_000)
-      end
+    test "human handoff gates #{last_ready} and #{outcome} with #{wait_mode} waits", context do
+      verify_human_handoff(context)
     end
   end
 
@@ -2262,345 +1649,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         :release_speech_loss
       ] do
     @tag preparation: preparation
-    test "human handoff handles #{preparation} preparation", %{
-      preparation: preparation
-    } do
-      restriction = %{transcript_routes: %{}, save_transcripts: false}
-
-      plan =
-        compile_plan(
-          support_policy: if(preparation == :none, do: restriction, else: %{}),
-          observer_policy:
-            case preparation do
-              mode
-              when mode in [
-                     :during_unrelated_change,
-                     :after_unrelated_adoption,
-                     :release_unrelated_change,
-                     :release_deadline,
-                     :release_speech_loss
-                   ] ->
-                %{}
-
-              :after_speech_adoption ->
-                %{save_transcripts: false}
-
-              _restricted ->
-                restriction
-            end
-        )
-
-      caller = Map.fetch!(plan.participants, "caller")
-      support = Map.fetch!(plan.participants, "human-support")
-      assert {:ok, room} = CallEngine.start_call(plan)
-
-      assert {:ok, room_monitor} =
-               CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
-
-      stop_room_on_exit(plan)
-      assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
-
-      TestTextToSpeechTransport.deliver_control(
-        source_tts,
-        ~s({"type":"Connected","request_id":"source-ready"})
-      )
-
-      caller_client =
-        plan
-        |> issue_session(room, caller.participant_id)
-        |> then(&connect(&1.session_id, "chat"))
-
-      policy_change =
-        if preparation != :none do
-          observer = Map.fetch!(plan.participants, "observer")
-
-          assert {:ok, join} =
-                   CallEngine.Command.JoinParticipant.new(
-                     tenant_id: plan.tenant_id,
-                     actor_id: plan.actor_id,
-                     room_id: plan.room_id,
-                     participant_id: observer.participant_id,
-                     role: :human,
-                     deadline: DateTime.add(DateTime.utc_now(), 5, :second)
-                   )
-
-          assert {:ok, _participant} = CallEngine.join_participant(join)
-
-          _observer_client =
-            plan
-            |> issue_session(room, observer.participant_id)
-            |> then(&connect(&1.session_id, "chat"))
-
-          policy_authority = CallEngine.MediaPolicy.Authority.whereis(room.incarnation_id)
-
-          assert {:ok, _policy} =
-                   CallEngine.MediaPolicy.Authority.leave(
-                     policy_authority,
-                     observer.participant_id
-                   )
-
-          {policy_authority, observer.participant_id}
-        end
-
-      assert :ok = send_rtvi_text(caller_client)
-      assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
-
-      assert {:ok, call} =
-               ToolCall.new(
-                 id: "no-transcription-transfer",
-                 name: "transfer",
-                 arguments: %{"destination" => "human-support", "reason" => "Connect support."}
-               )
-
-      assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
-      send(provider, {:test_agent_runtime_response, {:ok, response}})
-      assert_receive {:test_tts_transport_started, briefing, _}, 2_000
-
-      TestTextToSpeechTransport.deliver_control(
-        briefing,
-        ~s({"type":"Connected","request_id":"briefing-ready"})
-      )
-
-      support_client =
-        plan
-        |> issue_session(room, support.participant_id)
-        |> then(&connect(&1.session_id, "vxpipe"))
-
-      %{"data" => %{"attempt_id" => attempt}} =
-        await_sideband(support_client, "transfer.preparation", 2_000)
-
-      prior_media =
-        if preparation == :before_policy_change do
-          before = capture_private_media(plan, support_client, attempt)
-          {policy_authority, observer} = policy_change
-
-          assert {:ok, _policy} =
-                   CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
-
-          before
-        end
-
-      assert_receive {:test_tts_control, ^briefing, _speak}, 2_000
-      assert_receive {:test_tts_control, ^briefing, _flush}, 2_000
-
-      TestTextToSpeechTransport.deliver_control(
-        briefing,
-        ~s({"type":"SpeechStarted","request_id":"req","speech_id":"no-stt-briefing"})
-      )
-
-      TestTextToSpeechTransport.deliver_audio(briefing, :binary.copy(<<1, 0>>, 960))
-
-      TestTextToSpeechTransport.deliver_control(
-        briefing,
-        ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"no-stt-briefing"})
-      )
-
-      assert %{"data" => %{"attempt_id" => ^attempt}} =
-               await_sideband(support_client, "transfer.acceptance_ready", 2_000)
-
-      assert :ok = send_acceptance(support_client, "accept-without-transcription", attempt)
-
-      prior_media =
-        if preparation in [
-             :during_readiness,
-             :during_unrelated_change,
-             :after_adoption,
-             :after_unrelated_adoption,
-             :after_speech_adoption,
-             :release_policy_change,
-             :release_unrelated_change,
-             :release_deadline,
-             :release_speech_loss
-           ] do
-          assert_receive {:test_stt_transport_started, transport, _}, 2_000
-
-          assert %{"data" => %{"phase" => "preparing", "blockers" => blockers}} =
-                   await_sideband(support_client, "transfer.progress", 2_000)
-
-          assert "speech_to_text" in blockers
-
-          before = capture_private_media(plan, support_client, attempt)
-          {policy_authority, observer} = policy_change
-
-          if preparation in [
-               :after_adoption,
-               :after_unrelated_adoption,
-               :after_speech_adoption,
-               :release_policy_change,
-               :release_unrelated_change,
-               :release_deadline,
-               :release_speech_loss
-             ] do
-            {media, _monitors, _connections} = before
-
-            action =
-              if preparation in [
-                   :release_policy_change,
-                   :release_unrelated_change,
-                   :release_deadline,
-                   :release_speech_loss
-                 ],
-                 do: :release,
-                 else: :adopt
-
-            token = pause_native_gate(media.instance, action)
-
-            TestSpeechToTextTransport.deliver(
-              transport,
-              ~s({"type":"Connected","request_id":"ready-before-adoption","sequence_id":0})
-            )
-
-            assert_receive {:native_gate_waiting, ^token}, 2_000
-
-            try do
-              case preparation do
-                :release_deadline ->
-                  [{authority, _}] =
-                    Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
-
-                  pending = :sys.get_state(authority).pending_participant_transfer
-                  send(authority, {:vxpipe_participant_transfer_deadline, pending.task.ref})
-
-                  assert %{"reason" => "timeout"} =
-                           await_terminal_transfer_failure(caller_client, attempt)
-
-                :release_speech_loss ->
-                  TestSpeechToTextTransport.disconnect(transport, :test_release_failure)
-
-                  assert %{"reason" => "speech_to_text_unavailable"} =
-                           await_terminal_transfer_failure(caller_client, attempt)
-
-                _policy_change ->
-                  assert {:ok, _policy} =
-                           CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
-              end
-            after
-              send(media.instance, {:continue_native_gate, token})
-            end
-
-            if preparation == :after_speech_adoption do
-              assert_receive {:test_stt_transport_started, replacement, _}, 1_000
-              assert replacement != transport
-
-              # Reconciliation can retain the same blocker kinds, so a second
-              # progress notification is not a readiness acknowledgement.
-              # The replacement must keep native activation closed until ready.
-              assert :ok =
-                       refute_native_activation(
-                         support_client,
-                         System.monotonic_time(:millisecond) + 100
-                       )
-
-              TestSpeechToTextTransport.deliver(
-                replacement,
-                ~s({"type":"Connected","request_id":"changed-native-speech","sequence_id":0})
-              )
-            end
-          else
-            assert {:ok, _policy} =
-                     CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
-          end
-
-          if preparation == :during_unrelated_change do
-            TestSpeechToTextTransport.deliver(
-              transport,
-              ~s({"type":"Connected","request_id":"retained-after-policy-change","sequence_id":0})
-            )
-          end
-
-          before
-        else
-          prior_media
-        end
-
-      if preparation in [
-           :release_policy_change,
-           :release_unrelated_change,
-           :release_deadline,
-           :release_speech_loss
-         ] do
-        assert_receive {:DOWN, ^room_monitor, :process, _room, reason}, 2_000
-
-        if preparation == :release_speech_loss,
-          do: assert(reason in [:handoff_release_failed, :shutdown]),
-          else: assert(reason == :handoff_release_failed)
-
-        {_media, _monitors, connections} = prior_media
-
-        for {_id, connection} <- connections do
-          monitor = Process.monitor(connection.instance)
-          assert_receive {:DOWN, ^monitor, :process, _, _reason}, 2_000
-        end
-
-        refute_native_activation(support_client, System.monotonic_time(:millisecond) + 100)
-        refute_receive {:test_tts_transport_started, _recovery_or_redial, _}, 50
-      else
-        assert %{"data" => %{"attempt_id" => ^attempt}} =
-                 await_sideband(support_client, "transfer.active", 2_000)
-
-        [{authority, _}] =
-          Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
-
-        assert {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
-        joining = Map.fetch!(binding.connections, support_client.connection_id).pid
-        assert {:ok, media} = GenServer.call(joining, :vxpipe_connection_readiness)
-        assert media.attachment.admission == :main
-
-        if preparation not in [
-             :during_unrelated_change,
-             :after_adoption,
-             :after_unrelated_adoption,
-             :after_speech_adoption,
-             :release_policy_change,
-             :release_unrelated_change,
-             :release_deadline,
-             :release_speech_loss
-           ],
-           do: assert(media.attachment.media_ingress == nil)
-
-        assert {:ok, _resource, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(joining)
-        refute_receive {:test_stt_transport_started, _transport, _}, 100
-
-        if prior_media do
-          {before, monitors, connections} = prior_media
-          assert media.instance == before.instance
-          assert media.output == before.output
-          assert media.room_input == before.room_input
-          assert media.room_output == before.room_output
-
-          for {actor, monitor} <- monitors do
-            if preparation in [
-                 :during_unrelated_change,
-                 :after_adoption,
-                 :after_unrelated_adoption,
-                 :after_speech_adoption,
-                 :release_policy_change,
-                 :release_unrelated_change,
-                 :release_deadline,
-                 :release_speech_loss
-               ] do
-              assert media.attachment.media_ingress == before.attachment.media_ingress
-              refute_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 100
-            else
-              assert_receive {:DOWN, ^monitor, :process, ^actor, :shutdown}, 1_000
-            end
-          end
-
-          for {id, original} <- connections do
-            connection = Map.fetch!(binding.connections, id).pid
-            assert {:ok, current} = GenServer.call(connection, :vxpipe_connection_readiness)
-            assert current.instance == original.instance
-            assert current.output == original.output
-            assert current.room_input == original.room_input
-            assert current.room_output == original.room_output
-          end
-
-          send_tone(caller_client, 500, 1)
-          await_tone(support_client, 500, 2_000)
-          send_tone(support_client, 1_500, 1)
-          await_tone(caller_client, 1_500, 2_000)
-        end
-      end
+    test "human handoff handles #{preparation} preparation", %{preparation: preparation} do
+      verify_handoff_preparation(preparation)
     end
   end
 
@@ -2616,319 +1666,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         :agent_destination,
         :agent_model
       ] do
-    expected_briefing = if loss == :briefing_timeout, do: :playing, else: :completed
-
     @tag recovery_loss: loss
-    test "recovers the held caller after #{loss} loss without replacing source media" do
-      agent_destination? = unquote(loss) in [:agent_destination, :agent_model]
-
-      {wait_sounds, wait_options} =
-        wait_configuration(
-          if unquote(loss) in [:destination, :destination_output_clear],
-            do: :custom_url,
-            else: :defaults
-        )
-
-      plan =
-        compile_plan(
-          agent_destination: agent_destination?,
-          wait_sounds: wait_sounds,
-          transfer_timeout_ms:
-            if(unquote(loss) in [:briefing_timeout, :acceptance_timeout], do: 5_000, else: 30_000),
-          transfer_notice: "Private desk notice: verify the account before discussing details.",
-          billing_model:
-            if(unquote(loss) == :agent_model,
-              do: "test:blocked-unavailable",
-              else: "test:scripted"
-            )
-        )
-
-      caller = Map.fetch!(plan.participants, "caller")
-      support = Map.fetch!(plan.participants, "human-support")
-      assert {:ok, room} = CallEngine.start_call(plan, wait_options)
-      stop_room_on_exit(plan)
-      assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
-
-      TestTextToSpeechTransport.deliver_control(
-        source_tts,
-        ~s({"type":"Connected","request_id":"source-ready"})
-      )
-
-      caller_client =
-        plan
-        |> issue_session(room, caller.participant_id)
-        |> then(&connect(&1.session_id, "chat"))
-
-      [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
-      {:ok, initial} = CallEngine.RoomAuthority.readiness_binding(authority)
-      caller_connection = Map.fetch!(initial.connections, caller_client.connection_id).pid
-      caller_monitor = Process.monitor(caller_connection)
-      {:ok, before} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
-      assert :ok = send_rtvi_text(caller_client, "recover-with-speech", true)
-      assert_receive {:test_agent_runtime_stream, source_provider, _}, 2_000
-
-      assert {:ok, call} =
-               ToolCall.new(
-                 id: "recover-human-transfer",
-                 name: "transfer",
-                 arguments:
-                   if(agent_destination?,
-                     do: %{"destination" => "billing"},
-                     else: %{"destination" => "human-support", "reason" => "Connect support."}
-                   )
-               )
-
-      assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
-      send(source_provider, {:test_agent_runtime_response, {:ok, response}})
-
-      destination_preparer =
-        if unquote(loss) == :agent_model do
-          assert_receive {:test_agent_runtime_model_preparing, preparer}, 2_000
-          preparer
-        else
-          assert_receive {:test_tts_transport_started, preparer, _}, 2_000
-
-          TestTextToSpeechTransport.deliver_control(
-            preparer,
-            ~s({"type":"Connected","request_id":"destination-ready"})
-          )
-
-          preparer
-        end
-
-      assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
-      assert {:ok, acknowledgement} = ModelResponse.new(text: "I am connecting support.")
-      send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
-      assert caller_client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
-
-      observer = self()
-
-      release = fn ->
-        send(observer, :destination_admission_released)
-        :ok
-      end
-
-      support_client =
-        unless agent_destination? do
-          client =
-            plan
-            |> issue_session(room, support.participant_id, release)
-            |> then(&connect(&1.session_id, "vxpipe"))
-
-          assert %{"type" => "transfer.preparation"} =
-                   await_sideband(client, "transfer.preparation", 2_000)
-
-          if unquote(loss) in [:destination, :destination_output_clear, :acceptance_timeout] do
-            assert_receive {:test_tts_control, ^destination_preparer, speak}, 2_000
-            assert String.contains?(JSON.decode!(speak)["text"], "Private desk notice:")
-            assert_receive {:test_tts_control, ^destination_preparer, _flush}, 2_000
-            deliver_voice_tone(destination_preparer, "private-recovery-briefing", 750)
-            assert :ok = await_tone(client, 750, 2_000)
-
-            assert %{"type" => "transfer.acceptance_ready"} =
-                     await_sideband(client, "transfer.acceptance_ready", 2_000)
-
-            assert :ok =
-                     send_rtvi_text(
-                       caller_client,
-                       "held-private-turn",
-                       false,
-                       "Held input marker."
-                     )
-
-            assert %{"id" => "held-private-turn"} =
-                     await_sideband(caller_client, "error-response", 2_000)
-
-            refute_tone(caller_client, 750, 100)
-          end
-
-          client
-        end
-
-      {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
-      pending = :sys.get_state(authority).pending_participant_transfer
-      phase_monitor = Process.monitor(pending.task.pid)
-
-      recovery_gate =
-        if unquote(loss) == :destination_output_clear,
-          do: pause_native_gate(caller_connection, :recover)
-
-      case unquote(loss) do
-        :agent_model ->
-          send(destination_preparer, :release_test_agent_runtime_model)
-
-        :agent_destination ->
-          TestTextToSpeechTransport.disconnect(destination_preparer, :test_destination_failed)
-
-        loss when loss in [:destination, :destination_output_clear, :briefing_destination] ->
-          GenServer.stop(
-            Map.fetch!(binding.connections, support_client.connection_id).pid,
-            :normal
-          )
-
-        :briefing_voice ->
-          TestTextToSpeechTransport.disconnect(destination_preparer, :test_briefing_failed)
-
-        loss when loss in [:briefing_timeout, :acceptance_timeout] ->
-          # Let the configured total attempt timer expire at the actual lifecycle boundary.
-          assert pending.briefing == unquote(expected_briefing)
-
-        :phase ->
-          Process.exit(pending.task.pid, :kill)
-
-        :wait_player ->
-          {:ok, phase} =
-            CallEngine.RoomAuthority.ParticipantTransfer.Phase.scope(pending.task.pid)
-
-          [player] = Map.values(phase.audience.waits)
-          Process.exit(player, :kill)
-      end
-
-      if recovery_gate,
-        do: clear_during_recovery_readiness(caller_connection, before.output, recovery_gate)
-
-      release_timeout =
-        if unquote(loss) in [:briefing_timeout, :acceptance_timeout], do: 6_000, else: 2_000
-
-      unless agent_destination?,
-        do: assert_receive(:destination_admission_released, release_timeout)
-
-      assert_receive {:DOWN, ^phase_monitor, :process, _, _}, 2_000
-      await_recovered(authority, System.monotonic_time(:millisecond) + 2_000)
-
-      assert %{"phase" => "recovered", "reason" => reason} =
-               await_transfer_progress(caller_client, "recovered")
-
-      case unquote(loss) do
-        loss when loss in [:briefing_timeout, :acceptance_timeout] -> assert reason == "timeout"
-        :briefing_destination -> assert reason == "destination_disconnected"
-        :briefing_voice -> assert reason == "text_to_speech_unavailable"
-        _existing_loss -> :ok
-      end
-
-      unless agent_destination? do
-        refute_native_activation(support_client, System.monotonic_time(:millisecond) + 50)
-        refute_receive :destination_admission_released, 0
-      end
-
-      assert :ok = await_tone(caller_client, 1_000, 2_000)
-      refute_receive {:DOWN, ^caller_monitor, :process, ^caller_connection, _}, 50
-      {:ok, after_recovery} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
-      assert after_recovery.output == before.output
-      assert after_recovery.room_input == before.room_input
-      assert after_recovery.room_output == before.room_output
-      assert :sys.get_state(caller_connection).handoff_gate == nil
-      refute_receive {:test_tts_transport_started, _replacement, _}, 50
-
-      # Finish the scripted response to the failed tool before starting another caller turn.
-      assert_receive {:test_agent_runtime_stream, recovery_provider, recovery_request}, 2_000
-      assert_private_transfer_history(recovery_request)
-      assert {:ok, recovery_response} = ModelResponse.new(text: "I am still here.")
-      send(recovery_provider, {:test_agent_runtime_response, {:ok, recovery_response}})
-
-      assert %{"data" => %{"text" => "I am still here."}} =
-               await_sideband(caller_client, "bot-output", 2_000)
-
-      assert_receive {:test_tts_control, ^source_tts, speak}, 2_000
-      assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "I am still here."}
-      assert_receive {:test_tts_control, ^source_tts, _flush}, 2_000
-
-      TestTextToSpeechTransport.deliver_control(
-        source_tts,
-        ~s({"type":"SpeechStarted","speech_id":"recovered-speech"})
-      )
-
-      pcm =
-        for sample <- 0..4_799, into: <<>> do
-          amplitude = round(12_000 * :math.sin(2 * :math.pi() * 1_500 * sample / 48_000))
-          <<amplitude::little-signed-16>>
-        end
-
-      reference = TestTextToSpeechTransport.deliver_audio_with_result(source_tts, pcm)
-      assert_receive {:test_tts_audio_result, ^reference, :ok}, 2_000
-
-      TestTextToSpeechTransport.deliver_control(
-        source_tts,
-        ~s({"type":"SpeechMetadata","speech_id":"recovered-speech"})
-      )
-
-      assert :ok = await_tone(caller_client, 1_500, 2_000)
-
-      assert %{"type" => "bot-stopped-speaking"} =
-               await_sideband(caller_client, "bot-stopped-speaking", 2_000)
-
-      assert :ok = send_rtvi_text(caller_client, "after-recovery")
-
-      assert_receive {:test_agent_runtime_stream, retry_provider,
-                      %{correlation: %{correlation_id: "after-recovery"}} = retry_request},
-                     2_000
-
-      assert_private_transfer_history(retry_request)
-
-      if unquote(loss) in [:destination, :destination_output_clear] do
-        assert {:ok, retry_call} =
-                 ToolCall.new(
-                   id: "retry-human-transfer",
-                   name: "transfer",
-                   arguments: %{
-                     "destination" => "human-support",
-                     "reason" => "Try support again."
-                   }
-                 )
-
-        assert {:ok, retry_response} = ModelResponse.new(text: "", tool_calls: [retry_call])
-        send(retry_provider, {:test_agent_runtime_response, {:ok, retry_response}})
-        assert_receive {:test_tts_transport_started, retry_briefing, _}, 2_000
-
-        TestTextToSpeechTransport.deliver_control(
-          retry_briefing,
-          ~s({"type":"Connected","request_id":"retry-briefing-ready"})
-        )
-
-        retry_client =
-          plan
-          |> issue_session(room, support.participant_id, release)
-          |> then(&connect(&1.session_id, "vxpipe"))
-
-        assert %{"data" => %{"attempt_id" => attempt_id}} =
-                 await_sideband(retry_client, "transfer.preparation", 2_000)
-
-        assert_receive {:test_tts_control, ^retry_briefing, _speak}, 2_000
-        assert_receive {:test_tts_control, ^retry_briefing, _flush}, 2_000
-
-        TestTextToSpeechTransport.deliver_control(
-          retry_briefing,
-          ~s({"type":"SpeechStarted","speech_id":"retry-briefing"})
-        )
-
-        reference = TestTextToSpeechTransport.deliver_audio_with_result(retry_briefing, pcm)
-        assert_receive {:test_tts_audio_result, ^reference, :ok}, 2_000
-
-        TestTextToSpeechTransport.deliver_control(
-          retry_briefing,
-          ~s({"type":"SpeechMetadata","speech_id":"retry-briefing"})
-        )
-
-        assert :ok = await_tone(retry_client, 1_500, 2_000)
-
-        assert %{"data" => %{"attempt_id" => ^attempt_id}} =
-                 await_sideband(retry_client, "transfer.acceptance_ready", 2_000)
-
-        assert :ok = send_acceptance(retry_client, "accept-retry", attempt_id)
-        assert_receive {:test_stt_transport_started, retry_stt, _}, 2_000
-
-        TestSpeechToTextTransport.deliver(
-          retry_stt,
-          ~s({"type":"Connected","request_id":"retry-stt","sequence_id":0})
-        )
-
-        assert %{"data" => %{"attempt_id" => ^attempt_id}} =
-                 await_sideband(retry_client, "transfer.active", 5_000)
-
-        refute_receive {:DOWN, ^caller_monitor, :process, ^caller_connection, _}, 50
-        send_tone(retry_client, 1_500, 1)
-        assert :ok = await_tone(caller_client, 1_500, 2_000)
-      end
+    test "recovers the held caller after #{loss} loss without replacing source media", %{
+      recovery_loss: loss
+    } do
+      verify_handoff_recovery(loss)
     end
   end
 
@@ -3079,6 +1821,1269 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       await_recovered(room_authority, System.monotonic_time(:millisecond) + 2_000)
       assert Authority.snapshot(Authority.whereis(room.incarnation_id)) == policy
       assert {:ok, _resource, :ready} = Connection.readiness(caller_client.connection_id)
+    end
+  end
+
+  defp verify_human_handoff(%{wait_mode: mode, last_ready: last_ready, loss_at: loss_at}) do
+    alias Vxpipe.CallEngine.MediaPolicy.Authority
+
+    recording_change = if loss_at in [:recording_denied, :recording_unrelated], do: loss_at
+    loss_at = if recording_change, do: nil, else: loss_at
+    {wait_sounds, options} = wait_configuration(mode)
+    writer_readiness = :atomics.new(1, [])
+
+    plan =
+      compile_plan(
+        wait_sounds: wait_sounds,
+        observer_speech_to_text?: true,
+        observer_policy: %{},
+        restriction_policy:
+          if(recording_change == :recording_unrelated, do: %{}, else: %{record_audio: false})
+      )
+
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    observer = Map.fetch!(plan.participants, "observer")
+
+    assert {:ok, room} =
+             CallEngine.start_call(
+               plan,
+               Keyword.put(options, :recording,
+                 enabled: true,
+                 targets: [:full_mix, :individual_tracks],
+                 writer:
+                   {CallEngine.TestRecordingWriter, observer: self(), readiness: writer_readiness},
+                 maximum_pull_frames: 20
+               )
+             )
+
+    if mode == :custom_url,
+      do:
+        assert_receive(
+          {:test_opening_audio_fetch, "https://media.example.com/handoff.wav", _},
+          1_000
+        )
+
+    stop_room_on_exit(plan)
+    assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+    source_monitor = Process.monitor(source_tts)
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
+    caller_client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat"))
+
+    assert {:ok, join} =
+             CallEngine.Command.JoinParticipant.new(
+               tenant_id: plan.tenant_id,
+               actor_id: plan.actor_id,
+               room_id: plan.room_id,
+               participant_id: observer.participant_id,
+               role: :human,
+               deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+             )
+
+    assert {:ok, _participant} = CallEngine.join_participant(join)
+
+    observer_client =
+      plan
+      |> issue_session(room, observer.participant_id)
+      |> then(&connect(&1.session_id, "chat", false))
+
+    assert_receive {:test_stt_transport_started, remaining_stt, _}, 2_000
+
+    restriction_client =
+      if recording_change do
+        restriction = Map.fetch!(plan.participants, "recording-restriction")
+
+        assert {:ok, restriction_join} =
+                 CallEngine.Command.JoinParticipant.new(
+                   tenant_id: plan.tenant_id,
+                   actor_id: plan.actor_id,
+                   room_id: plan.room_id,
+                   participant_id: restriction.participant_id,
+                   role: :human,
+                   deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+                 )
+
+        assert {:ok, _} = CallEngine.join_participant(restriction_join)
+
+        client =
+          plan
+          |> issue_session(room, restriction.participant_id)
+          |> then(&connect(&1.session_id, "chat", false))
+
+        policy_authority = Authority.whereis(room.incarnation_id)
+        assert {:ok, _} = Authority.leave(policy_authority, restriction.participant_id)
+        client
+      end
+
+    :ok = :atomics.put(writer_readiness, 1, 2)
+
+    recovers? = last_ready == :destination and loss_at == :preparation
+    assert :ok = send_rtvi_text(caller_client, "ready-transfer", recovers?)
+    assert_receive {:test_agent_runtime_stream, source_provider, _}, 2_000
+
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "ready-human-transfer",
+               name: "transfer",
+               arguments: %{
+                 "destination" => "human-support",
+                 "reason" => "Please connect human support."
+               }
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_transport_started, briefing_tts, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"Connected","request_id":"briefing-ready"})
+    )
+
+    briefing_monitor = Process.monitor(briefing_tts)
+
+    if recovers? do
+      assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
+      assert {:ok, acknowledgement} = ModelResponse.new(text: "I am connecting support.")
+      send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
+    end
+
+    # Every existing listener waits from authorization, before the destination connects.
+    for audience_client <- [caller_client, observer_client] do
+      case mode do
+        mode when mode in [:silent_caller, :silent_all] ->
+          refute_audio(audience_client, 150)
+
+        mode when mode in [:custom_url, :live_url] ->
+          await_tone(audience_client, 250, 2_000)
+
+        :defaults ->
+          assert audience_client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+      end
+    end
+
+    assert :ok = send_rtvi_text(caller_client, "before-destination")
+
+    assert %{"type" => "error-response", "id" => "before-destination"} =
+             await_sideband(caller_client, "error-response", 2_000)
+
+    support_client =
+      plan
+      |> issue_session(room, support.participant_id)
+      |> then(&connect(&1.session_id, "vxpipe"))
+
+    %{"data" => %{"attempt_id" => attempt_id}} =
+      await_sideband(support_client, "transfer.preparation", 5_000)
+
+    [{room_authority, _}] =
+      Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+    {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+    connection = Map.fetch!(binding.connections, support_client.connection_id).pid
+    observer_binding = Map.fetch!(binding.connections, observer_client.connection_id)
+    {:ok, observer_media} = GenServer.call(observer_binding.pid, :vxpipe_connection_readiness)
+    policy = Authority.snapshot(binding.policy_authority)
+    assert_receive {:test_tts_control, ^briefing_tts, _speak}, 2_000
+    assert_receive {:test_tts_control, ^briefing_tts, _flush}, 2_000
+
+    assert :ok = send_acceptance(support_client, "accept-before-briefing", attempt_id)
+
+    assert %{"id" => "accept-before-briefing", "type" => "error"} =
+             await_sideband(support_client, "error", 2_000)
+
+    assert :sys.get_state(room_authority).pending_participant_transfer.accepted? == false
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"readiness-briefing"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(briefing_tts, :binary.copy(<<1, 0>>, 960))
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing_tts,
+      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"readiness-briefing"})
+    )
+
+    assert support_client |> await_audio(5_000) |> decodable_pcm_size() == 1_920
+
+    assert %{"data" => %{"attempt_id" => ^attempt_id}} =
+             await_sideband(support_client, "transfer.acceptance_ready", 2_000)
+
+    assert_receive {:DOWN, ^briefing_monitor, :process, ^briefing_tts, _reason}, 1_000
+
+    assert :ok = send_acceptance(support_client, "accept-ready-support", attempt_id)
+
+    assert_receive {:test_stt_transport_started, joining_stt, _}, 2_000
+    %{"data" => progress} = await_sideband(support_client, "transfer.progress", 2_000)
+    assert progress["attempt_id"] == attempt_id
+    assert progress["phase"] == "preparing"
+    assert "speech_to_text" in progress["blockers"]
+    assert is_integer(progress["elapsed_ms"]) and progress["elapsed_ms"] >= 0
+    assert Enum.sort(Map.keys(progress)) == ["attempt_id", "blockers", "elapsed_ms", "phase"]
+
+    case mode do
+      :silent_all ->
+        refute_audio(support_client, 150)
+
+      mode when mode in [:custom_url, :live_url] ->
+        await_tone(support_client, 250, 2_000)
+
+      _default_joining ->
+        assert support_client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+    end
+
+    # A private microphone must not feed either the provider or the eventual room.
+    send_tone(support_client, 1_500, 1)
+    refute_tone(caller_client, 1_500, 200)
+    refute_receive {:test_stt_audio, ^joining_stt, _audio}, 100
+    {:ok, private} = GenServer.call(connection, :vxpipe_connection_readiness)
+    assert private.attachment.admission == :transfer_preparation
+    assert Authority.snapshot(binding.policy_authority) == policy
+    refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 100
+    assert :ok = send_rtvi_text(caller_client, "held-turn")
+
+    assert %{"type" => "error-response", "id" => "held-turn"} =
+             await_sideband(caller_client, "error-response", 2_000)
+
+    refute_receive {:test_agent_runtime_stream, _model,
+                    %{correlation: %{correlation_id: "held-turn"}}},
+                   100
+
+    releases = %{
+      destination: fn ->
+        TestSpeechToTextTransport.deliver(
+          joining_stt,
+          ~s({"type":"Connected","request_id":"ready-human-stt","sequence_id":0})
+        )
+      end,
+      participant: fn ->
+        TestSpeechToTextTransport.deliver(
+          remaining_stt,
+          ~s({"type":"Connected","request_id":"ready-remaining-stt","sequence_id":0})
+        )
+      end,
+      recording: fn -> :atomics.put(writer_readiness, 1, 0) end
+    }
+
+    for {kind, ready} <- releases, kind != last_ready, do: ready.()
+    blocker = if last_ready == :recording, do: "recording", else: "speech_to_text"
+
+    assert %{"attempt_id" => ^attempt_id} =
+             await_transfer_progress(caller_client, "preparing", [blocker])
+
+    assert :ok = send_rtvi_text(caller_client, "held-for-last-resource")
+
+    assert %{"id" => "held-for-last-resource"} =
+             await_sideband(caller_client, "error-response", 2_000)
+
+    send_tone(observer_client, 1_750, 1)
+    refute_tone(caller_client, 1_750, 100)
+    refute_tone(support_client, 1_750, 100)
+    refute_receive {:test_stt_audio, ^remaining_stt, _held_input}, 100
+    refute_receive {:test_stt_audio, ^joining_stt, _held_input}, 100
+    refute_receive {:test_recording_chunk, _, _private_audio}, 100
+    refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 100
+    assert Authority.snapshot(binding.policy_authority) == policy
+
+    if loss_at do
+      authority_monitor = Process.monitor(room_authority)
+
+      connection_monitors =
+        Enum.map(binding.connections, fn {_id, bound} ->
+          {bound.pid, Process.monitor(bound.pid)}
+        end)
+
+      fail_resource = fn ->
+        case last_ready do
+          kind when kind in [:destination, :participant] ->
+            transport = if kind == :destination, do: joining_stt, else: remaining_stt
+
+            connection_id =
+              if kind == :destination,
+                do: support_client.connection_id,
+                else: observer_client.connection_id
+
+            if loss_at == :preparation do
+              monitor = Process.monitor(transport)
+              TestSpeechToTextTransport.disconnect(transport, :test_handoff_loss)
+              assert_receive {:DOWN, ^monitor, :process, ^transport, _reason}, 1_000
+            else
+              capability =
+                :sys.get_state(room_authority).connections
+                |> Map.fetch!(connection_id)
+                |> Map.fetch!(:speech_to_text)
+                |> Map.fetch!(:capability)
+
+              receipt = observe_stt_loss(room_authority, capability)
+              assert :ok = :sys.suspend(capability)
+              monitor = Process.monitor(transport)
+
+              try do
+                TestSpeechToTextTransport.disconnect(transport, :test_handoff_loss)
+                assert_receive {:DOWN, ^monitor, :process, ^transport, _reason}, 1_000
+                refute_receive {:room_stt_loss_received, ^receipt}, 0
+              after
+                :sys.resume(capability)
+              end
+
+              assert_receive {:room_stt_loss_received, ^receipt}, 1_000
+            end
+
+          :recording ->
+            :atomics.put(writer_readiness, 1, 1)
+        end
+      end
+
+      if loss_at == :preparation do
+        fail_resource.()
+      else
+        token = pause_native_gate(connection, loss_at)
+        Map.fetch!(releases, last_ready).()
+        assert_receive {:native_gate_waiting, ^token}, 2_000
+
+        try do
+          assert :sys.get_state(private.output).held? == (loss_at != :release)
+          fail_resource.()
+        after
+          send(connection, {:continue_native_gate, token})
+        end
+      end
+
+      if recovers? do
+        # The failed destination is being disconnected; the retained caller owns
+        # the reliable recovery-status assertion.
+        assert %{"reason" => failure_reason} =
+                 await_transfer_progress(caller_client, "recovering")
+
+        # The speech owner can report provider loss directly, or the readiness
+        # collector can observe the failed media binding first.
+        assert failure_reason in ["speech_to_text_unavailable", "media_unavailable"]
+
+        await_recovered(room_authority, System.monotonic_time(:millisecond) + 2_000)
+
+        assert %{"phase" => "recovered", "reason" => ^failure_reason} =
+                 await_transfer_progress(caller_client, "recovered")
+
+        refute_receive {:DOWN, ^authority_monitor, :process, ^room_authority, _reason}, 50
+        refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _reason}, 50
+        assert {:ok, recovered} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+        assert recovered.room == binding.room
+
+        assert recovered.connections ==
+                 Map.delete(binding.connections, support_client.connection_id)
+
+        for peer <- [caller_client, observer_client] do
+          actor = Map.fetch!(recovered.connections, peer.connection_id).pid
+          assert :sys.get_state(actor).handoff_gate == nil
+        end
+
+        assert_receive {:test_agent_runtime_stream, response_provider, _}, 2_000
+        assert {:ok, response} = ModelResponse.new(text: "We can continue.")
+        send(response_provider, {:test_agent_runtime_response, {:ok, response}})
+
+        assert %{"data" => %{"text" => "We can continue."}} =
+                 await_sideband(observer_client, "bot-output", 2_000)
+
+        assert :sys.get_state(observer_binding.pid).rtvi_turn_state.active_spoken_output == nil
+        assert_receive {:test_tts_control, ^source_tts, speak}, 2_000
+        assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "We can continue."}
+        assert_receive {:test_tts_control, ^source_tts, _flush}, 2_000
+        deliver_voice_tone(source_tts, "whole-room-recovery", 1_500)
+        assert_handoff_audio_order(caller_client, 1_500, nil)
+        # Synthesized replies use the requesting caller's output. Verify the
+        # remaining listener's cue against the room audio it actually receives.
+        send_tone(caller_client, 500, 1)
+        assert_handoff_audio_order(observer_client, 500, nil)
+        refute_receive {:test_stt_audio, ^remaining_stt, _held_input}, 100
+        send_tone(observer_client, 1_750, 11)
+        await_tone(caller_client, 1_750, 2_000)
+        assert_receive {:test_stt_audio, ^remaining_stt, _conversation}, 2_000
+
+        for participant_id <- [caller.participant_id, observer.participant_id] do
+          assert_receive {:test_recording_writer_opened, _writer, _recorder,
+                          %{participant_id: ^participant_id, stream_id: stream_id}},
+                         2_000
+
+          assert_receive {:test_recording_chunk, ^stream_id, chunk}, 2_000
+          assert byte_size(chunk.payload) > 0
+        end
+
+        refute_receive {:test_stt_transport_started, _replacement, _}, 50
+        refute_receive {:test_tts_transport_started, _replacement, _}, 50
+        refute_native_activation(support_client, System.monotonic_time(:millisecond) + 100)
+      else
+        assert_receive {:DOWN, ^authority_monitor, :process, ^room_authority, reason}, 2_000
+        assert reason in [:shutdown, :handoff_recovery_failed, :handoff_release_failed]
+
+        for {actor, monitor} <- connection_monitors do
+          assert_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 2_000
+        end
+
+        for peer <- [caller_client, observer_client, support_client] do
+          refute_native_activation(peer, System.monotonic_time(:millisecond) + 100)
+        end
+
+        refute_receive {:test_stt_transport_started, _replacement, _}, 50
+        refute_receive {:test_tts_transport_started, _redial, _}, 50
+        assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _reason}, 2_000
+      end
+    else
+      adoption_pause =
+        if mode == :silent_all and last_ready == :destination,
+          do: pause_native_gate(connection, :adopt)
+
+      retained_recording_stream =
+        if recording_change do
+          support_id = support.participant_id
+
+          assert_receive {:test_recording_writer_opened, private_writer, private_writer,
+                          %{participant_id: ^support_id, stream_id: stream_id}},
+                         2_000
+
+          writer_monitor = Process.monitor(private_writer)
+          pending = :sys.get_state(room_authority).pending_participant_transfer
+          token = pause_native_gate(connection, :adopt)
+          restriction = Map.fetch!(plan.participants, "recording-restriction")
+
+          try do
+            assert {:ok, _} =
+                     Authority.admit(binding.policy_authority, restriction.participant_id)
+
+            if recording_change == :recording_denied do
+              assert_receive {:DOWN, ^writer_monitor, :process, ^private_writer, _}, 2_000
+            else
+              Map.fetch!(releases, last_ready).()
+            end
+
+            assert_receive {:native_gate_waiting, ^token}, 2_000
+            refreshed = :sys.get_state(room_authority).pending_participant_transfer
+            assert refreshed.task.pid == pending.task.pid
+            assert refreshed.deadline_ms == pending.deadline_ms
+            assert {:ok, current} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+            assert current.room == binding.room
+            source_id = Map.fetch!(plan.participants, "reception").participant_id
+
+            assert Map.fetch!(current.participants, source_id) ==
+                     Map.fetch!(binding.participants, source_id)
+
+            if recording_change == :recording_unrelated do
+              refute_receive {:DOWN, ^writer_monitor, :process, ^private_writer, _}, 0
+
+              refute_receive {:test_recording_writer_opened, _replacement, _source,
+                              %{participant_id: ^support_id}},
+                             0
+            end
+          after
+            send(connection, {:continue_native_gate, token})
+          end
+
+          stream_id
+        else
+          Map.fetch!(releases, last_ready).()
+          nil
+        end
+
+      adopted_listener =
+        if adoption_pause do
+          assert_receive {:native_gate_waiting, ^adoption_pause}, 2_000
+
+          phase = :sys.get_state(room_authority).pending_participant_transfer.task.pid
+
+          assert {:ok, %{worker: %Task{pid: worker}}} =
+                   CallEngine.RoomAuthority.ParticipantTransfer.Phase.scope(phase)
+
+          # Let adoption acknowledge within its existing deadline, but hold the
+          # worker before it can certify the inventory. Negotiate the new output
+          # fully so this case isolates membership from transport startup.
+          assert :erlang.suspend_process(worker)
+          send(connection, {:continue_native_gate, adoption_pause})
+
+          try do
+            plan
+            |> issue_session(room, caller.participant_id)
+            |> then(&connect(&1.session_id, "chat", false))
+          after
+            :erlang.resume_process(worker)
+          end
+        end
+
+      for phase <- ["cue", "releasing"] do
+        assert %{"data" => %{"attempt_id" => ^attempt_id, "blockers" => []}} =
+                 await_sideband(support_client, "transfer.progress", 5_000, phase)
+      end
+
+      assert %{"data" => %{"attempt_id" => ^attempt_id}} =
+               await_sideband(support_client, "transfer.active", 5_000)
+
+      {:ok, admitted} = GenServer.call(connection, :vxpipe_connection_readiness)
+      assert admitted.attachment.admission == :main
+      assert admitted.output == private.output
+      assert admitted.room_input == private.room_input
+      assert admitted.room_output == private.room_output
+      assert admitted.attachment.media_ingress == private.attachment.media_ingress
+      refute_receive {:test_stt_transport_started, _replacement, _}, 100
+      assert_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 2_000
+      assert {:ok, final} = CallEngine.RoomAuthority.readiness_binding(room_authority)
+      assert final.attempt == nil
+      assert final.room == binding.room
+      assert Map.fetch!(final.connections, observer_client.connection_id) == observer_binding
+
+      assert {:ok, retained_observer} =
+               GenServer.call(observer_binding.pid, :vxpipe_connection_readiness)
+
+      assert retained_observer.output == observer_media.output
+      assert retained_observer.room_input == observer_media.room_input
+      assert retained_observer.room_output == observer_media.room_output
+      assert {:ok, _binding, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(connection)
+
+      refute_receive {:test_stt_audio, ^joining_stt, _held_or_private_audio}, 100
+      refute_receive {:test_recording_chunk, _stream, _private_audio}, 100
+      refute_receive {:test_opening_audio_fetch, _url, _limits}
+
+      # Inspect the queued cue and subsequent conversation together: no wait may follow
+      # the cue, and no cue may follow the first conversation frame on either peer.
+      wait_frequency = if mode in [:custom_url, :live_url], do: 250
+      send_tone(caller_client, 500, 1)
+      assert_handoff_audio_order(support_client, 500, wait_frequency)
+      assert_handoff_audio_order(observer_client, 500, wait_frequency)
+
+      if restriction_client,
+        do: assert_handoff_audio_order(restriction_client, 500, wait_frequency)
+
+      send_tone(support_client, 1_500, 11)
+      assert_handoff_audio_order(caller_client, 1_500, wait_frequency)
+
+      if adopted_listener,
+        do: assert_handoff_audio_order(adopted_listener, 1_500, wait_frequency)
+
+      assert_receive {:test_stt_audio, ^joining_stt, _conversation_audio}, 2_000
+      refute_receive {:test_stt_audio, ^remaining_stt, _held_audio}, 100
+      send_tone(observer_client, 1_750, 11)
+      await_tone(caller_client, 1_750, 2_000)
+      await_tone(support_client, 1_750, 2_000)
+      assert_receive {:test_stt_audio, ^remaining_stt, _conversation_audio}, 2_000
+      caller_id = caller.participant_id
+      support_id = support.participant_id
+
+      if recording_change == :recording_denied do
+        assert :atomics.get(writer_readiness, 1) == 2
+
+        assert {:ok, resources} =
+                 CallEngine.RoomRecording.readiness_resources(binding.room.recording)
+
+        refute Enum.any?(resources, &(&1.kind == :recording_writer))
+        refute_receive {:test_recording_chunk, _stream, _chunk}, 100
+      else
+        for participant_id <- [caller_id, support_id, observer.participant_id] do
+          stream_id =
+            if recording_change == :recording_unrelated and participant_id == support_id do
+              retained_recording_stream
+            else
+              assert_receive {:test_recording_writer_opened, _writer, _recorder,
+                              %{participant_id: ^participant_id, stream_id: opened_stream}},
+                             2_000
+
+              opened_stream
+            end
+
+          assert_receive {:test_recording_chunk, ^stream_id, chunk}, 2_000
+          assert byte_size(chunk.payload) > 0
+        end
+      end
+
+      for {event, sequence} <- [{"StartOfTurn", 1}, {"EndOfTurn", 2}] do
+        TestSpeechToTextTransport.deliver(
+          joining_stt,
+          JSON.encode!(%{
+            "type" => "TurnInfo",
+            "request_id" => "ready-human-stt",
+            "sequence_id" => sequence,
+            "event" => event,
+            "turn_index" => 0,
+            "audio_window_start" => 0.0,
+            "audio_window_end" => 1.0,
+            "transcript" => "The support agent is connected.",
+            "words" => [],
+            "end_of_turn_confidence" => 0.8,
+            "trigger" => "model"
+          })
+        )
+      end
+
+      support_id = support.participant_id
+
+      assert %{"data" => %{"user_id" => ^support_id, "final" => false}} =
+               await_sideband(caller_client, "user-transcription", 5_000)
+
+      assert %{
+               "data" => %{
+                 "text" => "The support agent is connected.",
+                 "user_id" => ^support_id,
+                 "final" => true
+               }
+             } =
+               await_sideband(caller_client, "user-transcription", 5_000)
+    end
+  end
+
+  defp verify_handoff_preparation(preparation) do
+    restriction = %{transcript_routes: %{}, save_transcripts: false}
+
+    plan =
+      compile_plan(
+        support_policy: if(preparation == :none, do: restriction, else: %{}),
+        observer_policy:
+          case preparation do
+            mode
+            when mode in [
+                   :during_unrelated_change,
+                   :after_unrelated_adoption,
+                   :release_unrelated_change,
+                   :release_deadline,
+                   :release_speech_loss
+                 ] ->
+              %{}
+
+            :after_speech_adoption ->
+              %{save_transcripts: false}
+
+            _restricted ->
+              restriction
+          end
+      )
+
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    assert {:ok, room} = CallEngine.start_call(plan)
+
+    assert {:ok, room_monitor} =
+             CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
+
+    stop_room_on_exit(plan)
+    assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
+    caller_client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat"))
+
+    policy_change =
+      if preparation != :none do
+        observer = Map.fetch!(plan.participants, "observer")
+
+        assert {:ok, join} =
+                 CallEngine.Command.JoinParticipant.new(
+                   tenant_id: plan.tenant_id,
+                   actor_id: plan.actor_id,
+                   room_id: plan.room_id,
+                   participant_id: observer.participant_id,
+                   role: :human,
+                   deadline: DateTime.add(DateTime.utc_now(), 5, :second)
+                 )
+
+        assert {:ok, _participant} = CallEngine.join_participant(join)
+
+        _observer_client =
+          plan
+          |> issue_session(room, observer.participant_id)
+          |> then(&connect(&1.session_id, "chat"))
+
+        policy_authority = CallEngine.MediaPolicy.Authority.whereis(room.incarnation_id)
+
+        assert {:ok, _policy} =
+                 CallEngine.MediaPolicy.Authority.leave(
+                   policy_authority,
+                   observer.participant_id
+                 )
+
+        {policy_authority, observer.participant_id}
+      end
+
+    assert :ok = send_rtvi_text(caller_client)
+    assert_receive {:test_agent_runtime_stream, provider, _}, 2_000
+
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "no-transcription-transfer",
+               name: "transfer",
+               arguments: %{"destination" => "human-support", "reason" => "Connect support."}
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_transport_started, briefing, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing,
+      ~s({"type":"Connected","request_id":"briefing-ready"})
+    )
+
+    support_client =
+      plan
+      |> issue_session(room, support.participant_id)
+      |> then(&connect(&1.session_id, "vxpipe"))
+
+    %{"data" => %{"attempt_id" => attempt}} =
+      await_sideband(support_client, "transfer.preparation", 2_000)
+
+    prior_media =
+      if preparation == :before_policy_change do
+        before = capture_private_media(plan, support_client, attempt)
+        {policy_authority, observer} = policy_change
+
+        assert {:ok, _policy} =
+                 CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
+
+        before
+      end
+
+    assert_receive {:test_tts_control, ^briefing, _speak}, 2_000
+    assert_receive {:test_tts_control, ^briefing, _flush}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing,
+      ~s({"type":"SpeechStarted","request_id":"req","speech_id":"no-stt-briefing"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(briefing, :binary.copy(<<1, 0>>, 960))
+
+    TestTextToSpeechTransport.deliver_control(
+      briefing,
+      ~s({"type":"SpeechMetadata","request_id":"req","speech_id":"no-stt-briefing"})
+    )
+
+    assert %{"data" => %{"attempt_id" => ^attempt}} =
+             await_sideband(support_client, "transfer.acceptance_ready", 2_000)
+
+    assert :ok = send_acceptance(support_client, "accept-without-transcription", attempt)
+
+    prior_media =
+      if preparation in [
+           :during_readiness,
+           :during_unrelated_change,
+           :after_adoption,
+           :after_unrelated_adoption,
+           :after_speech_adoption,
+           :release_policy_change,
+           :release_unrelated_change,
+           :release_deadline,
+           :release_speech_loss
+         ] do
+        assert_receive {:test_stt_transport_started, transport, _}, 2_000
+
+        assert %{"data" => %{"phase" => "preparing", "blockers" => blockers}} =
+                 await_sideband(support_client, "transfer.progress", 2_000)
+
+        assert "speech_to_text" in blockers
+
+        before = capture_private_media(plan, support_client, attempt)
+        {policy_authority, observer} = policy_change
+
+        if preparation in [
+             :after_adoption,
+             :after_unrelated_adoption,
+             :after_speech_adoption,
+             :release_policy_change,
+             :release_unrelated_change,
+             :release_deadline,
+             :release_speech_loss
+           ] do
+          {media, _monitors, _connections} = before
+
+          action =
+            if preparation in [
+                 :release_policy_change,
+                 :release_unrelated_change,
+                 :release_deadline,
+                 :release_speech_loss
+               ],
+               do: :release,
+               else: :adopt
+
+          token = pause_native_gate(media.instance, action)
+
+          TestSpeechToTextTransport.deliver(
+            transport,
+            ~s({"type":"Connected","request_id":"ready-before-adoption","sequence_id":0})
+          )
+
+          assert_receive {:native_gate_waiting, ^token}, 2_000
+
+          try do
+            case preparation do
+              :release_deadline ->
+                [{authority, _}] =
+                  Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+                pending = :sys.get_state(authority).pending_participant_transfer
+                send(authority, {:vxpipe_participant_transfer_deadline, pending.task.ref})
+
+                assert %{"reason" => "timeout"} =
+                         await_terminal_transfer_failure(caller_client, attempt)
+
+              :release_speech_loss ->
+                TestSpeechToTextTransport.disconnect(transport, :test_release_failure)
+
+                assert %{"reason" => "speech_to_text_unavailable"} =
+                         await_terminal_transfer_failure(caller_client, attempt)
+
+              _policy_change ->
+                assert {:ok, _policy} =
+                         CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
+            end
+          after
+            send(media.instance, {:continue_native_gate, token})
+          end
+
+          if preparation == :after_speech_adoption do
+            assert_receive {:test_stt_transport_started, replacement, _}, 1_000
+            assert replacement != transport
+
+            # Reconciliation can retain the same blocker kinds, so a second
+            # progress notification is not a readiness acknowledgement.
+            # The replacement must keep native activation closed until ready.
+            assert :ok =
+                     refute_native_activation(
+                       support_client,
+                       System.monotonic_time(:millisecond) + 100
+                     )
+
+            TestSpeechToTextTransport.deliver(
+              replacement,
+              ~s({"type":"Connected","request_id":"changed-native-speech","sequence_id":0})
+            )
+          end
+        else
+          assert {:ok, _policy} =
+                   CallEngine.MediaPolicy.Authority.admit(policy_authority, observer)
+        end
+
+        if preparation == :during_unrelated_change do
+          TestSpeechToTextTransport.deliver(
+            transport,
+            ~s({"type":"Connected","request_id":"retained-after-policy-change","sequence_id":0})
+          )
+        end
+
+        before
+      else
+        prior_media
+      end
+
+    if preparation in [
+         :release_policy_change,
+         :release_unrelated_change,
+         :release_deadline,
+         :release_speech_loss
+       ] do
+      assert_receive {:DOWN, ^room_monitor, :process, _room, reason}, 2_000
+
+      if preparation == :release_speech_loss,
+        do: assert(reason in [:handoff_release_failed, :shutdown]),
+        else: assert(reason == :handoff_release_failed)
+
+      {_media, _monitors, connections} = prior_media
+
+      for {_id, connection} <- connections do
+        monitor = Process.monitor(connection.instance)
+        assert_receive {:DOWN, ^monitor, :process, _, _reason}, 2_000
+      end
+
+      refute_native_activation(support_client, System.monotonic_time(:millisecond) + 100)
+      refute_receive {:test_tts_transport_started, _recovery_or_redial, _}, 50
+    else
+      assert %{"data" => %{"attempt_id" => ^attempt}} =
+               await_sideband(support_client, "transfer.active", 2_000)
+
+      [{authority, _}] =
+        Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+      assert {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
+      joining = Map.fetch!(binding.connections, support_client.connection_id).pid
+      assert {:ok, media} = GenServer.call(joining, :vxpipe_connection_readiness)
+      assert media.attachment.admission == :main
+
+      if preparation not in [
+           :during_unrelated_change,
+           :after_adoption,
+           :after_unrelated_adoption,
+           :after_speech_adoption,
+           :release_policy_change,
+           :release_unrelated_change,
+           :release_deadline,
+           :release_speech_loss
+         ],
+         do: assert(media.attachment.media_ingress == nil)
+
+      assert {:ok, _resource, :ready} = Vxpipe.Gateway.WebRTC.Connection.readiness(joining)
+      refute_receive {:test_stt_transport_started, _transport, _}, 100
+
+      if prior_media do
+        {before, monitors, connections} = prior_media
+        assert media.instance == before.instance
+        assert media.output == before.output
+        assert media.room_input == before.room_input
+        assert media.room_output == before.room_output
+
+        for {actor, monitor} <- monitors do
+          if preparation in [
+               :during_unrelated_change,
+               :after_adoption,
+               :after_unrelated_adoption,
+               :after_speech_adoption,
+               :release_policy_change,
+               :release_unrelated_change,
+               :release_deadline,
+               :release_speech_loss
+             ] do
+            assert media.attachment.media_ingress == before.attachment.media_ingress
+            refute_receive {:DOWN, ^monitor, :process, ^actor, _reason}, 100
+          else
+            assert_receive {:DOWN, ^monitor, :process, ^actor, :shutdown}, 1_000
+          end
+        end
+
+        for {id, original} <- connections do
+          connection = Map.fetch!(binding.connections, id).pid
+          assert {:ok, current} = GenServer.call(connection, :vxpipe_connection_readiness)
+          assert current.instance == original.instance
+          assert current.output == original.output
+          assert current.room_input == original.room_input
+          assert current.room_output == original.room_output
+        end
+
+        send_tone(caller_client, 500, 1)
+        await_tone(support_client, 500, 2_000)
+        send_tone(support_client, 1_500, 1)
+        await_tone(caller_client, 1_500, 2_000)
+      end
+    end
+  end
+
+  defp verify_handoff_recovery(loss) do
+    expected_briefing = if loss == :briefing_timeout, do: :playing, else: :completed
+    agent_destination? = loss in [:agent_destination, :agent_model]
+
+    {wait_sounds, wait_options} =
+      wait_configuration(
+        if loss in [:destination, :destination_output_clear],
+          do: :custom_url,
+          else: :defaults
+      )
+
+    plan =
+      compile_plan(
+        agent_destination: agent_destination?,
+        wait_sounds: wait_sounds,
+        transfer_timeout_ms:
+          if(loss in [:briefing_timeout, :acceptance_timeout], do: 5_000, else: 30_000),
+        transfer_notice: "Private desk notice: verify the account before discussing details.",
+        billing_model:
+          if(loss == :agent_model,
+            do: "test:blocked-unavailable",
+            else: "test:scripted"
+          )
+      )
+
+    caller = Map.fetch!(plan.participants, "caller")
+    support = Map.fetch!(plan.participants, "human-support")
+    assert {:ok, room} = CallEngine.start_call(plan, wait_options)
+    stop_room_on_exit(plan)
+    assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"Connected","request_id":"source-ready"})
+    )
+
+    caller_client =
+      plan
+      |> issue_session(room, caller.participant_id)
+      |> then(&connect(&1.session_id, "chat"))
+
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    {:ok, initial} = CallEngine.RoomAuthority.readiness_binding(authority)
+    caller_connection = Map.fetch!(initial.connections, caller_client.connection_id).pid
+    caller_monitor = Process.monitor(caller_connection)
+    {:ok, before} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
+    assert :ok = send_rtvi_text(caller_client, "recover-with-speech", true)
+    assert_receive {:test_agent_runtime_stream, source_provider, _}, 2_000
+
+    assert {:ok, call} =
+             ToolCall.new(
+               id: "recover-human-transfer",
+               name: "transfer",
+               arguments:
+                 if(agent_destination?,
+                   do: %{"destination" => "billing"},
+                   else: %{"destination" => "human-support", "reason" => "Connect support."}
+                 )
+             )
+
+    assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(source_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    destination_preparer =
+      if loss == :agent_model do
+        assert_receive {:test_agent_runtime_model_preparing, preparer}, 2_000
+        preparer
+      else
+        assert_receive {:test_tts_transport_started, preparer, _}, 2_000
+
+        TestTextToSpeechTransport.deliver_control(
+          preparer,
+          ~s({"type":"Connected","request_id":"destination-ready"})
+        )
+
+        preparer
+      end
+
+    assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
+    assert {:ok, acknowledgement} = ModelResponse.new(text: "I am connecting support.")
+    send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
+    assert caller_client |> await_audio(2_000) |> decodable_pcm_size() == 1_920
+
+    observer = self()
+
+    release = fn ->
+      send(observer, :destination_admission_released)
+      :ok
+    end
+
+    support_client =
+      unless agent_destination? do
+        client =
+          plan
+          |> issue_session(room, support.participant_id, release)
+          |> then(&connect(&1.session_id, "vxpipe"))
+
+        assert %{"type" => "transfer.preparation"} =
+                 await_sideband(client, "transfer.preparation", 2_000)
+
+        if loss in [:destination, :destination_output_clear, :acceptance_timeout] do
+          assert_receive {:test_tts_control, ^destination_preparer, speak}, 2_000
+          assert String.contains?(JSON.decode!(speak)["text"], "Private desk notice:")
+          assert_receive {:test_tts_control, ^destination_preparer, _flush}, 2_000
+          deliver_voice_tone(destination_preparer, "private-recovery-briefing", 750)
+          assert :ok = await_tone(client, 750, 2_000)
+
+          assert %{"type" => "transfer.acceptance_ready"} =
+                   await_sideband(client, "transfer.acceptance_ready", 2_000)
+
+          assert :ok =
+                   send_rtvi_text(
+                     caller_client,
+                     "held-private-turn",
+                     false,
+                     "Held input marker."
+                   )
+
+          assert %{"id" => "held-private-turn"} =
+                   await_sideband(caller_client, "error-response", 2_000)
+
+          refute_tone(caller_client, 750, 100)
+        end
+
+        client
+      end
+
+    {:ok, binding} = CallEngine.RoomAuthority.readiness_binding(authority)
+    pending = :sys.get_state(authority).pending_participant_transfer
+    phase_monitor = Process.monitor(pending.task.pid)
+
+    recovery_gate =
+      if loss == :destination_output_clear,
+        do: pause_native_gate(caller_connection, :recover)
+
+    case loss do
+      :agent_model ->
+        send(destination_preparer, :release_test_agent_runtime_model)
+
+      :agent_destination ->
+        TestTextToSpeechTransport.disconnect(destination_preparer, :test_destination_failed)
+
+      loss when loss in [:destination, :destination_output_clear, :briefing_destination] ->
+        GenServer.stop(
+          Map.fetch!(binding.connections, support_client.connection_id).pid,
+          :normal
+        )
+
+      :briefing_voice ->
+        TestTextToSpeechTransport.disconnect(destination_preparer, :test_briefing_failed)
+
+      loss when loss in [:briefing_timeout, :acceptance_timeout] ->
+        # Let the configured total attempt timer expire at the actual lifecycle boundary.
+        assert pending.briefing == expected_briefing
+
+      :phase ->
+        Process.exit(pending.task.pid, :kill)
+
+      :wait_player ->
+        {:ok, phase} =
+          CallEngine.RoomAuthority.ParticipantTransfer.Phase.scope(pending.task.pid)
+
+        [player] = Map.values(phase.audience.waits)
+        Process.exit(player, :kill)
+    end
+
+    if recovery_gate,
+      do: clear_during_recovery_readiness(caller_connection, before.output, recovery_gate)
+
+    release_timeout =
+      if loss in [:briefing_timeout, :acceptance_timeout], do: 6_000, else: 2_000
+
+    unless agent_destination?,
+      do: assert_receive(:destination_admission_released, release_timeout)
+
+    assert_receive {:DOWN, ^phase_monitor, :process, _, _}, 2_000
+    await_recovered(authority, System.monotonic_time(:millisecond) + 2_000)
+
+    assert %{"phase" => "recovered", "reason" => reason} =
+             await_transfer_progress(caller_client, "recovered")
+
+    case loss do
+      loss when loss in [:briefing_timeout, :acceptance_timeout] -> assert reason == "timeout"
+      :briefing_destination -> assert reason == "destination_disconnected"
+      :briefing_voice -> assert reason == "text_to_speech_unavailable"
+      _existing_loss -> :ok
+    end
+
+    unless agent_destination? do
+      refute_native_activation(support_client, System.monotonic_time(:millisecond) + 50)
+      refute_receive :destination_admission_released, 0
+    end
+
+    assert :ok = await_tone(caller_client, 1_000, 2_000)
+    refute_receive {:DOWN, ^caller_monitor, :process, ^caller_connection, _}, 50
+    {:ok, after_recovery} = GenServer.call(caller_connection, :vxpipe_connection_readiness)
+    assert after_recovery.output == before.output
+    assert after_recovery.room_input == before.room_input
+    assert after_recovery.room_output == before.room_output
+    assert :sys.get_state(caller_connection).handoff_gate == nil
+    refute_receive {:test_tts_transport_started, _replacement, _}, 50
+
+    # Finish the scripted response to the failed tool before starting another caller turn.
+    assert_receive {:test_agent_runtime_stream, recovery_provider, recovery_request}, 2_000
+    assert_private_transfer_history(recovery_request)
+    assert {:ok, recovery_response} = ModelResponse.new(text: "I am still here.")
+    send(recovery_provider, {:test_agent_runtime_response, {:ok, recovery_response}})
+
+    assert %{"data" => %{"text" => "I am still here."}} =
+             await_sideband(caller_client, "bot-output", 2_000)
+
+    assert_receive {:test_tts_control, ^source_tts, speak}, 2_000
+    assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "I am still here."}
+    assert_receive {:test_tts_control, ^source_tts, _flush}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"SpeechStarted","speech_id":"recovered-speech"})
+    )
+
+    pcm =
+      for sample <- 0..4_799, into: <<>> do
+        amplitude = round(12_000 * :math.sin(2 * :math.pi() * 1_500 * sample / 48_000))
+        <<amplitude::little-signed-16>>
+      end
+
+    reference = TestTextToSpeechTransport.deliver_audio_with_result(source_tts, pcm)
+    assert_receive {:test_tts_audio_result, ^reference, :ok}, 2_000
+
+    TestTextToSpeechTransport.deliver_control(
+      source_tts,
+      ~s({"type":"SpeechMetadata","speech_id":"recovered-speech"})
+    )
+
+    assert :ok = await_tone(caller_client, 1_500, 2_000)
+
+    assert %{"type" => "bot-stopped-speaking"} =
+             await_sideband(caller_client, "bot-stopped-speaking", 2_000)
+
+    assert :ok = send_rtvi_text(caller_client, "after-recovery")
+
+    assert_receive {:test_agent_runtime_stream, retry_provider,
+                    %{correlation: %{correlation_id: "after-recovery"}} = retry_request},
+                   2_000
+
+    assert_private_transfer_history(retry_request)
+
+    if loss in [:destination, :destination_output_clear] do
+      assert {:ok, retry_call} =
+               ToolCall.new(
+                 id: "retry-human-transfer",
+                 name: "transfer",
+                 arguments: %{
+                   "destination" => "human-support",
+                   "reason" => "Try support again."
+                 }
+               )
+
+      assert {:ok, retry_response} = ModelResponse.new(text: "", tool_calls: [retry_call])
+      send(retry_provider, {:test_agent_runtime_response, {:ok, retry_response}})
+      assert_receive {:test_tts_transport_started, retry_briefing, _}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        retry_briefing,
+        ~s({"type":"Connected","request_id":"retry-briefing-ready"})
+      )
+
+      retry_client =
+        plan
+        |> issue_session(room, support.participant_id, release)
+        |> then(&connect(&1.session_id, "vxpipe"))
+
+      assert %{"data" => %{"attempt_id" => attempt_id}} =
+               await_sideband(retry_client, "transfer.preparation", 2_000)
+
+      assert_receive {:test_tts_control, ^retry_briefing, _speak}, 2_000
+      assert_receive {:test_tts_control, ^retry_briefing, _flush}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        retry_briefing,
+        ~s({"type":"SpeechStarted","speech_id":"retry-briefing"})
+      )
+
+      reference = TestTextToSpeechTransport.deliver_audio_with_result(retry_briefing, pcm)
+      assert_receive {:test_tts_audio_result, ^reference, :ok}, 2_000
+
+      TestTextToSpeechTransport.deliver_control(
+        retry_briefing,
+        ~s({"type":"SpeechMetadata","speech_id":"retry-briefing"})
+      )
+
+      assert :ok = await_tone(retry_client, 1_500, 2_000)
+
+      assert %{"data" => %{"attempt_id" => ^attempt_id}} =
+               await_sideband(retry_client, "transfer.acceptance_ready", 2_000)
+
+      assert :ok = send_acceptance(retry_client, "accept-retry", attempt_id)
+      assert_receive {:test_stt_transport_started, retry_stt, _}, 2_000
+
+      TestSpeechToTextTransport.deliver(
+        retry_stt,
+        ~s({"type":"Connected","request_id":"retry-stt","sequence_id":0})
+      )
+
+      assert %{"data" => %{"attempt_id" => ^attempt_id}} =
+               await_sideband(retry_client, "transfer.active", 5_000)
+
+      refute_receive {:DOWN, ^caller_monitor, :process, ^caller_connection, _}, 50
+      send_tone(retry_client, 1_500, 1)
+      assert :ok = await_tone(caller_client, 1_500, 2_000)
     end
   end
 

@@ -35,6 +35,18 @@ to synchronize process tests. Avoid sleeps and liveness polling. Verify exact
 ownership, stale completion rejection and resource drainage at the boundary;
 do not inspect another application's private state as its public contract.
 
+Keep parameterized tests small: generate a named test that passes its scenario
+parameters to a shared function, rather than expanding a large body for every
+combination. The WebRTC handoff cases previously drove the compiler alone to
+roughly 1 GiB of heap while optimizing duplicated scenarios. Reducing test
+concurrency does not remove that single-process compilation cost.
+
+Test helpers that start calls under the application supervisor must register
+cleanup for the exact room incarnation. A test process exiting does not stop
+application-owned room trees. On a host also serving the app, run builds and
+focused tests sequentially; the app container's memory limit does not constrain
+host `mix` processes.
+
 ## Browser and native media
 
 Every UI change needs rendered inspection. Run `agent-browser` with Chrome for
