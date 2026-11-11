@@ -6,6 +6,11 @@ defmodule Vxpipe.Identity.OAuth.BrowserStore do
   authorization transaction to its browser binding. Consent completion checks the
   rendered authority snapshot atomically. Grant lists and revocation are scoped to
   the authenticated user, and lists contain safe metadata rather than credentials.
+
+  Successful completion returns the callback fields and a receipt built from the
+  consumed request's presentation and authority. Approval includes the persisted
+  grant expiry; denial has no expiry and creates no grant. The browser adapter
+  chooses native redirection or receipt presentation without changing that decision.
   """
 
   alias Vxpipe.Identity.Principal

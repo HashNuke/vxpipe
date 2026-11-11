@@ -169,3 +169,81 @@ not be presented as a completed client token exchange.
   release artifacts; a browser request for an unregistered synthetic client
   renders the recovery page without signing in or creating a grant. Both services
   remain active, health is `ok`, and the container limit is unchanged at 1 GiB.
+
+## Completion decision and implementation
+
+- The earlier question was an optional UX preference, not an authorization gate.
+  Continued with its separate-receipt default after the independent work, rather
+  than leaving the requested outcomes unfinished. This is an implementation
+  assumption, not a claim of explicit user confirmation. Consent announces the
+  extra tab; the reviewed outcome layout and primary/secondary actions remain.
+- A decision gesture reserves a named receipt window and submits the native form
+  into it. The browser-only `presentation=receipt` field is closed and validated.
+  Blocked/detached windows and JavaScript-free submissions keep the ordinary 302.
+  Duplicate UI submissions are suppressed; one-time database consumption remains
+  the authority. There is no receipt table, queue, cookie or postMessage protocol.
+- Persistence returns presentation, snapshot and persisted grant expiry from the
+  same transaction that checks the current session/authority, locks client
+  metadata, creates the grant or denies, and consumes the request. It does not
+  rebind consent before completing. Denial creates no grant and preserves others.
+- Receipt delivery checks the opener's origin and exact opaque request path,
+  severs its own opener, then redirects the original window. Missing/closed or
+  unrelated openers fall back to current-window callback delivery. Callback data
+  is removed from bootstrap attributes and never placed in another Vxpipe URL or
+  browser storage. Approval means permission was recorded, not that the client
+  exchanged its code. The receipt displays the actual stored expiry.
+- Red: two Persistence receipt assertions, one Console receipt-response case and
+  the new browser transport contract failed before implementation; a detached
+  window case later failed before adding the available-window check. Green:
+  18 Persistence, 16 Console and 22 frontend cases. TypeScript, changed-file lint,
+  Storybook/assets builds and all four root static gates passed. No full suite.
+- Build corrections: the direct HEEx renderer accepts a plain map, so defaults
+  use Map.put_new rather than Phoenix change-tracked assign_new. Esbuild exposed
+  a case-only basename collision between OAuthReceipt.tsx and oauthReceipt.ts;
+  renamed the transport helper to oauthReceiptTransport.ts and rebuilt cleanly.
+- Real Chrome checks used a local browser client that opened its own OAuth
+  window. Both CIMD and DCR approval/denial returned to that exact window, which
+  successfully notified its original client opener; the Vxpipe receipt stayed
+  open with a severed opener. Approval completed S256 exchange, initialization,
+  tools/list, list_tenants, refresh and session reuse, then returned 401 after
+  revoke and 400 on code replay. Both denials preserved state and issuer.
+- With window.open blocked, the same DCR browser client completed the original
+  callback without any extra tab. An unreachable registered loopback callback
+  produced ERR_CONNECTION_REFUSED in the original window while the Vxpipe receipt
+  still said Access approved and directed the user to finish in the client.
+  That recorded grant appeared in Your connections; no exchange success was
+  asserted. Backend failures/replay use the separate recovery screen.
+- Actual desktop approval, mobile denial and light/mobile no-permission receipt
+  render without overflow. Manage connected clients reaches the real list; Back
+  to Vxpipe reaches Console home. The temporary Superadmin browser fixture first
+  omitted the gateway's browser_auth option for tenant directory reads; correcting
+  that test-only setup verified the full home destination. Product code did not
+  require a navigation workaround. Existing member/role isolation remains covered
+  by the prior real-database and browser checks.
+- Design/source review: preserved exact callback construction, session/CSRF/PKCE
+  boundaries, current authority and metadata locks, and one-time request behavior.
+  No preview-only flag or simulated completion enters the production flow.
+  The receipt only persists visibly when an extra window and original request
+  window are available; otherwise callback delivery takes precedence. This
+  supported scope is documented in the development guide.
+
+## Final release and completion
+
+- Rebuilt production assets, the OTP release and the local Docker image, then
+  restarted `vxpipe.service`. Both it and Caddy are active; `/healthz` returns
+  `ok`. Public `admin.js`, `oauth.js` and `oauth.css` hashes match the release.
+  Image: `sha256:678ce3cfcee1f995de80e545761d0a890a7e98fb906c9ad2ddd5f33f67313c69`.
+  The running container is named `vxpipe`, with the unchanged 1 GiB limit and
+  approximately 306 MiB observed usage after restart.
+- Public Chrome verifies the shared recovery page for a syntactically valid
+  request from an unregistered synthetic client, with a working native recovery
+  link and no browser errors. No production account or grant was created.
+  Initial inspection commands used the former container name, `/health` instead
+  of `/healthz`, malformed synthetic client IDs, and the document title as a
+  visible-text selector. Corrected these checks against the actual container,
+  routes and component; none required an application change.
+- Final formatting and changed-file lint pass. Milestone and index now reflect
+  complete implementation, focused tests and real browser/protocol evidence.
+  The temporary browser test VM, browser sessions and environment-free Storybook
+  source copy were cleaned up. Work remains on `qa`; main is unchanged. No full
+  suite was run and no environment file was read.

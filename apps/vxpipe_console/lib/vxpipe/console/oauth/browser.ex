@@ -102,7 +102,8 @@ defmodule Vxpipe.Console.OAuth.Browser do
 
   defp decision_input(%{method: "POST"} = conn) do
     with {:ok, params, conn} <- Input.read(conn, :form),
-         true <- Enum.all?(Map.keys(params), &(&1 in ["decision", "_csrf_token"])),
+         true <- Enum.all?(Map.keys(params), &(&1 in ["decision", "_csrf_token", "presentation"])),
+         true <- params["presentation"] in [nil, "receipt"],
          true <- params["decision"] in ["approve", "deny"] do
       {:ok, params,
        %{

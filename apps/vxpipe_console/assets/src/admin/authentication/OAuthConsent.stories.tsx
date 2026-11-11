@@ -15,7 +15,7 @@ const meta = {
   },
   parameters: {
     layout: "fullscreen",
-    docs: { description: { component: "Design proposal for /oauth/authorize/:id and its completion experience. Codex branding uses the supplied CIMD document; account, tenant and permissions are fixtures. Allow and Deny lead to proposed product screens with account and revocation navigation. Production currently responds with a 302 to the client callback; it does not serve these completion screens. The client owns its callback UI. No real authorization or redirects are performed. Optional logo_uri/client_uri branding also needs production wiring." } },
+    docs: { description: { component: "Shared production consent, approval, decline and recovery presentation. Codex branding uses public CIMD metadata; account, tenant and permissions are fixtures. The real form keeps the OAuth callback in its original window and shows a separate receipt when the browser permits it. Storybook simulates the decisions in one canvas without making authorization requests or opening windows." } },
   },
   render: (args) => <OAuthConsentStory key={JSON.stringify(args)} {...args} />,
 } satisfies Meta<typeof OAuthConsentStory>;

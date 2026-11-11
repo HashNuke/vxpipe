@@ -185,7 +185,10 @@ literal-loopback callback; the callback host, path and query must still match.
 The consent page shows the client name, optional website/logo, signed-in account,
 permissions and tenant scope. Expand **Connection details** to inspect the exact
 client ID and return address. Branding does not mean Vxpipe endorses the client.
-Allow or deny returns you to the client. Approved access lasts 30 days and can be
+Allow or deny returns the original tab to the client. A separate Vxpipe tab shows
+your decision when the browser permits it. **Access approved** records permission;
+continue in the client to finish connecting. If the extra tab is blocked, the
+client still receives the decision. Approved access lasts 30 days and can be
 revoked earlier.
 
 The tool catalog exposes:

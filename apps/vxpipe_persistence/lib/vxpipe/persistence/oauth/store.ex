@@ -115,7 +115,8 @@ defmodule Vxpipe.Persistence.OAuth.Store do
            code: response.code,
            state: response.state,
            redirect_uri: params["redirect_uri"],
-           grant_id: context.grant.public_id
+           grant_id: context.grant.public_id,
+           expires_at: context.grant.expires_at
          }}
       end
     end)

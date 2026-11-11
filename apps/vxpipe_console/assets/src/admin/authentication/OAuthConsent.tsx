@@ -4,6 +4,7 @@ import { Button } from "../Button";
 import type { Theme } from "./types";
 import { permissionGroups } from "./access";
 import { OAuthUnavailable } from "./OAuthUnavailable";
+import { prepareReceipt } from "./oauthReceiptTransport";
 import "./oauthConsent.css";
 
 export type ClientMetadata = {
@@ -64,17 +65,20 @@ function ClientLogo({ client }: { client: ClientMetadata }) {
   );
 }
 
-export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "dark", step = "consent", onDecision, onNavigate }: {
+export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "dark", step = "consent", expiresAt, onDecision, onNavigate }: {
   consent: Consent;
   requestId: string;
   csrfToken: string;
   theme?: Theme;
   step?: ConsentStep;
+  expiresAt?: string;
   onDecision?: (decision: "approve" | "deny") => void;
   onNavigate?: (destination: "connections" | "console") => void;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(step);
+  const submitted = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
   const website = httpsUrl(client.client_uri);
   const clientKind = client.client_id.startsWith("https://") ? "cimd" : "dcr";
   const callback = client.redirect_uri;
@@ -158,16 +162,26 @@ export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "d
             <p><ShieldCheck size={16} aria-hidden /><span>Revoke access anytime in <a href="/account/connections" onClick={onNavigate ? (event) => { event.preventDefault(); navigate("connections"); } : undefined}>Settings → Your connections</a>.</span></p>
           </div>
           <p className="oauth-preview-trust">Only allow this if you started the connection and trust {client.client_name}.</p>
-          <form action={`/oauth/authorize/${requestId}`} method="post" className="oauth-preview-actions" onSubmit={onDecision ? (event) => {
-            event.preventDefault();
-            const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement;
-            onDecision(submitter?.value === "approve" ? "approve" : "deny");
-          } : undefined}>
+          <form action={`/oauth/authorize/${requestId}`} method="post" className="oauth-preview-actions" aria-busy={submitting} onSubmit={(event) => {
+            if (onDecision) {
+              event.preventDefault();
+              const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement;
+              onDecision(submitter?.value === "approve" ? "approve" : "deny");
+            } else if (submitted.current) {
+              event.preventDefault();
+            } else {
+              submitted.current = true;
+              prepareReceipt(event.currentTarget, requestId);
+              // Keep named submit buttons successful for the native form payload.
+              setSubmitting(true);
+            }
+          }}>
             <input type="hidden" name="_csrf_token" value={csrfToken} />
-            <Button type="submit" name="decision" value="deny">Deny</Button>
-            <Button type="submit" name="decision" value="approve" className="oauth-preview-allow">Allow connection <ArrowRight size={16} aria-hidden /></Button>
+            <Button type="submit" name="decision" value="deny" aria-disabled={submitting}>Deny</Button>
+            <Button type="submit" name="decision" value="approve" aria-disabled={submitting} className="oauth-preview-allow">Allow connection <ArrowRight size={16} aria-hidden /></Button>
           </form>
-          <p className="oauth-preview-return">Either choice returns you to {client.client_name}.</p>
+          {submitting ? <p role="status" className="oauth-preview-return">Saving your choice…</p> : null}
+          <p className="oauth-preview-return">A confirmation opens in a new tab. This tab returns to {client.client_name}.</p>
         </> : <>
           <div className="oauth-preview-outcome-identity">
             <ClientLogo key={`${client.client_id}-${client.logo_uri}`} client={client} />
@@ -183,7 +197,7 @@ export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "d
             <dl className="oauth-preview-receipt">
               <div><dt>Client</dt><dd>{client.client_name}</dd></div>
               <div><dt>Access</dt><dd>{scopeLabel}</dd></div>
-              <div><dt>Expires</dt><dd>In {duration}</dd></div>
+              <div><dt>Expires</dt><dd>{expiresAt ? <time dateTime={expiresAt}>{new Date(expiresAt).toLocaleString()}</time> : `In ${duration}`}</dd></div>
             </dl>
             <p className="oauth-preview-outcome-note">You’re in control. Revoke access anytime in Settings → Your connections.</p>
             <div className="oauth-preview-outcome-actions">

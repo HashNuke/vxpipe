@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { OAuthConsent, type Consent } from "./OAuthConsent";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const consent: Consent = {
   client_id: "registered-client", client_name: "Real client", client_uri: "https://client.example/about",
   logo_uri: "https://client.example/logo.png", user_email: "member@real.test",
@@ -10,6 +10,23 @@ const consent: Consent = {
   grant_lifetime_seconds: 2592000,
   authority: { grants: ["calls.read", "call_specs.write"], all_tenant_actions: ["calls.read"], assigned_tenants: { "tenant-one": "read_write" } },
 };
+
+test("native submission reserves one receipt and suppresses duplicate decisions", () => {
+  const open = vi.spyOn(window, "open").mockReturnValue({} as Window);
+  render(<OAuthConsent consent={consent} requestId="request" csrfToken="csrf" />);
+  const form = screen.getByRole("button", { name: "Allow connection" }).closest("form")!;
+  expect(fireEvent.submit(form)).toBe(true);
+  expect(fireEvent.submit(form)).toBe(false);
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("status")).toHaveTextContent("Saving your choice");
+  expect(new FormData(form).getAll("presentation")).toEqual(["receipt"]);
+});
+
+test("the approved receipt displays the recorded expiry", () => {
+  render(<OAuthConsent consent={consent} requestId="request" csrfToken="" step="allowed" expiresAt="2026-12-11T12:34:56Z" />);
+  expect(document.querySelector("time")).toHaveAttribute("datetime", "2026-12-11T12:34:56Z");
+  expect(screen.getByText("Continue in Real client to finish connecting to Vxpipe.")).toBeInTheDocument();
+});
 
 test("reserved user permissions have readable labels while retaining their exact keys", () => {
   render(<OAuthConsent consent={{ ...consent, authority: { grants: ["users.members.write", "users.admins.write", "users.superadmins.write", "platform_api_keys.read"], all_tenant_actions: [], assigned_tenants: {} } }} requestId="id" csrfToken="csrf" />);

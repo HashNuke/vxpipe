@@ -4,7 +4,22 @@ defmodule Vxpipe.Console.OAuth.ConsentPage do
 
   def unavailable, do: render(%{consent: nil, id: nil, csrf_token: nil})
 
+  def receipt(receipt, id, callback) do
+    render(%{
+      consent: receipt.consent,
+      id: id,
+      csrf_token: nil,
+      state: receipt.state,
+      completion: %{request_id: id, callback: callback, expires_at: receipt.expires_at}
+    })
+  end
+
   def render(assigns) do
+    assigns =
+      assigns
+      |> Map.put_new(:state, if(assigns.consent, do: "consent", else: "unavailable"))
+      |> Map.put_new(:completion, nil)
+
     ~H"""
     <!doctype html>
     <html lang="en">
@@ -18,10 +33,10 @@ defmodule Vxpipe.Console.OAuth.ConsentPage do
         <title>{if @consent, do: "Connect client", else: "Connection unavailable"} · Vxpipe</title>
       </head>
       <body>
-        <div id="oauth-root" data-state={if @consent, do: "consent", else: "unavailable"} data-consent={if @consent, do: Jason.encode!(@consent)} data-request-id={@id} data-csrf-token={@csrf_token}></div>
+        <div id="oauth-root" data-state={@state} data-consent={if @consent, do: Jason.encode!(@consent)} data-request-id={@id} data-csrf-token={@csrf_token} data-completion={if @completion, do: Jason.encode!(@completion)}></div>
         <script type="module" src="/assets/oauth.js"></script>
         <noscript>
-        <div :if={@consent} class="vx-admin access-ui">
+        <div :if={@state == "consent"} class="vx-admin access-ui">
         <main class="access-auth oauth-consent">
           <p class="access-auth-mark">Vxpipe · MCP connection</p>
           <h1>Connect {@consent.client_name}</h1>
@@ -59,6 +74,11 @@ defmodule Vxpipe.Console.OAuth.ConsentPage do
           <h1>This request can’t be completed</h1>
           <p>Start a new connection from your client.</p>
           <a href="/">Back to Vxpipe</a>
+        </main>
+        <main :if={@completion} class="vx-admin oauth-preview oauth-preview-main">
+          <h1>{if @state == "allowed", do: "Access approved", else: "Connection declined"}</h1>
+          <p>Return to {@consent.client_name} to finish this request.</p>
+          <a href={@completion.callback} rel="noreferrer">Continue to client</a>
         </main>
         </noscript>
       </body>

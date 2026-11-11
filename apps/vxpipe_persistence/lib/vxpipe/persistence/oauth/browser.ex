@@ -35,18 +35,7 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
            {:ok, request} <- request(id, binding),
            {:ok, request} <- bind(request, principal.session_public_id, context.snapshot),
            %Client{} = client <- request_client(request) do
-        {:ok,
-         %{
-           client_name: client.metadata["client_name"],
-           client_id: client.metadata_url || client.public_id,
-           client_uri: branding_uri(client.metadata["client_uri"]),
-           logo_uri: branding_uri(client.metadata["logo_uri"]),
-           user_email: context.user.email,
-           grant_lifetime_seconds: Store.grant_lifetime_seconds(),
-           redirect_uri: request.params["redirect_uri"],
-           resource: request.resource,
-           authority: request.snapshot["authority"]
-         }}
+        {:ok, presentation(client, request, context.user.email)}
       else
         {:error, _} = error -> error
         _ -> {:error, :invalid_request}
@@ -62,10 +51,17 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
            {:ok, request} <- request(id, binding),
            true <- request.session_public_id == principal.session_public_id,
            true <- request.snapshot == json_snapshot(context.snapshot),
-           %Client{} <- request_client(request),
+           %Client{} = client <- request_client(request),
            {:ok, response} <- complete(request, principal, context.snapshot, decision) do
         Repo.delete!(request, Transaction.options())
-        {:ok, response}
+
+        receipt = %{
+          state: if(decision == :approve, do: "allowed", else: "denied"),
+          consent: presentation(client, request, context.user.email),
+          expires_at: Map.get(response, :expires_at)
+        }
+
+        {:ok, Map.put(response, :receipt, receipt)}
       else
         {:error, _} = error -> error
         _ -> {:error, :invalid_request}
@@ -241,6 +237,20 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
        }}
 
   defp json_snapshot(snapshot), do: snapshot |> JSON.encode!() |> JSON.decode!()
+
+  defp presentation(client, request, email) do
+    %{
+      client_name: client.metadata["client_name"],
+      client_id: client.metadata_url || client.public_id,
+      client_uri: branding_uri(client.metadata["client_uri"]),
+      logo_uri: branding_uri(client.metadata["logo_uri"]),
+      user_email: email,
+      grant_lifetime_seconds: Store.grant_lifetime_seconds(),
+      redirect_uri: request.params["redirect_uri"],
+      resource: request.resource,
+      authority: request.snapshot["authority"]
+    }
+  end
 
   defp branding_uri(value), do: if(Profile.branding_uri?(value), do: value)
 

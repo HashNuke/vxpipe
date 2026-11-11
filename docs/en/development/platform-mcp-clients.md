@@ -87,7 +87,7 @@ network responses are controlled fixtures, with no third-party credentials.
 
 Storybook includes **Vxpipe → Console → Authentication → MCP authorization**.
 Run `bin/storybook`, then open **Review Request**. **Allow Flow** and **Deny Flow**
-exercise the buttons and show the proposed completion screens. Consent shares
+exercise the buttons and show the production completion presentation. Consent shares
 `OAuthConsent` with the production page. Other stories cover DCR,
 missing/broken logos, all-tenant access, no permissions, unavailable requests,
 long names and the light theme. The account, tenant and authority are fixtures.
@@ -100,12 +100,13 @@ all-tenant/assigned-tenant authority lists its exact all-tenant actions separate
 Both decisions remain available without preselecting consent. A native HTML form
 preserves the authenticated CSRF-protected POST and works without JavaScript.
 
-Today, `AuthorizationController.decide/2` sends a **302 redirect** to the validated
-client callback. Approval includes `code`, denial includes `error=access_denied`,
+Ordinary submissions to `AuthorizationController.decide/2` send a **302 redirect**
+to the validated client callback. Enhanced submissions render the receipt in a
+separate window and deliver the same callback to the original request window.
+Approval includes `code`, denial includes `error=access_denied`,
 and both include `iss` and the original `state` when present. The receiving client
-owns the next screen. The Storybook completion screens are design proposals,
-not current production routes. Protocol details and review notes live in this
-documentation, not in the proposed app copy. For a native
+owns its callback screen. Production and Storybook share the receipt components.
+Protocol details and review notes live in this documentation. For a native
 client such as Codex, the callback may return to a loopback listener on the user's
 device. Failure to validate the request stays at Vxpipe without a redirect.
 Expired, consumed or otherwise rejected requests use the shared recovery screen
@@ -159,12 +160,37 @@ uses the existing test DNS/HTTP adapter seam; public-address validation remains
 enabled in production. Focused Identity, Persistence, Console and shared UI tests
 cover branding rejection, old records, digest drift and rendered authority.
 
-The completion-screen choice remains open: the client owns the callback page.
-Replacing its redirect with a Vxpipe receipt loses code/error delivery; moving the
-callback to a new window can break browser clients that rely on their original
-window/opener. The current implementation preserves the original-window 302.
-A separate receipt would require an explicit browser experience decision; no new
-receipt store, session cookie or callback transport has been introduced.
+### Completion transport
+
+Enhanced consent reserves a named Vxpipe receipt window during the decision click
+and submits the existing native form into it. The browser-only `presentation=receipt`
+field selects an HTML result; ordinary submissions retain the original 302.
+The receipt receives presentation data and actual expiry from the same locked
+transaction that checks current authority and consumes the request. It does not
+query consent again or store a separate receipt record.
+
+The receipt redirects its opener only when that window still has the same origin
+and exact opaque authorization path. This preserves the original OAuth window,
+including a browser client's own opener relationship. The receipt severs its own
+opener reference before delivery. A missing, closed or navigated opener falls
+back to callback delivery in the current window. No callback credentials enter a
+new Vxpipe URL, storage entry, log or cross-window message. Callback data is removed
+from the bootstrap DOM once read.
+
+If opening a receipt is blocked, or JavaScript is unavailable, the ordinary
+form/302 flow still delivers the result in the original window. Receipts therefore
+remain visible when the extra window and original request window are available;
+they are not a replacement for the client's callback. A callback network failure
+can leave the original window on a browser error while the Vxpipe receipt records
+only that access was approved. It never claims the client completed token exchange.
+
+The consent copy announces the extra tab. A single-tab receipt replacing the
+callback would lose
+code/error delivery; opening the callback in another window can break client
+opener expectations. A database receipt system or a postMessage handshake adds
+state without helping this native-form flow. See the browser's
+[named window behavior](https://developer.mozilla.org/en-US/docs/Web/API/Window/open)
+and [form target contract](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/form#target).
 
 ### Personal settings follow-through
 
@@ -181,5 +207,5 @@ session; they do not accept a target user from the page.
 
 The [Personal settings and MCP consent milestone](../../../labnotes/milestones/personal-settings-and-mcp-consent.md)
 tracks the production route/sidebar cutover, self-account behavior, CIMD/DCR
-branding and OAuth completion integration. It remains unchecked until real-app
-and protocol acceptance pass.
+branding and OAuth completion integration. Its checklist records the real-app
+and protocol acceptance evidence.

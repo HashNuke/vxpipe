@@ -170,6 +170,34 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
            |> response(403)
   end
 
+  test "a receipt response preserves the exact callback and carries the recorded outcome" do
+    for {decision, state, callback_key} <- [
+          {"approve", "allowed", "code=secret-code"},
+          {"deny", "denied", "error=access_denied"}
+        ] do
+      consent = signed_consent()
+
+      result =
+        consent
+        |> recycle()
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> post(
+          "https://localhost/oauth/authorize/#{@id}",
+          "decision=#{decision}&presentation=receipt"
+        )
+
+      body = html_response(result, 200)
+      assert body =~ ~s(data-state="#{state}")
+      assert body =~ "data-completion="
+      assert body =~ "https://client.example/callback?existing=keep"
+      assert body =~ callback_key
+      assert body =~ "state=private-state"
+      assert get_resp_header(result, "location") == []
+      assert get_resp_header(result, "cache-control") == ["private, no-store"]
+      assert get_resp_header(result, "referrer-policy") == ["no-referrer"]
+    end
+  end
+
   test "forged binding and non-session principals cannot complete consent" do
     consent = signed_consent()
 
@@ -284,6 +312,21 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
     refute_received {:complete, _}
   end
 
+  test "receipt selection rejects unknown values and duplicate fields before completion" do
+    for extra <- ["presentation=other", "presentation=receipt&presentation=receipt"] do
+      consent = signed_consent()
+
+      rejected =
+        consent
+        |> recycle()
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> post("https://localhost/oauth/authorize/#{@id}", "decision=approve&" <> extra)
+
+      assert response(rejected, 400)
+      refute_received {:complete, _}
+    end
+  end
+
   test "rate limiter failures reject locally and sensitive request details are not logged" do
     Process.put(:oauth_limit, {:error, :rate_limited})
 
@@ -372,9 +415,16 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
     if binding == Process.get(:oauth_binding) do
       send(self(), {:complete, decision})
 
+      {:ok, consent} = consent(@id, binding, principal())
+
       result = %{
         redirect_uri: "https://client.example/callback?existing=keep",
-        state: "private-state"
+        state: "private-state",
+        receipt: %{
+          consent: consent,
+          state: if(decision == :approve, do: "allowed", else: "denied"),
+          expires_at: if(decision == :approve, do: ~U[2026-12-11 00:00:00Z])
+        }
       }
 
       {:ok,

@@ -1,9 +1,8 @@
 # Personal settings and MCP consent
 
-Status: in progress; personal settings and connection management are implemented
-and locally verified. CIMD/DCR branding and shared consent are implemented;
-completion-screen integration remains pending.
-Do not mark this milestone or its index entry complete from preview evidence.
+Status: complete on `qa`. Personal settings, connection management, CIMD/DCR
+branding, shared consent and real approval/decline receipts pass focused tests
+and actual browser/protocol acceptance. The production release runs on Vitrum.
 
 ## Runnable slice and prerequisites
 
@@ -79,9 +78,11 @@ Storybook supplies an in-memory adapter to the same page/components.
 Production and Storybook now share the reviewed consent component. Validated
 CIMD/DCR branding, actual user/authority and grant lifetime reach the production
 page; existing clients need no migration. The native consent form preserves the
-existing HTTP 302 to the registered callback. Completion screens remain previews
-until their browser-window behavior is decided. Existing CIMD fetch/cache/security
-behavior is retained.
+existing HTTP 302 to the registered callback. Enhanced decisions show the reviewed
+receipt in a separate window and return the original window to the exact client
+callback. Blocked windows or JavaScript-free
+forms retain the native redirect. Existing CIMD fetch/cache/security behavior is
+retained; the receipt does not claim token exchange completed.
 
 ## Implementation checkpoints
 
@@ -139,41 +140,41 @@ behavior is retained.
 
 ### OAuth completion and protocol continuity
 
-- [ ] Before changing redirects, specify how an actual Vxpipe completion page can
+- [x] Before changing redirects, specify how an actual Vxpipe completion page can
   coexist with the client's registered callback. Record the chosen transport,
   who owns the resulting browser window and how failure is represented. The
   preview alone does not establish this protocol contract.
-- [ ] Preserve successful code/state delivery, denied `access_denied`/state
+- [x] Preserve successful code/state delivery, denied `access_denied`/state
   delivery, exact validated callback targeting, one-time completion and S256
   exchange. Do not replace the callback with a success page or claim a token
   exchange succeeded merely because consent was approved.
-- [ ] If a client-owned callback cannot return to Vxpipe, keep the compatible
+- [x] If a client-owned callback cannot return to Vxpipe, keep the compatible
   callback behavior and record the supported completion-screen scope before
   declaring the screen integrated. No silent mock completion in production.
-- [ ] Implement approved/declined product outcomes for the supported flow, with
+- [x] Implement approved/declined product outcomes for the supported flow, with
   Back to Vxpipe primary and Manage connected clients secondary. Cover callback
   failure, expired/replayed requests, login resume, cancellation and role drift.
 - [x] Promote the reviewed unavailable-request screen for rejected/expired/replayed
   requests, keeping error status, no callback, no approval receipt and a real
   Back to Vxpipe destination. Verify the actual browser and shared Storybook UI.
-- [ ] Exercise real local-client authorize → callback → code exchange → MCP call
+- [x] Exercise real local-client authorize → callback → code exchange → MCP call
   → refresh → revoke, plus denial, for both CIMD and DCR. Record what the browser
   actually displays and what the client receives.
-- [ ] Commit the completion slice with the decision and protocol evidence.
+- [x] Commit the completion slice with the decision and protocol evidence.
 
 ## Acceptance and completion
 
-- [ ] Relevant Identity/Persistence/Console contracts are green from red tests;
+- [x] Relevant Identity/Persistence/Console contracts are green from red tests;
   frontend tests, TypeScript, lint and Storybook/assets builds pass.
-- [ ] Inspect actual app and Storybook on desktop/mobile with agent-browser;
+- [x] Inspect actual app and Storybook on desktop/mobile with agent-browser;
   verify ordinary members can find both personal pages and cannot see admin links.
-- [ ] Run root format, warnings-as-errors compilation, strict Credo and
+- [x] Run root format, warnings-as-errors compilation, strict Credo and
   unused-dependency checks, plus focused tests as explicitly requested by the
   user for this implementation. Do not run a full suite. Investigate project-owned failures
   and record accurate rerun evidence; no live-provider credentials are needed.
-- [ ] Review the final implementation for ownership, permission boundaries and
+- [x] Review the final implementation for ownership, permission boundaries and
   OAuth callback continuity; synchronize handbook, stories and checkpoint notes.
-- [ ] Check this milestone and its index only after production acceptance passes.
+- [x] Check this milestone and its index only after production acceptance passes.
 
 ## Specification review — separate from implementation
 
@@ -215,3 +216,27 @@ including invalid callback rejection and native recovery navigation. An actual
 consumed-request reload and desktop/mobile/Storybook checks passed. This records
 one completed failure-state requirement; approval/decline receipts and their
 callback/window decision remain unfinished.
+
+2026-11-11 completion design review: selected the native form's named-window
+transport as the default after the optional UX question remained unanswered.
+The original callback window and its client opener are preserved; the receipt
+severs its own opener and uses the exact validated callback. Blocked windows keep
+the existing redirect. No receipt database or cross-window message protocol is
+needed. Presentation and expiry come from the same locked completion transaction.
+This review specifies the supported receipt scope separately from the evidence
+and does not claim explicit user confirmation of the default.
+
+2026-11-11 completion implementation: 18 Persistence, 16 Console and 22 frontend
+cases pass, including stored expiry, denial, duplicate submission, invalid receipt
+selection and blocked/detached/unrelated window handling. The real local browser
+client verifies original-window/opener continuity for CIMD and DCR approval and
+denial, exchange, MCP invocation, refresh, revoke and code replay. Popup blocking
+retains the direct callback. An unreachable callback leaves an approval receipt
+without claiming exchange succeeded. Actual outcome links, desktop/mobile and
+light/no-permission presentation pass.
+
+2026-11-11 completion release: built production assets and the OTP release in QA,
+rebuilt the local image and restarted Vxpipe. Health and both system services pass;
+public admin/OAuth assets match the verified release. The container retains its
+1 GiB limit. This closes the checklist with the browser evidence above; no full
+suite was run and main remains unchanged.
