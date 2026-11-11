@@ -11,6 +11,13 @@ the existing first-account instructions instead. No stylesheet, importer or
 runtime behavior changes are needed.
 
 Verification: reviewed the existing hosted page, checked the source diff and
-confirmed the replacement first-account target exists. The existing publishing
-workflow will validate the handbook build; inspect the published page on desktop
-and mobile after deployment. No new automated tests are needed for this copy edit.
+confirmed the replacement first-account target exists. No new automated tests
+were added for this copy edit.
+
+- Canonical commit `3261655e` and generated website commit `ca448a2` are pushed.
+- [Documentation publication](https://github.com/HashNuke/vxpipe/actions/runs/42945993198)
+  passed, including the handbook build. Cloudflare build
+  `a3b1a8ca-27e5-4b1c-8ae6-547cad7e4d21` succeeded.
+- Hosted Chrome screenshots at 1440×900 and 390×844 show only the prompt and
+  cards, with no horizontal overflow. Both installation links return HTTP 200;
+  the page has no remaining section headings or browser errors.
