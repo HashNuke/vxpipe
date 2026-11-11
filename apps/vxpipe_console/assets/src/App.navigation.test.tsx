@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { App } from "./App";
 
@@ -30,6 +30,39 @@ function fetcher({ directoryAccess = true, callsError = false } = {}) {
     return response({}, 503);
   });
 }
+
+test("returning to the browser preserves the API-key form and revealed key without fetching", async () => {
+  window.history.replaceState({}, "", "/api-keys/new");
+  const base = fetcher();
+  const issued = { id: "example-key", name: "Receptionist", kind: "full", last_four: "test", tenant: { key, name: "Acme" }, created_at: "2026-11-11T12:00:00Z", can_revoke: true };
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), "http://localhost");
+    if (url.pathname === "/admin/api/navigation") return response({ actor: { id: user.id, kind: "member" }, tenant_scope: "assigned", directory_access: true, landing_path: "/tenants", directory_path: "/tenants", platform_destinations: [{ id: "api_keys", label: "API Keys", path: "/api-keys" }], tenant: null });
+    if (url.pathname === "/api/api-keys/tenants") return response({ tenants: [{ key, name: "Acme" }], pagination: { has_next: false } });
+    if (url.pathname === "/api/api-keys" && init?.method === "POST") return response({ key: issued, secret: "nonfunctional-example-key" });
+    if (url.pathname === "/api/api-keys") return response({ keys: [], creatable_kinds: ["calls", "full", "platform"], pagination: { page: 1, has_next: false } });
+    return base(input);
+  });
+  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Receptionist" } });
+  fireEvent.change(screen.getByLabelText("Access type"), { target: { value: "full" } });
+  fireEvent.click(screen.getByRole("combobox", { name: "Tenant" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Acme" }));
+  const beforeFocus = fetchImpl.mock.calls.length;
+  await act(async () => { fireEvent(window, new Event("blur")); fireEvent(window, new Event("focus")); });
+  expect(fetchImpl).toHaveBeenCalledTimes(beforeFocus);
+  expect(screen.getByLabelText("Name")).toHaveValue("Receptionist");
+  expect(screen.getByLabelText("Access type")).toHaveValue("full");
+  expect(screen.getByRole("combobox", { name: "Tenant" })).toHaveTextContent("Acme");
+  expect(screen.queryByRole("status", { name: "Loading API keys" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
+  expect(await screen.findByLabelText("API key")).toHaveValue("nonfunctional-example-key");
+  await waitFor(() => expect(screen.queryByRole("status", { name: "Loading API keys" })).not.toBeInTheDocument());
+  const afterCreate = fetchImpl.mock.calls.length;
+  await act(async () => { fireEvent(window, new Event("blur")); fireEvent(window, new Event("focus")); });
+  expect(fetchImpl).toHaveBeenCalledTimes(afterCreate);
+  expect(screen.getByLabelText("API key")).toHaveValue("nonfunctional-example-key");
+});
 
 test("canonical dashboard uses the shared rail, server capabilities and real links", async () => {
   window.history.replaceState({}, "", `/t/${key}/dashboard`);
@@ -111,7 +144,7 @@ test("API-key-only permission exposes Integrations without Calls or Call Specs",
   expect(screen.queryByRole("region", { name: "Recent calls" })).not.toBeInTheDocument();
 });
 
-test("a revoked selected tenant clears old workspace data and resolves a fresh landing", async () => {
+test("navigating after tenant revocation clears old workspace data and resolves a fresh landing", async () => {
   window.history.replaceState({}, "", `/t/${key}/dashboard`);
   const base = fetcher();
   let revoked = false;
@@ -123,7 +156,7 @@ test("a revoked selected tenant clears old workspace data and resolves a fresh l
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
   await screen.findByText("No calls yet");
   revoked = true;
-  fireEvent(window, new Event("focus"));
+  fireEvent.click(screen.getByRole("link", { name: "Call Specs" }));
   expect(await screen.findByText("No tenant access")).toBeVisible();
   expect(window.location.pathname).toBe("/tenants");
   expect(screen.queryByText("Acme")).not.toBeInTheDocument();
@@ -155,8 +188,8 @@ test("a late tenant-search response cannot replace a newer query", async () => {
   expect(screen.queryByRole("option", { name: /Old result/ })).not.toBeInTheDocument();
 });
 
-test("revoking a resource read hides the open resource even when other tenant access remains", async () => {
-  window.history.replaceState({}, "", `/t/${key}/call-specs`);
+test("navigating to a revoked resource denies access even when other tenant access remains", async () => {
+  window.history.replaceState({}, "", `/t/${key}/dashboard`);
   let revoked = false;
   const base = fetcher();
   const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
@@ -169,14 +202,14 @@ test("revoking a resource read hides the open resource even when other tenant ac
     return result;
   });
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
-  expect(await screen.findByText("No call specs yet")).toBeVisible();
+  await screen.findByText("No calls yet");
   revoked = true;
-  fireEvent(window, new Event("focus"));
+  fireEvent.click(screen.getByRole("link", { name: "Call Specs" }));
   expect(await screen.findByRole("heading", { name: "Access unavailable" })).toBeVisible();
   expect(screen.queryByText("No call specs yet")).not.toBeInTheDocument();
 });
 
-test("refreshing authority also refreshes an already open tenant directory", async () => {
+test("returning to the tenant directory loads current tenant access", async () => {
   window.history.replaceState({}, "", "/tenants");
   let revoked = false;
   const base = fetcher();
@@ -184,13 +217,15 @@ test("refreshing authority also refreshes an already open tenant directory", asy
     ? response({ items: [{ tenant_key: other, name: "Beta", created_at: "2026-10-13T00:00:00Z" }], pagination: { page: 1, page_size: 25, total: 1, total_pages: 1 } }) : base(input));
   render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
   await screen.findByRole("link", { name: "Open Acme" });
+  fireEvent.click(screen.getByRole("link", { name: "Open Beta" }));
+  await screen.findByText("No calls yet");
   revoked = true;
-  fireEvent(window, new Event("focus"));
+  fireEvent.click(screen.getByRole("link", { name: "Tenants" }));
   await waitFor(() => expect(screen.queryByRole("link", { name: "Open Acme" })).not.toBeInTheDocument());
   expect(await screen.findByRole("link", { name: "Open Beta" })).toBeVisible();
 });
 
-test("session expiry clears private navigation and account identity", async () => {
+test("session expiry on the next navigation clears private navigation and account identity", async () => {
   window.history.replaceState({}, "", `/t/${key}/dashboard`);
   let expired = false;
   const base = fetcher();
@@ -200,7 +235,7 @@ test("session expiry clears private navigation and account identity", async () =
   await screen.findByText("No calls yet");
   expect(screen.getByText("operator@example.test")).toBeVisible();
   expired = true;
-  fireEvent(window, new Event("focus"));
+  fireEvent.click(screen.getByRole("link", { name: "Call Specs" }));
   await waitFor(() => expect(onSessionExpired).toHaveBeenCalledOnce());
   expect(screen.queryByText("operator@example.test")).not.toBeInTheDocument();
   expect(screen.queryByRole("navigation", { name: "Tenant" })).not.toBeInTheDocument();
