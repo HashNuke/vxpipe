@@ -5,6 +5,16 @@ import { OAuthConsentStory } from "./OAuthConsentStory";
 beforeEach(() => { vi.spyOn(window, "scrollTo").mockImplementation(() => undefined); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState({}, "", "/"); });
 
+test("an unavailable request offers a real recovery destination without approval controls", () => {
+  render(<OAuthConsentStory initialStep="unavailable" />);
+  expect(screen.getByRole("heading", { name: "This request can’t be completed" })).toBeInTheDocument();
+  const back = screen.getByRole("link", { name: "Back to Vxpipe" });
+  expect(back).toHaveAttribute("href", "/");
+  expect(screen.queryByRole("button", { name: "Allow connection" })).not.toBeInTheDocument();
+  fireEvent.click(back);
+  expect(screen.getByRole("heading", { name: "Tenants", level: 1 })).toBeInTheDocument();
+});
+
 test("allow and deny show product copy without protocol or Storybook annotations", () => {
   const location = window.location.href;
   const { unmount } = render(<OAuthConsentStory />);

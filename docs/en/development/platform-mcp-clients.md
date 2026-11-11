@@ -108,6 +108,9 @@ not current production routes. Protocol details and review notes live in this
 documentation, not in the proposed app copy. For a native
 client such as Codex, the callback may return to a loopback listener on the user's
 device. Failure to validate the request stays at Vxpipe without a redirect.
+Expired, consumed or otherwise rejected requests use the shared recovery screen
+with a Back to Vxpipe link. It retains the HTTP error status and does not display
+a client identity or approval receipt from a failed validation.
 
 The approved screen says **Access approved**, without claiming the client has
 finished its token exchange. **Back to Vxpipe** is the primary action and returns

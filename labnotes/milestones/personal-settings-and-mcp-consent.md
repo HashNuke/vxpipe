@@ -153,6 +153,9 @@ behavior is retained.
 - [ ] Implement approved/declined product outcomes for the supported flow, with
   Back to Vxpipe primary and Manage connected clients secondary. Cover callback
   failure, expired/replayed requests, login resume, cancellation and role drift.
+- [x] Promote the reviewed unavailable-request screen for rejected/expired/replayed
+  requests, keeping error status, no callback, no approval receipt and a real
+  Back to Vxpipe destination. Verify the actual browser and shared Storybook UI.
 - [ ] Exercise real local-client authorize → callback → code exchange → MCP call
   → refresh → revoke, plus denial, for both CIMD and DCR. Record what the browser
   actually displays and what the client receives.
@@ -205,3 +208,10 @@ MCP invocation, refresh, revoke and replay rejection. Desktop, mobile, light,
 all-tenant and no-permission presentation checked. The client receives and displays
 its callback page; Vxpipe outcome receipts are not yet integrated. See the same
 checkpoint labnote for the pending browser-experience choice.
+
+2026-11-11 recovery checkpoint: shared unavailable-request rendering replaces
+plain-text controller failures. Fourteen Console and eleven frontend cases pass,
+including invalid callback rejection and native recovery navigation. An actual
+consumed-request reload and desktop/mobile/Storybook checks passed. This records
+one completed failure-state requirement; approval/decline receipts and their
+callback/window decision remain unfinished.

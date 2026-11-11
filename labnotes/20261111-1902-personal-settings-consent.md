@@ -69,11 +69,11 @@ No environment files were read. Existing checkout setup/dependencies were reused
 - Source/code on QA is verified; the running release has not yet been rebuilt for
   this checkpoint. Deployment follows the completed consent work.
 
-## Remaining checkpoints
+## Checkpoint sequence
 
-Implement optional CIMD/DCR branding and the shared reviewed consent presentation.
-Record the OAuth completion/callback transport decision before changing redirects;
-approval must not be presented as a completed client token exchange.
+Personal settings precede branding and shared consent. Record the OAuth
+completion/callback transport decision before changing redirects; approval must
+not be presented as a completed client token exchange.
 
 ## Branding and production consent
 
@@ -137,3 +137,35 @@ approval must not be presented as a completed client token exchange.
   The rollback-only browser VM and temporary Storybook server were stopped.
 - This deploy includes personal settings, connection revocation and production
   consent branding. It does not claim the pending completion receipts are live.
+
+## Request-failure recovery
+
+- Continued the independent failure-screen work while the callback/receipt choice
+  remains unanswered. Failed authorization requests previously returned plain
+  text, despite the reviewed unavailable-request design.
+- Red: two Console cases and the new Storybook recovery-link case failed. Shared
+  `OAuthUnavailable` now renders production failures and the preview. It receives
+  no client identity or authority when backend validation fails. The original
+  400/403/503 status, private/no-store response and absent callback are preserved;
+  no approval or token-exchange success is implied. A no-JavaScript recovery link
+  remains available. Kept the reviewed layout and 44-pixel action height.
+- Green: 14 focused Console and 11 shared consent/Storybook tests. TypeScript,
+  changed-file ESLint, production assets, Storybook build, root format,
+  warnings-as-errors compilation, Credo and unused-dependency checks passed.
+  Existing Persistence cases already verify that expiry and changed authority
+  produce the invalid-request boundary handled by this page.
+- In the actual rollback-only browser flow, deny returned to the local client;
+  revisiting and reloading the consumed request rendered the recovery screen.
+  Desktop 1440 and mobile 390 showed no overflow or authorization controls.
+  Back to Vxpipe reached Console home and its correct No tenant access state for
+  the member without memberships. Storybook uses the same recovery component.
+  Browser errors were empty. Corrected two inspection selectors after their
+  waits timed out: the app uses navigation-layout, and the story is named
+  Request Unavailable. These were inspection mistakes, not application failures.
+- Approval/decline receipt transport remains the only implementation decision
+  awaiting the user's choice. No popup/callback behavior was added in this slice.
+
+- Recovery release deployed to Vitrum. Public OAuth JavaScript/CSS match the
+  release artifacts; a browser request for an unregistered synthetic client
+  renders the recovery page without signing in or creating a grant. Both services
+  remain active, health is `ok`, and the container limit is unchanged at 1 GiB.

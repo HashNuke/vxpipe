@@ -99,8 +99,8 @@ defmodule Vxpipe.Console.OAuth.AuthorizationController do
         _ -> 400
       end
 
-    conn
-    |> put_status(status)
-    |> html("This authorization request could not be completed. Start again from your client.")
+    ConsentPage.unavailable()
+    |> Phoenix.HTML.Safe.to_iodata()
+    |> then(&html(put_status(conn, status), &1))
   end
 end

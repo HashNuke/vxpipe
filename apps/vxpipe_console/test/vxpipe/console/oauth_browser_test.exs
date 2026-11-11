@@ -183,9 +183,35 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
       |> get("https://localhost/oauth/authorize/#{@id}")
 
     assert response(forged, 400)
+    assert forged.resp_body =~ ~s(data-state="unavailable")
+    assert forged.resp_body =~ ~s(src="/assets/oauth.js")
     Process.put(:oauth_principal, %{principal() | credential_kind: :oauth})
     rejected = consent |> recycle() |> get("https://localhost/oauth/authorize/#{@id}")
     assert response(rejected, 403)
+  end
+
+  test "completion failures render a local recovery page without a callback or approval receipt" do
+    for {result, status} <- [
+          {{:error, :invalid_request}, 400},
+          {{:error, :forbidden}, 403},
+          {{:error, :unavailable}, 503},
+          {{:ok, %{redirect_uri: "javascript:alert(1)", code: "secret-code"}}, 503}
+        ] do
+      consent = signed_consent()
+      Process.put(:oauth_completion_result, result)
+
+      failed =
+        consent
+        |> recycle()
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> post("https://localhost/oauth/authorize/#{@id}", "decision=approve")
+
+      assert html_response(failed, status) =~ ~s(data-state="unavailable")
+      assert get_resp_header(failed, "location") == []
+      assert get_resp_header(failed, "cache-control") == ["private, no-store"]
+      refute failed.resp_body =~ "secret-code"
+      refute failed.resp_body =~ "Access approved"
+    end
   end
 
   test "untrusted origin, host, plaintext transport, and bearer credentials fail closed" do
@@ -335,6 +361,14 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
   end
 
   def complete_authorization(@id, binding, %Principal{}, decision) do
+    if result = Process.get(:oauth_completion_result) do
+      result
+    else
+      complete_bound_authorization(binding, decision)
+    end
+  end
+
+  defp complete_bound_authorization(binding, decision) do
     if binding == Process.get(:oauth_binding) do
       send(self(), {:complete, decision})
 

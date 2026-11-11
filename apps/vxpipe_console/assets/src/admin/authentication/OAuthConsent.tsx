@@ -3,6 +3,7 @@ import { ArrowRight, Check, ChevronRight, CircleCheck, CircleSlash, Clock3, Glob
 import { Button } from "../Button";
 import type { Theme } from "./types";
 import { permissionGroups } from "./access";
+import { OAuthUnavailable } from "./OAuthUnavailable";
 import "./oauthConsent.css";
 
 export type ClientMetadata = {
@@ -96,6 +97,10 @@ export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "d
     else window.location.assign(destination === "connections" ? "/account/connections" : "/");
   }
 
+  if (step === "unavailable") {
+    return <OAuthUnavailable theme={theme} clientName={client.client_name} onBack={onNavigate ? () => onNavigate("console") : undefined} />;
+  }
+
   return (
     <div className="vx-admin oauth-preview" data-theme={theme}>
       <header className="oauth-preview-header">
@@ -163,11 +168,6 @@ export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "d
             <Button type="submit" name="decision" value="approve" className="oauth-preview-allow">Allow connection <ArrowRight size={16} aria-hidden /></Button>
           </form>
           <p className="oauth-preview-return">Either choice returns you to {client.client_name}.</p>
-        </> : step === "unavailable" ? <>
-          <CircleSlash size={32} className="oauth-preview-status" aria-hidden />
-          <h1 ref={heading} tabIndex={-1}>This request can’t be completed</h1>
-          <p className="oauth-preview-lead">The request may have expired or already been used. Start a new connection from {client.client_name}.</p>
-          <div className="oauth-preview-outcome-actions"><Button onClick={() => navigate("console")}>Back to Vxpipe <ArrowRight size={16} aria-hidden /></Button></div>
         </> : <>
           <div className="oauth-preview-outcome-identity">
             <ClientLogo key={`${client.client_id}-${client.logo_uri}`} client={client} />

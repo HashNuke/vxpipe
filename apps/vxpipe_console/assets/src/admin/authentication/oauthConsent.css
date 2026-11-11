@@ -61,7 +61,7 @@
 .oauth-preview-receipt dd { text-align: right; font-weight: 500; }
 .oauth-preview-outcome-note { margin-top: 24px; font-size: 13px; color: var(--admin-muted); }
 .oauth-preview-outcome-actions { display: grid; gap: 8px; margin-top: 28px; }
-.oauth-preview-outcome-actions button { min-height: 44px; }
+.oauth-preview-outcome-actions button, .oauth-preview-outcome-actions > a { min-height: 44px; }
 .oauth-preview-outcome-link { display: flex; align-items: center; justify-content: center; min-height: 44px; color: var(--admin-muted); text-decoration: underline; text-underline-offset: 4px; font-size: 13px; }
 .oauth-preview-outcome-link:hover { color: var(--admin-ink); }
 .oauth-preview-declined-note { margin-top: 12px; font-size: 13px; color: var(--admin-muted); }
