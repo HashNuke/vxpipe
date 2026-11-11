@@ -13,6 +13,7 @@ test("loads current connections and removes only successfully revoked access", a
   fireEvent.click(screen.getByRole("button", { name: "Revoke access for Research client" }));
   await waitFor(() => expect(screen.queryByText("Research client")).toBeNull());
   expect(screen.getByText("No connected clients.")).toBeTruthy();
+  expect(screen.getByRole("status")).toHaveTextContent("Access revoked for Research client");
   expect(fetch).toHaveBeenLastCalledWith("/api/account/connections/grant-1", expect.objectContaining({ method: "DELETE", credentials: "same-origin", headers: expect.objectContaining({ "x-csrf-token": "csrf" }) }));
 });
 

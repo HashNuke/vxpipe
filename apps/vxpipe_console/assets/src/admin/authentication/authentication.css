@@ -688,5 +688,20 @@
 }
 .access-connection-list li > div { min-width: 0; flex: 1 1 260px; }
 .access-connection-list h3 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+.access-connection-list h2 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
 .access-connection-list p { margin: 4px 0; }
 .access-connection-resource { overflow-wrap: anywhere; }
+.access-connections-page { margin: 0; padding: 0; border: 0; }
+.access-connections .access-section-heading { align-items: center; margin-bottom: 8px; }
+.access-connections-manage { color: var(--admin-muted); text-decoration: underline; text-underline-offset: 4px; font-size: 13px; }
+.access-connections-manage:hover { color: var(--admin-ink); }
+.access-connection-icon { flex-shrink: 0; color: var(--admin-muted); }
+.access-connections .access-connection-info { flex-basis: 240px; }
+.access-connections .access-revoked { margin-top: 20px; }
+.access-revoke:hover { color: var(--admin-red); }
+@media (max-width: 700px) {
+  .access-connections .access-section-heading { align-items: flex-start; }
+  .access-connection-list li { gap: 12px; }
+  .access-connections .access-connection-info { flex-basis: calc(100% - 36px); }
+  .access-connection-list .access-revoke { margin-left: 34px; min-height: 44px; }
+}

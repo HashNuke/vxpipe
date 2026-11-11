@@ -1,6 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AccessFrame } from "./AccessFrame";
 import { AccountPage } from "./AccountPage";
+import { ConnectedClients } from "./ConnectedClients";
+import { ConnectedClientsPage } from "./ConnectedClientsPage";
+import { connectedClientsFixture, type ConnectionsScenario } from "./connectedClientsFixture";
 import { AuthPage } from "./AuthPage";
 import { InstallationSettingsPage } from "./InstallationSettingsPage";
 import { FormMessage } from "./FormField";
@@ -23,6 +26,7 @@ export function AuthenticationJourney({
   saveBehavior = "success",
   followLocation = true,
   initialPublicUrl = "https://calls.example.test",
+  connectionsScenario = "connected",
   renderFrame,
 }: {
   actor?: Actor;
@@ -32,9 +36,11 @@ export function AuthenticationJourney({
   saveBehavior?: "success" | "failure" | "pending";
   followLocation?: boolean;
   initialPublicUrl?: string;
+  connectionsScenario?: ConnectionsScenario;
   renderFrame?: (children: ReactNode, path: string, session: { user?: User; role?: Role; navigate: (path: string) => void; logout: () => void }) => ReactNode;
 }) {
   const [roles, setRoles] = useState<Role[]>(structuredClone(seedRoles));
+  const [connectionsApi] = useState(() => connectedClientsFixture(connectionsScenario));
   const [users, setUsers] = useState<User[]>(
     initialPath === "/auth/setup" ? [] : structuredClone(seedUsers),
   );
@@ -141,12 +147,15 @@ export function AuthenticationJourney({
         setPublicUrl(url);
         return {};
       }} />;
+  } else if (path === "/account/connections") {
+    page = <ConnectedClientsPage api={connectionsApi} />;
   } else if (path === "/account") {
     page = (
       <AccountPage
         key={currentUser.id}
         user={currentUser}
         role={currentRole}
+        connectedClients={<ConnectedClients api={connectionsApi} onManage={() => navigate("/account/connections")} />}
         onSave={async (email) => {
           const error = await result();
           if (error) return { error };

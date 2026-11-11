@@ -24,6 +24,7 @@ export function storyPathCrumbs(path: string): StoryCrumb[] {
   const leaf = parts[0] === "t" ? parts[2] : parts[0] === "platform" ? parts[1] : parts[0];
   const names: Record<string, string> = { dashboard: "Dashboard", calls: "Calls", "call-specs": "Call Specs", services: "Services", "legacy-services": "Services", samples: "Call specs", "api-keys": "API Keys", roles: "Roles", users: "Users", installation: "Installation", account: "My account", diagnostics: "Diagnostics", "getting-started": "Getting started" };
   if (leaf === "tenants") return parts[1] === "new" ? [{ label: "Create tenant" }] : [];
+  if (leaf === "account" && parts[1] === "connections") return [{ label: "My account", href: "/account" }, { label: "Connected clients" }];
   if (leaf === "roles" || leaf === "users") {
     if (!parts[1]) return [{ label: names[leaf] }];
     return [{ label: names[leaf], href: `/${leaf}` },

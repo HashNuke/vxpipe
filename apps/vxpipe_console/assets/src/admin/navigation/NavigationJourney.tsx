@@ -5,6 +5,9 @@ import { StoryPageBreadcrumbs } from "../stories/StoryPageBreadcrumbs";
 import { StoryNavigationContext, storyNavigation, storyPathCrumbs } from "../stories/storyNavigation";
 import { AuthenticationJourney } from "../authentication/AuthenticationJourney";
 import { AccountPage } from "../authentication/AccountPage";
+import { ConnectedClients } from "../authentication/ConnectedClients";
+import { ConnectedClientsPage } from "../authentication/ConnectedClientsPage";
+import { connectedClientsFixture } from "../authentication/connectedClientsFixture";
 import { AuthPage } from "../authentication/AuthPage";
 import { tenants } from "../authentication/fixtures";
 import type { Theme, Tenant, Role, User } from "../authentication/types";
@@ -36,6 +39,7 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   creationOutcome?: "ready" | "error" | "pending"; directoryPageSize?: number; identity?: { role: Role; user: User }; initialTenants?: Tenant[]; persona?: Persona; initialPath?: string; theme?: Theme; state?: NavigationState; pickerState?: "ready" | "loading" | "unavailable";
 }) {
   const [tenantKeys, setTenantKeys] = useState(initialTenantKeys);
+  const [connectionsApi] = useState(() => connectedClientsFixture());
   const [directoryTenants, setDirectoryTenants] = useState(initialTenants);
   const { user, role } = useMemo(() => identity ?? navigationFixture(persona), [identity, persona]);
   const keysApi = useMemo(() => apiKeysFixture(role, user, directoryTenants), [role, user, directoryTenants]);
@@ -71,7 +75,8 @@ export function NavigationJourney({ persona = "all", initialPath = "/", theme = 
   const empty = (title: string, detail: string) => <div className="navigation-empty"><h2>{title}</h2><p>{detail}</p></div>;
   if (signedOut || path.startsWith("/auth/")) return <AdminShell theme={theme} showHeader={false}><div className="access-ui"><AuthPage mode={path === "/auth/setup" ? "setup" : path === "/auth/recover" ? "recover" : "login"} onSubmit={async () => { setSignedOut(false); navigate("/"); return {}; }} /></div></AdminShell>;
   if (/^\/(users|roles)(\/|$)/.test(path) || path === "/platform/installation") return <AuthenticationJourney key={`${persona}-${path}`} actor={role.kind === "superadmin" ? "superadmin" : role.kind === "admin" ? "admin" : "member"} initialPath={path} theme={theme} followLocation={false} renderFrame={(content, authPath) => shell(content, authPath.replace(/^\/admin/, ""))} />;
-  if (path === "/account") return shell(<div className="access-ui"><AccountPage user={user} role={role} onSave={async () => ({})} /></div>);
+  if (path === "/account/connections") return shell(<div className="access-ui"><ConnectedClientsPage api={connectionsApi} /></div>);
+  if (path === "/account") return shell(<div className="access-ui"><AccountPage user={user} role={role} connectedClients={<ConnectedClients api={connectionsApi} onManage={() => navigate("/account/connections")} />} onSave={async () => ({})} /></div>);
   if (path.endsWith("/editor") && tenant && tenantAccess(role, user, tenant, "call_specs") !== "none") return <NavigationEditor tenant={tenant} readOnly={tenantAccess(role, user, tenant, "call_specs") !== "write"} theme={theme} backPath={`/t/${tenant.key}/call-specs`} onNavigate={navigate} />;
   if (/\/calls\/[^/]+$/.test(path)) return <CallDetailsStory scenario={tenant && tenantAccess(role, user, tenant, "calls") !== "none" ? "ended" : "unavailable"} theme={theme} />;
   if (/^\/platform\/services(?:\/|$)/.test(path) && !navigationItems(role, user).platform.some(item => item.href === "/platform/services")) return shell(<main>{heading("Access unavailable")}{empty("Permission required", "Your role does not allow this action.")}</main>);

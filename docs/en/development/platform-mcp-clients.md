@@ -82,3 +82,58 @@ issuer responses, token exchange/refresh/revocation, metadata expiry, concurrent
 refresh results, rejected redirects, private targets and oversized documents.
 The persistence cases exercise the real Boruta adapters and database records;
 network responses are controlled fixtures, with no third-party credentials.
+
+## Consent design preview
+
+Storybook includes **Vxpipe → Console → Authentication → MCP authorization**.
+Run `bin/storybook`, then open **Review Request**. **Allow Flow** and **Deny Flow**
+exercise the buttons and show the proposed completion screens. Other stories cover DCR,
+missing/broken logos, all-tenant access, no permissions, unavailable requests,
+long names and the light theme. The account, tenant and authority are fixtures.
+
+The proposal keeps the Console visual system and adds client branding, a visible
+account identity, plain-language permissions, explicit tenant scope, and an
+expandable section for exact identifiers and callback details. Both decisions
+remain available without preselecting consent.
+
+Today, `AuthorizationController.decide/2` sends a **302 redirect** to the validated
+client callback. Approval includes `code`, denial includes `error=access_denied`,
+and both include `iss` and the original `state` when present. The receiving client
+owns the next screen. The Storybook completion screens are design proposals,
+not current production routes. Protocol details and review notes live in this
+documentation, not in the proposed app copy. For a native
+client such as Codex, the callback may return to a loopback listener on the user's
+device. Failure to validate the request stays at Vxpipe without a redirect.
+
+The approved screen says **Access approved**, without claiming the client has
+finished its token exchange. **Back to Vxpipe** is the primary action and returns
+to Console home; **Manage connected clients** is a secondary text link. Denial
+states that no new access was granted and existing connections are unchanged.
+
+**Vxpipe → Console → My account → Connected clients** includes a complete
+revocation journey with connected, empty, loading, unavailable, revoking and
+failed-revocation states. The consent and approval screens link to it. Both
+Storybook account navigation paths also expose the existing connected-client
+section, using an in-memory adapter for the real component. A successful revoke
+removes only the selected client and announces the result; failure keeps it listed.
+Production already provides that section inside `/account`; the standalone
+`/account/connections` page is currently a Storybook proposal.
+
+### Optional client branding
+
+[`client_name`, `client_uri`, and `logo_uri` are standard DCR metadata](https://www.rfc-editor.org/rfc/rfc7591.html#section-2).
+The [MCP CIMD example](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#example-metadata-document)
+uses the same fields. Name, website and logo describe the client; they do not
+prove that Vxpipe has verified or endorsed it.
+
+The preview uses the supplied Codex metadata. It renders an HTTPS logo with no
+referrer and falls back to the shared Lucide `Plug` icon if the logo is absent,
+invalid, or fails to load. The website is optional; DCR does not need to provide
+either optional branding field. The remote logo remains an external image
+dependency, with the fallback available offline.
+
+This is a Storybook proposal only. Production currently strips `logo_uri` from
+CIMD, rejects it as an unknown DCR registration field, and does not expose
+`client_uri` in the consent view model. Production adoption must explicitly
+validate and retain the optional branding metadata, expose it to the consent
+renderer, and decide the image-loading policy before using this presentation.
