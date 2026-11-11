@@ -60,3 +60,23 @@
   failures, not as a wholly green run.
 - No environment files were read. Work is on `main`; the running QA release has
   not yet been updated by this checkpoint.
+
+## QA deployment
+
+- Implementation `26b9bd31` is pushed to `main` and merged into `qa` as
+  `0cde73de`. Built the production release in the QA checkout and rebuilt its
+  existing local Docker image; existing compiled assets were unchanged.
+- Restarted `vxpipe.service`. The packaged migration ran successfully before
+  startup. Both Vxpipe and Caddy are active and enabled, public health returns
+  `ok`, HTTP redirects to HTTPS with 308, and Docker still enforces 1 GiB memory.
+- Live discovery advertises CIMD and issuer-bound authorization responses.
+- Removed the temporary Codex pre-registration override from local configuration.
+  Codex now automatically chooses `https://chatgpt.com/oauth/codex/client.json`
+  and a dynamic literal-loopback port. The live authorization endpoint accepts
+  that request and returns the browser-bound consent redirect (HTTP 302).
+- The user's login/consent is still required before this assistant can list or
+  invoke platform MCP tools. No authenticated connection is claimed by these
+  discovery/authorization checks.
+- The documentation publishing workflow for `26b9bd31` passed. Runtime
+  environment files were loaded privately by the existing service; their
+  contents were not inspected or changed.
