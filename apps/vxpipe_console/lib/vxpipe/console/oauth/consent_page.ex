@@ -20,6 +20,8 @@ defmodule Vxpipe.Console.OAuth.ConsentPage do
           <h1>Connect {@consent.client_name}</h1>
           <p class="access-lead">This client is asking to act on your behalf through the Vxpipe API. Only continue if you started this connection and trust the client.</p>
           <dl class="oauth-destinations">
+            <dt :if={Vxpipe.Identity.OAuth.Profile.metadata_url?(Map.get(@consent, :client_id))}>Client ID</dt>
+            <dd :if={Vxpipe.Identity.OAuth.Profile.metadata_url?(Map.get(@consent, :client_id))}>{@consent.client_id}</dd>
             <dt>API</dt><dd>{@consent.resource}</dd>
             <dt>Return to</dt><dd>{@consent.redirect_uri}</dd>
           </dl>

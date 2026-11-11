@@ -6,6 +6,7 @@ defmodule Vxpipe.Persistence.OAuth.AuthorizationRequest do
     field(:binding_digest, :binary)
     field(:client_id, :binary_id)
     field(:params, :map)
+    field(:client_metadata_digest, :binary)
     field(:resource, :string)
     field(:session_public_id, :binary_id)
     field(:snapshot, :map)

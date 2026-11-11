@@ -30,6 +30,9 @@ defmodule Vxpipe.Persistence.MixProject do
     [
       {:boruta, "== 2.3.8"},
       {:ecto_sql, "~> 3.13.5"},
+      {:ex_mcp,
+       git: "https://github.com/HashNuke/ex_mcp.git",
+       ref: "5fa760207bb09fc3b19b3049bc481b5e55106095"},
       {:oban, "~> 2.24.2"},
       {:plug, "~> 1.20"},
       {:postgrex, "~> 0.21.1"},

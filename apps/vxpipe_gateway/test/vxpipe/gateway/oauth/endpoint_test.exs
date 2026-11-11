@@ -29,7 +29,8 @@ defmodule Vxpipe.Gateway.OAuth.EndpointTest do
     assert server["code_challenge_methods_supported"] == ["S256"]
     assert server["token_endpoint_auth_methods_supported"] == ["none"]
     assert server["grant_types_supported"] == ["authorization_code", "refresh_token"]
-    refute Map.has_key?(server, "client_id_metadata_document_supported")
+    assert server["client_id_metadata_document_supported"] == true
+    assert server["authorization_response_iss_parameter_supported"] == true
     refute_received {:oauth_rate_limit, _, _}
   end
 

@@ -57,6 +57,7 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
     assert get_session(signed_in, "vxpipe_oauth_browser") == binding
     consent = signed_in |> recycle() |> get("https://localhost/oauth/authorize/#{@id}")
     assert html_response(consent, 200) =~ "Connect Research client"
+    assert html_response(consent, 200) =~ "https://client.example/oauth/client.json"
     assert get_resp_header(consent, "cache-control") == ["private, no-store"]
     assert get_resp_header(consent, "referrer-policy") == ["no-referrer"]
     assert RequireUser.allowed_path?(principal(), "/oauth/authorize/#{@id}")
@@ -117,7 +118,14 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
       assert callback.host == "client.example"
 
       assert URI.decode_query(callback.query) ==
-               Map.merge(%{"existing" => "keep", "state" => "private-state"}, expected)
+               Map.merge(
+                 %{
+                   "existing" => "keep",
+                   "state" => "private-state",
+                   "iss" => "https://localhost"
+                 },
+                 expected
+               )
     end
   end
 
@@ -299,6 +307,7 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
         {:ok,
          %{
            client_name: "Research client",
+           client_id: "https://client.example/oauth/client.json",
            redirect_uri: "https://client.example/callback?existing=keep",
            resource: @resource,
            authority: %{

@@ -43,6 +43,10 @@ config :vxpipe_persistence, :call_details_publication_recovery, enabled: false
 
 config :vxpipe_persistence, Vxpipe.Persistence.Repo, log: false
 
+config :vxpipe_persistence, :oauth_client_metadata,
+  default_cache_seconds: 300,
+  max_cache_seconds: 3_600
+
 config :vxpipe_persistence, Oban,
   name: Vxpipe.Persistence.Jobs,
   repo: Vxpipe.Persistence.Repo,

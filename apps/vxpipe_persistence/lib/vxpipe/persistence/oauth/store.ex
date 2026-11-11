@@ -10,6 +10,7 @@ defmodule Vxpipe.Persistence.OAuth.Store do
     BorutaResourceOwners,
     BorutaResponse,
     Client,
+    Clients,
     Credentials,
     Grant,
     RateLimit,
@@ -53,7 +54,8 @@ defmodule Vxpipe.Persistence.OAuth.Store do
 
   @impl true
   def exchange(params, resource) do
-    with {:ok, params} <- Profile.token(params, resource) do
+    with {:ok, params} <- Profile.token(params, resource),
+         {:ok, params} <- Clients.internal_params(params) do
       Transaction.run(fn -> exchange_for(params, resource) end)
     end
   end
@@ -67,7 +69,12 @@ defmodule Vxpipe.Persistence.OAuth.Store do
   @impl true
   def revoke(params, resource) do
     with {:ok, params} <- Profile.revocation(params),
-         do: Transaction.run(fn -> Credentials.revoke(params, resource) end)
+         {:ok, params} <- Clients.internal_params(params) do
+      Transaction.run(fn -> Credentials.revoke(params, resource) end)
+    else
+      {:error, :invalid_grant} -> :ok
+      error -> error
+    end
   end
 
   defdelegate cleanup(limit), to: Retention
@@ -77,16 +84,17 @@ defmodule Vxpipe.Persistence.OAuth.Store do
   defp code_for(principal, params, resource, expected_snapshot) do
     with {:ok, context} <- Authority.browser(principal),
          true <- context.snapshot == expected_snapshot,
-         %Client{} = client <-
-           Repo.one(
-             from(c in Client, where: c.public_id == ^params["client_id"], lock: "FOR KEY SHARE"),
-             Transaction.options()
-           ),
-         true <- params["redirect_uri"] in client.metadata["redirect_uris"],
+         %Client{} = client <- Clients.find(params["client_id"], "FOR SHARE"),
+         true <-
+           Profile.redirect_matches?(params["redirect_uri"], client.metadata["redirect_uris"]),
          :ok <- Retention.expire_user_grants(context.user_id),
          :ok <- grant_quota(context.user_id),
+         params = Map.put(params, "client_id", client.public_id),
          grant <- create_grant(context, params, resource) do
-      context |> Map.put(:grant, grant) |> authorize_with_boruta(params)
+      context
+      |> Map.put(:grant, grant)
+      |> Map.put(:redirect_uri, params["redirect_uri"])
+      |> authorize_with_boruta(params)
     else
       {:error, _} = error -> error
       _ -> {:error, :invalid_request}
@@ -113,7 +121,7 @@ defmodule Vxpipe.Persistence.OAuth.Store do
   defp exchange_for(params, resource) do
     with {:ok, context} <- Credentials.prepare(params, resource),
          :ok <- token_quota(context.grant.public_id) do
-      BorutaContext.run(context, fn ->
+      BorutaContext.run(Map.put(context, :redirect_uri, params["redirect_uri"]), fn ->
         params =
           if params["grant_type"] == "refresh_token",
             do: Map.put_new(params, "scope", "mcp"),

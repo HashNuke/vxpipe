@@ -178,6 +178,13 @@ Configure an OAuth-capable MCP client with `https://YOUR_HOST/mcp`. Complete
 Console login and consent. Do not attach a static Vxpipe API key. The client acts
 within the user's current role, tenant access and approved grant.
 
+Clients can identify themselves with a hosted Client ID Metadata Document (CIMD)
+or use dynamic client registration (DCR). Vxpipe advertises both in its OAuth
+discovery document. Native clients may choose an available port for a registered
+literal-loopback callback; the callback host, path and query must still match.
+The consent page shows the CIMD client ID URL so you can check which client is
+requesting access.
+
 The tool catalog exposes:
 
 - Tenants: `list_tenants`, `get_tenant`.

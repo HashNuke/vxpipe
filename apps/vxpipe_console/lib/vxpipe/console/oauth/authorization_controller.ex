@@ -54,7 +54,7 @@ defmodule Vxpipe.Console.OAuth.AuthorizationController do
              principal,
              decision
            ),
-         {:ok, location} <- callback(result) do
+         {:ok, location} <- callback(Map.put(result, :iss, conn.assigns.oauth_options.issuer)) do
       conn |> put_resp_header("location", location) |> send_resp(302, "")
     else
       {:error, reason} -> failure(conn, reason)
@@ -74,7 +74,7 @@ defmodule Vxpipe.Console.OAuth.AuthorizationController do
 
       additions =
         result
-        |> Map.take([:code, :error, :state])
+        |> Map.take([:code, :error, :state, :iss])
         |> Enum.reject(fn {_key, value} -> is_nil(value) end)
         |> URI.encode_query()
 

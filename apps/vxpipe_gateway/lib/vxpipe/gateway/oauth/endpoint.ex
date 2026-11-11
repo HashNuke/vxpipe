@@ -18,7 +18,7 @@ defmodule Vxpipe.Gateway.OAuth.Endpoint do
     :unauthorized_client,
     :access_denied
   ]
-  @registration_fields ~w(client_id client_name redirect_uris grant_types response_types token_endpoint_auth_method scope client_uri client_id_issued_at)a
+  @registration_fields ~w(client_id client_name redirect_uris grant_types response_types token_endpoint_auth_method scope client_uri client_id_issued_at application_type)a
   @token_fields ~w(access_token token_type expires_in refresh_token scope)a
 
   @impl true
