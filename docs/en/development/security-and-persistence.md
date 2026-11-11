@@ -73,14 +73,18 @@ authorization attempts. Re-encryption must not change the external credential.
 
 Gateway/ExMCP own the MCP protocol boundary. Boruta processes OAuth through
 Identity/Persistence adapters; Console owns login and consent. The approved
-profile uses public-client authorization code, PKCE S256, bounded DCR and rotating
-refresh credentials. It is not a general OIDC identity-provider product.
+profile uses public-client authorization code, PKCE S256, CIMD, bounded DCR and
+rotating refresh credentials. It is not a general OIDC identity-provider product.
 
 Discovery and challenges use the configured Installation URL and resource
-audience. Redirects are exact registered values. Consent delegates the user's
+audience. Redirects match registered values, allowing native loopback ports to
+vary during authorization. Consent delegates the user's
 current permissions and tenant scope; every invocation rechecks authorization.
 Revocation prevents continued access even through an existing MCP session.
 HTTP API keys and participant admission tokens remain separate.
+
+See [Platform MCP client identification](platform-mcp-clients.md) for CIMD
+retrieval, metadata caching and the public-client profile.
 
 ## Outbound MCP OAuth
 

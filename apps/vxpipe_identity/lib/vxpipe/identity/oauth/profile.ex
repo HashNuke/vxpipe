@@ -3,7 +3,7 @@ defmodule Vxpipe.Identity.OAuth.Profile do
 
   alias Vxpipe.Identity.ApiKeyActor
 
-  @registration ~w(client_name redirect_uris grant_types response_types token_endpoint_auth_method scope client_uri)
+  @registration ~w(client_name redirect_uris grant_types response_types token_endpoint_auth_method scope client_uri application_type)
   @authorization ~w(response_type client_id redirect_uri resource scope state code_challenge code_challenge_method)
   @code ~w(grant_type client_id redirect_uri resource code code_verifier)
   @refresh ~w(grant_type client_id refresh_token resource scope)
@@ -22,6 +22,62 @@ defmodule Vxpipe.Identity.OAuth.Profile do
       {:error, :invalid_client_metadata}
     end
   end
+
+  @doc "Validates a public client's document without trusting unrelated metadata extensions."
+  def client_metadata(document, identifier) when is_map(document) do
+    with true <- metadata_url?(identifier),
+         ^identifier <- document["client_id"],
+         false <-
+           Enum.any?(
+             ~w(client_secret client_secret_expires_at jwks jwks_uri software_statement),
+             &Map.has_key?(document, &1)
+           ),
+         true <- Map.get(document, "token_endpoint_auth_methods_supported", ["none"]) == ["none"],
+         redirects when is_list(redirects) and length(redirects) in 1..5 <-
+           document["redirect_uris"] do
+      document
+      |> Map.take(@registration)
+      |> Map.put("redirect_uris", Enum.filter(redirects, &redirect_uri?/1))
+      |> registration()
+    else
+      _ -> {:error, :invalid_client_metadata}
+    end
+  end
+
+  def client_metadata(_, _), do: {:error, :invalid_client_metadata}
+
+  @doc "Exact HTTPS document identifier; the identifier is never normalized."
+  def metadata_url?(value) when is_binary(value) and byte_size(value) in 1..2_048 do
+    with true <- redirect_uri?(value),
+         {:ok, %URI{scheme: "https", path: path, query: nil}} <- URI.new(value),
+         true <- is_binary(path) and path not in ["", "/"] do
+      Enum.all?(String.split(path, "/"), &(URI.decode(&1) not in [".", ".."]))
+    else
+      _ -> false
+    end
+  end
+
+  def metadata_url?(_), do: false
+
+  @doc "Matches exact redirects, allowing only the native loopback port to vary."
+  def redirect_matches?(requested, registered) when is_list(registered) do
+    redirect_uri?(requested) and
+      Enum.any?(registered, fn uri ->
+        requested == uri or
+          (loopback?(requested) and loopback?(uri) and
+             without_loopback_port(requested) == without_loopback_port(uri))
+      end)
+  end
+
+  def redirect_matches?(_, _), do: false
+
+  defp loopback?(uri) when is_binary(uri),
+    do: Regex.match?(~r{\Ahttp://(127\.0\.0\.1|\[::1\])(?::[0-9]+)?(?:/|\?|$)}, uri)
+
+  defp loopback?(_), do: false
+
+  defp without_loopback_port(uri),
+    do: Regex.replace(~r{\A(http://(?:127\.0\.0\.1|\[::1\]))(?::[0-9]+)?}, uri, "\\1")
 
   def authorization(params, resource) do
     with :ok <- target(params, resource, true) do
@@ -81,7 +137,8 @@ defmodule Vxpipe.Identity.OAuth.Profile do
       grants?(Map.get(params, "grant_types", @grants)) and
       Map.get(params, "response_types", ["code"]) == ["code"] and
       Map.get(params, "token_endpoint_auth_method", "none") == "none" and scope?(params) and
-      optional_client_uri?(params["client_uri"])
+      optional_client_uri?(params["client_uri"]) and
+      Map.get(params, "application_type") in [nil, "native", "web"]
   end
 
   defp valid_authorization?(params) do
@@ -107,7 +164,9 @@ defmodule Vxpipe.Identity.OAuth.Profile do
 
   defp target(_params, _resource, _required?), do: {:error, :invalid_request}
 
-  defp client_id?(params), do: ApiKeyActor.valid_id?(params["client_id"])
+  defp client_id?(params),
+    do: ApiKeyActor.valid_id?(params["client_id"]) or metadata_url?(params["client_id"])
+
   defp scope?(params), do: Map.get(params, "scope", "mcp") == "mcp"
 
   defp name?(value) when is_binary(value),

@@ -9,6 +9,63 @@ defmodule Vxpipe.Identity.OAuth.ProfileTest do
   @verifier String.duplicate("a", 43)
   @challenge :crypto.hash(:sha256, @verifier) |> Base.url_encode64(padding: false)
 
+  test "Codex native registration metadata is accepted" do
+    assert {:ok, metadata} =
+             Profile.registration(%{
+               "client_name" => "Codex",
+               "application_type" => "native",
+               "redirect_uris" => [@redirect]
+             })
+
+    assert metadata["application_type"] == "native"
+  end
+
+  test "CIMD identifiers remain exact HTTPS document URLs throughout OAuth" do
+    id = "https://client.example:443/oauth/client.json"
+
+    assert {:ok, params} =
+             Profile.authorization(Map.put(authorization(), "client_id", id), @resource)
+
+    assert params["client_id"] == id
+
+    assert {:ok, _} =
+             Profile.token(
+               %{"grant_type" => "refresh_token", "client_id" => id, "refresh_token" => "token"},
+               @resource
+             )
+
+    assert {:ok, _} = Profile.revocation(%{"client_id" => id, "token" => "token"})
+
+    for invalid <- [
+          "http://client.example/client.json",
+          "https://client.example/",
+          "https://user@client.example/client.json",
+          "https://client.example/a/../client.json",
+          id <> "#fragment"
+        ] do
+      assert {:error, :invalid_request} =
+               Profile.authorization(Map.put(authorization(), "client_id", invalid), @resource)
+    end
+  end
+
+  test "loopback redirect matching permits only a different port" do
+    assert Profile.redirect_matches?(@redirect, ["http://127.0.0.1/callback"])
+    assert Profile.redirect_matches?("http://[::1]:45321/callback", ["http://[::1]/callback"])
+
+    for rejected <- [
+          "http://localhost:41000/callback",
+          "http://127.0.0.1:41000/other",
+          "http://127.0.0.1:41000/callback?extra=1",
+          "https://127.0.0.1:41000/callback"
+        ] do
+      refute Profile.redirect_matches?(rejected, ["http://127.0.0.1/callback"])
+    end
+
+    refute Profile.redirect_matches?("https://client.example:45321/callback", [
+             "https://client.example/callback"
+           ])
+  end
+
   test "public registration fixes the client security profile without accepting authority" do
     assert {:ok, client} =
              Profile.registration(%{

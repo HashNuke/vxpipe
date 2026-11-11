@@ -89,6 +89,8 @@ defmodule Vxpipe.Gateway.OAuth.Configuration do
       code_challenge_methods_supported: ["S256"],
       token_endpoint_auth_methods_supported: ["none"],
       revocation_endpoint_auth_methods_supported: ["none"],
+      client_id_metadata_document_supported: true,
+      authorization_response_iss_parameter_supported: true,
       scopes_supported: ["mcp"]
     }
 

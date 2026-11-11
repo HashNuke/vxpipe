@@ -8,6 +8,7 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
     Authority,
     AuthorizationRequest,
     Client,
+    Clients,
     Grant,
     Store,
     Transaction
@@ -18,7 +19,8 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
   @impl true
   def begin_authorization(params, resource, binding) do
     with true <- opaque?(binding),
-         {:ok, params} <- Profile.authorization(params, resource) do
+         {:ok, params} <- Profile.authorization(params, resource),
+         {:ok, _client} <- Clients.resolve(params["client_id"]) do
       Transaction.run(fn -> create_request(params, resource, binding) end)
     else
       {:error, _} = error -> error
@@ -32,10 +34,11 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
       with {:ok, context} <- Authority.browser(principal),
            {:ok, request} <- request(id, binding),
            {:ok, request} <- bind(request, principal.session_public_id, context.snapshot),
-           %Client{} = client <- Repo.get(Client, request.client_id, Transaction.options()) do
+           %Client{} = client <- request_client(request) do
         {:ok,
          %{
            client_name: client.metadata["client_name"],
+           client_id: client.metadata_url || client.public_id,
            redirect_uri: request.params["redirect_uri"],
            resource: request.resource,
            authority: request.snapshot["authority"]
@@ -55,6 +58,7 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
            {:ok, request} <- request(id, binding),
            true <- request.session_public_id == principal.session_public_id,
            true <- request.snapshot == json_snapshot(context.snapshot),
+           %Client{} <- request_client(request),
            {:ok, response} <- complete(request, principal, context.snapshot, decision) do
         Repo.delete!(request, Transaction.options())
         {:ok, response}
@@ -143,12 +147,9 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
     active = from(r in AuthorizationRequest, where: r.expires_at > ^now)
     own = from(r in active, where: r.binding_digest == ^digest)
 
-    with %Client{} = client <-
-           Repo.one(
-             from(c in Client, where: c.public_id == ^params["client_id"], lock: "FOR KEY SHARE"),
-             Transaction.options()
-           ),
-         true <- params["redirect_uri"] in client.metadata["redirect_uris"],
+    with %Client{} = client <- Clients.find(params["client_id"], "FOR SHARE"),
+         true <-
+           Profile.redirect_matches?(params["redirect_uri"], client.metadata["redirect_uris"]),
          :ok <- quota(active, 10_000),
          :ok <- quota(own, 10) do
       id = Transaction.random()
@@ -158,6 +159,7 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
           digest: Transaction.digest(id),
           binding_digest: digest,
           client_id: client.public_id,
+          client_metadata_digest: Clients.digest(client),
           params: params,
           resource: resource,
           expires_at: DateTime.add(now, 600)
@@ -176,6 +178,16 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
     if Repo.aggregate(query, :count, :digest, Transaction.options()) < limit,
       do: :ok,
       else: {:error, :quota_exceeded}
+  end
+
+  defp request_client(request) do
+    client =
+      Repo.one(
+        from(c in Client, where: c.public_id == ^request.client_id, lock: "FOR SHARE"),
+        Transaction.options()
+      )
+
+    if client && request.client_metadata_digest == Clients.digest(client), do: client
   end
 
   defp request(id, binding) do
