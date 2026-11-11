@@ -46,3 +46,28 @@ test("the login redirect is not remembered as the exit from Settings", () => {
   view.rerender(<NavigationShell {...props} path="/roles"><main /></NavigationShell>);
   expect(screen.getByRole("link", { name: "Back to tenants" })).toHaveAttribute("href", "/tenants");
 });
+
+
+test("personal settings share the settings sidebar and have distinct active links", () => {
+  const { role, user } = navigationFixture("all");
+  const view = render(<NavigationShell previewPersonalSettings role={role} user={user} tenants={[]} path="/account/connections" onNavigate={vi.fn()} onLogout={vi.fn()} theme="dark" onRetry={vi.fn()}><main /></NavigationShell>);
+  expect(screen.getByRole("link", { name: "Users" })).toBeVisible();
+  expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  const personal = screen.getByRole("navigation", { name: "For you" });
+  expect(within(personal).getByRole("link", { name: "Your connections" })).toHaveAttribute("aria-current", "page");
+  expect(within(personal).getByRole("link", { name: "Your account" })).not.toHaveAttribute("aria-current");
+  view.rerender(<NavigationShell previewPersonalSettings role={role} user={user} tenants={[]} path="/account" onNavigate={vi.fn()} onLogout={vi.fn()} theme="dark" onRetry={vi.fn()}><main /></NavigationShell>);
+  expect(screen.getByRole("link", { name: "Your account" })).toHaveAttribute("aria-current", "page");
+});
+
+test("personal settings remain available without any platform permissions", () => {
+  const props = { previewPersonalSettings: true, tenants: [], projectedItems: { tenant: [], platform: [] }, onNavigate: vi.fn(), onLogout: vi.fn(), theme: "dark" as const, onRetry: vi.fn() };
+  const view = render(<NavigationShell {...props} path="/tenants"><main /></NavigationShell>);
+  expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "#/account");
+  expect(screen.queryByRole("link", { name: /account/i })).not.toBeInTheDocument();
+  view.rerender(<NavigationShell {...props} path="/account/connections"><main /></NavigationShell>);
+  expect(screen.getByRole("navigation", { name: "For you" })).toBeVisible();
+  expect(screen.queryByRole("navigation", { name: "Settings" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Your account" })).toHaveAttribute("href", "#/account");
+  expect(screen.getByRole("link", { name: "Your connections" })).toHaveAttribute("href", "#/account/connections");
+});

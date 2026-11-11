@@ -110,12 +110,13 @@ finished its token exchange. **Back to Vxpipe** is the primary action and return
 to Console home; **Manage connected clients** is a secondary text link. Denial
 states that no new access was granted and existing connections are unchanged.
 
-**Vxpipe → Console → My account → Connected clients** includes a complete
+**Vxpipe → Console → Settings → Your connections** includes a complete
 revocation journey with connected, empty, loading, unavailable, revoking and
 failed-revocation states. The consent and approval screens link to it. Both
-Storybook account navigation paths also expose the existing connected-client
-section, using an in-memory adapter for the real component. A successful revoke
-removes only the selected client and announces the result; failure keeps it listed.
+Storybook navigation paths reach the separate Your connections page, using an
+in-memory adapter for the real component. Revocation requires confirmation; a
+successful revoke removes only the selected client and announces the result,
+while failure keeps it listed and leaves the dialog available for retry.
 Production already provides that section inside `/account`; the standalone
 `/account/connections` page is currently a Storybook proposal.
 
@@ -137,3 +138,17 @@ CIMD, rejects it as an unknown DCR registration field, and does not expose
 `client_uri` in the consent view model. Production adoption must explicitly
 validate and retain the optional branding metadata, expose it to the consent
 renderer, and decide the image-loading policy before using this presentation.
+
+### Personal settings follow-through
+
+The Settings sidebar preview now groups **Your account** and **Your connections**
+under **For you**, below the administrative links the user may access. Ordinary
+members retain these personal destinations even without any administrative
+permissions. Account editing and connection management are separate pages, and
+revocation asks for confirmation before submitting. The confirmation uses the
+shared component; the new sidebar and standalone route remain preview-only.
+
+The [Personal settings and MCP consent milestone](../../../labnotes/milestones/personal-settings-and-mcp-consent.md)
+tracks the production route/sidebar cutover, self-account behavior, CIMD/DCR
+branding and OAuth completion integration. It remains unchecked until real-app
+and protocol acceptance pass.

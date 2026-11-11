@@ -35,6 +35,7 @@ test("member authority survives switching from an account story to a tenant", as
   const { AuthenticationStory } = await import("./AuthenticationStory");
   const { fireEvent } = await import("@testing-library/react");
   render(<AuthenticationStory actor="member" initialPath="/account" followLocation={false} />);
+  fireEvent.click(screen.getByRole("link", { name: "Back to tenants" }));
   fireEvent.click(screen.getByRole("combobox", { name: "Switch tenant" }));
   fireEvent.click(await screen.findByRole("option", { name: /Acme/ }));
   expect(screen.getByRole("heading", { name: "Dashboard", level: 1 })).toBeVisible();

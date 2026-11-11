@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { OAuthConsentStory } from "./OAuthConsentStory";
 
@@ -31,9 +31,10 @@ test("the approved page returns to Console home with its primary action", () => 
 
 test("consent links to a working connected clients destination", async () => {
   render(<OAuthConsentStory />);
-  fireEvent.click(screen.getByRole("link", { name: "My account → Connected clients" }));
-  expect(await screen.findByRole("heading", { name: "Connected clients", level: 1 })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("link", { name: "Settings → Your connections" }));
+  expect(await screen.findByRole("heading", { name: "Your connections", level: 1 })).toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "Revoke access for Codex" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Revoke access" }));
   expect(await screen.findByRole("status")).toHaveTextContent("Access revoked for Codex");
   expect(screen.queryByRole("button", { name: "Revoke access for Codex" })).not.toBeInTheDocument();
 });

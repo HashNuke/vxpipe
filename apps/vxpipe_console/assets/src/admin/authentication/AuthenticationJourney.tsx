@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AccessFrame } from "./AccessFrame";
 import { AccountPage } from "./AccountPage";
-import { ConnectedClients } from "./ConnectedClients";
 import { ConnectedClientsPage } from "./ConnectedClientsPage";
 import { connectedClientsFixture, type ConnectionsScenario } from "./connectedClientsFixture";
 import { AuthPage } from "./AuthPage";
@@ -155,8 +154,7 @@ export function AuthenticationJourney({
         key={currentUser.id}
         user={currentUser}
         role={currentRole}
-        connectedClients={<ConnectedClients api={connectionsApi} onManage={() => navigate("/account/connections")} />}
-        onSave={async (email) => {
+        onSave={async (email, _currentPassword, newPassword) => {
           const error = await result();
           if (error) return { error };
           if (
@@ -172,9 +170,11 @@ export function AuthenticationJourney({
               user.id === currentUser.id ? { ...user, email } : user,
             ),
           );
-          setActorId(null);
-          navigate("/auth/login");
-          setNotice("Account updated. Sign in again with your new details.");
+          if (newPassword) {
+            setActorId(null);
+            navigate("/auth/login");
+            setNotice("Password changed. Your sessions were signed out. Sign in again with your new password.");
+          }
           return {};
         }}
       />

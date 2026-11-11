@@ -33,7 +33,7 @@ export function StoryWorkspace({ children, path, tenant, theme = "dark", user, r
     }
   };
   if (destination) return <NavigationJourney key={destination} initialPath={destination} initialTenantKeys={initialTenantKeys} initialTenants={tenants} identity={{ user: actor, role: authority }} theme={theme} />;
-  return <NavigationShell previewIntegrations theme={theme} path={path} user={actor} role={authority}
+  return <NavigationShell previewPersonalSettings previewIntegrations theme={theme} path={path} user={actor} role={authority}
     tenants={visibleTenants(authority, actor, tenants)} selected={tenant ? { ...tenant, id: tenant.key } : undefined}
     onNavigate={navigate} onLogout={onLogout ?? (() => setDestination("/auth/login"))} onRetry={() => undefined}>
     <StoryNavigationContext value={storyNavigation(path, navigate, tenant)}><AdminLayoutContext value>

@@ -11,7 +11,8 @@ test("single-tenant entry shows dashboard with only permitted links", () => {
   expect(screen.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "#/api-keys");
   expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "My account" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Settings" })).toBeVisible();
+  expect(screen.queryByRole("link", { name: "My account" })).not.toBeInTheDocument();
   expect(screen.queryByText("acme_demo_000001")).not.toBeInTheDocument();
 });
 test("multi-tenant directory and search show only allowed tenants, selection opens dashboard", async () => {

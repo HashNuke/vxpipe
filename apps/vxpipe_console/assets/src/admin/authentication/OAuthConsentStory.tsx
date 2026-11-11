@@ -143,7 +143,7 @@ export function OAuthConsentStory({
 
           <div className="oauth-preview-limits">
             <p><Clock3 size={16} aria-hidden /><span>Access ends after <strong>30 days</strong>. Changes to your role or access require a new connection.</span></p>
-            <p><ShieldCheck size={16} aria-hidden /><span>Revoke access anytime in <a href="/account/connections" onClick={(event) => { event.preventDefault(); navigate("connections"); }}>My account → Connected clients</a>.</span></p>
+            <p><ShieldCheck size={16} aria-hidden /><span>Revoke access anytime in <a href="/account/connections" onClick={(event) => { event.preventDefault(); navigate("connections"); }}>Settings → Your connections</a>.</span></p>
           </div>
           <p className="oauth-preview-trust">Only allow this if you started the connection and trust {client.client_name}.</p>
           <div className="oauth-preview-actions">
@@ -173,7 +173,7 @@ export function OAuthConsentStory({
               <div><dt>Access</dt><dd>{access === "empty" ? "No action permissions" : access === "all-tenants" ? "All tenants, including future tenants" : "Demo"}</dd></div>
               <div><dt>Expires</dt><dd>In 30 days</dd></div>
             </dl>
-            <p className="oauth-preview-outcome-note">You’re in control. Revoke access anytime from your account.</p>
+            <p className="oauth-preview-outcome-note">You’re in control. Revoke access anytime in Settings → Your connections.</p>
             <div className="oauth-preview-outcome-actions">
               <Button className="oauth-preview-allow" onClick={() => navigate("console")}>Back to Vxpipe <ArrowRight size={16} aria-hidden /></Button>
               <a className="oauth-preview-outcome-link" href="/account/connections" onClick={(event) => { event.preventDefault(); navigate("connections"); }}>Manage connected clients</a>

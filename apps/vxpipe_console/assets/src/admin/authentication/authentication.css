@@ -705,3 +705,8 @@
   .access-connections .access-connection-info { flex-basis: calc(100% - 36px); }
   .access-connection-list .access-revoke { margin-left: 34px; min-height: 44px; }
 }
+
+.access-revoke-confirm { display: flex; flex-direction: column; gap: 24px; }
+.access-revoke-confirm > p { color: var(--admin-muted); font-size: 14px; line-height: 1.65; max-width: 65ch; }
+.access-revoke-confirm .access-actions { justify-content: flex-end; flex-wrap: wrap; }
+.access-revoke-confirm .access-danger { color: var(--admin-red); border-color: var(--admin-red); }
