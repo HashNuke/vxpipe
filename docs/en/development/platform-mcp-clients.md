@@ -102,7 +102,7 @@ network responses are controlled fixtures, with no third-party credentials.
 
 Storybook includes **Vxpipe → Console → Authentication → MCP authorization**.
 Run `bin/storybook`, then open **Review Request**. **Allow Flow** and **Deny Flow**
-exercise the buttons and show the production completion presentation. Consent shares
+exercise the buttons and return directly to a simulated client callback. Consent shares
 `OAuthConsent` with the production page. Other stories cover DCR,
 missing/broken logos, all-tenant access, no permissions, unavailable requests,
 long names and the light theme. The account, tenant and authority are fixtures.
@@ -115,27 +115,23 @@ all-tenant/assigned-tenant authority lists its exact all-tenant actions separate
 Both decisions remain available without preselecting consent. A native HTML form
 preserves the authenticated CSRF-protected POST and works without JavaScript.
 
-Submissions to `AuthorizationController.decide/2` render the confirmation in the
-same tab. **Back to my app** navigates to the exact validated client callback.
-Approval includes `code`, denial includes `error=access_denied`, and both include
-`iss` and the original `state` when present. The receiving client
-owns its callback screen. Production and Storybook share the receipt components.
-Protocol details and review notes live in this documentation. For a native
-client such as Codex, the callback may return to a loopback listener on the user's
-device. Failure to validate the request stays at Vxpipe without a redirect.
-Expired, consumed or otherwise rejected requests use the shared recovery screen
-with a Back to Vxpipe link. It retains the HTTP error status and does not display
-a client identity or approval receipt from a failed validation.
+Submissions to `AuthorizationController.decide/2` immediately return an HTTP 303
+redirect to the exact validated client callback in the same tab. Approval includes
+`code`, denial includes `error=access_denied`, and both include `iss` and the
+original `state` when present. There is no intermediate confirmation or second
+button to finish the handoff. The client owns its callback screen and token
+exchange. Native clients such as Codex may use a loopback listener on the user's
+device.
 
-The approved screen says **Access approved**, without claiming the client has
-finished its token exchange. **Back to my app** is the primary action on both
-outcomes; **Manage connected clients** remains a secondary approval link. Denial
-states that no new access was granted and existing connections are unchanged.
+Failure to validate the request stays at Vxpipe without a redirect. Expired,
+consumed or otherwise rejected requests use the shared recovery screen with a
+Back to Vxpipe link. Missing or unsafe callback results also fail locally. The
+response retains its HTTP error status and does not invent an approval receipt.
 
 **Vxpipe → Console → Settings → Your connections** includes a complete
 revocation journey with connected, empty, loading, unavailable, revoking and
-failed-revocation states. The consent and approval screens link to it. Both
-Storybook navigation paths reach the separate Your connections page, using an
+failed-revocation states. The consent screen links to it.
+Storybook navigation reaches the separate Your connections page, using an
 in-memory adapter for the real component. Revocation requires confirmation; a
 successful revoke removes only the selected client and announces the result,
 while failure keeps it listed and leaves the dialog available for retry.
@@ -176,32 +172,21 @@ cover branding rejection, old records, digest drift and rendered authority.
 
 ### Completion transport
 
-The native consent POST renders approval or denial directly. Its confirmation
-receives presentation data, actual expiry and the validated callback from the same
-locked transaction that checks current authority and consumes the request. It
-does not query consent again or store a separate receipt record.
+The existing locked completion transaction checks current authority, consumes the
+one-time request and returns the authorization response. The controller validates
+the callback and sends a same-tab HTTP 303 redirect. The browser follows it with a
+GET, including when JavaScript is disabled; the consent POST body is not forwarded
+to the client. This follows the [OAuth redirect guidance](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.12).
 
-The primary action is an ordinary **Back to my app** link with no target window.
-The user stays on the confirmation until selecting it, then the same tab navigates
-to the client callback. No popup, opener manipulation, automatic redirect or
-cross-window message protocol is involved. The JavaScript-free page provides the
-same callback link. Existing client opener relationships remain intact.
+The callback preserves the full code/error, state, issuer and any existing query.
+It is not copied into another Vxpipe URL, browser storage or logs. Responses remain
+private/no-store with a no-referrer policy. No popup, receipt record, JavaScript
+redirect, or cross-window message protocol is needed. Asset fingerprints ensure
+new consent pages use the current form rather than a cached popup bundle.
 
-The callback retains its complete code/error, state and issuer response. It is
-never copied into another Vxpipe URL, browser storage or logs. The response is
-private/no-store with a no-referrer policy. The callback is available to the link;
-the bootstrap copy is removed after React reads it.
-
-For manual CLI login, users select **Back to my app**, then copy the resulting
-callback address into their CLI, even when the loopback destination cannot load.
-Approval alone does not mean token exchange has completed. Closing the
-confirmation without returning to the client leaves that exchange unfinished;
-consent remains one-time and the authorization code retains its existing expiry.
-
-This flow replaces the separate-window design, which made manual login confusing
-by foregrounding a Vxpipe address while returning the original tab to the client.
-Keeping the confirmation and explicit callback action together preserves the
-reviewed outcome page and makes the handoff visible without additional state.
+For manual CLI login, copy the resulting callback address into the CLI even when
+the loopback destination cannot load. The CLI still has to exchange the code;
+authorization codes keep their existing expiry and one-time-use rules.
 
 ### Personal settings follow-through
 

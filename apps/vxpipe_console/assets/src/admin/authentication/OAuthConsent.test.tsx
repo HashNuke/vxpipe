@@ -23,29 +23,6 @@ test("native submission stays in the same tab and suppresses duplicate decisions
   expect(new FormData(form).has("presentation")).toBe(false);
 });
 
-test.each(["allowed", "denied"] as const)("%s confirmation waits for Back to my app with the exact callback", (step) => {
-  const open = vi.spyOn(window, "open");
-  const returnToApp = vi.fn();
-  const callback = `http://127.0.0.1:1455/callback?${step === "allowed" ? "code=example-code" : "error=access_denied"}&state=example-state&iss=https%3A%2F%2Fvxpipe.example`;
-  render(<OAuthConsent consent={consent} requestId="request" csrfToken="" step={step} callbackUrl={callback} onReturnToApp={returnToApp} />);
-  const back = screen.getByRole("link", { name: "Back to my app" });
-  expect(back).toHaveAttribute("href", callback);
-  expect(back).not.toHaveAttribute("target");
-  expect(back).toHaveAttribute("rel", "noreferrer");
-  expect(screen.queryByRole("button", { name: "Back to Vxpipe" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("link", { name: "Back to Vxpipe" })).not.toBeInTheDocument();
-  expect(returnToApp).not.toHaveBeenCalled();
-  expect(open).not.toHaveBeenCalled();
-  fireEvent.click(back);
-  expect(returnToApp).toHaveBeenCalledTimes(1);
-});
-
-test("the approved receipt displays the recorded expiry", () => {
-  render(<OAuthConsent consent={consent} requestId="request" csrfToken="" step="allowed" expiresAt="2026-12-11T12:34:56Z" />);
-  expect(document.querySelector("time")).toHaveAttribute("datetime", "2026-12-11T12:34:56Z");
-  expect(screen.getByText("Continue in Real client to finish connecting to Vxpipe.")).toBeInTheDocument();
-});
-
 test("reserved user permissions have readable labels while retaining their exact keys", () => {
   render(<OAuthConsent consent={{ ...consent, authority: { grants: ["users.members.write", "users.admins.write", "users.superadmins.write", "platform_api_keys.read"], all_tenant_actions: [], assigned_tenants: {} } }} requestId="id" csrfToken="csrf" />);
   expect(screen.getByRole("heading", { name: "Manage member accounts" })).toBeInTheDocument();

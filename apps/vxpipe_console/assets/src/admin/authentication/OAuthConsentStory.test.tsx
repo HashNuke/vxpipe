@@ -15,28 +15,13 @@ test("an unavailable request offers a real recovery destination without approval
   expect(screen.getByRole("heading", { name: "Tenants", level: 1 })).toBeInTheDocument();
 });
 
-test("allow and deny show product copy without protocol or Storybook annotations", () => {
+test.each(["Allow connection", "Deny"])("%s returns directly to the client", (decision) => {
   const location = window.location.href;
-  const { unmount } = render(<OAuthConsentStory />);
-  fireEvent.click(screen.getByRole("button", { name: "Allow connection" }));
-  expect(screen.getByRole("heading", { name: "Access approved" })).toHaveFocus();
-  expect(screen.getByText("Continue in Codex to finish connecting to Vxpipe.")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Back to my app" })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Manage connected clients" })).toBeInTheDocument();
-  expect(screen.queryByText(/HTTP|Storybook|EXAMPLE_CODE|What happens next|client controls/)).not.toBeInTheDocument();
-  unmount();
   render(<OAuthConsentStory />);
-  fireEvent.click(screen.getByRole("button", { name: "Deny" }));
-  expect(screen.getByRole("heading", { name: "Connection declined" })).toHaveFocus();
-  expect(screen.getByText("Codex wasn’t given new access to your Vxpipe account.")).toBeInTheDocument();
-  expect(screen.queryByText(/HTTP|Storybook|access_denied|What happens next|client controls/)).not.toBeInTheDocument();
-  expect(window.location.href).toBe(location);
-});
-
-test.each(["allowed", "denied"] as const)("the %s story returns to the client with its primary action", (initialStep) => {
-  render(<OAuthConsentStory initialStep={initialStep} />);
-  fireEvent.click(screen.getByRole("link", { name: "Back to my app" }));
+  fireEvent.click(screen.getByRole("button", { name: decision }));
   expect(screen.getByRole("status")).toHaveTextContent("Returned to Codex");
+  expect(screen.queryByRole("link", { name: "Back to my app" })).not.toBeInTheDocument();
+  expect(window.location.href).toBe(location);
 });
 
 test("consent links to a working connected clients destination", async () => {

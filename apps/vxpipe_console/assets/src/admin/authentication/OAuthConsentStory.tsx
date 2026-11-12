@@ -49,7 +49,6 @@ export function OAuthConsentStory({
   </main></div>;
   const redirectUri = clientKind === "cimd" ? "http://127.0.0.1:1455/callback" : "https://client.example.test/oauth/callback";
   return <OAuthConsent theme={theme} step={step} requestId="storybook" csrfToken="storybook"
-    callbackUrl={redirectUri} onReturnToApp={() => setStep("client")}
     consent={{ ...client, user_email: "owner@example.test", resource,
       redirect_uri: redirectUri,
       grant_lifetime_seconds: 2592000,
@@ -57,5 +56,5 @@ export function OAuthConsentStory({
         all_tenant_actions: access === "all-tenants" ? grants : [],
         assigned_tenants: access === "assigned" ? { Demo: "read_write" } : {},
       },
-    }} onDecision={(decision) => setStep(decision === "approve" ? "allowed" : "denied")} onNavigate={setStep} />;
+    }} onDecision={() => setStep("client")} onNavigate={setStep} />;
 }

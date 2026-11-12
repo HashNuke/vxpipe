@@ -49,22 +49,8 @@
 .oauth-preview-allow:hover { background: color-mix(in oklch, var(--admin-ink) 85%, var(--admin-bg)); }
 .oauth-preview-return { text-align: center; color: var(--admin-muted); font-size: 12px; margin-top: 12px; }
 .oauth-preview-status { margin-bottom: 24px; color: var(--admin-muted); }
-.oauth-preview-positive { color: var(--admin-green); }
-.oauth-preview-outcome { padding-top: clamp(48px, 9vh, 96px); max-width: 560px; text-align: center; }
-.oauth-preview-outcome-identity { display: inline-flex; position: relative; margin-bottom: 32px; }
-.oauth-preview-outcome-identity .oauth-preview-logo { width: 72px; height: 72px; }
-.oauth-preview-outcome-state { position: absolute; right: -10px; bottom: -8px; background: var(--admin-bg); border-radius: 50%; padding: 3px; box-sizing: content-box; color: var(--admin-muted); }
-.oauth-preview-outcome-state.oauth-preview-positive { color: var(--admin-green); }
-.oauth-preview-receipt { text-align: left; margin-top: 32px; padding-block: 12px; border-block: 1px solid var(--admin-line); }
-.oauth-preview-receipt > div { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 16px; align-items: baseline; padding-block: 9px; }
-.oauth-preview-receipt dt, .oauth-preview-receipt dd { margin: 0; font-size: 13px; }
-.oauth-preview-receipt dd { text-align: right; font-weight: 500; }
-.oauth-preview-outcome-note { margin-top: 24px; font-size: 13px; color: var(--admin-muted); }
 .oauth-preview-outcome-actions { display: grid; gap: 8px; margin-top: 28px; }
 .oauth-preview-outcome-actions button, .oauth-preview-outcome-actions > a { min-height: 44px; }
-.oauth-preview-outcome-link { display: flex; align-items: center; justify-content: center; min-height: 44px; color: var(--admin-muted); text-decoration: underline; text-underline-offset: 4px; font-size: 13px; }
-.oauth-preview-outcome-link:hover { color: var(--admin-ink); }
-.oauth-preview-declined-note { margin-top: 12px; font-size: 13px; color: var(--admin-muted); }
 @media (max-width: 600px) {
   .oauth-preview-header { padding: 16px 20px; }
   .oauth-preview-main { padding: 28px 20px 32px; }

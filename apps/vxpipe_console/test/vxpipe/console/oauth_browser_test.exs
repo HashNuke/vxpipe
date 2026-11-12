@@ -141,7 +141,7 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
 
   def public_url, do: Process.get(:installation_origin)
 
-  test "approval and denial wait on confirmation with the exact callback link" do
+  test "approval and denial redirect immediately with the exact callback" do
     for {decision, expected} <- [
           {"approve", %{"code" => "secret-code"}},
           {"deny", %{"error" => "access_denied"}}
@@ -154,17 +154,13 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
         |> put_req_header("content-type", "application/x-www-form-urlencoded")
         |> post("https://localhost/oauth/authorize/#{@id}", "decision=#{decision}")
 
-      body = html_response(response, 200)
-      assert get_resp_header(response, "location") == []
+      destination = redirected_to(response, 303)
       assert get_resp_header(response, "cache-control") == ["private, no-store"]
       assert get_resp_header(response, "referrer-policy") == ["no-referrer"]
-      assert body =~ ~s(data-state="#{if decision == "approve", do: "allowed", else: "denied"}")
-      assert body =~ "data-completion="
+      refute response.resp_body =~ "data-completion="
+      refute response.resp_body =~ "Back to my app"
 
-      [_, destination] =
-        Regex.run(~r/<a href="([^"]+)" rel="noreferrer">Back to my app<\/a>/, body)
-
-      callback = destination |> String.replace("&amp;", "&") |> URI.parse()
+      callback = URI.parse(destination)
       assert callback.host == "client.example"
 
       assert URI.decode_query(callback.query) ==
@@ -192,7 +188,7 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
       |> put_req_header("origin", "null")
       |> put_req_header("content-type", "application/x-www-form-urlencoded")
 
-    assert request |> post("https://localhost/oauth/authorize/#{@id}", body) |> response(200)
+    assert request |> post("https://localhost/oauth/authorize/#{@id}", body) |> response(303)
     assert_received {:complete, :approve}
     foreign = put_req_header(request, "origin", "https://evil.example")
     assert foreign |> post("https://localhost/oauth/authorize/#{@id}", body) |> response(403)
@@ -234,7 +230,8 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
           {{:error, :invalid_request}, 400},
           {{:error, :forbidden}, 403},
           {{:error, :unavailable}, 503},
-          {{:ok, %{redirect_uri: "javascript:alert(1)", code: "secret-code"}}, 503}
+          {{:ok, %{redirect_uri: "javascript:alert(1)", code: "secret-code"}}, 503},
+          {{:ok, %{code: "secret-code"}}, 503}
         ] do
       consent = signed_consent()
       Process.put(:oauth_completion_result, result)
@@ -465,16 +462,9 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
     if binding == Process.get(:oauth_binding) do
       send(self(), {:complete, decision})
 
-      {:ok, consent} = consent(@id, binding, principal())
-
       result = %{
         redirect_uri: "https://client.example/callback?existing=keep",
-        state: "private-state",
-        receipt: %{
-          consent: consent,
-          state: if(decision == :approve, do: "allowed", else: "denied"),
-          expires_at: if(decision == :approve, do: ~U[2026-12-11 00:00:00Z])
-        }
+        state: "private-state"
       }
 
       {:ok,

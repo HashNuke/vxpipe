@@ -1,7 +1,7 @@
 # Personal settings and MCP consent
 
-Status: complete on `qa`, including the same-tab callback-button follow-up. Personal settings, connection management, CIMD/DCR
-branding, shared consent and real approval/decline receipts pass focused tests
+Status: complete on `qa`, including the immediate callback redirect follow-up. Personal settings, connection management, CIMD/DCR
+branding, shared consent and immediate approval/denial callbacks pass focused tests
 and actual browser/protocol acceptance. The production release runs on Vitrum.
 
 ## Runnable slice and prerequisites
@@ -61,12 +61,9 @@ Design sources: the user-reviewed `OAuthConsentStory`, `Account` and
 - Consent states who is signed in, the actual delegated actions and tenant
   ceiling, expiry and where to revoke access. It grants no authority beyond the
   existing backend policy. Keep the exact client/callback details available.
-- Approved outcome uses product copy and a clear receipt of the approved client,
-  scope and expiry. **Back to my app** is the primary action to the validated client callback;
-  **Manage connected clients** is the secondary link to Your connections.
-  Declined outcome confirms that no new access was granted and existing
-  connections are unchanged. Neither screen contains Storybook instructions,
-  simulated callback annotations or protocol implementation explanations.
+- Approval and denial immediately redirect the current tab to the validated
+  client callback. No confirmation button is required. The client owns its result
+  screen and token exchange; requests without a trusted callback fail locally.
 
 ## Current implementation boundary
 
@@ -78,10 +75,10 @@ Storybook supplies an in-memory adapter to the same page/components.
 Production and Storybook now share the reviewed consent component. Validated
 CIMD/DCR branding, actual user/authority and grant lifetime reach the production
 page; existing clients need no migration. The native consent form preserves the
-authenticated POST. Approval and denial render confirmation in that same tab.
-Back to my app follows the exact validated callback on user action, including
-without JavaScript. Existing CIMD fetch/cache/security behavior is retained;
-the confirmation does not claim token exchange completed.
+authenticated POST. Approval and denial return HTTP 303 to the exact validated
+callback, including without JavaScript. Existing CIMD fetch/cache/security behavior
+is retained. The superseded receipt presentation and transaction payload are
+removed; the previous acceptance notes below describe those earlier checkpoints.
 
 ## Implementation checkpoints
 
@@ -265,3 +262,23 @@ CIMD/DCR decisions, same-tab explicit callback delivery, code exchange/MCP use,
 refresh/revoke/replay and the unreachable callback address used by manual CLI
 login. Desktop/mobile/light layouts were inspected. The QA release is live on
 Vitrum; health/services pass and public assets match the built release.
+
+## Immediate callback follow-up — 2026-11-12
+
+The user replaced the explicit Back to my app step with automatic callback
+navigation to avoid leaving approved connections unfinished. The local design
+review selected an HTTP 303 after the native consent POST: the browser performs a
+GET to the existing validated callback without another tab or JavaScript step.
+Missing/unsafe callbacks and rejected requests remain local failures. This
+supersedes the receipt/button contract in the historical checkpoints above.
+
+- [x] Redirect approved and denied requests immediately; remove unused receipt
+  presentation and payload, and synchronize the Storybook flow and handbook.
+- [x] Verify exact callback/query preservation, CSRF, missing/unsafe callback
+  failures and one-time completion with focused tests and real Chrome flows.
+- [x] Deploy QA and verify published assets and service health.
+
+Acceptance: 17 Console cases, 10 persistence cases and 12 UI cases pass, along
+with static/build checks. Chrome CIMD/DCR approval/denial, no-JavaScript completion
+and unreachable manual-CLI callback checks pass. QA is deployed and healthy;
+see [checkpoint evidence](../20261112-0517-consent-direct-redirect.md).

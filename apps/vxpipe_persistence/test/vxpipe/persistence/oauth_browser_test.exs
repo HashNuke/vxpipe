@@ -62,9 +62,7 @@ defmodule Vxpipe.Persistence.OAuthBrowserTest do
 
     assert issued.state == "test-state"
     grant = Repo.get!(Grant, issued.grant_id)
-    assert issued.receipt.consent == consent
-    assert issued.receipt.state == "allowed"
-    assert issued.receipt.expires_at == grant.expires_at
+    assert issued.expires_at == grant.expires_at
 
     assert {:ok, _} =
              Store.exchange(
@@ -127,10 +125,6 @@ defmodule Vxpipe.Persistence.OAuthBrowserTest do
              state: "test-state",
              redirect_uri: "http://127.0.0.1:43210/callback"
            }
-
-    assert response.receipt.state == "denied"
-    assert response.receipt.consent.client_name == "Local OAuth test"
-    assert response.receipt.expires_at == nil
 
     assert {:error, _} = Browser.complete_authorization(id, ctx.binding, ctx.principal, :approve)
 

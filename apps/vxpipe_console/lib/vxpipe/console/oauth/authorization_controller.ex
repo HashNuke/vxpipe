@@ -55,9 +55,7 @@ defmodule Vxpipe.Console.OAuth.AuthorizationController do
              decision
            ),
          {:ok, location} <- callback(Map.put(result, :iss, conn.assigns.oauth_options.issuer)) do
-      ConsentPage.receipt(result.receipt, id, location)
-      |> Phoenix.HTML.Safe.to_iodata()
-      |> then(&html(conn, &1))
+      conn |> put_status(:see_other) |> redirect(external: location)
     else
       {:error, reason} -> failure(conn, reason)
     end
@@ -91,6 +89,8 @@ defmodule Vxpipe.Console.OAuth.AuthorizationController do
       {:error, :unavailable}
     end
   end
+
+  defp callback(_result), do: {:error, :unavailable}
 
   defp failure(conn, reason) do
     status =

@@ -51,17 +51,11 @@ defmodule Vxpipe.Persistence.OAuth.Browser do
            {:ok, request} <- request(id, binding),
            true <- request.session_public_id == principal.session_public_id,
            true <- request.snapshot == json_snapshot(context.snapshot),
-           %Client{} = client <- request_client(request),
+           %Client{} <- request_client(request),
            {:ok, response} <- complete(request, principal, context.snapshot, decision) do
         Repo.delete!(request, Transaction.options())
 
-        receipt = %{
-          state: if(decision == :approve, do: "allowed", else: "denied"),
-          consent: presentation(client, request, context.user.email),
-          expires_at: Map.get(response, :expires_at)
-        }
-
-        {:ok, Map.put(response, :receipt, receipt)}
+        {:ok, response}
       else
         {:error, _} = error -> error
         _ -> {:error, :invalid_request}

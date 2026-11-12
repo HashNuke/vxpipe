@@ -8,14 +8,14 @@ const meta = {
   args: { theme: "dark", initialStep: "consent", clientKind: "cimd", branding: "provided", access: "assigned", longContent: false },
   argTypes: {
     theme: { control: "select", options: ["dark", "light"] },
-    initialStep: { control: "select", options: ["consent", "allowed", "denied", "unavailable"] },
+    initialStep: { control: "select", options: ["consent", "unavailable"] },
     clientKind: { control: "select", options: ["cimd", "dcr"] },
     branding: { control: "select", options: ["provided", "missing", "broken"] },
     access: { control: "select", options: ["assigned", "all-tenants", "empty"] },
   },
   parameters: {
     layout: "fullscreen",
-    docs: { description: { component: "Shared production consent, approval, decline and recovery presentation. Codex branding uses public CIMD metadata; account, tenant and permissions are fixtures. Decisions show a confirmation in the same tab. Back to my app navigates to the validated client callback. Storybook simulates the decisions and return to the client in one canvas without authorization requests or external navigation." } },
+    docs: { description: { component: "Shared production consent and recovery presentation. Codex branding uses public CIMD metadata; account, tenant and permissions are fixtures. Decisions return directly to the validated client callback in the same tab. Storybook simulates the decisions and return to the client in one canvas without authorization requests or external navigation." } },
   },
   render: (args) => <OAuthConsentStory key={JSON.stringify(args)} {...args} />,
 } satisfies Meta<typeof OAuthConsentStory>;
@@ -26,12 +26,12 @@ export const ReviewRequest: Story = {};
 export const AllowFlow: Story = { play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   await userEvent.click(canvas.getByRole("button", { name: "Allow connection" }));
-  await expect(canvas.getByRole("heading", { name: "Access approved" })).toBeVisible();
+  await expect(canvas.getByRole("status")).toBeVisible();
 } };
 export const DenyFlow: Story = { play: async ({ canvasElement }) => {
   const canvas = within(canvasElement);
   await userEvent.click(canvas.getByRole("button", { name: "Deny" }));
-  await expect(canvas.getByRole("heading", { name: "Connection declined" })).toBeVisible();
+  await expect(canvas.getByRole("status")).toBeVisible();
 } };
 export const DcrWithoutBranding: Story = { name: "DCR · no optional branding", args: { clientKind: "dcr" } };
 export const MissingLogo: Story = { args: { branding: "missing" } };
