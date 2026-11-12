@@ -84,6 +84,35 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
     assert body =~ "tenants.read"
   end
 
+  test "consent loads the deployment's versioned assets instead of old unversioned URLs" do
+    manifest_path = "priv/static/assets/consent-test-#{System.unique_integer([:positive])}.json"
+    manifest_file = Application.app_dir(:vxpipe_console, manifest_path)
+    previous = @endpoint.config(:cache_static_manifest)
+
+    latest = %{
+      "assets/oauth.js" => "assets/oauth-current.js",
+      "assets/oauth.css" => "assets/oauth-current.css",
+      "assets/admin-ui.css" => "assets/admin-ui-current.css"
+    }
+
+    File.mkdir_p!(Path.dirname(manifest_file))
+    File.write!(manifest_file, JSON.encode!(%{latest: latest, digests: %{}}))
+    Phoenix.Config.put(@endpoint, :cache_static_manifest, manifest_path)
+    @endpoint.config_change([], [])
+
+    on_exit(fn ->
+      Phoenix.Config.put(@endpoint, :cache_static_manifest, previous)
+      @endpoint.config_change([], [])
+      File.rm!(manifest_file)
+    end)
+
+    body = signed_consent() |> html_response(200)
+    assert body =~ ~s(src="/assets/oauth-current.js?vsn=d")
+    assert body =~ ~s(href="/assets/oauth-current.css?vsn=d")
+    assert body =~ ~s(href="/assets/admin-ui-current.css?vsn=d")
+    refute body =~ ~s(src="/assets/oauth.js")
+  end
+
   test "authorization uses the current installation host and resource" do
     options = Application.fetch_env!(:vxpipe_console, :oauth)
 

@@ -29,6 +29,9 @@ erl_crash.dump
 /apps/vxpipe_console/assets/coverage/
 /apps/vxpipe_console/assets/debug-storybook.log
 /apps/vxpipe_console/priv/static/assets/
+/apps/vxpipe_console/priv/static/cache_manifest.json
+/apps/vxpipe_console/priv/static/index-*.html
+/apps/vxpipe_console/priv/static/index*.gz
 
 # Reusable browser packages and Storybook artifacts.
 /node_modules/

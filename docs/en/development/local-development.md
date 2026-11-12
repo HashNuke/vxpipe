@@ -59,6 +59,10 @@ MIX_ENV=prod mix assets.deploy
 MIX_ENV=prod mix release vxpipe
 ```
 
+`assets.deploy` also generates Phoenix's asset manifest and fingerprinted files.
+Build it before assembling the release so OAuth pages load the matching assets
+after deployment, even when a browser has cached an earlier bundle.
+
 Supply the [runtime configuration](../usage/configuration.md) through your service
 manager or container environment. The release does not load `.env` automatically.
 Create the PostgreSQL database first, then apply its migrations before starting:

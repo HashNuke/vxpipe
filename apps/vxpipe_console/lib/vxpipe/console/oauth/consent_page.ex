@@ -1,6 +1,7 @@
 defmodule Vxpipe.Console.OAuth.ConsentPage do
   @moduledoc false
   use Phoenix.Component
+  alias Vxpipe.Console.Endpoint
 
   def unavailable, do: render(%{consent: nil, id: nil, csrf_token: nil})
 
@@ -28,13 +29,13 @@ defmodule Vxpipe.Console.OAuth.ConsentPage do
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="color-scheme" content="dark" />
         <link rel="icon" href="data:," />
-        <link rel="stylesheet" href="/assets/admin-ui.css" />
-        <link rel="stylesheet" href="/assets/oauth.css" />
+        <link rel="stylesheet" href={Endpoint.static_path("/assets/admin-ui.css")} />
+        <link rel="stylesheet" href={Endpoint.static_path("/assets/oauth.css")} />
         <title>{if @consent, do: "Connect client", else: "Connection unavailable"} · Vxpipe</title>
       </head>
       <body>
         <div id="oauth-root" data-state={@state} data-consent={if @consent, do: Jason.encode!(@consent)} data-request-id={@id} data-csrf-token={@csrf_token} data-completion={if @completion, do: Jason.encode!(@completion)}></div>
-        <script type="module" src="/assets/oauth.js"></script>
+        <script type="module" src={Endpoint.static_path("/assets/oauth.js")}></script>
         <noscript>
         <div :if={@state == "consent"} class="vx-admin access-ui">
         <main class="access-auth oauth-consent">

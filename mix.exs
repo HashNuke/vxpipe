@@ -41,7 +41,8 @@ defmodule Vxpipe.MixProject do
       "assets.deploy": [
         "do --app vxpipe_console cmd --cd assets npm run check",
         "do --app vxpipe_console cmd --cd assets npm run css:build -- --minify",
-        "do --app vxpipe_console esbuild vxpipe_console --minify"
+        "do --app vxpipe_console esbuild vxpipe_console --minify",
+        "do --app vxpipe_console phx.digest"
       ],
       "assets.test": ["do --app vxpipe_console cmd --cd assets npm test"],
       quality: [
