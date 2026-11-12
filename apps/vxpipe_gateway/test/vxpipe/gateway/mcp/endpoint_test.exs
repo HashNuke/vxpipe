@@ -66,6 +66,39 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
              ]
   end
 
+  test "the native Codex handshake reaches ExMCP negotiation and keeps its selected session version",
+       context do
+    version = "2025-06-18"
+    request = put_in(initialize(), ["params", "protocolVersion"], version)
+    initialized = call(:post, request, context.options, @secret, nil, nil)
+    assert initialized.status == 200
+    assert %{"result" => %{"protocolVersion" => ^version}} = JSON.decode!(initialized.resp_body)
+    assert [session_id] = get_resp_header(initialized, "mcp-session-id")
+    on_exit(fn -> ExMCP.SessionManager.terminate_session(session_id) end)
+
+    tools = call(:post, rpc("tools/list", 2), context.options, @secret, session_id, version)
+    assert tools.status == 200
+    assert %{"result" => %{"tools" => [_ | _]}} = JSON.decode!(tools.resp_body)
+
+    assert call(:post, rpc("ping", 3), context.options, @secret, session_id, @version).status ==
+             400
+
+    assert call(:delete, nil, context.options, @secret, session_id, version).status == 204
+
+    assert call(:post, rpc("ping", 4), context.options, @secret, session_id, version).status ==
+             404
+  end
+
+  test "an unknown offered revision reaches ExMCP's supported-version response", context do
+    request = put_in(initialize(), ["params", "protocolVersion"], "2099-01-01")
+    initialized = call(:post, request, context.options, @secret, nil, nil)
+    assert initialized.status == 200
+    assert %{"result" => %{"protocolVersion" => version}} = JSON.decode!(initialized.resp_body)
+    assert version == ExMCP.protocol_version()
+    assert [session_id] = get_resp_header(initialized, "mcp-session-id")
+    on_exit(fn -> ExMCP.SessionManager.terminate_session(session_id) end)
+  end
+
   test "credentials are required on every HTTP method, with no alternate credential source",
        context do
     for method <- [:post, :get, :delete, :options] do
@@ -233,7 +266,7 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
     end
   end
 
-  test "unsupported protocol profiles and oversized bodies are rejected before session allocation",
+  test "conflicting initialize versions and oversized bodies are rejected before session allocation",
        context do
     request = put_in(initialize(), ["params", "protocolVersion"], "2026-07-28")
     rejected = call(:post, request, context.options, @secret)
@@ -358,10 +391,10 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
   defp rpc(method, id, params \\ %{}),
     do: %{"jsonrpc" => "2.0", "method" => method, "params" => params, "id" => id}
 
-  defp call(method, body, options, secret \\ nil, session_id \\ nil) do
+  defp call(method, body, options, secret \\ nil, session_id \\ nil, version \\ @version) do
     conn = conn(method, "https://localhost/mcp", if(body, do: JSON.encode!(body), else: ""))
     conn = put_req_header(conn, "content-type", "application/json")
-    conn = put_req_header(conn, "mcp-protocol-version", @version)
+    conn = if version, do: put_req_header(conn, "mcp-protocol-version", version), else: conn
     conn = if secret, do: put_req_header(conn, "authorization", "Bearer #{secret}"), else: conn
     conn = if session_id, do: put_req_header(conn, "mcp-session-id", session_id), else: conn
     Endpoint.call(conn, Endpoint.init(options))

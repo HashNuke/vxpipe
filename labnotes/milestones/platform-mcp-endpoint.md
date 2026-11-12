@@ -1107,3 +1107,16 @@ pagination, secret-reference/static-header client compatibility, cleanup invaria
 UI route inventory and commit hygiene. All changed Markdown file links resolve.
 The milestone and implementation-order index are complete; commits remain on the
 implementation branch for the user's normal integration workflow.
+
+## Version negotiation follow-up — 2026-11-12
+
+- [x] Remove the gateway's pre-ExMCP version gate and hardcoded initialization
+  response. ExMCP owns acceptance, negotiation and per-session header validation;
+  Vxpipe retains application request limits and authenticated tool authorization.
+- [x] Verify the native Codex 0.167.2 offer (2025-06-18), library fallback for an
+  unknown offer, session-version consistency and authenticated DELETE through the
+  actual endpoint. All 22 focused endpoint/lifecycle/privacy cases pass; root
+  static checks pass. No full suite was run for this follow-up.
+- [x] Deploy QA and verify the installed Codex native client against Vitrum with
+  the existing OAuth login: all 17 tools load without the prior protocol error.
+  See [the diagnosis and acceptance evidence](../20261112-0222-mcp-version-negotiation.md).

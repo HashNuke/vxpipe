@@ -158,11 +158,8 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
     end
   end
 
-  defp dispatch(%{method: "DELETE"} = conn, options) do
-    if Protocol.valid_delete?(conn),
-      do: ExMCP.HttpPlug.call(conn, options.protocol),
-      else: error(conn, 400, "unsupported_protocol_version")
-  end
+  defp dispatch(%{method: "DELETE"} = conn, options),
+    do: ExMCP.HttpPlug.call(conn, options.protocol)
 
   defp dispatch(conn, _options),
     do: conn |> put_resp_header("allow", "POST, DELETE") |> error(405, "method_not_allowed")
@@ -170,7 +167,7 @@ defmodule Vxpipe.Gateway.MCP.Endpoint do
   defp process_body(conn, body, options) do
     case JSON.decode(body) do
       {:ok, request} ->
-        case Protocol.validate(conn, request) do
+        case Protocol.validate(request) do
           :ok -> authorize_tool(conn, request, options)
           {:error, code, message} -> reject_request(conn, request, code, message)
         end

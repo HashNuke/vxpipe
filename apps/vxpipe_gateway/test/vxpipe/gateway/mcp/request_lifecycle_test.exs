@@ -5,7 +5,7 @@ defmodule Vxpipe.Gateway.MCP.RequestLifecycleTest do
   import Plug.Test
 
   alias Vxpipe.Gateway.Test.MCPOAuth
-  alias Vxpipe.Gateway.MCP.{Admission, Endpoint, Protocol}
+  alias Vxpipe.Gateway.MCP.{Admission, Endpoint}
   alias Vxpipe.Gateway.Test.MCPProbeHandler
 
   setup do
@@ -99,7 +99,7 @@ defmodule Vxpipe.Gateway.MCP.RequestLifecycleTest do
       )
       |> put_req_header("authorization", "Bearer synthetic-key")
       |> put_req_header("content-type", "application/json")
-      |> put_req_header("mcp-protocol-version", Protocol.version())
+      |> put_req_header("mcp-protocol-version", ExMCP.protocol_version())
 
     conn = if session, do: put_req_header(conn, "mcp-session-id", session), else: conn
     Endpoint.call(conn, options)
@@ -113,7 +113,7 @@ defmodule Vxpipe.Gateway.MCP.RequestLifecycleTest do
 
   defp initialize_params do
     %{
-      protocolVersion: Protocol.version(),
+      protocolVersion: ExMCP.protocol_version(),
       capabilities: %{},
       clientInfo: %{name: "local-lifecycle-test", version: "1"}
     }

@@ -8,7 +8,7 @@ defmodule Vxpipe.Gateway.MCP.SensitiveFailuresTest do
   alias Vxpipe.Calls
   alias Vxpipe.Calls.{Administration, TestMemoryRepository}
   alias Vxpipe.Gateway.Test.MCPOAuth
-  alias Vxpipe.Gateway.MCP.{Admission, Endpoint, Protocol}
+  alias Vxpipe.Gateway.MCP.{Admission, Endpoint}
   alias Vxpipe.Gateway.Test.AccountStore
 
   @password "private-mcp-password-sentinel!"
@@ -152,7 +152,7 @@ defmodule Vxpipe.Gateway.MCP.SensitiveFailuresTest do
   defp initialize(options) do
     response =
       request(options, nil, "initialize", %{
-        protocolVersion: Protocol.version(),
+        protocolVersion: ExMCP.protocol_version(),
         capabilities: %{},
         clientInfo: %{name: "sensitive-boundary", version: "1"}
       })
@@ -180,7 +180,7 @@ defmodule Vxpipe.Gateway.MCP.SensitiveFailuresTest do
       )
       |> put_req_header("authorization", "Bearer synthetic-key")
       |> put_req_header("content-type", "application/json")
-      |> put_req_header("mcp-protocol-version", Protocol.version())
+      |> put_req_header("mcp-protocol-version", ExMCP.protocol_version())
 
     conn = if session, do: put_req_header(conn, "mcp-session-id", session), else: conn
     Endpoint.call(conn, options)

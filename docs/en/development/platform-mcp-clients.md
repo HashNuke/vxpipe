@@ -13,10 +13,25 @@ browser consent, PKCE S256, resource binding, token rotation and revocation flow
 This is inbound access to Vxpipe, separate from tenant MCP connections used by
 participants during calls.
 
-The protocol remains MCP 2025-11-25. Its [authorization profile](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#client-id-metadata-documents)
-recommends CIMD. The [CIMD draft](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00)
+OAuth client identification follows the MCP 2025-11-25 [authorization profile](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#client-id-metadata-documents),
+which recommends CIMD. The [CIMD draft](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00)
 defines URL-based client identifiers. We also return `iss` on approval and denial,
 and advertise issuer identification according to [RFC 9207](https://www.rfc-editor.org/rfc/rfc9207.html).
+
+## Protocol negotiation
+
+ExMCP owns version negotiation and HTTP version validation for the platform's
+initialize-based Streamable HTTP transport. Vxpipe supplies server identity and
+tool capabilities without forcing a response version or checking a separate
+version allowlist ahead of the library. Authentication, admission limits and tool
+authorization remain at the Vxpipe boundary.
+
+For an accepted client offer, ExMCP returns that revision; for an unknown offer,
+it proposes a supported revision, following the [MCP initialization contract](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation).
+Subsequent requests use the negotiated version and ExMCP validates their headers
+against the session. This includes the `2025-06-18` offer sent by Codex CLI
+`0.167.2`, as well as `2025-11-25` clients. OAuth/CIMD support does not require a
+client to use the same dated MCP wire revision as the authorization guidance.
 
 ## Identity and validation
 

@@ -2,7 +2,7 @@ defmodule Vxpipe.Gateway.MCP.Handler do
   @moduledoc "MCP protocol callbacks over the operations enabled by Vxpipe."
   use ExMCP.Server.Handler
 
-  alias Vxpipe.Gateway.MCP.{Protocol, Tools}
+  alias Vxpipe.Gateway.MCP.Tools
 
   def options(conn, _request),
     do: %{actor: conn.assigns.mcp_actor, call_options: conn.assigns.mcp_call_options}
@@ -18,7 +18,6 @@ defmodule Vxpipe.Gateway.MCP.Handler do
   def handle_initialize(_params, state) do
     {:ok,
      %{
-       protocolVersion: Protocol.version(),
        capabilities: %{tools: %{}},
        serverInfo: %{name: "vxpipe", version: "0.1.0"}
      }, state}
