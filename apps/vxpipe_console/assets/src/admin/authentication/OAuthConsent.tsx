@@ -52,6 +52,17 @@ function httpsUrl(value?: string | null): string | undefined {
   } catch { return undefined; }
 }
 
+function formatExpiry(value: string): string {
+  return new Date(value).toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).replace(/\s([ap]m)$/, "$1");
+}
+
 function ClientLogo({ client }: { client: ClientMetadata }) {
   const [failed, setFailed] = useState(false);
   const logo = httpsUrl(client.logo_uri);
@@ -197,7 +208,7 @@ export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "d
             <dl className="oauth-preview-receipt">
               <div><dt>Client</dt><dd>{client.client_name}</dd></div>
               <div><dt>Access</dt><dd>{scopeLabel}</dd></div>
-              <div><dt>Expires</dt><dd>{expiresAt ? <time dateTime={expiresAt}>{new Date(expiresAt).toLocaleString()}</time> : `In ${duration}`}</dd></div>
+              <div><dt>Expires</dt><dd>{expiresAt ? <time dateTime={expiresAt}>{formatExpiry(expiresAt)}</time> : `In ${duration}`}</dd></div>
             </dl>
             <p className="oauth-preview-outcome-note">You’re in control. Revoke access anytime in Settings → Your connections.</p>
             <div className="oauth-preview-outcome-actions">
