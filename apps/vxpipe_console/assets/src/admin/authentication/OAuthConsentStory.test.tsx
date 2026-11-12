@@ -21,7 +21,7 @@ test("allow and deny show product copy without protocol or Storybook annotations
   fireEvent.click(screen.getByRole("button", { name: "Allow connection" }));
   expect(screen.getByRole("heading", { name: "Access approved" })).toHaveFocus();
   expect(screen.getByText("Continue in Codex to finish connecting to Vxpipe.")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Back to Vxpipe" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Back to my app" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Manage connected clients" })).toBeInTheDocument();
   expect(screen.queryByText(/HTTP|Storybook|EXAMPLE_CODE|What happens next|client controls/)).not.toBeInTheDocument();
   unmount();
@@ -33,10 +33,10 @@ test("allow and deny show product copy without protocol or Storybook annotations
   expect(window.location.href).toBe(location);
 });
 
-test("the approved page returns to Console home with its primary action", () => {
-  render(<OAuthConsentStory initialStep="allowed" />);
-  fireEvent.click(screen.getByRole("button", { name: "Back to Vxpipe" }));
-  expect(screen.getByRole("heading", { name: "Tenants", level: 1 })).toBeInTheDocument();
+test.each(["allowed", "denied"] as const)("the %s story returns to the client with its primary action", (initialStep) => {
+  render(<OAuthConsentStory initialStep={initialStep} />);
+  fireEvent.click(screen.getByRole("link", { name: "Back to my app" }));
+  expect(screen.getByRole("status")).toHaveTextContent("Returned to Codex");
 });
 
 test("consent links to a working connected clients destination", async () => {

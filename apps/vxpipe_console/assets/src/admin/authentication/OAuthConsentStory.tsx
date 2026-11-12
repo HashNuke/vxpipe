@@ -2,8 +2,9 @@ import { useState } from "react";
 import { AuthenticationStory } from "../stories/AuthenticationStory";
 import { NavigationJourney } from "../navigation/NavigationJourney";
 import { OAuthConsent, type ClientMetadata, type ConsentStep } from "./OAuthConsent";
+import { Button } from "../Button";
 import type { Theme } from "./types";
-type Step = ConsentStep | "connections" | "console";
+type Step = ConsentStep | "connections" | "console" | "client";
 type Access = "assigned" | "all-tenants" | "empty";
 
 // Branding comes from the supplied CIMD example; all account/authority data is synthetic.
@@ -42,9 +43,15 @@ export function OAuthConsentStory({
   };
   if (step === "connections") return <AuthenticationStory theme={theme} initialPath="/account/connections" followLocation={false} />;
   if (step === "console") return <NavigationJourney theme={theme} />;
+  if (step === "client") return <div className="vx-admin oauth-preview" data-theme={theme}><main className="oauth-preview-main">
+    <h1>{client.client_name}</h1><p role="status">Returned to {client.client_name}</p>
+    <Button onClick={() => setStep("consent")}>Review another request</Button>
+  </main></div>;
+  const redirectUri = clientKind === "cimd" ? "http://127.0.0.1:1455/callback" : "https://client.example.test/oauth/callback";
   return <OAuthConsent theme={theme} step={step} requestId="storybook" csrfToken="storybook"
+    callbackUrl={redirectUri} onReturnToApp={() => setStep("client")}
     consent={{ ...client, user_email: "owner@example.test", resource,
-      redirect_uri: clientKind === "cimd" ? "http://127.0.0.1:1455/callback" : "https://client.example.test/oauth/callback",
+      redirect_uri: redirectUri,
       grant_lifetime_seconds: 2592000,
       authority: { grants: access === "empty" ? [] : grants,
         all_tenant_actions: access === "all-tenants" ? grants : [],

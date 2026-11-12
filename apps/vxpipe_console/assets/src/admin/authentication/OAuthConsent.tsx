@@ -4,7 +4,6 @@ import { Button } from "../Button";
 import type { Theme } from "./types";
 import { permissionGroups } from "./access";
 import { OAuthUnavailable } from "./OAuthUnavailable";
-import { prepareReceipt } from "./oauthReceiptTransport";
 import "./oauthConsent.css";
 
 export type ClientMetadata = {
@@ -65,15 +64,17 @@ function ClientLogo({ client }: { client: ClientMetadata }) {
   );
 }
 
-export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "dark", step = "consent", expiresAt, onDecision, onNavigate }: {
+export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "dark", step = "consent", expiresAt, callbackUrl, onDecision, onNavigate, onReturnToApp }: {
   consent: Consent;
   requestId: string;
   csrfToken: string;
   theme?: Theme;
   step?: ConsentStep;
   expiresAt?: string;
+  callbackUrl?: string;
   onDecision?: (decision: "approve" | "deny") => void;
   onNavigate?: (destination: "connections" | "console") => void;
+  onReturnToApp?: () => void;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(step);
@@ -171,7 +172,6 @@ export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "d
               event.preventDefault();
             } else {
               submitted.current = true;
-              prepareReceipt(event.currentTarget, requestId);
               // Keep named submit buttons successful for the native form payload.
               setSubmitting(true);
             }
@@ -181,7 +181,7 @@ export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "d
             <Button type="submit" name="decision" value="approve" aria-disabled={submitting} className="oauth-preview-allow">Allow connection <ArrowRight size={16} aria-hidden /></Button>
           </form>
           {submitting ? <p role="status" className="oauth-preview-return">Saving your choice…</p> : null}
-          <p className="oauth-preview-return">A confirmation opens in a new tab. This tab returns to {client.client_name}.</p>
+          <p className="oauth-preview-return">After confirming your choice, you can return to {client.client_name}.</p>
         </> : <>
           <div className="oauth-preview-outcome-identity">
             <ClientLogo key={`${client.client_id}-${client.logo_uri}`} client={client} />
@@ -201,13 +201,13 @@ export function OAuthConsent({ consent: client, requestId, csrfToken, theme = "d
             </dl>
             <p className="oauth-preview-outcome-note">You’re in control. Revoke access anytime in Settings → Your connections.</p>
             <div className="oauth-preview-outcome-actions">
-              <Button className="oauth-preview-allow" onClick={() => navigate("console")}>Back to Vxpipe <ArrowRight size={16} aria-hidden /></Button>
+              <Button asChild className="oauth-preview-allow"><a href={callbackUrl} rel="noreferrer" onClick={onReturnToApp ? (event) => { event.preventDefault(); onReturnToApp(); } : undefined}>Back to my app <ArrowRight size={16} aria-hidden /></a></Button>
               <a className="oauth-preview-outcome-link" href="/account/connections" onClick={onNavigate ? (event) => { event.preventDefault(); navigate("connections"); } : undefined}>Manage connected clients</a>
             </div>
           </> : <>
             <p className="oauth-preview-declined-note">Your existing connections are unchanged.</p>
             <div className="oauth-preview-outcome-actions">
-              <Button className="oauth-preview-allow" onClick={() => navigate("console")}>Back to Vxpipe <ArrowRight size={16} aria-hidden /></Button>
+              <Button asChild className="oauth-preview-allow"><a href={callbackUrl} rel="noreferrer" onClick={onReturnToApp ? (event) => { event.preventDefault(); onReturnToApp(); } : undefined}>Back to my app <ArrowRight size={16} aria-hidden /></a></Button>
             </div>
             <p className="oauth-preview-outcome-note">Changed your mind? Start a new connection from {client.client_name}.</p>
           </>}

@@ -55,13 +55,9 @@ defmodule Vxpipe.Console.OAuth.AuthorizationController do
              decision
            ),
          {:ok, location} <- callback(Map.put(result, :iss, conn.assigns.oauth_options.issuer)) do
-      if conn.assigns.oauth_params["presentation"] == "receipt" do
-        ConsentPage.receipt(result.receipt, id, location)
-        |> Phoenix.HTML.Safe.to_iodata()
-        |> then(&html(conn, &1))
-      else
-        conn |> put_resp_header("location", location) |> send_resp(302, "")
-      end
+      ConsentPage.receipt(result.receipt, id, location)
+      |> Phoenix.HTML.Safe.to_iodata()
+      |> then(&html(conn, &1))
     else
       {:error, reason} -> failure(conn, reason)
     end

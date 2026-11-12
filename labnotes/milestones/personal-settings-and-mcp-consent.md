@@ -1,6 +1,6 @@
 # Personal settings and MCP consent
 
-Status: complete on `qa`. Personal settings, connection management, CIMD/DCR
+Status: complete on `qa`, including the same-tab callback-button follow-up. Personal settings, connection management, CIMD/DCR
 branding, shared consent and real approval/decline receipts pass focused tests
 and actual browser/protocol acceptance. The production release runs on Vitrum.
 
@@ -62,7 +62,7 @@ Design sources: the user-reviewed `OAuthConsentStory`, `Account` and
   ceiling, expiry and where to revoke access. It grants no authority beyond the
   existing backend policy. Keep the exact client/callback details available.
 - Approved outcome uses product copy and a clear receipt of the approved client,
-  scope and expiry. **Back to Vxpipe** is the primary action to Console home;
+  scope and expiry. **Back to my app** is the primary action to the validated client callback;
   **Manage connected clients** is the secondary link to Your connections.
   Declined outcome confirms that no new access was granted and existing
   connections are unchanged. Neither screen contains Storybook instructions,
@@ -78,11 +78,10 @@ Storybook supplies an in-memory adapter to the same page/components.
 Production and Storybook now share the reviewed consent component. Validated
 CIMD/DCR branding, actual user/authority and grant lifetime reach the production
 page; existing clients need no migration. The native consent form preserves the
-existing HTTP 302 to the registered callback. Enhanced decisions show the reviewed
-receipt in a separate window and return the original window to the exact client
-callback. Blocked windows or JavaScript-free
-forms retain the native redirect. Existing CIMD fetch/cache/security behavior is
-retained; the receipt does not claim token exchange completed.
+authenticated POST. Approval and denial render confirmation in that same tab.
+Back to my app follows the exact validated callback on user action, including
+without JavaScript. Existing CIMD fetch/cache/security behavior is retained;
+the confirmation does not claim token exchange completed.
 
 ## Implementation checkpoints
 
@@ -152,7 +151,7 @@ retained; the receipt does not claim token exchange completed.
   callback behavior and record the supported completion-screen scope before
   declaring the screen integrated. No silent mock completion in production.
 - [x] Implement approved/declined product outcomes for the supported flow, with
-  Back to Vxpipe primary and Manage connected clients secondary. Cover callback
+  Back to my app primary and Manage connected clients secondary. Cover callback
   failure, expired/replayed requests, login resume, cancellation and role drift.
 - [x] Promote the reviewed unavailable-request screen for rejected/expired/replayed
   requests, keeping error status, no callback, no approval receipt and a real
@@ -240,3 +239,29 @@ rebuilt the local image and restarted Vxpipe. Health and both system services pa
 public admin/OAuth assets match the verified release. The container retains its
 1 GiB limit. This closes the checklist with the browser evidence above; no full
 suite was run and main remains unchanged.
+
+
+## Callback-button follow-up — 2026-11-12
+
+Design review: the user explicitly replaces the separate-tab flow with a
+same-tab confirmation and Back to my app action. Both approval and denial use
+the validated callback, preserving code/error, state and issuer. Remove the
+popup transport and presentation flag entirely. Keep the unavailable-request
+recovery link because a rejected request has no validated callback to follow.
+The earlier separate-window evidence above records the superseded implementation.
+
+- [x] Render both confirmations in the current tab and wait for the explicit
+  callback action, including the JavaScript-free page.
+- [x] Replace the outcome's Console-home action with Back to my app; synchronize
+  Storybook and remove the popup transport/flag without a compatibility branch.
+- [x] Verify exact callback data, CSRF, failure behavior and duplicate submission
+  with focused tests; inspect desktop/mobile and real CIMD/DCR callback flows,
+  including an unreachable loopback callback suitable for manual URL copying.
+- [x] Update documentation, build/release QA, verify deployment, commit and push.
+
+Acceptance: 16 frontend and 15 Console cases pass, along with TypeScript, lint,
+root static checks and assets/Storybook builds. Real browser checks cover both
+CIMD/DCR decisions, same-tab explicit callback delivery, code exchange/MCP use,
+refresh/revoke/replay and the unreachable callback address used by manual CLI
+login. Desktop/mobile/light layouts were inspected. The QA release is live on
+Vitrum; health/services pass and public assets match the built release.

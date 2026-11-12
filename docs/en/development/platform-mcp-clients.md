@@ -100,11 +100,10 @@ all-tenant/assigned-tenant authority lists its exact all-tenant actions separate
 Both decisions remain available without preselecting consent. A native HTML form
 preserves the authenticated CSRF-protected POST and works without JavaScript.
 
-Ordinary submissions to `AuthorizationController.decide/2` send a **302 redirect**
-to the validated client callback. Enhanced submissions render the receipt in a
-separate window and deliver the same callback to the original request window.
-Approval includes `code`, denial includes `error=access_denied`,
-and both include `iss` and the original `state` when present. The receiving client
+Submissions to `AuthorizationController.decide/2` render the confirmation in the
+same tab. **Back to my app** navigates to the exact validated client callback.
+Approval includes `code`, denial includes `error=access_denied`, and both include
+`iss` and the original `state` when present. The receiving client
 owns its callback screen. Production and Storybook share the receipt components.
 Protocol details and review notes live in this documentation. For a native
 client such as Codex, the callback may return to a loopback listener on the user's
@@ -114,8 +113,8 @@ with a Back to Vxpipe link. It retains the HTTP error status and does not displa
 a client identity or approval receipt from a failed validation.
 
 The approved screen says **Access approved**, without claiming the client has
-finished its token exchange. **Back to Vxpipe** is the primary action and returns
-to Console home; **Manage connected clients** is a secondary text link. Denial
+finished its token exchange. **Back to my app** is the primary action on both
+outcomes; **Manage connected clients** remains a secondary approval link. Denial
 states that no new access was granted and existing connections are unchanged.
 
 **Vxpipe → Console → Settings → Your connections** includes a complete
@@ -162,35 +161,32 @@ cover branding rejection, old records, digest drift and rendered authority.
 
 ### Completion transport
 
-Enhanced consent reserves a named Vxpipe receipt window during the decision click
-and submits the existing native form into it. The browser-only `presentation=receipt`
-field selects an HTML result; ordinary submissions retain the original 302.
-The receipt receives presentation data and actual expiry from the same locked
-transaction that checks current authority and consumes the request. It does not
-query consent again or store a separate receipt record.
+The native consent POST renders approval or denial directly. Its confirmation
+receives presentation data, actual expiry and the validated callback from the same
+locked transaction that checks current authority and consumes the request. It
+does not query consent again or store a separate receipt record.
 
-The receipt redirects its opener only when that window still has the same origin
-and exact opaque authorization path. This preserves the original OAuth window,
-including a browser client's own opener relationship. The receipt severs its own
-opener reference before delivery. A missing, closed or navigated opener falls
-back to callback delivery in the current window. No callback credentials enter a
-new Vxpipe URL, storage entry, log or cross-window message. Callback data is removed
-from the bootstrap DOM once read.
+The primary action is an ordinary **Back to my app** link with no target window.
+The user stays on the confirmation until selecting it, then the same tab navigates
+to the client callback. No popup, opener manipulation, automatic redirect or
+cross-window message protocol is involved. The JavaScript-free page provides the
+same callback link. Existing client opener relationships remain intact.
 
-If opening a receipt is blocked, or JavaScript is unavailable, the ordinary
-form/302 flow still delivers the result in the original window. Receipts therefore
-remain visible when the extra window and original request window are available;
-they are not a replacement for the client's callback. A callback network failure
-can leave the original window on a browser error while the Vxpipe receipt records
-only that access was approved. It never claims the client completed token exchange.
+The callback retains its complete code/error, state and issuer response. It is
+never copied into another Vxpipe URL, browser storage or logs. The response is
+private/no-store with a no-referrer policy. The callback is available to the link;
+the bootstrap copy is removed after React reads it.
 
-The consent copy announces the extra tab. A single-tab receipt replacing the
-callback would lose
-code/error delivery; opening the callback in another window can break client
-opener expectations. A database receipt system or a postMessage handshake adds
-state without helping this native-form flow. See the browser's
-[named window behavior](https://developer.mozilla.org/en-US/docs/Web/API/Window/open)
-and [form target contract](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/form#target).
+For manual CLI login, users select **Back to my app**, then copy the resulting
+callback address into their CLI, even when the loopback destination cannot load.
+Approval alone does not mean token exchange has completed. Closing the
+confirmation without returning to the client leaves that exchange unfinished;
+consent remains one-time and the authorization code retains its existing expiry.
+
+This flow replaces the separate-window design, which made manual login confusing
+by foregrounding a Vxpipe address while returning the original tab to the client.
+Keeping the confirmation and explicit callback action together preserves the
+reviewed outcome page and makes the handoff visible without additional state.
 
 ### Personal settings follow-through
 

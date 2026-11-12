@@ -112,7 +112,7 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
 
   def public_url, do: Process.get(:installation_origin)
 
-  test "approval and denial preserve registered callback query and state" do
+  test "approval and denial wait on confirmation with the exact callback link" do
     for {decision, expected} <- [
           {"approve", %{"code" => "secret-code"}},
           {"deny", %{"error" => "access_denied"}}
@@ -125,7 +125,17 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
         |> put_req_header("content-type", "application/x-www-form-urlencoded")
         |> post("https://localhost/oauth/authorize/#{@id}", "decision=#{decision}")
 
-      callback = response |> get_resp_header("location") |> hd() |> URI.parse()
+      body = html_response(response, 200)
+      assert get_resp_header(response, "location") == []
+      assert get_resp_header(response, "cache-control") == ["private, no-store"]
+      assert get_resp_header(response, "referrer-policy") == ["no-referrer"]
+      assert body =~ ~s(data-state="#{if decision == "approve", do: "allowed", else: "denied"}")
+      assert body =~ "data-completion="
+
+      [_, destination] =
+        Regex.run(~r/<a href="([^"]+)" rel="noreferrer">Back to my app<\/a>/, body)
+
+      callback = destination |> String.replace("&amp;", "&") |> URI.parse()
       assert callback.host == "client.example"
 
       assert URI.decode_query(callback.query) ==
@@ -153,7 +163,7 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
       |> put_req_header("origin", "null")
       |> put_req_header("content-type", "application/x-www-form-urlencoded")
 
-    assert request |> post("https://localhost/oauth/authorize/#{@id}", body) |> response(302)
+    assert request |> post("https://localhost/oauth/authorize/#{@id}", body) |> response(200)
     assert_received {:complete, :approve}
     foreign = put_req_header(request, "origin", "https://evil.example")
     assert foreign |> post("https://localhost/oauth/authorize/#{@id}", body) |> response(403)
@@ -168,34 +178,6 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
            |> put_req_header("origin", "null")
            |> get(authorization_url())
            |> response(403)
-  end
-
-  test "a receipt response preserves the exact callback and carries the recorded outcome" do
-    for {decision, state, callback_key} <- [
-          {"approve", "allowed", "code=secret-code"},
-          {"deny", "denied", "error=access_denied"}
-        ] do
-      consent = signed_consent()
-
-      result =
-        consent
-        |> recycle()
-        |> put_req_header("content-type", "application/x-www-form-urlencoded")
-        |> post(
-          "https://localhost/oauth/authorize/#{@id}",
-          "decision=#{decision}&presentation=receipt"
-        )
-
-      body = html_response(result, 200)
-      assert body =~ ~s(data-state="#{state}")
-      assert body =~ "data-completion="
-      assert body =~ "https://client.example/callback?existing=keep"
-      assert body =~ callback_key
-      assert body =~ "state=private-state"
-      assert get_resp_header(result, "location") == []
-      assert get_resp_header(result, "cache-control") == ["private, no-store"]
-      assert get_resp_header(result, "referrer-policy") == ["no-referrer"]
-    end
   end
 
   test "forged binding and non-session principals cannot complete consent" do
@@ -312,8 +294,12 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
     refute_received {:complete, _}
   end
 
-  test "receipt selection rejects unknown values and duplicate fields before completion" do
-    for extra <- ["presentation=other", "presentation=receipt&presentation=receipt"] do
+  test "decision rejects obsolete presentation flags and duplicate fields before completion" do
+    for extra <- [
+          "presentation=receipt",
+          "presentation=other",
+          "presentation=receipt&presentation=receipt"
+        ] do
       consent = signed_consent()
 
       rejected =

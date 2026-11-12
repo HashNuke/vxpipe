@@ -10,7 +10,7 @@ defmodule Vxpipe.Identity.OAuth.BrowserStore do
   Successful completion returns the callback fields and a receipt built from the
   consumed request's presentation and authority. Approval includes the persisted
   grant expiry; denial has no expiry and creates no grant. The browser adapter
-  chooses native redirection or receipt presentation without changing that decision.
+  presents the receipt with an explicit link to the validated client callback.
   """
 
   alias Vxpipe.Identity.Principal

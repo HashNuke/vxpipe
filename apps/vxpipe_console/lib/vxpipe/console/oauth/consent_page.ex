@@ -10,7 +10,7 @@ defmodule Vxpipe.Console.OAuth.ConsentPage do
       id: id,
       csrf_token: nil,
       state: receipt.state,
-      completion: %{request_id: id, callback: callback, expires_at: receipt.expires_at}
+      completion: %{callback: callback, expires_at: receipt.expires_at}
     })
   end
 
@@ -78,7 +78,7 @@ defmodule Vxpipe.Console.OAuth.ConsentPage do
         <main :if={@completion} class="vx-admin oauth-preview oauth-preview-main">
           <h1>{if @state == "allowed", do: "Access approved", else: "Connection declined"}</h1>
           <p>Return to {@consent.client_name} to finish this request.</p>
-          <a href={@completion.callback} rel="noreferrer">Continue to client</a>
+          <a href={@completion.callback} rel="noreferrer">Back to my app</a>
         </main>
         </noscript>
       </body>

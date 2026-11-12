@@ -15,7 +15,7 @@ const meta = {
   },
   parameters: {
     layout: "fullscreen",
-    docs: { description: { component: "Shared production consent, approval, decline and recovery presentation. Codex branding uses public CIMD metadata; account, tenant and permissions are fixtures. The real form keeps the OAuth callback in its original window and shows a separate receipt when the browser permits it. Storybook simulates the decisions in one canvas without making authorization requests or opening windows." } },
+    docs: { description: { component: "Shared production consent, approval, decline and recovery presentation. Codex branding uses public CIMD metadata; account, tenant and permissions are fixtures. Decisions show a confirmation in the same tab. Back to my app navigates to the validated client callback. Storybook simulates the decisions and return to the client in one canvas without authorization requests or external navigation." } },
   },
   render: (args) => <OAuthConsentStory key={JSON.stringify(args)} {...args} />,
 } satisfies Meta<typeof OAuthConsentStory>;

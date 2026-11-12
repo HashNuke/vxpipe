@@ -11,15 +11,33 @@ const consent: Consent = {
   authority: { grants: ["calls.read", "call_specs.write"], all_tenant_actions: ["calls.read"], assigned_tenants: { "tenant-one": "read_write" } },
 };
 
-test("native submission reserves one receipt and suppresses duplicate decisions", () => {
+test("native submission stays in the same tab and suppresses duplicate decisions", () => {
   const open = vi.spyOn(window, "open").mockReturnValue({} as Window);
   render(<OAuthConsent consent={consent} requestId="request" csrfToken="csrf" />);
   const form = screen.getByRole("button", { name: "Allow connection" }).closest("form")!;
   expect(fireEvent.submit(form)).toBe(true);
   expect(fireEvent.submit(form)).toBe(false);
-  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).not.toHaveBeenCalled();
+  expect(form.target).toBe("");
   expect(screen.getByRole("status")).toHaveTextContent("Saving your choice");
-  expect(new FormData(form).getAll("presentation")).toEqual(["receipt"]);
+  expect(new FormData(form).has("presentation")).toBe(false);
+});
+
+test.each(["allowed", "denied"] as const)("%s confirmation waits for Back to my app with the exact callback", (step) => {
+  const open = vi.spyOn(window, "open");
+  const returnToApp = vi.fn();
+  const callback = `http://127.0.0.1:1455/callback?${step === "allowed" ? "code=example-code" : "error=access_denied"}&state=example-state&iss=https%3A%2F%2Fvxpipe.example`;
+  render(<OAuthConsent consent={consent} requestId="request" csrfToken="" step={step} callbackUrl={callback} onReturnToApp={returnToApp} />);
+  const back = screen.getByRole("link", { name: "Back to my app" });
+  expect(back).toHaveAttribute("href", callback);
+  expect(back).not.toHaveAttribute("target");
+  expect(back).toHaveAttribute("rel", "noreferrer");
+  expect(screen.queryByRole("button", { name: "Back to Vxpipe" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Back to Vxpipe" })).not.toBeInTheDocument();
+  expect(returnToApp).not.toHaveBeenCalled();
+  expect(open).not.toHaveBeenCalled();
+  fireEvent.click(back);
+  expect(returnToApp).toHaveBeenCalledTimes(1);
 });
 
 test("the approved receipt displays the recorded expiry", () => {
