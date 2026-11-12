@@ -313,6 +313,41 @@ defmodule Vxpipe.Console.OAuthBrowserTest do
     end
   end
 
+  test "rejected consent submissions log the reason without form values or request identifiers" do
+    for {body, reason} <- [
+          {"_csrf_token=private-csrf-sentinel", "missing_decision"},
+          {"decision=private-decision-sentinel", "invalid_decision"},
+          {"decision=approve&unknown=private-extra-sentinel", "unexpected_form_fields"},
+          {"decision=approve&decision=deny", "malformed_form"}
+        ] do
+      consent = signed_consent()
+
+      log =
+        capture_log(fn ->
+          rejected =
+            consent
+            |> recycle()
+            |> put_req_header("content-type", "application/x-www-form-urlencoded")
+            |> post("https://localhost/oauth/authorize/#{@id}", body)
+
+          assert response(rejected, 400)
+        end)
+
+      assert log =~ "OAuth browser request rejected method=POST status=400 reason=#{reason}"
+
+      for private <- [
+            @id,
+            "private-csrf-sentinel",
+            "private-decision-sentinel",
+            "private-extra-sentinel"
+          ] do
+        refute log =~ private
+      end
+
+      refute_received {:complete, _}
+    end
+  end
+
   test "rate limiter failures reject locally and sensitive request details are not logged" do
     Process.put(:oauth_limit, {:error, :rate_limited})
 

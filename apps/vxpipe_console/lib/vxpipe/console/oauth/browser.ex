@@ -2,6 +2,7 @@ defmodule Vxpipe.Console.OAuth.Browser do
   @moduledoc "Validates the browser-facing OAuth boundary before session or consent work."
   @behaviour Plug
   import Plug.Conn
+  require Logger
   alias Vxpipe.Console.ClientAddress
   alias Vxpipe.Gateway.OAuth.{Configuration, Input}
   alias Vxpipe.Identity.OAuth.Profile
@@ -23,15 +24,36 @@ defmodule Vxpipe.Console.OAuth.Browser do
          {:ok, params, conn} <- input(conn, options.resource) do
       conn |> assign(:oauth_options, options) |> assign(:oauth_params, params)
     else
-      false -> reject(conn, 404)
-      {:error, :forbidden} -> reject(conn, 403)
-      {:error, :rate_limited} -> reject(conn, 429)
-      {:error, :unavailable} -> reject(conn, 503)
-      {:error, status, updated} -> reject(updated, status)
-      _invalid -> reject(conn, 400)
+      false ->
+        reject(conn, 404, :disabled)
+
+      {:error, :forbidden} ->
+        reject(conn, 403, :untrusted_request)
+
+      {:error, :untrusted_origin} ->
+        reject(conn, 403, :untrusted_origin)
+
+      {:error, :rate_limited} ->
+        reject(conn, 429, :rate_limited)
+
+      {:error, :unavailable} ->
+        reject(conn, 503, :unavailable)
+
+      {:error, 400, updated} ->
+        reject(updated, 400, :malformed_form)
+
+      {:error, status, updated} ->
+        reject(updated, status, :invalid_body)
+
+      {:error, reason}
+      when reason in [:unexpected_form_fields, :missing_decision, :invalid_decision] ->
+        reject(conn, 400, reason)
+
+      _invalid ->
+        reject(conn, 400, :invalid_request)
     end
   rescue
-    _error -> reject(conn, 503)
+    _error -> reject(conn, 503, :internal_error)
   end
 
   def browser_binding(conn), do: get_session(conn, @binding_key)
@@ -70,10 +92,11 @@ defmodule Vxpipe.Console.OAuth.Browser do
     if conn.host in options.allowed_hosts and conn.host == issuer.host and
          Atom.to_string(conn.scheme) == issuer.scheme and conn.port == issuer.port and
          (conn.scheme == :https or conn.remote_ip in [{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 1}]) and
-         issuer.path in [nil, "", "/"] and get_req_header(conn, "authorization") == [] and
-         trusted_origin?(conn, origin),
-       do: :ok,
-       else: {:error, :forbidden}
+         issuer.path in [nil, "", "/"] and get_req_header(conn, "authorization") == [] do
+      if trusted_origin?(conn, origin), do: :ok, else: {:error, :untrusted_origin}
+    else
+      {:error, :forbidden}
+    end
   end
 
   # Native form navigation sends Origin: null under our no-referrer policy.
@@ -102,8 +125,7 @@ defmodule Vxpipe.Console.OAuth.Browser do
 
   defp decision_input(%{method: "POST"} = conn) do
     with {:ok, params, conn} <- Input.read(conn, :form),
-         true <- Enum.all?(Map.keys(params), &(&1 in ["decision", "_csrf_token"])),
-         true <- params["decision"] in ["approve", "deny"] do
+         :ok <- validate_decision(params) do
       {:ok, params,
        %{
          conn
@@ -111,9 +133,22 @@ defmodule Vxpipe.Console.OAuth.Browser do
            query_params: %{},
            params: Map.merge(conn.path_params, params)
        }}
-    else
-      false -> {:error, :invalid_request}
-      error -> error
+    end
+  end
+
+  defp validate_decision(params) do
+    cond do
+      Enum.any?(Map.keys(params), &(&1 not in ["decision", "_csrf_token"])) ->
+        {:error, :unexpected_form_fields}
+
+      not Map.has_key?(params, "decision") ->
+        {:error, :missing_decision}
+
+      params["decision"] not in ["approve", "deny"] ->
+        {:error, :invalid_decision}
+
+      true ->
+        :ok
     end
   end
 
@@ -135,7 +170,11 @@ defmodule Vxpipe.Console.OAuth.Browser do
 
   defp query(_value), do: {:error, :invalid_request}
 
-  defp reject(conn, status) do
+  defp reject(conn, status, reason) do
+    Logger.warning(
+      "OAuth browser request rejected method=#{conn.method} status=#{status} reason=#{reason}"
+    )
+
     conn = Vxpipe.Console.PrivateNoStore.call(conn, [])
     conn = if status == 429, do: put_resp_header(conn, "retry-after", "60"), else: conn
 
