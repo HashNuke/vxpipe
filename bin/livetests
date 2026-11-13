@@ -412,13 +412,15 @@ ensure_telnyx_app() {
   app="$(telnyx_api GET "/call_control_applications?filter[application_name][contains]=$node_name" |
     exact_by application_name "$node_name")" || return 2
   wanted="$(jq -nc --arg w "$webhook" --arg p "$profile_id" \
-    '{webhook_event_url: $w, webhook_api_version: "2", outbound: {outbound_voice_profile_id: $p}}')"
+    '{webhook_event_url: $w, webhook_api_version: "2", call_cost_in_webhooks: true, outbound: {outbound_voice_profile_id: $p}}')"
   if [[ -z "$app" ]]; then
     [[ "$mode" == check ]] && return 1
     app="$(telnyx_api POST /call_control_applications \
       "$(jq -c --arg n "$node_name" '. + {application_name: $n}' <<< "$wanted")" | jq -c .data)" || return 2
     report telnyx "voice API application" "created $node_name"
   elif [[ "$(jq -r '.webhook_event_url' <<< "$app")" != "$webhook" ||
+    "$(jq -r '.webhook_api_version' <<< "$app")" != "2" ||
+    "$(jq -r '.call_cost_in_webhooks' <<< "$app")" != "true" ||
     "$(jq -r '.outbound.outbound_voice_profile_id' <<< "$app")" != "$profile_id" ]]; then
     [[ "$mode" == check ]] && { carrier_error "Telnyx application $node_name is not wired to this machine; run bin/livetests telephony:provision"; return 2; }
     app="$(telnyx_api PATCH "/call_control_applications/$(jq -r .id <<< "$app")" "$wanted" | jq -c .data)" || return 2

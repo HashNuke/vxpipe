@@ -82,6 +82,40 @@ Gateway's common lifecycle. Authenticate raw callbacks before trusting routing;
 retain initialized service/credential identity for active legs. Test both dial
 directions, uncertain submission, duplicate callbacks and selective hangup.
 
+### Telnyx v2 billing events
+
+Telnyx uses the v2 `data.record_type/event_type/id/occurred_at/payload` envelope and
+ED25519 verification of the timestamp plus raw request body. The test provisioner
+sets and repairs both `webhook_api_version: "2"` and `call_cost_in_webhooks: true`.
+See [webhook format](https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-webhooks),
+[application settings](https://developers.telnyx.com/api-reference/call-control-applications/update-a-call-control-application),
+and the `CallCost` schema in the [official OpenAPI specification](https://github.com/team-telnyx/openapi/blob/master/openapi/spec3.json).
+
+`call.cost` is a billing event, separate from call lifecycle dispatch. Gateway
+finds the persisted telephony usage by provider leg and session, then checks the
+application against the immutable call plan. The tenant URL must match the stored
+tenant; the platform URL can receive either scope. The original credential identity
+supplies the current verification key. Authentication precedes every write.
+An index supports this lookup without scanning all calls. Missing or ambiguous
+usage, deleted credentials and storage failures return 503 for carrier retry.
+Changing current number routing cannot reassign the charge to another tenant.
+
+The existing immutable usage store records final cumulative decimal costs, billed
+milliseconds and component costs included in the total. Total currency comes from
+agreeing component currencies; no currency is guessed. A stable event receipt and
+per-component observation identities make retries idempotent and reject a changed
+payload under the same event ID. A partial write can resume on retry; publication
+is requested after the full event has been stored. Error events store an unknown
+measurement, not zero, and never change the call's lifecycle outcome.
+
+This reuses durable call plans and usage instead of retaining live call processes
+or adding a second billing queue/store. It relies on the carrier's retry window
+when usage has not yet reached persistence; it does not backfill historical events
+that Telnyx never delivered. Focused mounted HTTP tests cover signed v2 payloads,
+scope and amount validation; persistence tests cover ended calls, immutable replay
+and ambiguous targets. Provisioning fixtures mock the carrier API; no paid calls
+are needed for these checks.
+
 ## Public directory definitions
 
 Canonical definitions are top-level `integrations/*.json` in this repository.

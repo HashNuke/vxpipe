@@ -29,7 +29,10 @@ for new calls.
    input and requires it to be entered again. Both sections save together.
 3. Copy the webhook URL under **Voice application** into Telnyx, then assign the
    incoming numbers to that application. Inherited settings use the platform URL;
-   either tenant override uses the tenant URL. Vxpipe does not change Telnyx settings.
+   either tenant override uses the tenant URL. Select webhook API version **2** and
+   enable **Call cost in webhooks** on the application (`webhook_api_version: "2"`,
+   `call_cost_in_webhooks: true`). Vxpipe does not change Telnyx settings.
+   See the [Telnyx application settings](https://developers.telnyx.com/api-reference/call-control-applications/update-a-call-control-application).
 4. Select the tenant's service name and number on the incoming call spec's Entry
    connection, then publish it. Configure an E.164 outbound caller ID in Phone
    routing when the service will place calls or dial transfer destinations.
@@ -58,6 +61,14 @@ tenant URL only accepts that tenant's routes. Shared application events also nee
 the called number to identify the tenant. Invalid credentials, unknown numbers
 and ambiguous routes cannot start a call; retries cannot create a second call
 after a number moves to another tenant. Active legs keep their original identity.
+
+### Call costs
+
+Signed `call.cost` events update the call's usage after it ends. Vxpipe records the
+reported total, charge components and billed duration; retries do not add the same
+charge again. Cost errors remain unavailable rather than appearing as zero. Keep
+the original credential and its Telnyx public key available while final events
+are arriving. Cost delivery must be enabled on the Voice API application.
 
 ## Twilio
 

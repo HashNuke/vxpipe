@@ -13,6 +13,17 @@ defmodule Vxpipe.Calls.UsageProjections do
 
   def store(_observation, _options), do: {:error, :invalid_usage_observation}
 
+  @doc "Resolves durable carrier usage for authenticated billing webhook processing."
+  def telephony_target(provider, leg_id, session_id, options) do
+    with {:ok, repository} <- Repositories.fetch(options, :usage_repository) do
+      Repositories.call(repository, :fetch_telephony_billing_target, [
+        provider,
+        leg_id,
+        session_id
+      ])
+    end
+  end
+
   @spec fetch_report(CallReadAccess.authority(), String.t(), keyword()) ::
           {:ok, UsageReport.t()} | {:error, term()}
   def fetch_report(authority, call_id, options)
@@ -26,5 +37,4 @@ defmodule Vxpipe.Calls.UsageProjections do
   end
 
   def fetch_report(_principal, _call_id, _options), do: {:error, :invalid_usage_request}
-
 end

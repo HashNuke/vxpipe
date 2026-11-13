@@ -473,6 +473,118 @@ defmodule Vxpipe.Persistence.UsageStoreTest do
     assert Repo.aggregate(UsageObservation, :count) == 0
   end
 
+  test "carrier billing target survives call completion and resolves the pinned service",
+       context do
+    alias Vxpipe.CallEngine.ResolvedCallPlan
+    alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
+    alias Vxpipe.CallEngine.Telephony.ServiceReference
+
+    reference = %ServiceReference{
+      tenant_id: @tenant_key,
+      service_id: "stored-service",
+      name: "telnyx",
+      provider: "telnyx",
+      provider_connection_id: "original-app",
+      credential_id: "original-credential",
+      credential_owner: :platform,
+      credential_name: "telnyx",
+      application_owner: :platform
+    }
+
+    plan =
+      struct(ResolvedCallPlan,
+        participants: %{"caller" => struct(Participant, telephony_service: reference)}
+      )
+
+    context.call
+    |> Ecto.Changeset.change(
+      state: :ended,
+      resolved_plan: Vxpipe.Persistence.ResolvedPlanCodec.encode(plan)
+    )
+    |> Repo.update!()
+
+    {:ok, provider} =
+      ProviderContext.new(
+        name: "telnyx",
+        integration_id: "telnyx",
+        operation_id: "carrier-leg",
+        session_id: "carrier-session"
+      )
+
+    source = %{
+      observation("identified-leg", "phone-attempt", 0, 1, :final)
+      | capability: :telephony,
+        provider: provider,
+        measurement: nil
+    }
+
+    assert {:ok, _} = UsageStore.store_usage_observation(Repo, source)
+
+    assert {:ok, {found, ^reference}} =
+             UsageStore.fetch_telephony_billing_target(
+               Repo,
+               "telnyx",
+               "carrier-leg",
+               "carrier-session"
+             )
+
+    assert found.tenant_id == @tenant_key
+    assert found.call_id == @call_id
+    assert found.attempt_id == "phone-attempt"
+
+    assert {:error, :usage_target_not_found} =
+             UsageStore.fetch_telephony_billing_target(
+               Repo,
+               "telnyx",
+               "carrier-leg",
+               "other-session"
+             )
+
+    {:ok, measurement} =
+      Measurement.new(
+        component: "cost",
+        quantity: "0.0106",
+        unit: {:currency, "USD"},
+        mode: :cumulative,
+        status: :final,
+        provenance: :provider_reported
+      )
+
+    cost = %{
+      source
+      | id: "cost-delivery",
+        delivery_id: "cost-fingerprint",
+        measurement: measurement,
+        outcome: :unknown,
+        source_sequence: nil
+    }
+
+    assert {:ok, stored} = UsageStore.store_usage_observation(Repo, cost)
+    assert {:ok, ^stored} = UsageStore.store_usage_observation(Repo, cost)
+
+    assert {:error, :usage_observation_conflict} =
+             UsageStore.store_usage_observation(Repo, %{cost | delivery_id: "altered-payload"})
+
+    assert {:ok, [amount]} = UsageStore.fetch_usage_amounts(Repo, @tenant_key, @call_id)
+    assert amount.quantity == Decimal.new("0.0106")
+    assert Repo.aggregate(UsageObservation, :count) == 2
+
+    assert {:ok, _} =
+             UsageStore.store_usage_observation(Repo, %{
+               source
+               | id: "ambiguous-leg",
+                 attempt_id: "another-attempt"
+             })
+
+    assert {:error, :ambiguous_usage_target} =
+             UsageStore.fetch_telephony_billing_target(
+               Repo,
+               "telnyx",
+               "carrier-leg",
+               "carrier-session"
+             )
+  end
+
   defp observation(id, attempt_id, quantity, source_sequence, status, options \\ []) do
     {:ok, provider} =
       ProviderContext.new(

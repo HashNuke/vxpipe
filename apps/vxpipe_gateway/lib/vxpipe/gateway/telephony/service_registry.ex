@@ -25,12 +25,17 @@ defmodule Vxpipe.Gateway.Telephony.ServiceRegistry do
         public_url_provider: nil,
         provider_credential_repository: nil,
         telephony_service_repository: nil,
+        usage_repository: nil,
         adapters: %{}
       )
 
     repository_options =
       options
-      |> Keyword.take([:telephony_service_repository, :provider_credential_repository])
+      |> Keyword.take([
+        :telephony_service_repository,
+        :provider_credential_repository,
+        :usage_repository
+      ])
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
 
     %__MODULE__{

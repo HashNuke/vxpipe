@@ -9,7 +9,13 @@ defmodule Vxpipe.Providers.Telnyx.Events do
 
   alias Vxpipe.Gateway.Telephony.IngressHandler
 
-  alias Vxpipe.Providers.Telnyx.{WebhookDecoder, WebhookSelection, WebhookVerifier}
+  alias Vxpipe.Providers.Telnyx.{
+    CallCostDecoder,
+    CallCostWebhook,
+    WebhookDecoder,
+    WebhookSelection,
+    WebhookVerifier
+  }
 
   @spec route?(Plug.Conn.t()) :: boolean()
   def route?(%Plug.Conn{method: "POST", path_info: ["webhooks", "platform", "telnyx"]}),
@@ -25,13 +31,16 @@ defmodule Vxpipe.Providers.Telnyx.Events do
     with true <- options.registry.enabled?,
          :ok <- json_content_type(conn),
          {:ok, body, conn} <- RawBody.read(conn, options.maximum_body_bytes),
-         {:ok, selection} <- WebhookSelection.select(options.registry, locator, body),
+         {:ok, selection} <- select(options.registry, locator, body),
          {:ok, headers} <- authentication_headers(conn),
          {:ok, received_at} <- received_at(options.clock),
          webhook = %Webhook{headers: headers, body: body, received_at: received_at},
          :ok <- WebhookVerifier.verify(webhook, selection.verifier_options),
-         {:ok, service, owner} <- WebhookSelection.resolve(selection, webhook) do
-      handle_verified(conn, options.handler, service, webhook, owner)
+         {:ok, result} <- resolve(selection, webhook) do
+      case result do
+        :cost -> send_resp(conn, 200, "ok")
+        {service, owner} -> handle_verified(conn, options.handler, service, webhook, owner)
+      end
     else
       false ->
         reject(conn, 404, :disabled, "not found")
@@ -80,6 +89,23 @@ defmodule Vxpipe.Providers.Telnyx.Events do
           "webhook processing unavailable"
         )
     end
+  end
+
+  defp select(registry, locator, body) do
+    case CallCostDecoder.decode(body) do
+      {:ok, cost} -> CallCostWebhook.select(cost, locator, registry.repository_options)
+      :ignore -> WebhookSelection.select(registry, locator, body)
+      error -> error
+    end
+  end
+
+  defp resolve(%{cost: _cost} = selection, _webhook) do
+    with :ok <- CallCostWebhook.store(selection), do: {:ok, :cost}
+  end
+
+  defp resolve(selection, webhook) do
+    with {:ok, service, owner} <- WebhookSelection.resolve(selection, webhook),
+         do: {:ok, {service, owner}}
   end
 
   defp handle_verified(conn, handler, service, webhook, owner) do

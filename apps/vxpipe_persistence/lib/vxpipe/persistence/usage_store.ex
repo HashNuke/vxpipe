@@ -12,6 +12,11 @@ defmodule Vxpipe.Persistence.UsageStore do
   alias Vxpipe.Persistence.Schema.UsageObservation, as: StoredObservation
 
   @impl true
+  defdelegate fetch_telephony_billing_target(repo, provider, leg_id, session_id),
+    to: Vxpipe.Persistence.TelephonyBillingTarget,
+    as: :fetch
+
+  @impl true
   def store_usage_observation(repo, %Observation{} = observation) do
     repo.transaction(fn ->
       with %Call{} = call <- fetch_call(repo, observation.tenant_id, observation.call_id, true),

@@ -302,6 +302,14 @@ rg -q -F '+14155550199' "$scratch/out" || fail "Twilio number not reported"
 rg -q -F 'twilio-token-test-only' <(grep '^ARGV' "$scratch/api/log") && fail "Twilio token in argv"
 rg -q -F 'KEYtestonly' <(grep '^ARGV' "$scratch/api/log") && fail "Telnyx key in argv"
 
+# Existing applications must repair v1/default cost settings even when URLs match.
+jq 'map(.webhook_api_version = "1" | .call_cost_in_webhooks = false)' \
+  "$scratch/api/telnyx/apps.json" > "$scratch/app-drift.json"
+mv "$scratch/app-drift.json" "$scratch/api/telnyx/apps.json"
+livetests telephony:provision > "$scratch/out"
+jq -e 'all(.[]; .webhook_api_version == "2" and .call_cost_in_webhooks == true)' \
+  "$scratch/api/telnyx/apps.json" >/dev/null || fail "Telnyx v2/cost settings were not repaired"
+
 # A second run finds everything and changes nothing.
 : > "$scratch/api/log"
 livetests telephony:provision --allow-purchase > "$scratch/out" 2>&1
