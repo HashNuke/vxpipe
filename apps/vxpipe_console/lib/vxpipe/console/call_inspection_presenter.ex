@@ -88,7 +88,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
 
   defp incarnation(%PreparedCall{}), do: nil
 
-  defp participants(%PreparedCall{plan: %ResolvedCallPlan{} = plan}, history) do
+  defp participants(%PreparedCall{plan: %ResolvedCallPlan{} = plan} = call, history) do
     plan.participants
     |> Enum.sort_by(fn {call_spec_key, _participant} ->
       participant_order(call_spec_key, plan)
@@ -97,7 +97,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
       participant_entity(
         call_spec_key,
         participant,
-        plan,
+        call,
         history
       )
     end)
@@ -114,10 +114,11 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
   defp participant_entity(
          call_spec_key,
          %Participant{} = participant,
-         plan,
+         call,
          history
        ) do
     id = participant.participant_id
+    plan = call.plan
 
     %{
       "id" => id,
@@ -128,7 +129,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
         "role" => participant_role(call_spec_key, participant, plan),
         "state" => participant_state(id, history),
         "description" => participant.description,
-        "connection" => connection(participant.connection),
+        "connection" => connection(participant, call),
         "capabilities" => capabilities(participant),
         "system_prompt" => participant.prompt,
         "transfer_policies" =>
@@ -171,13 +172,41 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     |> Enum.max(fn -> 0 end)
   end
 
-  defp connection(nil), do: nil
-  defp connection(%{service: :web}), do: %{"kind" => "webrtc"}
+  defp connection(%Participant{connection: %{service: :web}}, _call),
+    do: %{"kind" => "webrtc"}
 
-  defp connection(%{number: number}) when is_binary(number),
+  defp connection(%Participant{call_spec_key: key, connection: %{mode: :receive}}, call)
+       when key == call.entry_caller,
+       do: incoming_connection(call)
+
+  defp connection(%Participant{connection: %{mode: :receive}}, _call), do: nil
+
+  defp connection(%Participant{connection: %{number: number}}, _call),
+    do: phone_connection(number)
+
+  defp connection(_participant, _call), do: nil
+
+  defp phone_connection(number) when is_binary(number),
     do: %{"kind" => "phone", "phone_number" => number}
 
-  defp connection(_connection), do: nil
+  defp phone_connection(_number), do: nil
+
+  defp incoming_connection(call) do
+    identity =
+      %{"sip_uri" => call.caller_sip_uri, "caller_id_name" => call.caller_id_name}
+      |> Map.reject(fn {_key, value} -> is_nil(value) end)
+
+    cond do
+      is_binary(call.caller_id_number) ->
+        Map.merge(identity, %{"kind" => "phone", "phone_number" => call.caller_id_number})
+
+      is_binary(call.caller_sip_uri) ->
+        Map.put(identity, "kind", "sip")
+
+      true ->
+        nil
+    end
+  end
 
   defp capabilities(participant) do
     [

@@ -14,7 +14,8 @@ export interface Participant {
 
 export type ParticipantConnection =
   | { kind: "webrtc" }
-  | { kind: "phone"; phoneNumber: string };
+  | { kind: "phone"; phoneNumber: string; sipUri?: string; callerIdName?: string }
+  | { kind: "sip"; sipUri: string; callerIdName?: string };
 
 export interface ParticipantCapability {
   name: string;

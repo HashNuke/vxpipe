@@ -6,6 +6,21 @@ defmodule Vxpipe.Providers.Telnyx.WebhookDecoderTest do
 
   @occurred_at ~U[2026-09-11 09:45:12.123456Z]
 
+  test "retains numeric caller ID separately from the normalized SIP address and display name" do
+    input =
+      webhook("call.initiated", %{
+        "direction" => "incoming",
+        "from" => "+15550001001",
+        "from_sip_uri" => "Alice@SIP.EXAMPLE.COM:5061;transport=tls",
+        "caller_id_name" => "Alice"
+      })
+
+    assert {:ok, event} = WebhookDecoder.decode(input)
+    assert event.from == "+15550001001"
+    assert Map.get(event, :from_sip_uri) == "sip:Alice@sip.example.com:5061;transport=tls"
+    assert Map.get(event, :caller_id_name) == "Alice"
+  end
+
   test "normalizes an incoming call with its routing and correlation identity" do
     webhook = webhook("call.initiated", %{"direction" => "incoming"})
 

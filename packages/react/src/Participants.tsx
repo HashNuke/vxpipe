@@ -6,7 +6,8 @@ function presenceLabel(state: Participant["state"]) {
 }
 
 function connectionLabel(connection: ParticipantConnection) {
-  return connection.kind === "webrtc" ? "WebRTC" : connection.phoneNumber;
+  if (connection.kind === "webrtc") return "WebRTC";
+  return connection.kind === "phone" ? connection.phoneNumber : connection.sipUri;
 }
 
 export function Participants({

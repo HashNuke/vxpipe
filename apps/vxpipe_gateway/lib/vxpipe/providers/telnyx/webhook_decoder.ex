@@ -37,7 +37,16 @@ defmodule Vxpipe.Providers.Telnyx.WebhookDecoder do
     with {:ok, payload} <- payload(data),
          {:ok, from} <- bounded_field(payload, "from", @maximum_phone_address_bytes),
          {:ok, to} <- bounded_field(payload, "to", @maximum_phone_address_bytes) do
-      build_event(:incoming, data, from: from, to: to)
+      build_event(:incoming, data,
+        from: from,
+        to: to,
+        from_sip_uri:
+          Vxpipe.CallEngine.Telephony.CallerIdentity.sip_uri(Map.get(payload, "from_sip_uri")),
+        caller_id_name:
+          Vxpipe.CallEngine.Telephony.CallerIdentity.display_name(
+            Map.get(payload, "caller_id_name")
+          )
+      )
     else
       _invalid -> invalid()
     end

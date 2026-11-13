@@ -61,6 +61,8 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
              )
 
     assert claim.call.state == :admitting
+    assert Map.get(claim.call, :incoming_from) == event.from
+    assert Map.get(claim.call, :incoming_to) == event.to
     assert Repo.aggregate(Call, :count) == 1
     assert Repo.aggregate(TelephonyLeg, :count) == 1
 
@@ -73,8 +75,33 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
              )
 
     assert duplicate.call.id == claim.call.id
+    assert Map.get(duplicate.call, :incoming_from) == event.from
+    assert Map.get(duplicate.call, :incoming_to) == event.to
     assert Repo.aggregate(Call, :count) == 1
     assert Repo.aggregate(TelephonyLeg, :count) == 1
+  end
+
+  test "retains a SIP caller address separately from the receiving number", context do
+    event = incoming_event()
+      |> Map.put(:from, "+15550001001")
+      |> Map.put(:from_sip_uri, "sip:caller@example.com")
+      |> Map.put(:caller_id_name, "Example caller")
+
+    assert {:ok, claim} =
+             Calls.claim_incoming_telephony(
+               {:tenant, context.tenant.key},
+               "primary-phone",
+               event,
+               context.options
+             )
+
+    assert {:ok, loaded} = Calls.fetch_call(context.tenant.key, claim.call.id, context.options)
+    assert Map.get(loaded, :incoming_from) == "+15550001001"
+    assert loaded.caller_id_number == "+15550001001"
+    assert Map.get(loaded, :caller_sip_uri) == "sip:caller@example.com"
+    assert Map.get(loaded, :caller_id_name) == "Example caller"
+    assert Map.get(loaded, :incoming_to) == event.to
+    assert loaded.plan.participants[loaded.entry_caller].connection.number == event.to
   end
 
   test "persists a Twilio leg without a fabricated provider session identifier", context do

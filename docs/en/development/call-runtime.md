@@ -30,6 +30,20 @@ cleanup ownership, then release permitted startup. Cancellation and binding are
 ordered by the call-row transaction. A cancellation that wins before release
 must not permit later initialization to reopen the call.
 
+Incoming telephony admission stores the provider-reported `from` and `to`
+addresses on the call, separately from the immutable routing plan. Dedicated
+`caller_id_number`, `caller_id_name` and `caller_sip_uri` columns preserve caller
+identity without conflating a phone number, display name and SIP endpoint.
+Only an E.164 source populates the numeric caller ID; display names never do.
+SIP addresses retain their user and parameters, with an explicit `sip:` or
+`sips:` scheme and normalized host. Missing identities remain null. These are
+reported identities, not proof of ownership. Call inspection displays the caller
+ID and SIP address separately, including SIP-only calls without a numeric ID.
+A receive connection's configured number is the destination and must never be
+used as a caller fallback. Older calls without a captured caller address leave
+that identity unavailable unless independently recovered from a matching carrier
+record.
+
 Join tokens are scoped, expiring and single-use. Token issuance/redemption and
 call cancellation share the established lock order. A human transfer destination
 may obtain a later admission after the exact failed admission is released; old

@@ -1,7 +1,7 @@
 defmodule Vxpipe.Calls.TelephonyAdmissions do
   @moduledoc "Provider-neutral incoming telephony admission workflows."
 
-  alias Vxpipe.CallEngine.Telephony.Event
+  alias Vxpipe.CallEngine.Telephony.{CallerIdentity, Event}
 
   alias Vxpipe.Calls.{
     CallSpecCredentials,
@@ -36,7 +36,16 @@ defmodule Vxpipe.Calls.TelephonyAdmissions do
          {:ok, participant} <- Map.fetch(call.plan.participants, route.participant_ref),
          {:ok, repository} <- Repositories.fetch(options, :call_repository) do
       claim = %TelephonyAdmissionClaim{
-        call: %{call | state: :admitting},
+        call: %{
+          call
+          | state: :admitting,
+            incoming_from: event.from,
+            incoming_to: event.to,
+            caller_id_number: CallerIdentity.phone_number(event.from),
+            caller_id_name: CallerIdentity.display_name(event.caller_id_name),
+            caller_sip_uri:
+              CallerIdentity.sip_uri(event.from_sip_uri) || CallerIdentity.sip_uri(event.from)
+        },
         participant_ref: route.participant_ref,
         participant_id: participant.participant_id,
         provider: event.provider,

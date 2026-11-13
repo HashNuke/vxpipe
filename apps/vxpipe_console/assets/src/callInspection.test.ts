@@ -10,6 +10,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+test("preserves both the phone caller ID and the SIP identity", () => {
+  const response = responseFixture("ended");
+  const caller = response.participants[0]!;
+  Object.assign(caller.value, { connection: { kind: "phone", phone_number: "+15550001001", sip_uri: "sip:caller@example.com", caller_id_name: "Example caller" } });
+  expect(parseCallInspectionResponse(response).participants[0]?.value.connection).toEqual({kind: "phone", phoneNumber: "+15550001001", sipUri: "sip:caller@example.com", callerIdName: "Example caller"});
+});
+
+test("preserves a SIP caller without fabricating a phone number", () => {
+  const response = responseFixture("ended");
+  Object.assign(response.participants[0]!.value, { connection: {kind: "sip", sip_uri: "sips:caller@example.com", caller_id_name: "+15550001003"} });
+  expect(parseCallInspectionResponse(response).participants[0]?.value.connection).toEqual({kind: "sip", sipUri: "sips:caller@example.com", callerIdName: "+15550001003"});
+});
+
 test("maps an ongoing database response into the Core snapshot", () => {
   const snapshot = parseCallInspectionResponse(responseFixture("running"));
 

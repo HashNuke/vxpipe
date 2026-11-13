@@ -27,6 +27,86 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
 
   @tenant_key "tenantkey1234567"
 
+  for {from, expected} <- [
+        {nil, nil},
+        {"+15550001001", %{"kind" => "phone", "phone_number" => "+15550001001"}},
+        {"sip:caller@example.com", %{"kind" => "sip", "sip_uri" => "sip:caller@example.com"}}
+      ] do
+    @tag incoming_from: from
+    @tag expected: expected
+    test "shows the observed inbound caller #{inspect(from)} instead of the receiving number", %{
+      incoming_from: from,
+      expected: expected
+    } do
+      inspection = result()
+      prepared = inspection.prepared_call
+      plan = prepared.plan
+      caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+      connection = %ConnectionIntent{
+        service: "telnyx",
+        mode: :receive,
+        admission: :start_call,
+        number: "+15550001002"
+      }
+
+      plan = %{
+        plan
+        | participants:
+            Map.put(plan.participants, plan.entry_caller, %{caller | connection: connection})
+      }
+
+      prepared =
+        prepared
+        |> Map.put(:plan, plan)
+        |> Map.put(:incoming_from, from)
+        |> Map.put(:caller_id_number, if(from == "+15550001001", do: from))
+        |> Map.put(:caller_sip_uri, if(from == "sip:caller@example.com", do: from))
+
+      response = CallInspectionPresenter.present(%{inspection | prepared_call: prepared})
+      [caller | _others] = response["participants"]
+      assert caller["value"]["connection"] == expected
+    end
+  end
+
+  test "shows both caller ID and SIP address without substituting a numeric display name" do
+    inspection = result()
+    prepared = inspection.prepared_call
+    plan = prepared.plan
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+
+    connection = %ConnectionIntent{
+      service: "telnyx",
+      mode: :receive,
+      admission: :start_call,
+      number: "+15550001002"
+    }
+
+    plan = %{
+      plan
+      | participants:
+          Map.put(plan.participants, plan.entry_caller, %{caller | connection: connection})
+    }
+
+    prepared =
+      prepared
+      |> Map.put(:plan, plan)
+      |> Map.put(:incoming_from, "+15550001001")
+      |> Map.put(:caller_id_number, "+15550001001")
+      |> Map.put(:caller_sip_uri, "sip:caller@example.com")
+      |> Map.put(:caller_id_name, "+15550001003")
+
+    response = CallInspectionPresenter.present(%{inspection | prepared_call: prepared})
+    [caller | _] = response["participants"]
+
+    assert caller["value"]["connection"] == %{
+             "kind" => "phone",
+             "phone_number" => "+15550001001",
+             "sip_uri" => "sip:caller@example.com",
+             "caller_id_name" => "+15550001003"
+           }
+  end
+
   test "shows only normalized outgoing lifecycle metadata" do
     inspection = result()
     submitted = inspection.call.started_at

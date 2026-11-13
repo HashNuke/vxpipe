@@ -29,6 +29,22 @@ export function ParticipantDetails({
         </div>
       </header>
 
+      {participant.connection && participant.connection.kind !== "webrtc" && (
+        <section className="vx-participant-detail-section">
+          <h3>{participant.role === "caller" ? "Caller identity" : "Connection"}</h3>
+          <dl className="vx-caller-identity">
+            <dt>{participant.role === "caller" ? "Caller ID number" : "Phone number"}</dt>
+            <dd>{participant.connection.kind === "phone" ? participant.connection.phoneNumber : "Not provided"}</dd>
+            {participant.connection.sipUri && <>
+              <dt>SIP address</dt><dd>{participant.connection.sipUri}</dd>
+            </>}
+            {participant.connection.callerIdName && <>
+              <dt>Caller ID name</dt><dd>{participant.connection.callerIdName}</dd>
+            </>}
+          </dl>
+        </section>
+      )}
+
       <section className="vx-participant-detail-section">
         <h3>Capabilities</h3>
         {participant.capabilities.length === 0 ? (

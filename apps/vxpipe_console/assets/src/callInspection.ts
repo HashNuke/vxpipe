@@ -187,10 +187,17 @@ function participant(
 function participantConnection(value: unknown, path: string) {
   if (value === null || value === undefined) return undefined;
   const item = object(value, path);
-  const kind = member(item.kind, ["webrtc", "phone"] as const, `${path}.kind`);
+  const kind = member(item.kind, ["webrtc", "phone", "sip"] as const, `${path}.kind`);
+  if (kind === "webrtc") return { kind } as const;
+  const sipUri = optionalString(item.sip_uri, `${path}.sip_uri`);
+  const callerIdName = optionalString(item.caller_id_name, `${path}.caller_id_name`);
+  const identity = {
+    ...(sipUri === undefined ? {} : { sipUri }),
+    ...(callerIdName === undefined ? {} : { callerIdName }),
+  };
   return kind === "phone"
-    ? { kind, phoneNumber: string(item.phone_number, `${path}.phone_number`) } as const
-    : { kind } as const;
+    ? { kind, phoneNumber: string(item.phone_number, `${path}.phone_number`), ...identity } as const
+    : { kind, ...identity, sipUri: string(item.sip_uri, `${path}.sip_uri`) } as const;
 }
 
 function namedDescriptions(value: unknown, path: string) {

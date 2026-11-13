@@ -10,7 +10,12 @@ defmodule Vxpipe.Calls.PreparedCall do
              :idempotency_key,
              :idempotency_digest,
              :to_number,
-             :from_number
+             :from_number,
+             :incoming_from,
+             :incoming_to,
+             :caller_id_number,
+             :caller_id_name,
+             :caller_sip_uri
            ]}
   @enforce_keys [
     :id,
@@ -45,7 +50,12 @@ defmodule Vxpipe.Calls.PreparedCall do
                 idempotency_key: nil,
                 idempotency_digest: nil,
                 to_number: nil,
-                from_number: nil
+                from_number: nil,
+                incoming_from: nil,
+                incoming_to: nil,
+                caller_id_number: nil,
+                caller_id_name: nil,
+                caller_sip_uri: nil
               ]
 
   @type state :: :prepared | :admitting | :running | :ended | :failed
@@ -76,6 +86,11 @@ defmodule Vxpipe.Calls.PreparedCall do
           idempotency_digest: nil | binary(),
           to_number: nil | String.t(),
           from_number: nil | String.t(),
+          incoming_from: nil | String.t(),
+          incoming_to: nil | String.t(),
+          caller_id_number: nil | String.t(),
+          caller_id_name: nil | String.t(),
+          caller_sip_uri: nil | String.t(),
           state: state(),
           room_id: String.t(),
           created_at: DateTime.t(),

@@ -399,6 +399,21 @@
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 10px;
 }
+.vx-caller-identity {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr);
+  gap: 10px 16px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.vx-caller-identity dt {
+  color: var(--vx-muted);
+}
+.vx-caller-identity dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .vx-capability-grid article,
 .vx-participant-detail-list li {
   display: flex;

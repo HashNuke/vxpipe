@@ -20,7 +20,12 @@ defmodule Vxpipe.Persistence.Schema.Call do
              :idempotency_key,
              :idempotency_digest,
              :to_number,
-             :from_number
+             :from_number,
+             :incoming_from,
+             :incoming_to,
+             :caller_id_number,
+             :caller_id_name,
+             :caller_sip_uri
            ]}
 
   schema "calls" do
@@ -43,6 +48,11 @@ defmodule Vxpipe.Persistence.Schema.Call do
     field(:idempotency_digest, :binary)
     field(:to_number, :string)
     field(:from_number, :string)
+    field(:incoming_from, :string)
+    field(:incoming_to, :string)
+    field(:caller_id_number, :string)
+    field(:caller_id_name, :string)
+    field(:caller_sip_uri, :string)
 
     field(:state, Ecto.Enum, values: [:prepared, :admitting, :running, :ended, :failed])
 
@@ -92,6 +102,11 @@ defmodule Vxpipe.Persistence.Schema.Call do
       :idempotency_digest,
       :to_number,
       :from_number,
+      :incoming_from,
+      :incoming_to,
+      :caller_id_number,
+      :caller_id_name,
+      :caller_sip_uri,
       :state,
       :room_id,
       :created_at,
@@ -119,6 +134,11 @@ defmodule Vxpipe.Persistence.Schema.Call do
     ])
     |> validate_length(:entry_caller, min: 1, max: 128)
     |> validate_length(:entry_receiver, min: 1, max: 128)
+    |> validate_length(:incoming_from, min: 1, max: 128)
+    |> validate_length(:incoming_to, min: 1, max: 128)
+    |> validate_format(:caller_id_number, ~r/\A\+[1-9][0-9]{1,14}\z/)
+    |> validate_length(:caller_id_name, min: 1, max: 128)
+    |> validate_length(:caller_sip_uri, min: 1, max: 512)
     |> validate_binary_size(:plan_digest, 32)
     |> validate_binary_size(:idempotency_digest, 32)
     |> check_constraint(:outgoing_outcome, name: :calls_outgoing_outcome)
