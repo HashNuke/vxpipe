@@ -18,7 +18,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
   alias Vxpipe.Gateway.MCP.{Admission, Endpoint}
 
   @version "2025-11-25"
-  @spec_tools ~w(list_call_specs get_call_spec create_call_spec update_call_spec publish_call_spec_revision list_providers list_provider_models)
+  @spec_tools ~w(list_call_specs get_call_spec create_call_spec update_call_spec publish_call_spec_revision list_services list_provider_models)
 
   setup do
     repository = start_supervised!(TestMemoryRepository)
@@ -28,6 +28,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
       call_spec_repository: {TestMemoryRepository, repository},
       admin_repository: {__MODULE__, self()},
       provider_credential_repository: {__MODULE__, self()},
+      mcp_connection_repository: {__MODULE__, self()},
       registries: %{host_tools: %{}}
     ]
 
@@ -59,6 +60,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
       catalog = request(endpoint, session, 2, "tools/list", %{})
       names = Enum.map(JSON.decode!(catalog.resp_body)["result"]["tools"], & &1["name"])
       assert Enum.all?(@spec_tools, &(&1 in names))
+      refute "list_providers" in names
     end
 
     for actor <- [MCPOAuth.actor(ctx.tenant.key, :calls)] do
@@ -190,15 +192,25 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
     assert_received {:list_specs, _, 2, 2}
 
     providers =
-      invoke(ctx.endpoint, session, 3, "list_providers", %{
+      invoke(ctx.endpoint, session, 3, "list_services", %{
         tenant_key: ctx.tenant.key,
         capability: "text_to_speech",
         page_size: 1
       })
       |> result()
 
-    assert [%{"id" => _}] = providers["structuredContent"]["items"]
+    assert [%{"service" => "deepgram", "source" => "tenant"}] =
+             providers["structuredContent"]["items"]
+
     assert providers["structuredContent"]["pagination"]["page_size"] == 1
+
+    services =
+      invoke(ctx.endpoint, session, 30, "list_services", %{tenant_key: ctx.tenant.key})
+      |> result()
+
+    assert services["isError"] == false
+    assert [%{"service" => "deepgram"}] = services["structuredContent"]["items"]
+    refute JSON.encode!(services) =~ "private-sentinel"
 
     models =
       invoke(ctx.endpoint, session, 4, "list_provider_models", %{
@@ -284,7 +296,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
            %{tenant_key: ctx.tenant.key, call_spec_definition: source(), api_key: "secret"}, 5},
           {"publish_call_spec_revision",
            %{tenant_key: ctx.tenant.key, call_spec_id: "1", revision: "1"}, 6},
-          {"list_providers", %{tenant_key: ctx.tenant.key, capability: "unsupported"}, 7}
+          {"list_services", %{tenant_key: ctx.tenant.key, capability: "unsupported"}, 7}
         ] do
       response = invoke(ctx.endpoint, session, id, name, arguments)
       assert %{"error" => %{"code" => -32602}} = JSON.decode!(response.resp_body)
@@ -328,8 +340,26 @@ defmodule Vxpipe.Gateway.MCP.CallSpecToolsTest do
 
   def list_bindings(owner, tenant) do
     send(owner, {:bindings, tenant})
-    {:ok, %{tenant: %{key: tenant, name: "Fixture"}, bindings: []}}
+
+    {:ok,
+     %{
+       tenant: %{key: tenant, name: "Fixture"},
+       bindings: [
+         %{
+           provider: "deepgram",
+           name: "deepgram",
+           source: :tenant,
+           status: :connected,
+           credential_id: "private-sentinel",
+           platform_available: false,
+           saved_fields: ["api_key"],
+           last_validated_at: nil
+         }
+       ]
+     }}
   end
+
+  def list(_owner, _tenant), do: {:ok, []}
 
   defp source,
     do: %{

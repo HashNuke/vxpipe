@@ -105,7 +105,7 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
           {categoriesList.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           {!categoriesList.some(item => item.id === category) && <option value={category}>{label}</option>}
         </select></div>
-        {(data?.status === "unavailable" || categoriesFailed) && <div className="directory-sidebar-notice" role="alert"><div><strong>Integration directory unavailable</strong><Button variant="ghost" aria-label="Retry directory" onClick={() => setRetry(value => value + 1)}><RefreshCw size={15} aria-hidden /></Button></div><p>Showing built-in AI and telephony services</p></div>}
+        {(data?.status === "unavailable" || categoriesFailed) && <div className="directory-sidebar-notice" role="alert"><div><strong>Integration directory unavailable</strong><Button variant="ghost" aria-label="Retry directory" onClick={() => setRetry(value => value + 1)}><RefreshCw size={15} aria-hidden /></Button></div><p>Built-in and connected integrations remain available.</p></div>}
       </aside>
       <div className="service-directory-results" aria-busy={busy}>
         {state.status === "error" && <div className="directory-message" role="alert"><div><strong>{data ? "This page could not be loaded" : "Connection status unavailable"}</strong><p>{data ? "Your current results are still shown." : "Retry to load integrations and their current connection status."}</p></div><Button onClick={() => setRetry(value => value + 1)}>{data ? "Retry page" : "Retry connections"}</Button></div>}
@@ -113,8 +113,8 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
         {state.status === "invalid-page" && <div className="directory-message" role="alert"><span>This page link is no longer valid for these results.</span><Button onClick={() => selectCursor(null)}>Start from first page</Button></div>}
         {state.status === "missing" && <div className="directory-message" role="alert">This integration category is unavailable. Choose another category.</div>}
         {busy && !data && <p role="status">Loading integrations…</p>}
-        {data && <section className="service-directory-group" aria-label={data.status === "unavailable" ? "Installed services" : label}>
-          <h2>{data.status === "unavailable" ? "Installed services" : label}</h2>
+        {data && <section className="service-directory-group" aria-label={data.status === "unavailable" ? "Available integrations" : label}>
+          <h2>{data.status === "unavailable" ? "Available integrations" : label}</h2>
           {data.items.length === 0 ? <div className="service-directory-empty" role="status"><h3>{category === "connected" ? "No connected integrations" : "No matching integrations"}</h3><p>{category === "connected" ? "Browse AI models or Telephony to connect an integration." : "Try a different search or category."}</p></div> : <div className="service-directory-list">{data.items.map(item => {
             const native = item.provider;
             return <article className="service-directory-row" aria-label={item.name} key={item.id}>

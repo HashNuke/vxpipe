@@ -60,9 +60,11 @@ Implementation tasks remain unchecked until their acceptance evidence is recorde
 | Users | `list_users`, `create_user`, `update_user`, `disable_user` |
 
 These are 13 required tools. Supporting workflow tools are
-`publish_call_spec_revision`, `list_providers`, `list_provider_models`, and
+`publish_call_spec_revision`, `list_services`, `list_provider_models`, and
 `list_role_options`. Publication remains explicit; role options expose identifiers
-without role editing. Product list tools use page/page_size, including these helpers.
+without role editing. `list_services` returns only configured, connected native
+and MCP services visible in the requested tenant; platform services require the
+corresponding permission. Product list tools use page/page_size, including these helpers.
 Every tenant-specific tool requires the public `tenant_key`; authentication checks
 key/tenant/resource agreement. Tenant discovery and installation-wide user/role
 operations do not take a tenant argument. No session-selected tenant is implied.

@@ -4,8 +4,15 @@ import { MemoryRouter } from "react-router";
 import { StoryWorkspace } from "../stories/StoryWorkspace";
 import { IntegrationsDirectory } from "./IntegrationsDirectory";
 
-const fetchFixture = async (input: RequestInfo | URL, brokenLogo = false) => {
+const saved = { id: "saved-tools", tenant_key: "fixture", endpoint: "https://mcp.example.test/mcp", server_name: "Team tools", auth_method: "none", generation: 1, status: "connected", tool_count: 0, can_edit: true };
+
+const fetchFixture = async (input: RequestInfo | URL, brokenLogo = false, outage = false) => {
   const url = new URL(String(input), "https://console.example.test");
+  if (outage && url.pathname.endsWith("/mcp-connections/saved-tools")) return Response.json({ connection: { ...saved, tools: [] } });
+  if (outage && !url.pathname.endsWith("/categories")) return Response.json({ tenant: { key: "fixture", name: "Fixture" }, installation_version: "0.1.0", directory_status: "unavailable", connections: [], mcp_connections: [saved], page: null, local_items: [], fallback_items: [
+    { id: "provider-telnyx", kind: "provider", name: "Telnyx", connection: { provider_id: "telnyx" }, capabilities: ["telephony"], connections: [], can_connect: true },
+    { id: "mcp-saved-tools", kind: "mcp", name: saved.server_name, connection: { endpoint: saved.endpoint }, connections: [], mcp_connections: [saved], can_connect: false },
+  ] });
   if (url.pathname.endsWith("/categories")) return Response.json({ categories: [] });
   if (url.searchParams.has("cursor")) return Response.json({ error: { code: "cursor_mismatch" } }, { status: 400 });
   return Response.json({ tenant: brokenLogo ? { key: "fixture", name: "Fixture" } : null, mcp_connections: [], installation_version: "0.1.0", directory_status: "available", connections: [],
@@ -15,10 +22,10 @@ const fetchFixture = async (input: RequestInfo | URL, brokenLogo = false) => {
     } });
 };
 
-function Preview({ brokenLogo = false }: { brokenLogo?: boolean }) {
-  const fetchImpl = useMemo(() => (input: RequestInfo | URL) => fetchFixture(input, brokenLogo), [brokenLogo]);
-  return <StoryWorkspace path="/platform/services" theme="light"><MemoryRouter initialEntries={[brokenLogo ? "/t/fixture/services/calendar" : "/platform/services?q=google&cursor=old-page"]}>
-    <IntegrationsDirectory tenantKey={brokenLogo ? "fixture" : null} fetchImpl={fetchImpl} onManage={() => undefined} />
+function Preview({ brokenLogo = false, outage = false }: { brokenLogo?: boolean; outage?: boolean }) {
+  const fetchImpl = useMemo(() => (input: RequestInfo | URL) => fetchFixture(input, brokenLogo, outage), [brokenLogo, outage]);
+  return <StoryWorkspace path="/platform/services" theme="light"><MemoryRouter initialEntries={[brokenLogo || outage ? "/t/fixture/services/calendar" : "/platform/services?q=google&cursor=old-page"]}>
+    <IntegrationsDirectory tenantKey={brokenLogo || outage ? "fixture" : null} fetchImpl={fetchImpl} csrfToken="fixture" canManageMcps canEdit onManage={() => undefined} />
   </MemoryRouter></StoryWorkspace>;
 }
 
@@ -31,3 +38,5 @@ export const InvalidPage: Story = {};
 
 // Browsers block this local unsafe port before network I/O.
 export const BrokenLogo: Story = { args: { brokenLogo: true } };
+
+export const DirectoryUnavailable: Story = { args: { outage: true } };

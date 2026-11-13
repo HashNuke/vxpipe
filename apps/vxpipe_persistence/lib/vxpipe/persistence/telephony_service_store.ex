@@ -291,12 +291,48 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
         lock: "FOR SHARE"
       )
 
-    with {:ok, service} <- fetch_metadata(repo, query),
+    with {:ok, service} <- fetch_or_inherit(context, query, tenant_key, name),
          :ok <- Service.validate(service),
          {:ok, service} <- resolve_application(repo, service),
          {:ok, {_tenant_id, credential}} <- lock_credential(context, service) do
       resolved = resolved_service(service, credential)
       {:ok, %ResolvedTelephonyService{service: resolved, credential: credential}}
+    end
+  end
+
+  defp fetch_or_inherit(context, query, tenant, name) do
+    repo = Keyword.fetch!(context, :repo)
+
+    case fetch_metadata(repo, query) do
+      {:error, :telephony_service_not_found} when name == "telnyx" ->
+        inherit_telnyx(context, query, tenant)
+
+      result ->
+        result
+    end
+  end
+
+  # Persist the routing identity on first use of an inherited connection. This
+  # keeps publication, incoming routing and pinned calls on the same binding,
+  # without requiring a separate user-configured service or application name.
+  defp inherit_telnyx(context, query, tenant) do
+    repo = Keyword.fetch!(context, :repo)
+
+    with {:ok, service} <-
+           Service.new(tenant, %{
+             "name" => "telnyx",
+             "provider" => "telnyx",
+             "credential_name" => "telnyx",
+             "ingress_key" => Vxpipe.Calls.PublicId.uuid()
+           }),
+         {:ok, resolved} <- resolve_application(repo, service),
+         {:ok, {tenant_id, _credential}} <- lock_credential(context, resolved),
+         {:ok, _stored} <-
+           repo.insert(
+             TelephonyService.changeset(%TelephonyService{}, attributes(service, tenant_id)),
+             @query_options ++ [on_conflict: :nothing, conflict_target: [:tenant_id, :name]]
+           ) do
+      fetch_metadata(repo, query)
     end
   end
 

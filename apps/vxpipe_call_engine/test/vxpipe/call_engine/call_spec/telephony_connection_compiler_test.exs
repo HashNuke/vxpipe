@@ -5,6 +5,30 @@ defmodule Vxpipe.CallEngine.CallSpec.TelephonyConnectionCompilerTest do
   alias Vxpipe.CallEngine.CallSpec.NumberFromVariable
   alias Vxpipe.CallEngine.Error
 
+  test "Telnyx call specs refer to the service, never to an application ID or name" do
+    input =
+      put_in(base_call_spec(), [:participants, "caller", :connection], %{
+        service: "telnyx",
+        mode: "receive",
+        admission: "start_call",
+        number: "+15550001000"
+      })
+
+    assert {:ok, _spec} = CallSpec.new(input, resource_id: "reception", revision: 1)
+
+    for field <- [:application_id, :application_name, :provider_connection_id] do
+      invalid =
+        update_in(
+          input,
+          [:participants, "caller", :connection],
+          &Map.put(&1, field, "application")
+        )
+
+      assert {:error, %Error{code: :invalid_call_spec}} =
+               CallSpec.new(invalid, resource_id: "reception", revision: 1)
+    end
+  end
+
   test "accepts provider-neutral receive and literal dial connection intents" do
     input =
       base_call_spec()

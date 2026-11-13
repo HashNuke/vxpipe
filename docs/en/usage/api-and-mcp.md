@@ -201,11 +201,22 @@ The tool catalog exposes:
 
 - Tenants: `list_tenants`, `get_tenant`.
 - Specs/catalogs: `list_call_specs`, `get_call_spec`, `create_call_spec`,
-  `update_call_spec`, `publish_call_spec_revision`, `list_providers`,
+  `update_call_spec`, `publish_call_spec_revision`, `list_services`,
   `list_provider_models`.
 - Calls: `create_call`, `create_join_token`, `hangup_call`.
 - Accounts: `list_users`, `create_user`, `update_user`, `disable_user`,
   `list_role_options`.
+
+`list_services` lists saved, connected services for the requested `tenant_key`,
+including tenant MCP connections. It requires `call_specs.read` for that tenant;
+inherited platform services additionally require `platform_services.read`.
+Unconfigured providers are excluded. The optional `capability` filter accepts the
+speech/model capabilities, `telephony`, or `tools`; paging applies after visibility
+and capability filtering. Results contain public names, source, capabilities and
+call-spec identifiers, never credentials or tokens. For native providers, `service`
+and `provider_id` identify the provider (for example, `telnyx`); `credential_name`
+identifies its saved credential binding. For MCPs, `service` is the saved connection
+ID used in a tool's `integration` field.
 
 Discovery filters tools by permission, and each invocation rechecks authority.
 MCP uses `call_spec_definition` where HTTP uses `source`; both reach the same

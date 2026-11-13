@@ -24,6 +24,11 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
                ~w(speech_to_text output_speech_to_text text_to_speech speech_to_speech model_inference)
            })
   @write_names ~w(create_call_spec update_call_spec publish_call_spec_revision)
+  @services put_in(
+              @catalog,
+              [:capability, :enum],
+              @catalog.capability.enum ++ ~w(telephony tools)
+            )
   @definitions [
     {"list_call_specs", "List a tenant's call specs with bounded pagination.",
      Map.merge(@tenant, @paging), ["tenant_key"]},
@@ -41,9 +46,9 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
     {"publish_call_spec_revision",
      "Explicitly publish a saved, valid revision. Does not start a call.",
      Map.put(@identity, :revision, @revision), ["tenant_key", "call_spec_id", "revision"]},
-    {"list_providers",
-     "List installed providers and public credential availability for a capability.", @catalog,
-     ["tenant_key", "capability"]},
+    {"list_services",
+     "List configured services visible in this tenant. Includes permitted platform connections and saved tenant MCPs. Optionally filter by capability. Native service values are provider IDs (for example telnyx); MCP service values identify tool integrations.",
+     @services, ["tenant_key"]},
     {"list_provider_models", "List public models and voice options without calling a provider.",
      Map.put(@catalog, :provider, %{type: "string", minLength: 1, maxLength: 128}),
      ["tenant_key", "provider", "capability"]}
@@ -150,10 +155,10 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
          do: {:ok, %{call_spec_id: revision.call_spec_id, published_revision: revision.revision}}
   end
 
-  def call(actor, "list_providers", args, options) do
-    with {:ok, %{providers: providers}} <-
-           Calls.list_providers(actor, args["tenant_key"], args["capability"], options),
-         do: CatalogPage.paginate(providers, args["page"], args["page_size"])
+  def call(actor, "list_services", args, options) do
+    with {:ok, %{services: services}} <-
+           Calls.list_services(actor, args["tenant_key"], args["capability"], options),
+         do: CatalogPage.paginate(services, args["page"], args["page_size"])
   end
 
   def call(actor, "list_provider_models", args, options) do
@@ -176,7 +181,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
   def error(_name, reason) when reason in [:call_spec_page_out_of_range, :page_out_of_range],
     do: %{code: "page_out_of_range"}
 
-  def error(name, reason) when name in ["list_providers", "list_provider_models"] do
+  def error(name, reason) when name in ["list_services", "list_provider_models"] do
     {_status, projected} = ProviderCatalogErrors.response(reason)
     projected
   end

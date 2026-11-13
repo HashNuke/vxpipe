@@ -38,6 +38,64 @@ defmodule Vxpipe.Persistence.SharedTelnyxRoutingTest do
     %{first: first, second: second, author: author, context: context, options: options}
   end
 
+  test "service telnyx inherits connection settings without registering a named application",
+       data do
+    {:ok, _} = credential(:platform, 1, data.options)
+    :ok = TelephonyServices.configure_platform_application("shared-app", data.options)
+    source = put_in(source(), [:participants, "caller", :connection, :service], "telnyx")
+
+    assert {:ok, draft} =
+             Calls.save_authorized_call_spec(
+               InstallationOperator.authority(),
+               data.first.key,
+               source,
+               data.options
+             )
+
+    assert draft.validation_errors == []
+
+    assert {:ok, _published} =
+             Calls.publish_authorized_call_spec(
+               InstallationOperator.authority(),
+               data.first.key,
+               draft.call_spec_id,
+               draft.revision,
+               data.options
+             )
+
+    assert {:ok, route} =
+             TelephonyServices.fetch_telnyx_route(
+               :platform,
+               "shared-app",
+               "+15550001000",
+               data.options
+             )
+
+    assert route.name == "telnyx"
+    assert route.tenant_key == data.first.key
+    assert {:ok, resolved} = TelephonyServices.resolve(data.first.key, "telnyx", data.options)
+    assert resolved.service.provider_connection_id == "shared-app"
+    assert resolved.service.application_owner == :platform
+    assert resolved.service.id == route.id
+    assert {:ok, again} = TelephonyServices.resolve(data.first.key, "telnyx", data.options)
+    assert again.service.id == route.id
+  end
+
+  test "inheritance never bypasses missing settings or tenant credential overrides", data do
+    assert {:error, :provider_credential_unavailable} =
+             TelephonyServices.resolve(data.first.key, "telnyx", data.options)
+
+    {:ok, _} = credential(:platform, 1, data.options)
+    :ok = TelephonyServices.configure_platform_application("shared-app", data.options)
+    {:ok, _} = credential(data.first.key, 2, data.options)
+
+    assert {:error, :provider_credential_unavailable} =
+             TelephonyServices.resolve(data.first.key, "telnyx", data.options)
+
+    assert {:error, :telephony_service_not_found} =
+             TelephonyServiceStore.fetch(data.context, data.first.key, "telnyx")
+  end
+
   test "shared application routing selects the published tenant by called number", data do
     {:ok, _} = credential(:platform, 1, data.options)
     :ok = TelephonyServices.configure_platform_application("shared-app", data.options)

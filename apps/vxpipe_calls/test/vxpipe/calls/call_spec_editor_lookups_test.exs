@@ -13,6 +13,28 @@ defmodule Vxpipe.Calls.CallSpecEditorLookupsTest do
   @tenant "AAAAAAAAAAAAAAAA"
   @other "BBBBBBBBBBBBBBBB"
 
+  test "configured Telnyx is selectable without a separate named phone application" do
+    {:ok, bindings} = bindings_fixture(@tenant)
+    inherited = %{hd(bindings.bindings) | provider: "telnyx", name: "telnyx", source: :platform}
+
+    opts =
+      options(
+        {:ok, %{bindings | bindings: [inherited]}},
+        {:ok, {tenant_fixture(@tenant), [], [], false}},
+        {:ok, {tenant_fixture(@tenant), [], [], false}}
+      )
+
+    assert {:ok, lookups} =
+             Vxpipe.Calls.CallSpecEditorLookups.list(privileged_principal(@tenant), @tenant, opts)
+
+    assert [%{key: "telnyx", name: "Telnyx", provider: "telnyx"}] = lookups.telephony_services
+
+    assert {:ok, lookups} =
+             Vxpipe.Calls.CallSpecEditorLookups.list(member_principal(@tenant), @tenant, opts)
+
+    assert lookups.telephony_services == []
+  end
+
   defmodule TestEditorBindingsRepository do
     def list_bindings(result, scope) do
       send(self(), {:editor_bindings_requested, scope})

@@ -90,7 +90,7 @@ it.each([
   if (!canEdit) expect(screen.getByRole("button", { name: "Edit Google AI Studio" })).toBeDisabled();
 });
 
-it("connects, manages and disconnects a tenant MCP through the live inventory controls", async () => {
+it.each(["local", "unavailable"])("connects, manages and disconnects a tenant MCP with %s directory status", async directoryStatus => {
   let connected = false;
   const saved = { id: "mcp-id", tenant_key: "tenant-a", endpoint: "https://mcp.example.test/mcp", server_name: "Tools server", auth_method: "none", generation: 1, status: "connected", tool_count: 0, can_edit: true };
   const fetcher = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
@@ -99,7 +99,7 @@ it("connects, manages and disconnects a tenant MCP through the live inventory co
     if (init?.method === "POST" && path.endsWith("/mcp-connections")) { connected = true; return response({ connection: saved }, 201); }
     if (init?.method === "DELETE") { connected = false; return response({ connection: { ...saved, generation: 2, status: "revoked" } }); }
     if (path.endsWith("/mcp-connections/mcp-id")) return response({ connection: { ...saved, tools: [] } });
-    return response({ ...local, tenant: { key: "tenant-a", name: "Tenant A" }, mcp_connections: connected ? [saved] : [], local_items: connected ? [{ id: "mcp-mcp-id", kind: "mcp", name: "Tools server", connection: { endpoint: saved.endpoint }, connections: [], mcp_connections: [saved], can_connect: false }] : [] });
+    return response({ ...local, directory_status: directoryStatus, local_items: [], tenant: { key: "tenant-a", name: "Tenant A" }, mcp_connections: connected ? [saved] : [], [directoryStatus === "local" ? "local_items" : "fallback_items"]: connected ? [{ id: "mcp-mcp-id", kind: "mcp", name: "Tools server", connection: { endpoint: saved.endpoint }, connections: [], mcp_connections: [saved], can_connect: false }] : [] });
   });
   render(<MemoryRouter initialEntries={["/t/tenant-a/services"]}><IntegrationsDirectory tenantKey="tenant-a" csrfToken="csrf" canManageMcps fetchImpl={fetcher} onManage={vi.fn()} /></MemoryRouter>);
   fireEvent.click(await screen.findByRole("button", { name: "Connect other MCP" }));

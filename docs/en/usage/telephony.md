@@ -33,14 +33,16 @@ for new calls.
    enable **Call cost in webhooks** on the application (`webhook_api_version: "2"`,
    `call_cost_in_webhooks: true`). Vxpipe does not change Telnyx settings.
    See the [Telnyx application settings](https://developers.telnyx.com/api-reference/call-control-applications/update-a-call-control-application).
-4. Select the tenant's service name and number on the incoming call spec's Entry
-   connection, then publish it. Configure an E.164 outbound caller ID in Phone
-   routing when the service will place calls or dial transfer destinations.
+4. Select **Telnyx** and a number on the incoming call spec's Entry connection,
+   then publish it. In JSON, use `"service": "telnyx"`. The Voice API application
+   ID belongs only in the Telnyx connection settings; never put an application ID
+   or application name in a call spec.
 
-For an inherited application, leave the application ID blank in Phone routing
-to keep the platform default when changing its outbound caller number.
-Application-only changes require tenant service write permission; credential
-controls follow the role's separate credential permissions.
+A tenant can use the platform connection directly without registering a separate
+phone service. A tenant application override takes precedence over the platform
+application; tenant credentials require their own tenant application. Application-only
+changes require tenant service write permission; credential controls follow the
+role's separate credential permissions.
 
 The shared application routes each called number to its tenant and published call
 spec. Two published specs cannot claim the same number on that application.
@@ -48,10 +50,7 @@ Explicit tenant applications are dedicated: use inheritance to share the platfor
 application instead of copying its ID into an override.
 
 **Use platform default** in Credentials retains the tenant application. To inherit
-both settings, reset credentials first, then the application. If a tenant has
-multiple named services, choose the application to edit; their names and call-spec
-references remain unchanged. Each binding needs a dedicated application before
-that tenant switches to its own credentials.
+both settings, reset credentials first, then the application.
 
 Telnyx includes the application as `connection_id` in its
 [webhook payload](https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-webhooks). A dedicated tenant application

@@ -22,8 +22,12 @@ defmodule Vxpipe.CallEngine.ModelCatalog do
     "openai" => "OpenAI",
     "openrouter" => "OpenRouter",
     "rime" => "Rime",
-    "zenmux" => "Zenmux"
+    "zenmux" => "Zenmux",
+    "telnyx" => "Telnyx",
+    "twilio" => "Twilio"
   }
+
+  def provider_name(id), do: Map.get(@names, id, id)
 
   def catalog do
     Map.new(@capabilities, fn {capability, _kind} ->
@@ -47,7 +51,7 @@ defmodule Vxpipe.CallEngine.ModelCatalog do
           kind in capabilities and
             match?({:ok, _module}, Registry.resolve_capability(provider, kind))
         end)
-        |> Enum.map(fn {id, _capabilities} -> %{id: id, name: Map.get(@names, id, id)} end)
+        |> Enum.map(fn {id, _capabilities} -> %{id: id, name: provider_name(id)} end)
         |> Enum.sort_by(& &1.id)
 
       {:ok, providers}

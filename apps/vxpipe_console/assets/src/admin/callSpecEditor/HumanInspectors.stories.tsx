@@ -18,23 +18,23 @@ function HumanInspectorStory({ entry, theme, initial, initialTab = "connection",
   const [document, onChange] = useState(initial);
   const [participantKey, onRenamed] = useState("specialist");
   const [tab, onTabChange] = useState(initialTab);
-  const props = { document, onChange, issues: validateSource(document.source), catalog: modelCatalogFixture, lookups: { phoneNumbers, telephonyServices: noPhoneServices ? [] : [{ key: "phone", name: "Reception phone", provider: "telnyx" as const }], credentialNames: { deepgram: ["production"] }, mcpIntegrations: [] }, tab, onTabChange };
+  const props = { document, onChange, issues: validateSource(document.source), catalog: modelCatalogFixture, lookups: { phoneNumbers, telephonyServices: noPhoneServices ? [] : [{ key: "telnyx", name: "Telnyx", provider: "telnyx" as const }], credentialNames: { deepgram: ["production"] }, mcpIntegrations: [] }, tab, onTabChange };
   return <EditorTheme theme={theme}><main className="min-h-screen bg-muted p-0 sm:p-6"><div className="mx-auto h-dvh min-h-[32rem] w-full max-w-[34rem] overflow-hidden border border-border bg-background sm:h-[calc(100dvh-3rem)] sm:rounded-md">
     {entry ? <InboundInspector {...props} /> : Object.hasOwn(document.source.participants, participantKey) ? <HumanInspector {...props} participantKey={participantKey} onRenamed={onRenamed} /> : <p className="p-4 text-sm text-muted-foreground">Participant removed.</p>}
   </div></main></EditorTheme>;
 }
 const phone = structuredClone(editorFixture);
-phone.source.participants.specialist = { type: "human", description: "Appointment specialist", connection: { service: "phone", mode: "dial", admission: "transfer", number: "+15550001000" }, transfer_notice: "Please help this caller with their appointment." };
+phone.source.participants.specialist = { type: "human", description: "Appointment specialist", connection: { service: "telnyx", mode: "dial", admission: "transfer", number: "+15550001000" }, transfer_notice: "Please help this caller with their appointment." };
 const incoming = structuredClone(editorFixture);
 incoming.source.opening_audio = { type: "text", text: "Welcome to reception. This call may be recorded to help us improve our service.", text_to_speech: { provider: "deepgram", model: "flux", options: { voice: "hannah" } } };
 const outgoing = structuredClone(incoming);
 delete outgoing.source.incoming_call;
 outgoing.source.outgoing_call = { callee: "caller", handled_by: "intake", ring_timeout_ms: 30000 };
-outgoing.source.participants.caller = { type: "human", connection: { service: "phone", mode: "dial" } };
+outgoing.source.participants.caller = { type: "human", connection: { service: "telnyx", mode: "dial" } };
 outgoing.source.opening_audio = { type: "file_url", url: "https://example.test/welcome.wav" };
 const variable = structuredClone(phone);
 variable.source.call_variables = { sections: { routing: { schema: { type: "object", properties: { support_phone: { type: "string" } } } } } };
-variable.source.participants.specialist = { ...phone.source.participants.specialist, connection: { service: "phone", mode: "dial", number_from_variable: { section: "routing", variable: "support_phone" } } };
+variable.source.participants.specialist = { ...phone.source.participants.specialist, connection: { service: "telnyx", mode: "dial", number_from_variable: { section: "routing", variable: "support_phone" } } };
 variable.source.participants.intake = { type: "agent", prompt: "Help the caller.", transfers: ["specialist"], variable_permissions: { routing: ["read"] } };
 const overrides = structuredClone(phone);
 overrides.source.defaults = { capabilities: { speech_to_text: { provider: "deepgram", model: "flux-general-multi", options: { encoding: "linear16", sample_rate: 48000 } } } };

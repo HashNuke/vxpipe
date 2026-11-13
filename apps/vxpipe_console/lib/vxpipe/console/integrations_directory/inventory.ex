@@ -100,8 +100,9 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
       {:error, reason} when reason in @outages ->
         items =
           NativeCatalog.items()
-          |> filter_fallback(params)
           |> join(context.connections, context.can_connect_native)
+          |> Enum.concat(Enum.map(context.mcp_connections, &mcp_item/1))
+          |> filter_fallback(params)
 
         {:ok,
          Map.merge(context, %{
@@ -206,6 +207,7 @@ defmodule Vxpipe.Console.IntegrationsDirectory.Inventory do
       "kind" => "mcp",
       "name" => record.server_name,
       "summary" => "",
+      "category_ids" => [],
       "connection" => %{"endpoint" => record.endpoint},
       "connections" => [],
       "mcp_connections" => [record],

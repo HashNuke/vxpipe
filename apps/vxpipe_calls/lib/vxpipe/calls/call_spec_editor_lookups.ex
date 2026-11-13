@@ -46,7 +46,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
               Enum.map(
                 applications.applications,
                 &%{key: &1.name, name: &1.name, provider: "telnyx"}
-              ))
+              ) ++ configured_telnyx(bindings.bindings, privileged))
            |> Enum.uniq_by(& &1.key)
            |> Enum.sort_by(& &1.name),
          mcp_integrations: integrations,
@@ -81,7 +81,7 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
               Enum.map(
                 applications.applications,
                 &%{key: &1.name, name: &1.name, provider: "telnyx"}
-              ))
+              ) ++ configured_telnyx(bindings.bindings, true))
            |> Enum.uniq_by(& &1.key)
            |> Enum.sort_by(& &1.name),
          mcp_integrations: integrations,
@@ -92,6 +92,15 @@ defmodule Vxpipe.Calls.CallSpecEditorLookups do
   end
 
   def list(_authority, _tenant, _options), do: {:error, :installation_operator_required}
+
+  defp configured_telnyx(bindings, platform_allowed?) do
+    if Enum.any?(bindings, fn binding ->
+         binding.provider == "telnyx" and binding.name == "telnyx" and
+           binding.status == :connected and (binding.source == :tenant or platform_allowed?)
+       end),
+       do: [%{key: "telnyx", name: "Telnyx", provider: "telnyx"}],
+       else: []
+  end
 
   # Tenant-pinned, secret-free telephony metadata for authorized spec readers.
   # Unlike OperatorAdministration.list_services/3 this never requires

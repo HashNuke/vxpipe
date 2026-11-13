@@ -139,6 +139,9 @@ defmodule Vxpipe.Calls do
   def list_providers(authority, tenant_key, capability, options \\ []),
     do: Vxpipe.Calls.ProviderCatalog.providers(authority, tenant_key, capability, options)
 
+  def list_services(authority, tenant_key, capability \\ nil, options \\ []),
+    do: Vxpipe.Calls.ServiceCatalog.list(authority, tenant_key, capability, options)
+
   def list_provider_models(authority, tenant_key, provider, capability, options \\ []),
     do: Vxpipe.Calls.ProviderCatalog.models(authority, tenant_key, provider, capability, options)
 

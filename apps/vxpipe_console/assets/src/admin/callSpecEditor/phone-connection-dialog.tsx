@@ -47,7 +47,7 @@ export function PhoneConnectionDialog({ services, currentService, currentNumber,
           {(["twilio", "telnyx"] as const).flatMap((provider) => {
             const choices = eligible.filter((item) => item.provider === provider);
             const name = provider === "twilio" ? "Twilio" : "Telnyx";
-            return choices.length ? choices.map((item) => <SelectItem key={item.key} value={item.key}>{name} · {item.name}</SelectItem>) : [<SelectItem key={provider} value={`unavailable-${provider}`} disabled>{name} · Not configured</SelectItem>];
+            return choices.length ? choices.map((item) => <SelectItem key={item.key} value={item.key}>{item.key === provider ? name : `${name} · ${item.name}`}</SelectItem>) : [<SelectItem key={provider} value={`unavailable-${provider}`} disabled>{name} · Not configured</SelectItem>];
           })}
         </SelectContent>
       </Select>

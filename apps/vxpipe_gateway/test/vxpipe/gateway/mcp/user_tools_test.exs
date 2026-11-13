@@ -33,7 +33,7 @@ defmodule Vxpipe.Gateway.MCP.UserToolsTest do
 
   test "call-spec discovery separates reads from writes and honors membership caps" do
     reader = principal(~w(call_specs.read call_specs.write), :read)
-    read_names = ~w(list_call_specs get_call_spec list_providers list_provider_models)
+    read_names = ~w(list_call_specs get_call_spec list_services list_provider_models)
     assert names(CallSpecTools.list(reader)) == read_names
 
     assert {:ok, _} =
@@ -119,7 +119,7 @@ defmodule Vxpipe.Gateway.MCP.UserToolsTest do
     assert CallTools.list(delegated) == []
 
     assert names(CallSpecTools.list(delegated)) ==
-             ~w(list_call_specs get_call_spec list_providers list_provider_models)
+             ~w(list_call_specs get_call_spec list_services list_provider_models)
 
     assert names(AccountTools.list(delegated)) == ~w(list_users list_role_options)
 

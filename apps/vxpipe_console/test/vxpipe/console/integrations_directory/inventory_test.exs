@@ -157,6 +157,20 @@ defmodule Vxpipe.Console.IntegrationsDirectory.InventoryTest do
     opts = Keyword.put(opts, :fetcher, fn _, _ -> {:error, :unavailable} end)
     assert {:ok, result} = Inventory.list(FakeUserIdentity.principal(), @tenant, %{}, opts)
     assert [%{id: "mcp-id"}] = result.mcp_connections
+
+    assert Enum.any?(
+             result.fallback_items,
+             &(&1["mcp_connections"] == [Map.put(saved, :can_edit, true)])
+           )
+
+    for {params, expected} <- [
+          {%{"q" => "tools"}, ["Tools"]},
+          {%{"q" => "missing"}, []},
+          {%{"category" => "telephony"}, ["Telnyx", "Twilio"]}
+        ] do
+      assert {:ok, result} = Inventory.list(FakeUserIdentity.principal(), @tenant, params, opts)
+      assert Enum.map(result.fallback_items, & &1["name"]) == expected
+    end
   end
 
   test "unknown MCP status fails closed" do
