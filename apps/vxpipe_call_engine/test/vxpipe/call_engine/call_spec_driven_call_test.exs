@@ -76,9 +76,17 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     # Registered first so this runs after the startup helper's own cleanup.
     on_exit(fn ->
-      assert Registry.select(Vxpipe.CallEngine.RoomRegistry, [
-               {{{:room_incarnation, plan.tenant_id, plan.room_id, :_}, :_, :_}, [], [true]}
-             ]) == []
+      # Registry removes terminated owners asynchronously. Check the remaining
+      # owners' termination rather than racing its bookkeeping table.
+      owners =
+        Registry.select(Vxpipe.CallEngine.RoomRegistry, [
+          {{{:room_incarnation, plan.tenant_id, plan.room_id, :_}, :"$1", :_}, [], [:"$1"]}
+        ])
+
+      for owner <- owners do
+        monitor = Process.monitor(owner)
+        assert_receive {:DOWN, ^monitor, :process, ^owner, _reason}, 1_000
+      end
     end)
 
     assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call(plan)

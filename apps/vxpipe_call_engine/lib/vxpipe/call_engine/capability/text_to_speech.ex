@@ -6,7 +6,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
   alias Vxpipe.CallEngine.Capability.TextToSpeech.{Output, Usage}
-  alias Vxpipe.CallEngine.Media.AudioOutputFrame
+  alias Vxpipe.CallEngine.Media.{AudioOutputFrame, PCMResampler}
   alias Vxpipe.CallEngine.Readiness.{Resource, Watch}
   alias Vxpipe.CallEngine.Speech.{Audio, Event, Session}
   alias Vxpipe.CallEngine.Telemetry
@@ -405,15 +405,16 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
         state = %{state | current: current}
 
         with :ok <- Session.validate_audio(state.session, audio),
+             {frame, input_samples} <- output_frame(request, audio, state),
              :ok <-
                Output.push(
                  state.output,
                  self(),
                  audio,
                  request.output_sink,
-                 output_frame(request, audio, state)
+                 frame
                ) do
-          current = observe_first_audio(current, state.provider)
+          current = observe_first_audio(%{current | input_samples: input_samples}, state.provider)
           {:noreply, %{state | current: current}}
         else
           _failure -> stop_unavailable(:audio_output_failed, state)
@@ -430,6 +431,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
         current = %{
           first_audio_observed?: false,
           handle: handle,
+          input_samples: 0,
           phase: :submitted,
           played_ms: 0,
           request: request,
@@ -526,23 +528,31 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   defp output_frame(request, %Audio{payload: payload}, state) do
     format = state.descriptor.format
 
-    struct!(AudioOutputFrame, %{
-      tenant_id: request.tenant_id,
-      room_id: request.room_id,
-      incarnation_id: request.incarnation_id,
-      participant_id: request.participant_id,
-      connection_id: request.connection_id,
-      command_id: request.command_id,
-      correlation_id: request.correlation_id,
-      codec: format.encoding,
-      sample_rate: format.sample_rate,
-      channels: format.channels,
-      byte_order: format.byte_order,
-      payload: payload,
-      audio_scope: audio_scope(request.purpose),
-      output_generation: request.output_generation,
-      reply_to: self()
-    })
+    # Providers retain their native format for credit and usage. Playout uses
+    # the same 48 kHz PCM boundary as STS and room audio.
+    {normalized, _timestamp} =
+      PCMResampler.resample(payload, state.current.input_samples, format.sample_rate, 48_000)
+
+    frame =
+      struct!(AudioOutputFrame, %{
+        tenant_id: request.tenant_id,
+        room_id: request.room_id,
+        incarnation_id: request.incarnation_id,
+        participant_id: request.participant_id,
+        connection_id: request.connection_id,
+        command_id: request.command_id,
+        correlation_id: request.correlation_id,
+        codec: format.encoding,
+        sample_rate: 48_000,
+        channels: format.channels,
+        byte_order: format.byte_order,
+        payload: normalized,
+        audio_scope: audio_scope(request.purpose),
+        output_generation: request.output_generation,
+        reply_to: self()
+      })
+
+    {frame, state.current.input_samples + div(byte_size(payload), 2)}
   end
 
   defp readiness_resource(options) do

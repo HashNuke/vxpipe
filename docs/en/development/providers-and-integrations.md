@@ -85,6 +85,11 @@ is a small complete implementation. The behavior modules and shared conformance
 tests are executable references; avoid copying a provider-specific socket API
 into the common session contract.
 
+TTS allocations retain the provider's native PCM format for credit and usage.
+The TTS capability converts audio to 48 kHz mono PCM at the playout boundary,
+matching STS and gateway output. Track cumulative input samples across chunks;
+normalization must preserve duration and must not inflate provider usage.
+
 For conversational STT, declare the actual endpoint authority. For finite agent
 output recognition, implement explicit `finish_input`/`input_finished` proof.
 For STS, declare who controls responses, transcript settlement, interruption,

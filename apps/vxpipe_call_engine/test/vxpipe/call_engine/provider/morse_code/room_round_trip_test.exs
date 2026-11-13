@@ -160,7 +160,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
                     %AudioOutputFrame{correlation_id: ^correlation_id} = first_frame},
                    1_000
 
-    assert byte_size(first_frame.payload) <= 640
+    assert first_frame.sample_rate == 48_000
+    assert byte_size(first_frame.payload) <= 1_920
     :ok = TestAudioOutputSink.playback_started(sink)
 
     assert_receive {:vxpipe_event, %AgentSpeechStarted{correlation_id: ^correlation_id}},
@@ -349,7 +350,8 @@ defmodule Vxpipe.CallEngine.Provider.MorseCode.RoomRoundTripTest do
 
   defp assert_decodes_to(frames, expected_text) do
     output_pcm = frames |> Enum.map(& &1.payload) |> IO.iodata_to_binary()
-    assert {:ok, output_config} = Config.new(sample_rate: 16_000, unit_duration_ms: 20)
+    assert Enum.all?(frames, &(&1.sample_rate == 48_000))
+    assert {:ok, output_config} = Config.new(sample_rate: 48_000, unit_duration_ms: 20)
     assert {:ok, output_decoder} = Decoder.new(output_config)
     assert {:ok, output_decoder, output_events} = Decoder.push(output_decoder, output_pcm)
     assert {:ok, _output_decoder, []} = Decoder.flush(output_decoder)

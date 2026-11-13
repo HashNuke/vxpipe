@@ -80,13 +80,15 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
     :ok
   end
 
-  for {provider, model, voice} <- [
-        {"cartesia", "sonic-3.6", "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"},
-        {"elevenlabs", "eleven_flash_v2_5", "JBFqnCBsd6RMkjVDRZzb"}
+  for {provider, model, voice, output_samples_per_input} <- [
+        {"cartesia", "sonic-3.6", "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4", 2},
+        {"elevenlabs", "eleven_flash_v2_5", "JBFqnCBsd6RMkjVDRZzb", 3}
       ] do
     @tag selection: %{provider: provider, model: model, options: %{voice: voice}}
+    @tag output_samples_per_input: output_samples_per_input
     test "#{provider} compiled room finishes speech only after credited playout", %{
-      selection: selection
+      selection: selection,
+      output_samples_per_input: output_samples_per_input
     } do
       {plan, room} = start_room(selection)
       assert_receive {:test_tts_transport_started, wire, _connection}, 2_000
@@ -100,8 +102,13 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
 
       context = expect_utterance(selection.provider, wire, "Echo: hello")
       pcm = :binary.copy(<<1, 0>>, 320)
+      output_pcm = :binary.copy(<<1, 0>>, 320 * output_samples_per_input)
       wire_reference = TestTextToSpeechTransport.deliver_audio_with_result(wire, {context, pcm})
-      assert_receive {:test_audio_output, ^sink, %{correlation_id: "first", payload: ^pcm}}, 2_000
+
+      assert_receive {:test_audio_output, ^sink,
+                      %{correlation_id: "first", payload: ^output_pcm, sample_rate: 48_000}},
+                     2_000
+
       assert_receive {:test_tts_audio_result, ^wire_reference, :ok}, 2_000
       TestTextToSpeechTransport.deliver_control(wire, {:final, context})
       assert_receive {:test_audio_output_finish, ^sink, "first"}, 2_000
@@ -111,8 +118,10 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
     end
 
     @tag selection: %{provider: provider, model: model, options: %{voice: voice}}
+    @tag output_samples_per_input: output_samples_per_input
     test "#{provider} compiled room interruption retires synthesis before replacement", %{
-      selection: selection
+      selection: selection,
+      output_samples_per_input: output_samples_per_input
     } do
       {plan, room} = start_room(selection)
       assert_receive {:test_tts_transport_started, wire, _connection}, 2_000
@@ -164,7 +173,7 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
 
       assert_receive {:test_tts_audio_result, ^stale_reference, :ok}, 2_000
       TestTextToSpeechTransport.deliver_control(wire, {:final, first_context})
-      refute_receive {:test_audio_output, ^sink, %{payload: <<99, 0>>}}, 30
+      refute_receive {:test_audio_output, ^sink, _stale_frame}, 30
 
       second_context = expect_utterance(selection.provider, wire, "Echo: change")
       refute second_context == first_context
@@ -173,7 +182,10 @@ defmodule Vxpipe.CallEngine.SpeechExpansionRoomTest do
       next_reference =
         TestTextToSpeechTransport.deliver_audio_with_result(wire, {second_context, <<2, 0>>})
 
-      assert_receive {:test_audio_output, ^sink, %{correlation_id: "second", payload: <<2, 0>>}},
+      output_pcm = :binary.copy(<<2, 0>>, output_samples_per_input)
+
+      assert_receive {:test_audio_output, ^sink,
+                      %{correlation_id: "second", payload: ^output_pcm, sample_rate: 48_000}},
                      2_000
 
       assert_receive {:test_tts_audio_result, ^next_reference, :ok}, 2_000
