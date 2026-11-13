@@ -149,7 +149,9 @@ defmodule Vxpipe.Console.Test.MorseRestartProbe do
       {:ok, plan} = CallSpecCompiler.compile(spec, invocation, %{host_tools: %{}})
 
       {:ok, room} =
-        CallEngine.start_call(plan, credential_source: {ProviderCredentialSource, options})
+        Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
+          credential_source: {ProviderCredentialSource, options}
+        )
 
       {:ok, monitor} = CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
       caller = Map.fetch!(plan.participants, plan.entry_caller)

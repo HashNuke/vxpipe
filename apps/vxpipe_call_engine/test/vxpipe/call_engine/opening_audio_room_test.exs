@@ -88,7 +88,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       )
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     assert_receive {:test_tts_transport_started, _voice, _}
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     connection_id = "failed-opening"
@@ -125,7 +125,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       )
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     assert_receive {:test_tts_transport_started, _voice, _}
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     connection_id = "failed-opening-queued"
@@ -177,7 +177,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     configure_speech_runtime(tts_ready?: false)
     plan = compile_plan(receiver: :human, wait_sounds: %{})
     caller = Map.fetch!(plan.participants, plan.entry_caller)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     assert_receive {:test_tts_transport_started, transport, _connection}, 1_000
 
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
@@ -227,7 +227,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         }
       )
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
 
     [{lifecycle, _}] =
       Registry.lookup(CallEngine.RoomRegistry, {:call_lifecycle, room.incarnation_id})
@@ -294,7 +294,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         )
 
       assert {:ok, room} =
-               CallEngine.start_call(plan,
+               Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                  wait_sound_settings: [
                    fetcher:
                      {TestOpeningAudioFetcher,
@@ -378,7 +378,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
         )
 
       assert {:ok, room} =
-               CallEngine.start_call(plan,
+               Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                  call_lifecycle: [
                    readiness_timeout_ms: 30_000,
                    idle_timeout_ms: 15_000,
@@ -490,7 +490,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
     assert receiver.kind == :human
     assert receiver.capabilities.text_to_speech == nil
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     assert_receive {:test_tts_transport_started, transport, connection}
     assert URI.decode_query(URI.parse(connection.url).query)["model"] == "flux-opening-voice"
     monitor = Process.monitor(transport)
@@ -542,7 +542,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       caller = Map.fetch!(plan.participants, plan.entry_caller)
 
       assert {:ok, room} =
-               CallEngine.start_call(plan,
+               Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                  recording: [
                    enabled: true,
                    targets: [:full_mix, :individual_tracks],
@@ -697,7 +697,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     assert_receive {:test_tts_transport_started, tts_transport, _connection}
 
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
@@ -772,7 +772,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     first_plan = compile_plan()
     first_caller = Map.fetch!(first_plan.participants, first_plan.entry_caller)
-    assert {:ok, first_room} = CallEngine.start_call(first_plan)
+    assert {:ok, first_room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(first_plan)
     assert_receive {:test_tts_transport_started, first_tts, _connection}
 
     first_sink =
@@ -787,7 +787,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     second_plan = compile_plan()
     second_caller = Map.fetch!(second_plan.participants, second_plan.entry_caller)
-    assert {:ok, second_room} = CallEngine.start_call(second_plan)
+    assert {:ok, second_room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(second_plan)
     assert_receive {:test_tts_transport_started, second_tts, _connection}
 
     second_sink =
@@ -809,7 +809,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     third_plan = compile_plan(opening_credential_name: "another-opening-binding")
     third_caller = Map.fetch!(third_plan.participants, third_plan.entry_caller)
-    assert {:ok, third_room} = CallEngine.start_call(third_plan)
+    assert {:ok, third_room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(third_plan)
     assert_receive {:test_tts_transport_started, third_tts, _connection}
 
     third_sink =
@@ -829,7 +829,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                call_lifecycle: [
                  readiness_timeout_ms: 30_000,
                  idle_timeout_ms: 15_000,
@@ -868,7 +868,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     plan = without_receiver_text_to_speech(plan)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     refute_receive {:test_tts_transport_started, _transport, _connection}
 
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
@@ -936,7 +936,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     assert_receive {:test_tts_transport_started, tts_transport, _connection}
 
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
@@ -979,7 +979,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     sink = start_supervised!({TestAudioOutputSink, observer: self()})
     command = attach_command(plan, room, caller, "conn-file-opening-failure")
     assert {:ok, _attachment} = TestTransferConnection.attach(command, sink)
@@ -1001,7 +1001,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
             %Error{
               code: :unsupported_call_plan,
               details: %{"path" => ["opening_audio", "text_to_speech"]}
-            }} = CallEngine.start_call(no_tts_plan)
+            }} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(no_tts_plan)
 
     assert Registry.lookup(
              Vxpipe.CallEngine.RoomRegistry,
@@ -1026,7 +1026,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
       plan = compile_plan(opening_audio: nil, agent_text_to_speech: true, first_message: opening)
       caller = Map.fetch!(plan.participants, plan.entry_caller)
-      assert {:ok, room} = CallEngine.start_call(plan)
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
       assert_receive {:test_tts_transport_started, voice, _}
       sink = start_supervised!({TestAudioOutputSink, observer: self()})
       connection_id = "protected-opening"
@@ -1125,7 +1125,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
 
     voices =
       for _voice <- 1..2, into: %{} do
@@ -1191,7 +1191,7 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     assert_receive {:test_tts_transport_started, tts_transport, _connection}
     refute_receive {:test_agent_runtime_stream, _provider, _request}
 

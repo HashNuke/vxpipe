@@ -1,7 +1,6 @@
 defmodule Vxpipe.Providers.Twilio.MediaSessionTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.{CallSpec, CallInvocation, CallSpecCompiler}
   alias Vxpipe.CallEngine.Media.AudioOutputFrame
   alias Vxpipe.CallEngine.Telephony.{Event, MediaPacket, Submission}
@@ -23,7 +22,7 @@ defmodule Vxpipe.Providers.Twilio.MediaSessionTest do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     assistant = Map.fetch!(plan.participants, plan.entry_receiver)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
 
     leg =
       start_supervised!(

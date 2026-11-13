@@ -231,7 +231,9 @@ defmodule Vxpipe.Console.Integration.MorseCodeApiConfiguredRoomTest do
     assert {:ok, plan} = CallSpecCompiler.compile(spec, invocation, %{host_tools: %{}})
 
     assert {:ok, room} =
-             CallEngine.start_call(plan, credential_source: {ProviderCredentialSource, options})
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
+               credential_source: {ProviderCredentialSource, options}
+             )
 
     {plan, room}
   end

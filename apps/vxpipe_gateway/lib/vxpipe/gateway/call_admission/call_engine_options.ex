@@ -25,6 +25,7 @@ defmodule Vxpipe.Gateway.CallAdmission.CallEngineOptions do
     ]
     |> put_optional(:outbound_leg_connector, Keyword.get(options, :outbound_leg_connector))
     |> put_optional(:credential_source, Keyword.get(options, :credential_source))
+    |> put_optional(:speech_runtime, Keyword.get(options, :speech_runtime))
     |> put_optional(
       :remote_mcp_connection_provider,
       Keyword.get(options, :remote_mcp_connection_provider)

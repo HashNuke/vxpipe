@@ -364,6 +364,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSTransferRoomTest do
   end
 
   defp assert_source_resumed(context) do
+    # Tool terminal publication precedes result delivery and hold settlement in
+    # the same authority callback. Wait for that callback before new input.
+    _ = :sys.get_state(context.authority)
     assert :ok = Vxpipe.CallEngine.Capability.SpeechToSpeech.push_text(context.capability, "HI")
     _ = :sys.get_state(context.provider)
   end

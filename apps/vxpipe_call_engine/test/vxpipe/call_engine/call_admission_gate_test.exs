@@ -163,7 +163,7 @@ defmodule Vxpipe.CallEngine.CallAdmissionGateTest do
   end
 
   defp start_call(plan, options) do
-    CallEngine.start_call(
+    Vxpipe.CallEngine.TestCallStartup.start_call_raw(
       plan,
       Keyword.put(options, :call_lifecycle,
         readiness_timeout_ms: 30_000,

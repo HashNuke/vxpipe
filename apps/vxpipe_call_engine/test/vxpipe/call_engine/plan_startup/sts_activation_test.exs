@@ -74,7 +74,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
       assert config.tools == []
       refute inspect(startup) =~ "tenant-marker"
 
-      for provider_settings <- [[enabled: false], [enabled: true, vad: true]] do
+      for provider_settings <- [[vad: true]] do
         disabled =
           Keyword.put(settings, :speech_to_speech,
             providers: %{RealtimeSession => provider_settings}
@@ -120,19 +120,6 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
     end
   end
 
-  test "ElevenLabs STS is enabled in the configured application provider registry" do
-    settings =
-      Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-      |> Keyword.fetch!(:speech_to_speech)
-
-    assert {:ok, [enabled: true]} =
-             Vxpipe.CallEngine.CapabilityCatalog.provider_settings(
-               settings,
-               RealtimeSession,
-               :speech_to_speech
-             )
-  end
-
   test "Gemini Live starts from the saved Google key with validated public speech options" do
     plan =
       compile_plan(%{
@@ -175,7 +162,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
     disabled =
       Keyword.put(settings, :speech_to_speech, providers: %{provider => [enabled: false]})
 
-    assert {:error, _error} = PlanStartup.validate(plan, disabled)
+    assert :ok = PlanStartup.validate(plan, disabled)
   end
 
   test "configured Gemini rejects unknown models and private or unsupported speech options" do
@@ -317,7 +304,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
     assert error.code in [:invalid_call_spec, :unsupported_call_plan]
   end
 
-  test "agent-output recognition still requires its STT provider to be enabled" do
+  test "agent-output recognition needs no host registration or enablement" do
     plan =
       compile_plan(%{
         speech_to_speech: %{
@@ -330,15 +317,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSActivationTest do
 
     for registry <- [%{}, %{STTSession => [enabled: false]}] do
       settings = Keyword.put(options(), :speech_to_text, providers: registry)
-      assert {:error, error} = PlanStartup.validate(plan, settings)
-      assert error.code == :unsupported_call_plan
-
-      assert error.details["path"] == [
-               "participants",
-               "assistant",
-               "capabilities",
-               "output_speech_to_text"
-             ]
+      assert :ok = PlanStartup.validate(plan, settings)
+      assert {:ok, _startup} = PlanStartup.new(plan, settings)
     end
   end
 

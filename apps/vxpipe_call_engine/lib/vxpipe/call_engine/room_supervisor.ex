@@ -434,6 +434,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       plan: plan,
       incarnation_id: incarnation_id,
       start_command_id: Id.generate(:command),
+      speech_runtime: Keyword.get(runtime_options, :speech_runtime, []),
       agent_request_options: Keyword.get(runtime_options, :agent_request_options, []),
       credential_source: Keyword.get(runtime_options, :credential_source),
       archive_handoff: archive.handoff,
@@ -515,6 +516,7 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
   defp source_stopped(handoff, reason), do: Handoff.source_stopped(handoff, reason)
 
   defp plan_startup_options(runtime_options) do
+    speech_runtime = Keyword.get(runtime_options, :speech_runtime, [])
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     [
@@ -524,9 +526,9 @@ defmodule Vxpipe.CallEngine.RoomSupervisor do
       credential_source: Keyword.get(runtime_options, :credential_source),
       mcp_integrations: Keyword.get(runtime_options, :mcp_integrations),
       opening_audio: Keyword.fetch!(runtime_options, :opening_audio),
-      speech_to_text: Keyword.fetch!(settings, :speech_to_text),
-      speech_to_speech: Keyword.get(settings, :speech_to_speech, providers: %{}),
-      text_to_speech: Keyword.fetch!(settings, :text_to_speech)
+      speech_to_text: Keyword.get(speech_runtime, :speech_to_text),
+      speech_to_speech: Keyword.get(speech_runtime, :speech_to_speech),
+      text_to_speech: Keyword.get(speech_runtime, :text_to_speech)
     ]
   end
 

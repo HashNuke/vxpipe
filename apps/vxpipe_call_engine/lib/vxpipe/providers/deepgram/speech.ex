@@ -31,24 +31,6 @@ defmodule Vxpipe.Providers.Deepgram.Speech do
 
   def selection_options(_kind, _model, _input), do: {:error, :unsupported_capability}
 
-  def settings(:speech_to_text, settings) do
-    Keyword.validate(settings,
-      enabled: false,
-      media_ingress: nil,
-      wire_module: Deepgram.STTSocket,
-      wire_options: []
-    )
-  end
-
-  def settings(:text_to_speech, settings) do
-    Keyword.validate(settings,
-      enabled: false,
-      maximum_requests: nil,
-      wire_module: Deepgram.TTSSocket,
-      wire_options: []
-    )
-  end
-
   defp normalize(input, additional \\ []) do
     Enum.reduce_while(input, {:ok, []}, fn {key, value}, {:ok, acc} ->
       case key do

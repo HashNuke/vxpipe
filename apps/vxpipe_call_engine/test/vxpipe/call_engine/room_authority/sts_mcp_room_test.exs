@@ -314,7 +314,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
     assert :ok = CatalogStore.publish(scene.store, empty)
 
     assert {:error, %CallEngine.Error{code: :unsupported_call_plan}} =
-             CallEngine.start_call(scene.plan, mcp_catalog_store: scene.store)
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(scene.plan,
+               mcp_catalog_store: scene.store
+             )
 
     refute_received {:test_remote_mcp_opened, _, _}
   end

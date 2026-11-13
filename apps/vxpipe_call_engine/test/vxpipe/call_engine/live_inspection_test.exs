@@ -73,7 +73,7 @@ defmodule Vxpipe.CallEngine.LiveInspectionTest do
     plan = resolved_plan()
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
 
     assert {:ok, initial} = await_snapshot(plan, &(&1.latest_variable_revision == 0))
     assert initial.incarnation_id == room.incarnation_id

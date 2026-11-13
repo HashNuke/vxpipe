@@ -15,7 +15,7 @@ defmodule Vxpipe.CallEngine.TelephonyCallStartupTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                call_lifecycle: [
                  readiness_timeout_ms: 30_000,
                  idle_timeout_ms: 15_000,

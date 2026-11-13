@@ -77,7 +77,7 @@ defmodule Vxpipe.CallEngine.CallLoad.Room do
 
   def start(plan, mode, supervisor) do
     started = now()
-    {:ok, room} = CallEngine.start_call(plan)
+    {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     admitted = now()
     TestCallStartup.await_prepared(plan)
     caller = Map.fetch!(plan.participants, plan.entry_caller)

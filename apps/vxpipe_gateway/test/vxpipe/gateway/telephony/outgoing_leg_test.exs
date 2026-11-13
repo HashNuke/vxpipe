@@ -917,7 +917,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     plan = Vxpipe.Gateway.TestTelephonyServiceRepository.pin_plan(plan, service_options(self()))
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                outbound_leg_connector:
                  {OutgoingLegConnector,
                   [

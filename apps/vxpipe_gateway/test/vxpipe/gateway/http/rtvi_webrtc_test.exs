@@ -472,35 +472,29 @@ defmodule Vxpipe.Gateway.HTTP.RTVIWebRTCTest do
   end
 
   defp create_audio_session(room_id, vad) do
-    options =
-      Endpoint.init(
-        cors: [],
-        room_creation: [
-          enabled: true,
-          principal: [
-            tenant_id: "tenant-development",
-            actor_id: "actor-samples",
-            scopes: ["rooms:create", "rooms:join"]
-          ],
-          trusted_call: [
-            call_spec:
-              TestTurnCall.call_spec(speech_to_text: true, text_to_speech: true)
-              |> put_in([:participants, "caller", :capabilities, :speech_to_text, :vad], vad),
-            resource_id: "audio-turn-call-spec",
-            revision: 1,
-            host_tools: %{}
-          ]
-        ]
+    speech =
+      TestTurnCall.call_spec(speech_to_text: true).participants["caller"].capabilities.speech_to_text
+
+    {plan, room, caller} =
+      TestTurnCall.start(room_id,
+        speech_to_text: Map.put(speech, :vad, vad),
+        text_to_speech: true
       )
 
-    response =
-      :post
-      |> conn("/api/rooms", JSON.encode!(%{"room_id" => room_id}))
-      |> put_req_header("content-type", "application/json")
-      |> Endpoint.call(options)
+    assert {:ok, session} =
+             Vxpipe.Gateway.SessionSupervisor.issue(
+               [
+                 tenant_id: plan.tenant_id,
+                 actor_id: plan.actor_id,
+                 room_id: room.room_id,
+                 incarnation_id: room.incarnation_id,
+                 participant_id: caller.participant_id,
+                 tool_visibility: plan.tool_visibility
+               ],
+               300_000
+             )
 
-    assert response.status == 201
-    get_in(JSON.decode!(response.resp_body), ["session", "session_id"])
+    session.session_id
   end
 
   defp create_room_session(room_id) do
