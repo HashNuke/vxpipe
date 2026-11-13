@@ -2,11 +2,7 @@ defmodule Vxpipe.Calls.PublicId do
   @moduledoc false
 
   @spec tenant_key() :: String.t()
-  def tenant_key do
-    12
-    |> :crypto.strong_rand_bytes()
-    |> Base.url_encode64(padding: false)
-  end
+  def tenant_key, do: tenant_key("")
 
   @spec api_key() :: String.t()
   def api_key do
@@ -43,6 +39,19 @@ defmodule Vxpipe.Calls.PublicId do
       ],
       "-"
     )
+  end
+
+  defp tenant_key(<<key::binary-size(16), _rest::binary>>), do: key
+
+  defp tenant_key(prefix) do
+    # Discard Base64's two symbols and replenish until 16 alphanumeric characters remain.
+    characters =
+      12
+      |> :crypto.strong_rand_bytes()
+      |> Base.url_encode64(padding: false)
+      |> String.replace(["-", "_"], "")
+
+    tenant_key(prefix <> characters)
   end
 
   defp hex(value, width) do

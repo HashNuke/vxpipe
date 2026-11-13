@@ -10,9 +10,9 @@ defmodule Vxpipe.Gateway.Telephony.IngressRegistration do
       case service.identity do
         %{
           provider: :telnyx,
-          service_reference: %{credential_name: "telnyx", credential_owner: owner}
+          service_reference: %{credential_name: "telnyx"}
         } ->
-          [{:scoped_telnyx, owner, service.identity.provider_connection_id, provider_leg}]
+          [{:scoped_telnyx, service.identity.provider_connection_id, provider_leg}]
 
         %{provider: :twilio} ->
           [IngressIdentity.ingress_key(service.identity, provider_leg)]

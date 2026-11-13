@@ -26,6 +26,10 @@ function manageTelnyx() {
   fireEvent.click(screen.getByRole("button", { name: "Manage Telnyx" }));
 }
 function saveKey() {
+  const publicKey = screen.queryByLabelText("Public key");
+  if (publicKey) fireEvent.change(publicKey, { target: { value: btoa("q".repeat(32)) } });
+  const application = screen.queryByLabelText("Voice API application ID") as HTMLInputElement | null;
+  if (application && !application.value) fireEvent.change(application, { target: { value: "tenant-application" } });
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "storybook-dummy-key" },
   });
@@ -41,13 +45,15 @@ test("an inherited Telnyx connection saves a tenant application without overridi
   expect(screen.queryByLabelText("Service name")).not.toBeInTheDocument();
   expect(screen.queryByText("Phone routing")).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/Outbound caller/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Voice API application ID")).toHaveAttribute("readonly");
+  fireEvent.click(screen.getByRole("button", { name: "Override voice application" }));
   fireEvent.change(screen.getByLabelText("Voice API application ID"), {
     target: { value: "2912345678901234568" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   manageTelnyx();
   expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234568");
-  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/platform/telnyx");
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/tenants/DemoTenant000001/telnyx");
   expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "unsaved" } });
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -55,16 +61,17 @@ test("an inherited Telnyx connection saves a tenant application without overridi
   expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234568");
 });
 
-test("Telnyx application validation and credential override keep the tenant application in place", () => {
+test("Telnyx credential override clears the application and validates its replacement", () => {
   renderConnected(<OnboardingStory scenario="inherited-services" theme="dark" />);
   manageTelnyx();
+  fireEvent.click(screen.getByRole("button", { name: "Override voice application" }));
   fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
-  expect(screen.getByRole("alert")).toHaveTextContent("Enter the Voice API application ID");
+  expect(screen.getByRole("alert")).toHaveTextContent("Voice API application ID");
   fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "2912345678901234568" } });
-  fireEvent.click(screen.getByRole("button", { name: "Override for this tenant" }));
-  expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234568");
-  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/tenants/demo-tenant/telnyx");
+  fireEvent.click(screen.getByRole("button", { name: "Override credentials" }));
+  expect(screen.getByLabelText("Voice API application ID")).toHaveValue("");
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/tenants/DemoTenant000001/telnyx");
   expect(screen.getByLabelText("API key")).toHaveValue("");
 });
 
@@ -75,10 +82,11 @@ test("a saved tenant connection can change its application without replacing cre
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   manageTelnyx();
   expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234568");
-  fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
+  fireEvent.click(screen.getByRole("button", { name: "Use platform default for credentials" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   manageTelnyx();
   expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234568");
-  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/platform/telnyx");
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/tenants/DemoTenant000001/telnyx");
 });
 
 test("tenant connect and edit display an encoded tenant webhook using the supplied application origin", () => {
@@ -90,7 +98,7 @@ test("tenant connect and edit display an encoded tenant webhook using the suppli
     />,
   );
   expect(screen.getByLabelText("Webhook URL")).toHaveValue(
-    "http://localhost:4567/webhooks/tenants/demo-tenant/telnyx",
+    "http://localhost:4567/webhooks/tenants/DemoTenant000001/telnyx",
   );
   expect(screen.getByLabelText("Webhook URL")).toHaveAttribute("readonly");
   fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
@@ -104,11 +112,11 @@ test("tenant connect and edit display an encoded tenant webhook using the suppli
   );
   manageTelnyx();
   expect(screen.getByLabelText("Webhook URL")).toHaveValue(
-    "https://voice.example.test/webhooks/tenants/demo-tenant/telnyx",
+    "https://voice.example.test/webhooks/tenants/DemoTenant000001/telnyx",
   );
 });
 
-test("platform connect and edit display the platform webhook without tenant steps", () => {
+test("platform connect saves the shared application and platform webhook", () => {
   vi.useFakeTimers();
   renderConnected(
     <OnboardingStory
@@ -120,7 +128,7 @@ test("platform connect and edit display the platform webhook without tenant step
   expect(screen.getByLabelText("Webhook URL")).toHaveValue(
     "http://localhost:4000/webhooks/platform/telnyx",
   );
-  expect(screen.queryByLabelText("Voice API application ID")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "2912345678901234567" } });
   expect(
     screen.queryByRole("navigation", { name: "Tenant setup" }),
   ).not.toBeInTheDocument();
@@ -130,6 +138,7 @@ test("platform connect and edit display the platform webhook without tenant step
   ).toBeVisible();
   manageTelnyx();
   expect(screen.getByRole("dialog", { name: "Manage Telnyx" })).toBeVisible();
+  expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234567");
   expect(screen.getByLabelText("Webhook URL")).toHaveValue(
     "http://localhost:4000/webhooks/platform/telnyx",
   );
@@ -145,18 +154,19 @@ test("inherited services count toward readiness and Telnyx overrides use an inde
   );
   expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
   fireEvent.click(
-    screen.getByRole("button", { name: "Override for this tenant" }),
+    screen.getByRole("button", { name: "Override credentials" }),
   );
   expect(screen.getByLabelText("API key")).toHaveFocus();
   expect(screen.getByLabelText("Webhook URL")).toHaveValue(
-    "http://localhost:4000/webhooks/tenants/demo-tenant/telnyx",
+    "http://localhost:4000/webhooks/tenants/DemoTenant000001/telnyx",
   );
   saveKey();
   const telephony = within(screen.getByRole("article", { name: "Telnyx" }));
   expect(telephony.getByText("Tenant override")).toBeVisible();
-  expect(telephony.getByText("Public key needed")).toBeVisible();
+  expect(telephony.queryByText("Public key needed")).not.toBeInTheDocument();
   manageTelnyx();
-  fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
+  fireEvent.click(screen.getByRole("button", { name: "Use platform default for credentials" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(telephony.queryByText("Inherited from platform")).not.toBeInTheDocument();
   expect(telephony.getByText("Connected")).toBeVisible();
 });
@@ -211,7 +221,7 @@ test("webhook copy gives success and usable failure feedback", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Copy webhook URL" }));
   expect(await screen.findByText("Webhook URL copied.")).toBeVisible();
   expect(writeText).toHaveBeenCalledWith(
-    "http://localhost:4000/webhooks/tenants/demo-tenant/telnyx",
+    "http://localhost:4000/webhooks/tenants/DemoTenant000001/telnyx",
   );
   writeText.mockRejectedValueOnce(new Error("denied"));
   fireEvent.click(screen.getByRole("button", { name: "Copy webhook URL" }));
@@ -220,4 +230,52 @@ test("webhook copy gives success and usable failure feedback", async () => {
       "Copy failed. Select the URL and copy it manually.",
     ),
   ).toBeVisible();
+});
+
+test("credential override requires a tenant application and Cancel discards changes", () => {
+  renderConnected(<OnboardingStory scenario="telnyx-inherited" theme="dark" />);
+  const application = screen.getByLabelText("Voice API application ID");
+  expect(application).toHaveValue("2912345678901234567");
+  expect(application).toHaveAttribute("readonly");
+  expect(screen.queryByText(/Local preview/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Override credentials" }));
+  expect(screen.getByLabelText("API key")).toHaveFocus();
+  expect(application).not.toHaveAttribute("readonly");
+  expect(application).toHaveValue("");
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/tenants/DemoTenant000001/telnyx");
+  fireEvent.click(screen.getByRole("button", { name: "Use platform default for credentials" }));
+  expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Use platform default for voice application" }));
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/platform/telnyx");
+  fireEvent.click(screen.getByRole("button", { name: "Override voice application" }));
+  fireEvent.change(application, { target: { value: "tenant-app" } });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  manageTelnyx();
+  expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234567");
+  expect(screen.getByLabelText("Voice API application ID")).toHaveAttribute("readonly");
+});
+
+test("restoring the shared application requires restoring platform credentials first", () => {
+  renderConnected(<OnboardingStory scenario="telnyx-override" theme="dark" />);
+  expect(screen.queryByRole("button", { name: "Use platform default for voice application" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Use platform default for credentials" }));
+  fireEvent.click(screen.getByRole("button", { name: "Use platform default for voice application" }));
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/platform/telnyx");
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  manageTelnyx();
+  expect(screen.getByLabelText("Voice API application ID")).toHaveAttribute("readonly");
+  expect(screen.getByRole("button", { name: "Override credentials" })).toBeVisible();
+});
+
+
+test("the voice application contains its webhook and an application override switches its URL", () => {
+  renderConnected(<OnboardingStory scenario="telnyx-inherited" theme="dark" />);
+  const voice = within(screen.getByRole("region", { name: "Voice application" }));
+  expect(voice.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/platform/telnyx");
+  fireEvent.click(voice.getByRole("button", { name: "Override voice application" }));
+  expect(voice.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/tenants/DemoTenant000001/telnyx");
+  expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
+  expect(screen.queryByText(/Tenant webhook|Update the webhook in Telnyx/)).not.toBeInTheDocument();
+  fireEvent.click(voice.getByRole("button", { name: "Use platform default for voice application" }));
+  expect(voice.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/platform/telnyx");
 });

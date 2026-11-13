@@ -45,6 +45,7 @@ defmodule Vxpipe.Calls.TelephonyPlanBindingsTest do
              provider: service.provider,
              provider_connection_id: service.provider_connection_id,
              credential_id: service.credential_id,
+             application_owner: service.application_owner,
              credential_owner: nil,
              credential_name: nil
            }

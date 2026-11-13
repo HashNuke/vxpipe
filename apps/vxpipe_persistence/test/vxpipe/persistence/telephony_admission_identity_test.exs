@@ -15,17 +15,38 @@ defmodule Vxpipe.Persistence.TelephonyAdmissionIdentityTest do
     data
   end
 
-  test "matching provider IDs and aliases remain distinct across tenant admissions and retries",
+  test "different applications may reuse provider IDs and aliases across tenants",
        data do
     other = new()
+
+    Repo.update_all(from(s in TelephonyService, where: s.public_id == ^other.service.id),
+      set: [provider_connection_id: "connection-2"]
+    )
+
     publish(other, source())
     assert {:ok, first} = incoming(data, data.options)
-    assert {:ok, second} = incoming(other, other.options)
+
+    assert {:ok, second} =
+             Calls.claim_incoming_telephony(
+               {:tenant, other.tenant.key},
+               "support",
+               %{event() | provider_connection_id: "connection-2"},
+               other.options
+             )
+
     refute first.call.id == second.call.id
 
     for {owner, original} <- [{data, first}, {other, second}] do
       assert Map.get(original, :service_id) == owner.service.id
-      assert {:duplicate, retry} = incoming(owner, owner.options)
+
+      assert {:duplicate, retry} =
+               Calls.claim_incoming_telephony(
+                 {:tenant, owner.tenant.key},
+                 "support",
+                 %{event() | provider_connection_id: original.provider_connection_id},
+                 owner.options
+               )
+
       assert retry.call.id == original.call.id
       assert retry.call.tenant_key == owner.tenant.key
 
@@ -47,7 +68,7 @@ defmodule Vxpipe.Persistence.TelephonyAdmissionIdentityTest do
     assert Repo.aggregate(TelephonyLeg, :count) == 2
   end
 
-  test "a new canonical service reusing an alias does not inherit the old service's duplicate",
+  test "a replacement binding cannot readmit an old leg but accepts a new leg",
        data do
     assert {:ok, first} = incoming(data, data.options)
 
@@ -69,11 +90,35 @@ defmodule Vxpipe.Persistence.TelephonyAdmissionIdentityTest do
                data.options
              )
 
-    assert {:ok, second} = incoming(data, data.options)
+    assert {:error, :telephony_leg_conflict} = incoming(data, data.options)
+
+    next_event = %{
+      event()
+      | provider_event_id: "replacement-event",
+        provider_call_leg_id: "replacement-leg",
+        provider_call_control_id: "replacement-control"
+    }
+
+    assert {:ok, second} =
+             Calls.claim_incoming_telephony(
+               {:tenant, data.tenant.key},
+               "support",
+               next_event,
+               data.options
+             )
+
     assert Map.get(first, :service_id) == data.service.id
     assert Map.get(second, :service_id) == replacement.id
     refute first.call.id == second.call.id
-    assert {:duplicate, retry} = incoming(data, data.options)
+
+    assert {:duplicate, retry} =
+             Calls.claim_incoming_telephony(
+               {:tenant, data.tenant.key},
+               "support",
+               next_event,
+               data.options
+             )
+
     assert retry.call.id == second.call.id
     assert Repo.aggregate(Call, :count) == 2
   end
@@ -145,7 +190,7 @@ defmodule Vxpipe.Persistence.TelephonyAdmissionIdentityTest do
           %{event() | provider_event_id: "retry-event"},
           %{event() | provider_call_leg_id: "different-leg"}
         ] do
-      assert {:error, :legacy_telephony_claim} =
+      assert {:error, :telephony_leg_conflict} =
                Calls.claim_incoming_telephony(
                  {:tenant, data.tenant.key},
                  "support",
@@ -156,9 +201,9 @@ defmodule Vxpipe.Persistence.TelephonyAdmissionIdentityTest do
 
     other = new()
     publish(other, source())
-    assert {:ok, _other_call} = incoming(other, other.options)
-    assert Repo.aggregate(Call, :count) == 2
-    assert Repo.aggregate(TelephonyLeg, :count) == 2
+    assert {:error, :telephony_leg_conflict} = incoming(other, other.options)
+    assert Repo.aggregate(Call, :count) == 1
+    assert Repo.aggregate(TelephonyLeg, :count) == 1
   end
 
   test "the repository refuses a claim whose canonical identity disagrees with its pinned plan",

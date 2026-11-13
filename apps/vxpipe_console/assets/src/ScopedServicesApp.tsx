@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminShell } from "./admin/AdminShell";
+import { TelnyxConnectionModal } from "./admin/TelnyxConnectionModal";
 import { Button } from "./admin/Button";
 import { PageNotice } from "./admin/PageNotice";
 import { PageToast } from "./admin/PageToast";
@@ -494,16 +495,13 @@ export function ScopedServicesApp({
         ) : null}
         {tenantKey !== null && showTelephonyApplications ? (
           <TenantTelephonyApplications
-            key={tenantKey}
+            key={`${tenantKey}:${retry}`}
             tenantKey={tenantKey}
             csrfToken={csrfToken}
             binding={primary.find((binding) => binding.provider === "telnyx")}
             credentialsLoaded={phase === "ready"}
             webhookUrl={
-              primary.find((binding) => binding.provider === "telnyx")
-                ?.source === "tenant"
-                ? directory?.webhookUrls?.tenant
-                : directory?.webhookUrls?.platform
+              directory?.webhookUrls?.tenant
             }
             fetchImpl={fetchImpl}
             onSessionExpired={onSessionExpired}
@@ -542,7 +540,14 @@ export function ScopedServicesApp({
         ) : null}
       </main>
       {notice ? <PageToast message={notice.message} kind={notice.kind} onDismiss={() => setNotice(null)} /> : null}
-      {modal ? (
+      {modal?.provider === "telnyx" && (!modal.bindingName || modal.bindingName === "telnyx") ? (
+        <TelnyxConnectionModal scope={scope} csrfToken={csrfToken} fetchImpl={fetchImpl} onClose={close} onTest={testCredentials}
+          onSessionExpired={onSessionExpired} onSaved={() => {
+            setModal(null); setRetry(value => value + 1);
+            setNotice({ kind: "success", message: "Telnyx connection saved." });
+            requestAnimationFrame(() => trigger.current?.focus());
+          }} />
+      ) : modal ? (
         <ServiceSetupModal
           state={modal}
           scope={scope}

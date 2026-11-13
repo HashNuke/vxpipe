@@ -281,7 +281,7 @@ export function TenantTelephonyApplications({
                 <dl className="phone-application-metadata">
                   <div>
                     <dt>Voice API application</dt>
-                    <dd>{application.provider_connection_id}</dd>
+                    <dd>{application.provider_connection_id ?? "Platform default"}</dd>
                   </div>
                   {application.outbound_number ? (
                     <div>

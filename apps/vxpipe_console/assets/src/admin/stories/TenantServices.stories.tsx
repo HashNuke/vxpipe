@@ -43,6 +43,8 @@ export const TelnyxConnected: Story = {
 };
 export const TelnyxInheritedCredentials: Story = { args: { scenario: "telnyx-inherited" } };
 export const TelnyxApplicationRequired: Story = { args: { scenario: "telnyx-inherited-empty" } };
+export const TelnyxApplicationOverride: Story = { args: { scenario: "telnyx-application-override" } };
+export const TelnyxCredentialsOverride: Story = { args: { scenario: "telnyx-credentials-override" } };
 export const TelnyxTenantCredentials: Story = { args: { scenario: "telnyx-override" } };
 export const TelnyxInheritedLight: Story = { args: { scenario: "telnyx-inherited", theme: "light" } };
 export const TelnyxInheritedMobile: Story = {

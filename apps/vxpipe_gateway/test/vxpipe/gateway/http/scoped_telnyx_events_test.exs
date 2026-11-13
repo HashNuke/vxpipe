@@ -64,39 +64,102 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
     end
   end
 
-  test "scope and signature failures cannot select another verifier or resolve an application",
+  test "unverified locators never authorize dispatch and tenant URLs cannot cross tenants",
        data do
     incoming = body("first-app")
 
     for conn <- [
           signed(:platform, incoming, data.tenant_private),
           signed(:platform, incoming <> " ", data.platform_private, signed_body: incoming),
-          signed(:platform, incoming, data.platform_private, timestamp: @now - 301),
-          signed(:platform, "malformed", data.tenant_private)
+          signed(:platform, incoming, data.platform_private, timestamp: @now - 301)
         ] do
       assert Mount.call(conn, data.mount).status == 401
-      refute_received {:application_lookup, _}
       refute_received {:event, _, _, _}
     end
 
-    # An inheriting tenant has no verifier at its own URL.
-    assert request(data.mount, {:tenant, @first}, incoming, data.platform_private).status == 404
+    assert request(data.mount, :platform, "malformed", data.tenant_private).status == 400
+    assert request(data.mount, {:tenant, @second}, incoming, data.platform_private).status == 404
 
     assert request(data.mount, {:tenant, "CCCCCCCCCCCCCCCC"}, incoming, data.platform_private).status ==
              404
 
-    assert request(data.mount, :platform, "malformed", data.platform_private).status == 400
-    refute_received {:application_lookup, _}
+    refute_received {:event, _, _, _}
   end
 
-  test "authenticated applications must belong to the route's effective credential scope", data do
-    assert request(data.mount, :platform, body("second-app"), data.platform_private).status == 403
+  test "tenant applications work at the platform URL and with inherited credentials", data do
+    assert request(data.mount, :platform, body("second-app"), data.tenant_private).status == 200
+    assert_receive {:event, service, _, nil}
+    assert service.identity.scope == {:tenant, @second}
 
-    assert request(data.mount, {:tenant, @second}, body("first-app"), data.tenant_private).status ==
-             403
+    assert request(data.mount, {:tenant, @first}, body("first-app"), data.platform_private).status ==
+             200
+
+    assert_receive {:event, inherited, _, nil}
+    assert inherited.identity.scope == {:tenant, @first}
+    assert inherited.identity.service_reference.credential_owner == :platform
+    assert request(data.mount, :platform, body("second-app"), data.platform_private).status == 401
 
     assert request(data.mount, :platform, body("unknown-app"), data.platform_private).status ==
              404
+
+    refute_received {:event, _, _, _}
+  end
+
+  test "the shared application's called number selects its tenant", data do
+    first = %{
+      data.first
+      | service: %{
+          data.first.service
+          | provider_connection_id: "shared",
+            application_owner: :platform
+        }
+    }
+
+    second = snapshot(@second, :platform, "shared", <<1::256>>)
+
+    second = %{
+      second
+      | credential: first.credential,
+        service: %{
+          second.service
+          | application_owner: :platform,
+            credential_id: first.service.credential_id,
+            public_key: first.service.public_key
+        }
+    }
+
+    context =
+      %{data.context | snapshots: [first, second], credentials: %{:platform => first.credential}}
+      |> Map.put(:numbers, %{@first => "+15550001000", @second => "+15550002000"})
+
+    shared_mount = mount(context)
+
+    for {tenant, number} <- [{@first, "+15550001000"}, {@second, "+15550002000"}] do
+      assert request(
+               shared_mount,
+               :platform,
+               body("shared", "leg-#{tenant}", nil, number),
+               data.platform_private
+             ).status == 200
+
+      assert_receive {:event, configured, _, nil}
+      assert configured.identity.scope == {:tenant, tenant}
+      assert configured.identity.service_reference.application_owner == :platform
+    end
+
+    assert request(
+             shared_mount,
+             :platform,
+             body("shared", "unknown", nil, "+15550009999"),
+             data.platform_private
+           ).status == 404
+
+    assert request(
+             shared_mount,
+             {:tenant, @first},
+             body("shared", "foreign", nil, "+15550002000"),
+             data.platform_private
+           ).status == 404
 
     refute_received {:event, _, _, _}
   end
@@ -152,7 +215,7 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
     registry = Vxpipe.Gateway.Telephony.LegRegistry
 
     assert {:ok, _} =
-             Registry.register(registry, {:scoped_telnyx, :platform, "first-app", leg}, {
+             Registry.register(registry, {:scoped_telnyx, "first-app", leg}, {
                :incoming,
                service
              })
@@ -184,10 +247,13 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
 
   def resolve(context, scope, "telnyx", "telnyx") do
     send(context.observer, {:credential_lookup, scope})
+    scope = if is_binary(scope), do: {:tenant, scope}, else: scope
 
-    case Map.fetch(context.credentials, scope) do
-      {:ok, credential} -> {:ok, credential}
-      :error -> {:error, :provider_credential_unavailable}
+    selected = Map.get(context.credentials, scope, Map.get(context.credentials, :platform))
+
+    case selected do
+      nil -> {:error, :provider_credential_unavailable}
+      credential -> {:ok, credential}
     end
   end
 
@@ -201,15 +267,36 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
     end
   end
 
-  def fetch_telnyx_application(context, application) do
+  def fetch_telnyx_route(%{unavailable: true}, _scope, _application, _number),
+    do: {:error, :telephony_services_unavailable}
+
+  def fetch_telnyx_route(context, scope, application, number) do
     send(context.observer, {:application_lookup, application})
 
-    case Enum.find(context.snapshots, &(&1.service.provider_connection_id == application)) do
-      nil ->
-        {:error, :telephony_service_not_found}
+    matches =
+      Enum.filter(context.snapshots, fn snapshot ->
+        tenant = snapshot.service.tenant_key
+        expected_number = Map.get(Map.get(context, :numbers, %{}), tenant, "+15550001000")
 
-      snapshot ->
-        {:ok, %{snapshot.service | credential_owner: nil, credential_id: nil, public_key: nil}}
+        snapshot.service.provider_connection_id == application and number == expected_number and
+          (scope == :platform or scope == {:tenant, tenant})
+      end)
+
+    case matches do
+      [snapshot] ->
+        {:ok,
+         %{
+           snapshot.service
+           | credential_owner: nil,
+             credential_id: nil,
+             application_owner: nil,
+             public_key: nil,
+             provider_connection_id:
+               if(snapshot.service.application_owner == :platform, do: nil, else: application)
+         }}
+
+      _ ->
+        {:error, :telephony_service_not_found}
     end
   end
 
@@ -243,7 +330,12 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
 
     %{
       original
-      | service: %{original.service | credential_owner: owner, credential_name: "telnyx"},
+      | service: %{
+          original.service
+          | credential_owner: owner,
+            credential_name: "telnyx",
+            application_owner: {:tenant, tenant}
+        },
         credential: %{
           original.credential
           | credential: credential,
@@ -295,7 +387,7 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
     |> put_req_header("telnyx-signature-ed25519", Base.encode64(signature))
   end
 
-  defp body(application, leg \\ "fresh-leg", state \\ nil),
+  defp body(application, leg \\ "fresh-leg", state \\ nil, number \\ "+15550001000"),
     do:
       JSON.encode!(%{
         data: %{
@@ -310,7 +402,7 @@ defmodule Vxpipe.Gateway.HTTP.ScopedTelnyxEventsTest do
             call_session_id: "session",
             direction: "incoming",
             from: "+15550001001",
-            to: "+15550001000",
+            to: number,
             client_state: state
           }
         }

@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 60 milestone specifications: 47 complete and 13 incomplete. Milestone 17, Telnyx calls and
+Status: 62 milestone specifications: 49 complete and 13 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -189,9 +189,10 @@ progress without claiming the entire milestone is complete.
 56. [x] [Participant-owned MCP sessions](participant-owned-mcp-sessions.md) — Complete: all 29 implementation items verified. Activation-owned sessions/renewal and durable tenant catalog maintenance pass credential-change, teardown, transfer/recovery, capacity, privacy and controlled local acceptance. Actual Cron refresh and external inbound MCP continuity pass. All five root gates pass: 5,094 tests, zero failures, 371 excluded, seed 157471; focused final lanes and independent Astra reviews are clean. Deployment and the separate directory workflow approval remain outside this milestone.
 57. [x] [Shared tool execution for LLM and speech-to-speech participants](shared-participant-tool-execution.md) — Complete: 20/20 tasks and 4/4 checkpoints. LLM and native speech participants share tool/MCP execution, both conversation modes, semantic completion, bounded retention and usage. The 446-test common lane covers ordinary/duplex receptionist behavior, controlled outcomes, repeated identities, partial admission and teardown. All five root gates pass (5,213 tests, zero failures, 376 excluded; seed 112460), plus Lean and clean independent Astra review. Provider live acceptance and deployment remain separately owned.
 58. [x] [Consolidated handbook and publication](consolidated-handbook-and-publication.md) — Complete: 21 English usage/development pages, shared assets, Mermaid and automatic source-to-website publication. Cloudflare deployment and hosted browser acceptance pass; installation choices lead to Docker and Railway guides. Container acceptance remains in the next milestone.
-59. [ ] [Voice agent input and output guardrails](voice-agent-guardrails.md) — Research/specification complete; implementation not started. Participant questions and confidence thresholds, inherited evaluator selection, Jev/OpenAI Decisions, input feedback or standard responses, bounded output regeneration, and permitted transcript/debug evidence. Native speech-to-speech is deferred.
-60. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README. Local QA release, migrations and container/system services are implemented; distribution and embedded acceptance remain incomplete.
-61. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+59. [x] [Shared Telnyx applications and tenant overrides](shared-telnyx-applications.md) — Three checkpoints: persist defaults/overrides, route shared calls by number, and connect the production modal. All nine tasks verified: atomic configuration, populated migrations, shared routing, duplicate protection, production modal and all root gates. Tenant credentials require a tenant application; either override displays the tenant URL. Signed tenant application events also work at the platform endpoint. Migrate data without legacy fallback modes.
+60. [ ] [Voice agent input and output guardrails](voice-agent-guardrails.md) — Research/specification complete; implementation not started. Participant questions and confidence thresholds, inherited evaluator selection, Jev/OpenAI Decisions, input feedback or standard responses, bounded output regeneration, and permitted transcript/debug evidence. Native speech-to-speech is deferred.
+61. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README. Local QA release, migrations and container/system services are implemented; distribution and embedded acceptance remain incomplete.
+62. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
 
 The 2026-11-11 [guardrail research and decision](../../docs/design/voice-agent-guardrails.md)
 adds participant input/output checks after their implemented runtime, provider,
@@ -554,6 +555,19 @@ This is a coverage map, not another approval or implementation checklist.
 - **Embedded and container delivery**: Container/OTP boundary; complete approved scope.
 
 ## Specification review evidence
+
+The 2026-11-13 [shared Telnyx application specification](shared-telnyx-applications.md#specification-review--separate-from-implementation)
+was simplified again after the user's scope review. Three checkpoints reuse
+existing credential, service, route and admission boundaries. Explicit application
+uniqueness stays; inherited bindings share the platform default through null IDs.
+Data migration replaces legacy fallbacks. Number routing, tenant isolation and
+duplicate protection remain required. The user selected tenant URLs for either
+override and requires an application when configuring tenant credentials. The
+platform endpoint also accepts verified tenant applications. All nine implementation tasks now pass, including migrations, routing, production
+UI and final umbrella acceptance. The implementation evidence remains separate
+from this specification review. See the
+[design decision](../../docs/design/shared-telnyx-applications.md) and
+[review evidence](../20261113-1123-simplify-telnyx-milestone.md).
 
 The 2026-11-09 [shared participant tool specification](shared-participant-tool-execution.md#design-review-and-scope-reconciliation)
 has independent design/dependency approval. Review corrected the linked speech

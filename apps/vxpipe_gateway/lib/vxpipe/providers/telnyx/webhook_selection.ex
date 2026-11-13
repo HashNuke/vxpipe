@@ -1,18 +1,28 @@
 defmodule Vxpipe.Providers.Telnyx.WebhookSelection do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.Telephony.{Event, Webhook}
   alias Vxpipe.Calls.{ProviderAuth, ProviderCredential, ProviderCredentials, TelephonyServices}
   alias Vxpipe.Gateway.Telephony.{ConfiguredService, ServiceRegistry, WebhookService}
-  alias Vxpipe.Providers.Telnyx.WebhookVerifier
+  alias Vxpipe.Providers.Telnyx.{WebhookDecoder, WebhookVerifier}
 
   @derive {Inspect, only: [:scope, :owner]}
-  defstruct [:scope, :owner, :service, :registry, :credential, :verifier_options]
+  defstruct [
+    :scope,
+    :owner,
+    :service,
+    :registry,
+    :credential,
+    :verifier_options,
+    :candidate,
+    :application
+  ]
 
   def select(registry, {:scope, scope}, body) do
     with :ok <- ProviderAuth.owner(scope) do
       case WebhookService.scoped_telnyx_owner(scope, body) do
         {:ok, service, owner} -> retained(service, owner)
-        :not_found -> fresh(registry, scope)
+        :not_found -> fresh(registry, scope, body)
         {:error, _reason} = error -> error
       end
     else
@@ -28,34 +38,21 @@ defmodule Vxpipe.Providers.Telnyx.WebhookSelection do
     do: {:ok, service, owner}
 
   def resolve(%__MODULE__{} = selection, webhook) do
-    with {:ok, application} <- application_id(webhook.body),
-         {:ok, candidate} <-
-           TelephonyServices.fetch_telnyx_application(
-             application,
-             selection.registry.repository_options
-           ),
-         :ok <- matching_tenant(selection.scope, candidate.tenant_key),
-         {:ok, snapshot} <-
+    candidate = selection.candidate
+
+    with {:ok, snapshot} <-
            TelephonyServices.resolve(
              candidate.tenant_key,
              candidate.name,
              selection.registry.repository_options
            ),
-         :ok <- matching_selection(selection, candidate, snapshot),
-         {:ok, service} <-
-           ServiceRegistry.configure(selection.registry, snapshot),
+         :ok <- matching_selection(selection, snapshot),
+         {:ok, service} <- ServiceRegistry.configure(selection.registry, snapshot),
          :ok <- WebhookVerifier.verify(webhook, service.verifier_options) do
       {:ok, service, nil}
     else
-      {:error, :telephony_service_not_found} ->
-        {:error, :service_not_found}
-
       {:error, reason}
-      when reason in [
-             :invalid_telnyx_webhook,
-             :webhook_source_mismatch,
-             :invalid_webhook_authentication
-           ] ->
+      when reason in [:webhook_source_mismatch, :invalid_webhook_authentication] ->
         {:error, reason}
 
       _unavailable ->
@@ -70,19 +67,32 @@ defmodule Vxpipe.Providers.Telnyx.WebhookSelection do
   defp retained(service, owner),
     do:
       {:ok,
-       %__MODULE__{
-         service: service,
-         owner: owner,
-         verifier_options: service.verifier_options
-       }}
+       %__MODULE__{service: service, owner: owner, verifier_options: service.verifier_options}}
 
-  defp fresh(registry, scope) do
-    with {:ok, selected} <-
-           ProviderCredentials.resolve(scope, "telnyx", "telnyx", registry.repository_options),
+  # Unsigned fields locate one candidate. Only a verified raw body can reach resolve/2
+  # and dispatch; a tenant URL cannot select another tenant's credential.
+  defp fresh(registry, scope, body) do
+    with {:ok, event} <- incoming_event(body),
+         {:ok, candidate} <-
+           TelephonyServices.fetch_telnyx_route(
+             scope,
+             event.provider_connection_id,
+             event.to,
+             registry.repository_options
+           ),
+         true <- scope == :platform or scope == {:tenant, candidate.tenant_key},
+         {:ok, selected} <-
+           ProviderCredentials.resolve(
+             candidate.tenant_key,
+             "telnyx",
+             "telnyx",
+             registry.repository_options
+           ),
          credential = selected.credential,
          true <-
-           ProviderCredential.owner(credential) == scope and credential.provider == "telnyx" and
-             credential.name == "telnyx" and credential.status == :active,
+           ProviderCredential.available_to?(credential, candidate.tenant_key) and
+             credential.provider == "telnyx" and credential.name == "telnyx" and
+             credential.status == :active,
          :ok <- ProviderAuth.validate("telnyx", credential.auth_kind, selected.payload),
          public_key = Map.get(selected.payload, "public_key"),
          true <- Vxpipe.Providers.Telnyx.Credential.public_key?(public_key) do
@@ -90,17 +100,27 @@ defmodule Vxpipe.Providers.Telnyx.WebhookSelection do
        %__MODULE__{
          scope: scope,
          registry: registry,
+         candidate: candidate,
+         application: event.provider_connection_id,
          credential: {credential.id, credential.version},
          verifier_options: [public_key: public_key]
        }}
     else
-      {:error, reason} when reason in [:provider_credential_unavailable, :tenant_not_found] ->
+      {:error, :invalid_telnyx_webhook} = error ->
+        error
+
+      {:error, reason}
+      when reason in [
+             :telephony_service_not_found,
+             :provider_credential_unavailable,
+             :provider_credential_not_found,
+             :tenant_not_found,
+             :service_not_found,
+             :invalid_provider_auth
+           ] ->
         {:error, :service_not_found}
 
       false ->
-        {:error, :service_not_found}
-
-      {:error, :invalid_provider_auth} ->
         {:error, :service_not_found}
 
       _unavailable ->
@@ -108,30 +128,25 @@ defmodule Vxpipe.Providers.Telnyx.WebhookSelection do
     end
   end
 
-  defp matching_tenant(:platform, _tenant), do: :ok
-  defp matching_tenant({:tenant, tenant}, tenant), do: :ok
-  defp matching_tenant(_scope, _tenant), do: {:error, :webhook_source_mismatch}
-
-  defp matching_selection(selection, candidate, snapshot) do
+  defp matching_selection(selection, snapshot) do
+    candidate = selection.candidate
     service = snapshot.service
     credential = snapshot.credential.credential
 
-    if service.id == candidate.id and
-         service.provider_connection_id == candidate.provider_connection_id and
-         service.credential_name == "telnyx" and service.credential_owner == selection.scope and
+    if service.id == candidate.id and service.tenant_key == candidate.tenant_key and
+         service.name == candidate.name and
+         service.provider_connection_id == selection.application and
+         service.credential_name == "telnyx" and
          {credential.id, credential.version} == selection.credential,
        do: :ok,
        else: {:error, :webhook_source_mismatch}
   end
 
-  defp application_id(body) do
-    case JSON.decode(body) do
-      {:ok, %{"data" => %{"payload" => %{"connection_id" => application}}}}
-      when is_binary(application) and byte_size(application) in 1..128 ->
-        {:ok, application}
-
-      _invalid ->
-        {:error, :invalid_telnyx_webhook}
+  defp incoming_event(body) do
+    case WebhookDecoder.decode(%Webhook{body: body, headers: %{}, received_at: 0}) do
+      {:ok, %Event{kind: :incoming} = event} -> {:ok, event}
+      {:error, _reason} = error -> error
+      _not_a_new_call -> {:error, :service_not_found}
     end
   end
 end

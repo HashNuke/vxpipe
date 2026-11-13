@@ -232,7 +232,12 @@ defmodule Vxpipe.Gateway.Telephony.TenantServiceReaderTest do
 
     snapshot = %{
       original
-      | service: %{original.service | credential_name: "telnyx", credential_owner: :platform},
+      | service: %{
+          original.service
+          | credential_name: "telnyx",
+            credential_owner: :platform,
+            application_owner: {:tenant, @tenant}
+        },
         credential: %{
           original.credential
           | credential: %{
@@ -246,7 +251,13 @@ defmodule Vxpipe.Gateway.Telephony.TenantServiceReaderTest do
         }
     }
 
-    metadata = %{snapshot.service | credential_id: nil, credential_owner: nil, public_key: nil}
+    metadata = %{
+      snapshot.service
+      | credential_id: nil,
+        credential_owner: nil,
+        application_owner: nil,
+        public_key: nil
+    }
 
     context = fn
       :fetch_by_ingress, ["scoped-ingress"] -> {:ok, metadata}
@@ -260,6 +271,9 @@ defmodule Vxpipe.Gateway.Telephony.TenantServiceReaderTest do
     assert incoming.identity.scope == {:tenant, @tenant}
     assert Keyword.fetch!(incoming.adapter_options, :api_key) == "platform-private-key"
 
+    assert Vxpipe.Providers.Telnyx.PublicEndpoint.event_url(incoming) ==
+             @origin <> "/webhooks/tenants/#{@tenant}/telnyx"
+
     assert {:ok, _} =
              ServiceRegistry.fetch_for_tenant(registry, "primary-phone", @tenant, reference)
 
@@ -270,6 +284,49 @@ defmodule Vxpipe.Gateway.Telephony.TenantServiceReaderTest do
              })
 
     refute inspect(incoming) =~ "platform-private-key"
+
+    inherited = %{snapshot | service: %{snapshot.service | application_owner: :platform}}
+    inherited_metadata = %{metadata | provider_connection_id: nil}
+
+    inherited_context = fn
+      :fetch_by_ingress, ["scoped-ingress"] -> {:ok, inherited_metadata}
+      :resolve, [@tenant, "primary-phone"] -> {:ok, inherited}
+    end
+
+    assert {:ok, inherited_service} =
+             ServiceRegistry.fetch(registry(inherited_context), "scoped-ingress")
+
+    assert Vxpipe.Providers.Telnyx.PublicEndpoint.event_url(inherited_service) ==
+             @origin <> "/webhooks/platform/telnyx"
+  end
+
+  test "resolving an explicit application cannot silently accept a different application" do
+    original = Repository.snapshot(service(:telnyx, @tenant, "scoped-ingress", "private-key"))
+
+    metadata = %{
+      original.service
+      | credential_id: nil,
+        credential_owner: nil,
+        application_owner: nil,
+        public_key: nil
+    }
+
+    changed = %{
+      original
+      | service: %{
+          original.service
+          | provider_connection_id: "changed-app",
+            application_owner: {:tenant, @tenant}
+        }
+    }
+
+    context = fn
+      :fetch_by_ingress, ["scoped-ingress"] -> {:ok, metadata}
+      :resolve, [@tenant, "primary-phone"] -> {:ok, changed}
+    end
+
+    assert {:error, :service_not_found} =
+             ServiceRegistry.fetch(registry(context), "scoped-ingress")
   end
 
   defp registry(context) do

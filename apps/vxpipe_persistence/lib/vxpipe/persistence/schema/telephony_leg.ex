@@ -64,6 +64,10 @@ defmodule Vxpipe.Persistence.Schema.TelephonyLeg do
     |> validate_lengths()
     |> foreign_key_constraint(:tenant_id)
     |> foreign_key_constraint(:call_id)
+    |> unique_constraint(:provider_event_id, name: :telephony_legs_telnyx_application_event_index)
+    |> unique_constraint(:provider_call_leg_id,
+      name: :telephony_legs_telnyx_application_leg_index
+    )
     |> unique_constraint(:provider_event_id,
       name: :telephony_legs_tenant_service_event_index
     )

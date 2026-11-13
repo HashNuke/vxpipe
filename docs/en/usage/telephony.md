@@ -22,19 +22,37 @@ for new calls.
 
 ## Telnyx
 
-1. Save the Telnyx API key and its Ed25519 webhook verification public key at
-   platform or tenant scope. The public key is required for phone operation.
-2. In the tenant's Telephony settings, configure the Voice API application ID.
-   Each scoped application belongs to one tenant. Set an E.164 outbound caller ID
-   if the service will place calls or dial transfer destinations.
-3. Use the webhook URL for that exact credential scope in Telnyx. Assign the
-   intended incoming number to the Voice API application.
-4. Select this service and number on the incoming call spec's Entry connection,
-   then publish it.
+1. Open **Telnyx** in Platform Integrations and save the API key, public key and
+   Voice API application ID. Tenants can inherit this connection.
+2. Open Telnyx for a tenant to override its Voice application, or its credentials
+   together with an application. Editing tenant credentials clears the application
+   input and requires it to be entered again. Both sections save together.
+3. Copy the webhook URL under **Voice application** into Telnyx, then assign the
+   incoming numbers to that application. Inherited settings use the platform URL;
+   either tenant override uses the tenant URL. Vxpipe does not change Telnyx settings.
+4. Select the tenant's service name and number on the incoming call spec's Entry
+   connection, then publish it. Configure an E.164 outbound caller ID in Phone
+   routing when the service will place calls or dial transfer destinations.
 
-A tenant Telnyx credential overrides the platform credential. An unreadable or
-invalid tenant credential does not fall back to platform authority. The URL scope
-selects the webhook verifier before new application routing is trusted.
+The shared application routes each called number to its tenant and published call
+spec. Two published specs cannot claim the same number on that application.
+Explicit tenant applications are dedicated: use inheritance to share the platform
+application instead of copying its ID into an override.
+
+**Use platform default** in Credentials retains the tenant application. To inherit
+both settings, reset credentials first, then the application. If a tenant has
+multiple named services, choose the application to edit; their names and call-spec
+references remain unchanged. Each binding needs a dedicated application before
+that tenant switches to its own credentials.
+
+Telnyx includes the application as `connection_id` in its
+[webhook payload](https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-webhooks). A dedicated tenant application
+can still send to the platform URL if its webhook has not been updated: Vxpipe
+selects that tenant and verifies the signature with its effective public key. A
+tenant URL only accepts that tenant's routes. Shared application events also need
+the called number to identify the tenant. Invalid credentials, unknown numbers
+and ambiguous routes cannot start a call; retries cannot create a second call
+after a number moves to another tenant. Active legs keep their original identity.
 
 ## Twilio
 

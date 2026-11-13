@@ -9,6 +9,7 @@ defmodule Vxpipe.Console.ScopedTelnyxEndpointTest do
   alias Vxpipe.Gateway.HTTP.Mount
 
   alias Vxpipe.Persistence.{
+    CallSpecStore,
     CredentialKeyring,
     CredentialStore,
     ProviderCredentialStore,
@@ -29,7 +30,9 @@ defmodule Vxpipe.Console.ScopedTelnyxEndpointTest do
     options = [
       credential_repository: {CredentialStore, Repo},
       provider_credential_repository: {ProviderCredentialStore, context},
-      telephony_service_repository: {TelephonyServiceStore, context}
+      telephony_service_repository: {TelephonyServiceStore, context},
+      call_spec_repository: {CallSpecStore, Repo},
+      registries: %{host_tools: %{}}
     ]
 
     previous = Endpoint.config(:gateway_mount)
@@ -73,11 +76,13 @@ defmodule Vxpipe.Console.ScopedTelnyxEndpointTest do
             data.options
           )
 
+        publish_route(tenant.key, "+15550001000", data.options)
         assert signed(:platform, service, platform_private).status == 200
         assert_receive {:verified_service, identity}
         assert identity.scope == {:tenant, tenant.key}
         assert identity.service_reference.credential_owner == :platform
-        assert signed({:tenant, tenant.key}, service, platform_private).status == 404
+        assert signed({:tenant, tenant.key}, service, platform_private).status == 200
+        assert_receive {:verified_service, ^identity}
         service
       end
 
@@ -89,16 +94,89 @@ defmodule Vxpipe.Console.ScopedTelnyxEndpointTest do
     assert_receive {:verified_service, identity}
     assert identity.service_reference.credential_owner == scope
     assert signed(scope, second, platform_private).status == 401
-    assert signed(:platform, second, tenant_private).status == 401
-    assert signed(:platform, second, platform_private).status == 403
-    assert signed(scope, first, tenant_private).status == 403
+    assert signed(:platform, second, tenant_private).status == 200
+    assert_receive {:verified_service, ^identity}
+    assert signed(:platform, second, platform_private).status == 401
+    assert signed(scope, first, tenant_private).status == 404
     refute_received {:verified_service, _}
 
     assert :ok = ProviderCredentials.delete(second.tenant_key, own.id, data.options)
     assert signed(:platform, second, platform_private).status == 200
     assert_receive {:verified_service, inherited}
     assert inherited.service_reference.credential_owner == :platform
-    assert signed(scope, second, tenant_private).status == 404
+    assert signed(scope, second, tenant_private).status == 401
+  end
+
+  test "persisted shared application routes signed events to two tenants by number", data do
+    {public, private} = :crypto.generate_key(:eddsa, :ed25519)
+    {:ok, _} = provision(:platform, public, data.options)
+    :ok = TelephonyServices.configure_platform_application("shared-app", data.options)
+
+    for number <- ["+15550001000", "+15550002000"] do
+      {:ok, tenant, _} = Administration.bootstrap_tenant("Shared tenant", [:admin], data.options)
+
+      {:ok, service} =
+        TelephonyServices.register(
+          tenant.key,
+          %{
+            "name" => "phone",
+            "provider" => "telnyx",
+            "credential_name" => "telnyx",
+            "provider_connection_id" => nil,
+            "ingress_key" => "ingress-#{tenant.key}"
+          },
+          data.options
+        )
+
+      publish_route(tenant.key, number, data.options)
+
+      assert signed(:platform, %{service | provider_connection_id: "shared-app"}, private, number).status ==
+               200
+
+      assert_receive {:verified_service, identity}
+      assert identity.scope == {:tenant, tenant.key}
+      assert identity.service_reference.application_owner == :platform
+    end
+  end
+
+  defp publish_route(tenant, number, options) do
+    source = %{
+      schema_version: "20260915.01",
+      name: "Phone route",
+      entry_caller: "caller",
+      entry_receiver: "assistant",
+      wait_sounds: nil,
+      defaults: %{capabilities: %{model_inference: %{provider: "fixture", model: "local"}}},
+      participants: %{
+        "caller" => %{
+          type: "human",
+          connection: %{
+            service: "phone",
+            mode: "receive",
+            number: number,
+            admission: "start_call"
+          }
+        },
+        "assistant" => %{
+          type: "agent",
+          prompt: "Help the caller.",
+          tools: %{},
+          first_message: %{mode: "wait_for_input"}
+        }
+      }
+    }
+
+    operator = Vxpipe.Calls.InstallationOperator.authority()
+    {:ok, draft} = Vxpipe.Calls.save_authorized_call_spec(operator, tenant, source, options)
+
+    assert {:ok, _} =
+             Vxpipe.Calls.publish_authorized_call_spec(
+               operator,
+               tenant,
+               draft.call_spec_id,
+               draft.revision,
+               options
+             )
   end
 
   def handle_event(observer, service, _event, _owner) do
@@ -117,7 +195,7 @@ defmodule Vxpipe.Console.ScopedTelnyxEndpointTest do
         options
       )
 
-  defp signed(scope, service, private) do
+  defp signed(scope, service, private, number \\ "+15550001000") do
     body =
       JSON.encode!(%{
         data: %{
@@ -132,7 +210,7 @@ defmodule Vxpipe.Console.ScopedTelnyxEndpointTest do
             call_leg_id: "leg",
             call_session_id: "session",
             from: "+15550001001",
-            to: "+15550001000"
+            to: number
           }
         }
       })

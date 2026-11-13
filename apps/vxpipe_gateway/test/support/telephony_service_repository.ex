@@ -112,6 +112,7 @@ defmodule Vxpipe.Gateway.TestTelephonyServiceRepository do
           service
           | credential_id: credential_id,
             credential_owner: {:tenant, tenant},
+            application_owner: {:tenant, tenant},
             public_key: Keyword.fetch!(options, :public_key)
         },
         else: service
@@ -182,11 +183,30 @@ defmodule Vxpipe.Gateway.TestTelephonyServiceRepository do
            &(&1.service.provider == "telnyx" and &1.service.provider_connection_id == application)
          ) do
       [snapshot] ->
-        {:ok, %{snapshot.service | credential_id: nil, credential_owner: nil, public_key: nil}}
+        {:ok,
+         %{
+           snapshot.service
+           | credential_id: nil,
+             credential_owner: nil,
+             application_owner: nil,
+             public_key: nil
+         }}
 
       _missing_or_ambiguous ->
         {:error, :telephony_service_not_found}
     end
+  end
+
+  def fetch_telnyx_route(context, scope, application, number) when is_function(context, 2),
+    do: context.(:fetch_telnyx_route, [scope, application, number])
+
+  def fetch_telnyx_route(snapshots, scope, application, _number) do
+    snapshots =
+      Enum.filter(snapshots, fn snapshot ->
+        scope == :platform or scope == {:tenant, snapshot.service.tenant_key}
+      end)
+
+    fetch_telnyx_application(snapshots, application)
   end
 
   def resolve(context, scope, provider, name) when is_function(context, 2),

@@ -334,6 +334,20 @@ defmodule Vxpipe.Console.Router do
     get "/platform/services", Vxpipe.Console.AdminServicesController, :platform_index,
       metadata: %{console_product_api: true}
 
+    get "/platform/telnyx-connection", Vxpipe.Console.AdminTelnyxConnectionController, :show,
+      metadata: %{console_product_api: true}
+
+    patch "/platform/telnyx-connection", Vxpipe.Console.AdminTelnyxConnectionController, :update,
+      metadata: %{console_product_api: true}
+
+    get "/tenants/:tenant_key/telnyx-connection",
+        Vxpipe.Console.AdminTelnyxConnectionController,
+        :show, metadata: %{console_product_api: true}
+
+    patch "/tenants/:tenant_key/telnyx-connection",
+          Vxpipe.Console.AdminTelnyxConnectionController,
+          :update, metadata: %{console_product_api: true}
+
     patch "/platform/credentials/:credential_id",
           Vxpipe.Console.AdminServicesController,
           :update_platform, metadata: %{console_product_api: true}

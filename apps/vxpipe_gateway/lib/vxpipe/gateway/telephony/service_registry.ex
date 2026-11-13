@@ -106,7 +106,18 @@ defmodule Vxpipe.Gateway.Telephony.ServiceRegistry do
        ) do
     reference = TelephonyServices.reference(resolved)
 
-    %{reference | credential_id: nil, credential_owner: nil} ==
+    application_id =
+      if is_nil(candidate.provider_connection_id) and resolved.application_owner == :platform,
+        do: nil,
+        else: reference.provider_connection_id
+
+    %{
+      reference
+      | credential_id: nil,
+        credential_owner: nil,
+        application_owner: nil,
+        provider_connection_id: application_id
+    } ==
       TelephonyServices.reference(candidate)
   end
 

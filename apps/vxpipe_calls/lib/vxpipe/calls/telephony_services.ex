@@ -27,6 +27,7 @@ defmodule Vxpipe.Calls.TelephonyServices do
       provider_connection_id: service.provider_connection_id,
       credential_id: service.credential_id,
       credential_owner: service.credential_owner,
+      application_owner: service.application_owner,
       credential_name: service.credential_name
     }
   end
@@ -69,6 +70,22 @@ defmodule Vxpipe.Calls.TelephonyServices do
     end
   end
 
+  def platform_application(options \\ []) do
+    with {:ok, repository} <- Repositories.fetch(options, :telephony_service_repository) do
+      Repositories.call(repository, :platform_application, [])
+    end
+  end
+
+  def configure_platform_application(application_id, options \\ []) do
+    with true <- is_nil(application_id) or TelephonyService.application_id?(application_id),
+         {:ok, repository} <- Repositories.fetch(options, :telephony_service_repository) do
+      Repositories.call(repository, :configure_platform_application, [application_id])
+    else
+      false -> {:error, :invalid_telephony_service}
+      error -> error
+    end
+  end
+
   def fetch(tenant_key, name, options \\ []) do
     with :ok <- ProviderAuth.tenant_key(tenant_key),
          :ok <- TelephonyService.identifier(name),
@@ -95,6 +112,19 @@ defmodule Vxpipe.Calls.TelephonyServices do
 
   def fetch_telnyx_application(_application_id, _options),
     do: {:error, :telephony_service_not_found}
+
+  @doc "Finds one published incoming number's service; the result is not webhook authentication."
+  def fetch_telnyx_route(scope, application_id, number, options \\ []) do
+    with :ok <- ProviderAuth.owner(scope),
+         true <- TelephonyService.application_id?(application_id),
+         true <- is_binary(number) and byte_size(number) in 1..128,
+         {:ok, repository} <- Repositories.fetch(options, :telephony_service_repository) do
+      scope = if is_binary(scope), do: {:tenant, scope}, else: scope
+      Repositories.call(repository, :fetch_telnyx_route, [scope, application_id, number])
+    else
+      _invalid -> {:error, :telephony_service_not_found}
+    end
+  end
 
   def resolve(tenant_key, name, options \\ []) do
     with :ok <- ProviderAuth.tenant_key(tenant_key),

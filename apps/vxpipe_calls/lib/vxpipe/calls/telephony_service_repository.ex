@@ -5,12 +5,21 @@ defmodule Vxpipe.Calls.TelephonyServiceRepository do
   Registration requires readable credentials and atomically enforces tenant-local names
   and globally unique ingress keys. Legacy bindings pin an exact tenant credential;
   scoped Telnyx applications resolve the consuming tenant's effective primary binding.
-  Scoped application IDs are unique. `fetch` and `fetch_by_ingress` return stored
+  Explicit scoped application IDs are unique; an absent ID inherits the platform default.
+  `fetch` and `fetch_by_ingress` return stored
   metadata only; `resolve` fills the selected credential identity and authentication.
   Metadata for a scoped application has a credential name but no resolved ID or key.
   """
 
   alias Vxpipe.Calls.{ResolvedTelephonyService, TelephonyService}
+
+  @callback platform_application(term()) :: {:ok, String.t() | nil} | {:error, atom()}
+  @callback configure_platform_application(term(), String.t() | nil) :: :ok | {:error, atom()}
+  @optional_callbacks platform_application: 1, configure_platform_application: 2
+
+  @doc "Saves connection settings atomically; callback repositories must share this context."
+  @callback with_configuration(term(), :platform | String.t(), (-> term())) :: term()
+  @optional_callbacks with_configuration: 3
 
   @callback register(term(), TelephonyService.t()) ::
               {:ok, TelephonyService.t()} | {:error, atom()}
@@ -27,6 +36,11 @@ defmodule Vxpipe.Calls.TelephonyServiceRepository do
   @doc "Returns a scoped Telnyx application mapping; excludes legacy exact-ID bindings."
   @callback fetch_telnyx_application(term(), String.t()) ::
               {:ok, TelephonyService.t()} | {:error, atom()}
+
+  @doc "Returns exactly one published incoming route's service within the requested scope."
+  @callback fetch_telnyx_route(term(), :platform | {:tenant, String.t()}, String.t(), String.t()) ::
+              {:ok, TelephonyService.t()} | {:error, atom()}
+  @optional_callbacks fetch_telnyx_route: 4
   @callback resolve(term(), String.t(), String.t()) ::
               {:ok, ResolvedTelephonyService.t()} | {:error, atom()}
 

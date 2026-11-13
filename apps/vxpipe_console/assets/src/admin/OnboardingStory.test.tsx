@@ -44,7 +44,10 @@ function chooseDirectoryService(provider: string) {
   if (["telnyx", "twilio"].includes(provider))
     fireEvent.click(within(screen.getByRole("navigation", { name: "Integration categories" })).getByRole("link", { name: /Telephony/ }));
   fireEvent.click(screen.getByRole("button", { name: `Connect ${setupProvider(provider as SetupProviderId).name}` }));
-  if (provider === "telnyx") fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "2912345678901234567" } });
+  if (provider === "telnyx") {
+    fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "2912345678901234567" } });
+    fireEvent.change(screen.getByLabelText("Public key"), { target: { value: btoa("q".repeat(32)) } });
+  }
 }
 function selectService(provider: string) {
   fireEvent.click(serviceTrigger());
@@ -520,14 +523,15 @@ test("Telnyx is one service connection", () => {
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   act(() => vi.advanceTimersByTime(1000));
-  expect(within(screen.getByRole("article", { name: "Telnyx" })).getByText("Public key needed")).toBeVisible();
+  expect(within(screen.getByRole("article", { name: "Telnyx" })).queryByText("Public key needed")).not.toBeInTheDocument();
   for (let count = 0; count < 2; count++) {
     const region = screen.getByRole("region", { name: "Telephony" });
     expect(within(region).getAllByRole("article", { name: "Telnyx" })).toHaveLength(1);
     fireEvent.click(within(region).getByRole("button", { name: "Manage Telnyx" }));
-    fireEvent.click(screen.getByRole("button", { name: "Update credentials" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit credentials" }));
     expect(screen.getByLabelText("API key")).toHaveValue("");
     expect(screen.getByLabelText("Public key")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "updated-tenant-app" } });
     expect(screen.queryByRole("combobox", { name: "Service" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("API key"), {
       target: { value: "updated-storybook-key" },

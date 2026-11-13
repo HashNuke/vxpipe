@@ -173,6 +173,121 @@ defmodule Vxpipe.Persistence.TelephonyCallStoreTest do
     assert %TelephonyLeg{state: "ended", incarnation_id: nil} = Repo.one(TelephonyLeg)
   end
 
+  test "an event or leg replay after its number moves cannot create a call for another tenant",
+       context do
+    assert {:ok, original} =
+             Calls.claim_incoming_telephony(
+               {:tenant, context.tenant.key},
+               "primary-phone",
+               incoming_event(),
+               context.options
+             )
+
+    options =
+      Keyword.drop(context.options, [
+        :tenant_key_generator,
+        :uuid_generator,
+        :call_id_generator,
+        :room_id_generator
+      ])
+
+    {:ok, next, _} = Administration.bootstrap_tenant("Next owner", [:admin], options)
+
+    options =
+      Keyword.put(
+        options,
+        :telephony_service_repository,
+        Vxpipe.Calls.TestTelephonyServiceRepository.repository([context.tenant, next])
+      )
+
+    {:ok, draft} = Calls.save_call_spec(next.key, call_spec_input(), options)
+    {:ok, _} = Calls.publish_call_spec(next.key, draft.call_spec_id, 1, options)
+
+    import Ecto.Query
+
+    Repo.update_all(
+      from(r in Vxpipe.Persistence.Schema.TelephonyRoute,
+        where:
+          r.tenant_id ==
+            ^Repo.get_by!(Vxpipe.Persistence.Schema.Tenant, key: context.tenant.key).id
+      ),
+      set: [published_at: nil]
+    )
+
+    for event <- [incoming_event(), %{incoming_event() | provider_event_id: "repeated-leg-event"}] do
+      assert {:error, :telephony_leg_conflict} =
+               Calls.claim_incoming_telephony(
+                 {:tenant, next.key},
+                 "primary-phone",
+                 event,
+                 options
+               )
+    end
+
+    assert Repo.aggregate(Call, :count) == 1
+    assert Repo.aggregate(TelephonyLeg, :count) == 1
+    assert Repo.one(TelephonyLeg).call_id == Repo.one(Call).id
+    assert Repo.one(Call).public_id == original.call.id
+  end
+
+  test "migration backfills application ownership in populated stored plans without runtime fallback",
+       context do
+    {:ok, claim} =
+      Calls.claim_incoming_telephony(
+        {:tenant, context.tenant.key},
+        "primary-phone",
+        incoming_event(),
+        context.options
+      )
+
+    legacy = legacy_references(claim.call.plan)
+    stored = Repo.one(Call)
+    encoded = :erlang.term_to_binary(legacy, [:deterministic])
+
+    Repo.update!(
+      Ecto.Changeset.change(stored,
+        resolved_plan: encoded,
+        plan_digest: :crypto.hash(:sha256, encoded)
+      )
+    )
+
+    Code.require_file(
+      "../../../priv/repo/migrations/20261113122000_backfill_telnyx_application_owners.exs",
+      __DIR__
+    )
+
+    migration = Vxpipe.Persistence.Repo.Migrations.BackfillTelnyxApplicationOwners
+    apply(migration, :backfill, [Repo])
+    migrated = Repo.one(Call)
+    {:ok, plan} = Vxpipe.Persistence.ResolvedPlanCodec.decode(migrated.resolved_plan)
+    assert migrated.resolved_plan != encoded
+    assert migrated.plan_digest == :crypto.hash(:sha256, migrated.resolved_plan)
+    assert_references(plan, context.tenant.key)
+    apply(migration, :backfill, [Repo])
+    assert Repo.one(Call).resolved_plan == migrated.resolved_plan
+  end
+
+  defp legacy_references(%Vxpipe.CallEngine.Telephony.ServiceReference{} = reference) do
+    reference |> Map.put(:credential_name, "telnyx") |> Map.delete(:application_owner)
+  end
+
+  defp legacy_references(value) when is_map(value),
+    do: Map.new(Map.to_list(value), fn {key, nested} -> {key, legacy_references(nested)} end)
+
+  defp legacy_references(value) when is_list(value), do: Enum.map(value, &legacy_references/1)
+  defp legacy_references(value), do: value
+
+  defp assert_references(%Vxpipe.CallEngine.Telephony.ServiceReference{} = reference, tenant),
+    do: assert(reference.application_owner == {:tenant, tenant})
+
+  defp assert_references(value, tenant) when is_map(value),
+    do: Enum.each(Map.to_list(value), fn {_, nested} -> assert_references(nested, tenant) end)
+
+  defp assert_references(value, tenant) when is_list(value),
+    do: Enum.each(value, &assert_references(&1, tenant))
+
+  defp assert_references(_value, _tenant), do: :ok
+
   defp incoming_event do
     %Event{
       kind: :incoming,

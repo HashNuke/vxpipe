@@ -27,6 +27,15 @@ defmodule Vxpipe.Calls.TenantCreationTest do
     end
   end
 
+  test "generated tenant keys contain exactly 16 letters and digits", context do
+    for _ <- 1..64 do
+      assert {:ok, tenant} =
+               TenantCreation.create(principal(["tenants.write"]), "Support", context.options)
+
+      assert tenant.key =~ ~r/\A[A-Za-z0-9]{16}\z/
+    end
+  end
+
   test "unknown actors fail closed before repository access" do
     for actor <- [
           nil,

@@ -998,6 +998,7 @@ defmodule Vxpipe.Gateway.Telephony.OutgoingLegTest do
     reference = %{
       original.identity.service_reference
       | credential_owner: :platform,
+        application_owner: :platform,
         credential_name: "telnyx"
     }
 

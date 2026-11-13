@@ -6,17 +6,70 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
 
   alias Vxpipe.Calls.TelephonyService, as: Service
   alias Vxpipe.Calls.{ResolvedTelephonyService, TelephonyServices}
-  alias Vxpipe.Persistence.{ProviderCredentialScope, ProviderCredentialStore}
-  alias Vxpipe.Persistence.Schema.{ProviderCredential, TelephonyService}
+  alias Vxpipe.Persistence.{ProviderCredentialScope, ProviderCredentialStore, TelnyxRouting}
+
+  alias Vxpipe.Persistence.Schema.{
+    ProviderCredential,
+    TelephonyRoute,
+    TelephonyService,
+    TelnyxSettings
+  }
 
   @query_options [log: false, telemetry_event: nil]
+
+  @impl true
+  def with_configuration(context, scope, operation) do
+    with_repository(context, fn repo ->
+      repo.transaction(
+        fn ->
+          TelnyxRouting.lock(repo, :write)
+
+          with {:ok, _owner} <- ProviderCredentialScope.owner(repo, scope, "FOR UPDATE"),
+               {:ok, result} <- operation.() do
+            result
+          else
+            {:error, reason} -> repo.rollback(reason)
+          end
+        end,
+        @query_options
+      )
+    end)
+  end
+
+  @impl true
+  def platform_application(context) do
+    with_repository(context, fn repo ->
+      {:ok, repo.get!(TelnyxSettings, 1, @query_options).application_id}
+    end)
+  end
+
+  @impl true
+  def configure_platform_application(context, application_id) do
+    with_repository(context, fn repo ->
+      transaction(repo, fn ->
+        settings = TelnyxRouting.lock(repo, :write)
+
+        with :ok <- TelnyxRouting.validate_default(repo, application_id),
+             {:ok, _} <-
+               repo.update(TelnyxSettings.changeset(settings, application_id), @query_options) do
+          :ok
+        else
+          {:error, %Ecto.Changeset{}} -> {:error, :invalid_telephony_service}
+          error -> error
+        end
+      end)
+    end)
+  end
 
   @impl true
   def register(context, %Service{} = service) do
     with :ok <- Service.validate(service) do
       with_repository(context, fn repo ->
         repo.transaction(fn ->
-          with {:ok, {tenant_id, _private_snapshot}} <- lock_credential(context, service),
+          TelnyxRouting.lock(repo, :write)
+
+          with :ok <- TelnyxRouting.validate_application(repo, service),
+               {:ok, {tenant_id, _private_snapshot}} <- lock_credential(context, service),
                {:ok, stored} <-
                  repo.insert(
                    TelephonyService.changeset(
@@ -39,6 +92,8 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
   def update_application(context, tenant_key, id, changes) do
     with_repository(context, fn repo ->
       repo.transaction(fn ->
+        TelnyxRouting.lock(repo, :write)
+
         query =
           from(s in TelephonyService,
             join: t in assoc(s, :tenant),
@@ -69,6 +124,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
     }
 
     with :ok <- Service.validate(updated),
+         :ok <- TelnyxRouting.validate_application(repo, updated),
          {:ok, {_tenant_id, _credential}} <- lock_credential(context, updated),
          {:ok, saved} <-
            repo.update(
@@ -130,6 +186,41 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
   end
 
   @impl true
+  def fetch_telnyx_route(context, scope, application_id, number) do
+    with_repository(context, fn repo ->
+      query =
+        from(service in TelephonyService,
+          join: tenant in assoc(service, :tenant),
+          join: settings in TelnyxSettings,
+          on: settings.id == 1,
+          join: route in TelephonyRoute,
+          on: route.tenant_id == service.tenant_id and route.service == service.name,
+          join: revision in assoc(route, :call_spec_revision),
+          join: spec in assoc(revision, :call_spec),
+          where:
+            service.provider == "telnyx" and service.credential_name == "telnyx" and
+              fragment("coalesce(?, ?)", service.provider_connection_id, settings.application_id) ==
+                ^application_id and
+              route.number == ^number and not is_nil(route.published_at) and
+              spec.published_revision_id == revision.id,
+          select: {service, tenant.key},
+          limit: 2
+        )
+
+      query =
+        case scope do
+          :platform -> query
+          {:tenant, key} -> from([_service, tenant] in query, where: tenant.key == ^key)
+        end
+
+      case repo.all(query, @query_options) do
+        [{service, tenant_key}] -> {:ok, metadata(service, tenant_key)}
+        _unknown_or_ambiguous -> {:error, :telephony_service_not_found}
+      end
+    end)
+  end
+
+  @impl true
   def resolve(context, tenant_key, name) do
     with_repository(context, fn repo ->
       transaction(repo, fn -> resolve_locked(context, tenant_key, name) end)
@@ -140,6 +231,10 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
   def with_active(context, tenant_key, requirements, operation) do
     with_repository(context, fn repo ->
       transaction(repo, fn ->
+        mode =
+          if Enum.any?(requirements, &Map.get(&1, :publishing?, false)), do: :publish, else: :read
+
+        TelnyxRouting.lock(repo, mode)
         _ = lock_requirements(context, tenant_key, requirements)
         operation.()
       end)
@@ -186,6 +281,7 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
 
   defp resolve_locked(context, tenant_key, name) do
     repo = Keyword.fetch!(context, :repo)
+    TelnyxRouting.lock(repo, :read)
 
     query =
       from(s in TelephonyService,
@@ -197,11 +293,34 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
 
     with {:ok, service} <- fetch_metadata(repo, query),
          :ok <- Service.validate(service),
+         {:ok, service} <- resolve_application(repo, service),
          {:ok, {_tenant_id, credential}} <- lock_credential(context, service) do
       resolved = resolved_service(service, credential)
       {:ok, %ResolvedTelephonyService{service: resolved, credential: credential}}
     end
   end
+
+  defp resolve_application(
+         repo,
+         %{provider: "telnyx", credential_name: "telnyx", provider_connection_id: nil} = service
+       ) do
+    settings = repo.get!(TelnyxSettings, 1, @query_options)
+
+    if Service.application_id?(settings.application_id),
+      do:
+        {:ok,
+         %{
+           service
+           | provider_connection_id: settings.application_id,
+             application_owner: :platform
+         }},
+      else: {:error, :provider_credential_unavailable}
+  end
+
+  defp resolve_application(_repo, %{provider: "telnyx", credential_name: "telnyx"} = service),
+    do: {:ok, %{service | application_owner: {:tenant, service.tenant_key}}}
+
+  defp resolve_application(_repo, service), do: {:ok, service}
 
   defp transaction(repo, operation) do
     case repo.transaction(fn ->
@@ -240,9 +359,11 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
          true <-
            Vxpipe.Providers.Telnyx.Credential.public_key?(
              Map.get(credential.payload, "public_key")
-           ) do
+           ),
+         :ok <- application_credentials(service, credential) do
       {:ok, {owner.id, credential}}
     else
+      {:error, :telnyx_application_required} = error -> error
       _unavailable -> {:error, :provider_credential_unavailable}
     end
   end
@@ -275,6 +396,17 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
     end
   end
 
+  defp application_credentials(service, credential) do
+    inherited? = is_nil(service.provider_connection_id) or service.application_owner == :platform
+
+    platform_credentials? =
+      Vxpipe.Calls.ProviderCredential.owner(credential.credential) == :platform
+
+    if inherited? and not platform_credentials?,
+      do: {:error, :telnyx_application_required},
+      else: :ok
+  end
+
   defp fetch_metadata(repo, query) do
     case repo.one(query, @query_options) do
       nil -> {:error, :telephony_service_not_found}
@@ -285,7 +417,14 @@ defmodule Vxpipe.Persistence.TelephonyServiceStore do
   defp attributes(service, tenant_id) do
     service
     |> Map.from_struct()
-    |> Map.drop([:id, :tenant_key, :credential_owner, :inserted_at, :updated_at])
+    |> Map.drop([
+      :id,
+      :tenant_key,
+      :credential_owner,
+      :application_owner,
+      :inserted_at,
+      :updated_at
+    ])
     |> Map.merge(%{public_id: service.id, tenant_id: tenant_id})
     |> Map.update!(:answering_machine_detection, &Atom.to_string/1)
   end

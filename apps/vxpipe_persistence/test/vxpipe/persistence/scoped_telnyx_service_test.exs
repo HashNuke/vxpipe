@@ -99,6 +99,84 @@ defmodule Vxpipe.Persistence.ScopedTelnyxServiceTest do
     assert restored.service.public_key == public_key(1)
   end
 
+  test "tenant applications inherit the platform ID and can reset with platform credentials",
+       data do
+    {:ok, platform} = credential(:platform, 1, data.options)
+    assert {:ok, nil} = TelephonyServices.platform_application(data.options)
+    assert :ok = TelephonyServices.configure_platform_application("shared-app", data.options)
+
+    for tenant <- [data.first, data.second] do
+      attributes = Map.put(application(tenant.key), "provider_connection_id", nil)
+      assert {:ok, stored} = TelephonyServices.register(tenant.key, attributes, data.options)
+      assert stored.provider_connection_id == nil
+      assert {:ok, snapshot} = TelephonyServices.resolve(tenant.key, "support", data.options)
+      assert snapshot.service.provider_connection_id == "shared-app"
+      assert snapshot.service.application_owner == :platform
+      assert snapshot.service.credential_id == platform.id
+    end
+
+    {:ok, own} = credential(data.first.key, 1, data.options)
+
+    assert {:error, :provider_credential_unavailable} =
+             TelephonyServices.resolve(data.first.key, "support", data.options)
+
+    {:ok, stored} = TelephonyServices.fetch(data.first.key, "support", data.options)
+
+    assert {:ok, _} =
+             TelephonyServiceStore.update_application(data.context, data.first.key, stored.id, %{
+               "provider_connection_id" => "tenant-app"
+             })
+
+    assert {:ok, override} = TelephonyServices.resolve(data.first.key, "support", data.options)
+    assert override.service.provider_connection_id == "tenant-app"
+    assert override.service.application_owner == {:tenant, data.first.key}
+    assert override.service.credential_id == own.id
+
+    assert {:error, :telnyx_application_required} =
+             TelephonyServiceStore.update_application(data.context, data.first.key, stored.id, %{
+               "provider_connection_id" => nil
+             })
+
+    assert :ok = ProviderCredentials.delete(data.first.key, own.id, data.options)
+
+    assert {:ok, still_dedicated} =
+             TelephonyServices.resolve(data.first.key, "support", data.options)
+
+    assert still_dedicated.service.provider_connection_id == "tenant-app"
+
+    assert {:ok, _} =
+             TelephonyServiceStore.update_application(data.context, data.first.key, stored.id, %{
+               "provider_connection_id" => nil
+             })
+
+    assert {:ok, restored} = TelephonyServices.resolve(data.first.key, "support", data.options)
+    assert restored.service.provider_connection_id == "shared-app"
+    assert restored.service.application_owner == :platform
+    assert restored.service.credential_id == platform.id
+  end
+
+  test "a missing or changed platform application cannot satisfy an old prepared binding", data do
+    {:ok, _} = credential(:platform, 1, data.options)
+    attributes = Map.put(application(data.first.key), "provider_connection_id", nil)
+    assert {:ok, _} = TelephonyServices.register(data.first.key, attributes, data.options)
+
+    assert {:error, :provider_credential_unavailable} =
+             TelephonyServices.resolve(data.first.key, "support", data.options)
+
+    assert :ok = TelephonyServices.configure_platform_application("first-app", data.options)
+    assert {:ok, snapshot} = TelephonyServices.resolve(data.first.key, "support", data.options)
+    assert :ok = TelephonyServices.configure_platform_application("next-app", data.options)
+    reference = TelephonyServices.reference(snapshot.service)
+
+    assert {:error, {:provider_credential_unavailable, ["phone"]}} =
+             TelephonyServiceStore.with_active(
+               data.context,
+               data.first.key,
+               [%{name: "support", path: ["phone"], reference: reference}],
+               fn -> flunk("changed application reached write") end
+             )
+  end
+
   test "application lookup returns only explicit scoped mappings", data do
     {:ok, _platform} = credential(:platform, 1, data.options)
     attributes = application(data.first.key)

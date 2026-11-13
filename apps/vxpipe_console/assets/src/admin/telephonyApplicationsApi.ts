@@ -9,7 +9,7 @@ export type PublishedPhoneRoute = {
 export type TelephonyApplication = {
   id: string;
   name: string;
-  provider_connection_id: string;
+  provider_connection_id: string | null;
   outbound_number: string | null;
   published_routes: PublishedPhoneRoute[];
 };
@@ -51,8 +51,8 @@ export function parseTelephonyApplications(
       ) ||
       !text(item.name) ||
       !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(item.name) ||
-      !text(item.provider_connection_id) ||
-      !/^[\x21-\x7e]+$/.test(item.provider_connection_id) ||
+      !(item.provider_connection_id === null || (text(item.provider_connection_id) &&
+        /^[\x21-\x7e]+$/.test(item.provider_connection_id))) ||
       !(item.outbound_number === null || phone(item.outbound_number)) ||
       !Array.isArray(item.published_routes) ||
       ids.has(item.id) ||

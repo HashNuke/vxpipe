@@ -70,7 +70,7 @@ defmodule Vxpipe.Calls.CallSpecs do
       CallSpecCredentials.with_active(
         call_spec,
         tenant_key,
-        Keyword.put(options, :outbound_number_required?, true),
+        Keyword.merge(options, outbound_number_required?: true, telephony_publication?: true),
         fn ->
           Repositories.call(repository, :publish_revision, [
             tenant_key,

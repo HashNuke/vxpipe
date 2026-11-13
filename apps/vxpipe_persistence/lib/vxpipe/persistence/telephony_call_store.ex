@@ -184,12 +184,20 @@ defmodule Vxpipe.Persistence.TelephonyCallStore do
         join: revision in assoc(call, :call_spec_revision),
         join: call_spec in assoc(revision, :call_spec),
         where:
-          tenant.key == ^claim.call.tenant_key and leg.tenant_id == tenant.id and
-            leg.service_id == ^claim.service_id and
-            leg.provider == ^Atom.to_string(claim.provider) and
-            field(leg, ^field_name) == ^value,
+          leg.provider == ^Atom.to_string(claim.provider) and field(leg, ^field_name) == ^value,
         select: {leg, call, {tenant, call_spec, revision}}
       )
+
+    query =
+      if claim.provider == :telnyx do
+        from(leg in query, where: leg.provider_connection_id == ^claim.provider_connection_id)
+      else
+        from([leg, _call, tenant] in query,
+          where:
+            tenant.key == ^claim.call.tenant_key and leg.tenant_id == tenant.id and
+              leg.service_id == ^claim.service_id
+        )
+      end
 
     case repo.one(query) do
       nil -> nil

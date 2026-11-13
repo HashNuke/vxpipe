@@ -1,6 +1,6 @@
 import { LoaderCircle } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
-import { credentialInputClass } from "../credentials/ApiKeyCredentialFields";
+import { useEffect, useRef } from "react";
+import { TelnyxConnectionDialog } from "./TelnyxConnectionDialog";
 import { ServiceCredentialForm } from "../ServiceCredentialForm";
 import { SetupDialog } from "../SetupDialog";
 import { Button } from "../Button";
@@ -21,25 +21,7 @@ import type {
 
 import type { ServiceModalState } from "../ServiceSetupModal";
 
-export function StoryProviderDialog({
-  state,
-  onClose,
-  onSubmit,
-  onTest,
-  connections = [],
-  providers = setupProviders,
-  scope,
-  publicOrigin,
-  webhookUrls,
-  platformConnections = [],
-  onOverride,
-  onUsePlatform,
-  onManagePlatform,
-  telephonySetup = true,
-  bindingName,
-  applicationId = "",
-  onSaveApplication,
-}: {
+export type StoryProviderDialogProps = {
   state: ServiceModalState;
   onClose: () => void;
   onSubmit: (draft: CredentialDraft) => void;
@@ -56,12 +38,33 @@ export function StoryProviderDialog({
   onOverride?: () => void;
   onUsePlatform?: (provider: SetupProviderId) => void;
   applicationId?: string;
+  platformApplicationId?: string;
   onSaveApplication?: (applicationId: string) => void;
-}) {
-  const fieldId = useId();
-  const [application, setApplication] = useState(applicationId);
-  const [applicationError, setApplicationError] = useState("");
-  const [editingCredentials, setEditingCredentials] = useState(false);
+};
+
+export function StoryProviderDialog(props: StoryProviderDialogProps) {
+  return props.state.provider === "telnyx" && props.telephonySetup !== false
+    ? <TelnyxConnectionDialog {...props} />
+    : <GenericProviderDialog {...props} />;
+}
+
+function GenericProviderDialog({
+  state,
+  onClose,
+  onSubmit,
+  onTest,
+  connections = [],
+  providers = setupProviders,
+  scope,
+  publicOrigin,
+  webhookUrls,
+  platformConnections = [],
+  onOverride,
+  onUsePlatform,
+  onManagePlatform,
+  telephonySetup = true,
+  bindingName,
+}: StoryProviderDialogProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const provider = state.provider
     ? setupProvider(state.provider, providers)
@@ -76,32 +79,6 @@ export function StoryProviderDialog({
     (item) => item.provider === provider?.id,
   );
   const effectiveScope = inherited ? { kind: "platform" as const } : scope;
-  const tenantApplication = provider?.id === "telnyx" && scope.kind === "tenant" && telephonySetup;
-  const applicationOnly = tenantApplication && connected && !editingCredentials;
-  const pending = state.status === "submitting" || state.status === "testing";
-  function saveApplication() {
-    if (!tenantApplication) return true;
-    if (!/^[\x21-\x7e]{1,128}$/.test(application.trim())) {
-      setApplicationError("Enter the Voice API application ID without spaces.");
-      contentRef.current?.querySelector<HTMLInputElement>("[data-application-id]")?.focus();
-      return false;
-    }
-    onSaveApplication?.(application.trim());
-    return true;
-  }
-  const applicationField = tenantApplication ? <>
-    <div className="grid gap-1.5 text-sm">
-      <label className="font-semibold" htmlFor={`${fieldId}-application`}>Voice API application ID</label>
-      <input id={`${fieldId}-application`} data-application-id className={credentialInputClass}
-        value={application} disabled={pending} maxLength={128} spellCheck={false}
-        aria-describedby={`${fieldId}-application-hint`} aria-invalid={Boolean(applicationError)}
-        onChange={event => { setApplication(event.target.value); setApplicationError(""); }} />
-      <p id={`${fieldId}-application-hint`} className="text-xs text-[var(--admin-muted)]">
-        Use a different Voice API application for each tenant. Phone numbers are set in call specs.
-      </p>
-    </div>
-    {applicationError && <p role="alert" className="text-sm text-[var(--admin-red)]">{applicationError}</p>}
-  </> : null;
   const webhookUrl = webhookUrls
     ? effectiveScope.kind === "platform"
       ? webhookUrls.platform
@@ -128,7 +105,7 @@ export function StoryProviderDialog({
     contentRef.current
       ?.querySelector<HTMLInputElement>("input:not([disabled])")
       ?.focus();
-  }, [state.provider, state.overriding, editingCredentials]);
+  }, [state.provider, state.overriding]);
   return (
     <SetupDialog
       anchorTop
@@ -159,18 +136,15 @@ export function StoryProviderDialog({
                   : "Saving credentials…"}
               </p>
             ) : null}
-            {inherited || applicationOnly ? (
+            {inherited ? (
               <div className="setup-inherited-detail">
                 {state.message ? (
                   <p className="text-sm text-[var(--admin-red)]" role="alert">
                     {state.message}
                   </p>
                 ) : null}
-                <p>{tenantApplication
-                  ? inherited ? "Using the platform’s API key and public key. The application ID belongs to this tenant." : "Using this tenant’s saved credentials. You can update its application ID separately."
-                  : "This tenant uses the platform service. Platform credentials are managed in Platform services."}</p>
+                <p>This tenant uses the platform service. Platform credentials are managed in Platform services.</p>
                 <div className="setup-scope-actions">
-                  {!inherited && <Button onClick={() => setEditingCredentials(true)}>Update credentials</Button>}
                   {inherited && onOverride ? (
                     <Button
                       disabled={state.status === "submitting"}
@@ -188,17 +162,7 @@ export function StoryProviderDialog({
                     </Button>
                   ) : null}
                 </div>
-                {tenantApplication ? <form className="grid gap-4 telnyx-application-form" noValidate onSubmit={event => {
-                  event.preventDefault();
-                  if (saveApplication()) onClose();
-                }}>
-                  {applicationField}
-                  {webhook}
-                  <div className="setup-credential-actions">
-                    <Button type="button" disabled={pending} onClick={onClose}>Cancel</Button>
-                    <Button type="submit" disabled={pending}>Save</Button>
-                  </div>
-                </form> : webhook}
+                {webhook}
               </div>
             ) : (
               <ServiceCredentialForm
@@ -216,7 +180,7 @@ export function StoryProviderDialog({
                 }
                 message={state.message}
                 onCancel={onClose}
-                onSubmit={draft => { if (saveApplication()) onSubmit(draft); }}
+                onSubmit={onSubmit}
                 onTest={onTest}
                 showTelnyxPublicKey={telephonySetup}
                 providerLocked
@@ -227,8 +191,6 @@ export function StoryProviderDialog({
                   state.operation === "removal" ? "Updating…" : "Saving…"
                 }
                 beforeActions={<>
-                  {applicationField}
-                  {provider.id === "telnyx" && scope.kind === "platform" && <p className="text-sm text-[var(--admin-muted)]">Each tenant sets its own Voice API application ID in its Telnyx connection.</p>}
                   {webhook}
                 </>}
               />

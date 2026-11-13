@@ -32,7 +32,7 @@ defmodule Vxpipe.Gateway.Telephony.WebhookServiceTest do
 
       rejected =
         case provider do
-          :telnyx -> WebhookService.scoped_telnyx_owner(:platform, payload)
+          :telnyx -> WebhookService.scoped_telnyx_owner({:tenant, "BBBBBBBBBBBBBBBB"}, payload)
           :twilio -> WebhookService.select_twilio(registry, "other-ingress", payload, local_id)
         end
 

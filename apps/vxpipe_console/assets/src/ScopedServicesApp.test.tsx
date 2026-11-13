@@ -150,10 +150,16 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
   let saved = false;
   const fetchImpl = vi.fn(
     async (_url: RequestInfo | URL, options?: RequestInit) => {
-      if (options?.method === "POST") {
+      if (String(_url).endsWith("/credentials/test")) return Response.json({ status: "valid" });
+      if (options?.method === "PATCH") {
         saved = true;
-        return new Response("{}", { status: 201 });
+        return Response.json({});
       }
+      if (String(_url).endsWith("/telnyx-connection")) return Response.json({
+        platform_application_id: saved ? "platform-app" : null,
+        applications: [], credential: saved ? { ...binding("telnyx"), saved_fields: ["api_key", "public_key"] } : null,
+        webhook_urls: { platform: "https://callbacks.example.test/voice/webhooks/platform/telnyx", tenant: null },
+      });
       return new Response(
         JSON.stringify({
           tenant: null,
@@ -181,7 +187,7 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
   fireEvent.change(await screen.findByLabelText("Service"), {
     target: { value: "telnyx" },
   });
-  expect(screen.getByLabelText("Webhook URL")).toHaveValue(
+  expect(await screen.findByLabelText("Webhook URL")).toHaveValue(
     "https://callbacks.example.test/voice/webhooks/platform/telnyx",
   );
   fireEvent.change(screen.getByLabelText("API key"), {
@@ -191,31 +197,33 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
   fireEvent.change(screen.getByLabelText("Public key"), {
     target: { value: publicKey },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Test credentials" }));
+  expect(await screen.findByText("Credentials tested successfully.")).toBeVisible();
+  expect(saved).toBe(false);
+  fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "platform-app" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
   );
-  expect(screen.getByRole("status", { name: "Notification" })).toHaveTextContent("Service saved.");
+  expect(screen.getByRole("status", { name: "Notification" })).toHaveTextContent("Telnyx connection saved.");
   expect(screen.getByRole("status", { name: "Notification" })).toHaveClass("fixed");
   expect(fetchImpl).toHaveBeenCalledWith(
-    "/api/platform/credentials",
+    "/api/platform/telnyx-connection",
     expect.objectContaining({
       body: JSON.stringify({
-        provider: "telnyx",
-        name: "telnyx",
-        values: { api_key: "synthetic-api-key", public_key: publicKey },
+        application_id: "platform-app",
+        credentials: { api_key: "synthetic-api-key", public_key: publicKey },
       }),
     }),
   );
   fireEvent.click(await screen.findByRole("button", { name: "Edit Telnyx" }));
-  expect(await screen.findByLabelText("Public key")).toHaveValue("");
+  fireEvent.click(await screen.findByRole("button", { name: "Edit credentials" }));
+  expect(screen.getByLabelText("Public key")).toHaveValue("");
   expect(screen.getByLabelText("Public key")).toHaveAttribute(
     "placeholder",
-    "••••••••",
+    "Leave blank to keep saved public key",
   );
-  expect(
-    screen.getByText(/Leave blank to remove the saved public key/),
-  ).toBeInTheDocument();
+  expect(screen.queryByText(/Leave blank to remove/)).not.toBeInTheDocument();
 });
 
 test("platform services test and save separately, then edit the exact persisted binding", async () => {

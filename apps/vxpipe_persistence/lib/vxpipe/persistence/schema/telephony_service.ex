@@ -26,7 +26,6 @@ defmodule Vxpipe.Persistence.Schema.TelephonyService do
       :name,
       :ingress_key,
       :provider,
-      :provider_connection_id,
       :answering_machine_detection,
       :media_token_ttl_ms,
       :webhook_tolerance_seconds
@@ -34,6 +33,7 @@ defmodule Vxpipe.Persistence.Schema.TelephonyService do
 
     service
     |> cast(attributes, [
+      :provider_connection_id,
       :outbound_number,
       :public_key,
       :credential_id,
@@ -42,6 +42,7 @@ defmodule Vxpipe.Persistence.Schema.TelephonyService do
     |> validate_required(required)
     |> check_constraint(:public_key, name: :telephony_services_provider_public_key)
     |> check_constraint(:credential_name, name: :telephony_services_credential_binding)
+    |> check_constraint(:provider_connection_id, name: :telephony_services_application_required)
     |> foreign_key_constraint(:tenant_id)
     |> foreign_key_constraint(:credential_id, name: :telephony_services_credential_owner_fkey)
     |> unique_constraint(:public_id)

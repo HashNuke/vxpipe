@@ -37,15 +37,15 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
              resource_id: revision.call_spec_id,
              revision: revision.revision
            ) do
-      with_active_capabilities(
-        call_spec,
-        revision.tenant_key,
-        options,
-        fn ->
-          TelephonyPlanBindings.with_active(plan, options, operation)
-        end,
-        plan.credential_bindings
-      )
+      TelephonyPlanBindings.with_active(plan, options, fn ->
+        with_active_capabilities(
+          call_spec,
+          revision.tenant_key,
+          options,
+          operation,
+          plan.credential_bindings
+        )
+      end)
     else
       false -> unavailable(["tenant_id"])
       error -> error
@@ -53,8 +53,8 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
   end
 
   def with_active(%CallSpec{} = call_spec, tenant_key, options, operation) do
-    with_active_capabilities(call_spec, tenant_key, options, fn ->
-      with_active_services(call_spec, tenant_key, options, operation)
+    with_active_services(call_spec, tenant_key, options, fn ->
+      with_active_capabilities(call_spec, tenant_key, options, operation)
     end)
   end
 
@@ -164,7 +164,12 @@ defmodule Vxpipe.Calls.CallSpecCredentials do
         operation.()
 
       [first | _] = requirements ->
-        requirements = Enum.map(requirements, &authoring_requirement(&1, options))
+        requirements =
+          Enum.map(requirements, fn requirement ->
+            requirement
+            |> authoring_requirement(options)
+            |> Map.put(:publishing?, Keyword.get(options, :telephony_publication?, false))
+          end)
 
         case TelephonyServices.with_active(tenant_key, requirements, options, operation) do
           {:error, {:provider_service_forbidden, path}} ->

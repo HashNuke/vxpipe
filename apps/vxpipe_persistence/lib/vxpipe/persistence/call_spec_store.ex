@@ -5,7 +5,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
 
   import Ecto.Query
 
-  alias Vxpipe.Persistence.CallSpecId
+  alias Vxpipe.Persistence.{CallSpecId, TelnyxRouting}
   alias Ecto.Multi
   alias Vxpipe.Calls.{CallSpecRevision, ParticipantRoute, TelephonyRoute}
   alias Vxpipe.Persistence.Schema.{CallSpec, Tenant}
@@ -181,6 +181,20 @@ defmodule Vxpipe.Persistence.CallSpecStore do
   def publish_revision(repo, tenant_key, call_spec_id, revision_number, published_at) do
     multi =
       Multi.new()
+      |> Multi.run(:telnyx_publish_lock, fn repo, _changes ->
+        if repo.exists?(
+             from(r in StoredTelephonyRoute,
+               join: revision in assoc(r, :call_spec_revision),
+               where:
+                 revision.call_spec_id == ^CallSpecId.database_id(call_spec_id) and
+                   revision.revision == ^revision_number
+             )
+           ) do
+          TelnyxRouting.lock(repo, :publish)
+        end
+
+        {:ok, :locked}
+      end)
       |> Multi.run(:tenant_publish_lock, fn repo, _changes ->
         case repo.one(from(t in Tenant, where: t.key == ^tenant_key, lock: "FOR NO KEY UPDATE")) do
           nil -> {:error, :tenant_not_found}
@@ -211,7 +225,9 @@ defmodule Vxpipe.Persistence.CallSpecStore do
             )
           )
 
-        if conflict?, do: {:error, :phone_number_in_use}, else: {:ok, :available}
+        if conflict? or TelnyxRouting.publication_conflict?(repo, call_spec, revision),
+          do: {:error, :phone_number_in_use},
+          else: {:ok, :available}
       end)
       |> Multi.run(:disable_old_routes, fn repo, %{selection: {call_spec, _revision}} ->
         route_query = routes_for_call_spec(call_spec.id)

@@ -45,6 +45,17 @@ defmodule Vxpipe.Console.RoutePermission do
   def for_request("GET", ["api", "platform", "integrations"]),
     do: {:installation, "platform_services.read"}
 
+  def for_request("GET", ["api", "platform", "telnyx-connection"]),
+    do: {:installation, "platform_services.read"}
+
+  def for_request("PATCH", ["api", "platform", "telnyx-connection"]),
+    do: {:installation, "platform_services.write"}
+
+  # The domain operation checks write permission separately for each changed section.
+  def for_request(method, ["api", "tenants", tenant, "telnyx-connection"])
+      when method in ["GET", "PATCH"],
+      do: {:tenant, "tenant_services.read", tenant}
+
   def for_request("GET", ["api", "tenants", tenant, "integrations"]),
     do: {:tenant, "tenant_services.read", tenant}
 

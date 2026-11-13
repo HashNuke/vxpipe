@@ -40,7 +40,7 @@ defmodule Vxpipe.Gateway.Telephony.WebhookService do
 
     selected =
       case lookup({:outgoing, local_id}) do
-        :not_found -> lookup({:scoped_telnyx, scope, application, provider_leg})
+        :not_found -> lookup({:scoped_telnyx, application, provider_leg})
         found -> found
       end
 
@@ -50,7 +50,8 @@ defmodule Vxpipe.Gateway.Telephony.WebhookService do
 
         if service.identity.provider == :telnyx and
              service.identity.provider_connection_id == application and
-             match?(%{credential_name: "telnyx", credential_owner: ^scope}, reference),
+             (scope == :platform or scope == service.identity.scope) and
+             match?(%{credential_name: "telnyx"}, reference),
            do: {:ok, service, owner},
            else: {:error, :service_not_found}
 

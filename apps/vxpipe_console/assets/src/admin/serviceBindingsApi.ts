@@ -126,7 +126,7 @@ export function parseBindingDirectory(
   };
 }
 
-function validWebhookUrl(value: unknown): value is string {
+export function validWebhookUrl(value: unknown): value is string {
   if (typeof value !== "string" || value.length > 2304) return false;
   try {
     const url = new URL(value);

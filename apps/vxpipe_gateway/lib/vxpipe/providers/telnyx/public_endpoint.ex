@@ -6,14 +6,14 @@ defmodule Vxpipe.Providers.Telnyx.PublicEndpoint do
   @spec event_url(ConfiguredService.t()) :: String.t()
   def event_url(
         %ConfiguredService{
-          identity: %{service_reference: %{credential_name: "telnyx", credential_owner: owner}}
+          identity: %{service_reference: %{credential_name: "telnyx", application_owner: owner}}
         } = service
       )
       when not is_nil(owner) do
     scoped_event_url(service.public_base_url, owner)
   end
 
-  @doc "Builds a credential-scope URL, preserving the configured public path prefix."
+  @doc "Builds an application-scope URL, preserving the configured public path prefix."
   def scoped_event_url(base, owner) do
     suffix =
       case owner do

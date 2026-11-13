@@ -20,7 +20,8 @@ defmodule Vxpipe.Calls.TelephonyService do
   @enforce_keys [:id, :tenant_key]
   @derive {Inspect, only: [:id, :tenant_key, :name, :provider, :credential_id]}
   defstruct @enforce_keys ++
-              Keyword.keys(@attributes) ++ [:credential_owner, :inserted_at, :updated_at]
+              Keyword.keys(@attributes) ++
+              [:credential_owner, :application_owner, :inserted_at, :updated_at]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -28,7 +29,8 @@ defmodule Vxpipe.Calls.TelephonyService do
           name: String.t(),
           ingress_key: String.t(),
           provider: String.t(),
-          provider_connection_id: String.t(),
+          provider_connection_id: String.t() | nil,
+          application_owner: :platform | {:tenant, String.t()} | nil,
           credential_id: String.t() | nil,
           credential_name: String.t() | nil,
           credential_owner: :platform | {:tenant, String.t()} | nil,
@@ -115,11 +117,13 @@ defmodule Vxpipe.Calls.TelephonyService do
   def credential_matches?(_service, _payload), do: false
 
   defp provider_metadata?(%{provider: "telnyx", credential_name: "telnyx"} = service),
-    do: connection_id?(service.provider_connection_id)
+    do:
+      application_id?(service.provider_connection_id) or
+        (is_nil(service.provider_connection_id) and is_nil(service.credential_id))
 
   defp provider_metadata?(%{provider: "telnyx"} = service),
     do:
-      connection_id?(service.provider_connection_id) and
+      application_id?(service.provider_connection_id) and
         Vxpipe.Providers.Telnyx.Credential.public_key?(service.public_key)
 
   defp provider_metadata?(%{provider: "twilio"} = service),
@@ -146,7 +150,8 @@ defmodule Vxpipe.Calls.TelephonyService do
 
   defp uuid?(_value), do: false
 
-  defp connection_id?(value) do
+  @doc false
+  def application_id?(value) do
     is_binary(value) and byte_size(value) in 1..128 and Regex.match?(~r/\A[\x21-\x7E]+\z/, value)
   end
 

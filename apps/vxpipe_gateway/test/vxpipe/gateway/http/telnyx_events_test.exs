@@ -85,7 +85,7 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
     refute_receive {:telephony_event, _identity, _event}
   end
 
-  test "verifies a signed malformed body before returning a decoder error", context do
+  test "rejects a malformed body without dispatch", context do
     conn = request(context.endpoint, "not-json", context.private_key)
 
     assert conn.status == 400
@@ -103,7 +103,17 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
     refute_receive {:telephony_event, _identity, _event}
   end
 
-  test "acknowledges authenticated events that the platform ignores", context do
+  test "acknowledges authenticated ignored events for an existing leg", context do
+    assert {:ok, service} =
+             ServiceRegistry.fetch(context.endpoint.router.telephony.registry, @ingress_key)
+
+    assert {:ok, _} =
+             Vxpipe.Gateway.Telephony.IngressRegistration.register(
+               service,
+               "call-leg-1",
+               :incoming
+             )
+
     body = event_body("call.playback.ended", "voice-application-1")
 
     conn = request(context.endpoint, body, context.private_key)
