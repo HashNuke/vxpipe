@@ -1,14 +1,20 @@
 import { Check, Copy } from "lucide-react";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "./Button";
 
 export function TelnyxWebhookField({ url }: { url: string }) {
   const id = useId();
   const [state, setState] = useState<"idle" | "copied" | "error">("idle");
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (resetTimer.current !== null) clearTimeout(resetTimer.current);
+  }, []);
   async function copy() {
+    if (resetTimer.current !== null) clearTimeout(resetTimer.current);
     try {
       await navigator.clipboard.writeText(url);
       setState("copied");
+      resetTimer.current = setTimeout(() => setState("idle"), 2000);
     } catch {
       setState("error");
     }
@@ -27,7 +33,7 @@ export function TelnyxWebhookField({ url }: { url: string }) {
           ) : (
             <Copy aria-hidden="true" size={16} />
           )}
-          {state === "copied" ? "Copied" : "Copy"}
+          <span aria-live="polite">{state === "copied" ? "Copied" : "Copy"}</span>
         </Button>
       </div>
       <input
@@ -42,11 +48,9 @@ export function TelnyxWebhookField({ url }: { url: string }) {
       <p id={`${id}-hint`}>
         Configure this URL in Telnyx for the Voice API Application
       </p>
-      {state !== "idle" ? (
+      {state === "error" ? (
         <p role="status">
-          {state === "copied"
-            ? "Webhook URL copied."
-            : "Copy failed. Select the URL and copy it manually."}
+          Copy failed. Select the URL and copy it manually.
         </p>
       ) : null}
     </div>

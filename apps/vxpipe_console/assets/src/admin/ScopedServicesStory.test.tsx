@@ -211,22 +211,28 @@ test("platform saves become available to a newly created tenant", () => {
   expect(screen.getByRole("button", { name: "Manage Deepgram" })).toBeVisible();
 });
 
-test("webhook copy gives success and usable failure feedback", async () => {
+test("webhook copy briefly confirms in the button and retains usable failure feedback", async () => {
+  vi.useFakeTimers();
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
     value: { writeText },
   });
   renderConnected(<OnboardingStory scenario="telnyx-credentials" theme="dark" />);
-  fireEvent.click(screen.getByRole("button", { name: "Copy webhook URL" }));
-  expect(await screen.findByText("Webhook URL copied.")).toBeVisible();
+  const button = screen.getByRole("button", { name: "Copy webhook URL" });
+  await act(async () => fireEvent.click(button));
+  expect(button).toHaveTextContent("Copied");
+  expect(screen.queryByText("Webhook URL copied.")).not.toBeInTheDocument();
   expect(writeText).toHaveBeenCalledWith(
     "http://localhost:4000/webhooks/tenants/DemoTenant000001/telnyx",
   );
+  act(() => vi.advanceTimersByTime(2000));
+  expect(button).toHaveTextContent("Copy");
+  expect(button).not.toHaveTextContent("Copied");
   writeText.mockRejectedValueOnce(new Error("denied"));
-  fireEvent.click(screen.getByRole("button", { name: "Copy webhook URL" }));
+  await act(async () => fireEvent.click(button));
   expect(
-    await screen.findByText(
+    screen.getByText(
       "Copy failed. Select the URL and copy it manually.",
     ),
   ).toBeVisible();

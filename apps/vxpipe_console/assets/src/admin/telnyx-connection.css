@@ -26,11 +26,11 @@
 .telnyx-setting:last-of-type { padding-bottom: 0; border-bottom: 0; }
 .telnyx-setting-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
 .telnyx-setting-heading h3 { font-size: 14px; font-weight: 600; }
-.telnyx-setting-source { display: flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 12px; color: var(--admin-muted); }
+.telnyx-setting-source { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; padding: 2px 7px; border: 1px solid var(--admin-row-line); border-radius: 4px; background: var(--admin-soft); font-size: 11px; line-height: 1.5; font-weight: 500; color: var(--admin-muted); }
 .telnyx-setting-heading > button { flex: 0 0 auto; }
 .telnyx-setting-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .telnyx-credential-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; font-size: 13px; }
-.telnyx-credential-summary dt, .telnyx-field-label { color: var(--admin-muted); font-size: 12px; }
+.telnyx-credential-summary dt, .telnyx-field-label { color: var(--admin-ink); font-size: 13px; font-weight: 500; }
 .telnyx-credential-summary dd { display: flex; align-items: center; gap: 12px; margin-top: 8px; min-height: 20px; }
 .telnyx-saved-check { color: var(--admin-green); flex-shrink: 0; }
 .telnyx-masked-key { font-family: "Geist Mono", monospace; letter-spacing: 0.06em; }
@@ -42,8 +42,8 @@
 .telnyx-field-hint { font-size: 12px; line-height: 1.6; color: var(--admin-muted); margin-top: 8px; }
 .telnyx-webhook-section { padding-top: 24px; }
 .telnyx-webhook-section .setup-webhook { padding: 0; border: 0; }
-.telnyx-webhook-section .setup-webhook label { color: var(--admin-muted); font-size: 12px; font-weight: 400; }
-.telnyx-webhook-section .setup-webhook-heading button { font-size: 12px; }
+.telnyx-webhook-section .setup-webhook label { color: var(--admin-ink); font-size: 13px; font-weight: 500; }
+.telnyx-webhook-section .setup-webhook-heading button { min-width: 84px; font-size: 12px; }
 .telnyx-connection-footer > button:first-child { margin-right: auto; }
 .telnyx-connection-error, .telnyx-connection-success, .telnyx-connection-progress { margin-top: 16px; font-size: 13px; line-height: 1.6; }
 .telnyx-connection-error { color: var(--admin-red); }
