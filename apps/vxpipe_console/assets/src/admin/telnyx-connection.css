@@ -32,7 +32,7 @@
 .telnyx-credential-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; font-size: 13px; }
 .telnyx-credential-summary dt, .telnyx-field-label { color: var(--admin-muted); font-size: 12px; }
 .telnyx-credential-summary dd { display: flex; align-items: center; gap: 12px; margin-top: 8px; min-height: 20px; }
-.telnyx-credential-summary dd > span:last-child { color: var(--admin-muted); font-size: 12px; }
+.telnyx-saved-check { color: var(--admin-green); flex-shrink: 0; }
 .telnyx-masked-key { font-family: "Geist Mono", monospace; letter-spacing: 0.06em; }
 .telnyx-credential-fields { display: grid; gap: 16px; }
 .telnyx-credential-fields > div { grid-template-columns: 1fr; }

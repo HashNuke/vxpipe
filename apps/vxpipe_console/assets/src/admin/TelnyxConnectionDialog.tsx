@@ -1,4 +1,4 @@
-import { Building2, LoaderCircle } from "lucide-react";
+import { Building2, Check, LoaderCircle } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Button } from "./Button";
 import { ApiKeyCredentialFields, credentialInputClass } from "./credentials/ApiKeyCredentialFields";
@@ -191,8 +191,8 @@ function TelnyxConnectionForm({
               <p id={`${id}-public-hint`} className="text-xs text-[var(--admin-muted)]">Note: Public key is only required if you use Telephony services</p>
             </div>
           </div> : <dl className="telnyx-credential-summary">
-            <div><dt>API key</dt><dd><span aria-label="Saved API key" className="telnyx-masked-key">••••••••••••</span><span>Saved</span></dd></div>
-            <div><dt>Public key</dt><dd>{inheritedCredentials && !initiallyInherited ? "Platform default" : effectiveConnection?.telephonyPublicKeyConfigured || effectiveConnection?.savedFields?.includes("publicKey") ? <><span aria-label="Saved public key" className="telnyx-masked-key">••••••••••••</span><span>Saved</span></> : "Not configured"}</dd></div>
+            <div><dt>API key</dt><dd><span aria-hidden="true" className="telnyx-masked-key">••••••••••••</span><Check size={16} role="img" aria-label="Saved API key" className="telnyx-saved-check" /></dd></div>
+            <div><dt>Public key</dt><dd>{inheritedCredentials && !initiallyInherited ? "Platform default" : effectiveConnection?.telephonyPublicKeyConfigured || effectiveConnection?.savedFields?.includes("publicKey") ? <><span aria-hidden="true" className="telnyx-masked-key">••••••••••••</span><Check size={16} role="img" aria-label="Saved public key" className="telnyx-saved-check" /></> : "Not configured"}</dd></div>
           </dl>}
         </section>
 
