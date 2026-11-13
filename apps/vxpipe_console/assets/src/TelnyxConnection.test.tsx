@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { ScopedServicesApp } from "./ScopedServicesApp";
 import { modelCatalogFixture } from "./admin/modelCatalogFixtures";
@@ -27,7 +27,7 @@ test("live modal reads saved configuration, saves one patch, and reloads it on r
       model_catalog: modelCatalogFixture, provider_capabilities: { telnyx: ["credential", "telephony"] } });
   });
   render(<ScopedServicesApp scope={scope} csrfToken="csrf-fixture" fetchImpl={fetchImpl} onNavigate={vi.fn()}
-    showTelephonyApplications={false} renderInventory={({ onManage }) => <button onClick={() => onManage("telnyx")}>Manage Telnyx</button>} />);
+    renderInventory={({ onManage }) => <button onClick={() => onManage("telnyx")}>Manage Telnyx</button>} />);
   fireEvent.click(screen.getByRole("button", { name: "Manage Telnyx" }));
   fireEvent.click(await screen.findByRole("button", { name: "Override voice application" }));
   fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "acme-app" } });
@@ -53,7 +53,7 @@ test("multiple named applications require selection and a failed save keeps the 
       model_catalog: modelCatalogFixture, provider_capabilities: { telnyx: ["credential", "telephony"] } });
   });
   render(<ScopedServicesApp scope={scope} csrfToken="csrf" fetchImpl={fetchImpl} onNavigate={vi.fn()}
-    showTelephonyApplications={false} renderInventory={({ onManage }) => <button onClick={() => onManage("telnyx")}>Manage Telnyx</button>} />);
+    renderInventory={({ onManage }) => <button onClick={() => onManage("telnyx")}>Manage Telnyx</button>} />);
   fireEvent.click(screen.getByRole("button", { name: "Manage Telnyx" }));
   fireEvent.click(await screen.findByRole("button", { name: "sales" }));
   fireEvent.click(screen.getByRole("button", { name: "Override voice application" }));
@@ -63,4 +63,39 @@ test("multiple named applications require selection and a failed save keeps the 
   expect(screen.getByLabelText("Voice API application ID")).toHaveValue("sales-app");
   const write = fetchImpl.mock.calls.find(([, init]) => init?.method === "PATCH");
   expect(JSON.parse(String(write?.[1]?.body)).service_id).toBe(second.id);
+});
+
+
+test("Telnyx opens one persistent dialog and loads its settings directly", async () => {
+  let resolve!: (response: Response) => void;
+  const fetchImpl = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(() => new Promise(done => { resolve = done; }));
+  render(<ScopedServicesApp scope={scope} csrfToken="csrf" fetchImpl={fetchImpl} onNavigate={vi.fn()}
+    renderInventory={({ onManage }) => <button onClick={() => onManage("telnyx")}>Edit Telnyx</button>} />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit Telnyx" }));
+  const dialog = screen.getByRole("dialog", { name: "Telnyx" });
+  const header = within(dialog).getByRole("heading", { name: "Telnyx" });
+  expect(within(dialog).getByText("Acme")).toBeVisible();
+  expect(within(dialog).getByRole("status")).toHaveTextContent("Loading Telnyx settings");
+  expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([`/api/tenants/${scope.tenantKey}/telnyx-connection`]);
+  await act(async () => resolve(Response.json(connection())));
+  expect(await screen.findByDisplayValue("shared-app")).toBeVisible();
+  expect(screen.getByRole("dialog")).toBe(dialog);
+  expect(within(dialog).getByRole("heading", { name: "Telnyx" })).toBe(header);
+  expect(within(dialog).queryByRole("status")).not.toBeInTheDocument();
+});
+
+test("Telnyx loading can be cancelled without a late response reopening the dialog", async () => {
+  let resolve!: (response: Response) => void;
+  const fetchImpl = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(() => new Promise(done => { resolve = done; }));
+  render(<ScopedServicesApp scope={scope} csrfToken="csrf" fetchImpl={fetchImpl} onNavigate={vi.fn()}
+    renderInventory={({ onManage }) => <button onClick={() => onManage("telnyx")}>Edit Telnyx</button>} />);
+  const edit = screen.getByRole("button", { name: "Edit Telnyx" });
+  edit.focus();
+  fireEvent.click(edit);
+  expect(fetchImpl.mock.calls[0][0]).toBe(`/api/tenants/${scope.tenantKey}/telnyx-connection`);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(fetchImpl.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  await act(async () => resolve(Response.json(connection())));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  await waitFor(() => expect(edit).toHaveFocus());
 });

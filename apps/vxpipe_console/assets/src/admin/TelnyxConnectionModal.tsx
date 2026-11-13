@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "./Button";
-import { SetupDialog } from "./SetupDialog";
+import { LoaderCircle } from "lucide-react";
 import { TelnyxConnectionDialog, type TelnyxConnectionChanges } from "./TelnyxConnectionDialog";
 import { parseTelnyxConnection, telnyxSaveError, type TelnyxConnection } from "./telnyxConnectionApi";
 import type { CredentialDraft, CredentialTestResult } from "./serviceTypes";
@@ -27,6 +27,7 @@ export function TelnyxConnectionModal({ scope, csrfToken, fetchImpl, onClose, on
     setMessage(undefined);
     fetchImpl(url, { credentials: "same-origin", headers: { accept: "application/json" }, signal: controller.signal })
       .then(async response => {
+        if (controller.signal.aborted) return;
         if (response.status === 401) onSessionExpired();
         if (!response.ok) throw new Error("unavailable");
         const next = parseTelnyxConnection(await response.json(), tenantKey
@@ -61,23 +62,28 @@ export function TelnyxConnectionModal({ scope, csrfToken, fetchImpl, onClose, on
     }
   }
 
-  if (!connection) return <SetupDialog title="Telnyx connection" onClose={onClose}>
-    <div className="mcp-dialog-form"><div className="mcp-dialog-scroll">
-      {message ? <><p role="alert">{message}</p><Button onClick={() => setRetry(value => value + 1)}>Retry</Button></> : <p role="status">Loading Telnyx settings…</p>}
-    </div><footer className="mcp-dialog-footer"><Button onClick={onClose}>Cancel</Button></footer></div>
-  </SetupDialog>;
-  if (connection.applications.length > 1 && !selection) return <SetupDialog title="Choose voice application" onClose={onClose}>
-    <div className="mcp-dialog-form"><div className="mcp-dialog-scroll grid gap-2">
+  let content: ReactNode;
+  if (!connection) content = <div className="mcp-dialog-form telnyx-connection-form">
+    <div className="mcp-dialog-scroll telnyx-connection-loading">
+      {message ? <div><p role="alert">{message}</p><Button onClick={() => setRetry(value => value + 1)}>Retry</Button></div>
+        : <p role="status"><LoaderCircle size={16} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />Loading Telnyx settings…</p>}
+    </div>
+    <footer className="mcp-dialog-footer telnyx-connection-footer"><Button data-telnyx-close variant="ghost" onClick={onClose}>Cancel</Button></footer>
+  </div>;
+  else if (connection.applications.length > 1 && !selection) content = <div className="mcp-dialog-form telnyx-connection-form">
+    <div className="mcp-dialog-scroll grid content-start gap-2">
+      <h3>Choose voice application</h3>
       {connection.applications.map(application => <Button key={application.id} onClick={() => setSelection(application.id)}>{application.name}</Button>)}
-    </div><footer className="mcp-dialog-footer"><Button onClick={onClose}>Cancel</Button></footer></div>
-  </SetupDialog>;
-  const application = connection.applications.find(item => item.id === selection);
-  return <TelnyxConnectionDialog key={selection ?? "new"} scope={scope}
+    </div>
+    <footer className="mcp-dialog-footer telnyx-connection-footer"><Button data-telnyx-close variant="ghost" onClick={onClose}>Cancel</Button></footer>
+  </div>;
+  const application = connection?.applications.find(item => item.id === selection);
+  return <TelnyxConnectionDialog formKey={selection ?? "new"} content={content} scope={scope}
     canEditCredentials={canEditCredentials} canEditApplication={canEditApplication}
     state={{ provider: "telnyx", status: pending ? "submitting" : message ? "error" : "idle", message }}
-    connections={connection.credential ? [connection.credential] : []}
-    platformConnections={connection.platformAvailable ? [{ provider: "telnyx", source: "platform", status: "connected" }] : []}
-    applicationId={tenantKey ? application?.provider_connection_id ?? "" : connection.platformApplicationId ?? ""}
-    applicationExists={!tenantKey || Boolean(application)} platformApplicationId={connection.platformApplicationId ?? ""}
-    webhookUrls={connection.webhookUrls} onTest={onTest} onClose={() => { if (!saving.current) onClose(); }} onSave={save} />;
+    connections={connection?.credential ? [connection.credential] : []}
+    platformConnections={connection?.platformAvailable ? [{ provider: "telnyx", source: "platform", status: "connected" }] : []}
+    applicationId={tenantKey ? application?.provider_connection_id ?? "" : connection?.platformApplicationId ?? ""}
+    applicationExists={!tenantKey || Boolean(application)} platformApplicationId={connection?.platformApplicationId ?? ""}
+    webhookUrls={connection?.webhookUrls} onTest={onTest} onClose={() => { if (!saving.current) onClose(); }} onSave={save} />;
 }

@@ -137,7 +137,7 @@ test("platform connect saves the shared application and platform webhook", () =>
     screen.getByRole("heading", { name: "Platform Integrations", level: 1 }),
   ).toBeVisible();
   manageTelnyx();
-  expect(screen.getByRole("dialog", { name: "Manage Telnyx" })).toBeVisible();
+  expect(screen.getByRole("dialog", { name: "Telnyx" })).toBeVisible();
   expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234567");
   expect(screen.getByLabelText("Webhook URL")).toHaveValue(
     "http://localhost:4000/webhooks/platform/telnyx",

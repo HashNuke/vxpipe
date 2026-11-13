@@ -1,4 +1,22 @@
-.telnyx-connection-form { overflow: hidden; }
+.setup-dialog:has(.telnyx-connection-title) {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 680px);
+  height: min(720px, calc(100dvh - var(--setup-dialog-top) - var(--setup-dialog-bottom)));
+  padding: 0;
+  overflow: hidden;
+}
+.setup-dialog:has(.telnyx-connection-title) > .setup-dialog-header {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--admin-row-line);
+}
+.telnyx-connection-form { flex: 1; overflow: hidden; }
+.telnyx-connection-form > .mcp-dialog-scroll { flex: 1; }
+.telnyx-connection-loading { display: grid; place-items: center; color: var(--admin-muted); }
+.telnyx-connection-loading > p { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.telnyx-connection-loading button { margin-top: 16px; }
 .telnyx-connection-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .telnyx-connection-title img { flex: 0 0 auto; border-radius: 6px; }
 .telnyx-connection-title span { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
@@ -19,8 +37,8 @@
 .telnyx-credential-fields { display: grid; gap: 16px; }
 .telnyx-credential-fields > div { grid-template-columns: 1fr; }
 .telnyx-field-label { display: block; margin-bottom: 8px; }
-.mcp-services-preview .telnyx-application-value { font-family: "Geist Mono", monospace; font-size: 13px; }
-.mcp-services-preview .telnyx-application-value[readonly] { background: var(--admin-soft); border-color: transparent; }
+.setup-dialog .telnyx-connection-form input.telnyx-application-value { font-family: "Geist Mono", monospace; font-size: 13px; }
+.setup-dialog .telnyx-connection-form input.telnyx-application-value[readonly] { background: var(--admin-soft); border-color: transparent; }
 .telnyx-field-hint { font-size: 12px; line-height: 1.6; color: var(--admin-muted); margin-top: 8px; }
 .telnyx-webhook-section { padding-top: 24px; }
 .telnyx-webhook-section .setup-webhook { padding: 0; border: 0; }
@@ -39,4 +57,13 @@
   .telnyx-credential-summary dd { flex-wrap: wrap; gap: 4px 8px; }
   .telnyx-connection-footer { gap: 8px; padding: 16px; }
   .telnyx-connection-footer > button { min-height: 40px; padding-inline: 10px; }
+}
+
+.telnyx-connection-footer .mcp-primary {
+  color: var(--admin-bg);
+  background: var(--admin-ink);
+  border-color: var(--admin-ink);
+}
+.telnyx-connection-footer .mcp-primary:hover {
+  background: color-mix(in oklch, var(--admin-ink) 90%, var(--admin-bg));
 }

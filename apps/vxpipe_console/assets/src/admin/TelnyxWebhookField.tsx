@@ -40,8 +40,7 @@ export function TelnyxWebhookField({ url }: { url: string }) {
         aria-describedby={`${id}-hint`}
       />
       <p id={`${id}-hint`}>
-        Use this URL in your Telnyx Voice API application to receive call
-        events.
+        Configure this URL in Telnyx for the Voice API Application
       </p>
       {state !== "idle" ? (
         <p role="status">

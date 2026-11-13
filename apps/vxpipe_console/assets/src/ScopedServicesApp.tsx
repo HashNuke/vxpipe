@@ -11,7 +11,6 @@ import {
   type ServiceModalState,
 } from "./admin/ServiceSetupModal";
 import { TenantSetupPage } from "./admin/TenantSetupPage";
-import { TenantTelephonyApplications } from "./admin/TenantTelephonyApplications";
 import {
   parseBindingDirectory,
   type BindingDirectory,
@@ -65,7 +64,6 @@ export function ScopedServicesApp({
   canEdit = true,
   canEditApplications = canEdit,
   renderInventory,
-  showTelephonyApplications = true,
 }: {
   scope: SetupServiceScope;
   csrfToken: string;
@@ -81,7 +79,6 @@ export function ScopedServicesApp({
   accessDenied?: boolean;
   canEdit?: boolean;
   canEditApplications?: boolean;
-  showTelephonyApplications?: boolean;
   renderInventory?: (props: InventoryProps) => ReactNode;
 }) {
   const Inventory = renderInventory;
@@ -113,7 +110,7 @@ export function ScopedServicesApp({
     setPhase("loading");
     setDirectory(null);
     setLoadingNative(null);
-    if (hasInventory && !showTelephonyApplications) {
+    if (hasInventory) {
       setPhase("ready");
       return () => { nativeDetails.current?.abort(); saving.current?.abort(); };
     }
@@ -145,7 +142,7 @@ export function ScopedServicesApp({
       nativeDetails.current?.abort();
       saving.current?.abort();
     };
-  }, [directoryUrl, tenantKey, fetchImpl, onSessionExpired, retry, hasInventory, showTelephonyApplications]);
+  }, [directoryUrl, tenantKey, fetchImpl, onSessionExpired, retry, hasInventory]);
 
   async function withNativeSettings(target: NativeAction, action: (settings: BindingDirectory) => void | Promise<void>) {
     if ((!canEdit && !canEditApplications) || accessDenied || saving.current || nativeDetails.current) return;
@@ -213,7 +210,7 @@ export function ScopedServicesApp({
   async function testCredentials(
     draft: CredentialDraft,
   ): Promise<CredentialTestResult> {
-    if (!modal || saving.current || !directory) {
+    if (!modal || saving.current) {
       return {
         status: "error",
         message: "Credentials could not be tested. Try again.",
@@ -452,7 +449,11 @@ export function ScopedServicesApp({
           <>
             <InventoryPresentation render={Inventory} directory={directory} revision={retry} removingProvider={removingProvider ?? (loadingNative?.operation === "remove" ? loadingNative.provider : null)}
               onRemove={(provider, name) => { void withNativeSettings({ provider, operation: "remove" }, settings => removeCardCredentials(provider, name, settings)); }}
-              onManage={(provider, bindingName) => { void withNativeSettings({ provider, operation: "manage" }, () => open({ provider, bindingName, status: "idle" })); }} />
+              onManage={(provider, bindingName) => {
+                const next = { provider, bindingName, status: "idle" as const };
+                if (provider === "telnyx" && (!bindingName || bindingName === "telnyx")) open(next);
+                else void withNativeSettings({ provider, operation: "manage" }, () => open(next));
+              }} />
           </>
         ) : phase === "loading" ? (
           <p role="status">{renderInventory ? "Loading integrations…" : "Loading services…"}</p>
@@ -504,23 +505,6 @@ export function ScopedServicesApp({
               ))}
             </div>
           </section>
-        ) : null}
-        {tenantKey !== null && showTelephonyApplications ? (
-          <TenantTelephonyApplications
-            key={`${tenantKey}:${retry}`}
-            tenantKey={tenantKey}
-            csrfToken={csrfToken}
-            binding={primary.find((binding) => binding.provider === "telnyx")}
-            credentialsLoaded={phase === "ready"}
-            webhookUrl={
-              directory?.webhookUrls?.tenant
-            }
-            fetchImpl={fetchImpl}
-            onSessionExpired={onSessionExpired}
-            onConnectionDetails={() =>
-              open({ provider: "telnyx", status: "idle" })
-            }
-          />
         ) : null}
         {!renderInventory && phase === "ready" && tenantKey !== null ? (
           <footer className="setup-footer">

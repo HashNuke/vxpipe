@@ -1,6 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { TenantTelephonyApplications } from "./admin/TenantTelephonyApplications";
 import { App } from "./test/ResourceApp";
 import { modelCatalogFixture } from "./admin/modelCatalogFixtures";
 
@@ -9,49 +8,12 @@ afterEach(() => {
   window.history.replaceState({}, "", "/admin");
 });
 
-test("an inherited application can save its outbound caller number without becoming dedicated", async () => {
-  const tenant = { key: "AAAAAAAAAAAAAAAA", name: "Shared voice tenant" };
-  const application = {
-    id: "5eef6e68-11aa-434a-9a99-abc123def456",
-    name: "support",
-    provider_connection_id: null,
-    outbound_number: null,
-    published_routes: [],
-  };
-  const prefix = `/api/tenants/${tenant.key}/telephony-applications`;
-  const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
-    Response.json(init?.method === "PATCH"
-      ? { application: { ...application, ...JSON.parse(String(init.body)) } }
-      : { tenant, applications: [application], truncated: false }),
-  );
-
-  render(<TenantTelephonyApplications tenantKey={tenant.key} csrfToken="synthetic-csrf"
-    credentialsLoaded binding={{ provider: "telnyx", name: "telnyx", source: "platform",
-      status: "connected", credentialId: "saved-platform-credential", platformAvailable: true,
-      savedFields: ["apiKey", "publicKey"], telephonyPublicKeyConfigured: true,
-      lastValidatedAt: null }}
-    webhookUrl="https://callbacks.example.test/webhooks/platform/telnyx"
-    fetchImpl={fetchImpl} onConnectionDetails={vi.fn()} onSessionExpired={vi.fn()} />);
-
-  fireEvent.click(await screen.findByRole("button", { name: "Edit support" }));
-  fireEvent.change(screen.getByLabelText("Outbound caller number (optional)"), {
-    target: { value: "+15550002000" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Save application" }));
-
-  await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(`${prefix}/${application.id}`,
-    expect.objectContaining({ method: "PATCH", body: JSON.stringify({
-      provider_connection_id: null, outbound_number: "+15550002000",
-    }) }),
-  ));
-});
-
-test("a tenant service writer can open Telnyx to change only the application", async () => {
+test.each(["", "/telephony"])("a tenant service writer edits the application only through the Telnyx modal on services%s", async category => {
   const tenant = { key: "AAAAAAAAAAAAAAAA", name: "Shared voice tenant" };
   const binding = { provider: "telnyx", name: "telnyx", source: "platform", status: "connected",
     credential_id: "saved-platform-credential", platform_available: true, saved_fields: ["api_key", "public_key"], last_validated_at: null,
     can_edit: false };
-  window.history.replaceState({}, "", `/t/${tenant.key}/services`);
+  window.history.replaceState({}, "", `/t/${tenant.key}/services${category}`);
   const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
     const path = String(url);
     if (init?.method === "PATCH") return Response.json({});
@@ -75,6 +37,8 @@ test("a tenant service writer can open Telnyx to change only the application", a
   await screen.findByRole("button", { name: "Connect other MCP" });
   const edit = await screen.findByRole("button", { name: "Edit Telnyx" });
   expect(edit).toBeEnabled();
+  expect(screen.queryByRole("heading", { name: "Phone routing" })).not.toBeInTheDocument();
+  expect(fetchImpl.mock.calls.some(([url]) => String(url).includes("/telephony-applications"))).toBe(false);
   fireEvent.click(edit);
   fireEvent.click(await screen.findByRole("button", { name: "Override voice application" }));
   expect(screen.queryByRole("button", { name: "Override credentials" })).not.toBeInTheDocument();

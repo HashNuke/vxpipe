@@ -7,7 +7,7 @@ import type { TelephonyApplication } from "../telephonyApplicationsApi";
 
 const tenant = { key: "Acme123456789012", name: "Acme" };
 
-function fixture() {
+function fixture(settingsDelay: number) {
   let application: TelephonyApplication = {
     id: "5eef6e68-11aa-434a-9a99-abc123def456", name: "support",
     provider_connection_id: null, outbound_number: null, published_routes: [],
@@ -19,6 +19,7 @@ function fixture() {
     const path = new URL(String(input), "https://console.example.test").pathname;
     if (path.endsWith("/categories")) return Response.json({ categories: [] });
     if (path.endsWith("/telnyx-connection")) {
+      if (!init?.method && settingsDelay) await new Promise(resolve => setTimeout(resolve, settingsDelay));
       if (init?.method === "PATCH") {
         const changes = JSON.parse(String(init.body));
         application = { ...application, provider_connection_id: changes.application_id };
@@ -26,13 +27,6 @@ function fixture() {
       return Response.json({ platform_application_id: "shared-app", credential, applications: [application],
         webhook_urls: { platform: "https://calls.example.test/webhooks/platform/telnyx",
           tenant: `https://calls.example.test/webhooks/tenants/${tenant.key}/telnyx` } });
-    }
-    if (path.includes("/telephony-applications")) {
-      if (init?.method === "PATCH") {
-        application = { ...application, ...JSON.parse(String(init.body)) };
-        return Response.json({ application });
-      }
-      return Response.json({ tenant, applications: [application], truncated: false });
     }
     if (path.endsWith("/service-bindings")) return Response.json({ tenant, bindings: [credential],
       model_catalog: modelCatalogFixture, provider_capabilities: { telnyx: ["credential", "telephony"] } });
@@ -44,9 +38,9 @@ function fixture() {
   };
 }
 
-function Preview({ phoneRouting = false, readOnly = false }: { phoneRouting?: boolean; readOnly?: boolean }) {
-  const fetchImpl = useMemo(() => fixture(), []);
-  return <MemoryRouter initialEntries={[`/t/${tenant.key}/services${phoneRouting ? "/telephony" : ""}`]}>
+function Preview({ telephony = false, readOnly = false, settingsDelay = 0 }: { telephony?: boolean; readOnly?: boolean; settingsDelay?: number }) {
+  const fetchImpl = useMemo(() => fixture(settingsDelay), [settingsDelay]);
+  return <MemoryRouter initialEntries={[`/t/${tenant.key}/services${telephony ? "/telephony" : ""}`]}>
     <IntegrationsApp scope={{ kind: "tenant", tenantKey: tenant.key, tenantName: tenant.name }}
       csrfToken="fixture" fetchImpl={fetchImpl} canEdit={false} canEditApplications={!readOnly} onNavigate={() => undefined} />
   </MemoryRouter>;
@@ -60,5 +54,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const ApplicationWriter: Story = {};
-export const InheritedCallerNumber: Story = { args: { phoneRouting: true } };
+export const TelephonyCategory: Story = { args: { telephony: true } };
 export const ReadOnly: Story = { args: { readOnly: true } };
+
+export const SlowConnection: Story = { args: { telephony: true, settingsDelay: 3000 } };

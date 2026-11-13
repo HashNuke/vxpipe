@@ -1,5 +1,5 @@
 import { Building2, LoaderCircle } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Button } from "./Button";
 import { ApiKeyCredentialFields, credentialInputClass } from "./credentials/ApiKeyCredentialFields";
 import { SetupDialog } from "./SetupDialog";
@@ -15,6 +15,8 @@ export type TelnyxConnectionChanges = {
   credentials?: { api_key?: string; public_key?: string } | null;
 };
 export type TelnyxConnectionDialogProps = {
+  content?: ReactNode;
+  formKey?: string;
   state: ServiceModalState;
   scope: SetupServiceScope;
   connections?: SetupConnection[];
@@ -33,8 +35,30 @@ export type TelnyxConnectionDialogProps = {
 import telnyxIcon from "./assets/icons/telnyx.png";
 import "./telnyx-connection.css";
 
-/** Shared by the live connection editor and Storybook. The host saves atomically. */
-export function TelnyxConnectionDialog({
+/** Keep the frame mounted while its settings, selection, or form changes. */
+export function TelnyxConnectionDialog({ content, formKey, ...props }: TelnyxConnectionDialogProps) {
+  const [testing, setTesting] = useState(false);
+  const busy = testing || props.state.status === "submitting" || props.state.status === "testing";
+  const onTest = props.onTest;
+  const testCredentials = onTest ? async (draft: CredentialDraft): Promise<CredentialTestResult> => {
+    setTesting(true);
+    try {
+      return await onTest(draft);
+    } finally {
+      setTesting(false);
+    }
+  } : undefined;
+  return <SetupDialog title="Telnyx" anchorTop busy={busy} onClose={props.onClose}
+    initialFocusSelector={content || props.connections?.length ? "[data-telnyx-close]" : undefined}
+    headerContent={<div className="telnyx-connection-title">
+      <img src={telnyxIcon} alt="" width={28} height={28} />
+      <div><span>Telnyx</span><p>{props.scope.kind === "tenant" ? props.scope.tenantName : "Platform connection"}</p></div>
+    </div>}>
+    {content ?? <TelnyxConnectionForm key={formKey} {...props} onTest={testCredentials} />}
+  </SetupDialog>;
+}
+
+function TelnyxConnectionForm({
   state, scope, connections = [], platformConnections = [], applicationId = "",
   platformApplicationId = "", applicationExists = true, publicOrigin, webhookUrls,
   canEditCredentials = true, canEditApplication = true,
@@ -56,6 +80,7 @@ export function TelnyxConnectionDialog({
   const [applicationError, setApplicationError] = useState(false);
   const [testResult, setTestResult] = useState<CredentialTestResult | { status: "testing" } | null>(null);
   const fieldsRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const applicationRef = useRef<HTMLInputElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const pending = state.status === "submitting" || state.status === "testing" || testResult?.status === "testing";
@@ -65,10 +90,10 @@ export function TelnyxConnectionDialog({
     ? effectiveScope.kind === "platform" ? webhookUrls.platform : webhookUrls.tenant
     : publicOrigin ? telnyxWebhookUrl(publicOrigin, effectiveScope) : null;
   const effectiveConnection = inheritedCredentials ? initiallyInherited ? selected : platform : selected;
-  const title = `${selected ? "Manage" : "Connect"} Telnyx`;
 
   useEffect(() => {
     if (credentialsChanged) fieldsRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+    else cancelRef.current?.focus();
   }, [credentialsChanged]);
   useEffect(() => {
     if (error && !applicationError) errorRef.current?.focus();
@@ -144,20 +169,12 @@ export function TelnyxConnectionDialog({
     }
   }
 
-  return <SetupDialog title={title} anchorTop busy={pending} onClose={onClose}
-    initialFocusSelector={selected ? "[data-telnyx-close]" : undefined}
-    headerContent={<div className="telnyx-connection-title">
-      <img src={telnyxIcon} alt="" width={28} height={28} />
-      <div><span>{title}</span><p>{tenant ? scope.tenantName : "Platform connection"}</p></div>
-    </div>}>
+  return (
     <form className="mcp-dialog-form telnyx-connection-form" noValidate onSubmit={event => { event.preventDefault(); save(); }}>
       <div className="mcp-dialog-scroll telnyx-connection-body">
         <section className="telnyx-setting" aria-labelledby={`${id}-credentials`}>
           <div className="telnyx-setting-heading">
-            <div><h3 id={`${id}-credentials`}>Credentials</h3><p className="telnyx-setting-source">
-              {inheritedCredentials || !tenant ? <Building2 size={13} aria-hidden="true" /> : null}
-              {inheritedCredentials || !tenant ? "Platform default" : "Tenant credentials"}
-            </p></div>
+            <h3 id={`${id}-credentials`}>Credentials</h3>
             <div className="telnyx-setting-actions">
               {canReplaceCredentials && (inheritedCredentials ? <Button type="button" aria-label="Override credentials" disabled={pending} onClick={editCredentials}>Override</Button>
                 : !editingCredentials ? <Button type="button" variant="ghost" aria-label="Edit credentials" disabled={pending} onClick={editCredentials}>Edit</Button> : null)}
@@ -175,7 +192,7 @@ export function TelnyxConnectionDialog({
             </div>
           </div> : <dl className="telnyx-credential-summary">
             <div><dt>API key</dt><dd><span aria-label="Saved API key" className="telnyx-masked-key">••••••••••••</span><span>Saved</span></dd></div>
-            <div><dt>Public key</dt><dd>{inheritedCredentials && !initiallyInherited ? "Platform default" : effectiveConnection?.telephonyPublicKeyConfigured || effectiveConnection?.savedFields?.includes("publicKey") ? "Configured" : "Not configured"}</dd></div>
+            <div><dt>Public key</dt><dd>{inheritedCredentials && !initiallyInherited ? "Platform default" : effectiveConnection?.telephonyPublicKeyConfigured || effectiveConnection?.savedFields?.includes("publicKey") ? <><span aria-label="Saved public key" className="telnyx-masked-key">••••••••••••</span><span>Saved</span></> : "Not configured"}</dd></div>
           </dl>}
         </section>
 
@@ -206,10 +223,10 @@ export function TelnyxConnectionDialog({
         {pending ? <p className="telnyx-connection-progress" role="status"><LoaderCircle size={16} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />{testResult?.status === "testing" || state.status === "testing" ? "Testing credentials…" : "Saving connection…"}</p> : null}
       </div>
       <footer className="mcp-dialog-footer telnyx-connection-footer">
-        <Button type="button" data-telnyx-close variant="ghost" disabled={pending} onClick={onClose}>Cancel</Button>
+        <Button type="button" ref={cancelRef} data-telnyx-close variant="ghost" disabled={pending} onClick={onClose}>Cancel</Button>
         {credentialsChanged && onTest ? <Button type="button" variant="ghost" disabled={pending} onClick={() => void testCredentials()}>Test credentials</Button> : null}
         <Button className="mcp-primary" type="submit" disabled={pending}>{state.status === "submitting" ? "Saving…" : "Save"}</Button>
       </footer>
     </form>
-  </SetupDialog>;
+  );
 }

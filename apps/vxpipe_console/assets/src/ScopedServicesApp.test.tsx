@@ -64,7 +64,7 @@ test("editing immediately opens a loading dialog and Cancel ignores a late setti
   let resolve!: (response: Response) => void;
   const fetchImpl = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(() => new Promise<Response>(done => { resolve = done; }));
   render(<ScopedServicesApp scope={{ kind: "platform" }} csrfToken="csrf" fetchImpl={fetchImpl}
-    onNavigate={vi.fn()} showTelephonyApplications={false}
+    onNavigate={vi.fn()}
     renderInventory={({ onManage }) => <button onClick={() => onManage("google")}>Edit Google</button>} />);
   const edit = screen.getByRole("button", { name: "Edit Google" });
   edit.focus();
@@ -83,7 +83,7 @@ test("loading hands over to the credential editor and restores the original Edit
   let resolve!: (response: Response) => void;
   const fetchImpl = vi.fn(() => new Promise<Response>(done => { resolve = done; }));
   render(<ScopedServicesApp scope={{ kind: "platform" }} csrfToken="csrf" fetchImpl={fetchImpl}
-    onNavigate={vi.fn()} showTelephonyApplications={false}
+    onNavigate={vi.fn()}
     renderInventory={({ onManage }) => <button onClick={() => onManage("google")}>Edit Google</button>} />);
   const edit = screen.getByRole("button", { name: "Edit Google" });
   edit.focus();
