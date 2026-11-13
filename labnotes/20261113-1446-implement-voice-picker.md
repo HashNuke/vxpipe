@@ -20,10 +20,10 @@ using the reviewed component and existing effective credential resolver.
 - Red/green: Engine 8, Calls 6, Console endpoints 2 focused tests. Synthetic
   fixtures only; no provider account requests, paid synthesis or telephony.
 
-## Remaining
+## Completion
 
-Production UI/client scope, remaining provider catalogs, browser acceptance and
-final milestone gates. No deployment is claimed. Environment files were not read.
+All milestone checkpoints are complete on main. No deployment is claimed.
+Environment files were not read.
 
 ## Production editor checkpoint
 
@@ -68,3 +68,31 @@ final milestone gates. No deployment is claimed. Environment files were not read
 - Updated illustrative provider stories to the implemented filters and added
   Google/ElevenLabs STS examples. Typecheck and focused lint passed. Root format,
   warnings-as-errors compile, strict Credo and unused dependencies passed.
+
+## Shared acceptance checkpoint
+
+- Added a 20-page limit and repeated-cursor protection, including empty/duplicate
+  pages. Two focused tests failed before the guard and passed afterward. Search
+  resets the limit; selecting/cancelling still preserves source and explicit IDs.
+- Extended real App route tests to tenant authors and operator sessions, covering
+  STS as well as opening/default/participant TTS. Six voice round trips preserve
+  bindings/options through dirty Publish and reload. The tenant editor uses the
+  same `/admin/tenants/:tenantKey/call-specs/:id` route as the operator; an initial
+  test using a nonexistent `/t/.../:id` path was corrected. Initial STS test data
+  wrongly used a defaults.agent field; corrected to existing capabilities schema.
+- Final focused verification: 15 Engine + 6 Calls + 2 Console endpoint tests;
+  54 UI tests (53 in the grouped pass plus the credential-binding test, whose
+  .ts extension was initially mistyped). Typecheck and changed-file ESLint pass.
+  Earlier 56 adjacent editor/seed tests and root static checks also passed.
+- Chrome: production route/client with synthetic responses, desktop/mobile,
+  opening selection/publish, participant TTS and STS mode/voice change, filter
+  application and keyboard return. No overflow at 390px. Existing first-pass
+  evidence covers long names, pagination, empty/error/retry and unknown saved IDs.
+  Corrected the preview's hardcoded TTS subtitle for its STS mode; production
+  descriptors already use the actual model name. This is offline rendered
+  verification, not hosted or authenticated-provider acceptance.
+- API call-site inspection confirms discovery is authoring-only; no call-start,
+  speech generation, save or publish function invokes a catalog. No persistent
+  cache, jobs, new dependencies or processes were added.
+- Updated milestone checkboxes, index count and design evidence. Full-suite and
+  live/provider tests were intentionally not run, per the user's constraints.

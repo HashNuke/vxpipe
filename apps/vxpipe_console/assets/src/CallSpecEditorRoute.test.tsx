@@ -237,18 +237,35 @@ test("outgoing creation explains missing phone services and can be cancelled", a
 });
 
 
-test.each(["opening", "defaults", "participant"])("production voice client round-trips %s selection through dirty Publish and reload", async (site) => {
+test.each([
+  { site: "opening", tenant: false, sts: false },
+  { site: "defaults", tenant: false, sts: false },
+  { site: "participant", tenant: false, sts: false },
+  { site: "opening", tenant: true, sts: false },
+  { site: "defaults", tenant: true, sts: true },
+  { site: "participant", tenant: true, sts: true },
+])("production voice client round-trips $site (tenant=$tenant, sts=$sts) through dirty Publish and reload", async ({ site, tenant, sts }) => {
   window.history.replaceState({}, "", `/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/${stored.call_spec_id}`);
-  const selection = { provider: "elevenlabs", model: "eleven_flash_v2_5", credential_name: "office", options: { voice: "saved-voice", sample_rate: 24000 } };
+  const capability = sts ? "speech_to_speech" : "text_to_speech";
+  const selection = { provider: "elevenlabs", model: sts ? "eleven_realtime_v1_mini" : "eleven_flash_v2_5", credential_name: "office", options: { voice: "saved-voice", ...(sts ? { turn_control: "provider" } : { sample_rate: 24000 }) } };
   const initial = structuredClone(source);
-  initial.defaults!.capabilities!.text_to_speech = selection;
-  initial.opening_audio = { type: "text", text: "Welcome", text_to_speech: selection };
+  if (sts) {
+    delete initial.defaults!.capabilities!.model_inference;
+    delete initial.defaults!.capabilities!.text_to_speech;
+    initial.defaults!.capabilities!.speech_to_speech = selection;
+  } else initial.defaults!.capabilities!.text_to_speech = selection;
+  if (!sts) initial.opening_audio = { type: "text", text: "Welcome", text_to_speech: selection };
   let persisted = { ...stored, source: initial };
   const fetch = transport(); const good = fetch.getMockImplementation()!;
   fetch.mockImplementation((input, init) => {
     const url = new URL(String(input), "https://console.test");
+    if (tenant && url.pathname === "/admin/api/session") return reply({
+      user: { id: "author", email: "author@example.test", roleId: "author", enabled: true, memberships: [{ tenantId: "AAAAAAAAAAAAAAAA", access: "read_write" }] },
+      role: { id: "author", name: "Author", kind: null, grants: ["call_specs.read", "call_specs.write"].map(permission => ({ permission, scope: "assigned_tenants" })) },
+    });
     if (url.pathname.includes("/voices")) {
       expect(url.searchParams.get("credential_name")).toBe("office");
+      expect(url.searchParams.get("capability")).toBe(capability);
       if (url.pathname.endsWith("/descriptor")) return reply({ providerName: "ElevenLabs", modelName: "Flash", search: true, filters: [] });
       const voice = { id: "chosen-voice", name: "Chosen voice", attributes: [] };
       if (url.pathname.endsWith("/voices")) return reply({ voices: [voice], nextCursor: null });
@@ -276,7 +293,7 @@ test.each(["opening", "defaults", "participant"])("production voice client round
   const catalogsBeforePublish = fetch.mock.calls.filter(([path]) => /\/voices\?/.test(String(path))).length;
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
   await screen.findByText("Published revision 3");
-  const selected = site === "opening" && persisted.source.opening_audio?.type === "text" ? persisted.source.opening_audio.text_to_speech : site === "participant" ? persisted.source.participants.assistant!.capabilities!.text_to_speech : persisted.source.defaults!.capabilities!.text_to_speech;
+  const selected = site === "opening" && persisted.source.opening_audio?.type === "text" ? persisted.source.opening_audio.text_to_speech : site === "participant" ? persisted.source.participants.assistant!.capabilities![capability] : persisted.source.defaults!.capabilities![capability];
   expect(selected).toEqual({ ...selection, options: { ...selection.options, voice: "chosen-voice" } });
   expect(fetch.mock.calls.filter(([path]) => /\/voices\?/.test(String(path)))).toHaveLength(catalogsBeforePublish);
   view.unmount(); render(<App csrfToken="csrf" fetchImpl={fetch} />); await navigateSite();

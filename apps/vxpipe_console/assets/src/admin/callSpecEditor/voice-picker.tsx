@@ -15,7 +15,7 @@ export function VoicePicker({ client, scope, current, onSelect, onClose, onRetur
   const [query, setQuery] = useState<VoiceCatalogQuery>({ search: "", filters: {}, cursor: null });
   const [draft, setDraft] = useState({ search: "", filters: {} } as Pick<VoiceCatalogQuery, "search" | "filters">);
   const [applied, setApplied] = useState(false);
-  const [result, setResult] = useState<{ query: VoiceCatalogQuery; page: VoiceCatalogPage }>();
+  const [result, setResult] = useState<{ query: VoiceCatalogQuery; page: VoiceCatalogPage; cursors: string[]; limited: boolean }>();
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
   const [selected, setSelected] = useState(current);
@@ -25,7 +25,13 @@ export function VoicePicker({ client, scope, current, onSelect, onClose, onRetur
     Promise.all([client.describe(scope, controller.signal), client.list(scope, query, controller.signal)]).then(([description, page]) => {
       if (controller.signal.aborted) return;
       setDescriptor(description); setError(false);
-      setResult(previous => ({ query, page: query.cursor && previous ? { ...page, voices: [...new Map([...previous.page.voices, ...page.voices].map(voice => [voice.id, voice])).values()] } : page }));
+      setResult(previous => {
+        const cursors = query.cursor ? [...(previous?.cursors ?? []), query.cursor] : [];
+        // Bound the mounted list to 20 pages, including empty/duplicate pages.
+        const limited = !!page.nextCursor && (cursors.length >= 19 || cursors.includes(page.nextCursor));
+        const voices = query.cursor && previous ? [...new Map([...previous.page.voices, ...page.voices].map(voice => [voice.id, voice])).values()] : page.voices;
+        return { query, cursors, limited, page: { ...page, voices, nextCursor: limited ? null : page.nextCursor } };
+      });
     }).catch(() => { if (!controller.signal.aborted) setError(true); });
     return () => controller.abort();
   }, [client, scope, query, retry]);
@@ -75,6 +81,7 @@ export function VoicePicker({ client, scope, current, onSelect, onClose, onRetur
               </label>)}
             </RadioGroup> : <div className="space-y-2 px-5 py-8 sm:px-6"><p className="font-medium">No voices found</p><p className="text-sm text-muted-foreground">Try a different search or clear your filters.</p></div>}
             {page?.nextCursor && <div className="px-5 py-3 sm:px-6"><Button variant="outline" className="w-full" disabled={loading || dirty} onClick={() => changeQuery({ ...query, cursor: page.nextCursor })}>{loading ? "Loading voices…" : "Load more voices"}</Button></div>}
+            {result?.limited && <p className="px-5 py-3 text-sm text-muted-foreground sm:px-6">Refine your search to see more voices.</p>}
           </>}
         </div>
       </div>

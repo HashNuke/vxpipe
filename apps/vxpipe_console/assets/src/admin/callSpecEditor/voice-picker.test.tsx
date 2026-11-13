@@ -134,3 +134,32 @@ test("a failed selected-voice lookup stays distinct from a missing voice and can
   await screen.findByRole("button", { name: /Voice: River/ });
   expect(screen.getByTestId("value")).toHaveTextContent("saved");
 });
+
+test("repeated pagination cursors stop loading and keep the saved selection intact", async () => {
+  const catalog = client({ list: vi.fn(async (_scope, query) => ({ voices: [river], nextCursor: query.cursor === "second" ? "third" : "second" })) });
+  render(<Harness catalog={catalog} />); await open();
+  fireEvent.click(screen.getByRole("button", { name: "Load more voices" }));
+  await waitFor(() => expect(catalog.list).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Load more voices" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Load more voices" }));
+  expect(await screen.findByText("Refine your search to see more voices.")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Load more voices" })).not.toBeInTheDocument();
+  expect(screen.getAllByRole("radio")).toHaveLength(1);
+  expect(screen.getByTestId("value")).toHaveTextContent("voice-1");
+});
+
+test("large catalogs have a bounded page count that resets with a new search", async () => {
+  const catalog = client({ list: vi.fn(async (_scope, query) => ({ voices: [river], nextCursor: String(Number(query.cursor ?? 0) + 1) })) });
+  render(<Harness catalog={catalog} />); await open();
+  for (let page = 1; page < 20; page++) {
+    await waitFor(() => expect(screen.getByRole("button", { name: "Load more voices" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Load more voices" }));
+    await waitFor(() => expect(catalog.list).toHaveBeenCalledTimes(page + 1));
+  }
+  expect(await screen.findByText("Refine your search to see more voices.")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Load more voices" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "River" } });
+  fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+  expect(await screen.findByRole("button", { name: "Load more voices" })).toBeEnabled();
+  expect(screen.queryByText("Refine your search to see more voices.")).not.toBeInTheDocument();
+});

@@ -164,7 +164,10 @@ edits. Catalog errors stay inside the picker, with retry and cancellation.
 Fetch the selected voice's details for display and fetch pages when the picker
 opens or the user applies filters/loads more. Do not eagerly download every
 provider's voices with the model catalog. Reuse results within the mounted editor
-using its existing cancellation/request patterns. Keep public static catalogs
+using its existing cancellation/request patterns. The dialog keeps at most 20
+pages (at most 2,000 rows given the 100-row response limit), stops repeated
+cursors, and asks the author to refine the search when that limit is reached.
+A new search resets the page budget. Keep public static catalogs
 bounded; search them locally on the backend.
 
 Start without a database catalog, periodic jobs, distributed cache, a new OTP

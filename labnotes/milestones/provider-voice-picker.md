@@ -1,7 +1,8 @@
 # Provider voice picker
 
-Status: provider coverage and production wiring are implemented on main. Final
-shared-behavior and browser acceptance checks are in progress.
+Status: complete on main. All three implementation checkpoints and acceptance
+gates passed with focused offline checks and local Chrome inspection. No hosted
+deployment or authenticated provider interoperability run is claimed.
 
 ## Outcome and prerequisites
 
@@ -69,33 +70,33 @@ prerequisites. Packaging, call retention and guardrails are not prerequisites.
 
 ### C — Complete shared behavior and acceptance
 
-- [ ] Finish cancellation, scope changes, selected-ID lookup, empty/error/retry
+- [x] Finish cancellation, scope changes, selected-ID lookup, empty/error/retry
   states, pagination bounds and unknown saved voice preservation. Remove manual
   voice inputs from production capability fields. Keep model-specific option
   names, explicit bindings and inherited selections correct.
-- [ ] Verify tenant isolation and permission/credential changes, and that opening
+- [x] Verify tenant isolation and permission/credential changes, and that opening
   the editor does not fetch every provider's voice list. Confirm catalogs are not
   fetched by save, publish or call startup. No shared private cache is required.
-- [ ] Inspect production-wired picker states in headless Chrome at desktop and
+- [x] Inspect production-wired picker states in headless Chrome at desktop and
   mobile widths, including keyboard focus/return, long names, search/filter,
   load-more, loading, errors and a saved ID absent from page one. Check opening
   audio, defaults, TTS and STS through both editor authorization contexts.
-- [ ] Run focused provider-contract, Calls/Console route and UI tests, typecheck,
+- [x] Run focused provider-contract, Calls/Console route and UI tests, typecheck,
   relevant static checks and documentation checks; record evidence and synchronize
   this milestone/index. Do not run live telephony or paid AI tests. An optional
   read-only catalog interoperability check needs separate explicit authorization.
 
 ## Acceptance gates
 
-- [ ] Every installed voice-bearing capability uses the common picker in the
+- [x] Every installed voice-bearing capability uses the common picker in the
   actual app; Storybook-only integration is insufficient.
-- [ ] Selecting a voice round-trips its exact supported identifier and configured
+- [x] Selecting a voice round-trips its exact supported identifier and configured
   binding through save/reload/publish; changed drafts publish successfully.
-- [ ] Tenant/platform authorization and effective credential choice are enforced
+- [x] Tenant/platform authorization and effective credential choice are enforced
   server-side; private voices never cross tenants or connections.
-- [ ] Slow/failing catalogs and obsolete responses neither block the editor nor
+- [x] Slow/failing catalogs and obsolete responses neither block the editor nor
   silently overwrite the current voice. Bounded pagination and cancellation work.
-- [ ] Provider compatibility gates above are resolved and browser/test evidence
+- [x] Provider compatibility gates above are resolved and browser/test evidence
   is recorded without paid calls or deployment being implied by local checks.
 
 ## Specification review
@@ -132,3 +133,33 @@ its offline verification limit. Focused Engine checks now total 15, including
 all installed voice-bearing descriptors and pure wire serialization for every
 named choice. Storybook filters match implemented capabilities. Root formatting,
 compile warnings, Credo and unused-dependency checks passed.
+
+Checkpoint C (2026-11-13): the picker stops repeated cursors and limits each search
+to 20 pages (at most 2,000 rows), with a visible refine-search prompt. New searches
+reset that budget. Two regression tests failed before the guard and passed after
+it. Credential/scope changes abort obsolete requests; unknown IDs and unrelated
+options remain intact. Production free-text voice controls are removed.
+
+Final focused checks: Engine 15, Calls 6, Console endpoints 2; UI 54 across HTTP
+client, shared picker, capability fields, credential seeding, human inspectors and
+18 editor-route tests. These include tenant authors and installation operators,
+TTS and STS, exact binding/ID preservation, dirty Publish and reload. Tests assert
+no eager list fetch on editor load and no additional list fetch on Publish.
+Source inspection confirms only Console catalog routes call the workflow; call
+startup/save/publish have no catalog dependency. Revocation, cross-tenant access
+and platform credential authorization are rechecked on every server request.
+Typecheck, changed-file ESLint, root formatting, warnings-as-errors compile,
+strict Credo, unused-dependency and documentation-link checks passed.
+
+Chrome inspection used the production editor route and HTTP client against
+synthetic fetch responses, at 1440x1000 and 390x844. It covered opening audio,
+defaults, participant TTS and switching a participant to STS; selection/publish,
+loading, missing saved IDs, error/retry, empty results, long names, load-more,
+filters, Escape/focus return and no mobile horizontal overflow. Provider component
+stories were also checked against actual filter descriptors. Both authorization
+contexts are verified by the production App route tests and server boundary tests;
+the browser preview itself does not authenticate a user or contact a provider.
+
+No full suite, live telephony, paid AI tests, environment-file reads or deployment
+were performed. The same shared picker and API cover every installed model with
+a voice parameter; catalog outages cannot change a saved voice or stop a call.

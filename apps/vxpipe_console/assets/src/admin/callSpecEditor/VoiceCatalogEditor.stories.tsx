@@ -34,13 +34,13 @@ function createPreviewFetch(): EditorFetch {
       });
       if (url.searchParams.get("search") === "error") return reply({}, 503);
       const voice = { id: "river", name: "River", attributes: [{ key: "language", label: "Language", value: "English" }] };
-      if (url.pathname.endsWith("/descriptor")) return reply({ providerName: "ElevenLabs", modelName: "Flash v2.5", search: true, filters: [{ key: "language", label: "Language", type: "text" }] });
+      if (url.pathname.endsWith("/descriptor")) return reply({ providerName: "ElevenLabs", modelName: url.searchParams.get("capability") === "speech_to_speech" ? "Eleven Realtime v1 Mini" : "Eleven Flash v2.5", search: true, filters: [{ key: "language", label: "Language", type: "text" }] });
       if (url.pathname.endsWith("/voices")) {
         const page = url.searchParams.has("cursor") ? [{ ...voice, id: "long-name", name: "A very long friendly voice name for reception and customer care conversations" }] : [voice];
         return reply({ voices: url.searchParams.get("search") === "missing" ? [] : page, nextCursor: url.searchParams.has("cursor") || url.searchParams.get("search") ? null : "second" });
       }
       const id = decodeURIComponent(url.pathname.split("/").at(-1)!);
-      return reply({ voice: { ...voice, id, name: id === "saved-private-voice" ? "Private reception voice" : id === "river" ? "River" : "Selected voice" } });
+      return reply({ voice: { ...voice, id, name: id === "saved-private-voice" ? "Private reception voice" : id === "river" ? "River" : id === "brian" ? "Brian" : "Selected voice" } });
     }
     if (url.pathname.endsWith("/call-spec-editor-lookups")) return reply({ credential_names: { elevenlabs: ["office"] }, telephony_services: [], mcp_integrations: [], tool_catalog: { tools: [], mcp_available: true } });
     if (url.pathname.includes("/providers")) {
