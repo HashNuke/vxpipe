@@ -52,4 +52,11 @@
 
 ## Release
 
-- QA release verification will be recorded after deployment.
+- Committed and pushed implementation `783f41b8` to QA, built production assets
+  and the release, built the local container image, and restarted `vxpipe.service`.
+- Public Vitrum health returned `ok`; app and Caddy services are active. The
+  running image label matches `783f41b8` and its memory limit remains 1 GiB.
+- The deployed release catalog contains `list_services` and excludes
+  `list_providers`. The public fingerprinted admin bundle contains the updated
+  fallback heading and notice. Existing MCP clients need to refresh their tool
+  catalog (reconnect) to discover the renamed tool.
