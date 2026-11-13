@@ -75,6 +75,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
   def start_entries(%CreateRoom{}, _options, %State{}), do: {:error, :agent_start_failed}
 
   def start_entries(%ResolvedCallPlan{} = plan, options, %State{} = state) do
+    speech_runtime = Keyword.get(options, :speech_runtime, [])
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
     deadline = CallLifecycle.readiness_deadline(state.call_lifecycle)
 
@@ -104,9 +105,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.Startup do
         end),
       remote_mcp_connection_provider: Keyword.get(options, :remote_mcp_connection_provider),
       remote_mcp_protocol_client: Keyword.get(options, :remote_mcp_protocol_client),
-      speech_to_text: Keyword.fetch!(settings, :speech_to_text),
-      speech_to_speech: Keyword.get(settings, :speech_to_speech, providers: %{}),
-      text_to_speech: Keyword.fetch!(settings, :text_to_speech)
+      speech_to_text: Keyword.get(speech_runtime, :speech_to_text),
+      speech_to_speech: Keyword.get(speech_runtime, :speech_to_speech),
+      text_to_speech: Keyword.get(speech_runtime, :text_to_speech)
     ]
 
     with {:ok, entries} <- PlanStartup.entries(plan),

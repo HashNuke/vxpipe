@@ -302,7 +302,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     assert :ok = Session.close(session)
   end
 
-  test "Cartesia startup cannot use disabled settings or another provider's credential" do
+  test "Cartesia startup uses credentials without a host enablement gate" do
     options = cartesia_options()
 
     assert {:error, _error} =
@@ -310,7 +310,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
 
     disabled = [providers: %{CartesiaTTSSession => [enabled: false, maximum_requests: 4]}]
 
-    assert {:error, _error} =
+    assert {:ok, _startup} =
              PlanStartup.new(cartesia_plan(), Keyword.put(options, :text_to_speech, disabled))
 
     missing =
@@ -467,24 +467,6 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
        [
          enabled: true,
          providers: %{FluxSession => stt_settings}
-       ]},
-      {:speech_to_text,
-       [
-         providers: %{
-           FluxSession => stt_settings,
-           Vxpipe.CallEngine.SpeechGuideTTSProvider => [enabled: true]
-         }
-       ]},
-      {:speech_to_text,
-       [
-         providers: %{
-           FluxSession => stt_settings,
-           Vxpipe.CallEngine.Provider.MorseCodeSTT.Session => [
-             enabled: true,
-             media_ingress: [],
-             provider_private: [ignored: true]
-           ]
-         }
        ]},
       {:text_to_speech, Keyword.put(tts_settings, :provider, TTSFluxSession)},
       {:text_to_speech, Keyword.put(tts_settings, :provider_private, ignored: true)}
@@ -737,12 +719,12 @@ defmodule Vxpipe.CallEngine.PlanStartup.InlineActivationTest do
     end
   end
 
-  test "ElevenLabs startup rejects disabled settings and credentials from another provider" do
+  test "ElevenLabs startup requires matching credentials without a host enablement gate" do
     options = elevenlabs_options()
 
     disabled = [providers: %{ElevenLabsTTSSession => [enabled: false, maximum_requests: 4]}]
 
-    assert {:error, _error} =
+    assert {:ok, _startup} =
              PlanStartup.new(elevenlabs_plan(), Keyword.put(options, :text_to_speech, disabled))
 
     missing =

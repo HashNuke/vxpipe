@@ -90,21 +90,7 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
         credential_source: {ProviderCredentialSource, options},
         agent_runtime:
           Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
-          |> Keyword.fetch!(:agent_runtime),
-        text_to_speech: [providers: %{TTSSession => [enabled: true, maximum_requests: 4]}],
-        speech_to_text: [
-          providers: %{
-            STTSession => [
-              enabled: true,
-              media_ingress: [
-                maximum_frames: 50,
-                maximum_bytes: 262_144,
-                maximum_age_ms: 2_000,
-                maximum_consecutive_overflows: 5
-              ]
-            ]
-          }
-        ]
+          |> Keyword.fetch!(:agent_runtime)
       ]
 
       assert {:ok, inherited} = PlanStartup.new(plan, runtime_options)
@@ -150,6 +136,13 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
       assert stt_key(restored, @vad == true) == "synthetic-platform-elevenlabs"
       assert Keyword.fetch!(public, :model) == "eleven_flash_v2_5"
       assert restored.text_to_speech.usage_provider.name == "elevenlabs"
+
+      assert :ok = ProviderCredentials.delete(:platform, platform.id, options)
+
+      assert {:error, %{code: :unsupported_call_plan} = error} =
+               PlanStartup.new(plan, runtime_options)
+
+      refute inspect(error) =~ "synthetic-"
     end
   end
 
@@ -159,7 +152,7 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
       model = unquote(model)
       assert {:ok, tenant, _} = Administration.bootstrap_tenant("Native STS", [:admin], options)
 
-      assert {:ok, _platform} =
+      assert {:ok, platform} =
                ProviderCredentials.provision(
                  :platform,
                  "elevenlabs",
@@ -210,10 +203,7 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
 
       runtime_options = [
         owner: self(),
-        credential_source: {ProviderCredentialSource, options},
-        speech_to_speech: [providers: %{RealtimeSession => [enabled: true]}],
-        speech_to_text: [providers: %{}],
-        text_to_speech: [providers: %{}]
+        credential_source: {ProviderCredentialSource, options}
       ]
 
       assert {:ok, inherited} = PlanStartup.new(plan, runtime_options)
@@ -235,6 +225,13 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
       assert {:ok, restored} = PlanStartup.new(plan, runtime_options)
       assert sts_key(restored, model) == "synthetic-platform-sts"
       refute :erlang.term_to_binary(publication) =~ "synthetic-"
+
+      assert :ok = ProviderCredentials.delete(:platform, platform.id, options)
+
+      assert {:error, %{code: :unsupported_call_plan} = error} =
+               PlanStartup.new(plan, runtime_options)
+
+      refute inspect(error) =~ "synthetic-"
     end
   end
 

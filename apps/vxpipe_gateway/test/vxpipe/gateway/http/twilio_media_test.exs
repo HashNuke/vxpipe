@@ -290,7 +290,7 @@ defmodule Vxpipe.Providers.Twilio.MediaTest do
         start: %{mediaFormat: %{encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1}}
       })
 
-    assert {:stop, :invalid_media_message, {1008, "invalid media message"}, _socket} =
+    assert {:stop, :normal, {1008, "invalid media message"}, _socket} =
              Vxpipe.Gateway.TestObservedTelephonySocket.handle_in({body, opcode: :text}, socket)
 
     assert_receive {:socket_probe, %{count: 1},

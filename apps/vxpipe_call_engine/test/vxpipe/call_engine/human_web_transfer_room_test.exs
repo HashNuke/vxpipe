@@ -322,7 +322,7 @@ defmodule Vxpipe.CallEngine.HumanWebTransferRoomTest do
     plan = compile_plan(support_stt: true)
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
     TestTextToSpeechTransport.deliver_control(

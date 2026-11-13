@@ -561,7 +561,7 @@ defmodule Vxpipe.CallEngine.OutgoingCallRoomTest do
     {call_admission, connector_options} = Keyword.pop(connector_options, :call_admission)
     {archive, connector_options} = Keyword.pop(connector_options, :archive, enabled: false)
 
-    CallEngine.start_call(plan,
+    Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
       outgoing_admission: admission,
       call_admission: call_admission,
       archive: archive,

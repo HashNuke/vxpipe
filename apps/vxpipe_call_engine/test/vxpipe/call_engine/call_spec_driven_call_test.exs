@@ -1464,7 +1464,8 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
         assert listener_stt != caller_stt
         assert url =~ "model=flux-general-multi"
       else
-        assert {:error, %Error{code: :speech_to_text_unavailable}} = result
+        assert {:ok, %ConnectionAttachment{media_ingress: ingress}} = result
+        assert is_pid(ingress)
       end
 
       assert {:ok, after_attachment} = RoomAuthority.readiness_binding(authority)
@@ -1479,7 +1480,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     end
   end
 
-  test "resolves explicitly registered alternate speech providers without changing defaults" do
+  test "resolves alternate speech providers with explicit transport overrides" do
     plan = compile_plan(unique_id("room-morse-runtime"), speech?: true, speech_provider: :morse)
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
@@ -1781,7 +1782,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     receiver = Map.fetch!(plan.participants, plan.entry_receiver)
 
-    assert {:ok, _room} = CallEngine.start_call(plan)
+    assert {:ok, _room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     assert_receive {:failure_waiting, worker}, 1_000
     [{authority, _}] = Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, room_id})
     monitor = Process.monitor(authority)
@@ -1831,7 +1832,8 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     source = {Vxpipe.CallEngine.TestTenantCredentialSource, {self(), bindings}}
 
-    assert {:ok, _room} = CallEngine.start_call(plan, credential_source: source)
+    assert {:ok, _room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, credential_source: source)
 
     [{authority, _}] =
       Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
@@ -1872,7 +1874,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
                   "model_inference"
                 ]
               }
-            }} = CallEngine.start_call(plan)
+            }} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
 
     assert Registry.lookup(
              Vxpipe.CallEngine.RoomRegistry,
@@ -1880,9 +1882,13 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
            ) == []
   end
 
-  test "rejects selected speech that the application runtime cannot provide" do
+  test "rejects a speech provider without an implemented adapter" do
     room_id = unique_id("room-unsupported-speech")
     plan = compile_plan(room_id, speech?: true)
+    caller = plan.participants["caller"]
+    invalid = %{caller.capabilities.speech_to_text | provider: "unsupported"}
+    caller = %{caller | capabilities: %{caller.capabilities | speech_to_text: invalid}}
+    plan = %{plan | participants: Map.put(plan.participants, "caller", caller)}
 
     assert {:error,
             %Error{
@@ -1895,7 +1901,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
                   "speech_to_text"
                 ]
               }
-            }} = CallEngine.start_call(plan)
+            }} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
 
     assert Registry.lookup(
              Vxpipe.CallEngine.RoomRegistry,
@@ -1923,7 +1929,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     handoff
   end
 
-  defp archive_options(options \\ []) do
+  defp archive_options(options) do
     Keyword.merge(
       [
         writer: {TestArchiveWriter, self()},

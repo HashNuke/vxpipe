@@ -23,6 +23,7 @@ defmodule Vxpipe.CallEngine.PlanStartup do
     Id,
     ResolvedCallPlan,
     SpeechToSpeechRuntime,
+    SpeechRuntimeOptions,
     SpeechToTextRuntime,
     TextToSpeechRuntime
   }
@@ -109,13 +110,12 @@ defmodule Vxpipe.CallEngine.PlanStartup do
         provider_kind = if kind == :output_speech_to_text, do: :speech_to_text, else: kind
 
         with {:ok, provider} <- CapabilityCatalog.adapter(selection),
-             {:ok, settings} <-
-               CapabilityCatalog.provider_settings(
+             {:ok, _settings} <-
+               SpeechRuntimeOptions.resolve(
                  Keyword.get(options, provider_kind),
                  provider,
                  provider_kind
-               ),
-             true <- Keyword.get(settings, :enabled) == true do
+               ) do
           :ok
         else
           _unsupported -> unsupported_speech_configuration(participant, kind)

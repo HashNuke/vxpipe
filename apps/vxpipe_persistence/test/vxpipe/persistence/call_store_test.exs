@@ -1056,7 +1056,9 @@ defmodule Vxpipe.Persistence.CallStoreTest do
     archive_monitor = Process.monitor(archive_handoff.subscriber)
 
     assert {:ok, room} =
-             CallEngine.start_call(claim.call.plan, archive_handoff: archive_handoff)
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(claim.call.plan,
+               archive_handoff: archive_handoff
+             )
 
     assert {:ok, _running} =
              Calls.mark_call_started(

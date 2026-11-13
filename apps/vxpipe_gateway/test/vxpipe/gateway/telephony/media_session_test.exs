@@ -32,7 +32,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, plan.entry_caller)
     assistant = Map.fetch!(plan.participants, plan.entry_receiver)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
 
     leg =
       start_supervised!(
@@ -201,7 +201,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
   test "ends the supervised media session when its room ends" do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, plan.entry_caller)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
 
     leg =
       start_supervised!(
@@ -583,7 +583,7 @@ defmodule Vxpipe.Gateway.Telephony.MediaSessionTest do
   defp managed_media_context do
     plan = compile_plan()
     caller = Map.fetch!(plan.participants, plan.entry_caller)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     leg = start_supervised!({Task, fn -> receive do: (:stop -> :ok) end}, id: :managed_leg)
     binding = binding(plan, room.incarnation_id, caller.participant_id, leg)
 

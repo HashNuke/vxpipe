@@ -145,7 +145,10 @@ defmodule Vxpipe.Persistence.TenantOpeningAudioTest do
 
     plan = prepare(ctx)
     source = {Vxpipe.Persistence.TestControlledCredentialSource, {ctx.options, self(), "opening"}}
-    assert {:ok, attempt} = CallEngine.start_call(plan, credential_source: source)
+
+    assert {:ok, attempt} =
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, credential_source: source)
+
     assert_receive {:tenant_credential_pending, resolver, "deepgram", "opening"}, 1_000
 
     assert {:ok, monitor} =

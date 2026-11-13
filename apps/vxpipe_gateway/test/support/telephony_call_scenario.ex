@@ -46,6 +46,7 @@ defmodule Vxpipe.Gateway.TelephonyCallScenario do
 
     runtime_options =
       [
+        speech_runtime: Vxpipe.CallEngine.TestCallStartup.speech_runtime(),
         media_admission: media_admission,
         outbound_leg_connector: connector,
         service_registry: registry,

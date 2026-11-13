@@ -28,6 +28,38 @@ its actual acceptance scope permits. An experimental adapter file is not a
 production-selectable feature. Read the installed manifest instead of maintaining
 a second evergreen provider-support table in prose.
 
+## Configured-service authority
+
+The saved call spec selects the provider, model, voice and public options. Private
+startup resolves its named tenant or inherited platform credential from the
+configured database credential source. Removing or revoking that credential still
+blocks startup. The installed provider registry maps IDs to executable drivers;
+it does not enable services for a tenant.
+
+STT, TTS and STS do not read application-configured provider lists or `enabled`
+flags. Development and production use the same startup path. Keeping a second
+release-level enablement list was rejected because a service configured through
+the UI could otherwise validate successfully and fail only when a call started.
+The old development call spec embedded in configuration is also retired; use
+`examples/call-specs/` and save/publish the chosen spec in the database.
+
+`SpeechRuntimeOptions` owns bounded transport defaults (STT ingress and TTS request
+limits). Tests can pass `speech_runtime` explicitly to inject local transports;
+this is a trusted internal startup option, not call-spec data or service
+configuration. Legacy test fixtures are captured by the test startup helper only.
+These overrides cannot replace the selected provider/model or credential source.
+
+The separately hosted Morse API still has a private deployment-origin setting,
+`MORSE_CODE_API_BASE_URL`, shared by discovery and speech transport. This is live
+endpoint wiring, not a provider/model selection or enablement gate; it remains
+outside this cleanup. Hosted speech adapters use their implemented protocol
+endpoints.
+
+Regression coverage exercises database-backed ElevenLabs STT, TTS and STS with no
+host registration, tenant-over-platform precedence and credential deletion. Room
+startup also runs with poisoned obsolete application speech settings to verify
+that neither startup stage reads them.
+
 ## Speech adapter checklist
 
 1. Implement `Speech.STTProvider`, `TTSProvider` or `STSProvider` as appropriate.

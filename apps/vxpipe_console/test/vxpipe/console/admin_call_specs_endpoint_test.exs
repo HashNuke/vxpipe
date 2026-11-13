@@ -567,6 +567,7 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       assert data["credential_names"]["google"] == ["primary", "shared"]
 
       assert data["telephony_services"] == [
+               %{"key" => "telnyx", "name" => "Telnyx", "provider" => "telnyx"},
                %{"key" => "office", "name" => "office", "provider" => "telnyx"}
              ]
 

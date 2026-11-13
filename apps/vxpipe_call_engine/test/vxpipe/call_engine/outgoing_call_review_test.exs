@@ -62,7 +62,7 @@ defmodule Vxpipe.CallEngine.OutgoingCallReviewTest do
   end
 
   defp start_call(plan) do
-    CallEngine.start_call(plan,
+    Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
       outbound_leg_connector: {TestOutboundLegConnector, %{observer: self(), owner: self()}},
       archive: [
         enabled: true,

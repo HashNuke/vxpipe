@@ -113,6 +113,16 @@ resolve uncertainty. Room shutdown, carrier termination, command-worker drainage
 and required persistence acknowledgements are distinct evidence. Unknown or lost
 membership cannot be reported as confirmed cleanup.
 
+Managed calls become durably ended once both the room's archived closure and
+the gateway cleanup acknowledgement are saved, in either order. The carrier leg
+owns carrier termination, command drainage and final usage persistence. Local
+media and WebSocket roots separately prove their own orderly shutdown.
+
+Handled WebSocket failures retain their protocol error close codes while using
+the normal WebSock stop path. This allows the actual socket owner to finish an
+orderly shutdown without classifying a handled media error as unknown cleanup.
+Unexpected crashes and lost ownership remain unconfirmed.
+
 Use links, monitors and explicit lifecycle operations for correctness.
 `terminate/2` supplies best-effort cleanup only. A late callback, completion or
 timer must match the original incarnation/attempt/generation, and cannot stop a

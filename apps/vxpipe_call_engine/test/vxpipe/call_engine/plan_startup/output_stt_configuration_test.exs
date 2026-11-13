@@ -104,8 +104,12 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     assert :ok = CapabilitySelection.validate(output, [])
     settings = Keyword.fetch!(options(), :speech_to_text)
 
-    assert CapabilityCatalog.provider_settings(settings, STTSession, :output_speech_to_text) ==
-             CapabilityCatalog.provider_settings(settings, STTSession, :speech_to_text)
+    assert Vxpipe.CallEngine.SpeechRuntimeOptions.resolve(
+             settings,
+             STTSession,
+             :output_speech_to_text
+           ) ==
+             Vxpipe.CallEngine.SpeechRuntimeOptions.resolve(settings, STTSession, :speech_to_text)
   end
 
   test "startup keeps human credentials independent of the finite sidecar and STS generator" do
@@ -135,15 +139,13 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     assert_received {:tenant_credential_resolved, "tenant-output-config", "google", "recognizer"}
   end
 
-  test "human Google recognition retains host and tenant credential admission gates" do
+  test "human Google recognition requires matching credentials without host enablement" do
     plan = plan(16_000, morse(), %{speech_to_text: google()})
 
     for registry <- [%{}, %{STTSession => [enabled: false]}] do
       settings = Keyword.put(options(), :speech_to_text, providers: registry)
-      assert {:error, error} = PlanStartup.validate(plan, settings)
-
-      assert error.details["path"] ==
-               ["participants", "caller", "capabilities", "speech_to_text"]
+      assert :ok = PlanStartup.validate(plan, settings)
+      assert {:ok, _startup} = PlanStartup.new(plan, settings)
     end
 
     for credentials <- [
@@ -162,30 +164,14 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
     end
   end
 
-  test "a finite sidecar still requires its existing STT host enablement" do
+  test "a finite sidecar requires no host registration or enablement" do
     plan = plan(16_000, morse())
 
     for registry <- [%{}, %{Vxpipe.Providers.MorseCode.STTSession => [enabled: false]}] do
       settings = Keyword.put(options(), :speech_to_text, providers: registry)
 
-      assert {:error, error} = PlanStartup.validate(plan, settings)
-
-      assert error.details["path"] == [
-               "participants",
-               "assistant",
-               "capabilities",
-               "output_speech_to_text"
-             ]
-
-      # Construction retains its existing enclosing STS-runtime error projection.
-      assert {:error, error} = PlanStartup.new(plan, settings)
-
-      assert error.details["path"] == [
-               "participants",
-               "assistant",
-               "capabilities",
-               "speech_to_speech"
-             ]
+      assert :ok = PlanStartup.validate(plan, settings)
+      assert {:ok, _startup} = PlanStartup.new(plan, settings)
     end
   end
 
@@ -208,7 +194,10 @@ defmodule Vxpipe.CallEngine.PlanStartup.OutputSTTConfigurationTest do
       end
 
       assert {:error, error} =
-               Vxpipe.CallEngine.start_call(plan, Keyword.take(options(), [:credential_source]))
+               Vxpipe.CallEngine.TestCallStartup.start_call_raw(
+                 plan,
+                 Keyword.take(options(), [:credential_source])
+               )
 
       assert error.details["path"] ==
                ["participants", "assistant", "capabilities", "output_speech_to_text"]

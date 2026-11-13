@@ -26,7 +26,7 @@ defmodule Vxpipe.CallEngine.MediaPolicyAdmissionFailureTest do
 
   defp assert_rejected_admission(component) do
     plan = compile_plan(component)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
 
     assert [{room_authority, _value}] =
              Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})

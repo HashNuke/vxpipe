@@ -679,7 +679,7 @@ defmodule Vxpipe.Console.Integration.LiveTelephonyTest do
     Application.put_env(:vxpipe_call_engine, Vxpipe.CallEngine.Application, configured)
 
     assert {:ok, room} =
-             CallEngine.start_call(call.plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(call.plan,
                credential_source: {Vxpipe.Calls.ProviderCredentialSource, fixture.options},
                outbound_leg_connector:
                  {Vxpipe.CallEngine.TestOutboundLegConnector,

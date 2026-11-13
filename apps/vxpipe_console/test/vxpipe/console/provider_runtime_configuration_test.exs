@@ -46,7 +46,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
   test "development boot requires no provider environment credential", context do
     configuration = Config.Reader.read!(@runtime, env: :dev)
     refute Keyword.has_key?(configuration, :req_llm)
-    assert_inline_sample(context.development)
+    assert_no_configured_speech(context.development)
   end
 
   test "Morse runtime configuration defaults locally and requires an explicit HTTPS production origin" do
@@ -85,7 +85,7 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
   end
 
   @tag :tmp_dir
-  test "retired provider settings and a legacy file cannot change the inline providers",
+  test "retired provider settings and a legacy file cannot configure speech providers",
        context do
     legacy = Path.join(context.tmp_dir, "vxpipe.toml")
     File.write!(legacy, "[malformed legacy-private-marker")
@@ -98,20 +98,14 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
     configuration = Config.Reader.read!(@runtime, env: :dev)
     refute inspect(configuration) =~ "retired-private-marker"
     refute inspect(configuration) =~ "legacy-private-marker"
-    assert_inline_sample(Config.Reader.merge(context.development, configuration))
+    assert_no_configured_speech(Config.Reader.merge(context.development, configuration))
   end
 
-  test "sample setup requires an explicit provisioned tenant selector" do
-    disabled = Config.Reader.read!(@runtime, env: :dev)
-    sample = disabled |> Keyword.fetch!(:vxpipe_console) |> Keyword.fetch!(:sample_call)
-    refute Keyword.fetch!(sample, :enabled)
-
+  test "a legacy development tenant selector does not install an application-configured call" do
     System.put_env("VXPIPE_DEV_TENANT", "BBBBBBBBBBBBBBBB")
-    enabled = Config.Reader.read!(@runtime, env: :dev)
-    sample = enabled |> Keyword.fetch!(:vxpipe_console) |> Keyword.fetch!(:sample_call)
-    assert Keyword.fetch!(sample, :enabled)
-    assert Keyword.fetch!(sample, :tenant_key) == "BBBBBBBBBBBBBBBB"
-    refute Keyword.has_key?(sample, :tenant_name)
+    configuration = Config.Reader.read!(@runtime, env: :dev)
+    console = Keyword.fetch!(configuration, :vxpipe_console)
+    refute Keyword.has_key?(console, :sample_call)
   end
 
   test "platform callback origin enables tenant telephony without static credentials" do
@@ -185,20 +179,22 @@ defmodule Vxpipe.Console.ProviderRuntimeConfigurationTest do
     refute Exception.message(error) =~ "private-value"
   end
 
-  defp assert_inline_sample(configuration) do
-    trusted =
+  defp assert_no_configured_speech(configuration) do
+    engine =
+      configuration
+      |> Keyword.fetch!(:vxpipe_call_engine)
+      |> Keyword.fetch!(Vxpipe.CallEngine.Application)
+
+    for kind <- [:speech_to_text, :text_to_speech, :speech_to_speech] do
+      refute Keyword.has_key?(engine, kind)
+    end
+
+    http =
       configuration
       |> Keyword.fetch!(:vxpipe_gateway)
       |> Keyword.fetch!(Vxpipe.Gateway.Application)
       |> Keyword.fetch!(:http)
-      |> Keyword.fetch!(:room_creation)
-      |> Keyword.fetch!(:trusted_call)
 
-    refute Keyword.has_key?(trusted, :capability_profiles)
-    call_spec = Keyword.fetch!(trusted, :call_spec)
-    assert call_spec.schema_version == "20260915.01"
-    assert call_spec.defaults.capabilities.speech_to_text.provider == "deepgram"
-    assert call_spec.defaults.capabilities.text_to_speech.provider == "deepgram"
-    assert call_spec.defaults.capabilities.model_inference.provider == "google"
+    refute http |> Keyword.get(:room_creation, []) |> Keyword.has_key?(:trusted_call)
   end
 end

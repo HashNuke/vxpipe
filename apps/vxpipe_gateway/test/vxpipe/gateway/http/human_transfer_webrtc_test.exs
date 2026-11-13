@@ -129,7 +129,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     plan = compile_plan(morse: true, transfer_notice: "E")
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     stop_room_on_exit(plan)
 
     caller_client =
@@ -235,7 +235,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         maximum_pull_frames: 20
       )
 
-    assert {:ok, room} = CallEngine.start_call(plan, options)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, options)
     stop_room_on_exit(plan)
     assert_receive {:test_agent_runtime_model_preparing, initial_model}, 2_000
     caller = Map.fetch!(plan.participants, "caller")
@@ -397,7 +397,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         maximum_pull_frames: 20
       )
 
-    assert {:ok, room} = CallEngine.start_call(plan, options)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, options)
     stop_room_on_exit(plan)
     assert_receive {:test_agent_runtime_model_preparing, initial_model}, 2_000
     caller = Map.fetch!(plan.participants, "caller")
@@ -514,7 +514,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
     observer = Map.fetch!(plan.participants, "observer")
-    assert {:ok, room} = CallEngine.start_call(plan, options)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, options)
     stop_room_on_exit(plan)
     assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
     source_monitor = Process.monitor(source_tts)
@@ -835,7 +835,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     on_exit(fn -> :telemetry.detach(handler) end)
 
     plan = compile_plan(reception_model: "test:blocked", caller_speech_to_text?: true)
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     stop_room_on_exit(plan)
     assert_receive {:test_agent_runtime_model_preparing, model}, 2_000
 
@@ -917,7 +917,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           maximum_pull_frames: 20
         )
 
-      assert {:ok, room} = CallEngine.start_call(plan, options)
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, options)
       stop_room_on_exit(plan)
       assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
       caller = Map.fetch!(plan.participants, "caller")
@@ -1001,7 +1001,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       plan = compile_plan(reception_model: model)
 
       assert {:ok, room} =
-               CallEngine.start_call(plan,
+               Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                  call_lifecycle: [
                    readiness_timeout_ms: 30_000,
                    idle_timeout_ms: 15_000,
@@ -1090,7 +1090,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         Keyword.put(settings, :opening_audio, opening_settings)
       )
 
-      assert {:ok, room} = CallEngine.start_call(plan, options)
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, options)
       stop_room_on_exit(plan)
       assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
       caller = Map.fetch!(plan.participants, "caller")
@@ -1144,7 +1144,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           wait_sounds: sounds
         )
 
-      assert {:ok, room} = CallEngine.start_call(plan, options)
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, options)
       stop_room_on_exit(plan)
       assert_receive {:test_agent_runtime_model_preparing, model_preparer}, 2_000
       assert_receive {:test_tts_transport_started, opening_voice, _}, 2_000
@@ -1209,7 +1209,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       )
 
     caller = Map.fetch!(plan.participants, "caller")
-    assert {:ok, room} = CallEngine.start_call(plan, options)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, options)
     stop_room_on_exit(plan)
     assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
     source_monitor = Process.monitor(source_tts)
@@ -1381,7 +1381,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
           ]
         )
 
-      assert {:ok, room} = CallEngine.start_call(plan, options)
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, options)
       stop_room_on_exit(plan)
       assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
       source_monitor = Process.monitor(source_tts)
@@ -1683,7 +1683,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
       plan = compile_plan(wait_sounds: nil)
       caller = Map.fetch!(plan.participants, "caller")
       support = Map.fetch!(plan.participants, "human-support")
-      assert {:ok, room} = CallEngine.start_call(plan)
+      assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
       stop_room_on_exit(plan)
       assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
@@ -1846,7 +1846,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     observer = Map.fetch!(plan.participants, "observer")
 
     assert {:ok, room} =
-             CallEngine.start_call(
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(
                plan,
                Keyword.put(options, :recording,
                  enabled: true,
@@ -2463,7 +2463,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
 
     assert {:ok, room_monitor} =
              CallEngine.monitor_room(plan.tenant_id, plan.room_id, room.incarnation_id)
@@ -2801,7 +2801,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
     caller = Map.fetch!(plan.participants, "caller")
     support = Map.fetch!(plan.participants, "human-support")
-    assert {:ok, room} = CallEngine.start_call(plan, wait_options)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, wait_options)
     stop_room_on_exit(plan)
     assert_receive {:test_tts_transport_started, source_tts, _}, 2_000
 
@@ -3176,7 +3176,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     plan = compile_plan(wait_sounds: nil)
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                recording: [
                  enabled: true,
                  targets: [:individual_tracks],
@@ -3455,7 +3455,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     plan = compile_plan()
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                recording: [
                  enabled: true,
                  targets: [:individual_tracks],

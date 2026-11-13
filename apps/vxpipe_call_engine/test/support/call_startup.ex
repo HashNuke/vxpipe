@@ -6,11 +6,23 @@ defmodule Vxpipe.CallEngine.TestCallStartup do
   alias Vxpipe.CallEngine.RoomAuthority
 
   def start_call(plan, options \\ []) do
-    with {:ok, room} <- CallEngine.start_call(plan, options) do
+    with {:ok, room} <- start_call_raw(plan, options) do
       stop_on_exit(plan, room)
       await_prepared(plan)
       {:ok, room}
     end
+  end
+
+  # Legacy fixture builders keep their fake transports in test application state.
+  # Capture them here and pass them explicitly; production startup never reads it.
+  def speech_runtime do
+    :vxpipe_call_engine
+    |> Application.get_env(Vxpipe.CallEngine.Application, [])
+    |> Keyword.take([:speech_to_text, :text_to_speech, :speech_to_speech])
+  end
+
+  def start_call_raw(plan, options \\ []) do
+    CallEngine.start_call(plan, Keyword.put_new(options, :speech_runtime, speech_runtime()))
   end
 
   defp stop_on_exit(plan, room) do

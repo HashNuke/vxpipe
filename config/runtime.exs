@@ -334,19 +334,6 @@ if config_env() == :dev do
 
   config :vxpipe_gateway, Vxpipe.Gateway.Application, http: gateway_http
 
-  if database_enabled? do
-    room_creation = Keyword.fetch!(gateway_http, :room_creation)
-    trusted_call = Keyword.fetch!(room_creation, :trusted_call)
-    sample_tenant = nonempty_env.("VXPIPE_DEV_TENANT")
-
-    config :vxpipe_console, :sample_call,
-      enabled: not is_nil(sample_tenant),
-      call_spec: Keyword.fetch!(trusted_call, :call_spec),
-      initial_variables: Keyword.fetch!(trusted_call, :initial_variables),
-      tenant_key: sample_tenant,
-      transfer_participant: "human-support"
-  end
-
   console_listener =
     if phoenix_tls? do
       [

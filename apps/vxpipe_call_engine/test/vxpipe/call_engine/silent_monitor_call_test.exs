@@ -15,7 +15,7 @@ defmodule Vxpipe.CallEngine.SilentMonitorCallTest do
 
   test "an admitted monitor receives full mix but cannot publish room audio" do
     plan = compile_plan()
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     stop_room_on_exit(plan)
 
     monitor = Map.fetch!(plan.participants, "monitor")

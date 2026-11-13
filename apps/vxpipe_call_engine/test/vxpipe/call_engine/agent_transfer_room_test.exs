@@ -331,7 +331,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     reception = Map.fetch!(plan.participants, "reception")
     billing = Map.fetch!(plan.participants, "billing")
 
-    assert {:ok, room} = CallEngine.start_call(plan)
+    assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan)
     attach_caller(plan, room, caller)
 
     request = transfer_request(plan, room, caller, reception, "tool-stale-transfer")
@@ -445,7 +445,9 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     billing = Map.fetch!(plan.participants, "billing")
     billing_participant_id = billing.participant_id
 
-    assert {:ok, room} = CallEngine.start_call(plan, archive: archive_options())
+    assert {:ok, room} =
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, archive: archive_options())
+
     attach_caller(plan, room, caller)
 
     initial = send_command(plan, room, caller, "Please try billing.")

@@ -2,7 +2,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution do
   @moduledoc "Resolves pinned speech selections into privately authenticated provider configuration."
 
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
-  alias Vxpipe.CallEngine.{CapabilityCatalog, CredentialSource}
+  alias Vxpipe.CallEngine.{CapabilityCatalog, CredentialSource, SpeechRuntimeOptions}
 
   def resolve_provider(nil, _tenant_id, _options, _kind), do: {:ok, nil}
 
@@ -14,8 +14,7 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechProviderResolution do
       ) do
     with {:ok, provider} <- CapabilityCatalog.adapter(selection),
          {:ok, settings} <-
-           CapabilityCatalog.provider_settings(Keyword.get(options, kind), provider, kind),
-         true <- Keyword.get(settings, :enabled) == true,
+           SpeechRuntimeOptions.resolve(Keyword.get(options, kind), provider, kind),
          {:ok, credential} <- CredentialSource.resolve(tenant_id, selection, options),
          {:ok, selected_options} <- CapabilityCatalog.speech_options(selection),
          {:ok, selected_options} <- authenticate_speech(selected_options, credential),

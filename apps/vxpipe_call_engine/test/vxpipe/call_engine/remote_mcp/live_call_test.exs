@@ -149,7 +149,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     plan = compile_plan(integrations, transfer?: true, transfer_timeout_ms: 5_000)
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                mcp_catalog_store: RemoteMCPFixture.source!(integrations),
                remote_mcp_connection_provider: Vxpipe.CallEngine.RemoteMCPWireConnectionProvider
              )
@@ -451,7 +451,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
         pending =
           for _ <- 1..4 do
             plan = compile_plan(catalog)
-            assert {:ok, room} = CallEngine.start_call(plan, runtime)
+            assert {:ok, room} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, runtime)
 
             on_exit(fn ->
               CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
@@ -757,7 +757,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
       readiness_timeout = if unquote(cancellation) == :readiness_deadline, do: 500, else: 30_000
 
       assert {:ok, room} =
-               CallEngine.start_call(plan,
+               Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                  call_lifecycle: [readiness_timeout_ms: readiness_timeout],
                  mcp_catalog_store: RemoteMCPFixture.source!(integrations),
                  remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
@@ -892,7 +892,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     plan = compile_plan(integrations, transfer?: true)
 
     assert {:ok, room} =
-             CallEngine.start_call(plan,
+             Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan,
                mcp_catalog_store: RemoteMCPFixture.source!(integrations),
                remote_mcp_connection_provider: TestRemoteMCPConnectionProvider,
                remote_mcp_protocol_client: TestRemoteMCPProtocolClient
@@ -1024,7 +1024,7 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
                 "path" => ["participants", "reception", "tools", "customer_lookup"],
                 "reason" => "pinned remote MCP generation is no longer available"
               }
-            }} = CallEngine.start_call(plan, mcp_catalog_store: store)
+            }} = Vxpipe.CallEngine.TestCallStartup.start_call_raw(plan, mcp_catalog_store: store)
 
     assert Registry.lookup(Vxpipe.CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id}) == []
   end
