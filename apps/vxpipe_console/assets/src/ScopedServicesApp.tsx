@@ -59,6 +59,7 @@ export function ScopedServicesApp({
   headerActions,
   accessDenied = false,
   canEdit = true,
+  canEditApplications = canEdit,
   renderInventory,
   showTelephonyApplications = true,
 }: {
@@ -75,6 +76,7 @@ export function ScopedServicesApp({
    */
   accessDenied?: boolean;
   canEdit?: boolean;
+  canEditApplications?: boolean;
   showTelephonyApplications?: boolean;
   renderInventory?: (props: InventoryProps) => ReactNode;
 }) {
@@ -140,7 +142,7 @@ export function ScopedServicesApp({
   }, [directoryUrl, tenantKey, fetchImpl, onSessionExpired, retry, hasInventory, showTelephonyApplications]);
 
   async function withNativeSettings(action: (settings: BindingDirectory) => void | Promise<void>) {
-    if (!canEdit || accessDenied || saving.current || nativeDetails.current) return;
+    if ((!canEdit && !canEditApplications) || accessDenied || saving.current || nativeDetails.current) return;
     const controller = new AbortController();
     nativeDetails.current = controller;
     setLoadingNative(true);
@@ -165,7 +167,8 @@ export function ScopedServicesApp({
   }
 
   function open(next: Modal) {
-    if (!canEdit || saving.current) return;
+    const applicationEditor = next.provider === "telnyx" && (!next.bindingName || next.bindingName === "telnyx");
+    if ((!canEdit && !(applicationEditor && canEditApplications)) || accessDenied || saving.current) return;
     trigger.current = document.activeElement as HTMLElement;
     setModal(next);
     setNotice(null);
@@ -542,6 +545,7 @@ export function ScopedServicesApp({
       {notice ? <PageToast message={notice.message} kind={notice.kind} onDismiss={() => setNotice(null)} /> : null}
       {modal?.provider === "telnyx" && (!modal.bindingName || modal.bindingName === "telnyx") ? (
         <TelnyxConnectionModal scope={scope} csrfToken={csrfToken} fetchImpl={fetchImpl} onClose={close} onTest={testCredentials}
+          canEditCredentials={canEdit} canEditApplication={canEditApplications}
           onSessionExpired={onSessionExpired} onSaved={() => {
             setModal(null); setRetry(value => value + 1);
             setNotice({ kind: "success", message: "Telnyx connection saved." });

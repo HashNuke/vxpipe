@@ -126,3 +126,18 @@ button and fixture changes covered by focused reruns. Four PostgreSQL concurrenc
 cases and populated migration acceptance also pass. Live-provider calls were not
 run. See the [review evidence](../20261113-1123-simplify-telnyx-milestone.md) and
 [implementation labnote](../20261113-1114-implement-shared-telnyx.md).
+
+
+### Post-review corrections
+
+Astra xhigh reproduced two UI integration gaps after the implementation commit:
+editing an inherited application's outbound caller number was blocked, and a
+service-only writer could not open the application editor. Both are fixed with
+regression tests; credential and application permissions remain separate. The
+follow-up Astra review found no additional confirmed defects. See the
+[fix evidence](../20261113-1431-fix-telnyx-review.md) for automated and desktop/mobile
+browser verification. These corrections do not change the approved backend contract.
+
+Final follow-up acceptance: all five root gates pass; 5,264 Elixir tests and
+1,109 Console frontend tests pass, with zero failures. Both original reproductions
+are green. Desktop/mobile browser inspection and the follow-up Astra review pass.

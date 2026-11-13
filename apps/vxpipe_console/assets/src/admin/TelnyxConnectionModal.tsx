@@ -6,10 +6,11 @@ import { parseTelnyxConnection, telnyxSaveError, type TelnyxConnection } from ".
 import type { CredentialDraft, CredentialTestResult } from "./serviceTypes";
 import type { SetupServiceScope } from "./setupCatalog";
 
-export function TelnyxConnectionModal({ scope, csrfToken, fetchImpl, onClose, onSaved, onSessionExpired, onTest }: {
+export function TelnyxConnectionModal({ scope, csrfToken, fetchImpl, onClose, onSaved, onSessionExpired, onTest, canEditCredentials = true, canEditApplication = true }: {
   scope: SetupServiceScope; csrfToken: string;
   fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   onTest?: (draft: CredentialDraft) => Promise<CredentialTestResult>;
+  canEditCredentials?: boolean; canEditApplication?: boolean;
   onClose: () => void; onSaved: () => void; onSessionExpired: () => void;
 }) {
   const [connection, setConnection] = useState<TelnyxConnection | null>(null);
@@ -72,6 +73,7 @@ export function TelnyxConnectionModal({ scope, csrfToken, fetchImpl, onClose, on
   </SetupDialog>;
   const application = connection.applications.find(item => item.id === selection);
   return <TelnyxConnectionDialog key={selection ?? "new"} scope={scope}
+    canEditCredentials={canEditCredentials} canEditApplication={canEditApplication}
     state={{ provider: "telnyx", status: pending ? "submitting" : message ? "error" : "idle", message }}
     connections={connection.credential ? [connection.credential] : []}
     platformConnections={connection.platformAvailable ? [{ provider: "telnyx", source: "platform", status: "connected" }] : []}

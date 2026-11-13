@@ -4,7 +4,7 @@ import type { TelephonyApplication } from "./telephonyApplicationsApi";
 
 export type ApplicationDraft = {
   name: string;
-  provider_connection_id: string;
+  provider_connection_id: string | null;
   outbound_number: string | null;
 };
 
@@ -28,6 +28,7 @@ export function TelephonyApplicationForm({
     application?.provider_connection_id ?? "",
   );
   const [number, setNumber] = useState(application?.outbound_number ?? "");
+  const inheritsApplication = application?.provider_connection_id === null;
   const [validation, setValidation] = useState("");
   useEffect(() => {
     first.current?.focus();
@@ -42,7 +43,7 @@ export function TelephonyApplicationForm({
         event.preventDefault();
         const draft = {
           name: name.trim(),
-          provider_connection_id: connection.trim(),
+          provider_connection_id: connection.trim() || (inheritsApplication ? null : ""),
           outbound_number: number.trim() || null,
         };
         if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(draft.name)) {
@@ -51,7 +52,7 @@ export function TelephonyApplicationForm({
           );
           return;
         }
-        if (!/^[\x21-\x7e]{1,128}$/.test(draft.provider_connection_id)) {
+        if (draft.provider_connection_id !== null && !/^[\x21-\x7e]{1,128}$/.test(draft.provider_connection_id)) {
           setValidation("Enter the Voice API application ID without spaces.");
           return;
         }
@@ -94,15 +95,16 @@ export function TelephonyApplicationForm({
             ref={application ? first : undefined}
             value={connection}
             onChange={(event) => setConnection(event.target.value)}
-            required
+            required={!inheritsApplication}
+            placeholder={inheritsApplication ? "Platform default" : undefined}
             maxLength={128}
             spellCheck={false}
             aria-describedby={`${id}-application-hint`}
           />
         </label>
         <p id={`${id}-application-hint`}>
-          Copy the ID from your Telnyx Voice API application. Use a dedicated
-          application for this tenant.
+          {inheritsApplication ? "Leave blank to use the platform default."
+            : "Copy the ID from your Telnyx Voice API application. Use a dedicated application for this tenant."}
         </p>
         <label>
           Outbound caller number (optional)

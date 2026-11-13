@@ -22,6 +22,8 @@ export type TelnyxConnectionDialogProps = {
   applicationId?: string;
   platformApplicationId?: string;
   applicationExists?: boolean;
+  canEditCredentials?: boolean;
+  canEditApplication?: boolean;
   publicOrigin?: string;
   webhookUrls?: { platform: string; tenant: string | null };
   onClose: () => void;
@@ -35,6 +37,7 @@ import "./telnyx-connection.css";
 export function TelnyxConnectionDialog({
   state, scope, connections = [], platformConnections = [], applicationId = "",
   platformApplicationId = "", applicationExists = true, publicOrigin, webhookUrls,
+  canEditCredentials = true, canEditApplication = true,
   onClose, onSave, onTest,
 }: TelnyxConnectionDialogProps) {
   const id = useId();
@@ -42,8 +45,9 @@ export function TelnyxConnectionDialog({
   const selected = connections.find(item => item.provider === "telnyx");
   const platform = platformConnections.find(item => item.provider === "telnyx");
   const initiallyInherited = tenant && selected?.source === "platform";
+  const canReplaceCredentials = canEditCredentials && (!tenant || canEditApplication);
   const [inheritedCredentials, setInheritedCredentials] = useState(initiallyInherited);
-  const [editingCredentials, setEditingCredentials] = useState(!selected && !initiallyInherited);
+  const [editingCredentials, setEditingCredentials] = useState(!selected && !initiallyInherited && canReplaceCredentials);
   const [inheritedApplication, setInheritedApplication] = useState(tenant && !applicationId && initiallyInherited);
   const [application, setApplication] = useState(applicationId || platformApplicationId);
   const [apiKey, setApiKey] = useState("");
@@ -55,7 +59,7 @@ export function TelnyxConnectionDialog({
   const applicationRef = useRef<HTMLInputElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const pending = state.status === "submitting" || state.status === "testing" || testResult?.status === "testing";
-  const credentialsChanged = editingCredentials && !inheritedCredentials;
+  const credentialsChanged = canReplaceCredentials && editingCredentials && !inheritedCredentials;
   const effectiveScope = inheritedCredentials && inheritedApplication ? { kind: "platform" as const } : scope;
   const webhookUrl = webhookUrls
     ? effectiveScope.kind === "platform" ? webhookUrls.platform : webhookUrls.tenant
@@ -107,7 +111,7 @@ export function TelnyxConnectionDialog({
     const changes: TelnyxConnectionChanges = {};
     const nextApplication = inheritedApplication ? null : resolvedApplication;
     const initialApplication = tenant ? applicationId || null : platformApplicationId || null;
-    if (!applicationExists || nextApplication !== initialApplication || (tenant && credentialsChanged)) {
+    if (canEditApplication && (!applicationExists || nextApplication !== initialApplication || (tenant && credentialsChanged))) {
       changes.application_id = nextApplication;
     }
     if (credentialsChanged) {
@@ -125,7 +129,7 @@ export function TelnyxConnectionDialog({
         ...(apiKey ? { api_key: apiKey } : {}),
         ...(publicKey.trim() ? { public_key: publicKey.trim() } : {}),
       };
-    } else if (inheritedCredentials && !initiallyInherited && selected) changes.credentials = null;
+    } else if (canEditCredentials && inheritedCredentials && !initiallyInherited && selected) changes.credentials = null;
     if (Object.keys(changes).length) onSave(changes);
     else onClose();
   }
@@ -155,9 +159,9 @@ export function TelnyxConnectionDialog({
               {inheritedCredentials || !tenant ? "Platform default" : "Tenant credentials"}
             </p></div>
             <div className="telnyx-setting-actions">
-              {inheritedCredentials ? <Button type="button" aria-label="Override credentials" disabled={pending} onClick={editCredentials}>Override</Button>
-                : !editingCredentials ? <Button type="button" variant="ghost" aria-label="Edit credentials" disabled={pending} onClick={editCredentials}>Edit</Button> : null}
-              {tenant && !inheritedCredentials && platform ? <Button type="button" aria-label="Use platform default for credentials" disabled={pending} onClick={usePlatformCredentials}>Use platform default</Button> : null}
+              {canReplaceCredentials && (inheritedCredentials ? <Button type="button" aria-label="Override credentials" disabled={pending} onClick={editCredentials}>Override</Button>
+                : !editingCredentials ? <Button type="button" variant="ghost" aria-label="Edit credentials" disabled={pending} onClick={editCredentials}>Edit</Button> : null)}
+              {canEditCredentials && tenant && !inheritedCredentials && platform ? <Button type="button" aria-label="Use platform default for credentials" disabled={pending} onClick={usePlatformCredentials}>Use platform default</Button> : null}
             </div>
           </div>
           {credentialsChanged ? <div className="telnyx-credential-fields" ref={fieldsRef}>
@@ -180,13 +184,13 @@ export function TelnyxConnectionDialog({
               {inheritedApplication || !tenant ? <Building2 size={13} aria-hidden="true" /> : null}
               {inheritedApplication || !tenant ? "Platform default" : "Tenant override"}
             </p></div>
-            {inheritedApplication ? <Button type="button" aria-label="Override voice application" disabled={pending} onClick={() => { setInheritedApplication(false); applicationRef.current?.focus(); }}>Override</Button>
+            {canEditApplication && (inheritedApplication ? <Button type="button" aria-label="Override voice application" disabled={pending} onClick={() => { setInheritedApplication(false); applicationRef.current?.focus(); }}>Override</Button>
               : tenant && inheritedCredentials && platformApplicationId ? <Button type="button" aria-label="Use platform default for voice application" disabled={pending}
-                onClick={() => { setInheritedApplication(true); setApplicationError(false); setError(null); }}>Use platform default</Button> : null}
+                onClick={() => { setInheritedApplication(true); setApplicationError(false); setError(null); }}>Use platform default</Button> : null)}
           </div>
           <label className="telnyx-field-label" htmlFor={`${id}-application`}>Voice API application ID</label>
           <input id={`${id}-application`} ref={applicationRef} className={`${credentialInputClass} telnyx-application-value`}
-            value={inheritedApplication ? platformApplicationId : application} readOnly={inheritedApplication} disabled={pending}
+            value={inheritedApplication ? platformApplicationId : application} readOnly={inheritedApplication || !canEditApplication} disabled={pending}
             maxLength={128} spellCheck={false} placeholder="Enter application ID" aria-invalid={applicationError}
             aria-describedby={`${id}-application-hint`}
             onChange={event => { setApplication(event.target.value); setApplicationError(false); setError(null); }} />

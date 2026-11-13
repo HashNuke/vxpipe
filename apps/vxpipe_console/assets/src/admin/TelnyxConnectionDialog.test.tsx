@@ -77,3 +77,17 @@ test("Cancel discards the draft without invoking save", () => {
   expect(onSave).not.toHaveBeenCalled();
   expect(base.onClose).toHaveBeenCalled();
 });
+
+
+test("credential-only writers can reset credentials while the application stays read-only", () => {
+  const onSave = vi.fn();
+  render(<TelnyxConnectionDialog {...base} applicationId="acme-app"
+    connections={[{ ...base.connections[0], source: "tenant" }]}
+    canEditCredentials canEditApplication={false} onSave={onSave} />);
+  expect(screen.getByLabelText("Voice API application ID")).toHaveAttribute("readonly");
+  expect(screen.queryByRole("button", { name: "Edit credentials" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Use platform default for credentials" }));
+  expect(screen.queryByRole("button", { name: "Use platform default for voice application" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ credentials: null });
+});

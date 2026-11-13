@@ -1170,6 +1170,9 @@ function ScopedServicesRoute({ platform = false, ...props }: AppProps & { platfo
       canEdit={!!principal && (platform
         ? canWritePlatformServices(principal.role)
         : canWriteTenantCredentials(principal.role, membershipAccess(principal.user, tenantKey)))}
+      canEditApplications={!!principal && (platform
+        ? canWritePlatformServices(principal.role)
+        : effectiveAccess(principal.role, "tenant_services", membershipAccess(principal.user, tenantKey)) === "write")}
       canManageMcps={!!principal && !platform && effectiveAccess(principal.role, "tenant_services", membershipAccess(principal.user, tenantKey)) === "write"}
       actorId={principal?.user.id}
       headerActions={

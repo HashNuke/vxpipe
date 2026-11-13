@@ -16,9 +16,9 @@ const defaultFetch: IntegrationFetch = (input, init) => window.fetch(input, init
 const sessionExpired = () => window.location.assign("/auth/login");
 const localCategories: { id: string; name: string; count?: number }[] = [{ id: "connected", name: "Connected integrations" }, { id: "ai", name: "AI models" }, { id: "telephony", name: "Telephony" }];
 
-export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedirect, fetchImpl = defaultFetch, onSessionExpired = sessionExpired, onManage, onRemove, removingProvider, revision, csrfToken = "", canEdit = false, canManageMcps = false }: {
+export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedirect, fetchImpl = defaultFetch, onSessionExpired = sessionExpired, onManage, onRemove, removingProvider, revision, csrfToken = "", canEdit = false, canEditApplications = canEdit, canManageMcps = false }: {
   actorId?: string; onAuthorizationRedirect?: (url: string) => void;
-  csrfToken?: string; canEdit?: boolean; canManageMcps?: boolean; tenantKey: string | null; fetchImpl?: IntegrationFetch; onSessionExpired?: () => void;
+  csrfToken?: string; canEdit?: boolean; canEditApplications?: boolean; canManageMcps?: boolean; tenantKey: string | null; fetchImpl?: IntegrationFetch; onSessionExpired?: () => void;
   onManage: (provider: SetupProviderId, connection?: IntegrationConnection) => void;
   onRemove?: (provider: SetupProviderId, bindingName: string) => void; removingProvider?: SetupProviderId | null; revision?: unknown;
 }) {
@@ -78,6 +78,10 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
   }
 
   function closeMcp() { setMcpDialog(null); setRetry(value => value + 1); }
+  function canEditConnection(connection: IntegrationConnection) {
+    return (canEditApplications && connection.provider === "telnyx" && connection.name === "telnyx") ||
+      (canEdit && (connection.canEdit || (tenantKey !== null && connection.source === "platform")));
+  }
   function openMcp(connection: McpConnection) { if (tenantKey && (canManageMcps || connection.status !== "revoked")) setMcpDialog({ tenantKey, actorId, connection }); }
   const showMcpDialog = !!mcpDialog && tenantKey !== null && mcpDialog.tenantKey === tenantKey && mcpDialog.actorId === actorId && (!!mcpDialog.connection || canManageMcps);
 
@@ -121,7 +125,7 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
                 <Button disabled={state.status !== "ready"} aria-label={`Manage ${connection.serverName}`} onClick={() => tenantKey && setMcpDialog({ tenantKey, actorId, connection: { ...connection, canEdit: connection.canEdit && canManageMcps } })}>Manage</Button>
               </Fragment>)}{item.connections.map(connection => <Fragment key={`${connection.provider}:${connection.name}`}>
                 {connection.status === "connected" ? <span className="setup-service-status" title="Connected"><CheckCheck size={18} aria-hidden /><span className="sr-only">Connected</span></span> : <span className="mcp-status-warning directory-attention"><CircleAlert size={16} aria-hidden />Reconnect required</span>}
-                <Button disabled={!canEdit || !(connection.canEdit || (tenantKey !== null && connection.source === "platform" && canEdit)) || !!removingProvider || state.status !== "ready"} aria-label={`Edit ${item.name}${item.connections.length > 1 ? ` (${connection.name})` : ""}`} onClick={() => item.provider && onManage(item.provider, connection)}>{item.connections.length > 1 ? `Edit ${connection.name}` : "Edit"}</Button>
+                <Button disabled={!canEditConnection(connection) || !!removingProvider || state.status !== "ready"} aria-label={`Edit ${item.name}${item.connections.length > 1 ? ` (${connection.name})` : ""}`} onClick={() => item.provider && onManage(item.provider, connection)}>{item.connections.length > 1 ? `Edit ${connection.name}` : "Edit"}</Button>
               {onRemove && connection.canEdit && connection.credentialId && (tenantKey === null || connection.source === "tenant") && <Button variant="ghost" disabled={!!removingProvider || state.status !== "ready"} aria-label={`Remove ${item.name} (${connection.name}) credentials`} onClick={() => item.provider && onRemove(item.provider, connection.name)}>{removingProvider === item.provider ? "Removing…" : "Remove"}</Button>}
               </Fragment>)}{item.connections.length === 0 && item.mcpConnections.length === 0 && <>
                 <Button disabled={!item.canConnect || state.status !== "ready" || (item.kind === "mcp" && (!canManageMcps || !csrfToken || !item.listing))} aria-label={`Connect ${item.name}`} onClick={() => {

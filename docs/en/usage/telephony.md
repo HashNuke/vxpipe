@@ -34,6 +34,11 @@ for new calls.
    connection, then publish it. Configure an E.164 outbound caller ID in Phone
    routing when the service will place calls or dial transfer destinations.
 
+For an inherited application, leave the application ID blank in Phone routing
+to keep the platform default when changing its outbound caller number.
+Application-only changes require tenant service write permission; credential
+controls follow the role's separate credential permissions.
+
 The shared application routes each called number to its tenant and published call
 spec. Two published specs cannot claim the same number on that application.
 Explicit tenant applications are dedicated: use inheritance to share the platform
