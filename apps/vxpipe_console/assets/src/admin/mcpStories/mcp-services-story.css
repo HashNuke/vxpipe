@@ -225,12 +225,14 @@
   flex: 0 0 auto;
   background: var(--admin-panel);
 }
-.mcp-services-preview .mcp-primary {
+.mcp-services-preview .mcp-primary,
+.service-directory-heading .mcp-primary {
   color: var(--admin-bg);
   background: var(--admin-ink);
   border-color: var(--admin-ink);
 }
-.mcp-services-preview .mcp-primary:hover {
+.mcp-services-preview .mcp-primary:hover,
+.service-directory-heading .mcp-primary:hover {
   background: color-mix(in oklch, var(--admin-ink) 90%, var(--admin-bg));
 }
 .mcp-services-preview .mcp-danger {
@@ -688,7 +690,7 @@
   }
 }
 
-/* Directory and fixed-provider credentials are Storybook-only. */
+/* Shared integration directory layout. */
 .service-directory-heading {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(200px, 320px) auto;
@@ -878,11 +880,13 @@
   margin: 12px 0;
 }
 .service-directory-custom-action {
+  justify-self: end;
+  white-space: nowrap;
   min-height: 40px;
 }
 @media (max-width: 520px) {
   .service-directory-heading > .service-directory-custom-action {
-    width: 100%;
+    justify-self: start;
     min-height: 44px;
     justify-content: center;
   }

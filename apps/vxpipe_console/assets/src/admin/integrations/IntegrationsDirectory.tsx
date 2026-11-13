@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { CheckCheck, CircleAlert, Plug, RefreshCw, Search } from "lucide-react";
+import { CheckCheck, CircleAlert, Plug, Plus, RefreshCw, Search } from "lucide-react";
 import { Button } from "../Button";
 import { ServiceLogo } from "../ServiceLogo";
 import { capabilityLabels, type SetupProviderId } from "../setupCatalog";
@@ -92,8 +92,8 @@ export function IntegrationsDirectory({ tenantKey, actorId, onAuthorizationRedir
     <nav aria-label="Integration breadcrumb" className="mb-6 text-sm text-[var(--admin-muted)]">Integrations <span aria-hidden="true"> / </span><span className="text-[var(--admin-ink)]">{label}</span></nav>
     <div className="mcp-page-heading service-directory-heading">
       <h1>{tenantKey === null ? "Platform Integrations" : "Integrations"}</h1>
-      {tenantKey !== null && canManageMcps && csrfToken && data && <Button disabled={state.status !== "ready"} onClick={() => setMcpDialog({ tenantKey, actorId })}>Connect other MCP</Button>}
       <div className="mcp-search"><Search size={17} aria-hidden /><input aria-label="Search integrations" type="search" placeholder="Search all integrations…" maxLength={200} value={searchInput} onChange={event => setSearchInput(event.target.value)} /></div>
+      {tenantKey !== null && canManageMcps && csrfToken && <Button className="mcp-primary service-directory-custom-action" onClick={() => setMcpDialog({ tenantKey, actorId })}><Plus size={16} aria-hidden />Connect other MCP</Button>}
     </div>
     <div className="service-directory-layout">
       <aside className="service-directory-sidebar" aria-label="Integration categories and status">

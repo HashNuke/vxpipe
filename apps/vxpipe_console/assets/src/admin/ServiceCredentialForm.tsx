@@ -236,7 +236,6 @@ export function ServiceCredentialForm({
             clearTestResult();
           }}
           publicKeyPlaceholder={savedPlaceholder("publicKey")}
-          publicKeySaved={savedFields.includes("publicKey")}
         />
       ) : (
         <ApiKeyCredentialFields

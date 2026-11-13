@@ -108,12 +108,8 @@ export function ServiceSetupModal({
       anchorTop
       busy={state.status === "submitting" || state.status === "testing"}
       onClose={onClose}
-      title={
-        provider
-          ? `${state.overriding ? "Override" : connected ? "Manage" : "Connect"} ${provider.name}`
-          : "Connect a service"
-      }
-      headerContent={
+      title={provider?.name ?? "Connect a service"}
+      headerContent={provider ? undefined :
         <div className="setup-service-header">
           <div className="setup-service-heading">
             <select
@@ -144,7 +140,6 @@ export function ServiceSetupModal({
       <div ref={contentRef}>
         {provider ? (
           <>
-            {bindingName ? <p>Binding: {bindingName}</p> : null}
             <div className="setup-tags setup-modal-capabilities">
               {provider.capabilities.map((capability) => (
                 <span key={capability}>{capabilityLabels[capability]}</span>

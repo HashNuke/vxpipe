@@ -121,7 +121,6 @@ function GenericProviderDialog({
       <div ref={contentRef} className="mcp-dialog-scroll story-provider-credentials">
         {provider ? (
           <>
-            {bindingName ? <p>Binding: {bindingName}</p> : null}
             {state.status === "submitting" || state.status === "testing" ? (
               <p className="setup-validation" role="status">
                 <LoaderCircle

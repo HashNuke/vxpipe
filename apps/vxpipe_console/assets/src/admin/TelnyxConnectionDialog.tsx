@@ -168,9 +168,10 @@ export function TelnyxConnectionDialog({
             <ApiKeyCredentialFields value={apiKey} disabled={pending} onChange={value => { setApiKey(value); setError(null); setTestResult(null); }} placeholder={selected && !initiallyInherited ? "Leave blank to keep saved API key" : "Enter API key"} />
             <div className="grid gap-1.5 text-sm">
               <label className="font-semibold" htmlFor={`${id}-public`}>Public key</label>
-              <input className={credentialInputClass} id={`${id}-public`} value={publicKey} disabled={pending} spellCheck={false}
+              <input className={credentialInputClass} id={`${id}-public`} aria-describedby={`${id}-public-hint`} value={publicKey} disabled={pending} spellCheck={false}
                 placeholder={selected && !initiallyInherited ? "Leave blank to keep saved public key" : "Enter public key"}
                 onChange={event => { setPublicKey(event.target.value); setError(null); setTestResult(null); }} />
+              <p id={`${id}-public-hint`} className="text-xs text-[var(--admin-muted)]">Note: Public key is only required if you use Telephony services</p>
             </div>
           </div> : <dl className="telnyx-credential-summary">
             <div><dt>API key</dt><dd><span aria-label="Saved API key" className="telnyx-masked-key">••••••••••••</span><span>Saved</span></dd></div>

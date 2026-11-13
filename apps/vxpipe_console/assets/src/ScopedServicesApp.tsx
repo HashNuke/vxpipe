@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { LoaderCircle } from "lucide-react";
+import { SetupDialog } from "./admin/SetupDialog";
 import { AdminShell } from "./admin/AdminShell";
 import { TelnyxConnectionModal } from "./admin/TelnyxConnectionModal";
 import { Button } from "./admin/Button";
@@ -16,6 +18,7 @@ import {
 } from "./admin/serviceBindingsApi";
 import {
   installedSetupProviders,
+  setupProvider,
   voiceSetupReady,
   type SetupProviderId,
   type SetupServiceScope,
@@ -33,6 +36,7 @@ type Fetch = (
   input: RequestInfo | URL,
   init?: RequestInit,
 ) => Promise<Response>;
+type NativeAction = { provider: SetupProviderId; operation: "manage" | "remove" };
 type Modal = ServiceModalState & { bindingName?: string };
 const defaultFetch: Fetch = (input, init) => window.fetch(input, init);
 const sessionExpired = () => window.location.assign("/auth/login");
@@ -92,7 +96,9 @@ export function ScopedServicesApp({
   const [removingProvider, setRemovingProvider] = useState<SetupProviderId | null>(null);
   const saving = useRef<AbortController | null>(null);
   const nativeDetails = useRef<AbortController | null>(null);
-  const [loadingNative, setLoadingNative] = useState(false);
+  const [loadingNative, setLoadingNative] = useState<NativeAction | null>(null);
+  const loadingEditor = loadingNative?.operation === "manage";
+  const dialogOpen = modal !== null || loadingEditor;
   const trigger = useRef<HTMLElement | null>(null);
   const main = useRef<HTMLElement | null>(null);
   const tenantKey = scope.kind === "tenant" ? scope.tenantKey : null;
@@ -106,7 +112,7 @@ export function ScopedServicesApp({
     const controller = new AbortController();
     setPhase("loading");
     setDirectory(null);
-    setLoadingNative(false);
+    setLoadingNative(null);
     if (hasInventory && !showTelephonyApplications) {
       setPhase("ready");
       return () => { nativeDetails.current?.abort(); saving.current?.abort(); };
@@ -141,11 +147,12 @@ export function ScopedServicesApp({
     };
   }, [directoryUrl, tenantKey, fetchImpl, onSessionExpired, retry, hasInventory, showTelephonyApplications]);
 
-  async function withNativeSettings(action: (settings: BindingDirectory) => void | Promise<void>) {
+  async function withNativeSettings(target: NativeAction, action: (settings: BindingDirectory) => void | Promise<void>) {
     if ((!canEdit && !canEditApplications) || accessDenied || saving.current || nativeDetails.current) return;
     const controller = new AbortController();
     nativeDetails.current = controller;
-    setLoadingNative(true);
+    if (target.operation === "manage") trigger.current = document.activeElement as HTMLElement;
+    setLoadingNative(target);
     setNotice(null);
     try {
       const response = await fetchImpl(directoryUrl, {
@@ -162,19 +169,22 @@ export function ScopedServicesApp({
       if (!controller.signal.aborted) setNotice({ kind: "error", message: "Integration settings could not be loaded. Try the action again." });
     } finally {
       if (nativeDetails.current === controller) nativeDetails.current = null;
-      if (!controller.signal.aborted) setLoadingNative(false);
+      if (!controller.signal.aborted) setLoadingNative(null);
     }
   }
 
   function open(next: Modal) {
     const applicationEditor = next.provider === "telnyx" && (!next.bindingName || next.bindingName === "telnyx");
     if ((!canEdit && !(applicationEditor && canEditApplications)) || accessDenied || saving.current) return;
-    trigger.current = document.activeElement as HTMLElement;
+    if (!nativeDetails.current) trigger.current = document.activeElement as HTMLElement;
     setModal(next);
     setNotice(null);
   }
   function close() {
     if (saving.current) return;
+    nativeDetails.current?.abort();
+    nativeDetails.current = null;
+    setLoadingNative(null);
     setModal(null);
     requestAnimationFrame(() => trigger.current?.focus());
   }
@@ -407,7 +417,7 @@ export function ScopedServicesApp({
               { label: renderInventory ? "Integrations" : "Setup services" },
             ]
       }
-      headerInert={modal !== null}
+      headerInert={dialogOpen}
       headerActions={
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -428,8 +438,8 @@ export function ScopedServicesApp({
         ref={main}
         className="tenant-setup"
         tabIndex={-1}
-        inert={modal !== null ? true : undefined}
-        aria-hidden={modal !== null ? true : undefined}
+        inert={dialogOpen ? true : undefined}
+        aria-hidden={dialogOpen ? true : undefined}
         aria-busy={phase === "loading"}
       >
         {accessDenied ? (
@@ -440,10 +450,9 @@ export function ScopedServicesApp({
           />
         ) : Inventory ? (
           <>
-            <InventoryPresentation render={Inventory} directory={directory} revision={retry} removingProvider={removingProvider}
-              onRemove={(provider, name) => { void withNativeSettings(settings => removeCardCredentials(provider, name, settings)); }}
-              onManage={(provider, bindingName) => { void withNativeSettings(() => open({ provider, bindingName, status: "idle" })); }} />
-            {loadingNative && <p role="status">Loading integration settings…</p>}
+            <InventoryPresentation render={Inventory} directory={directory} revision={retry} removingProvider={removingProvider ?? (loadingNative?.operation === "remove" ? loadingNative.provider : null)}
+              onRemove={(provider, name) => { void withNativeSettings({ provider, operation: "remove" }, settings => removeCardCredentials(provider, name, settings)); }}
+              onManage={(provider, bindingName) => { void withNativeSettings({ provider, operation: "manage" }, () => open({ provider, bindingName, status: "idle" })); }} />
           </>
         ) : phase === "loading" ? (
           <p role="status">{renderInventory ? "Loading integrations…" : "Loading services…"}</p>
@@ -593,6 +602,18 @@ export function ScopedServicesApp({
           }
           onUsePlatform={tenantKey ? usePlatformService : undefined}
         />
+      ) : loadingEditor && loadingNative ? (
+        <SetupDialog anchorTop title={setupProvider(loadingNative.provider)?.name ?? "Integration settings"} onClose={close}>
+          <div className="mcp-dialog-form">
+            <div className="mcp-dialog-scroll">
+              <p className="flex items-center gap-2 text-sm text-[var(--admin-muted)]" role="status">
+                <LoaderCircle size={16} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
+                Loading integration settings…
+              </p>
+            </div>
+            <footer className="mcp-dialog-footer"><Button onClick={close}>Cancel</Button></footer>
+          </div>
+        </SetupDialog>
       ) : null}
     </AdminShell>
   );

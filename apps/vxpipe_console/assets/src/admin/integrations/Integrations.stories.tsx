@@ -6,7 +6,7 @@ import { modelCatalogFixture } from "../modelCatalogFixtures";
 import { setupProviders } from "../setupCatalog";
 
 /** Exercise production components with local fixture responses, never real HTTP. */
-function fixtureFetch(readOnly: boolean, removalFails: boolean) {
+function fixtureFetch(readOnly: boolean, removalFails: boolean, settingsDelay: number) {
   let connected = true;
   const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
     if (init?.method === "DELETE") {
@@ -18,6 +18,7 @@ function fixtureFetch(readOnly: boolean, removalFails: boolean) {
       credential_id: "fixture-google", platform_available: false, saved_fields: ["api_key"], last_validated_at: null };
     const bindings = connected ? [binding] : [];
     const url = new URL(String(input), "https://console.example.test");
+    if (url.pathname.endsWith("/services") && settingsDelay) await new Promise(resolve => setTimeout(resolve, settingsDelay));
     if (url.pathname.endsWith("/integrations")) {
       const providers = setupProviders.filter(provider => url.searchParams.get("category") === "connected" ? connected && provider.id === "google" : true);
       return Response.json({ tenant: null, installation_version: "0.1.0", directory_status: "local", page: null, fallback_items: [],
@@ -33,8 +34,8 @@ function fixtureFetch(readOnly: boolean, removalFails: boolean) {
   return fetchImpl;
 }
 
-function Preview({ readOnly = false, removalFails = false }: { readOnly?: boolean; removalFails?: boolean }) {
-  const fetchImpl = useMemo(() => fixtureFetch(readOnly, removalFails), [readOnly, removalFails]);
+function Preview({ readOnly = false, removalFails = false, settingsDelay = 0 }: { readOnly?: boolean; removalFails?: boolean; settingsDelay?: number }) {
+  const fetchImpl = useMemo(() => fixtureFetch(readOnly, removalFails, settingsDelay), [readOnly, removalFails, settingsDelay]);
   return <MemoryRouter initialEntries={["/platform/services"]}><IntegrationsApp scope={{ kind: "platform" }} csrfToken="fixture" fetchImpl={fetchImpl} canEdit={!readOnly} onNavigate={() => undefined} /></MemoryRouter>;
 }
 
@@ -48,3 +49,4 @@ type Story = StoryObj<typeof meta>;
 export const Connected: Story = {};
 export const ReadOnly: Story = { args: { readOnly: true } };
 export const RemovalFailure: Story = { args: { removalFails: true } };
+export const SlowSettings: Story = { args: { settingsDelay: 5000 } };

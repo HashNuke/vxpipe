@@ -1,11 +1,13 @@
 import { setupProviders } from "./admin/setupCatalog";
 import { modelCatalogFixture } from "./admin/modelCatalogFixtures";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { App } from "./test/ResourceApp";
@@ -58,14 +60,50 @@ const providerCapabilities = {
   zenmux: ["credential", "llm"],
 };
 
+test("editing immediately opens a loading dialog and Cancel ignores a late settings response", async () => {
+  let resolve!: (response: Response) => void;
+  const fetchImpl = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(() => new Promise<Response>(done => { resolve = done; }));
+  render(<ScopedServicesApp scope={{ kind: "platform" }} csrfToken="csrf" fetchImpl={fetchImpl}
+    onNavigate={vi.fn()} showTelephonyApplications={false}
+    renderInventory={({ onManage }) => <button onClick={() => onManage("google")}>Edit Google</button>} />);
+  const edit = screen.getByRole("button", { name: "Edit Google" });
+  edit.focus();
+  fireEvent.click(edit);
+  expect(within(screen.getByRole("dialog")).getByRole("status")).toHaveTextContent("Loading integration settings");
+  expect(edit.closest("main")).toHaveAttribute("inert");
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(fetchImpl.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  await act(async () => resolve(Response.json({ tenant: null, bindings: [], model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities })));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  await waitFor(() => expect(edit).toHaveFocus());
+});
+
+test("loading hands over to the credential editor and restores the original Edit button", async () => {
+  let resolve!: (response: Response) => void;
+  const fetchImpl = vi.fn(() => new Promise<Response>(done => { resolve = done; }));
+  render(<ScopedServicesApp scope={{ kind: "platform" }} csrfToken="csrf" fetchImpl={fetchImpl}
+    onNavigate={vi.fn()} showTelephonyApplications={false}
+    renderInventory={({ onManage }) => <button onClick={() => onManage("google")}>Edit Google</button>} />);
+  const edit = screen.getByRole("button", { name: "Edit Google" });
+  edit.focus();
+  fireEvent.click(edit);
+  expect(screen.getByRole("dialog")).toBeVisible();
+  await act(async () => resolve(Response.json({ tenant: null, bindings: [], model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities })));
+  expect(await screen.findByLabelText("API key")).toBeVisible();
+  expect(screen.queryByText("Loading integration settings…")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(edit).toHaveFocus());
+});
+
 test("integration inventory opens the existing provider credential workflow", async () => {
   const fetchImpl = vi.fn(async () => response({ tenant: null, bindings: [],
     model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities }));
   render(<ScopedServicesApp scope={{ kind: "platform" }} csrfToken="csrf" fetchImpl={fetchImpl}
     onNavigate={vi.fn()} renderInventory={({ onManage }) => <button onClick={() => onManage("google")}>Connect Google integration</button>} />);
   fireEvent.click(await screen.findByRole("button", { name: "Connect Google integration" }));
-  expect(await screen.findByRole("dialog")).toBeVisible();
-  expect(screen.getByLabelText(/API key/i)).toBeVisible();
+  expect(await screen.findByLabelText(/API key/i)).toBeVisible();
+  expect(screen.getByRole("dialog")).toBeVisible();
   expect(screen.queryByRole("button", { name: "Connect a service" })).not.toBeInTheDocument();
 });
 
@@ -115,34 +153,29 @@ test("platform service reader sees connections without mutation controls", async
   expect(screen.queryByRole("button", { name: /Manage Deepgram|More actions for Deepgram/ })).not.toBeInTheDocument();
 });
 
-test("Setup picker offers installed services with only working capability badges", async () => {
+test("a chosen service stays fixed in its editor with only working capability badges", async () => {
   window.history.replaceState({}, "", "/platform/services/ai");
   const fetchImpl = vi.fn(async () => response({
-    tenant: null,
-    bindings: [],
-    model_catalog: modelCatalogFixture, provider_capabilities: providerCapabilities,
+    tenant: null, bindings: [], model_catalog: modelCatalogFixture,
+    provider_capabilities: providerCapabilities,
   }));
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
-  await screen.findByRole("heading", { name: "Platform Integrations" });
-
   fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
-  const picker = await screen.findByRole("combobox", { name: "Service" });
-  expect(picker).toHaveTextContent("Zenmux");
-  expect(picker).not.toHaveTextContent("Google Vertex AI");
-  fireEvent.change(picker, { target: { value: "google" } });
-  const dialog = screen.getByRole("dialog", { name: "Connect Google AI Studio" });
+  await screen.findByLabelText(/API key/i);
+  const dialog = screen.getByRole("dialog", { name: "Google AI Studio" });
+  expect(within(dialog).queryByRole("combobox", { name: "Service" })).not.toBeInTheDocument();
+  expect(dialog).not.toHaveTextContent("Binding:");
   expect(dialog).toHaveTextContent("LLM");
   expect(dialog).not.toHaveTextContent("Speech-to-text");
   expect(dialog).not.toHaveTextContent("Text-to-speech");
   expect(dialog).not.toHaveTextContent("Speech-to-speech");
+  fireEvent.keyDown(dialog, { key: "Escape" });
 
-  fireEvent.change(picker, { target: { value: "rime" } });
-  expect(screen.getByRole("dialog", { name: "Connect Rime" })).not.toHaveTextContent("Credentials only");
-  expect(screen.getByRole("dialog", { name: "Connect Rime" })).toHaveTextContent("Text-to-speech");
-  fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
-  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
-  expect(await screen.findByRole("combobox", { name: "Service" })).toHaveTextContent("Twilio");
-  expect(await screen.findByRole("combobox", { name: "Service" })).toHaveTextContent("Rime");
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Rime" }));
+  await screen.findByLabelText(/API key/i);
+  const rime = screen.getByRole("dialog", { name: "Rime" });
+  expect(rime).not.toHaveTextContent("Credentials only");
+  expect(rime).toHaveTextContent("Text-to-speech");
 });
 
 test("Telnyx saves the public key and shows backend URLs and saved-field metadata", async () => {
@@ -183,10 +216,8 @@ test("Telnyx saves the public key and shows backend URLs and saved-field metadat
   );
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   await screen.findByRole("heading", { name: "Platform Integrations" });
-  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
-  fireEvent.change(await screen.findByLabelText("Service"), {
-    target: { value: "telnyx" },
-  });
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Telnyx" }));
+  await screen.findByLabelText("API key");
   expect(await screen.findByLabelText("Webhook URL")).toHaveValue(
     "https://callbacks.example.test/voice/webhooks/platform/telnyx",
   );
@@ -252,12 +283,8 @@ test("platform services test and save separately, then edit the exact persisted 
   expect(
     await screen.findByRole("heading", { name: "Platform Integrations" }),
   ).toBeInTheDocument();
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Connect Google AI Studio" }),
-  );
-  fireEvent.change(await screen.findByLabelText("Service"), {
-    target: { value: "deepgram" },
-  });
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Deepgram" }));
+  await screen.findByLabelText("API key");
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "synthetic-first" },
   });
@@ -315,7 +342,8 @@ test("platform services test and save separately, then edit the exact persisted 
     screen.queryByRole("button", { name: /Disable/ }),
   ).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Remove credentials" })).not.toBeInTheDocument();
-  fireEvent.keyDown(await screen.findByRole("dialog"), { key: "Escape" });
+  await screen.findByLabelText("API key");
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
   fireEvent.click(await screen.findByRole("button", { name: "Remove Deepgram (deepgram) credentials" }));
   await waitFor(() =>
     expect(
@@ -359,15 +387,15 @@ test("platform save failure appears in a page notification while the form stays 
 
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   await screen.findByRole("heading", { name: "Platform Integrations" });
-  fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
-  fireEvent.change(await screen.findByLabelText("Service"), { target: { value: "rime" } });
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Rime" }));
+  await screen.findByLabelText("API key");
   fireEvent.change(screen.getByLabelText("API key"), { target: { value: "synthetic-rime" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   expect(await screen.findByRole("alert", { name: "Notification" })).toHaveTextContent(
     "Credentials could not be saved",
   );
-  expect(screen.getByRole("dialog", { name: "Connect Rime" })).toBeVisible();
+  expect(screen.getByRole("dialog", { name: "Rime" })).toBeVisible();
   expect(screen.getByLabelText("API key")).toBeEnabled();
 });
 
@@ -396,12 +424,8 @@ test("keeps Save usable when a platform credential cannot be tested", async () =
 
   render(<App csrfToken="csrf-example" fetchImpl={withAdminSession(fetchImpl)} />);
   await screen.findByRole("heading", { name: "Platform Integrations" });
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Connect Google AI Studio" }),
-  );
-  fireEvent.change(await screen.findByLabelText("Service"), {
-    target: { value: "rime" },
-  });
+  fireEvent.click(await screen.findByRole("button", { name: "Connect Rime" }));
+  await screen.findByLabelText("API key");
   fireEvent.change(screen.getByLabelText("API key"), {
     target: { value: "synthetic-rime" },
   });

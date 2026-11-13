@@ -10,7 +10,7 @@ test.each([
 ])("Cartesia saves a private key for the selected scope: %j", (scope) => {
   const submit = vi.fn();
   render(<ServiceSetupModal state={{provider: "cartesia", status: "idle"}} scope={scope} onClose={vi.fn()} onSelect={vi.fn()} onSubmit={submit} onTest={vi.fn()} />);
-  expect(screen.getByRole("dialog", {name: "Connect Cartesia"})).toBeVisible();
+  expect(screen.getByRole("dialog", {name: "Cartesia"})).toBeVisible();
   expect(screen.getByText("Text-to-speech")).toBeVisible();
   expect(screen.getByText("Speech-to-text")).toBeVisible();
   expect(screen.getByLabelText("API key")).toHaveAttribute("type", "password");
@@ -26,7 +26,7 @@ test.each([
 ])("ElevenLabs saves its single private key for the selected scope: %j", (scope) => {
   const submit = vi.fn();
   render(<ServiceSetupModal state={{provider: "elevenlabs", status: "idle"}} scope={scope} onClose={vi.fn()} onSelect={vi.fn()} onSubmit={submit} onTest={vi.fn()} />);
-  expect(screen.getByRole("dialog", {name: "Connect ElevenLabs"})).toBeVisible();
+  expect(screen.getByRole("dialog", {name: "ElevenLabs"})).toBeVisible();
   expect(screen.getByText("Text-to-speech")).toBeVisible();
   expect(screen.getByText("Speech-to-text")).toBeVisible();
   expect(screen.getByText("Speech-to-speech")).toBeVisible();

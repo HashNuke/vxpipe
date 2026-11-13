@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, test, vi } from "vitest";
 import { IntegrationsApp } from "./IntegrationsApp";
@@ -36,8 +36,8 @@ test("production integration browsing opens the existing native credential form"
   expect(screen.getByText("LLM")).toBeVisible();
   expect(screen.queryByText("Speech-to-text")).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "Connect Google AI Studio" }));
-  expect(await screen.findByRole("dialog")).toBeVisible();
-  expect(screen.getByLabelText(/API key/i)).toBeVisible();
+  expect(await screen.findByLabelText(/API key/i)).toBeVisible();
+  expect(screen.getByRole("dialog")).toBeVisible();
   expect(fetchImpl.mock.calls.filter(([url]) => String(url) === "/api/platform/services")).toHaveLength(1);
 });
 
@@ -160,4 +160,33 @@ test.each(["local", "unavailable"])("read-only native rows show installed capabi
   expect(screen.getByRole("img", { name: "Google AI Studio service logo" })).toBeVisible();
   expect(screen.queryByText("Speech-to-text")).not.toBeInTheDocument();
   expect(fetchImpl.mock.calls).toHaveLength(1);
+});
+
+
+test("the custom MCP action remains available while navigating integration categories", async () => {
+  let complete: (response: Response) => void = () => undefined;
+  const inventory = { tenant: { key: "demo", name: "Demo" }, installation_version: "0.1.0",
+    directory_status: "local", connections: [], mcp_connections: [], page: null, fallback_items: [], local_items: [] };
+  const fetchImpl = vi.fn((url: RequestInfo | URL) => String(url).endsWith("/categories")
+    ? Promise.resolve(Response.json({ categories: [] }))
+    : String(url).includes("/integrations?") ? new Promise<Response>(resolve => { complete = resolve; })
+    : Promise.resolve(Response.json({ tenant: inventory.tenant, bindings: [], applications: [],
+      model_catalog: modelCatalogFixture, provider_capabilities: {} })));
+  render(<MemoryRouter initialEntries={["/t/demo/services"]}><IntegrationsApp
+    scope={{ kind: "tenant", tenantKey: "demo", tenantName: "Demo" }} csrfToken="csrf"
+    canManageMcps fetchImpl={fetchImpl} onNavigate={vi.fn()} /></MemoryRouter>);
+  const action = screen.getByRole("button", { name: "Connect other MCP" });
+  expect(action).toBeVisible();
+  expect(action).toBeEnabled();
+  await act(async () => complete(Response.json(inventory)));
+
+  for (const category of ["Telephony", "AI models", "Connected integrations"]) {
+    fireEvent.click(screen.getByRole("link", { name: category }));
+    expect(screen.getByRole("button", { name: "Connect other MCP" })).toBe(action);
+    expect(action).toBeVisible();
+    expect(action).toBeEnabled();
+    expect(screen.getByText("Loading integrations…")).toBeVisible();
+    await act(async () => complete(Response.json(inventory)));
+    expect(screen.getByRole("button", { name: "Connect other MCP" })).toBe(action);
+  }
 });

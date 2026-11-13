@@ -11,7 +11,6 @@ type Props = ApiKeyFieldProps & {
   publicKey: string;
   onPublicKeyChange: (value: string) => void;
   publicKeyPlaceholder?: string;
-  publicKeySaved: boolean;
 };
 
 export function TelnyxCredentialFields({
@@ -19,7 +18,6 @@ export function TelnyxCredentialFields({
   publicKey,
   onPublicKeyChange,
   publicKeyPlaceholder,
-  publicKeySaved,
   ...apiKey
 }: Props) {
   const id = useId();
@@ -47,10 +45,7 @@ export function TelnyxCredentialFields({
             id={`${id}-public-hint`}
             className="text-xs text-[var(--admin-muted)]"
           >
-            Optional; Only required for Telephony services
-            {publicKeySaved
-              ? ". Leave blank to remove the saved public key; phone calls will require a new key."
-              : ""}
+            Note: Public key is only required if you use Telephony services
           </p>
         </div>
       ) : null}

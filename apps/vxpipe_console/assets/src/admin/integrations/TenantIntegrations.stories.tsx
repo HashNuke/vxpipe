@@ -5,12 +5,13 @@ import { IntegrationsApp } from "../../IntegrationsApp";
 import { StoryWorkspace } from "../stories/StoryWorkspace";
 import { modelCatalogFixture } from "../modelCatalogFixtures";
 
-function fixture(initialConnected: boolean, readOnly: boolean) {
+function fixture(initialConnected: boolean, readOnly: boolean, inventoryDelay: number) {
   let connected = initialConnected;
   let generation = 1;
   const tenant = { key: "fixture", name: "Fixture" };
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
+    if (path.includes("/integrations?") && inventoryDelay) await new Promise(resolve => setTimeout(resolve, inventoryDelay));
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     const saved = () => ({ id: "fixture-mcp", tenant_key: tenant.key, server_name: "Fixture tools",
       endpoint: "https://mcp.example.test/mcp", auth_method: "none", generation, status: "connected", tool_count: 2, can_edit: !readOnly });
@@ -26,8 +27,8 @@ function fixture(initialConnected: boolean, readOnly: boolean) {
     return Response.json({ tenant, bindings: [], model_catalog: modelCatalogFixture, provider_capabilities: { google: ["credential", "llm"] } });
   };
 }
-function Preview({ connected = false, readOnly = false }: { connected?: boolean; readOnly?: boolean }) {
-  const fetchImpl = useMemo(() => fixture(connected, readOnly), [connected, readOnly]);
+function Preview({ connected = false, readOnly = false, inventoryDelay = 0 }: { connected?: boolean; readOnly?: boolean; inventoryDelay?: number }) {
+  const fetchImpl = useMemo(() => fixture(connected, readOnly, inventoryDelay), [connected, readOnly, inventoryDelay]);
   return <StoryWorkspace path="/t/fixture/services" tenant={{ key: "fixture", name: "Fixture" }} theme="light"><MemoryRouter initialEntries={["/t/fixture/services"]}>
     <IntegrationsApp scope={{ kind: "tenant", tenantKey: "fixture", tenantName: "Fixture" }} csrfToken="fixture" canEdit={!readOnly} canManageMcps={!readOnly} fetchImpl={fetchImpl} onNavigate={() => undefined} />
   </MemoryRouter></StoryWorkspace>;
@@ -38,6 +39,7 @@ const meta = { title: "Vxpipe/Console/Integrations/Production tenant inventory",
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Connect: Story = {};
+export const SlowNavigation: Story = { args: { connected: true, inventoryDelay: 3000 } };
 export const Connected: Story = { args: { connected: true } };
 export const ReadOnly: Story = { args: { connected: true, readOnly: true } };
 
