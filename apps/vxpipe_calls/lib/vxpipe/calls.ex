@@ -145,6 +145,9 @@ defmodule Vxpipe.Calls do
   def list_provider_models(authority, tenant_key, provider, capability, options \\ []),
     do: Vxpipe.Calls.ProviderCatalog.models(authority, tenant_key, provider, capability, options)
 
+  def voice_catalog(authority, tenant_key, scope, operation, query, options \\ []),
+    do: Vxpipe.Calls.VoiceCatalog.request(authority, tenant_key, scope, operation, query, options)
+
   def list_operator_tenants(authority, options \\ []),
     do: OperatorAdministration.list_tenants(authority, options)
 

@@ -545,6 +545,18 @@ defmodule Vxpipe.Console.Router do
         Vxpipe.Console.AdminProviderCatalogController,
         :models
 
+    get "/tenants/:tenant_key/providers/:provider/voices/descriptor",
+        Vxpipe.Console.VoiceCatalogController,
+        :describe
+
+    get "/tenants/:tenant_key/providers/:provider/voices",
+        Vxpipe.Console.VoiceCatalogController,
+        :index
+
+    get "/tenants/:tenant_key/providers/:provider/voices/:voice_id",
+        Vxpipe.Console.VoiceCatalogController,
+        :show
+
     get "/tenants/:tenant_key/call-specs", Vxpipe.Console.AdminCallSpecsController, :index
 
     get "/tenants/:tenant_key/call-specs/:id",

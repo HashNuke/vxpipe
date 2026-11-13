@@ -1,9 +1,8 @@
 # Provider voice picker
 
-Status: research and local design review complete; implementation not started.
-The existing Storybook picker is reusable. Production still needs authorized
-voice catalogs and client/context wiring. This milestone is not complete merely
-because its provider previews work.
+Status: implementation in progress on main. The shared catalog, credential
+authorization and Console endpoints are implemented; production UI wiring and
+remaining provider catalogs are next. Acceptance gates remain open.
 
 ## Outcome and prerequisites
 
@@ -39,13 +38,13 @@ prerequisites. Packaging, call retention and guardrails are not prerequisites.
 
 ### A — Authorized backend and one working provider
 
-- [ ] Define the small catalog adapter boundary beside the existing speech
+- [x] Define the small catalog adapter boundary beside the existing speech
   catalog, normalize the existing UI contract, and reuse finite model voice lists.
-- [ ] Add the Calls authorization/credential-resolution workflow and thin Console
+- [x] Add the Calls authorization/credential-resolution workflow and thin Console
   descriptor/list/get routes. Cover tenant-only, authorized platform inheritance,
   tenant override, missing/disconnected credentials, forbidden access and sanitized
   upstream failures with focused offline boundary tests.
-- [ ] Implement ElevenLabs TTS listing/search, filters, cursor paging and direct
+- [x] Implement ElevenLabs TTS listing/search, filters, cursor paging and direct
   saved-ID lookup using the selected credential. Use captured/synthetic HTTP
   fixtures with no live account calls; filter incompatible model voices.
 - [ ] Wire the production client/context and credential-aware scope into all shared
@@ -111,3 +110,11 @@ is required. Remaining factual questions are ElevenLabs STS compatibility, Flux
 metadata coverage, and the installed Google TTS model's prebuilt set; each has an
 explicit task above. No independent-agent review or live provider acceptance is
 claimed.
+
+## Implementation evidence
+
+2026-11-13: first backend checkpoint uses bounded Req requests and the existing
+credential resolver, with no persistent cache or runtime speech changes. Focused
+offline tests cover the catalog (8), Calls authorization (6), and Console routes
+(2). Each boundary was exercised red before implementation. UI and all-provider
+acceptance are still pending.

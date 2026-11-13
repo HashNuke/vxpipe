@@ -174,6 +174,12 @@ defmodule Vxpipe.Console.RoutePermission do
   defp tenant_requirement("GET", tenant, ["providers", _provider, "models"]),
     do: {:tenant, "call_specs.read", tenant}
 
+  defp tenant_requirement("GET", tenant, ["providers", _provider, "voices"]),
+    do: {:tenant, "call_specs.read", tenant}
+
+  defp tenant_requirement("GET", tenant, ["providers", _provider, "voices", _operation]),
+    do: {:tenant, "call_specs.read", tenant}
+
   defp tenant_requirement("GET", tenant, ["call-spec-editor-lookups"]),
     do: {:tenant, "call_specs.read", tenant}
 
