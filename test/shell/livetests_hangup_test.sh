@@ -150,7 +150,7 @@ FAKE
 chmod +x "$scratch/bin/tailscale"
 
 export FAKE_API_DIR="$scratch/api"
-export VXPIPE_LIVE_PROVIDERS_ENV_FILE="$scratch/credentials.env"
+export VXPIPE_LIVE_PROVIDERS_ENV_FILE="$scratch/credentials.fixture"
 export VXPIPE_LIVETESTS_CURL_BIN="$scratch/bin/curl"
 export VXPIPE_LIVETESTS_TAILSCALE_BIN="$scratch/bin/tailscale"
 export VXPIPE_LIVETESTS_STATE_DIR="$scratch/state"
@@ -179,7 +179,7 @@ reset_api() {
   {"call_control_id":"v3:ended","call_leg_id":"ended","connection_id":"app-a","active":false,"from":"+13125550142","to":"+14155550199"}
 ]
 JSON
-  echo '[{"phone_number":"+13125550100","connection_id":"app-a","tags":["vxp-test-rocksalt-other"]},{"phone_number":"+13125550142","connection_id":"app-a","tags":["vxp-test-rocksalt"]},{"phone_number":"+13125550143","connection_id":"app-b","tags":["vxp-test-rocksalt-b"]}]' > "$scratch/api/telnyx-numbers.json"
+  echo '[{"phone_number":"+13125550100","connection_id":"app-a","tags":["vxpipe-test-rocksalt-other","vxpipe-test"]},{"phone_number":"+13125550142","connection_id":"app-a","tags":["vxpipe-test-rocksalt","vxpipe-test"]},{"phone_number":"+13125550143","connection_id":"app-b","tags":["vxpipe-test-rocksalt","vxpipe-test"]}]' > "$scratch/api/telnyx-numbers.json"
   cat > "$scratch/api/twilio.json" <<'JSON'
 [
   {"sid":"CAactive1","status":"in-progress","from":"+14155550199","to":"+13125550142"},

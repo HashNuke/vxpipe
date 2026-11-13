@@ -151,8 +151,11 @@ As decided in the [harness decision](https://github.com/HashNuke/vxpipe/blob/191
   `TELEPHONY_TEST_PUBLIC_URL` and `TELEPHONY_TEST_PORT` to the child, and stops only what it
   started, including on failure and interrupt. A per-machine lock prevents concurrent runs.
 - `telephony:provision [--allow-purchase]|status` find or create the Telnyx application,
-  outbound profile and tagged number, and the Twilio `FriendlyName` number, all named
-  `vxp-test-<machine>`, and point them at this machine's fixed test routes.
+  outbound profile and Twilio `FriendlyName` number named `vxp-test-<machine>`.
+  Telnyx's two numbers are reused from existing application assignments, then from
+  unassigned `vxpipe-test-<machine>` and `vxpipe-test` pools in that order. Both
+  numbers share the pool tags; caller/receiver roles live in the local test profile.
+  See [current provisioning behavior](../../docs/en/development/testing.md#live-telephony).
 - Env file settings reduce to `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TELNYX_API_KEY`,
   `TELNYX_PUBLIC_KEY`, `TAILSCALE_CLIENT_ID` and `TAILSCALE_CLIENT_SECRET`; `TELEPHONY_TEST_PUBLIC_URL` stays an
   optional override that disables Tailscale management.

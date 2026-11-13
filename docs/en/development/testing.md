@@ -114,6 +114,24 @@ bin/livetests run --only live_telnyx
 `telephony:provision` discovers/creates machine resources; number purchase requires
 its explicit `--allow-purchase` flag and separate authorization for that expense.
 
+Telnyx numbers use `vxpipe-test` for the shared test pool and
+`vxpipe-test-<machine>` for machine affinity. Provisioning keeps numbers already
+assigned to the machine's Voice API application, then fills its two-number
+requirement with active, unassigned numbers from the machine pool first and the
+shared pool second. A number present in both pools is counted once. Numbers
+assigned to another application are never taken; only the remaining shortage
+may be purchased with `--allow-purchase`.
+
+Selected numbers receive both tags. Reusing a shared number moves its machine
+tag to the current machine while preserving unrelated tags. Caller and receiver
+roles are saved as number IDs in
+`$XDG_STATE_HOME/vxpipe/livetests/vxp-test-<machine>/telnyx-profile.json`
+(default state root: `~/.local/state`). The profile is checked against Telnyx on
+each run and can be rebuilt from application assignments when absent. Status
+and test runs do not change carrier resources or write the profile. The Voice
+API application, outbound profile and Tailscale node retain their
+`vxp-test-<machine>` names.
+
 Live work reserves the named Git branch across checkouts. Before switching away,
 finish live activity and run `bin/livetests release`. A failed test retains the
 reservation. Read-only status commands remain available to other branches.

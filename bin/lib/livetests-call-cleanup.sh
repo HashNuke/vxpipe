@@ -71,10 +71,10 @@ cleanup_telnyx_numbers() {
     chunk="$(cleanup_json telnyx "$response" '
       if (.data | type) == "array" and all(.data[];
         (.tags // [] | type) == "array" and all((.tags // [])[]; type == "string"))
-      then [.data[] | select((.tags // [] | index($machine)) != null or (.tags // [] | index($machine + "-b")) != null)]
+      then [.data[] | select((.tags // [] | index($machine)) != null)]
         | if all(.[]; (.phone_number | type) == "string" and (.phone_number | length) > 0)
           then . else error("numbers") end
-      else error("numbers") end' --arg machine "$node_name")" || return 1
+      else error("numbers") end' --arg machine "$telnyx_machine_tag")" || return 1
     numbers="$(cleanup_append telnyx "$numbers" "$chunk")" || return 1
     total="$(cleanup_json telnyx "$response" '
       .meta.total_pages | if type == "number" and . >= 0 and floor == . then . else error("pages") end')" || return 1

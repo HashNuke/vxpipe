@@ -64,7 +64,17 @@ if [[ "$path" != "$url" ]]; then
       reply 200 "$(jq -c --arg id "$id" '{data: (.[] | select(.id == $id))}' "$api/telnyx/apps.json")" ;;
     "GET /phone_numbers")
       tag="$(query 'filter\[tag\]')"; number="$(query 'filter\[phone_number\]')"
-      reply 200 "$(jq -c --arg t "$tag" --arg p "$number" '{data: [.[] | select(($t == "" or ((.tags // []) | index($t))) and ($p == "" or .phone_number == $p))]}' "$api/telnyx/numbers.json")" ;;
+      page="$(query 'page\[number\]')"; page="${page:-1}"
+      reply 200 "$(jq -c --arg t "$tag" --arg p "$number" --argjson page "$page" '
+        [.[] | select(($t == "" or ((.tags // []) | index($t))) and ($p == "" or .phone_number == $p))]
+        | {data: .[(($page - 1) * 2):($page * 2)], meta: {total_pages: ((length / 2) | ceil)}}' "$api/telnyx/numbers.json")" ;;
+    "GET /phone_numbers/"*)
+      id="${path##*/}"
+      if [[ -f "$api/telnyx/claim-on-read" ]]; then
+        jq --arg id "$id" 'map(if .id == $id then .connection_id = "other-app" else . end)' \
+          "$api/telnyx/numbers.json" > "$api/t" && mv "$api/t" "$api/telnyx/numbers.json"
+      fi
+      reply 200 "$(jq -c --arg id "$id" '{data: first(.[] | select(.id == $id))}' "$api/telnyx/numbers.json")" ;;
     "PATCH /phone_numbers/"*)
       id="${path##*/}"
       jq --argjson b "$body" --arg id "$id" 'map(if .id == $id then . + $b else . end)' "$api/telnyx/numbers.json" > "$api/t" && mv "$api/t" "$api/telnyx/numbers.json"
@@ -76,7 +86,7 @@ if [[ "$path" != "$url" ]]; then
       number="$(jq -r '.phone_numbers[0].phone_number' <<< "$body")"
       connection="$(jq -r '.connection_id' <<< "$body")"
       id="$(next_id)"
-      jq --arg p "$number" --arg c "$connection" --arg id "$id" '. + [{id: $id, phone_number: $p, connection_id: $c, tags: []}]' "$api/telnyx/numbers.json" > "$api/t" && mv "$api/t" "$api/telnyx/numbers.json"
+      jq --arg p "$number" --arg c "$connection" --arg id "$id" '. + [{id: $id, phone_number: $p, connection_id: $c, status: "active", tags: []}]' "$api/telnyx/numbers.json" > "$api/t" && mv "$api/t" "$api/telnyx/numbers.json"
       reply 200 '{"data":{"status":"success"}}' ;;
   esac
   reply 404 "{\"errors\":[{\"detail\":\"unexpected $method $path\"}]}"
@@ -127,6 +137,7 @@ MIX
 chmod +x "$scratch/bin/"*
 
 reset_api() {
+  rm -f "$scratch/state/vxp-test-rocksalt/telnyx-profile.json" "$scratch/api/telnyx/claim-on-read"
   echo '[]' > "$scratch/api/telnyx/profiles.json"
   echo '[]' > "$scratch/api/telnyx/apps.json"
   # Another machine's resources must never be touched or adopted.
@@ -145,7 +156,7 @@ export VXPIPE_LIVETESTS_CURL_BIN="$scratch/bin/curl"
 export VXPIPE_LIVETESTS_TAILSCALE_BIN="$scratch/bin/tailscale"
 export VXPIPE_LIVE_PROVIDERS_MIX_BIN="$scratch/bin/mix"
 export VXPIPE_LIVE_RUNNER_TEST_OUTPUT="$scratch/output"
-export VXPIPE_LIVE_PROVIDERS_ENV_FILE="$scratch/live_providers.env"
+export VXPIPE_LIVE_PROVIDERS_ENV_FILE="$scratch/credentials.fixture"
 export VXPIPE_LIVETESTS_STATE_DIR="$scratch/state"
 export VXP_TEST_MACHINE=rocksalt
 cat > "$VXPIPE_LIVE_PROVIDERS_ENV_FILE" <<'ENV'
@@ -157,6 +168,81 @@ ENV
 livetests() { "$repo_root/bin/livetests" "$@"; }
 log_has() { rg -q -F -- "$1" "$scratch/api/log"; }
 url="https://vxp-test-rocksalt.tail0000.ts.net"
+
+# Fill a two-number requirement from both pools, even across inventory pages.
+# A number in both pools counts once; assigned, inactive and untagged numbers are excluded.
+reset_api
+cat > "$scratch/api/telnyx/numbers.json" <<'JSON'
+[
+  {"id":"busy","phone_number":"+13125550100","status":"active","connection_id":"other-app","tags":["vxpipe-test-rocksalt","vxpipe-test"]},
+  {"id":"untagged","phone_number":"+13125550101","status":"active","connection_id":null,"tags":[]},
+  {"id":"inactive","phone_number":"+13125550102","status":"purchase-pending","connection_id":null,"tags":["vxpipe-test-rocksalt","vxpipe-test"]},
+  {"id":"global-1","phone_number":"+13125550140","status":"active","connection_id":null,"tags":["vxpipe-test","vxpipe-test-wheeljack","keep-me"]},
+  {"id":"machine-1","phone_number":"+13125550142","status":"active","connection_id":null,"tags":["vxpipe-test-rocksalt","vxpipe-test"]},
+  {"id":"global-2","phone_number":"+13125550144","status":"active","connection_id":null,"tags":["vxpipe-test"]}
+]
+JSON
+livetests telephony:provision > "$scratch/out" 2> "$scratch/err" || fail "did not reuse machine and shared pools"
+app_id="$(jq -r '.[0].id' "$scratch/api/telnyx/apps.json")"
+jq -e --arg app "$app_id" '[.[] | select(.connection_id == $app) | .id] | sort == ["global-1","machine-1"]' \
+  "$scratch/api/telnyx/numbers.json" > /dev/null || fail "selected wrong pool numbers"
+jq -e '.[] | select(.id == "global-1") | .tags | sort == ["keep-me","vxpipe-test","vxpipe-test-rocksalt"]' \
+  "$scratch/api/telnyx/numbers.json" > /dev/null || fail "shared number tags not preserved and extended"
+log_has 'POST https://api.telnyx.com/v2/number_orders' && fail "purchased instead of reusing pool"
+profile="$scratch/state/vxp-test-rocksalt/telnyx-profile.json"
+jq -e --arg app "$app_id" '.application_id == $app and .caller_number_id == "machine-1" and .receiver_number_id == "global-1"' \
+  "$profile" > /dev/null || fail "caller and receiver roles not saved locally"
+[[ "$(stat -c %a "$profile")" == 600 ]] || fail "profile is not private"
+
+# Persisted roles survive reordered API responses and an extra assigned number.
+jq --arg app "$app_id" 'reverse + [{id:"extra",phone_number:"+13125550103",status:"active",connection_id:$app,tags:["vxpipe-test-rocksalt","vxpipe-test"]}]' \
+  "$scratch/api/telnyx/numbers.json" > "$scratch/t" && mv "$scratch/t" "$scratch/api/telnyx/numbers.json"
+: > "$scratch/api/log"
+livetests telephony:status > "$scratch/out"
+rg -q '^telnyx number: \+13125550142$' "$scratch/out" || fail "saved caller changed"
+rg -q '^telnyx second: \+13125550140$' "$scratch/out" || fail "saved receiver changed"
+grep '^ARGV' "$scratch/api/log" | grep -qvE '^ARGV GET ' && fail "status changed carrier resources"
+
+# A stale caller selection must not take the receiver's role or reclaim another app's number.
+jq 'map(if .id == "machine-1" then .connection_id = "other-app" else . end)' \
+  "$scratch/api/telnyx/numbers.json" > "$scratch/t" && mv "$scratch/t" "$scratch/api/telnyx/numbers.json"
+livetests telephony:provision > "$scratch/out" 2> "$scratch/err" || fail "could not replace stale caller"
+jq -e '.caller_number_id == "extra" and .receiver_number_id == "global-1"' "$profile" > /dev/null || fail "stale profile disturbed valid receiver"
+jq -e '.[] | select(.id == "machine-1") | .connection_id == "other-app"' "$scratch/api/telnyx/numbers.json" > /dev/null || fail "reclaimed a busy number"
+
+# Missing local state is recoverable from existing application assignments without buying.
+rm "$profile"
+: > "$scratch/api/log"
+livetests telephony:provision > "$scratch/out" 2> "$scratch/err" || fail "did not rebuild missing profile"
+grep '^ARGV' "$scratch/api/log" | grep -qvE '^ARGV GET ' && fail "recovery changed carrier resources"
+jq -e '.caller_number_id != .receiver_number_id' "$profile" > /dev/null || fail "recovery selected a number twice"
+
+# Recheck ownership immediately before assignment, including a change since discovery.
+reset_api
+echo '[{"id":"raced","phone_number":"+13125550142","status":"active","connection_id":null,"tags":["vxpipe-test-rocksalt","vxpipe-test"]}]' > "$scratch/api/telnyx/numbers.json"
+touch "$scratch/api/telnyx/claim-on-read"
+if livetests telephony:provision > "$scratch/out" 2> "$scratch/err"; then fail "accepted a number assigned during discovery"; fi
+log_has 'PATCH https://api.telnyx.com/v2/phone_numbers/' && fail "overwrote a concurrent assignment"
+
+# Exhaust the machine pool before using the shared pool; allocate exactly two.
+reset_api
+cat > "$scratch/api/telnyx/numbers.json" <<'JSON'
+[
+  {"id":"shared","phone_number":"+13125550101","status":"active","connection_id":null,"tags":["vxpipe-test"]},
+  {"id":"local-1","phone_number":"+13125550142","status":"active","connection_id":null,"tags":["vxpipe-test-rocksalt"]},
+  {"id":"local-2","phone_number":"+13125550143","status":"active","connection_id":null,"tags":["vxpipe-test-rocksalt"]},
+  {"id":"local-3","phone_number":"+13125550144","status":"active","connection_id":null,"tags":["vxpipe-test-rocksalt"]}
+]
+JSON
+livetests telephony:provision > "$scratch/out" 2> "$scratch/err" || fail "did not reuse machine pool"
+jq -e '[.[] | select(.connection_id != null) | .id] == ["local-1","local-2"]' \
+  "$scratch/api/telnyx/numbers.json" > /dev/null || fail "did not prefer exactly two machine numbers"
+
+# Purchase only the shortage after consuming an available pool number.
+reset_api
+echo '[{"id":"local-1","phone_number":"+13125550142","status":"active","connection_id":null,"tags":["vxpipe-test-rocksalt"]}]' > "$scratch/api/telnyx/numbers.json"
+livetests telephony:provision --allow-purchase > "$scratch/out" 2> "$scratch/err" || fail "did not fill the pool shortage"
+[[ "$(rg -c '^ARGV POST https://api.telnyx.com/v2/number_orders ' "$scratch/api/log")" == 1 ]] || fail "bought more than the shortage"
 
 # A Telnyx API error stops provisioning with a failure instead of reporting success.
 reset_api
@@ -200,11 +286,11 @@ app="$(jq -c '.[] | select(.application_name == "vxp-test-rocksalt")' "$scratch/
 app_id="$(jq -r '.id' <<< "$app")"
 number="$(jq -c '.[] | select(.phone_number == "+13125550142")' "$scratch/api/telnyx/numbers.json")"
 [[ "$(jq -r '.connection_id' <<< "$number")" == "$app_id" ]] || fail "Telnyx number not assigned to the app"
-[[ "$(jq -r '.tags | index("vxp-test-rocksalt")' <<< "$number")" != null ]] || fail "Telnyx number not tagged"
+[[ "$(jq -c '.tags | sort' <<< "$number")" == '["vxpipe-test","vxpipe-test-rocksalt"]' ]] || fail "Telnyx number not tagged"
 # A second Telnyx number receives the Telnyx-to-Telnyx calls.
 second="$(jq -c '.[] | select(.phone_number == "+13125550143")' "$scratch/api/telnyx/numbers.json")"
 [[ "$(jq -r '.connection_id' <<< "$second")" == "$app_id" ]] || fail "second Telnyx number not assigned to the app"
-[[ "$(jq -c '.tags' <<< "$second")" == '["vxp-test-rocksalt-b"]' ]] || fail "second Telnyx number not tagged: $second"
+[[ "$(jq -c '.tags | sort' <<< "$second")" == '["vxpipe-test","vxpipe-test-rocksalt"]' ]] || fail "second Telnyx number not tagged: $second"
 rg -q -F '+13125550143' "$scratch/out" || fail "second Telnyx number not reported"
 twilio="$(jq -c '.[] | select(.friendly_name == "vxp-test-rocksalt")' "$scratch/api/twilio/numbers.json")"
 [[ "$(jq -r '.phone_number' <<< "$twilio")" == "+14155550199" ]] || fail "Twilio number not bought"
