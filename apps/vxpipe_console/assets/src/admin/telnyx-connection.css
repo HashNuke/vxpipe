@@ -43,7 +43,6 @@
 .telnyx-webhook-section { padding-top: 24px; }
 .telnyx-webhook-section .setup-webhook { padding: 0; border: 0; }
 .telnyx-webhook-section .setup-webhook label { color: var(--admin-ink); font-size: 13px; font-weight: 500; }
-.telnyx-webhook-section .setup-webhook-heading button { min-width: 84px; font-size: 12px; }
 .telnyx-connection-footer > button:first-child { margin-right: auto; }
 .telnyx-connection-error, .telnyx-connection-success, .telnyx-connection-progress { margin-top: 16px; font-size: 13px; line-height: 1.6; }
 .telnyx-connection-error { color: var(--admin-red); }

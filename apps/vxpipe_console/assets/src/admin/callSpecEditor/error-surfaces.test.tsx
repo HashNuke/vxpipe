@@ -47,16 +47,19 @@ test("source view is read-only and copies and downloads the exact portable sourc
   expect(screen.getByRole("textbox", { name: "Call spec JSON" })).toHaveAttribute("readonly");
   fireEvent.click(screen.getByRole("button", { name: "Copy JSON" }));
   await waitFor(() => expect(copy).toHaveBeenCalledWith(text));
+  expect(screen.getByRole("button", { name: "Copy JSON" })).toHaveTextContent("Copied");
+  expect(feedback).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Download JSON" }));
   expect(create.mock.calls[0]?.[0]).toBeInstanceOf(Blob);
   expect(click).toHaveBeenCalledOnce(); expect(revoke).toHaveBeenCalledWith("blob:test");
 });
-test("clipboard failure becomes an action failure with source retained", async () => {
+test("clipboard failure appears beside the copy action with source retained", async () => {
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
   const feedback = vi.fn();
   render(<SourceView open onOpenChange={vi.fn()} source={editorFixture.source} onFeedback={feedback} />);
   fireEvent.click(screen.getByRole("button", { name: "Copy JSON" }));
-  await waitFor(() => expect(feedback).toHaveBeenCalledWith(expect.objectContaining({ tone: "error", persistent: true })));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Copy failed. Select the JSON and copy it manually.");
+  expect(feedback).not.toHaveBeenCalled();
   expect(screen.getByRole("textbox", { name: "Call spec JSON" })).toHaveValue(JSON.stringify(editorFixture.source, null, 2));
 });
 

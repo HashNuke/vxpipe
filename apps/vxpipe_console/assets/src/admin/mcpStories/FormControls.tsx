@@ -1,4 +1,4 @@
-import { ChevronDown, Copy, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import {
   useId,
   useState,
@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "../Button";
+import { CopyButton } from "../CopyButton";
 import type { Pair } from "./fixtures";
 
 export function Field({
@@ -165,34 +166,14 @@ export function Disclosure({
   );
 }
 export function CopyField({ label, value }: { label: string; value: string }) {
-  const [status, setStatus] = useState("");
   return (
     <Field label={label}>
       {(id) => (
-        <>
-          <div className="mcp-copy-field">
-            <input id={id} value={value} readOnly />
-            <Button
-              type="button"
-              aria-label={`Copy ${label.toLowerCase()}`}
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(value);
-                  setStatus("Copied");
-                } catch {
-                  setStatus("Select the URL to copy it.");
-                }
-              }}
-            >
-              <Copy size={15} aria-hidden />
-            </Button>
-          </div>
-          {status && (
-            <p className="mcp-hint" role="status">
-              {status}
-            </p>
-          )}
-        </>
+        <div className="mcp-copy-field">
+          <input id={id} value={value} readOnly onFocus={event => event.target.select()} />
+          <CopyButton value={value} aria-label={`Copy ${label.toLowerCase()}`}
+            errorMessage="Copy failed. Select the URL and copy it manually." />
+        </div>
       )}
     </Field>
   );

@@ -1,10 +1,11 @@
 import { StoryNavigationContext } from "./stories/storyNavigation";
 import { StoryPageBreadcrumbs } from "./stories/StoryPageBreadcrumbs";
-import { Building2, ChevronRight, Check, Copy, Plus } from "lucide-react";
+import { Building2, ChevronRight, Check, Plus } from "lucide-react";
 import { useContext, useState } from "react";
 import { formatAdminRelativeTime } from "./formatAdminRelativeTime";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip";
 import { Button } from "./Button";
+import { CopyButton } from "./CopyButton";
 import {
   tenantApiKeyKind,
   tenantApiKeyKinds,
@@ -160,17 +161,6 @@ function ApiKeyReveal({
   creation: Extract<ApiKeyCreation, { status: "created" }>;
   onDone: () => void;
 }) {
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
-    "idle",
-  );
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(creation.secret);
-      setCopyState("copied");
-    } catch {
-      setCopyState("error");
-    }
-  }
   const option = tenantApiKeyKind(creation.key.kind);
   return (
     <section aria-label="API key created" className="setup-key-created">
@@ -195,19 +185,10 @@ function ApiKeyReveal({
         />
       </label>
       <div className="setup-key-actions">
-      <Button onClick={() => void copy()}>
-        <Copy aria-hidden="true" size={15} />
-        {copyState === "copied" ? "Copied" : "Copy API key"}
-      </Button>
+      <CopyButton value={creation.secret} label="Copy API key"
+        errorMessage="Copy failed. Select the key and copy it manually." />
       <Button onClick={onDone}>Done</Button>
       </div>
-      <p className="setup-key-copy-status" role="status">
-        {copyState === "error"
-          ? "Copy failed. Select the key above and copy it manually."
-          : copyState === "copied"
-            ? "API key copied."
-            : ""}
-      </p>
     </section>
   );
 }

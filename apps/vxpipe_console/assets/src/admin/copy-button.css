@@ -1,0 +1,9 @@
+.copy-action { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.copy-action > button { flex-shrink: 0; white-space: nowrap; }
+.copy-button-label { display: inline-grid; }
+.copy-button-label > span,
+.copy-button-label::before,
+.copy-button-label::after { grid-area: 1 / 1; }
+.copy-button-label::before { content: attr(data-label); visibility: hidden; }
+.copy-button-label::after { content: "Copied"; visibility: hidden; }
+.copy-button-error { max-width: 24rem; color: var(--admin-red); font-size: 12px; font-weight: 400; line-height: 1.5; }

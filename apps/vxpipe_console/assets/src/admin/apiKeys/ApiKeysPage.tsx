@@ -1,8 +1,9 @@
 import { StoryNavigationContext } from "../stories/storyNavigation";
 import { StoryPageBreadcrumbs } from "../stories/StoryPageBreadcrumbs";
 import { useContext, useEffect, useState } from "react";
-import { Check, ChevronRight, Copy, Plus, Search } from "lucide-react";
+import { Check, ChevronRight, Plus, Search } from "lucide-react";
 import { Button } from "../Button";
+import { CopyButton } from "../CopyButton";
 import { Pagination } from "../Pagination";
 import { DirectorySkeleton } from "../navigation/TenantDirectoryView";
 import { formatAdminRelativeTime } from "../formatAdminRelativeTime";
@@ -86,13 +87,10 @@ export function ApiKeysPage({ api, initialCreating = false, initialKind = "calls
   </main>;
 }
 function KeyReveal({ value, onDone }: { value: { key: AccessKey; secret: string }; onDone: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const [failed, setFailed] = useState(false);
   return <section className="setup-key-created max-w-xl" aria-label="API key created"><h2><Check size={18} aria-hidden />API key created</h2><strong>{value.key.name}</strong>
     <p>Copy this key now. It will not be shown again.</p>
     <label className="setup-key-name">API key<input readOnly value={value.secret} onFocus={event => event.target.select()} /></label>
-    <div className="flex gap-2"><Button onClick={() => { void navigator.clipboard.writeText(value.secret).then(() => { setCopied(true); setFailed(false); }).catch(() => setFailed(true)); }}><Copy size={15} aria-hidden />{copied ? "Copied" : "Copy API key"}</Button><Button onClick={onDone}>Done</Button></div>
-    {failed ? <p role="alert">Copy failed. Select and copy the key manually.</p> : null}
+    <div className="flex gap-2"><CopyButton value={value.secret} label="Copy API key" errorMessage="Copy failed. Select the key and copy it manually." /><Button onClick={onDone}>Done</Button></div>
   </section>;
 }
 function CreatedTime({ value }: { value: string }) {

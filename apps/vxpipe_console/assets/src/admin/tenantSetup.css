@@ -345,10 +345,6 @@
 .setup-key-created .setup-key-name {
   margin: 18px 0 12px;
 }
-.setup-key-copy-status {
-  min-height: 24px;
-  margin-top: 8px;
-}
 .setup-saved-key {
   display: flex;
   align-items: center;
