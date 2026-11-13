@@ -166,7 +166,9 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocket do
         {:ok, %{state | decoder_options: decoder_options, dispatch: dispatch}}
 
       {:error, _reason} ->
-        {:stop, :leg_unavailable, {1011, "leg unavailable"}, state}
+        # The close code reports the media failure; the socket itself closes
+        # orderly so its cleanup owner can prove local transport termination.
+        {:stop, :normal, {1011, "leg unavailable"}, state}
     end
   end
 
@@ -181,6 +183,6 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocket do
   end
 
   defp invalid_message(state) do
-    {:stop, :invalid_media_message, {1008, "invalid media message"}, state}
+    {:stop, :normal, {1008, "invalid media message"}, state}
   end
 end

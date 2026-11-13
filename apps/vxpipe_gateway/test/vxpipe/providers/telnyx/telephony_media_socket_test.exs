@@ -310,7 +310,7 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocketTest do
   test "closes on a frame that does not belong to the pinned call", context do
     invalid = put_in(start_message(), ["start", "call_control_id"], "call-control-other")
 
-    assert {:stop, :invalid_media_message, {1008, "invalid media message"}, _socket} =
+    assert {:stop, :normal, {1008, "invalid media message"}, _socket} =
              TelephonyMediaSocket.handle_in(
                {JSON.encode!(invalid), opcode: :text},
                context.socket
@@ -382,7 +382,7 @@ defmodule Vxpipe.Providers.Telnyx.TelephonyMediaSocketTest do
 
     name = JSON.decode!(mark)["mark"]["name"]
 
-    assert {:stop, :invalid_media_message, _, _} =
+    assert {:stop, :normal, {1008, "invalid media message"}, _} =
              TelephonyMediaSocket.handle_in(mark_message(name, "other"), socket)
 
     refute_receive {:vxpipe_playback_ack, ^request, _}

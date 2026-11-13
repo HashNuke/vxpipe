@@ -166,7 +166,8 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocket do
   defp dispatch_result(result, state) do
     case result do
       {:ok, dispatch} -> {:ok, %{state | dispatch: dispatch}}
-      {:error, _reason} -> {:stop, :leg_unavailable, {1011, "leg unavailable"}, state}
+      # Keep the failure in the close code while allowing orderly local cleanup.
+      {:error, _reason} -> {:stop, :normal, {1011, "leg unavailable"}, state}
     end
   end
 
@@ -185,6 +186,6 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocket do
   end
 
   defp invalid_message(state) do
-    {:stop, :invalid_media_message, {1008, "invalid media message"}, state}
+    {:stop, :normal, {1008, "invalid media message"}, state}
   end
 end

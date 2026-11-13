@@ -86,7 +86,7 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocketTest do
                context.socket
              )
 
-    assert :sys.get_state(binding.leg) == self()
+    assert :sys.get_state(binding.leg).observer == self()
   end
 
   test "rejects media startup for a stale room incarnation", context do
@@ -120,7 +120,7 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocketTest do
   test "closes on a start frame for another bound call", context do
     invalid = put_in(start_message(), ["start", "callSid"], "CAffffffffffffffffffffffffffffffff")
 
-    assert {:stop, :invalid_media_message, {1008, "invalid media message"}, _socket} =
+    assert {:stop, :normal, {1008, "invalid media message"}, _socket} =
              TelephonyMediaSocket.handle_in(text(invalid), context.socket)
 
     refute_receive {:test_media_event, _event, _source}
@@ -197,7 +197,7 @@ defmodule Vxpipe.Providers.Twilio.TelephonyMediaSocketTest do
     name = JSON.decode!(mark)["mark"]["name"]
     message = Map.put(mark_message(name), "streamSid", "MZffffffffffffffffffffffffffffffff")
 
-    assert {:stop, :invalid_media_message, _, _} =
+    assert {:stop, :normal, {1008, "invalid media message"}, _} =
              TelephonyMediaSocket.handle_in(text(message), socket)
 
     refute_receive {:vxpipe_playback_ack, ^request, _}
