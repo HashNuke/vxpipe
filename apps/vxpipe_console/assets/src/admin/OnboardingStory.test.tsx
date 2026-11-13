@@ -44,6 +44,7 @@ function chooseDirectoryService(provider: string) {
   if (["telnyx", "twilio"].includes(provider))
     fireEvent.click(within(screen.getByRole("navigation", { name: "Integration categories" })).getByRole("link", { name: /Telephony/ }));
   fireEvent.click(screen.getByRole("button", { name: `Connect ${setupProvider(provider as SetupProviderId).name}` }));
+  if (provider === "telnyx") fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "2912345678901234567" } });
 }
 function selectService(provider: string) {
   fireEvent.click(serviceTrigger());
@@ -524,6 +525,7 @@ test("Telnyx is one service connection", () => {
     const region = screen.getByRole("region", { name: "Telephony" });
     expect(within(region).getAllByRole("article", { name: "Telnyx" })).toHaveLength(1);
     fireEvent.click(within(region).getByRole("button", { name: "Manage Telnyx" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update credentials" }));
     expect(screen.getByLabelText("API key")).toHaveValue("");
     expect(screen.getByLabelText("Public key")).toHaveValue("");
     expect(screen.queryByRole("combobox", { name: "Service" })).not.toBeInTheDocument();

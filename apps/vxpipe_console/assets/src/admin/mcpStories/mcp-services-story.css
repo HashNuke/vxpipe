@@ -988,6 +988,9 @@
   color: var(--admin-bg);
   background: var(--admin-ink);
 }
+.story-provider-credentials .telnyx-application-form .setup-credential-actions {
+  margin-bottom: 0;
+}
 @media (min-width: 621px) {
   .story-provider-credentials form > div:has(> label[for]) {
     grid-template-columns: 160px minmax(0, 1fr);

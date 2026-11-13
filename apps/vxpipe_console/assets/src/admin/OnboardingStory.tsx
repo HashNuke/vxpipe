@@ -74,6 +74,9 @@ export type OnboardingScenario =
   | "telnyx-credentials"
   | "telnyx-ai-only"
   | "telnyx-connected"
+  | "telnyx-inherited"
+  | "telnyx-inherited-empty"
+  | "telnyx-override"
   | "new-tenant"
   | "creating-new-tenant"
   | "tenant-creation-error"
@@ -155,7 +158,7 @@ function tenantDefaults(key: string): TenantProgress {
 }
 
 function initialConnections(scenario: OnboardingScenario): SetupConnection[] {
-  if (scenario === "tenant-override")
+  if (scenario === "tenant-override" || scenario === "telnyx-override")
     return [{ ...connection("telnyx"), telephonyPublicKeyConfigured: true }];
   if (scenario === "tenant-override-error")
     return [{ provider: "deepgram", status: "invalid" }];
@@ -195,7 +198,7 @@ function initialModal(scenario: OnboardingScenario): ServiceModalState | null {
   if (scenario === "service-picker") return { provider: null, status: "idle" };
   if (scenario === "enter-credentials")
     return { provider: "deepgram", status: "idle" };
-  if (scenario === "telnyx-credentials" || scenario === "platform-telnyx")
+  if (["telnyx-credentials", "platform-telnyx", "telnyx-inherited", "telnyx-inherited-empty", "telnyx-override"].includes(scenario))
     return { provider: "telnyx", status: "idle" };
   if (scenario === "validating")
     return { provider: "google", status: "submitting" };
@@ -280,6 +283,9 @@ export function OnboardingStory({
       "inherited-services",
       "tenant-override",
       "tenant-override-error",
+      "telnyx-inherited",
+      "telnyx-inherited-empty",
+      "telnyx-override",
     ].includes(scenario)
       ? [
           connection("deepgram"),
@@ -294,6 +300,9 @@ export function OnboardingStory({
   );
   const platformPage = page === "platform";
   const [modal, setModal] = useState(() => initialModal(scenario));
+  const [telnyxApplications, setTelnyxApplications] = useState<Record<string, string>>(() =>
+    ["inherited-services", "tenant-override", "telnyx-connected", "telnyx-inherited", "telnyx-override"].includes(scenario)
+      ? { [initialTenants(scenario)[0].key]: "2912345678901234567" } : {});
   const [modelProvider, setModelProvider] = useState<SetupProviderId>("google");
   const [selectedRecipe, setSelectedRecipe] = useState<SampleRecipe | null>(
     null,
@@ -524,6 +533,8 @@ export function OnboardingStory({
             </>}
             renderProviderDialog={({ providerId, editing, onClose, onConnected }) => (
         <StoryProviderDialog
+          applicationId={telnyxApplications[tenant.key] ?? ""}
+          onSaveApplication={id => setTelnyxApplications(current => ({ ...current, [tenant.key]: id }))}
           providers={providers}
           connections={editing ? (platformPage ? platformConnections : connections) : []}
           platformConnections={platformConnections}

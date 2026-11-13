@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { McpServicesStory } from "./McpServicesStory";
 import { scenarios } from "./fixtures";
+import { SetupStory } from "../stories/SetupStory";
 
 const meta = {
   title: "Vxpipe/Console/Services/MCP integrations",
@@ -43,7 +44,10 @@ export const ConnectGoogleAIStudio: Story = {
 export const ConnectDeepgram: Story = {
   args: { scenario: "connect-deepgram" },
 };
-export const ConnectTelnyx: Story = { args: { scenario: "connect-telnyx" } };
+export const ConnectTelnyx: Story = {
+  args: { scenario: "connect-telnyx" },
+  render: args => <SetupStory scenario="telnyx-credentials" theme={args.theme ?? "dark"} publicOrigin="https://voice.example.test" />,
+};
 export const ConnectTwilio: Story = { args: { scenario: "connect-twilio" } };
 export const AlreadyConnectedAI: Story = { args: { scenario: "already-connected-ai" } };
 export const AlreadyConnectedMCP: Story = { args: { scenario: "already-connected-mcp" } };

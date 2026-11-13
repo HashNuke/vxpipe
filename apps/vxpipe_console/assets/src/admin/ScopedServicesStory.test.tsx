@@ -34,6 +34,53 @@ function saveKey() {
   openConnected();
 }
 
+test("an inherited Telnyx connection saves a tenant application without overriding credentials", () => {
+  renderConnected(<OnboardingStory scenario="inherited-services" theme="dark" />);
+  manageTelnyx();
+  expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Service name")).not.toBeInTheDocument();
+  expect(screen.queryByText("Phone routing")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/Outbound caller/)).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Voice API application ID"), {
+    target: { value: "2912345678901234568" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  manageTelnyx();
+  expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234568");
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/platform/telnyx");
+  expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "unsaved" } });
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  manageTelnyx();
+  expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234568");
+});
+
+test("Telnyx application validation and credential override keep the tenant application in place", () => {
+  renderConnected(<OnboardingStory scenario="inherited-services" theme="dark" />);
+  manageTelnyx();
+  fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("Enter the Voice API application ID");
+  fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "2912345678901234568" } });
+  fireEvent.click(screen.getByRole("button", { name: "Override for this tenant" }));
+  expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234568");
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/tenants/demo-tenant/telnyx");
+  expect(screen.getByLabelText("API key")).toHaveValue("");
+});
+
+test("a saved tenant connection can change its application without replacing credentials", () => {
+  renderConnected(<OnboardingStory scenario="telnyx-override" theme="dark" />);
+  fireEvent.change(screen.getByLabelText("Voice API application ID"), { target: { value: "2912345678901234568" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  manageTelnyx();
+  expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234568");
+  fireEvent.click(screen.getByRole("button", { name: "Use platform service" }));
+  manageTelnyx();
+  expect(screen.getByLabelText("Voice API application ID")).toHaveValue("2912345678901234568");
+  expect(screen.getByLabelText("Webhook URL")).toHaveValue("http://localhost:4000/webhooks/platform/telnyx");
+});
+
 test("tenant connect and edit display an encoded tenant webhook using the supplied application origin", () => {
   const view = renderConnected(
     <OnboardingStory
@@ -73,6 +120,7 @@ test("platform connect and edit display the platform webhook without tenant step
   expect(screen.getByLabelText("Webhook URL")).toHaveValue(
     "http://localhost:4000/webhooks/platform/telnyx",
   );
+  expect(screen.queryByLabelText("Voice API application ID")).not.toBeInTheDocument();
   expect(
     screen.queryByRole("navigation", { name: "Tenant setup" }),
   ).not.toBeInTheDocument();

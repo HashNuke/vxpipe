@@ -5,6 +5,7 @@ import { StoryProviderDialog } from "../mcpStories/StoryProviderDialog";
 import type { SetupConnection, SetupTenant } from "../setupCatalog";
 export function NavigationServices({ tenant, platform = false, readOnly = false, canManagePlatform = false }: { tenant: SetupTenant; platform?: boolean; readOnly?: boolean; canManagePlatform?: boolean; canReadKeys?: boolean; onNavigate: (path: string) => void }) {
   const [overriding, setOverriding] = useState(false);
+  const [applications, setApplications] = useState<Record<string, string>>({});
   const [connections, setConnections] = useState<SetupConnection[]>([
     { provider: "deepgram", status: "connected", source: platform ? "platform" : "tenant" },
     { provider: "google", status: "connected", source: "platform" },
@@ -15,6 +16,8 @@ export function NavigationServices({ tenant, platform = false, readOnly = false,
       platformConnections={platform ? [] : [{ provider: "google", status: "connected", source: "platform" }]}
       onManage={provider => { setOverriding(false); onConnect(provider); }} />}
     renderProviderDialog={({ providerId, editing, onClose, onConnected }) => <StoryProviderDialog
+      applicationId={applications[tenant.key] ?? ""}
+      onSaveApplication={id => setApplications(current => ({ ...current, [tenant.key]: id }))}
       state={{ provider: providerId, status: "idle", overriding }} connections={editing ? connections : []}
       scope={platform ? { kind: "platform" } : { kind: "tenant", tenantKey: tenant.key, tenantName: tenant.name }}
       onOverride={() => setOverriding(true)} onClose={() => { setOverriding(false); onClose(); }}

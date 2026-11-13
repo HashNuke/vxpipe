@@ -41,6 +41,14 @@ export const TelnyxAiOnly: Story = { args: { scenario: "telnyx-ai-only" } };
 export const TelnyxConnected: Story = {
   args: { scenario: "telnyx-connected" },
 };
+export const TelnyxInheritedCredentials: Story = { args: { scenario: "telnyx-inherited" } };
+export const TelnyxApplicationRequired: Story = { args: { scenario: "telnyx-inherited-empty" } };
+export const TelnyxTenantCredentials: Story = { args: { scenario: "telnyx-override" } };
+export const TelnyxInheritedLight: Story = { args: { scenario: "telnyx-inherited", theme: "light" } };
+export const TelnyxInheritedMobile: Story = {
+  args: { scenario: "telnyx-inherited" },
+  globals: { viewport: { value: "390px-844px", isRotated: false } },
+};
 export const InheritedServices: Story = {
   args: { scenario: "inherited-services" },
 };

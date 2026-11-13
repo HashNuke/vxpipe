@@ -21,6 +21,7 @@ export function TenantServicesStory({ scenario, tenant, readOnly = false, canRea
     return tenant ? { ...fixture, tenant } : fixture;
   });
   const [freshAttempt, setFreshAttempt] = useState(false);
+  const [applications, setApplications] = useState<Record<string, string>>({});
   const [dismissed, setDismissed] = useState(false);
   return <div className="tenant-setup"><ServiceConnectionsPreview
     tenant={state.tenant} readOnly={readOnly} showMcpInventory={state.status === "ready"}
@@ -41,6 +42,8 @@ export function TenantServicesStory({ scenario, tenant, readOnly = false, canRea
       </section>
     </>}
     renderProviderDialog={({ providerId, editing, onClose, onConnected }) => <StoryProviderDialog
+      applicationId={applications[state.tenant.key] ?? ""}
+      onSaveApplication={id => setApplications(current => ({ ...current, [state.tenant.key]: id }))}
       state={{ provider: providerId, status: freshAttempt ? "idle" : state.setup.status === "submitting" ? "submitting" : state.setup.message ? "error" : "idle", message: freshAttempt ? undefined : state.setup.message }}
       providers={[...setupProviders, { id: "vertex_ai", name: "Google Vertex AI", description: "", capabilities: [], defaultModels: {}, recommendedModels: {}, sampleCapabilities: [] }]}
       connections={editing && state.status === "ready" ? state.services.map(service => ({ provider: service.provider, status: "connected", source: "tenant" })) : []}
