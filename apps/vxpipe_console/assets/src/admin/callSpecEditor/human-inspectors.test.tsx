@@ -67,7 +67,7 @@ test("opening audio requires explicit speech selection and supports text, file a
   fireEvent.click(screen.getByRole("switch", { name: "Opening audio" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Opening message" }), { target: { value: "Welcome to reception." } });
   await choose("Provider", "deepgram");
-  expect(saved().opening_audio).toEqual({ type: "text", text: "Welcome to reception.", text_to_speech: { provider: "deepgram", model: "flux", options: { voice: "hannah" } } });
+  expect(saved().opening_audio).toEqual({ type: "text", text: "Welcome to reception.", text_to_speech: { provider: "deepgram", model: "flux", credential_name: "production", options: { voice: "hannah" } } });
   await choose("Opening audio type", "Audio file URL");
   fireEvent.change(screen.getByRole("textbox", { name: "Audio file URL" }), { target: { value: "https://example.test/welcome.wav" } });
   expect(saved().opening_audio).toEqual({ type: "file_url", url: "https://example.test/welcome.wav" });

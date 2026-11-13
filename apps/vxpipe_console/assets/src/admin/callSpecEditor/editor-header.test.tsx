@@ -11,7 +11,7 @@ test("publish and its menu are grouped; Save as draft is revealed and saves an u
   const actions = callbacks();
   render(<FlowEditorHeader backHref="/specs" dirty {...actions} />);
   const group = within(screen.getByRole("group", { name: "Publish actions" }));
-  expect(group.getByRole("button", { name: "Publish" })).toBeDisabled();
+  expect(group.getByRole("button", { name: "Publish" })).toBeEnabled();
   expect(screen.queryByRole("menuitem", { name: "Save as draft" })).not.toBeInTheDocument();
   const trigger = group.getByRole("button", { name: "More actions" });
   expect(trigger).toBeEnabled();
@@ -86,8 +86,8 @@ test.each([{}, { readOnly: true }, { saveDisabled: true }, { authoringDisabled: 
   fireEvent.click(menu.getByRole("menuitem", { name: "JSON editor" }));
   expect(source).toHaveBeenCalledOnce();
 });
-test.each([{ revision: undefined }, { revision: 3, dirty: true }, { revision: 3, issueCount: 1 }])("publish requires a saved unchanged revision with no client issues: %j", (state) => {
-  render(<FlowEditorHeader backHref="/specs" {...state} {...callbacks()} />);
+test.each([{ revision: 3, issueCount: 1 }, { revision: 3, jsonDraftCount: 1 }, { dirty: true, saveDisabled: true }])("publish blocks invalid, unapplied or unsavable edits: %j", (state) => {
+  render(<FlowEditorHeader backHref="/specs" onShowSource={vi.fn()} {...state} {...callbacks()} />);
   expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "More actions" })).toBeEnabled();
 });
@@ -100,4 +100,12 @@ test("an unchanged saved revision can be published; missing and forbidden outcom
   rerender(<FlowEditorHeader backHref="/specs" revision={3} authoringDisabled {...callbacks()} />);
   expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+});
+
+
+test.each([{ revision: undefined }, { revision: 3, dirty: true }])("Publish can save valid unsaved edits first: %j", state => {
+  const actions = callbacks();
+  render(<FlowEditorHeader backHref="/specs" {...state} {...actions} />);
+  fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+  expect(actions.onPublish).toHaveBeenCalledOnce();
 });

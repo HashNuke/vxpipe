@@ -22,7 +22,7 @@ function transport() {
     if (url.pathname.endsWith("/call-spec-editor-lookups")) return reply({ credential_names: {}, telephony_services: [], mcp_integrations: [], tool_catalog: { tools: [], mcp_available: true } });
     if (url.pathname.includes("/providers")) {
       const models = modelCatalogFixture[url.searchParams.get("capability") as CatalogCapability] ?? {};
-      return url.pathname.endsWith("/models") ? reply({ models: models[url.pathname.split("/").at(-2)!] }) : reply({ providers: Object.keys(models).map((id) => ({ id })) });
+      return url.pathname.endsWith("/models") ? reply({ models: models[url.pathname.split("/").at(-2)!] }) : reply({ providers: Object.keys(models).map((id) => ({ id, credential_available: true })) });
     }
     if (init?.method === "POST" || init?.method === "PUT") return reply({ call_spec: stored }, 201);
     if (url.pathname.endsWith("/1c94f0f7-05d5-4919-a7d5-01d7250e4caf")) return reply({ call_spec: stored });
@@ -66,6 +66,21 @@ test("new route creates a spec, replaces its URL without losing edits, and publi
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
   await screen.findByText("Published revision 2");
   expect(fetch).toHaveBeenCalledWith("/api/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf/revisions/2/publish", expect.objectContaining({ body: "{}" }));
+});
+
+test("Publish creates and publishes a new draft across URL replacement without reloading it", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/new");
+  const fetch = transport(); render(<App csrfToken="csrf" fetchImpl={fetch} />);
+  await createIncoming();
+  writeInitialPrompt();
+  fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+  await screen.findByText("Published revision 2");
+  expect(window.location.pathname).toBe("/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
+  const writes = fetch.mock.calls.filter(([, init]) => init?.method === "POST");
+  expect(writes).toHaveLength(2);
+  expect(writes[0]![0]).toBe("/api/tenants/AAAAAAAAAAAAAAAA/call-specs");
+  expect(writes[1]![0]).toBe("/api/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf/revisions/2/publish");
+  expect(fetch.mock.calls.filter(([url, init]) => String(url).endsWith("/1c94f0f7-05d5-4919-a7d5-01d7250e4caf") && (!init?.method || init.method === "GET"))).toHaveLength(0);
 });
 
 test("session expiry keeps the source and disables writes without navigating away", async () => {
@@ -155,7 +170,7 @@ test("URL replacement after creation preserves changes made during the request",
   expect(window.location.pathname).toBe("/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveValue("Newer prompt");
   expect(screen.getByText("Unsaved changes")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
 });
 
 test("the list opens a saved spec by its server-generated public UUID", async () => {

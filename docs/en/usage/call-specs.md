@@ -20,6 +20,10 @@ Saving appends an immutable revision. **Publish** makes a chosen revision availa
 to new calls and updates its incoming routes. A prepared/running call remains
 pinned to its revision. Saving or publishing never dials a phone number.
 
+In the editor, **Publish** saves valid unsaved edits first, then publishes that
+saved revision. Use **Save as draft**
+in the actions menu to save without publishing.
+
 The editor's ellipsis menu opens the JSON source. Current new source uses
 `schema_version: "20261004.01"`. Use the
 [development example](../../../examples/call-specs/development.json) as a complete

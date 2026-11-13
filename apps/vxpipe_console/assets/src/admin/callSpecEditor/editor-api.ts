@@ -70,7 +70,8 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
       const query = `?capability=${capability}`;
       const { providers } = await get(`${base}/providers${query}`, signal);
       if (!Array.isArray(providers) || providers.length > 32 || !providers.every((provider) => record(provider) && typeof provider.id === "string")) throw new Error("Invalid providers");
-      const models = await Promise.all(providers.map(async (provider: { id: string }) => {
+      const available = providers.filter((provider) => provider.credential_available === true);
+      const models = await Promise.all(available.map(async (provider: { id: string }) => {
         const body = await get(`${base}/providers/${encodeURIComponent(provider.id)}/models${query}`, signal);
         return [provider.id, body.models];
       }));

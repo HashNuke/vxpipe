@@ -8,7 +8,7 @@ import type { InspectorProps } from "./inspectorTypes";
 import type { OpeningAudio } from "./types";
 
 const emptySpeech = () => ({ type: "text" as const, text: "", text_to_speech: { provider: "", model: "" } });
-export function OpeningAudioFields({ document, onChange, issues, catalog }: InspectorProps & { catalog: ModelCatalog }) {
+export function OpeningAudioFields({ document, onChange, issues, catalog, credentialNames }: InspectorProps & { catalog: ModelCatalog; credentialNames: Record<string, string[]> }) {
   const audio = document.source.opening_audio;
   function change(value: OpeningAudio | undefined) {
     onChange(editSource(document, (source) => { if (value === undefined) delete source.opening_audio; else source.opening_audio = value; }));
@@ -24,7 +24,15 @@ export function OpeningAudioFields({ document, onChange, issues, catalog }: Insp
         <TextField multiline label="Opening message" path={["opening_audio", "text"]} issues={issues} disabled={document.readOnly} value={audio.text} onChange={(text) => change({ ...audio, text })} />
         <p className="text-xs text-muted-foreground">Choose the voice for this announcement. Opening audio uses its own text-to-speech selection.</p>
         <CapabilityFields kind="text_to_speech" path={["opening_audio", "text_to_speech"]} value={audio.text_to_speech.provider ? audio.text_to_speech : undefined} catalog={catalog} disabled={document.readOnly} issues={issues} defaultLabel="Choose a provider"
-          onChange={(selection) => change({ ...audio, text_to_speech: selection ?? { provider: "", model: "" } })} />
+          onChange={(selection) => {
+            if (selection && !selection.credential_name) {
+              const names = credentialNames[selection.provider] ?? [];
+              const name = names.includes(selection.provider) ? selection.provider
+                : names.includes("default") ? "default" : names.length === 1 ? names[0] : undefined;
+              if (name) selection = { ...selection, credential_name: name };
+            }
+            change({ ...audio, text_to_speech: selection ?? { provider: "", model: "" } });
+          }} />
       </> : <TextField label="Audio file URL" path={["opening_audio", "url"]} issues={issues} disabled={document.readOnly} value={audio.url} hint="Use an HTTP or HTTPS URL." onChange={(url) => change({ ...audio, url })} />}
     </div>}
   </section>;

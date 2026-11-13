@@ -74,7 +74,7 @@ test("source edits save exactly, update revision badges and publish the saved re
   const props = properties(); render(<CallSpecEditor {...props} />);
   rename("Renamed call");
   expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Renamed call");
-  expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
   saveDraft();
   expect(await screen.findByText("Saved as revision 4")).toBeVisible();
   expect(props.execute).toHaveBeenCalledWith(expect.objectContaining({ action: "save", source: { ...snapshot.document.source, name: "Renamed call" } }), expect.any(AbortSignal));

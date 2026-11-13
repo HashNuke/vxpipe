@@ -12,6 +12,7 @@ export type EditorRequest = {
   source: CallSpecSource;
   callSpecId?: string;
   revision?: number;
+  publishAfterSave?: boolean;
 };
 export type EditorState = EditorSnapshot & {
   savedSource?: CallSpecSource;
@@ -60,13 +61,14 @@ export function editorReducer(state: EditorState, event: EditorEvent): EditorSta
 }
 
 function startAction(state: EditorState, action: EditorRequest["action"]): EditorState {
+  const publishAfterSave = action === "publish" && (!state.saved || isDirty(state));
   if (state.pending || state.document.readOnly || state.feedback.authoringDisabled || state.feedback.sessionExpired ||
-    (action === "save" && state.feedback.saveDisabled)) return state;
+    ((action === "save" || publishAfterSave) && state.feedback.saveDisabled)) return state;
   if (state.clientIssues.length) return { ...state,
     feedback: applyActionResult(state.feedback, state.document.source, action, { clientIssues: state.clientIssues }) };
-  if (action === "publish" && (!state.saved || isDirty(state))) return state;
   return { ...state, nextRequestId: state.nextRequestId + 1,
-    pending: { id: state.nextRequestId, action, source: structuredClone(state.document.source),
+    pending: { id: state.nextRequestId, action: publishAfterSave ? "save" : action,
+      ...(publishAfterSave ? { publishAfterSave: true } : {}), source: structuredClone(state.document.source),
       callSpecId: state.saved?.callSpecId, revision: state.saved?.revision } };
 }
 
@@ -83,7 +85,16 @@ function completeAction(state: EditorState, id: number, received: EditorResult):
   const feedback = applyActionResult(state.feedback, state.document.source, request.action, result, request.source);
   const next = { ...state, pending: undefined, feedback };
   if (feedback.toast?.tone !== "success") return next;
-  if (request.action === "save") return { ...next, savedSource: request.source,
-    saved: { callSpecId: callSpecId!, revision: received.revision!, publishedRevision: state.saved?.publishedRevision ?? null } };
+  if (request.action === "save") {
+    const saved = { callSpecId: callSpecId!, revision: received.revision!, publishedRevision: state.saved?.publishedRevision ?? null };
+    // Publish the clicked snapshot, even if the user has edited again while saving.
+    return { ...next, savedSource: request.source, saved,
+      ...(request.publishAfterSave ? {
+        nextRequestId: state.nextRequestId + 1,
+        feedback: { ...feedback, toast: null },
+        pending: { id: state.nextRequestId, action: "publish" as const, source: request.source,
+          callSpecId: saved.callSpecId, revision: saved.revision },
+      } : {}) };
+  }
   return { ...next, saved: { ...state.saved!, publishedRevision: request.revision! } };
 }

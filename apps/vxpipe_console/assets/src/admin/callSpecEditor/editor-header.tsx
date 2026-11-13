@@ -113,7 +113,7 @@ export function FlowEditorHeader({
             <CircleAlert className="h-4 w-4" />{issueCount} {issueCount === 1 ? "issue" : "issues"}
           </Button>}
           <div role="group" aria-label="Publish actions" className="inline-flex shrink-0 items-stretch border-l border-border">
-            <Button variant="ghost" size="sm" className="h-auto min-h-10 rounded-none px-3 has-[>svg]:px-3 focus-visible:ring-inset" onClick={onPublish} disabled={disabled || authoringDisabled || revision === undefined || dirty || issueCount > 0}>
+            <Button variant="ghost" size="sm" className="h-auto min-h-10 rounded-none px-3 has-[>svg]:px-3 focus-visible:ring-inset" onClick={onPublish} disabled={disabled || authoringDisabled || issueCount > 0 || jsonDraftCount > 0 || (saveDisabled && (dirty || revision === undefined))}>
               {saving || publishing ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Rocket className="h-4 w-4" />}
               {saving ? "Saving…" : publishing ? "Publishing…" : "Publish"}
             </Button>

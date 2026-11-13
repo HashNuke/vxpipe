@@ -47,11 +47,10 @@ test("client errors block requests and editing only updates validation, without 
   expect(editName(blocked, "Fixed").clientIssues).toEqual([]);
 });
 
-test("pending actions, dirty publication and read-only documents cannot start requests", () => {
+test("pending actions and read-only documents cannot start requests", () => {
   const state = saved();
   const saving = editorReducer(state, { type: "start", action: "save" });
   expect(editorReducer(saving, { type: "start", action: "publish" })).toBe(saving);
-  expect(editorReducer(editName(state, "Dirty"), { type: "start", action: "publish" }).pending).toBeUndefined();
   const readOnly = createEditorState({ document: { ...document, readOnly: true } });
   expect(editName(readOnly, "Forbidden")).toBe(readOnly);
   expect(editorReducer(readOnly, { type: "start", action: "save" })).toBe(readOnly);

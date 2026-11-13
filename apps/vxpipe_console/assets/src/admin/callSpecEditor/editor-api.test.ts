@@ -39,14 +39,14 @@ test("create, append and publish use exact bodies and CSRF; failures retain fiel
   await expect(api.execute(request, signal)).rejects.toThrow();
 });
 
-test("loads installed provider/model listings and safe named lookups without live discovery", async () => {
+test("loads configured provider/model listings and safe named lookups without live discovery", async () => {
   const fetch = vi.fn((input: RequestInfo | URL) => {
     const url = new URL(String(input), "https://console.test");
     const capability = url.searchParams.get("capability") as typeof catalogCapabilities[number];
     const providers = modelCatalogFixture[capability] ?? {};
     if (url.pathname.endsWith("/call-spec-editor-lookups")) return reply({ credential_names: { google: ["primary"] }, telephony_services: [{ key: "phone", name: "phone" }], mcp_integrations: ["help"], tool_catalog: { mcp_available: true, tools: [{ type: "platform", tool: "hangup", description: "End the call." }] } });
     if (url.pathname.endsWith("/models")) return reply({ models: providers[url.pathname.split("/").at(-2)!] });
-    return reply({ providers: Object.keys(providers).map((id) => ({ id })) });
+    return reply({ providers: Object.keys(providers).map((id) => ({ id, credential_available: true })) });
   });
   const api = createEditorApi("tenant", "csrf", fetch);
   const signal = new AbortController().signal;
@@ -82,4 +82,18 @@ test("phone inventory uses a scoped abortable request with server search, pagina
   const result = await createEditorApi("tenant", "csrf", fetch).phoneNumbers("office / phone", "555", "page-token", signal, "current");
   expect(result).toEqual({ numbers: [{ id: "1", number: "+15550001000", name: "Office", available: false, assignedTo: ["Reception"] }], nextPage: "next" });
   expect(fetch).toHaveBeenCalledWith("/api/tenants/tenant/telephony-services/office%20%2F%20phone/numbers?search=555&page=page-token&call_spec_id=current", expect.objectContaining({ signal, credentials: "same-origin", cache: "no-store" }));
+});
+
+test("model choices exclude unconfigured or unavailable providers before fetching models", async () => {
+  const fetch = vi.fn((input: RequestInfo | URL) => {
+    const url = new URL(String(input), "https://console.test");
+    const capability = url.searchParams.get("capability");
+    if (url.pathname.endsWith("/models")) return reply({ models: modelCatalogFixture.text_to_speech!.elevenlabs });
+    return reply({ providers: capability === "text_to_speech" ? [
+      { id: "elevenlabs", credential_available: true }, { id: "cartesia", credential_available: false }, { id: "deepgram" },
+    ] : [] });
+  });
+  const catalog = await createEditorApi("tenant", "csrf", fetch).catalog(new AbortController().signal);
+  expect(Object.keys(catalog.text_to_speech!)).toEqual(["elevenlabs"]);
+  expect(fetch.mock.calls.filter(([path]) => String(path).includes("/models"))).toHaveLength(1);
 });

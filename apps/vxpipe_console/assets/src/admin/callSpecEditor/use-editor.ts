@@ -29,21 +29,24 @@ export function useEditor(snapshot: EditorSnapshot, execute: ExecuteEditorReques
   const start = useCallback((action: EditorRequest["action"]) => {
     if (!mounted.current || current.current.pending) return;
     const next = dispatch({ type: "start", action });
-    const request = next.pending;
+    let request = next.pending;
     if (!request) return;
     lastAction.current = action;
     const controller = new AbortController();
     active.current = controller;
     const run = async () => {
-      let result: EditorResult;
-      try { result = await execute(request, controller.signal); }
-      catch { result = {}; }
-      if (!mounted.current || controller.signal.aborted || current.current.pending?.id !== request.id) return;
-      if (result.status === 400 && result.error?.code === "invalid_request") console.error("Call spec editor sent an invalid request.", { action: request.action });
+      while (request) {
+        let result: EditorResult;
+        try { result = await execute(request, controller.signal); }
+        catch { result = {}; }
+        if (!mounted.current || controller.signal.aborted || current.current.pending?.id !== request.id) return;
+        if (result.status === 400 && result.error?.code === "invalid_request") console.error("Call spec editor sent an invalid request.", { action: request.action });
+        const expired = current.current.feedback.sessionExpired;
+        const completed = dispatch({ type: "complete", id: request.id, result });
+        if (!expired && completed.feedback.sessionExpired) onSessionExpired?.();
+        request = completed.pending;
+      }
       active.current = undefined;
-      const expired = current.current.feedback.sessionExpired;
-      const completed = dispatch({ type: "complete", id: request.id, result });
-      if (!expired && completed.feedback.sessionExpired) onSessionExpired?.();
     };
     void run();
   }, [dispatch, execute, onSessionExpired]);
