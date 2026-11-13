@@ -11,4 +11,4 @@ Verification:
 - Headless Chrome inspected the shared action at desktop width, the real inherited Telnyx modal at 390px, and light-theme failure feedback. Copy and Copied both measured 97.796875px; the label returned to Copy; no mobile horizontal overflow.
 - Browser clipboard success/failure used a local stub because headless clipboard permission was denied. Tests independently verify the exact clipboard value. Preview runs from an environment-free mirror; no environment files or live telephony tests were used.
 
-The Telnyx v2/cost-webhook request remains a separate checkpoint. These UI changes are not yet deployed to Vitrum.
+The Telnyx v2/cost-webhook work is a separate checkpoint. The shared copy control was deployed to Vitrum with release `2d7f4fbb`; public assets contain the component and its CSS, and the health endpoint is healthy.

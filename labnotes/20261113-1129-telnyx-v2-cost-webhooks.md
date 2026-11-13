@@ -22,4 +22,8 @@ Verification:
 - Root format check, warnings-as-errors compilation, strict Credo and unused-dependency check passed. No full suite or live telephony tests ran.
 - Read the existing test application's flags through credentials resolved inside the running release, without reading an environment file: already v2, cost events disabled. No numbers, calls or orders were changed during that inspection.
 
-The separate shared-copy UI checkpoint is committed in `26c3d2aa`. Deployment and live test-application flag verification follow this checkpoint.
+Deployment evidence:
+- Released `2d7f4fbb` to the QA service, including the shared-copy checkpoint `26c3d2aa` and modal hierarchy fix `a7ef5ebf`. Assets and the production release built successfully; the container image reports the expected revision.
+- Both app and proxy services are active, the public health endpoint returns `ok`, and the deployed JavaScript/CSS contain the shared copy control. The container remains limited to 1 GiB.
+- Enabled cost webhooks on the existing machine test application and read its configuration back: webhook API v2, cost notifications enabled, original webhook URL unchanged. No calls, number orders or live provider tests were run.
+- Python's HTTP client received 403 on the public assets; curl verified both deployed files successfully. No environment files were read.
