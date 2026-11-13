@@ -1,6 +1,6 @@
 # Provider voice picker
 
-Research and proposed implementation contract, 2026-11-13. Progress belongs in
+Research and implementation contract, 2026-11-13. Progress belongs in
 [the milestone](../../labnotes/milestones/provider-voice-picker.md).
 
 ## Decision
@@ -17,17 +17,17 @@ must not become a new dependency for running an already saved call spec.
 
 ## Existing implementation and reuse audit
 
-The audit covered application Elixir code, Console TypeScript, integration
+The pre-implementation audit covered application Elixir code, Console TypeScript, integration
 manifests, and existing provider milestones. No production provider voice-list,
 search or single-voice lookup implementation was found. There is useful existing
 code on both sides of the missing HTTP boundary:
 
 | Existing code | Reuse and gap |
 | --- | --- |
-| `assets/src/admin/voiceCatalog.ts` in Console | `describe/list/get`, descriptors, filter types, cursor pages and voice records already define the UI boundary. Scope lacks credential identity. |
+| `assets/src/admin/voiceCatalog.ts` in Console | `describe/list/get`, descriptors, filter types, cursor pages and voice records already define the UI boundary. Credential identity has now been added. |
 | `callSpecEditor/voice-field.tsx`, `voice-picker.tsx`, `voice-filters.tsx`, `voice-filter-select.tsx` | Shared modal, explicit search/filter application, pagination, cancellation, retries, unknown saved IDs and focus return. Reuse these components. |
 | `VoicePicker.stories.tsx`, `voiceCatalogFixtures.ts` | Cartesia, ElevenLabs, Google, OpenAI names-only, Deepgram and Rime examples, plus loading/error/unavailable/light states. Data is illustrative, not production availability. |
-| `callSpecEditor/capability-fields.tsx` | Already uses the picker when `VoiceCatalogContext` is supplied; otherwise renders a text field or select. Production `CallSpecEditorRoute.tsx` never supplies that context. This is the single voice-control replacement point found in the application. |
+| `callSpecEditor/capability-fields.tsx` | Already uses the picker when `VoiceCatalogContext` is supplied; previously rendered a text field or select without context. Production `CallSpecEditorRoute.tsx` now supplies that context; the manual fallback has been removed. This is the single voice-control replacement point found in the application. |
 | `Vxpipe.CallEngine.ModelCatalog`, `Speech.Model`, speech adapters' `models/0` | Existing model IDs, default voices, voice option names and installed-capability resolution. Most voices are `Model.free_voice(default)` descriptors, not catalogs. MorseCode API already has a finite list. |
 | `Vxpipe.Calls.ProviderCatalog`, `CallSpecEditorLookups`, `EffectiveServiceBindings` | Tenant authorization, accessible platform bindings, credential availability and public binding names. Reuse their policy and credential resolution; the current model endpoints do not fetch voices. |
 | MorseCode API restart probe | A test fixture requests `/v1/voices` to check origin replacement. It is not a reusable production listing/search client. |
@@ -44,9 +44,9 @@ implemented. Catalog metadata is not evidence of synthesis compatibility.
 
 | Provider / capability | Existing adapter | Catalog source and remaining work |
 | --- | --- | --- |
-| Cartesia TTS | Sonic model descriptors; default UUID; `options.voice` | Add authenticated paged list/get against `/voices`. Map `q`, ownership, language and gender filters, pin the supported version header, and normalize cursor results. Use the selected connection's key. [List](https://docs.cartesia.ai/api-reference/voices/list), [get](https://docs.cartesia.ai/api-reference/voices/get). |
-| ElevenLabs TTS | Flash/Turbo 2.5 descriptors; default George ID; `options.voice` | Add account-scoped `/v2/voices` search/filter/pagination and ID lookup. Preserve IDs, names and useful labels only; do not expose the upstream record's unrelated sharing/account data. [List/search](https://elevenlabs.io/docs/api-reference/voices/search), [get](https://elevenlabs.io/docs/api-reference/voices/get). |
-| ElevenLabs STS | Mini/Max accept a voice string; default `brian` | The [Realtime guide](https://elevenlabs.io/docs/eleven-agents/guides/openai-realtime-compatibility) and [session API](https://elevenlabs.io/docs/api-reference/conversations/create-client-secret) demonstrate `brian`, but do not establish that all TTS IDs work. Confirm the supported Realtime voice set before exposing more choices. Do not manufacture a mapping from a TTS display name to a Realtime ID. This is an explicit research gate. |
+| Cartesia TTS | Sonic model descriptors; default UUID; `options.voice` | Authenticated paged list/get against `/voices`. Map `q`, ownership, language and gender filters, pin the supported version header, and normalize cursor results. Use the selected connection's key. [List](https://docs.cartesia.ai/api-reference/voices/list), [get](https://docs.cartesia.ai/api-reference/voices/get). |
+| ElevenLabs TTS | Flash 2.5 / Multilingual v2 descriptors; default George ID; `options.voice` | Account-scoped `/v2/voices` search/filter/pagination and ID lookup. Preserve IDs, names and useful labels only; do not expose the upstream record's unrelated sharing/account data. [List/search](https://elevenlabs.io/docs/api-reference/voices/search), [get](https://elevenlabs.io/docs/api-reference/voices/get). |
+| ElevenLabs STS | Mini/Max accept a voice string; default `brian` | Use account voice IDs unchanged from `/v2/voices`, plus direct lookup of the documented `brian` default. The official Realtime library support and string schema resolve the initial compatibility question; evidence and inference are recorded below. No name-derived slugs. |
 | Deepgram TTS | Public `flux` model; `model_for_voice/1` emits `flux-<voice>-en` | Normalize the TTS portion of [model metadata](https://developers.deepgram.com/guides/fundamentals/model-metadata), restricted to supported Flux English voices. The [Flux voice reference](https://developers.deepgram.com/docs/flux-tts/voices) also lists other languages; the existing wire mapping cannot select those. Confirm Flux coverage in the metadata response; a documented bundled Flux list is acceptable if absent. Do not expose Aura as Flux. |
 | Google TTS / STS | Installed TTS is `gemini-3.1-flash-tts-preview`; STS is `gemini-3.8-live`; both use prebuilt voice names | Supply documented prebuilt lists, explicitly scoped to capability/model. Current [speech-generation docs](https://ai.google.dev/gemini-api/docs/speech-generation) describe additional library/designed voices for newer TTS models; that does not make them supported by our installed adapter. [Live capability docs](https://ai.google.dev/gemini-api/docs/live-guide) use `prebuiltVoiceConfig`. Verify the installed TTS model's supported set rather than copying a newer model's full catalog. |
 | OpenAI STS | GPT-Live accepts a string, defaults to `marin`, and transmits that string | Reuse the built-in voice names documented by the [Live session API](https://developers.openai.com/api/reference/resources/live/methods/create). [Custom voices](https://developers.openai.com/api/docs/guides/custom-voices) require an `{id}` wire value, which our adapter does not emit. Do not offer them in this slice or pass their IDs as named voices. |
@@ -57,6 +57,56 @@ No paid calls, audio generation, account mutations, or provider credential reads
 were performed for this research. Provider docs are evidence of available APIs;
 authenticated response compatibility still needs fixture-based implementation
 checks and, if explicitly authorized, narrowly scoped read-only interoperability.
+
+## Resolved provider evidence (2026-11-13)
+
+- **ElevenLabs Realtime:** the [official launch announcement](https://elevenlabs.io/blog/realtime)
+  explicitly says Mini and Max support the voice library, and the
+  [model reference](https://elevenlabs.io/docs/overview/models) describes library
+  voice customization. The [voice concepts](https://elevenlabs.io/docs/overview/intro)
+  identify voices by API ID. The public [OpenAPI schema](https://api.elevenlabs.io/openapi.json)
+  defines `OpenAIAudioOutputConfig-Input.voice` as a string, default `brian`, with
+  no enum or alternative voice-discovery endpoint. Taken together, these support
+  sending the account catalog's exact `voice_id` as the Realtime voice string.
+  This is an inference from those official contracts, verified against our wire
+  serializer for both models; it is **not** an authenticated upstream session test.
+  `/v2/voices` is shared for discovery only. No TTS tuning filter is imposed on
+  Realtime, and display names are never converted to aliases.
+- **Deepgram:** the public [model response](https://api.deepgram.com/v1/models)
+  contained 103 TTS entries and no Flux entries during research. Use the 36
+  English names in the [Flux voice reference](https://developers.deepgram.com/docs/flux-tts/voices),
+  preserving the installed `flux-<voice>-en` mapping. Aura and other languages are
+  excluded. Updating this bundled list is a normal provider metadata change.
+- **Google:** the installed [3.1 Flash TTS model](https://aistudio.google.com/docs/models/gemini-3.1-flash-tts-preview)
+  uses the 30 prebuilt names in the [speech guide](https://aistudio.google.com/docs/speech-generation).
+  The [Live capability guide](https://aistudio.google.com/docs/live-api/capabilities)
+  uses those prebuilt voices through `prebuiltVoiceConfig`. Both installed models
+  get that bounded set; newer designed/library voices are excluded.
+- **OpenAI:** the [Live session schema](https://developers.openai.com/api/reference/resources/live/methods/create)
+  lists 38 named voices. Offer those string values for `gpt-live-1`, excluding
+  custom `{id}` values. Tests check every named choice through the existing parser
+  and session serializer; no synthesis request is made.
+- **Rime:** [voice metadata](https://docs.rime.ai/api-reference/data/voice-details.md)
+  includes speaker, model and language in one public array. The
+  [public catalog](https://users.rime.ai/data/voices/voice_details.json) had 654
+  rows when researched. Filter `modelId=coda` and `lang=eng`; no second names
+  request or credential forwarding is needed. A 5,000-row/2 MiB bound protects
+  the local search. Saved IDs are found in this complete bounded list.
+- **Cartesia:** the [list contract](https://docs.cartesia.ai/api-reference/voices/list)
+  uses `starting_after` with the returned `next_page` ID, not a URL. Reuse the
+  installed adapter's version header, require active voices with UUIDs accepted
+  by its option parser, and expose language, gender and ownership filters.
+- **ElevenLabs TTS:** use Flash 2.5 and Multilingual v2 model descriptors already
+  installed. Professional voices with explicit tuning states must be fine-tuned
+  for the chosen model. `high_quality_base_model_ids` describes a recommendation,
+  not an exclusion rule. Optional names fall back to the exact ID. Storybook
+  advertises only the filters implemented by the backend.
+
+These checks resolved the initial research gates. They reuse model parsers and
+pure wire serializers, plus synthetic HTTP responses. Public documentation and
+public metadata were read; no private account catalog or paid speech request was
+made. Authenticated provider interoperability remains optional and requires
+explicit authorization.
 
 ## Backend boundary
 
@@ -80,7 +130,7 @@ checks and, if explicitly authorized, narrowly scoped read-only interoperability
 The public contract stays compact: descriptor, a page of `{id, name, description?,
 attributes}`, `nextCursor`, optional total, and a single-voice result or absence.
 Only advertised filter keys/types are accepted. Use bounded query/cursor lengths,
-page size (at most 100), response size, and upstream timeouts. Never follow a
+page size (at most 100), response size (2 MiB), and upstream timeouts (8 seconds receiving, 3 seconds connecting). Never follow a
 provider pagination URL supplied by the browser. Return stable sanitized failures
 for missing connection, forbidden access, rate limit, unavailable upstream and
 invalid response; do not turn a network failure into an empty catalog.
@@ -99,7 +149,7 @@ through the picker; selecting a voice stores its ID, not its display name.
 
 Reset results, filters and pagination and cancel obsolete requests when tenant,
 provider, model, capability or credential changes. Include the same scope in
-resolved-voice identities: the current `VoiceField` identity omits credentials.
+resolved-voice identities: the `VoiceField` identity includes credentials.
 Late results must not populate a new connection's dialog. Disconnect or permission
 loss must prevent subsequent catalog access even if the UI has an earlier result.
 

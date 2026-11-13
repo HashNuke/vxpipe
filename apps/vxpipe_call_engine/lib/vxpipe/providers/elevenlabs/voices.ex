@@ -1,5 +1,5 @@
 defmodule Vxpipe.Providers.ElevenLabs.Voices do
-  @moduledoc "Account-scoped TTS voice discovery; independent of speech sessions."
+  @moduledoc "Account-scoped TTS and Realtime voice discovery; independent of speech sessions."
   alias Vxpipe.CallEngine.VoiceCatalog.{HTTP, Query}
 
   @labels [
@@ -45,6 +45,11 @@ defmodule Vxpipe.Providers.ElevenLabs.Voices do
     end
   end
 
+  # The official Realtime schema documents this named default; catalog choices
+  # otherwise keep the account voice ID, never a name-derived slug.
+  def get(%{capability: "speech_to_speech"}, "brian", _payload, _options),
+    do: {:ok, %{id: "brian", name: "Brian", attributes: []}}
+
   def get(scope, id, payload, options) do
     case HTTP.get("https://api.elevenlabs.io/v1/voices/" <> id, headers(payload), %{}, options) do
       {:ok, body} ->
@@ -84,7 +89,8 @@ defmodule Vxpipe.Providers.ElevenLabs.Voices do
     end
   end
 
-  defp entry(%{"voice_id" => id, "name" => name} = voice) do
+  defp entry(%{"voice_id" => id} = voice) do
+    name = Map.get(voice, "name") || id
     description = Map.get(voice, "description") || ""
     labels = Map.get(voice, "labels") || %{}
 
@@ -106,6 +112,9 @@ defmodule Vxpipe.Providers.ElevenLabs.Voices do
   end
 
   defp entry(_), do: {:error, :invalid_voice_catalog_response}
+
+  defp compatible?(_, model) when model in ["eleven_realtime_v1_mini", "eleven_realtime_v1_max"],
+    do: true
 
   defp compatible?(%{"category" => "professional", "fine_tuning" => %{"state" => states}}, model)
        when is_map(states),

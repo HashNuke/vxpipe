@@ -35,7 +35,7 @@ defmodule Vxpipe.CallEngine.VoiceCatalog.HTTP do
   defp decode(%{status: 200, body: body})
        when is_binary(body) and byte_size(body) <= @maximum_bytes do
     case JSON.decode(body) do
-      {:ok, value} when is_map(value) -> {:ok, value}
+      {:ok, value} when is_map(value) or is_list(value) -> {:ok, value}
       _ -> {:error, :invalid_voice_catalog_response}
     end
   end

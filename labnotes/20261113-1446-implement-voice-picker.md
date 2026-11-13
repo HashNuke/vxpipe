@@ -48,3 +48,23 @@ final milestone gates. No deployment is claimed. Environment files were not read
   out despite the empty state rendering correctly; DOM inspection confirmed it.
 - Preview used a temporary environment-free mirror. No environment file, live
   provider account, audio generation, or telephony was accessed.
+
+## Provider coverage checkpoint
+
+- Cartesia uses existing version/header rules, authenticated cursor paging and
+  direct ID lookup. Rime uses bounded public metadata filtered to Coda/English;
+  configured credentials are authorized but never forwarded to the public host.
+- Google/OpenAI/Flux named lists reuse installed model contracts. Public Deepgram
+  metadata had no Flux entries, so the documented English list is bundled.
+- Official ElevenLabs Realtime library support plus the string voice schema
+  supports exact account IDs; no name-to-slug mapping. Evidence and the lack of
+  authenticated upstream verification are explicit in the design.
+- Added seven provider boundary tests; total Engine catalog checks: 15 passing.
+  Initial failures established missing provider scopes, malformed public rows and
+  optional private names. Malformed data now errors; missing names preserve IDs.
+  Updated the older malformed-name fixture to test a wrong type, because absence
+  is documented as valid. All installed voice-bearing models resolve a catalog;
+  all named choices pass public parsers and pure runtime wire serialization.
+- Updated illustrative provider stories to the implemented filters and added
+  Google/ElevenLabs STS examples. Typecheck and focused lint passed. Root format,
+  warnings-as-errors compile, strict Credo and unused dependencies passed.

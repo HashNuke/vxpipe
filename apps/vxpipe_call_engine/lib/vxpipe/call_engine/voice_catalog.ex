@@ -65,7 +65,13 @@ defmodule Vxpipe.CallEngine.VoiceCatalog do
 
   defp resolve(_), do: {:error, :invalid_voice_scope}
   defp adapter(_, _, %{voices: %{type: :list}}), do: {:ok, :finite}
-  defp adapter("elevenlabs", "text_to_speech", _), do: {:ok, Voices}
+  defp adapter("elevenlabs", _, _), do: {:ok, Voices}
+  defp adapter("cartesia", "text_to_speech", _), do: {:ok, Vxpipe.Providers.Cartesia.Voices}
+  defp adapter("rime", "text_to_speech", _), do: {:ok, Vxpipe.Providers.Rime.Voices}
+
+  defp adapter(provider, _, _) when provider in ["google", "openai", "deepgram"],
+    do: {:ok, Vxpipe.CallEngine.VoiceCatalog.NamedVoices}
+
   defp adapter(_, _, _), do: {:error, :invalid_voice_scope}
   defp filters(:finite), do: []
   defp filters(adapter), do: adapter.filters()

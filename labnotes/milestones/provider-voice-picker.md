@@ -1,8 +1,7 @@
 # Provider voice picker
 
-Status: implementation in progress on main. The shared catalog, credential
-authorization and Console endpoints are implemented; production UI wiring and
-remaining provider catalogs are next. Acceptance gates remain open.
+Status: provider coverage and production wiring are implemented on main. Final
+shared-behavior and browser acceptance checks are in progress.
 
 ## Outcome and prerequisites
 
@@ -54,16 +53,16 @@ prerequisites. Packaging, call retention and guardrails are not prerequisites.
 
 ### B — Complete the existing provider coverage
 
-- [ ] Add Cartesia authenticated list/search/get and Rime public catalog
+- [x] Add Cartesia authenticated list/search/get and Rime public catalog
   normalization. Keep supported model/language constraints and real filter
   capabilities; replace illustrative Storybook filter assumptions where necessary.
-- [ ] Add Deepgram Flux English voices from metadata, verifying the metadata
+- [x] Add Deepgram Flux English voices from metadata, verifying the metadata
   actually includes Flux; use a documented bundled list if it does not. Reuse
   public-to-wire voice mapping and exclude unsupported model/language combinations.
-- [ ] Supply model-specific Google prebuilt and OpenAI GPT-Live named-voice lists
+- [x] Supply model-specific Google prebuilt and OpenAI GPT-Live named-voice lists
   plus existing finite Morse descriptors. Verify every offered choice passes the
   existing public option parser and serializes into the supported wire shape.
-- [ ] Resolve ElevenLabs Realtime voice compatibility using official API/schema
+- [x] Resolve ElevenLabs Realtime voice compatibility using official API/schema
   evidence, then provide Mini/Max catalogs. Do not assume `/v2/voices` TTS IDs or
   name-derived slugs are valid. Record any remaining provider documentation gap
   explicitly instead of claiming all-provider completion.
@@ -123,3 +122,13 @@ The production editor route now supplies the HTTP catalog client. Focused route
 checks select ElevenLabs voices in opening audio, defaults and an inherited
 participant override, then publish a dirty draft and reload the exact ID, binding
 and unrelated options. Browser acceptance remains in checkpoint C.
+
+Checkpoint B: Cartesia account catalogs and bounded public Rime Coda/English
+catalogs are implemented. Named catalogs cover Google TTS/STS (30 voices),
+OpenAI GPT-Live (38), and Deepgram Flux English (36), plus finite Morse models.
+Official ElevenLabs library support and its string schema support keeping account
+voice IDs unchanged for Realtime Mini/Max; the design records this inference and
+its offline verification limit. Focused Engine checks now total 15, including
+all installed voice-bearing descriptors and pure wire serialization for every
+named choice. Storybook filters match implemented capabilities. Root formatting,
+compile warnings, Credo and unused-dependency checks passed.

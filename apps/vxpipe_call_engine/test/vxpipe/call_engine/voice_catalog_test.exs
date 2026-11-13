@@ -89,7 +89,7 @@ defmodule Vxpipe.CallEngine.VoiceCatalogTest do
 
     for body <- [
           %{"voices" => "bad"},
-          %{"voices" => [%{"voice_id" => "no-name"}], "has_more" => false},
+          %{"voices" => [%{"voice_id" => "invalid-name", "name" => []}], "has_more" => false},
           %{"voices" => [], "has_more" => true}
         ] do
       Req.Test.stub(__MODULE__, &Req.Test.json(&1, body))
