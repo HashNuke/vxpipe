@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { CredentialNamesContext } from "./credential-names";
 import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
 import { CapabilityFields } from "./capability-fields";
 import { canSelectDefaultAgentModels, defaultAgentModelMode, setDefaultAgentModelMode } from "./default-agent-models";
@@ -16,6 +18,7 @@ const labels: Record<DefaultModelKind, string> = {
 };
 export function DefaultsPanel(props: DefaultsPanelProps) {
   const { document, onChange, catalog, issues } = props;
+  const credentialNames = useContext(CredentialNamesContext);
   const mode = defaultAgentModelMode(document.source);
   return <div className="space-y-6">
     <p className="text-xs text-muted-foreground">Participants inherit these models unless they choose their own provider and model.</p>
@@ -26,7 +29,7 @@ export function DefaultsPanel(props: DefaultsPanelProps) {
           { value: "llm", label: "LLM + Text-to-Speech", disabled: !canSelectDefaultAgentModels(document.source, "llm", catalog) },
           { value: "speech_to_speech", label: "Speech-to-Speech", disabled: !canSelectDefaultAgentModels(document.source, "speech_to_speech", catalog) },
         ]}
-        onChange={(next) => { if (next === "llm" || next === "speech_to_speech") onChange(setDefaultAgentModelMode(document, next, catalog)); }} />
+        onChange={(next) => { if (next === "llm" || next === "speech_to_speech") onChange(setDefaultAgentModelMode(document, next, catalog, credentialNames)); }} />
       {mode === "llm" ? <div className="space-y-6">
         <DefaultCapability {...props} kind="model_inference" />
         <DefaultCapability {...props} kind="text_to_speech" />

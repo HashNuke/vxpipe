@@ -1,3 +1,4 @@
+import { CredentialNamesContext } from "./credential-names";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ModelCatalog } from "../modelCatalog";
 import { ActionFailureContext } from "./action-failure-context";
@@ -133,9 +134,9 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
       else setIssuesOpen(true);
     }
   }
-  const inspector = <Inspector key={inspectorRequest} document={document} onChange={editor.edit} catalog={catalog} lookups={lookups} issues={issues} focusRequest={focusRequest}
+  const inspector = <CredentialNamesContext value={lookups.credentialNames}><Inspector key={inspectorRequest} document={document} onChange={editor.edit} catalog={catalog} lookups={lookups} issues={issues} focusRequest={focusRequest}
     selectedNodeId={selectedNodeId} tab={tab} onTabChange={(tab) => { setTab(tab); setFocusRequest(undefined); }}
-    onRenamed={selectNode} onRemoved={() => selectNode(null)} />;
+    onRenamed={selectNode} onRemoved={() => selectNode(null)} /></CredentialNamesContext>;
   return <JsonDraftContext value={{ drafts: jsonDrafts, setDrafts: setJsonDrafts }}><ActionFailureContext value={reportFailure}>
     <FlowEditorLayout noticeAction={noticeAction} document={document} selectedNodeId={selectedNodeId} issues={counts.nodes} onSelectNode={selectNode}
       onSelectEdge={selectEdge} onAddNode={add}

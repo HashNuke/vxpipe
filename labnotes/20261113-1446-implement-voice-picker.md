@@ -24,3 +24,27 @@ using the reviewed component and existing effective credential resolver.
 
 Production UI/client scope, remaining provider catalogs, browser acceptance and
 final milestone gates. No deployment is claimed. Environment files were not read.
+
+## Production editor checkpoint
+
+- Supplied the tenant-scoped HTTP client at the production editor route and removed
+  manual voice inputs. The existing picker is reused for `voice` and `speaker`.
+- Included credential names in requests and lookup/dialog identity; stale requests
+  are cancelled. Failed selected-ID lookups have a retry distinct from an absent
+  saved voice. Opening a catalog never changes the source.
+- Shared the existing connection-name selection rule for new provider selections
+  and model-type switches. Explicit/inherited bindings and unrelated options stay
+  intact when choosing voices.
+- Focused checks: 34 voice/binding/human-inspector tests, 15 route tests (including
+  opening/default/participant dirty Publish and reload), 56 adjacent editor/seed
+  checks. Typecheck and changed-file ESLint passed after moving the preview's
+  mutable mock transport outside React render.
+- Added a preview using the real editor route and production HTTP client with
+  synthetic fetch responses. Chrome inspection at 1440x1000 and 390x844 covered
+  selected ID absent from page one, paging/long names, loading, errors/retry,
+  empty results and Escape focus return. Mobile had no horizontal overflow.
+  API authorization is covered separately by Calls/Console tests; this preview
+  does not claim live-provider or hosted acceptance. A text-selector wait timed
+  out despite the empty state rendering correctly; DOM inspection confirmed it.
+- Preview used a temporary environment-free mirror. No environment file, live
+  provider account, audio generation, or telephony was accessed.

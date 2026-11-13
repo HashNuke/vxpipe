@@ -1,7 +1,7 @@
 import { createContext } from "react";
 
 /** Authoring contract; provider wire formats and credentials stay behind this boundary. */
-export type VoiceScope = { provider: string; model: string; capability: "text_to_speech" | "speech_to_speech" };
+export type VoiceScope = { provider: string; model: string; credential_name?: string; capability: "text_to_speech" | "speech_to_speech" };
 export type Voice = {
   id: string;
   name: string;
@@ -25,6 +25,5 @@ export type VoiceCatalogClient = {
   get: (scope: VoiceScope, id: string, signal: AbortSignal) => Promise<Voice | null>;
 };
 
-// Storybook supplies a fixture adapter. Production keeps the existing field until
-// the authorized provider catalog endpoints implement this contract.
+// The app supplies a tenant-scoped HTTP client; Storybook supplies fixture catalogs.
 export const VoiceCatalogContext = createContext<VoiceCatalogClient | null>(null);

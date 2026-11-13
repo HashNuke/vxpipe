@@ -22,7 +22,7 @@ export function canSelectAgentModels(source: CallSpecSource, key: string, mode: 
 }
 
 /** A mode change keeps other agents' effective selections when removing conflicting defaults. */
-export function setAgentModelMode(document: SourceDocument, key: string, mode: AgentModelMode, catalog: ModelCatalog): SourceDocument {
+export function setAgentModelMode(document: SourceDocument, key: string, mode: AgentModelMode, catalog: ModelCatalog, credentialNames: Record<string, string[]> = {}): SourceDocument {
   return editSource(document, (source) => {
     const target = agent(source, key);
     const capabilities = target.capabilities ??= {};
@@ -51,7 +51,7 @@ export function setAgentModelMode(document: SourceDocument, key: string, mode: A
       if (capabilities[kind] || source.defaults?.capabilities?.[kind]) continue;
       const provider = Object.keys(catalog[kind] ?? {}).sort().find((provider) => catalog[kind]![provider]!.some((model) => model.default));
       if (!provider) throw new Error("No recommended model is available for this model type. Reload the model catalog.");
-      capabilities[kind] = recommendedSelection(catalog, kind, provider);
+      capabilities[kind] = recommendedSelection(catalog, kind, provider, credentialNames);
     }
 
     if (source.defaults?.capabilities && !Object.keys(source.defaults.capabilities).length) delete source.defaults.capabilities;

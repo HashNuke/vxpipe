@@ -14,7 +14,7 @@ export function canSelectDefaultAgentModels(source: CallSpecSource, mode: AgentM
 }
 
 /** Defaults apply to every agent, so incompatible overrides must be removed too. */
-export function setDefaultAgentModelMode(document: SourceDocument, mode: AgentModelMode, catalog: ModelCatalog): SourceDocument {
+export function setDefaultAgentModelMode(document: SourceDocument, mode: AgentModelMode, catalog: ModelCatalog, credentialNames: Record<string, string[]> = {}): SourceDocument {
   return editSource(document, (source) => {
     const defaults = (source.defaults ??= {}).capabilities ??= {};
     const incompatible: CatalogCapability[] = mode === "speech_to_speech"
@@ -31,7 +31,7 @@ export function setDefaultAgentModelMode(document: SourceDocument, mode: AgentMo
       if (defaults[kind]) continue;
       const provider = recommendedProvider(catalog, kind);
       if (!provider) throw new Error("No recommended model is available for this model type. Reload the model catalog.");
-      defaults[kind] = recommendedSelection(catalog, kind, provider);
+      defaults[kind] = recommendedSelection(catalog, kind, provider, credentialNames);
     }
   });
 }

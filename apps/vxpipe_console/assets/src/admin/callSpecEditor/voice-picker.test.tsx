@@ -103,3 +103,34 @@ test("unavailable saved voices are kept, request errors can retry, and readonly 
   view.unmount(); render(<Harness catalog={client()} disabled />);
   expect(await screen.findByRole("button", { name: /Voice: Skylar/ })).toBeDisabled();
 });
+
+
+test("connection changes cancel old lookups and reset an open catalog without replacing the saved ID", async () => {
+  let old!: (value: typeof skylar) => void;
+  let oldSignal!: AbortSignal;
+  const catalog = client({ get: vi.fn(async (scope, _id, signal) => {
+    if (scope.credential_name === "old") { oldSignal = signal; return new Promise<typeof skylar>(resolve => { old = resolve; }); }
+    return river;
+  }) });
+  const props = { client: catalog, provider: "test", model: "speech", capability: "text_to_speech" as const, value: "saved", onChange: vi.fn(), path: ["voice"] };
+  const view = render(<VoiceField {...props} credential_name="old" />);
+  fireEvent.click(screen.getByRole("button", { name: /Voice: saved/ }));
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "old search" } });
+  view.rerender(<VoiceField {...props} credential_name="new" />);
+  await waitFor(() => expect(view.container.querySelector('button[aria-label="Voice: River"]')).not.toBeNull());
+  expect(oldSignal.aborted).toBe(true);
+  old(skylar);
+  await waitFor(() => expect(screen.queryByRole("button", { name: /Voice: Skylar/ })).not.toBeInTheDocument());
+  expect(screen.getByRole("searchbox")).toHaveValue("");
+  expect(props.onChange).not.toHaveBeenCalled();
+});
+
+test("a failed selected-voice lookup stays distinct from a missing voice and can retry", async () => {
+  const catalog = client({ get: vi.fn().mockRejectedValueOnce(new Error("private error")).mockResolvedValue(river) });
+  render(<Harness catalog={catalog} initial="saved" />);
+  expect(await screen.findByText("Couldn’t load voice details.")).toBeVisible();
+  expect(screen.queryByText(/details aren’t available/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Retry voice details" }));
+  await screen.findByRole("button", { name: /Voice: River/ });
+  expect(screen.getByTestId("value")).toHaveTextContent("saved");
+});

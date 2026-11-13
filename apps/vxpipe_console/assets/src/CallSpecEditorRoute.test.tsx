@@ -6,7 +6,7 @@ import type { CatalogCapability } from "./admin/modelCatalog";
 import { newCallSpec } from "./admin/callSpecEditor/seed";
 import type { FlowCanvasProps } from "./admin/callSpecEditor/flow-canvas";
 
-vi.mock("./admin/callSpecEditor/flow-canvas", () => ({ FlowCanvas: ({ onSelectNode }: FlowCanvasProps) => <div>Flow canvas<button onClick={() => onSelectNode("assistant")}>Select assistant</button></div> }));
+vi.mock("./admin/callSpecEditor/flow-canvas", () => ({ FlowCanvas: ({ onSelectNode }: FlowCanvasProps) => <div>Flow canvas<button onClick={() => onSelectNode("assistant")}>Select assistant</button><button onClick={() => onSelectNode("$entry")}>Select entry</button></div> }));
 afterEach(() => { cleanup(); window.history.replaceState({}, "", "/admin"); });
 const source = { ...newCallSpec(modelCatalogFixture, { direction: "incoming" }).source, name: "Original" };
 if (source.participants.assistant?.type === "agent") source.participants.assistant.prompt = "Handle appointment requests.";
@@ -234,4 +234,51 @@ test("outgoing creation explains missing phone services and can be cancelled", a
   expect(screen.getByRole("link", { name: "Configure a phone service" })).toHaveAttribute("href", "/admin/tenants/AAAAAAAAAAAAAAAA/services");
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(await screen.findByText("No call specs yet")).toBeVisible();
+});
+
+
+test.each(["opening", "defaults", "participant"])("production voice client round-trips %s selection through dirty Publish and reload", async (site) => {
+  window.history.replaceState({}, "", `/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/${stored.call_spec_id}`);
+  const selection = { provider: "elevenlabs", model: "eleven_flash_v2_5", credential_name: "office", options: { voice: "saved-voice", sample_rate: 24000 } };
+  const initial = structuredClone(source);
+  initial.defaults!.capabilities!.text_to_speech = selection;
+  initial.opening_audio = { type: "text", text: "Welcome", text_to_speech: selection };
+  let persisted = { ...stored, source: initial };
+  const fetch = transport(); const good = fetch.getMockImplementation()!;
+  fetch.mockImplementation((input, init) => {
+    const url = new URL(String(input), "https://console.test");
+    if (url.pathname.includes("/voices")) {
+      expect(url.searchParams.get("credential_name")).toBe("office");
+      if (url.pathname.endsWith("/descriptor")) return reply({ providerName: "ElevenLabs", modelName: "Flash", search: true, filters: [] });
+      const voice = { id: "chosen-voice", name: "Chosen voice", attributes: [] };
+      if (url.pathname.endsWith("/voices")) return reply({ voices: [voice], nextCursor: null });
+      return reply({ voice: url.pathname.endsWith("/chosen-voice") ? voice : { ...voice, id: "saved-voice", name: "Saved voice" } });
+    }
+    if (init?.method === "PUT") {
+      persisted = { ...persisted, revision: 3, latest_revision: 3, source: JSON.parse(String(init.body)).source };
+      return reply({ call_spec: persisted });
+    }
+    if (init?.method === "POST") return reply({ call_spec: { ...persisted, published_revision: 3 } });
+    if (url.pathname.endsWith(`/${stored.call_spec_id}`)) return reply({ call_spec: persisted });
+    return good(input, init);
+  });
+  const navigateSite = async () => {
+    await screen.findByRole("button", { name: "Edit call spec name" });
+    if (site === "opening") fireEvent.click(screen.getByRole("button", { name: "Select entry" }));
+    if (site === "participant") { fireEvent.click(screen.getByRole("button", { name: "Select assistant" })); fireEvent.mouseDown(screen.getByRole("tab", { name: "Models" }), { button: 0, ctrlKey: false }); }
+  };
+  const view = render(<App csrfToken="csrf" fetchImpl={fetch} />); await navigateSite();
+  expect(fetch.mock.calls.some(([path]) => /\/voices\?/.test(String(path)))).toBe(false);
+  fireEvent.click(await screen.findByRole("button", { name: "Voice: Saved voice" }));
+  fireEvent.click(await screen.findByRole("radio", { name: /Chosen voice/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Use voice" }));
+  expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
+  const catalogsBeforePublish = fetch.mock.calls.filter(([path]) => /\/voices\?/.test(String(path))).length;
+  fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+  await screen.findByText("Published revision 3");
+  const selected = site === "opening" && persisted.source.opening_audio?.type === "text" ? persisted.source.opening_audio.text_to_speech : site === "participant" ? persisted.source.participants.assistant!.capabilities!.text_to_speech : persisted.source.defaults!.capabilities!.text_to_speech;
+  expect(selected).toEqual({ ...selection, options: { ...selection.options, voice: "chosen-voice" } });
+  expect(fetch.mock.calls.filter(([path]) => /\/voices\?/.test(String(path)))).toHaveLength(catalogsBeforePublish);
+  view.unmount(); render(<App csrfToken="csrf" fetchImpl={fetch} />); await navigateSite();
+  expect(await screen.findByRole("button", { name: "Voice: Chosen voice" })).toBeVisible();
 });

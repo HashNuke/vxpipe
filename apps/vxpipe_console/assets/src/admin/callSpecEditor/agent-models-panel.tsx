@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { CredentialNamesContext } from "./credential-names";
 import type { ModelCatalog } from "../modelCatalog";
 import { agentModelKinds, agentModelMode, canSelectAgentModels, setAgentModelMode } from "./agent-models";
 import { ChoiceField } from "./editor-fields";
@@ -6,6 +8,7 @@ import { ParticipantCapabilities } from "./participant-capabilities";
 
 export function AgentModelsPanel(props: InspectorProps & { participantKey: string; catalog: ModelCatalog }) {
   const { document, participantKey, catalog, onChange, issues } = props;
+  const credentialNames = useContext(CredentialNamesContext);
   const mode = agentModelMode(document.source, participantKey);
   return <div className="space-y-5">
     <ChoiceField label="Model type" layout="inline" path={["participants", participantKey, "capabilities"]} issues={issues} disabled={document.readOnly} value={mode}
@@ -14,7 +17,7 @@ export function AgentModelsPanel(props: InspectorProps & { participantKey: strin
         { value: "llm", label: "LLM + Text-to-Speech", disabled: !canSelectAgentModels(document.source, participantKey, "llm", catalog) },
       ]}
       hint={mode === "speech_to_speech" ? "One model handles speech input and speech output." : "Choose an LLM for responses and Text-to-Speech for this agent's voice."}
-      onChange={(next) => { if (next === "llm" || next === "speech_to_speech") onChange(setAgentModelMode(document, participantKey, next, catalog)); }} />
+      onChange={(next) => { if (next === "llm" || next === "speech_to_speech") onChange(setAgentModelMode(document, participantKey, next, catalog, credentialNames)); }} />
     <ParticipantCapabilities {...props} kinds={agentModelKinds[mode]} required />
   </div>;
 }

@@ -47,7 +47,7 @@ prerequisites. Packaging, call retention and guardrails are not prerequisites.
 - [x] Implement ElevenLabs TTS listing/search, filters, cursor paging and direct
   saved-ID lookup using the selected credential. Use captured/synthetic HTTP
   fixtures with no live account calls; filter incompatible model voices.
-- [ ] Wire the production client/context and credential-aware scope into all shared
+- [x] Wire the production client/context and credential-aware scope into all shared
   voice fields. Verify an ElevenLabs selection through opening audio, defaults and
   a participant, including save/reload and Publish from a dirty draft. This is the
   first runnable vertical slice.
@@ -118,3 +118,8 @@ credential resolver, with no persistent cache or runtime speech changes. Focused
 offline tests cover the catalog (8), Calls authorization (6), and Console routes
 (2). Each boundary was exercised red before implementation. UI and all-provider
 acceptance are still pending.
+
+The production editor route now supplies the HTTP catalog client. Focused route
+checks select ElevenLabs voices in opening audio, defaults and an inherited
+participant override, then publish a dirty draft and reload the exact ID, binding
+and unrelated options. Browser acceptance remains in checkpoint C.

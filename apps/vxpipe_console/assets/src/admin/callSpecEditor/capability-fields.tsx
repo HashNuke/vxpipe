@@ -1,8 +1,10 @@
+import { CredentialNamesContext } from "./credential-names";
 import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
 import { useContext } from "react";
 import { VoiceCatalogContext } from "../voiceCatalog";
 import { VoiceField } from "./voice-field";
-import { ChoiceField, TextField } from "./editor-fields";
+import { Button } from "../components/ui/button";
+import { ChoiceField } from "./editor-fields";
 import { recommendedSelection, selectionForModel } from "./seed";
 import type { CapabilitySelection, SourceIssue } from "./types";
 
@@ -23,6 +25,7 @@ const providerNames: Record<string, string> = { morse: "MorseCode Local", morse_
 
 /** Public model and voice remain separate; adapters own their wire-format mapping. */
 export function CapabilityFields({ kind, path, value, onChange, catalog, disabled, issues, defaultLabel = "Not configured", defaultDisabled = false, inherited }: Props) {
+  const credentialNames = useContext(CredentialNamesContext);
   const voiceCatalog = useContext(VoiceCatalogContext);
   const providers = catalog[kind] ?? {};
   const models = value && Object.hasOwn(providers, value.provider) ? providers[value.provider]! : [];
@@ -35,7 +38,7 @@ export function CapabilityFields({ kind, path, value, onChange, catalog, disable
         value={value?.provider ?? ""} choices={[...(inherited ? [] : [{ value: "", label: defaultLabel, disabled: defaultDisabled }]), ...Object.keys(providers).sort().map((provider) => ({ value: provider, label: providerNames[provider] ?? provider }))]}
         onChange={(provider) => {
           if (provider === inherited?.provider) { onChange(undefined); return; }
-          const selected = provider ? recommendedSelection(catalog, kind, provider) : undefined;
+          const selected = provider ? recommendedSelection(catalog, kind, provider, credentialNames) : undefined;
           onChange(selected && kind === "speech_to_text" && typeof value?.vad === "boolean"
             ? { ...selected, vad: value.vad } : selected);
         }} />
@@ -53,14 +56,9 @@ export function CapabilityFields({ kind, path, value, onChange, catalog, disable
     </div>
     {value && <>
       {voices && (voiceCatalog && (kind === "text_to_speech" || kind === "speech_to_speech")
-        ? <VoiceField client={voiceCatalog} provider={value.provider} model={value.model} capability={kind} path={[...path, "options", voices.parameter]} issues={issues} disabled={disabled}
+        ? <VoiceField client={voiceCatalog} provider={value.provider} model={value.model} capability={kind} credential_name={value.credential_name} path={[...path, "options", voices.parameter]} issues={issues} disabled={disabled}
           value={typeof voice === "string" ? voice : ""} onChange={voice => onChange({ ...value, options: { ...value.options, [voices.parameter]: voice } })} />
-        : voices.type === "free_text"
-        ? <TextField label="Voice" path={[...path, "options", voices.parameter]} issues={issues} disabled={disabled} value={typeof voice === "string" ? voice : ""}
-          onChange={(voice) => onChange({ ...value, options: { ...value.options, [voices.parameter]: voice } })} />
-        : <ChoiceField label="Voice" path={[...path, "options", voices.parameter]} issues={issues} disabled={disabled} value={typeof voice === "string" ? voice : ""}
-          choices={voices.values.map((voice) => ({ value: voice.id, label: voice.name }))}
-          onChange={(voice) => onChange({ ...value, options: { ...value.options, [voices.parameter]: voice } })} />)}
+        : <Button variant="outline" disabled aria-label={`Voice: ${voice || "Choose voice"}`}>{typeof voice === "string" ? voice : "Choose voice"}</Button>)}
     </>}
   </fieldset>;
 }

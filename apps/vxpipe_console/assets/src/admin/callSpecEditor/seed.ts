@@ -4,12 +4,12 @@ import { requireIdentifier } from "./editSource";
 
 export type NewCallDirection = { direction: "incoming" } | { direction: "outgoing"; service: string };
 
-export function recommendedSelection(catalog: ModelCatalog, capability: CatalogCapability, provider: string): CapabilitySelection {
+export function recommendedSelection(catalog: ModelCatalog, capability: CatalogCapability, provider: string, credentialNames: Record<string, string[]> = {}): CapabilitySelection {
   const providers = catalog[capability];
   const models = providers && Object.hasOwn(providers, provider) ? providers[provider] : undefined;
   const model = models?.find((model) => model.default);
   if (!model) throw new Error("No recommended model is available for this provider. Reload the model catalog.");
-  return selectionForModel(provider, model);
+  return withConfiguredCredential(selectionForModel(provider, model), credentialNames);
 }
 
 export function selectionForModel(provider: string, model: ModelDescriptor): CapabilitySelection {
@@ -47,4 +47,12 @@ export function newCallSpec(catalog: ModelCatalog, choice: NewCallDirection): So
       },
     },
   };
+}
+
+
+export function withConfiguredCredential(selection: CapabilitySelection, credentialNames: Record<string, string[]>): CapabilitySelection {
+  if (selection.credential_name) return selection;
+  const names = credentialNames[selection.provider] ?? [];
+  const name = names.includes(selection.provider) ? selection.provider : names.includes("default") ? "default" : names.length === 1 ? names[0] : undefined;
+  return name ? { ...selection, credential_name: name } : selection;
 }
