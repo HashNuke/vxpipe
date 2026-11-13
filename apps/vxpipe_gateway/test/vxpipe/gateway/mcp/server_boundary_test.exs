@@ -63,8 +63,9 @@ defmodule Vxpipe.Gateway.MCP.ServerBoundaryTest do
 
   @tag capture_log: true
   test "configured handler deadline returns a bounded error and terminates request work" do
+    # The short deadline exercises the blocked request, not session setup.
+    {session_id, _initialized} = initialize(options(block: true), "key-one")
     options = options(block: true, handler_call_timeout: 20)
-    {session_id, _initialized} = initialize(options, "key-one")
     supervisor = start_supervised!(Task.Supervisor)
 
     task =
@@ -72,7 +73,7 @@ defmodule Vxpipe.Gateway.MCP.ServerBoundaryTest do
         request("tools/list", 2, session_id, "key-one", options)
       end)
 
-    assert_receive {:probe_blocked, handler}
+    assert_receive {:probe_blocked, handler}, 1_000
     monitor = Process.monitor(handler)
     response = Task.await(task, 5_000)
 
