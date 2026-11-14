@@ -188,8 +188,10 @@ records the narrow protocol investigation and verification.
   the full default suite and required root/Lean checks.
 
 Verification: six live conversational cases pass, alongside all 5,314 default
-tests (zero failures, 385 excluded), root static checks and Lean. This checkpoint
-is not a production deployment or completion of the whole milestone.
+tests (zero failures, 385 excluded), root static checks and Lean. Commit `cd4a2de2`
+was deployed as a production release to `vxpipe.service` on 2026-11-14. Local and
+public health checks pass, and all 1,779 project BEAM hashes match the release
+build. This does not complete the whole milestone.
 
 This uses provider-gap evidence, not semantic sentence completion. Provider
 silence processing and keepalive cadence still contribute latency; this checkpoint

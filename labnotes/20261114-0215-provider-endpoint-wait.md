@@ -62,6 +62,23 @@ Sources checked on 2026-11-14:
   includes the configured encrypted-service room path and existing manual/local
   detector, interruption and lifecycle regressions.
 - Changed documentation links and diff whitespace checks pass. The live-test
-  reservation was released after live acceptance completed. Changes remain
-  uncommitted in `qa`; no deployment or one-second end-to-end latency result is
-  claimed.
+  reservation was released after live acceptance completed. These checks preceded
+  the deployment below and do not establish one-second end-to-end latency.
+
+## Production release deployment
+
+- Committed the implementation, tests and documentation on `qa` as `cd4a2de2`.
+- Built production assets and the `vxpipe` release, then packaged the release-only
+  container as `vxpipe:scribe-cd4a2de2`, with the source revision in its image label.
+- Telnyx reported zero active calls for the Vitrum application before restarting
+  `vxpipe.service` on 2026-11-14 at 06:33 UTC. Two historical database rows still
+  marked running predate the bookkeeping fix; no call records were changed here.
+- The migration pre-start command succeeded. The service is active with no
+  automatic restarts, and both local and public `/healthz` checks pass. All 1,779
+  project BEAM hashes in the running container match the built production release.
+  Startup logs contain no warning/error entries.
+- The deployed image is
+  `sha256:7fa110741d2335eae0e62680fe3807eb1515a09c4ce50aec3a8531ee1fc3ef2c`.
+  The previous image is retained as `vxpipe:before-scribe-cd4a2de2` for rollback.
+- Deployment verification covers release identity and startup health. No new
+  phone-call latency measurement or broader barge-in acceptance is claimed.
