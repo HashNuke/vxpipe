@@ -1,7 +1,7 @@
 # Provider turn detection and contextual barge-in
 
-Status: planned, 2026-11-14. Research and implementation tasks remain open.
-The user requested this milestone before implementation.
+Status: in progress, 2026-11-14. The narrow Scribe wait-removal checkpoint is
+implemented and verified; multilingual barge-in and the broader acceptance remain open.
 
 ## Runnable outcome
 
@@ -167,4 +167,30 @@ and retained explicit gates for provider endpoint evidence, upstream cancellatio
 control, multilingual ambiguity, Silero fallback and actual playback measurement.
 
 No provider research, implementation, live acceptance or one-second performance
-result is claimed by this review. All task boxes and the index entry remain open.
+result is claimed by this initial review. The index entry remains open until the
+whole milestone passes acceptance.
+
+## Scoped checkpoint — remove Scribe's local endpoint wait
+
+On 2026-11-14 the user requested only removal of the extra wait, deferring
+barge-in. [Checkpoint evidence](../20261114-0215-provider-endpoint-wait.md)
+records the narrow protocol investigation and verification.
+
+- [x] Establish provider silence evidence separately from forced transcript
+  commits, without selecting a different model or introducing local VAD.
+- [x] Remove Scribe's 1.5-second transcript-settling timer. Request provider
+  keepalives and finish immediately on an empty silence notification after
+  committed text with no outstanding draft. Preserve local/manual endpoint
+  waits and current barge-in behavior.
+- [x] Prove the behavior red/green, including forced segments, retained drafts,
+  repeated identical answers, missing evidence and duplicate silence events.
+- [x] Complete live repeated/long/noisy input checks with optional VAD off/on,
+  the full default suite and required root/Lean checks.
+
+Verification: six live conversational cases pass, alongside all 5,314 default
+tests (zero failures, 385 excluded), root static checks and Lean. This checkpoint
+is not a production deployment or completion of the whole milestone.
+
+This uses provider-gap evidence, not semantic sentence completion. Provider
+silence processing and keepalive cadence still contribute latency; this checkpoint
+does not claim the one-second end-to-end target or the broader barge-in design.

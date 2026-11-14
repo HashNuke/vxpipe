@@ -54,8 +54,13 @@ the default. Empty transcripts do not create model input.
 
 Conversational STT declares `provider_semantic`, `provider_gap`, `local_gap` or
 an explicitly supported `inferred_gap`. A recognition segment is not necessarily
-a conversational turn. The Scribe adapter's transcript-gap inference is a
-heuristic and must remain identified as such. Final-only input publishes start,
+a conversational turn. Continuous Scribe requests provider silence keepalives and
+settles committed text on an empty keepalive with no outstanding draft. This is
+`provider_gap` evidence, not semantic completion. It adds no local endpoint timer;
+the provider's silence detection, processing and keepalive cadence still affect
+latency. Forced long-input commits accumulate until that boundary. A pending
+draft retains its bounded flush/deadline handling. Manual/local-detector endpoint
+policies are separate and retain their waits. Final-only input publishes start,
 text and end in order.
 
 Human-STT and STS microphone paths have separate bounded queues, conversion

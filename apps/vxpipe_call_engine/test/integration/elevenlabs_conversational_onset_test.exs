@@ -198,7 +198,7 @@ defmodule Vxpipe.CallEngine.Integration.ElevenLabsConversationalOnsetTest do
 
     for {ended, word} <- Enum.zip(ends, expected_words) do
       assert String.downcase(ended.text) =~ word
-      assert ended.endpointing == :inferred_gap
+      assert ended.endpointing == :provider_gap
       assert Enum.any?(events, &(&1.kind == :transcript and &1.turn_ref == ended.turn_ref))
     end
   end

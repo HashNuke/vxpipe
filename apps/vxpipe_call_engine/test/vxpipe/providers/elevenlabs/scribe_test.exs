@@ -17,7 +17,8 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTest do
              "vad_silence_threshold_secs" => "1.5",
              "vad_threshold" => "0.4",
              "min_speech_duration_ms" => "100",
-             "min_silence_duration_ms" => "100"
+             "min_silence_duration_ms" => "100",
+             "keepalive_interval_ms" => "500"
            }
 
     refute connection.url =~ "synthetic-scribe-private"
@@ -34,7 +35,8 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTest do
       "vad_silence_threshold_secs" => 1.5,
       "vad_threshold" => 0.4,
       "min_speech_duration_ms" => 100,
-      "min_silence_duration_ms" => 100
+      "min_silence_duration_ms" => 100,
+      "keepalive_interval_ms" => 500
     }
 
     ready = %{
@@ -55,6 +57,8 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTest do
           {"vad_threshold", 0.8},
           {"min_speech_duration_ms", 250},
           {"min_silence_duration_ms", 250},
+          {"keepalive_interval_ms", nil},
+          {"keepalive_interval_ms", 1_000},
           {"vad_threshold", "0.4"},
           {"min_speech_duration_ms", nil}
         ] do

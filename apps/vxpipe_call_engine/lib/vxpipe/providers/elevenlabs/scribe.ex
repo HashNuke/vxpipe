@@ -6,7 +6,8 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
     vad_silence_threshold_secs: 1.5,
     vad_threshold: 0.4,
     min_speech_duration_ms: 100,
-    min_silence_duration_ms: 100
+    min_silence_duration_ms: 100,
+    keepalive_interval_ms: 500
   ]
   @enforce_keys [:api_key, :model, :encoding, :sample_rate, :language_code, :commit_strategy]
   @derive {Inspect, only: [:model, :encoding, :sample_rate, :language_code, :commit_strategy]}
