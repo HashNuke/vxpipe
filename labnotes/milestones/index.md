@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 63 milestone specifications: 50 complete and 13 incomplete. Milestone 17, Telnyx calls and
+Status: 64 milestone specifications: 50 complete and 14 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -192,8 +192,16 @@ progress without claiming the entire milestone is complete.
 59. [x] [Shared Telnyx applications and tenant overrides](shared-telnyx-applications.md) — Three checkpoints: persist defaults/overrides, route shared calls by number, and connect the production modal. All nine tasks verified: atomic configuration, populated migrations, shared routing, duplicate protection, production modal and all root gates. Tenant credentials require a tenant application; either override displays the tenant URL. Signed tenant application events also work at the platform endpoint. Migrate data without legacy fallback modes. [Post-review fixes](../20261113-1431-fix-telnyx-review.md) cover inherited caller-number editing and application-only permissions.
 60. [ ] [Voice agent input and output guardrails](voice-agent-guardrails.md) — Research/specification complete; implementation not started. Participant questions and confidence thresholds, inherited evaluator selection, Jev/OpenAI Decisions, input feedback or standard responses, bounded output regeneration, and permitted transcript/debug evidence. Native speech-to-speech is deferred.
 61. [x] [Provider voice picker](provider-voice-picker.md) — Shared production picker and authorized catalogs cover opening audio, defaults and participant TTS/STS. Provider compatibility research, 23 focused backend and 54 UI checks, and desktop/mobile Chrome inspection complete. No paid calls, persistent catalog infrastructure or deployment.
-62. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README. Local QA release, migrations and container/system services are implemented; distribution and embedded acceptance remain incomplete.
-63. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+62. [ ] [Provider turn detection and contextual barge-in](provider-turn-detection-and-contextual-barge-in.md) — Planned: remove extra waiting after confirmed provider turn completion, retain explicit local/Silero endpoint fallback, distinguish multilingual acknowledgments from interruptions, and verify the one-second response target. Research and implementation remain open.
+63. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README. Local QA release, migrations and container/system services are implemented; distribution and embedded acceptance remain incomplete.
+64. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+
+The 2026-11-14 [turn detection and barge-in plan](provider-turn-detection-and-contextual-barge-in.md)
+builds on completed speech/session and onset work. It replaces unconditional
+speech-onset interruption with contextual admission and removes duplicate endpoint
+waiting where the provider supplies a confirmed conversational boundary. Local
+detector fallback, multilingual research and measured latency remain explicit
+tasks. The local design review is separate from implementation; all gates are open.
 
 The 2026-11-11 [guardrail research and decision](../../docs/design/voice-agent-guardrails.md)
 adds participant input/output checks after their implemented runtime, provider,
