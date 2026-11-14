@@ -58,6 +58,17 @@ a conversational turn. The Scribe adapter's transcript-gap inference is a
 heuristic and must remain identified as such. Final-only input publishes start,
 text and end in order.
 
+ElevenLabs Scribe v2 Realtime (`scribe_v2_realtime`) and Scribe v3 Live
+(`scribe_v3_live`) share the same Scribe session, transport and transcript codec.
+The socket validates any echoed model against the selected configuration. Both
+use 16 kHz mono PCM and the existing manual/VAD commit modes. V3's additional
+`turn_probability` metadata does not change endpoint authority: Vxpipe does not
+request `turn_prediction` or interpret a partial's probability as a completed
+turn. This keeps model selection independent of turn-policy changes. The
+[ElevenLabs realtime reference](https://elevenlabs.io/docs/api-reference/speech-to-text/v-1-speech-to-text-realtime)
+and [commit-strategy guide](https://elevenlabs.io/docs/eleven-api/guides/how-to/speech-to-text/realtime/transcripts-and-commit-strategies)
+define the shared protocol and optional V3 behavior.
+
 Human-STT and STS microphone paths have separate bounded queues, conversion
 state and delivery credit. One consumer's overload cannot grow or stall the
 other queue. Only authorized source frames feed STS, not the mixed room output.

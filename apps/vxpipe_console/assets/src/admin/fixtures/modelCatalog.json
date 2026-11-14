@@ -88,6 +88,12 @@
         "id": "scribe_v2_realtime",
         "name": "Scribe v2 Realtime",
         "voices": null
+      },
+      {
+        "default": false,
+        "id": "scribe_v3_live",
+        "name": "Scribe v3 Live",
+        "voices": null
       }
     ],
     "google": [
@@ -197,6 +203,12 @@
         "default": true,
         "id": "scribe_v2_realtime",
         "name": "Scribe v2 Realtime",
+        "voices": null
+      },
+      {
+        "default": false,
+        "id": "scribe_v3_live",
+        "name": "Scribe v3 Live",
         "voices": null
       }
     ],

@@ -31,9 +31,10 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
     %{options: options}
   end
 
-  for vad <- [:omitted, false, true] do
+  for model <- ["scribe_v2_realtime", "scribe_v3_live"], vad <- [:omitted, false, true] do
+    @model model
     @vad vad
-    test "published ElevenLabs calls prepare API onset choice #{vad} with tenant/platform credentials",
+    test "published ElevenLabs #{model} calls prepare API onset choice #{vad} with tenant/platform credentials",
          %{
            options: options
          } do
@@ -50,7 +51,17 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
                  options
                )
 
-      assert {:ok, draft} = Vxpipe.Calls.save_call_spec(tenant.key, source(@vad), options)
+      assert {:ok, draft} =
+               Vxpipe.Calls.save_call_spec(
+                 tenant.key,
+                 put_in(
+                   source(@vad),
+                   [:defaults, :capabilities, :speech_to_text, :model],
+                   @model
+                 ),
+                 options
+               )
+
       assert draft.validation_errors == []
 
       assert {:ok, publication} =
@@ -99,7 +110,7 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
                "synthetic-platform-elevenlabs"
 
       assert inherited.text_to_speech.asset_cache_identity["credential"]["id"] == platform.id
-      assert stt_key(inherited, @vad == true) == "synthetic-platform-elevenlabs"
+      assert stt_key(inherited, @vad == true, @model) == "synthetic-platform-elevenlabs"
 
       assert {:ok, own} =
                ProviderCredentials.provision(
@@ -120,7 +131,7 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
                inherited.text_to_speech.asset_cache_identity
 
       refute inspect(overridden) =~ "synthetic-tenant-elevenlabs"
-      assert stt_key(overridden, @vad == true) == "synthetic-tenant-elevenlabs"
+      assert stt_key(overridden, @vad == true, @model) == "synthetic-tenant-elevenlabs"
       refute :erlang.term_to_binary(publication) =~ "synthetic-"
 
       assert :ok = ProviderCredentials.delete(tenant.key, own.id, options)
@@ -133,7 +144,7 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
                "synthetic-platform-elevenlabs"
 
       assert {TTSSession, public} = restored.text_to_speech.provider
-      assert stt_key(restored, @vad == true) == "synthetic-platform-elevenlabs"
+      assert stt_key(restored, @vad == true, @model) == "synthetic-platform-elevenlabs"
       assert Keyword.fetch!(public, :model) == "eleven_flash_v2_5"
       assert restored.text_to_speech.usage_provider.name == "elevenlabs"
 
@@ -251,15 +262,16 @@ defmodule Vxpipe.Console.ElevenLabsServiceActivationTest do
     |> Map.fetch!(:api_key)
   end
 
-  defp stt_key(startup, vad) do
+  defp stt_key(startup, vad, model) do
     [runtime] = startup.speech_to_text_runtimes |> Map.values() |> Enum.reject(&is_nil/1)
     assert {Vxpipe.CallEngine.Speech.ConversationalSTT, composed} = runtime.provider
     assert Keyword.fetch!(composed, :vad) == vad
     assert Keyword.fetch!(composed, :provider) == STTSession
     public = Keyword.fetch!(composed, :options)
     assert Keyword.fetch!(public, :commit_strategy) == :vad
-    assert Keyword.fetch!(public, :model) == "scribe_v2_realtime"
+    assert Keyword.fetch!(public, :model) == model
     assert runtime.usage_provider.name == "elevenlabs"
+    assert runtime.usage_provider.model == model
 
     runtime.provider_private
     |> Keyword.fetch!(:recognizer_private)

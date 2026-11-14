@@ -117,6 +117,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     options = [
       owner: self(),
       connection: Scribe.connection_options(state.config),
+      model: state.config.model,
       commit_strategy: :vad,
       transport_options: state.wire_options
     ]

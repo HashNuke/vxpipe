@@ -116,3 +116,23 @@ set `speech_to_text.vad: true` beside the provider/model fields for earlier loca
 speech detection. It changes onset only; the recognizer still owns the turn's
 endpoint. There is no Console VAD toggle, and the setting does not apply to native
 speech-to-speech models.
+
+### ElevenLabs Scribe models
+
+An ElevenLabs connection supports both `scribe_v2_realtime` (Scribe v2 Realtime)
+and `scribe_v3_live` (Scribe v3 Live). Select either model under Speech to text in
+the editor, or set it inside a call spec’s `capabilities`:
+
+```json
+{
+  "speech_to_text": {
+    "provider": "elevenlabs",
+    "model": "scribe_v3_live"
+  }
+}
+```
+
+Use `credential_name` when selecting a named connection. Both models use the same
+ElevenLabs API key. Existing specs keep their selected model; the default remains
+Scribe v2 Realtime. Both use Vxpipe's existing transcript onset and inferred-gap
+turn handling, described in [the speech runtime](../development/speech-runtime.md#input-and-caller-turns).

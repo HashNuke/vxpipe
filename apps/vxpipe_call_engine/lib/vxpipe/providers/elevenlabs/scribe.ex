@@ -2,6 +2,7 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
   @moduledoc false
   @endpoint "wss://api.elevenlabs.io/v1/speech-to-text/realtime"
   @model "scribe_v2_realtime"
+  @live_model "scribe_v3_live"
   @vad_profile [
     vad_silence_threshold_secs: 1.5,
     vad_threshold: 0.4,
@@ -17,7 +18,8 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
 
   def models do
     [
-      Model.new("scribe_v2_realtime", "Scribe v2 Realtime", true)
+      Model.new(@model, "Scribe v2 Realtime", true),
+      Model.new(@live_model, "Scribe v3 Live", false)
     ]
   end
 
@@ -89,12 +91,13 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
   defdelegate commit(), to: STTProtocol
   defdelegate keepalive(), to: STTProtocol
 
-  def decode(payload, commit_strategy \\ :manual)
+  def decode(payload, commit_strategy \\ :manual, model \\ @model)
 
-  def decode(payload, strategy) when strategy in [:manual, :vad] do
+  def decode(payload, strategy, model)
+      when strategy in [:manual, :vad] and model in [@model, @live_model] do
     case STTProtocol.decode(payload) do
       {:ok, {:ready, session_id, config}} ->
-        if matching_configuration?(config, strategy),
+        if matching_configuration?(config, strategy, model),
           do: {:ok, {:ready, session_id}},
           else: {:error, :invalid_message}
 
@@ -103,15 +106,15 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
     end
   end
 
-  def decode(_payload, _strategy), do: {:error, :invalid_message}
+  def decode(_payload, _strategy, _model), do: {:error, :invalid_message}
 
   defp unique_options?(options),
     do: length(options) == length(Enum.uniq(Keyword.keys(options)))
 
-  defp matching_configuration?(config, strategy) do
+  defp matching_configuration?(config, strategy, model) do
     expected =
       [
-        {"model_id", @model},
+        {"model_id", model},
         {"sample_rate", 16_000},
         {"audio_format", "pcm_16000"},
         {"commit_strategy", wire_strategy(strategy)}

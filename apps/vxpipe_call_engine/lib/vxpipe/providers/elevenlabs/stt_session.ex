@@ -170,6 +170,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
     options = [
       owner: self(),
       connection: Scribe.connection_options(state.config),
+      model: state.config.model,
       commit_strategy: :manual,
       transport_options: state.wire_options
     ]

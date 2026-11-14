@@ -3,6 +3,66 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeTest do
 
   alias Vxpipe.Providers.ElevenLabs.Scribe
 
+  test "v3 Live shares the streaming contract and validates the requested model acknowledgement" do
+    assert Enum.any?(
+             Scribe.models(),
+             &(&1.id == "scribe_v3_live" and &1.name == "Scribe v3 Live")
+           )
+
+    for strategy <- [:manual, :vad] do
+      assert {:ok, config} =
+               Scribe.new(
+                 api_key: "synthetic-key",
+                 model: "scribe_v3_live",
+                 commit_strategy: strategy
+               )
+
+      connection = Scribe.connection_options(config)
+      query = URI.decode_query(URI.parse(connection.url).query)
+      assert query["model_id"] == "scribe_v3_live"
+      assert query["commit_strategy"] == Atom.to_string(strategy)
+      assert query["audio_format"] == "pcm_16000"
+
+      ready = %{
+        "message_type" => "session_started",
+        "session_id" => "v3-session",
+        "config" => query |> Map.take(["model_id", "audio_format", "commit_strategy"])
+      }
+
+      assert {:ok, {:ready, "v3-session"}} =
+               Scribe.decode(JSON.encode!(ready), strategy, config.model)
+
+      mismatch = put_in(ready, ["config", "model_id"], "scribe_v2_realtime")
+
+      assert {:error, :invalid_message} =
+               Scribe.decode(JSON.encode!(mismatch), strategy, config.model)
+
+      assert {:error, :invalid_message} =
+               Scribe.decode(JSON.encode!(ready), strategy, "scribe_v2_realtime")
+
+      assert {:ok, {:partial, "A caller paused"}} =
+               Scribe.decode(
+                 JSON.encode!(%{
+                   "message_type" => "partial_transcript",
+                   "text" => "A caller paused",
+                   "turn_probability" => 0.95
+                 }),
+                 strategy,
+                 config.model
+               )
+
+      assert {:ok, {:segment, "A caller paused."}} =
+               Scribe.decode(
+                 JSON.encode!(%{
+                   "message_type" => "committed_transcript",
+                   "text" => "A caller paused."
+                 }),
+                 strategy,
+                 config.model
+               )
+    end
+  end
+
   test "VAD configuration requests provider silence commits without exposing the key" do
     assert {:ok, config} =
              Scribe.new(api_key: "synthetic-scribe-private", commit_strategy: :vad)

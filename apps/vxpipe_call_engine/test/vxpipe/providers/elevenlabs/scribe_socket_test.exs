@@ -5,6 +5,46 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocketTest do
   alias Vxpipe.CallEngine.TestSpeechWireServer
   alias Vxpipe.Providers.ElevenLabs.ScribeSocket
 
+  test "a v3 socket accepts its own model acknowledgement and rejects v2" do
+    server = start_supervised!({TestSpeechWireServer, owner: self()})
+
+    socket =
+      start_supervised!(%{
+        id: make_ref(),
+        start:
+          {ScribeSocket, :start_link,
+           [
+             [
+               owner: self(),
+               model: "scribe_v3_live",
+               commit_strategy: :vad,
+               connection: %{url: TestSpeechWireServer.endpoint(server), headers: []},
+               transport_options: []
+             ]
+           ]},
+        restart: :temporary
+      })
+
+    assert_receive {:vxpipe_socket_connected, ^socket}, 1_000
+    assert_receive {:speech_wire_connected, server_socket}, 1_000
+
+    ready = %{
+      "message_type" => "session_started",
+      "session_id" => "v3-socket",
+      "config" => %{"model_id" => "scribe_v3_live", "commit_strategy" => "vad"}
+    }
+
+    send(server_socket, {:send, {:text, JSON.encode!(ready)}})
+    assert_receive {:vxpipe_scribe_transport, ^socket, {:event, {:ready, "v3-socket"}}}, 1_000
+
+    send(
+      server_socket,
+      {:send, {:text, JSON.encode!(put_in(ready, ["config", "model_id"], "scribe_v2_realtime"))}}
+    )
+
+    assert_receive {:vxpipe_scribe_transport, ^socket, {:closed, :invalid_message}}, 1_000
+  end
+
   test "idle keepalive sends an empty noncommitting protocol message without speech events" do
     server = start_supervised!({TestSpeechWireServer, owner: self()})
 
@@ -42,7 +82,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocketTest do
 
   test "decodes segments and removes private provider error text before notifying its owner" do
     observer = self()
-    state = %{owner: observer}
+    state = %{owner: observer, model: "scribe_v2_realtime", commit_strategy: :manual}
 
     assert {:ok, ^state} =
              ScribeSocket.handle_frame(
