@@ -1,11 +1,11 @@
 # Simple structured messages for LLM agents
 
-Status: checkpoints A/B/C complete, 2026-11-16. Attributed input, settled history,
-storage/viewer projections, native tools without pending snapshots and validated
-mode/message replies on the pinned OpenAI profile are implemented and independently
-reviewed. Configured browser, transfer and supervised Session recovery pass. The
-native idle operation in D is implemented and independently reviewed; final
-current-source umbrella and Lean verification remain pending.
+Status: checkpoints A/B/C/D complete and independently reviewed, 2026-11-17.
+Attributed input, settled history, storage/viewer projections, stable native tool
+history, validated mode/message replies and bounded native idle are implemented.
+Configured browser, transfer, supervised Session recovery and idle edge cases pass.
+Final root verification passes 5,446 tests with zero failures (387 excluded,
+seed 469087), all static/dependency gates and Lean.
 The latest user review names the idle notification idle_timeout, defers
 call_state_changed, uses agent_mode/message for assistant replies, and allows
 listener-mode backchannels. Playback/classifier diagnostics stay internal and
@@ -519,7 +519,7 @@ and-wait, so that ambiguity is removed without another ordinary response field.
 
 Native platform tool: idle with an integer duration_seconds argument from 1 to 300,
 for example {"duration_seconds":10}. Checkpoint D implements this operation;
-configured and live browser acceptance pass, with final umbrella and Lean gates pending. Runtime validates
+configured and live browser acceptance, final umbrella checks and Lean all pass. Runtime validates
 bounds, permissions and exact activation/output ownership. The tool requests a
 quiet period; it does not sleep inside an agent/room GenServer or block human input.
 

@@ -2,8 +2,8 @@
 
 Status: checkpoint A complete, 2026-11-16. Archive and viewer compatibility is
 implemented, independently reviewed and verified through its acceptance gates.
-The message milestone's A/B/C checkpoints are complete; D's native idle and timed
-resumption work remains pending. No database migration is needed.
+The message milestone's A/B/C/D checkpoints are complete, including native idle
+and timed resumption (2026-11-17). No database migration is needed.
 The user explicitly requires the
 message-format milestone to cover the JavaScript call viewer and existing database
 columns, not only the LLM request format. The [message design](structured-agent-messages.md)

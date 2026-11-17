@@ -1,8 +1,8 @@
 # Structured agent messages and append-only history
 
-Status: checkpoints A/B/C complete, 2026-11-16. D implementation and independent
-Astra review are complete, 2026-11-17; its five task groups remain unchecked until
-the final current-source umbrella and Lean gates pass. Configured idle and live
+Status: all four checkpoints complete and independently reviewed, 2026-11-17.
+Final verification passes 5,446 tests with zero failures and 387 exclusions
+(seed 469087), all static/dependency gates and Lean. Configured idle and live
 browser acceptance pass. See the [implementation labnote](../20261116-1642-implement-structured-messages.md). This is the
 implementation owner for the [simple message-format design](../../docs/design/structured-agent-messages.md).
 The milestone index owns implementation order. A reviewed document is not a
@@ -257,28 +257,28 @@ optionally speaks a short acknowledgment, then waits while remaining responsive.
 Ten seconds after acknowledgment settlement, one idle_timeout can trigger a
 contextual follow-up; an earlier human reply cancels that timeout.
 
-- [ ] Write failing idle lifecycle tests for exact-target old-output cancellation,
+- [x] Write failing idle lifecycle tests for exact-target old-output cancellation,
   optional associated acknowledgment, speaker-to-listener settlement, timer start
   after playback, silent acknowledgment, early human input, expiry/cancel races,
   duplicate tool calls, source replacement and stale/newer-output callbacks.
-- [ ] Add the bounded native platform idle tool through the existing authorized
+- [x] Add the bounded native platform idle tool through the existing authorized
   tool/submission owner and room-owned control boundary. Use duration_seconds=10
   in acceptance, validate configured bounds and deadlines, and preserve original
   call/ack/completion formats. No sleeps in GenServer callbacks or blocking of human
   conversation. Permit only the associated acknowledgment during the armed hold;
   suppress unrelated cue/main output. Bound missing acknowledgment and sink failures.
-- [ ] Own pending/active idle timer state with existing supervision/correlation.
+- [x] Own pending/active idle timer state with existing supervision/correlation.
   Cancel on fresh user resumption, replacement/teardown or invalidation; do not
   mistake the admitted origin input for resumption. Suspend/rebase ordinary idle
   detection to avoid duplicate expiry. Settle actual completion and idle_timeout
   in one serialized model continuation; early cancellation creates no independent
   speaking request. Preserve completion history and exactly-once execution/expiry.
-- [ ] Wire idle availability, tool schema and prompt guidance through existing
+- [x] Wire idle availability, tool schema and prompt guidance through existing
   authoring/publication/permissions and pinned LLM profiles. It is an application
   control operation, not an unrestricted speculative business tool. Missing/disabled
   idle cannot be faked by returning listener/null. Keep STS native tool/control
   protocols unchanged; general STS idle support is outside this LLM slice.
-- [ ] Run configured-call acceptance with acknowledgment and silence, actual ten-
+- [x] Run configured-call acceptance with acknowledgment and silence, actual ten-
   second quiet timing measured from settled output, early reply, expiry once,
   background completion during the hold and an almost-finished old answer. Inspect
   the browser timeline and native tool history; no JSON speech or duplicate follow-
@@ -320,11 +320,13 @@ are inspected. Measured first audio is 1.99–4.99 seconds, above the unchanged 
 pricing is unknown and cache observations carry no guarantee. Listener cues remain
 suppressed until voice E. Full Astra xhigh source, evidence and owner review has no
 remaining validated finding. Independent parser/protocol/replay checks (22/0) and dynamic
-context wire check (1/0) pass. Current root verification passes 5,403 tests, zero
+context wire check (1/0) pass. Checkpoint C root verification passed 5,403 tests, zero
 failures, 387 excluded (seed 918318), all static/unused-lock gates and Lean. See the
 implementation labnote for red/green, provider, browser and recovery evidence.
-Checkpoint D implementation and independent Astra xhigh review are complete,
-with final umbrella and Lean verification still pending. Configured cases cover
+Checkpoint D and its independent Astra xhigh review are complete. Final current-source
+verification passes 5,446 tests, zero failures and 387 exclusions (seed 469087),
+formatting, compilation with warnings as errors, strict Credo, unused-dependency
+checks and Lean (nine build jobs and one replay test). Configured cases cover
 exact old-output cancellation, optional acknowledgment, early input and expiry
 ordering, duplicate and successive waits, background completion retention,
 source departure, connection replacement and transfer holds. Missing model
@@ -335,10 +337,13 @@ silent ten-second waits; actual expiry follows settlement by 10,006.8 ms and
 10,001.2 ms respectively. Native history remains append-only. Desktop and phone
 rendering were inspected. The review's transfer-hold finding is fixed and passes
 independent configured verification. Detailed red/green and review evidence is
-in the implementation labnote; the remaining completion gates are not inferred
-from these focused checks.
+in the implementation labnote. The final umbrella rerun also passes the native
+WebRTC handoff case that timed out in the preceding run; it needed no behavior
+or timeout change.
 
-The milestone index stays unchecked until D's five timed-idle groups pass.
+All thirty task groups and the milestone index entry are now checked. The
+separate voice-behavior milestone remains responsible for classifier integration,
+precise TTS alignment, speculative overlap and audible listener cues.
 
 | Former generic work in the voice plan | New owner |
 | --- | --- |
@@ -356,6 +361,11 @@ It replaces the generic format tasks previously embedded in voice checkpoints
 A/C/F. Voice A/B own precise spoken-word evidence; voice C owns overlap decisions,
 cue-window/mode policy and actual cancellation/admission; voice F owns the combined
 transport/language matrix. Each tests its own boundary using this protocol.
+
+### Historical specification reviews
+
+The following records describe design decisions and task status before implementation.
+Current completion evidence is recorded above.
 
 Local dependency review keeps this milestone independent of unfinished classifier,
 cue and timing work. The first three checkpoints deliver attributed conversation,

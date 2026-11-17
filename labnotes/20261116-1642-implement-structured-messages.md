@@ -1338,3 +1338,21 @@ No C production code or activation has changed yet.
   completion boxes and index entry remain unchecked. Added concise configured/
   browser evidence summary; local Markdown target verification passes with
   no missing paths. Fixed-source root99687 remains active; static gates pass.
+- Final fixed-source runner99687 completed successfully. Root5446/0,387
+  excluded,seed469087; per child: Identity101, MCP222, Providers35,
+  AgentRuntime161, CallEngine2524, Calls390, Gateway887, Artifacts20,
+  Persistence536, Console570. Logs vxpipe-d-verified-{format,compile,credo,
+  test,unused,lean}.log. Formatting, warning-free compilation, strict Credo
+  (1553sourcefiles,noissues), unused-dependency check and Lean all exit0. Lean
+  builds9jobs and replays1test/0failures. Native Gateway handoff passes in
+  isolated original-seed and full final run without behavior/timeout changes.
+- Final completion audit: all A10/B7/C8/D5 groups have implementation, configured
+  evidence and independent Astra review; no remaining validated findings. D
+  native permissions/profile restrictions, exactly-once outcomes, precise
+  target ownership, acknowledgment/sink bounds, expiry/input/source/transfer
+  races and ordinary idle coexistence pass. Live provider/browser evidence
+  remains as recorded above. Updated milestone/design/index completion status.
+  Future voice classifier/alignment/backchannel work remains separate.
+- Final documentation review verified all30checked groups and final log totals.
+  Corrected the linked storage/viewer design's stale D-pending status and labeled
+  historical specification reviews explicitly, preserving their original record.
