@@ -241,6 +241,8 @@ describe("call details controller", () => {
           id: "message-2",
           participantId: "assistant",
           text: "Live update during refresh",
+          agentMode: "listener",
+          outputPurpose: "backchannel",
           occurredAt: "2026-09-16T08:00:03.000Z",
           state: "final",
         },
@@ -252,7 +254,7 @@ describe("call details controller", () => {
     expect(store.getSnapshot().timeline[0]).toMatchObject({
       id: "message-2",
       revision: 2,
-      value: { text: "Live update during refresh" },
+      value: { text: "Live update during refresh", agentMode: "listener", outputPurpose: "backchannel" },
     });
   });
 });

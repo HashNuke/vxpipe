@@ -6,6 +6,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
   @derive {Inspect, only: []}
   @enforce_keys [
     :instructions,
+    :history_mode,
+    :reply_protocol,
     :initial_messages,
     :model_provider,
     :model,
@@ -31,14 +33,43 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
 
   @type t :: %__MODULE__{}
 
+  @doc false
+  @spec pin_compaction(keyword()) :: {:ok, keyword()} | {:error, atom()}
+  def pin_compaction(options) do
+    with {:ok, preparation} <-
+           CompactionConfiguration.new(
+             Keyword.get(options, :model_provider),
+             Keyword.get(options, :model),
+             Keyword.get(options, :context_compaction)
+           ) do
+      case preparation do
+        nil ->
+          {:ok, options}
+
+        %{compactor: compactor} ->
+          compaction =
+            options |> Keyword.fetch!(:context_compaction) |> Keyword.put(:compactor, compactor)
+
+          {:ok, Keyword.put(options, :context_compaction, compaction)}
+      end
+    end
+  end
+
   @spec new(keyword()) :: {:ok, t()} | {:error, :invalid_configuration}
   def new(options) when is_list(options) do
     with {:ok, options} <- validate_options(options),
          instructions when is_binary(instructions) <- Keyword.get(options, :instructions),
+         history_mode when history_mode in [:generated, :host_settled] <-
+           Keyword.get(options, :history_mode, :generated),
          {:ok, initial_messages} <-
-           validate_initial_messages(Keyword.get(options, :initial_messages, [])),
+           validate_initial_messages(
+             Keyword.get(options, :initial_messages, []),
+             Keyword.get(options, :maximum_output_bytes, 256 * 1_024)
+           ),
          {:ok, model_provider} <- validate_provider(Keyword.get(options, :model_provider)),
          {:ok, tool_registry} <- ToolRegistry.new(Keyword.get(options, :tools, [])),
+         {:ok, reply_protocol} <-
+           validate_reply_protocol(options, model_provider, tool_registry, history_mode),
          {:ok, executor} <- validate_executor(Keyword.get(options, :executor), tool_registry),
          {:ok, maximum_model_rounds} <-
            positive(Keyword.get(options, :maximum_model_rounds, 8)),
@@ -76,6 +107,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       {:ok,
        %__MODULE__{
          instructions: instructions,
+         history_mode: history_mode,
+         reply_protocol: reply_protocol,
          initial_messages: initial_messages,
          model_provider: model_provider,
          model: Keyword.get(options, :model),
@@ -122,6 +155,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
              is_function(emit_text_delta, 1) do
     %{
       model_provider: config.model_provider,
+      history_mode: config.history_mode,
+      reply_protocol: config.reply_protocol,
       model: config.model,
       tool_registry: config.tool_registry,
       executor: config.executor,
@@ -135,7 +170,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       model_context_source: config.model_context_source,
       model_context_timeout_ms: config.model_context_timeout_ms,
       maximum_model_context_bytes: config.maximum_model_context_bytes,
-      context_preparation: config.context_preparation,
+      context_preparation: prepared_compaction(config),
       begin_submission: begin_submission,
       commit: commit,
       emit_context_compaction_usage: emit_context_compaction_usage,
@@ -148,6 +183,8 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
   defp validate_options(options) do
     Keyword.validate(options, [
       :instructions,
+      :history_mode,
+      :reply_protocol,
       :initial_messages,
       :model_provider,
       :model,
@@ -171,6 +208,13 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
     ])
   end
 
+  defp prepared_compaction(%__MODULE__{context_preparation: nil}), do: nil
+
+  defp prepared_compaction(%__MODULE__{} = config) do
+    format = if config.history_mode == :host_settled, do: :structured, else: :legacy
+    Map.put(config.context_preparation, :summary_format, format)
+  end
+
   defp validate_provider(model_provider) when is_atom(model_provider) do
     if Code.ensure_loaded?(model_provider) and function_exported?(model_provider, :generate, 2) do
       {:ok, model_provider}
@@ -181,37 +225,70 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
 
   defp validate_provider(_model_provider), do: {:error, :invalid_provider}
 
-  defp validate_initial_messages(messages) when is_list(messages) do
-    if Enum.all?(messages, &valid_initial_message?/1) do
+  defp validate_reply_protocol(options, provider, registry, history_mode) do
+    case Keyword.get(options, :reply_protocol, :legacy) do
+      :legacy ->
+        {:ok, :legacy}
+
+      :mode_message_v1 when history_mode == :host_settled ->
+        if function_exported?(provider, :supports_protocol?, 3) and
+             provider.supports_protocol?(
+               Keyword.get(options, :model),
+               :mode_message_v1,
+               ToolRegistry.model_tools(registry)
+             ) do
+          {:ok, :mode_message_v1}
+        else
+          {:error, :unsupported_reply_protocol}
+        end
+
+      _invalid ->
+        {:error, :unsupported_reply_protocol}
+    end
+  end
+
+  defp validate_initial_messages(messages, maximum_output_bytes)
+       when is_list(messages) and is_integer(maximum_output_bytes) and maximum_output_bytes > 0 do
+    if Enum.all?(messages, &valid_initial_message?(&1, maximum_output_bytes)) do
       {:ok, messages}
     else
       {:error, :invalid_initial_messages}
     end
   end
 
-  defp validate_initial_messages(_messages), do: {:error, :invalid_initial_messages}
+  defp validate_initial_messages(_messages, _maximum), do: {:error, :invalid_initial_messages}
 
-  defp valid_initial_message?(%Message{
-         role: :user,
-         content: content,
-         origin: :caller,
-         name: nil,
-         tool_call_id: nil,
-         tool_calls: []
-       }),
+  defp valid_initial_message?(
+         %Message{
+           role: :user,
+           content: content,
+           origin: :caller,
+           name: nil,
+           tool_call_id: nil,
+           tool_calls: [],
+           provider_replay: replay
+         },
+         _maximum
+       )
+       when replay == %{},
        do: valid_initial_content?(content)
 
-  defp valid_initial_message?(%Message{
-         role: :assistant,
-         content: content,
-         origin: nil,
-         name: nil,
-         tool_call_id: nil,
-         tool_calls: []
-       }),
-       do: valid_initial_content?(content)
+  defp valid_initial_message?(
+         %Message{
+           role: :assistant,
+           content: content,
+           origin: nil,
+           name: nil,
+           tool_call_id: nil,
+           tool_calls: [],
+           provider_replay: replay
+         } = message,
+         maximum
+       )
+       when replay == %{},
+       do: valid_initial_content?(content) or Message.valid_spoken?(message, maximum)
 
-  defp valid_initial_message?(_message), do: false
+  defp valid_initial_message?(_message, _maximum), do: false
 
   defp valid_initial_content?(content) when is_binary(content) do
     content != "" and byte_size(content) <= 64 * 1_024

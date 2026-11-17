@@ -36,6 +36,7 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   defstruct @enforce_keys ++
               [
                 credential_bindings: nil,
+                agent_protocol: nil,
                 direction: :incoming,
                 ring_timeout_ms: nil,
                 wait_sounds: %Vxpipe.CallEngine.CallSpec.WaitSounds{},
@@ -85,12 +86,17 @@ defmodule Vxpipe.CallEngine.ResolvedCallPlan do
   @doc false
   def ensure_data_loaded!, do: Enum.each(@data_modules, &Code.ensure_loaded!/1)
 
+  @doc "The explicitly pinned protocol, or legacy for plans predating this field."
+  def agent_protocol(%{agent_protocol: snapshot}), do: snapshot
+  def agent_protocol(_legacy_plan), do: nil
+
   @type t :: %__MODULE__{
           call_spec_id: String.t(),
           call_spec_revision: pos_integer(),
           schema_version: String.t(),
           tenant_id: String.t(),
           credential_bindings: nil | %{{String.t(), String.t()} => map()},
+          agent_protocol: map() | nil,
           actor_id: String.t(),
           call_id: String.t(),
           room_id: String.t(),

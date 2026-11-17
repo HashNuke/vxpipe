@@ -125,8 +125,14 @@ defmodule Vxpipe.Calls.CallSpecs do
          {:ok, call_spec} <-
            CallSpec.new(source, resource_id: call_spec_id, revision: revision_number),
          :ok <- preserve_direction(repository, tenant_key, call_spec),
-         :ok <- CallSpecCredentials.check(call_spec, tenant_key, options) do
-      validation_errors = validate_support(call_spec, tenant_key, options)
+         :ok <- CallSpecCredentials.check(call_spec, tenant_key, options),
+         {:ok, protocol} <-
+           Vxpipe.CallEngine.AgentProtocol.capture(
+             Keyword.get(options, :agent_protocol_version, :mode_message_v1)
+           ) do
+      validation_errors =
+        validate_support(call_spec, tenant_key, Keyword.put(options, :agent_protocol, protocol))
+
       routes = participant_routes(call_spec, tenant_key, options)
       telephony_routes = telephony_routes(call_spec, tenant_key)
 
@@ -137,7 +143,7 @@ defmodule Vxpipe.Calls.CallSpecs do
         schema_version: call_spec.schema_version,
         source: source,
         source_digest: source_digest(source),
-        compiled_metadata: compiled_metadata(call_spec),
+        compiled_metadata: Map.put(compiled_metadata(call_spec), "agent_protocol", protocol),
         validation_errors: validation_errors,
         routes: routes,
         telephony_routes: telephony_routes,

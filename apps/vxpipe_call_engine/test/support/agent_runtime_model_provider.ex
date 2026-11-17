@@ -6,6 +6,9 @@ defmodule Vxpipe.CallEngine.TestAgentRuntimeModelProvider do
   @impl true
   def readiness(_model), do: :ready
 
+  @impl true
+  def supports_protocol?(_model, :mode_message_v1, _tools?), do: true
+
   @spec new(keyword()) :: {:ok, map()} | {:error, :invalid_configuration}
   def new(options) do
     with {:ok, options} <- Keyword.validate(options, [:model, :owner]),

@@ -240,6 +240,12 @@ function timelineEntity(value: unknown, path: string): CallDetailsTimelineEntity
           ["final", "streaming", "interrupted"] as const,
           `${path}.value.state`,
         ),
+        ...(item.agent_mode === undefined
+          ? {}
+          : { agentMode: member(item.agent_mode, ["speaker", "listener"] as const, `${path}.value.agent_mode`) }),
+        ...(item.output_purpose === undefined
+          ? {}
+          : { outputPurpose: member(item.output_purpose, ["main_response", "backchannel"] as const, `${path}.value.output_purpose`) }),
       },
     };
   }

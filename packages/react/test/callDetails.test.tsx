@@ -67,6 +67,39 @@ function mockEndpointResponse(
   };
 }
 
+test("labels a listening cue without changing participant media state", () => {
+  const response = mockEndpointResponse();
+  const entity = response.timeline[0]!;
+  if (entity.kind !== "message") throw new Error("fixture message missing");
+  Object.assign(entity.value, { text: "嗯，okay", agentMode: "listener", outputPurpose: "backchannel", spokenRange: { start: 0, end: 2 } });
+  const details = createCallDetailsStore(response);
+  render(<CallConsole controller={{ details }} />);
+  expect(screen.getByRole("article")).toHaveTextContent("嗯，okay");
+  expect(screen.getByText("Backchannel")).toBeVisible();
+  expect(document.querySelector("mark")?.textContent).toBe("嗯，");
+  expect(details.getSnapshot().participants[0]?.value.state).toBe("left");
+});
+
+test("keeps JSON-looking human speech literal and does not label input mode as a cue", () => {
+  const response = mockEndpointResponse();
+  const entity = response.timeline[0]!;
+  if (entity.kind !== "message") throw new Error("fixture message missing");
+  Object.assign(entity.value, { text: '{"message":"literal"}', agentMode: "listener" });
+  render(<CallConsole controller={{ details: createCallDetailsStore(response) }} />);
+  expect(screen.getByText('{"message":"literal"}')).toBeVisible();
+  expect(screen.queryByText("Backchannel")).not.toBeInTheDocument();
+});
+
+test("does not render empty dialogue as a speech bubble", () => {
+  const response = mockEndpointResponse();
+  const entity = response.timeline[0]!;
+  if (entity.kind !== "message") throw new Error("fixture message missing");
+  entity.value.text = " \n";
+  render(<CallConsole controller={{ details: createCallDetailsStore(response) }} />);
+  expect(screen.queryAllByRole("article")).toHaveLength(0);
+  expect(screen.getByText("No call active")).toBeVisible();
+});
+
 test("renders an ended call from a mocked endpoint response without live controls", () => {
   const details = createCallDetailsStore(mockEndpointResponse());
   const controller: CallConsoleController = { details };

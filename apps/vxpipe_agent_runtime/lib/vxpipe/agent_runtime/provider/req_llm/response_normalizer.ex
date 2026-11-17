@@ -3,12 +3,17 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ResponseNormalizer do
 
   alias Elixir.ReqLLM.Response
   alias Vxpipe.AgentRuntime.{ModelResponse, ToolCall}
+  alias Vxpipe.AgentRuntime.Provider.ReqLLM.OpenAIReplay
 
-  @spec normalize(Response.t()) :: {:ok, ModelResponse.t()} | {:error, atom()}
-  def normalize(%Response{} = response) do
+  @spec normalize(Response.t(), :legacy | :mode_message_v1) ::
+          {:ok, ModelResponse.t()} | {:error, atom()}
+  def normalize(%Response{} = response, protocol \\ :legacy, model \\ nil) do
     classified = Response.classify(response)
 
-    with {:ok, calls} <- normalize_tool_calls(classified.tool_calls) do
+    with :ok <- validate_reserved_calls(classified, protocol),
+         :ok <- validate_completion(response, classified, protocol),
+         {:ok, calls} <- normalize_tool_calls(classified.tool_calls),
+         {:ok, replay} <- capture_replay(protocol, model, response, classified.text, calls) do
       metadata = Response.call_metadata(response)
       usage = Map.get(metadata, :usage) || %{}
 
@@ -16,7 +21,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ResponseNormalizer do
         text: classified.text,
         tool_calls: calls,
         usage: usage,
-        provider_metadata: Map.delete(metadata, :usage)
+        provider_metadata: Map.delete(metadata, :usage),
+        provider_replay: replay
       )
     else
       _invalid -> {:error, :invalid_provider_response}
@@ -25,6 +31,31 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ResponseNormalizer do
     _error -> {:error, :invalid_provider_response}
   catch
     _kind, _reason -> {:error, :invalid_provider_response}
+  end
+
+  defp capture_replay(:mode_message_v1, model, response, text, calls),
+    do: OpenAIReplay.capture(model, response, text, calls)
+
+  defp capture_replay(_protocol, _model, _response, _text, _calls), do: {:ok, %{}}
+
+  defp validate_reserved_calls(_classified, :legacy), do: :ok
+
+  defp validate_reserved_calls(classified, :mode_message_v1) do
+    if Enum.any?(classified.tool_calls, &(fetch(&1, :name) == "structured_output")),
+      do: {:error, :invalid_provider_response},
+      else: :ok
+  end
+
+  defp validate_completion(_response, _classified, :legacy), do: :ok
+
+  defp validate_completion(response, classified, :mode_message_v1) do
+    complete? =
+      classified.finish_reason == :stop or
+        (classified.finish_reason == :tool_calls and classified.tool_calls != [])
+
+    if complete? and is_nil(response.error) and Response.refusals(response) == [],
+      do: :ok,
+      else: {:error, :invalid_provider_response}
   end
 
   defp normalize_tool_calls(calls) when is_list(calls) do

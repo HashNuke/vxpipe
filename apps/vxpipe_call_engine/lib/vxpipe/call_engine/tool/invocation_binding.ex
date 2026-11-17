@@ -4,7 +4,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   alias Vxpipe.CallEngine.CallVariables.Binding, as: VariablesBinding
   alias Vxpipe.CallEngine.RemoteMCP.ResolvedTool
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
-  alias Vxpipe.CallEngine.Tool.PlatformCatalog
+  alias Vxpipe.CallEngine.Tool.{Idle, PlatformCatalog}
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Binding, as: TransferBinding
 
   @derive {Inspect, only: [:name, :conversation_mode]}
@@ -54,7 +54,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
       })
       when is_binary(name) and conversation_mode in [:blocking, :non_blocking] and
              is_atom(action) do
-    if PlatformCatalog.action?(action) do
+    if platform_mode?(action, conversation_mode) do
       {:ok,
        %__MODULE__{
          name: name,
@@ -153,7 +153,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
         handler: {:platform, action}
       }) do
     is_binary(name) and name != "" and conversation_mode in [:blocking, :non_blocking] and
-      PlatformCatalog.action?(action)
+      platform_mode?(action, conversation_mode)
   end
 
   def valid?(%__MODULE__{
@@ -177,6 +177,9 @@ defmodule Vxpipe.CallEngine.Tool.InvocationBinding do
   end
 
   def valid?(_binding), do: false
+
+  defp platform_mode?(Idle, conversation_mode), do: conversation_mode == :non_blocking
+  defp platform_mode?(action, _conversation_mode), do: PlatformCatalog.action?(action)
 
   defp server_ref?(nil), do: false
   defp server_ref?(server) when is_pid(server) or is_atom(server), do: true

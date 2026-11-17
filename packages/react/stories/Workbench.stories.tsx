@@ -35,6 +35,7 @@ const meta = {
       options: [
         "ready",
         "conversation",
+        "listening-cues",
         "handoff",
         "human-handoff",
         "phone-caller",
@@ -64,6 +65,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Conversation: Story = {};
+export const ListeningCues: Story = { args: { scenario: "listening-cues" } };
 export const ReadyToStart: Story = { args: { scenario: "ready" } };
 export const AgentHandoff: Story = { args: { scenario: "handoff" } };
 export const HumanHandoff: Story = { args: { scenario: "human-handoff" } };

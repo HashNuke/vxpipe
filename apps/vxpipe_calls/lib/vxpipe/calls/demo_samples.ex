@@ -129,6 +129,8 @@ defmodule Vxpipe.Calls.DemoSamples do
   end
 
   defp create_entry(entry, actor, tenant_key, options) do
+    options = Keyword.put(options, :agent_protocol_version, :legacy)
+
     with {:ok, draft} <- CallSpecAuthoring.save(actor, tenant_key, entry.source, options),
          {:ok, published} <-
            CallSpecAuthoring.publish(

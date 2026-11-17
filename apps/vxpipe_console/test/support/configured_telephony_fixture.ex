@@ -398,7 +398,9 @@ defmodule Vxpipe.Console.Test.ConfiguredTelephonyFixture do
   end
 
   defp publish_source(fixture, source) do
-    assert {:ok, draft} = Calls.save_call_spec(fixture.tenant.key, source, fixture.options)
+    # Keep this existing Google/carrier lane on its original prose protocol.
+    options = Keyword.put(fixture.options, :agent_protocol_version, :legacy)
+    assert {:ok, draft} = Calls.save_call_spec(fixture.tenant.key, source, options)
     assert draft.validation_errors == []
 
     assert {:ok, publication} =

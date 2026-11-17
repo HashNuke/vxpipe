@@ -109,7 +109,12 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
              )
 
     assert_receive {:test_agent_runtime_stream, _model, request}, 1_000
-    assert Enum.any?(request.messages, &(&1.role == :user and &1.content == "Are you there?"))
+
+    assert Enum.any?(
+             request.messages,
+             &(&1.role == :user and JSON.decode!(&1.content)["message"] == "Are you there?")
+           )
+
     end_room(plan, room)
   end
 
@@ -148,7 +153,12 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     assert_receive {:vxpipe_event, %CallEngine.Event.AgentTurnFailed{}}, 1_000
 
     assert_receive {:test_agent_runtime_stream, _model, request}, 1_000
-    assert Enum.any?(request.messages, &(&1.role == :user and &1.content == "Hello?"))
+
+    assert Enum.any?(
+             request.messages,
+             &(&1.role == :user and JSON.decode!(&1.content)["message"] == "Hello?")
+           )
+
     end_room(plan, room)
   end
 
@@ -1109,8 +1119,17 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
       assert :ok = TestAudioOutputSink.playback_completed(sink)
       assert_receive {:vxpipe_event, %AgentTurnCompleted{}}, 1_000
       assert_receive {:test_agent_runtime_stream, model, request}, 1_000
-      assert Enum.any?(request.messages, &(&1.role == :user and &1.content == "Please help me."))
-      assert Enum.any?(request.messages, &(&1.role == :assistant and &1.content == "Welcome."))
+
+      assert Enum.any?(
+               request.messages,
+               &(&1.role == :user and JSON.decode!(&1.content)["message"] == "Please help me.")
+             )
+
+      assert Enum.any?(
+               request.messages,
+               &(&1.role == :assistant and JSON.decode!(&1.content)["message"] == "Welcome.")
+             )
+
       assert {:ok, response} = ModelResponse.new(text: "I can help.")
       send(model, {:test_agent_runtime_response, {:ok, response}})
     end
@@ -1168,14 +1187,193 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
 
     assert_receive {:test_agent_runtime_stream, provider, request}
 
+    {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+
     assert Enum.map(request.messages, &{&1.role, &1.content}) == [
-             {:system, "Answer clearly."},
-             {:assistant, "Welcome."},
-             {:user, "Hello"}
+             {:system, shared.text <> "\n\nAnswer clearly."},
+             {:assistant,
+              JSON.encode!(%{
+                "type" => "participant_message",
+                "participant_id" =>
+                  Map.fetch!(plan.participants, plan.entry_receiver).participant_id,
+                "message" => "Welcome.",
+                "agent_mode" => "speaker"
+              })},
+             {:user,
+              JSON.encode!(%{
+                "type" => "participant_message",
+                "participant_id" => caller.participant_id,
+                "agent_mode" => "listener",
+                "message" => "Hello"
+              })}
            ]
 
     assert {:ok, response} = ModelResponse.new(text: "Hello back.")
     send(provider, {:test_agent_runtime_response, {:ok, response}})
+  end
+
+  for played_ms <- [0, 20] do
+    @greeting_played_ms played_ms
+    test "fixed greeting with #{@greeting_played_ms}ms before detachment retains no unsupported speech" do
+      configure_speech_runtime()
+      configure_agent_runtime_provider()
+
+      plan =
+        compile_plan(
+          opening_audio: nil,
+          agent_text_to_speech: true,
+          first_message: %{mode: "fixed", text: "Welcome to our service."}
+        )
+
+      caller = Map.fetch!(plan.participants, plan.entry_caller)
+      {:ok, room} = CallEngine.TestCallStartup.start_call_raw(plan)
+      assert_receive {:test_tts_transport_started, voice, _}
+      sink = start_supervised!({TestAudioOutputSink, observer: self()})
+      attached = attach_command(plan, room, caller, "greeting-detach")
+      assert {:ok, _} = TestTransferConnection.attach(attached, sink)
+      assert_receive {:test_tts_control, ^voice, speak}
+      assert JSON.decode!(speak)["text"] == "Welcome to our service."
+      assert_receive {:test_tts_control, ^voice, _flush}
+      refute_receive {:test_agent_runtime_stream, _, _}, 0
+
+      if @greeting_played_ms > 0 do
+        TestTextToSpeechTransport.deliver_control(
+          voice,
+          JSON.encode!(%{type: "SpeechStarted", speech_id: "partial-greeting"})
+        )
+
+        TestTextToSpeechTransport.deliver_audio(voice, :binary.copy(<<1, 0>>, 960))
+        assert_receive {:test_audio_output, ^sink, _}
+        assert :ok = TestAudioOutputSink.playback_started(sink)
+        assert :ok = TestAudioOutputSink.playback_progress(sink, @greeting_played_ms, 100)
+
+        assert_receive {:vxpipe_event,
+                        %CallEngine.Event.AgentSpeechProgressed{played_ms: @greeting_played_ms}}
+      end
+
+      [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+
+      assert :ok =
+               TestTransferConnection.run(attached, fn ->
+                 RoomAuthority.detach_connection(authority, attached, self())
+               end)
+
+      replacement = attach_command(plan, room, caller, "greeting-reconnect")
+      assert {:ok, _} = TestTransferConnection.attach(replacement, sink)
+      CallEngine.TestCallStartup.await_ready(room.room_id)
+      refute_receive {:test_agent_runtime_stream, _, _}, 0
+
+      assert :ok =
+               TestTransferConnection.send_text(
+                 send_command(plan, room, caller, "greeting-reconnect", "Hello after reconnect")
+               )
+
+      assert_receive {:test_agent_runtime_stream, model, request}
+      assert Enum.map(request.messages, & &1.role) == [:system, :user]
+      assert JSON.decode!(List.last(request.messages).content)["agent_mode"] == "listener"
+      {:ok, response} = ModelResponse.new(text: "Hello.")
+      send(model, {:test_agent_runtime_response, {:ok, response}})
+      end_room(plan, room)
+    end
+  end
+
+  test "interrupted history retains completed TTS segments and omits the unplayed remainder" do
+    configure_speech_runtime()
+    configure_agent_runtime_provider()
+
+    plan =
+      compile_plan(
+        agent_text_to_speech: true,
+        opening_audio: nil,
+        first_message: %{mode: "wait_for_input"}
+      )
+
+    caller = Map.fetch!(plan.participants, plan.entry_caller)
+    {:ok, room} = CallEngine.TestCallStartup.start_call_raw(plan)
+    assert_receive {:test_tts_transport_started, voice, _}
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    connection = "conn-settled-prefix"
+
+    assert {:ok, _attachment} =
+             TestTransferConnection.attach(attach_command(plan, room, caller, connection), sink)
+
+    CallEngine.TestCallStartup.await_ready(room.room_id)
+    assert_receive {:test_stt_transport_started, stt, _}
+
+    assert :ok =
+             TestTransferConnection.send_text(
+               send_command(plan, room, caller, connection, "Tell me two things")
+             )
+
+    assert_receive {:test_agent_runtime_stream, provider, _}
+    {:ok, response} = ModelResponse.new(text: "First. Second.")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_control, ^voice, first_speak}
+    assert JSON.decode!(first_speak)["text"] == "First."
+    assert_receive {:test_tts_control, ^voice, _flush}
+    complete_speech(voice, sink, "settled-first", :conversation)
+    assert_receive {:test_tts_control, ^voice, second_speak}
+    assert JSON.decode!(second_speak)["text"] == "Second."
+    assert_receive {:test_tts_control, ^voice, _flush}
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      JSON.encode!(%{
+        "type" => "SpeechStarted",
+        "request_id" => "req",
+        "speech_id" => "settled-second"
+      })
+    )
+
+    onset = %{
+      type: "TurnInfo",
+      request_id: "prefix-interruption",
+      sequence_id: 1,
+      event: "StartOfTurn",
+      turn_index: 1,
+      audio_window_start: 0.0,
+      audio_window_end: 1.0,
+      transcript: "Actually, stop",
+      words: [],
+      end_of_turn_confidence: 0.99
+    }
+
+    TestSpeechToTextTransport.deliver(stt, JSON.encode!(onset))
+    assert_receive {:vxpipe_event, %CallEngine.Event.AgentTurnInterrupted{}}
+    refute_receive {:test_agent_runtime_stream, _, _}, 0
+
+    TestSpeechToTextTransport.deliver(
+      stt,
+      JSON.encode!(Map.merge(onset, %{event: "EndOfTurn", sequence_id: 2, trigger: "model"}))
+    )
+
+    assert_receive {:test_agent_runtime_stream, next_provider, request}
+    assistants = Enum.filter(request.messages, &(&1.role == :assistant))
+    assert [spoken] = Enum.map(assistants, &JSON.decode!(&1.content))
+
+    assert spoken == %{
+             "type" => "participant_message",
+             "agent_mode" => "speaker",
+             "participant_id" =>
+               Map.fetch!(plan.participants, plan.entry_receiver).participant_id,
+             "message" => "First."
+           }
+
+    assert JSON.decode!(List.last(request.messages).content) == %{
+             "type" => "participant_message",
+             "participant_id" => caller.participant_id,
+             "agent_mode" => "speaker",
+             "message" => "Actually, stop"
+           }
+
+    assert Enum.any?(request.messages, fn message ->
+             message.origin == :caller and
+               JSON.decode!(message.content)["message"] == "Tell me two things"
+           end)
+
+    {:ok, response} = ModelResponse.new(text: "Okay.")
+    send(next_provider, {:test_agent_runtime_response, {:ok, response}})
+    end_room(plan, room)
   end
 
   test "asks the model for a generated greeting only after the caller attaches" do
@@ -1204,6 +1402,13 @@ defmodule Vxpipe.CallEngine.OpeningAudioRoomTest do
     prompt = List.last(request.messages)
     assert prompt.role == :user
     assert prompt.origin == :engine
+
+    assert JSON.decode!(prompt.content) == %{
+             "type" => "platform_event",
+             "event" => "greeting_request",
+             "data" => %{},
+             "agent_mode" => "listener"
+           }
 
     assert {:ok, response} = ModelResponse.new(text: "Welcome from the model.")
     send(provider, {:test_agent_runtime_response, {:ok, response}})

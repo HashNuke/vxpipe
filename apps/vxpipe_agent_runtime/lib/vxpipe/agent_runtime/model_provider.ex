@@ -27,9 +27,14 @@ defmodule Vxpipe.AgentRuntime.ModelProvider do
 
   @callback maximum_output_tokens(model :: term()) :: pos_integer() | nil
 
+  @callback supports_protocol?(model :: term(), :mode_message_v1, [
+              Vxpipe.AgentRuntime.ModelTool.t()
+            ]) :: boolean()
+
   @optional_callbacks readiness: 1,
                       stream: 3,
                       streaming?: 1,
                       context_window_tokens: 1,
-                      maximum_output_tokens: 1
+                      maximum_output_tokens: 1,
+                      supports_protocol?: 3
 end

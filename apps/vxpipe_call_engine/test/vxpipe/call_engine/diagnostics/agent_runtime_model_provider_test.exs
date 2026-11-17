@@ -5,6 +5,19 @@ defmodule Vxpipe.CallEngine.Diagnostics.AgentRuntimeModelProviderTest do
 
   alias Vxpipe.CallEngine.Diagnostics.{AgentRuntimeModelProvider, ModelFixture}
 
+  test "the deterministic model fixture generates the selected dialogue protocol" do
+    fixture =
+      start_supervised!({ModelFixture, name: nil, delay_ms: 0, response: "Fixture answer."})
+
+    {:ok, config} = AgentRuntimeModelProvider.new(fixture: fixture, model: "test:scripted")
+    assert AgentRuntimeModelProvider.supports_protocol?(config, :mode_message_v1, [])
+    request = %{request("Hello fixture") | reply_protocol: :mode_message_v1}
+    assert {:ok, response} = AgentRuntimeModelProvider.generate(config, request)
+
+    assert {:ok, %{agent_mode: :speaker, message: "Fixture answer."}} =
+             Vxpipe.AgentRuntime.Dialogue.decode(response.text)
+  end
+
   test "streams the configured local fixture response through the neutral provider contract" do
     fixture =
       start_supervised!(

@@ -20,7 +20,7 @@ defmodule Vxpipe.CallEngine.Event.TextOutput do
     :will_be_spoken,
     :occurred_at
   ]
-  defstruct @enforce_keys ++ [schema_version: @schema_version]
+  defstruct @enforce_keys ++ [schema_version: @schema_version, agent_mode: nil]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -35,6 +35,7 @@ defmodule Vxpipe.CallEngine.Event.TextOutput do
           command_id: String.t(),
           correlation_id: String.t(),
           text: String.t(),
+          agent_mode: :speaker | :listener | nil,
           aggregated_by: :sentence,
           will_be_spoken: boolean(),
           occurred_at: DateTime.t()

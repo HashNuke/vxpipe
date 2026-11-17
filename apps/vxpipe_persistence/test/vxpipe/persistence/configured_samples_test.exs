@@ -99,7 +99,7 @@ defmodule Vxpipe.Persistence.ConfiguredSamplesTest do
     assert {:ok, _} =
              Calls.ProviderCredentials.provision(
                :platform,
-               "google",
+               "openai",
                "default",
                "api_key",
                %{"api_key" => "synthetic-platform"},
@@ -108,8 +108,8 @@ defmodule Vxpipe.Persistence.ConfiguredSamplesTest do
 
     config =
       put_in(c.config, [:call_spec, :defaults, :capabilities, :model_inference], %{
-        provider: "google",
-        model: "gemini-3.5-flash-lite"
+        provider: "openai",
+        model: "gpt-6-luna"
       })
 
     assert {:error, %{code: :provider_service_forbidden}} =
@@ -131,7 +131,7 @@ defmodule Vxpipe.Persistence.ConfiguredSamplesTest do
     caller = %{c.actor | grants: MapSet.new(["calls.write"])}
     assert {:ok, token} = ConfiguredSamples.prepare(caller, config, options)
     assert {:ok, call} = Calls.fetch_call(config.tenant_key, token.call_id, options)
-    assert call.plan.credential_bindings[{"google", "default"}]["scope"] == "platform"
+    assert call.plan.credential_bindings[{"openai", "default"}]["scope"] == "platform"
   end
 
   test "an ended prepared call cannot issue a transfer admission", c do

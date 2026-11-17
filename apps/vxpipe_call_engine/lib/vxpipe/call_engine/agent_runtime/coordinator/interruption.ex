@@ -3,7 +3,14 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
 
   alias Vxpipe.AgentRuntime.Session
   alias Vxpipe.CallEngine.AgentRuntime.CompletionContinuation
-  alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{ActiveRequest, History, State}
+
+  alias Vxpipe.CallEngine.AgentRuntime.Coordinator.{
+    ActiveRequest,
+    History,
+    OutputSettlement,
+    State
+  }
+
   alias Vxpipe.CallEngine.Command.SendText
   alias Vxpipe.CallEngine.Telemetry
 
@@ -65,6 +72,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Interruption do
 
   defp cancel_current(%State{current: %ActiveRequest{} = current} = state, timeout) do
     :ok = ActiveRequest.cancel(current, state.session, timeout)
+    state = OutputSettlement.await(state)
     %{state | current: nil}
   end
 

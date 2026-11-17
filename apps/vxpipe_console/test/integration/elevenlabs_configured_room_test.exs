@@ -57,6 +57,7 @@ defmodule Vxpipe.Console.Integration.ElevenLabsConfiguredRoomTest do
     events = stream(caller, File.read!(LiveFixture.pcm_path()), [], 0)
     :ok = ScribeTransport.deliver(wire, {:partial, "Public telescope."})
     :ok = ScribeTransport.deliver(wire, {:segment, "Public telescope."})
+    :ok = ScribeTransport.deliver(wire, {:partial, ""})
     events = await_final(events, System.monotonic_time(:millisecond) + 5_000)
 
     assert [

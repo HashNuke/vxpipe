@@ -10,6 +10,35 @@ defmodule Vxpipe.AgentRuntime.ToolRoundTest do
     ToolDescriptor
   }
 
+  test "native replay survives an actual tool acknowledgement and subsequent input" do
+    session = start_session([tool_descriptor("check_balance", :balance, :non_blocking)])
+    caller = request(session, "Check once", "replay_first")
+    release_pending_context("replay_first", [])
+    assert_receive {:model_provider_process, provider, _request}
+    replay = %{"format" => "test_v1", "opaque" => "private-native-token"}
+    call = tool_call("replay_call", "check_balance")
+
+    assert {:ok, response} =
+             ModelResponse.new(text: "Checking. ", tool_calls: [call], provider_replay: replay)
+
+    send(provider, {:test_model_response, {:ok, response}})
+    assert_submission(:balance, "replay_call", "replay_first")
+    release_pending_context("replay_first", [])
+    assert_receive {:model_provider_process, provider, captured}
+    retained = Enum.find(captured.messages, &(&1.tool_calls == [call]))
+    assert retained.provider_replay == replay
+    reply_with_text(provider, "Ready.")
+    assert {:ok, %Result{status: :completed, output: output}} = Task.await(caller)
+    refute output =~ "private-native-token"
+
+    later = request(session, "Next", "replay_later")
+    release_pending_context("replay_later", [])
+    assert_receive {:model_provider_process, provider, captured}
+    assert retained in captured.messages
+    reply_with_text(provider, "Later.")
+    assert {:ok, %Result{status: :completed}} = Task.await(later)
+  end
+
   test "commits an accepted blocking submission and performs one acknowledgement round" do
     session = start_session([tool_descriptor("check_balance", :balance, :blocking)])
     caller = request(session, "What is my balance?", "req_tool_1")

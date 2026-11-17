@@ -135,7 +135,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutputTest do
     }
 
     state = state |> TurnState.put(command) |> TurnState.put(replacement)
-    state = TurnState.update(state, command, &%{&1 | pending_speech: 1})
 
     request = %Vxpipe.CallEngine.TextToSpeechRequest{
       tenant_id: "tenant-test",
@@ -151,6 +150,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutputTest do
       output_sink: self()
     }
 
+    state = TurnState.begin_speech(state, request)
     settled = AgentOutput.playback(self(), request, :discarded, state)
     assert TurnState.get(settled, command).pending_speech == 0
     assert TurnState.active?(settled, command)

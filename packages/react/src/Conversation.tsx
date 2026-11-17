@@ -94,6 +94,9 @@ function MessageRow({
           ) : (
             <strong>{displayName}</strong>
           )}
+          {message.outputPurpose === "backchannel" && (
+            <span className="vx-message-purpose">Backchannel</span>
+          )}
           {message.state === "streaming" && (
             <span className="vx-streaming" role="img" aria-label="Streaming">
               <i />
@@ -311,12 +314,14 @@ function timeline(
   const items: TimelineItem[] = [];
   if (filters.messages)
     items.push(
-      ...snapshot.messages.map((value) => ({
-        kind: "messages" as const,
-        id: value.id,
-        occurredAt: value.occurredAt,
-        value,
-      })),
+      ...snapshot.messages
+        .filter((message) => message.text.trim() !== "")
+        .map((value) => ({
+          kind: "messages" as const,
+          id: value.id,
+          occurredAt: value.occurredAt,
+          value,
+        })),
     );
   if (filters.events)
     items.push(

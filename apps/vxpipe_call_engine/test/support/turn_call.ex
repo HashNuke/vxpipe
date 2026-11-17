@@ -33,7 +33,7 @@ defmodule Vxpipe.CallEngine.TestTurnCall do
         prompt: "Answer as a compact test assistant.",
         first_message: %{mode: "wait_for_input"},
         capabilities: output,
-        tools: %{},
+        tools: Keyword.get(options, :tools, %{}),
         transfers: []
       }
     }
@@ -72,7 +72,14 @@ defmodule Vxpipe.CallEngine.TestTurnCall do
                room_id: room_id
              )
 
-    assert {:ok, plan} = CallSpecCompiler.compile(call_spec, invocation, %{host_tools: %{}})
+    assert {:ok, plan} =
+             CallSpecCompiler.compile(call_spec, invocation, %{
+               host_tools: Keyword.get(options, :host_tools, %{})
+             })
+
+    assert {:ok, plan} =
+             Vxpipe.CallEngine.AgentProtocol.pin(plan, Keyword.get(options, :agent_protocol))
+
     assert {:ok, room} = TestCallStartup.start_call(plan)
     {plan, room, Map.fetch!(plan.participants, plan.entry_caller)}
   end

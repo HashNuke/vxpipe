@@ -6,10 +6,29 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
   alias Vxpipe.CallEngine.TestElevenLabsScribeTransport, as: Wire
   alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
 
+  test "provider silence after committed text settles without a local endpoint wait" do
+    {session, wire} = start_session()
+    Wire.deliver(wire, {:segment, "finished answer"})
+    started = event(session, :speech_started)
+    assert event(session, :transcript).text == "finished answer"
+
+    Wire.deliver(wire, {:partial, ""})
+
+    assert_receive {:vxpipe_speech, %Event{kind: :turn_ended} = ended}, 200
+    assert ended.turn_ref == started.turn_ref
+    assert ended.text == "finished answer"
+    assert ended.endpointing == :provider_gap
+    assert :ok = Session.ack(session, ended)
+
+    Wire.deliver(wire, {:partial, ""})
+    _ = :sys.get_state(Session.provider(session))
+    refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
+  end
+
   test "VAD commit mode is continuous and does not prepare a local detector" do
     {session, wire} = start_session()
     assert {:ok, descriptor} = Session.describe(session)
-    assert descriptor.endpointing == :inferred_gap
+    assert descriptor.endpointing == :provider_gap
     assert :ok = Descriptor.validate_conversational_stt(descriptor)
     assert :ok = Session.push_audio(session, :binary.copy(<<0>>, 64_000))
 
@@ -20,7 +39,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
     refute_received {:scribe_started, _}
   end
 
-  test "forced segments accumulate and continued partials cancel inferred endpoint" do
+  test "forced segments accumulate until provider silence with no outstanding draft" do
     {session, wire} = start_session()
     Wire.deliver(wire, {:partial, "first"})
     start = event(session, :speech_started)
@@ -37,10 +56,11 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
     refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
     Wire.deliver(wire, {:segment, "second final"})
     assert event(session, :transcript).text == "first final second final"
+    Wire.deliver(wire, {:partial, ""})
     ended = event(session, :turn_ended)
     assert ended.text == "first final second final"
     assert ended.turn_ref == start.turn_ref
-    assert ended.endpointing == :inferred_gap
+    assert ended.endpointing == :provider_gap
     Wire.deliver(wire, {:partial, "third"})
     next = event(session, :speech_started)
     refute next.turn_ref == start.turn_ref
@@ -48,7 +68,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
     refute_received {:scribe_started, _}
   end
 
-  test "inferred gap waits for the retained draft to commit before settlement" do
+  test "provider silence waits for the retained draft to commit before settlement" do
     {session, wire} = start_session()
     Wire.deliver(wire, {:segment, "first"})
     start = event(session, :speech_started)
@@ -57,10 +77,11 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
     assert event(session, :transcript).text == "first second"
     Wire.deliver(wire, {:partial, "second"})
     Wire.deliver(wire, {:segment, "second"})
+    Wire.deliver(wire, {:partial, ""})
     ended = event(session, :turn_ended)
     assert ended.turn_ref == start.turn_ref
     assert ended.text == "first second"
-    assert ended.endpointing == :inferred_gap
+    assert ended.endpointing == :provider_gap
   end
 
   test "an outstanding draft cannot settle and reopen a phantom turn through duplicate keepalives" do
@@ -75,6 +96,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
     _ = :sys.get_state(Session.provider(session))
     refute_received {:vxpipe_speech, %Event{kind: :speech_started}}
     Wire.deliver(wire, {:segment, "yes"})
+    Wire.deliver(wire, {:partial, ""})
     assert event(session, :turn_ended).turn_ref == started.turn_ref
   end
 
@@ -97,6 +119,16 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
     monitor = Process.monitor(wire)
     assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
     assert_receive {:DOWN, ^monitor, :process, ^wire, _}, 1_000
+    refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
+  end
+
+  test "committed text without provider silence cannot settle on a local deadline" do
+    {session, wire} = start_session(commit_timeout_ms: 200)
+    Wire.deliver(wire, {:segment, "continuing speech"})
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+
+    assert_receive {:vxpipe_speech_closed, ^session, :session_failed}, 1_000
     refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
   end
 
@@ -126,6 +158,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
         Wire.deliver(wire, {:segment, "yes"})
         started = event(session, :speech_started)
         assert event(session, :transcript).text == "yes"
+        Wire.deliver(wire, {:partial, ""})
         assert event(session, :turn_ended).turn_ref == started.turn_ref
         started.turn_ref
       end
@@ -147,10 +180,11 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
     refute_received {:vxpipe_speech, %Event{kind: :turn_ended}}
     Wire.deliver(wire, {:segment, "second final"})
     assert event(session, :transcript).text == "first second final"
+    Wire.deliver(wire, {:partial, ""})
     ended = event(session, :turn_ended)
     assert ended.turn_ref == started.turn_ref
     assert ended.text == "first second final"
-    assert ended.endpointing == :inferred_gap
+    assert ended.endpointing == :provider_gap
   end
 
   test "an unacknowledged draft flush fails within its own deadline" do
@@ -192,7 +226,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTTTest do
                      config: config,
                      wire_module: Wire,
                      wire_options: [observer: self()],
-                     inferred_gap_ms: 100,
+                     draft_flush_gap_ms: 100,
                      activity_options: [load: fn -> flunk("loaded Silero") end]
                    ]
              )

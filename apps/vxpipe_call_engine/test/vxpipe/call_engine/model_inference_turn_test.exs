@@ -52,11 +52,14 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert_receive {:test_agent_runtime_stream, first_request,
                     %ModelRequest{
                       messages: [
-                        %Message{role: :system, content: "Answer as a compact test assistant."},
-                        %Message{role: :user, content: "My name is River."}
+                        %Message{role: :system, content: system_content},
+                        %Message{role: :user, content: first_input}
                       ]
                     }}
 
+    {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    assert system_content == shared.text <> "\n\nAnswer as a compact test assistant."
+    assert JSON.decode!(first_input)["message"] == "My name is River."
     reply(first_request, "Nice to meet you, River.")
 
     assert_receive {:vxpipe_event, %TextOutput{sequence: 3, text: "Nice to meet you, River."}}
@@ -70,13 +73,15 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
     assert_receive {:test_agent_runtime_stream, second_request,
                     %ModelRequest{
                       messages: [
-                        %Message{role: :system, content: "Answer as a compact test assistant."},
-                        %Message{role: :user, content: "My name is River."},
-                        %Message{role: :assistant, content: "Nice to meet you, River."},
-                        %Message{role: :user, content: "What is my name?"}
+                        %Message{role: :system, content: ^system_content},
+                        %Message{role: :user, content: ^first_input},
+                        %Message{role: :assistant, content: confirmed_answer},
+                        %Message{role: :user, content: second_input}
                       ]
                     }}
 
+    assert JSON.decode!(confirmed_answer)["message"] == "Nice to meet you, River."
+    assert JSON.decode!(second_input)["message"] == "What is my name?"
     reply(second_request, "Your name is River.")
 
     assert_receive {:vxpipe_event, %TextOutput{sequence: 7, text: "Your name is River."}}
@@ -185,11 +190,15 @@ defmodule Vxpipe.CallEngine.ModelInferenceTurnTest do
                     %ModelRequest{
                       messages: [
                         %Message{role: :system},
-                        %Message{role: :user, content: "first"},
-                        %Message{role: :assistant, content: "first answer"},
-                        %Message{role: :user, content: "second"}
+                        %Message{role: :user, content: queued_first_input},
+                        %Message{role: :assistant, content: queued_answer},
+                        %Message{role: :user, content: queued_second_input}
                       ]
                     }}
+
+    assert JSON.decode!(queued_first_input)["message"] == "first"
+    assert JSON.decode!(queued_answer)["message"] == "first answer"
+    assert JSON.decode!(queued_second_input)["message"] == "second"
   end
 
   defp start_attached_room(room_id) do

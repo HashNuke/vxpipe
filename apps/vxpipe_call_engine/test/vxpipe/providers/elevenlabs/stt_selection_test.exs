@@ -8,7 +8,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSelectionTest do
 
   for model <- ["scribe_v2_realtime", "scribe_v3_live"] do
     @model model
-    test "inline #{model} selection resolves a private continuous recognizer with inferred gap authority" do
+    test "inline #{model} selection resolves a private continuous recognizer with provider gap authority" do
       assert {:ok, STTSession} = Registry.fetch_capability("elevenlabs", :stt)
 
       assert {:ok, selection} =
@@ -39,7 +39,7 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSelectionTest do
       assert Keyword.fetch!(private, :config) == config
       refute inspect(private) =~ "synthetic-private-key"
       assert {:ok, descriptor} = STTSession.configure(public)
-      assert descriptor.endpointing == :inferred_gap
+      assert descriptor.endpointing == :provider_gap
       refute descriptor.finite_input?
 
       assert {:ok, [name: "elevenlabs", model: @model]} =

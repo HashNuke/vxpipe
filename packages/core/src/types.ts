@@ -40,6 +40,10 @@ export interface Message {
   /** UTC RFC 3339 instant when this item occurred. */
   occurredAt: string;
   state: "final" | "streaming" | "interrupted";
+  /** Input-time mode or output intent; independent of current media state. */
+  agentMode?: "speaker" | "listener";
+  /** Runtime-projected output purpose; omitted for participant input and legacy records. */
+  outputPurpose?: "main_response" | "backchannel";
   spokenRange?: { start: number; end: number };
   metrics?: readonly Metric[];
 }

@@ -11,6 +11,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
     Context,
     InvocationBinding,
     InvocationCompletion,
+    InvocationConfig,
     InvocationLifecycle,
     InvocationRecord,
     InvocationSubmission,
@@ -52,6 +53,15 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
   def snapshot(registry, timeout \\ @call_timeout) do
     safe_call(registry, :snapshot, timeout)
   end
+
+  @spec running_execution(GenServer.server(), String.t()) ::
+          {:ok, InvocationRecord.running_execution()} | {:error, :unavailable}
+  def running_execution(registry, invocation_id)
+      when is_binary(invocation_id) and invocation_id != "" and byte_size(invocation_id) <= 256 do
+    safe_call(registry, {:running_execution, invocation_id})
+  end
+
+  def running_execution(_registry, _invocation_id), do: {:error, :unavailable}
 
   @doc false
   @spec check_new_id(GenServer.server(), String.t()) :: :ok | {:error, :rejected | :unavailable}
@@ -150,6 +160,16 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
 
   def handle_call(:snapshot, _from, state) do
     {:reply, {:ok, State.statuses(state)}, state}
+  end
+
+  def handle_call({:running_execution, invocation_id}, _from, state) do
+    reply =
+      case State.fetch(state, invocation_id) do
+        {:ok, record} -> InvocationRecord.running_execution(record, state.completion_target)
+        :error -> {:error, :unavailable}
+      end
+
+    {:reply, reply, state}
   end
 
   def handle_call({:check_new_id, invocation_id}, _from, state) do
@@ -293,20 +313,25 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistry do
   end
 
   defp start_available_invocation(submission, state, admission_deadline) do
+    timeout_ms = InvocationConfig.for_invocation(submission, state.invocation_timeout_ms)
+
     options = [
       invocation_id: submission.invocation_id,
       binding: submission.binding,
       arguments: submission.arguments,
       context: submission.context,
       reply_to: self(),
-      timeout_ms: state.invocation_timeout_ms,
+      timeout_ms: timeout_ms,
       maximum_result_bytes: state.maximum_result_bytes
     ]
 
     case InvocationSupervisor.prepare_invocation(state.invocation_supervisor, options) do
       {:ok, worker} ->
         monitor = Process.monitor(worker)
-        record = InvocationRecord.new(submission, worker, monitor)
+        # The worker starts its timer in begin/2. This earlier bound remains
+        # conservative even when admission or scheduling consumes part of it.
+        deadline_ms = System.monotonic_time(:millisecond) + timeout_ms
+        record = InvocationRecord.new(submission, worker, monitor, deadline_ms)
 
         case begin_prepared_invocation(worker, admission_deadline) do
           :ok ->

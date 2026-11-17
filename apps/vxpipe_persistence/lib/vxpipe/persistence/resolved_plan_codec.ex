@@ -111,7 +111,11 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodec do
     do: value |> Map.put_new(:credential_owner, nil) |> Map.put_new(:credential_name, nil)
 
   defp normalize_reference_defaults(value, ResolvedCallPlan),
-    do: value |> Map.put_new(:direction, :incoming) |> Map.put_new(:ring_timeout_ms, nil)
+    do:
+      value
+      |> Map.put_new(:direction, :incoming)
+      |> Map.put_new(:ring_timeout_ms, nil)
+      |> Map.put_new(:agent_protocol, nil)
 
   defp normalize_reference_defaults(
          value,

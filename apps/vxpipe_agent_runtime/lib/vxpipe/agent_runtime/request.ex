@@ -1,6 +1,8 @@
 defmodule Vxpipe.AgentRuntime.Request do
   @moduledoc "A single input admitted to an agent-runtime session."
 
+  alias Vxpipe.AgentRuntime.Input
+
   @derive {Inspect, only: [:origin, :correlation]}
   @enforce_keys [:input, :origin, :correlation]
   defstruct @enforce_keys
@@ -9,8 +11,17 @@ defmodule Vxpipe.AgentRuntime.Request do
   @type t :: %__MODULE__{input: String.t(), origin: origin(), correlation: map()}
   @default_max_input_bytes 64 * 1_024
 
-  @spec new(String.t(), map(), keyword()) :: {:ok, t()} | {:error, atom()}
+  @spec new(String.t() | Input.t(), map(), keyword()) :: {:ok, t()} | {:error, atom()}
   def new(input, correlation, options \\ [])
+
+  def new(%Input{} = input, correlation, options)
+      when is_map(correlation) and is_list(options) do
+    if Keyword.get(options, :origin, :caller) == input.origin do
+      new(Input.encode(input), correlation, options)
+    else
+      {:error, :invalid_origin}
+    end
+  end
 
   def new(input, correlation, options)
       when is_binary(input) and is_map(correlation) and is_list(options) do

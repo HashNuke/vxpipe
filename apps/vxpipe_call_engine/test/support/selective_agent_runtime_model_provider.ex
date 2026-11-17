@@ -4,6 +4,9 @@ defmodule Vxpipe.CallEngine.TestSelectiveAgentRuntimeModelProvider do
   @behaviour Vxpipe.AgentRuntime.ModelProvider
 
   @impl true
+  def supports_protocol?(_model, :mode_message_v1, _tools), do: true
+
+  @impl true
   def readiness(%{model: model, owner: owner}) when is_binary(model) and is_pid(owner), do: :ready
 
   @spec new(keyword()) :: {:ok, map()} | {:error, :invalid_configuration}

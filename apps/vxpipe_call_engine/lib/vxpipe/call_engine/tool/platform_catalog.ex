@@ -1,11 +1,12 @@
 defmodule Vxpipe.CallEngine.Tool.PlatformCatalog do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Tool.{CurrentTime, Hangup}
+  alias Vxpipe.CallEngine.Tool.{CurrentTime, Hangup, Idle}
 
   @tools %{
     "get_current_time" => CurrentTime,
-    "hangup" => Hangup
+    "hangup" => Hangup,
+    "idle" => Idle
   }
 
   @spec fetch(String.t()) :: {:ok, module()} | :error

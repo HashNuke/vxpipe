@@ -31,6 +31,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.State do
                 activated_agent_participant_ids: MapSet.new(),
                 pending_participant_transfer: nil,
                 agent_turns: %{},
+                idle_wait: nil,
                 background_tool_calls: %{},
                 pending_agent_teardowns: %{},
                 pending_connection_promotions: %{},

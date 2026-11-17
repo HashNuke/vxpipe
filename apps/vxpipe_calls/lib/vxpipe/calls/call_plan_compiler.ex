@@ -27,7 +27,9 @@ defmodule Vxpipe.Calls.CallPlanCompiler do
              registries,
              engine_options ++ duration_options
            ) do
-      TelephonyPlanBindings.pin(plan, options)
+      with {:ok, plan} <-
+             Vxpipe.CallEngine.AgentProtocol.pin(plan, Keyword.get(options, :agent_protocol)),
+           do: TelephonyPlanBindings.pin(plan, options)
     end
   end
 

@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
   @moduledoc false
 
-  alias Vxpipe.AgentRuntime.Session
+  alias Vxpipe.AgentRuntime.{Input, Session}
   alias Vxpipe.CallEngine.AgentRuntime.{CompletionContinuation, Correlation, OutputBuffer}
   alias Vxpipe.CallEngine.Command.{ContinueAgent, SendText}
   alias Vxpipe.CallEngine.Tool.Context
@@ -32,7 +32,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
 
     task =
       Task.Supervisor.async_nolink(Keyword.fetch!(options, :request_supervisor), fn ->
-        Session.request(session, command.content, correlation, :infinity)
+        Session.request(session, command.model_input || command.content, correlation, :infinity)
       end)
 
     new(command, correlation, :caller, task, options)
@@ -44,12 +44,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
 
   @spec start_greeting(SendText.t(), keyword()) :: {:ok, t()} | {:error, :unavailable}
   def start_greeting(%SendText{} = command, options) do
+    {:ok, input} = Input.platform(:greeting_request, %{}, :listener)
     correlation = correlation(command, options)
     session = Keyword.fetch!(options, :session)
 
     task =
       Task.Supervisor.async_nolink(Keyword.fetch!(options, :request_supervisor), fn ->
-        Session.continue(session, command.content, correlation, :infinity)
+        Session.continue(session, input, correlation, :infinity)
       end)
 
     new(command, correlation, :greeting, task, options)
@@ -61,12 +62,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest do
 
   @spec start_caller_idle(SendText.t(), keyword()) :: {:ok, t()} | {:error, :unavailable}
   def start_caller_idle(%SendText{} = command, options) do
+    {:ok, input} = Input.platform(:idle_timeout, %{}, :listener)
     correlation = correlation(command, options)
     session = Keyword.fetch!(options, :session)
 
     task =
       Task.Supervisor.async_nolink(Keyword.fetch!(options, :request_supervisor), fn ->
-        Session.continue(session, command.content, correlation, :infinity)
+        Session.continue(session, input, correlation, :infinity)
       end)
 
     new(command, correlation, :caller_idle, task, options)

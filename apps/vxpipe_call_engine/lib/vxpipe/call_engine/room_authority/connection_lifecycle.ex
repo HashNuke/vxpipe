@@ -8,11 +8,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     OpeningAudio,
+    OutputHistory,
     SpeechToSpeech,
     STTAudioAdmission,
     StartupReadiness,
     State,
-    TextCapability
+    TextCapability,
+    TurnState
   }
 
   alias Vxpipe.CallEngine.RoomAuthority.ParticipantTransfer.Phase
@@ -552,6 +554,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
 
   defp remove_by_id(connection_id, state, attributes) do
     connection = Map.get(state.connections, connection_id)
+    state = TurnState.retire_connection_output(state, connection_id)
     state = SpeechToSpeech.source_disconnected(state, connection_id)
     state = clear_speech_to_text(connection_id, false, state)
     {monitor, connection_monitors} = pop_monitor(connection_id, state)
@@ -566,6 +569,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ConnectionLifecycle do
         connections: Map.delete(state.connections, connection_id)
     }
 
+    state = OutputHistory.detached(state, connection_id)
     state = StartupReadiness.connection_removed(connection_id, connection, state)
 
     if connection == nil or connection.admission != :main do

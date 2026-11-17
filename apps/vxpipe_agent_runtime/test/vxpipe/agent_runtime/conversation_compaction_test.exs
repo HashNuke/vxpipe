@@ -34,6 +34,55 @@ defmodule Vxpipe.AgentRuntime.ConversationCompactionTest do
            ]
   end
 
+  test "host-settled compaction uses a typed summary without speech or delivery diagnostics" do
+    conversation =
+      base_conversation() |> exchange("old", :durable) |> exchange("recent", :durable)
+
+    {:ok, snapshot} = ConversationCompaction.snapshot(conversation, [], recent_entries: 1)
+
+    assert {:ok, compacted} =
+             ConversationCompaction.apply(
+               conversation,
+               snapshot,
+               "human-one corrected Friday",
+               :structured
+             )
+
+    summary = Enum.find(compacted.messages, &(&1.origin == :derived_summary))
+    assert summary.role == :assistant
+
+    assert JSON.decode!(summary.content) == %{
+             "type" => "conversation_summary",
+             "text" => "human-one corrected Friday"
+           }
+
+    assert summary.tool_calls == []
+  end
+
+  test "protected native exchanges retain private replay while summaries exclude it" do
+    {:ok, call} = ToolCall.new(id: "protected", name: "lookup", arguments: %{})
+    replay = %{"format" => "test_v1", "opaque" => "private-token"}
+    assistant = Message.assistant("Checking", [call], replay)
+
+    conversation =
+      base_conversation()
+      |> exchange("old", :durable)
+      |> Conversation.append_exchange(
+        [assistant, Message.tool(call, %{"status" => "running"})],
+        %{request_id: "protected"},
+        :durable
+      )
+      |> exchange("recent", :durable)
+
+    {:ok, snapshot} = ConversationCompaction.snapshot(conversation, [call.id], recent_entries: 1)
+
+    {:ok, compacted} =
+      ConversationCompaction.apply(conversation, snapshot, "old facts", :structured)
+
+    assert assistant in compacted.messages
+    assert Enum.find(compacted.messages, &(&1.origin == :derived_summary)).provider_replay == %{}
+  end
+
   test "protects permanent transfer history and the configured recent tail" do
     conversation =
       base_conversation()

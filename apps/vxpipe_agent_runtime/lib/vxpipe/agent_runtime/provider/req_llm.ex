@@ -4,10 +4,24 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
   @behaviour Vxpipe.AgentRuntime.ModelProvider
 
   alias Elixir.ReqLLM.{Response, StreamResponse}
-  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{Config, RequestProjection, ResponseNormalizer}
+
+  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{
+    Config,
+    DialogueProfile,
+    RequestProjection,
+    ResponseNormalizer
+  }
 
   @spec new(keyword()) :: {:ok, Config.t()} | {:error, :invalid_configuration}
   defdelegate new(options), to: Config
+
+  @doc "Whether a model has verified structured dialogue and native-tool support."
+  defdelegate supports_protocol_model?(provider, model, tool_names \\ []),
+    to: DialogueProfile,
+    as: :supports_model?
+
+  @impl true
+  defdelegate supports_protocol?(config, protocol, tools), to: DialogueProfile, as: :supports?
 
   @impl true
   def readiness(%Config{}), do: :ready
@@ -33,8 +47,11 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
     {model, context, options} = prepare_request(config, request)
 
     case Elixir.ReqLLM.generate_text(model, context, options) do
-      {:ok, %Response{} = response} -> ResponseNormalizer.normalize(response)
-      {:error, _reason} -> {:error, :provider_unavailable}
+      {:ok, %Response{} = response} ->
+        ResponseNormalizer.normalize(response, request.reply_protocol, config.model)
+
+      {:error, _reason} ->
+        {:error, :provider_unavailable}
     end
   rescue
     _error -> {:error, :provider_unavailable}
@@ -47,8 +64,11 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
     {model, context, options} = prepare_request(config, request)
 
     case Elixir.ReqLLM.stream_text(model, context, options) do
-      {:ok, %StreamResponse{} = response} -> consume_stream(response, emit)
-      {:error, _reason} -> {:error, :provider_unavailable}
+      {:ok, %StreamResponse{} = response} ->
+        consume_stream(response, emit, request.reply_protocol)
+
+      {:error, _reason} ->
+        {:error, :provider_unavailable}
     end
   rescue
     _error -> {:error, :provider_unavailable}
@@ -59,10 +79,14 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
   @doc false
   @spec consume_stream(StreamResponse.t(), (String.t() -> :ok | {:error, atom()})) ::
           {:ok, Vxpipe.AgentRuntime.ModelResponse.t()} | {:error, atom()}
-  def consume_stream(%StreamResponse{} = stream_response, emit) when is_function(emit, 1) do
+  def consume_stream(%StreamResponse{} = stream_response, emit, protocol \\ :legacy)
+      when is_function(emit, 1) do
     case StreamResponse.process_stream(stream_response, on_result: &emit_chunk(&1, emit)) do
-      {:ok, %Response{} = response} -> ResponseNormalizer.normalize(response)
-      {:error, _reason} -> {:error, :provider_unavailable}
+      {:ok, %Response{} = response} ->
+        ResponseNormalizer.normalize(response, protocol, stream_response.model)
+
+      {:error, _reason} ->
+        {:error, :provider_unavailable}
     end
   rescue
     _error -> {:error, :provider_unavailable}

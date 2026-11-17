@@ -234,6 +234,59 @@ defmodule Vxpipe.Calls.ArchivesTest do
     refute inspect(history) =~ "order-7"
   end
 
+  test "selects versioned speech using trusted attribution while retaining original tool facts" do
+    content = %{
+      "type" => "participant_message",
+      "participant_id" => "assistant-1",
+      "agent_mode" => "listener",
+      "message" => "嗯，okay"
+    }
+
+    payload = %{"content_format" => "structured_agent_message_v1", "content" => content}
+    time = ~U[2026-09-09 11:41:01Z]
+    speech = attributed_fact(:agent_output_generated, 1, time, payload)
+
+    silent =
+      attributed_fact(:agent_output_generated, 2, time, %{
+        payload
+        | "content" => %{content | "message" => nil}
+      })
+
+    future =
+      attributed_fact(
+        :accepted_input,
+        3,
+        time,
+        payload |> Map.put("content_format", "future") |> Map.put("text", "not speech")
+      )
+
+    tool =
+      attributed_fact(:tool_call_completed, 4, time, %{
+        "name" => "lookup",
+        "result" => %{"message" => "native result", "status" => "running"}
+      })
+
+    legacy =
+      attributed_fact(:accepted_input, 5, time, %{"content" => "{\"type\":\"platform_event\"}"})
+
+    mismatched =
+      attributed_fact(:agent_output_generated, 6, time, %{
+        payload
+        | "content" => %{content | "participant_id" => "someone-else"}
+      })
+
+    history =
+      Vxpipe.Calls.CallHistory.new(
+        [speech, silent, future, tool, legacy, mismatched],
+        %Vxpipe.Calls.VariableSnapshotHistory{snapshots: [], latest: nil}
+      )
+
+    assert history.transcript == [speech, legacy]
+    assert history.tool_history == [tool]
+    assert length(history.facts) == 6
+    assert speech.payload == payload
+  end
+
   test "reports complete and known-incomplete archive streams without inventing history" do
     snapshot_history = %Vxpipe.Calls.VariableSnapshotHistory{snapshots: [], latest: nil}
     input = call_fact(:accepted_input, 1, %{"content" => "Hello", "modality" => "text"})

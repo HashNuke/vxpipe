@@ -5,6 +5,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     CompactionObservation,
     Conversation,
     ContextPreparation,
+    Dialogue,
     Executor,
     Message,
     ModelContext,
@@ -19,7 +20,10 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   @spec run(Conversation.t(), Request.t(), map()) ::
           {:ok, String.t(), Conversation.t()} | {:error, atom()}
   def run(%Conversation{} = conversation, %Request{} = request, config) when is_map(config) do
-    staged_messages = [Message.user(request.input, request.origin)]
+    staged_messages =
+      if config.history_mode == :host_settled,
+        do: [],
+        else: [Message.user(request.input, request.origin)]
 
     generate(conversation, staged_messages, [], 1, true, request, config)
   end
@@ -42,7 +46,8 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
              pending_invocations,
              model_context,
              request.correlation
-           ),
+           )
+           |> Map.put(:reply_protocol, config.reply_protocol),
          {:ok, prepared_conversation, model_request} <-
            prepare_context(conversation, model_request, config),
          :ok <- config.emit_model_attempt_started.(),
@@ -71,10 +76,15 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
          request,
          config
        ) do
-    with {:ok, complete_output} <-
-           complete_output(response.text, output, config.maximum_output_bytes) do
+    with {:ok, complete_output} <- final_output(response.text, output, config) do
       conversation =
-        commit_final_exchange(response, conversation, staged_messages, request)
+        commit_final_exchange(
+          response,
+          conversation,
+          staged_messages,
+          request,
+          config.history_mode
+        )
 
       {:ok, complete_output, conversation}
     end
@@ -85,7 +95,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
       {:error, :model_round_limit}
     else
       with {:ok, next_output} <-
-             append_output(response.text, output, config.maximum_output_bytes),
+             tool_output(response.text, output, config),
            {:ok, submissions, blocking?} <- submit_calls(response.tool_calls, request, config),
            conversation <-
              commit_tool_exchange(response, submissions, conversation, staged_messages, request),
@@ -169,14 +179,18 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     Conversation.append_exchange(
       conversation,
       staged_messages ++
-        [Message.assistant(response.text, response.tool_calls)] ++ result_messages,
+        [Message.assistant(response.text, response.tool_calls, response.provider_replay)] ++
+        result_messages,
       request.correlation,
       :durable
     )
   end
 
-  defp commit_final_exchange(response, conversation, staged_messages, request) do
-    assistant = Message.assistant(response.text, [])
+  defp commit_final_exchange(_response, conversation, _staged, _request, :host_settled),
+    do: conversation
+
+  defp commit_final_exchange(response, conversation, staged_messages, request, :generated) do
+    assistant = Message.assistant(response.text, [], response.provider_replay)
 
     case {request.origin, staged_messages} do
       {:engine, [_message | _remaining] = messages} ->
@@ -322,7 +336,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
       StreamBudget.new(
         remaining_output_bytes,
         config.maximum_stream_events_per_round,
-        config.emit_text_delta
+        stream_emitter(config)
       )
 
     response =
@@ -343,6 +357,22 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
   defp emit_model_usage(%ModelResponse{} = response, config) do
     config.emit_model_usage.(response.usage, response.provider_metadata)
   end
+
+  defp stream_emitter(%{reply_protocol: :mode_message_v1}), do: fn _text -> :ok end
+  defp stream_emitter(config), do: config.emit_text_delta
+
+  defp final_output(text, _output, %{reply_protocol: :mode_message_v1} = config),
+    do: Dialogue.decode(text, config.maximum_output_bytes)
+
+  defp final_output(text, output, config),
+    do: complete_output(text, output, config.maximum_output_bytes)
+
+  defp tool_output(text, _output, %{reply_protocol: :mode_message_v1} = config) do
+    with {:ok, _bounded} <- append_output(text, [], config.maximum_output_bytes), do: {:ok, []}
+  end
+
+  defp tool_output(text, output, config),
+    do: append_output(text, output, config.maximum_output_bytes)
 
   defp running_result(call),
     do: %{"invocation_id" => call.id, "status" => "running"}

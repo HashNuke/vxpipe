@@ -1,11 +1,12 @@
 defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   @moduledoc """
   Continuous Scribe recognition using upstream VAD commits. Commits are stable
-  segments, including forced long-input segments. A 1.5-second absence of further
-  transcript revisions after a commit, with no outstanding draft, is an inferred
-  endpoint, not acoustic or provider-semantic proof. A stable draft after a committed
-  segment requests one explicit flush while upstream remains in VAD mode. Committed
-  text is required before settlement; missing responses fail within a bounded deadline.
+  segments, including forced long-input segments. An empty provider keepalive
+  after committed text confirms provider-processed silence with no outstanding
+  draft. It settles the turn immediately, without another local endpoint timer.
+  This is provider-gap evidence, not semantic completion. A stable draft after a
+  committed segment requests one explicit flush while upstream remains in VAD mode.
+  Committed text is required before settlement; missing responses fail within a bounded deadline.
   The stream lives inside one permission allocation.
   """
   use GenServer
@@ -15,7 +16,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
 
   @maximum_audio_bytes 96_000
   @maximum_text_bytes 65_536
-  @inferred_gap_ms 1_500
+  @draft_flush_gap_ms 1_500
   @commit_timeout_ms 60_000
   @flush_timeout_ms 5_000
 
@@ -43,7 +44,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
           provenance: :locally_measured
         },
         readiness: :provider_acknowledged,
-        endpointing: :inferred_gap,
+        endpointing: :provider_gap,
         speech_start?: true,
         speech_start_evidence: :transcript
       )
@@ -64,7 +65,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     private = Keyword.fetch!(options, :private)
     config = Keyword.fetch!(private, :config)
     channel = Keyword.fetch!(options, :channel)
-    gap = Keyword.get(private, :inferred_gap_ms, @inferred_gap_ms)
+    gap = Keyword.get(private, :draft_flush_gap_ms, @draft_flush_gap_ms)
     commit_timeout = Keyword.get(private, :commit_timeout_ms, @commit_timeout_ms)
     flush_timeout = Keyword.get(private, :flush_timeout_ms, @flush_timeout_ms)
 
@@ -100,7 +101,6 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
          last_text: "",
          accepted_samples: 0,
          settled_samples: 0,
-         candidate: nil,
          commit_watchdog: nil,
          commit_timeout: commit_timeout,
          flush: nil,
@@ -179,33 +179,6 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     end
   end
 
-  def handle_info({:inferred_endpoint, token}, %{candidate: {_timer, token}} = state) do
-    duration = div((state.accepted_samples - state.settled_samples) * 1_000, 16_000)
-
-    case Event.emit(state.channel, :turn_ended,
-           turn_ref: state.turn,
-           text: state.last_text,
-           endpointing: :inferred_gap,
-           provider_request_id: state.request_id,
-           audio_duration_ms: duration
-         ) do
-      result when result in [:ok, :discarded] ->
-        {:noreply,
-         %{
-           cancel_commit_watchdog(state)
-           | turn: nil,
-             committed: "",
-             partial: "",
-             last_text: "",
-             candidate: nil,
-             settled_samples: state.accepted_samples
-         }}
-
-      _failure ->
-        fail(state)
-    end
-  end
-
   def handle_info({:commit_deadline, token}, %{commit_watchdog: {_timer, token}} = state),
     do: fail(state)
 
@@ -241,11 +214,16 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     |> Map.put(:log, [])
   end
 
+  defp recognition(%{committed: committed, partial: ""} = state, :partial, "")
+       when committed != "" do
+    settle(state)
+  end
+
   defp recognition(state, :partial, text) do
     if String.trim(text) == "" or text == state.partial do
       {:ok, state}
     else
-      state = state |> cancel_candidate() |> cancel_flush_candidate()
+      state = cancel_flush_candidate(state)
 
       with {:ok, state} <- publish_text(%{state | partial: text}, join(state.committed, text)) do
         {:ok, state |> commit_watchdog() |> flush_candidate()}
@@ -262,15 +240,13 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
       with {:ok, state} <-
              publish_text(
                %{
-                 (state
-                  |> cancel_candidate()
-                  |> cancel_flush())
+                 cancel_flush(state)
                  | committed: cumulative,
                    partial: ""
                },
                cumulative
              ) do
-        {:ok, candidate(cancel_commit_watchdog(state))}
+        {:ok, state |> cancel_commit_watchdog() |> commit_watchdog()}
       end
     end
   end
@@ -310,10 +286,30 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     end
   end
 
-  defp candidate(state) do
-    token = make_ref()
-    timer = Process.send_after(self(), {:inferred_endpoint, token}, state.gap)
-    %{state | candidate: {timer, token}}
+  defp settle(state) do
+    duration = div((state.accepted_samples - state.settled_samples) * 1_000, 16_000)
+
+    case Event.emit(state.channel, :turn_ended,
+           turn_ref: state.turn,
+           text: state.last_text,
+           endpointing: :provider_gap,
+           provider_request_id: state.request_id,
+           audio_duration_ms: duration
+         ) do
+      result when result in [:ok, :discarded] ->
+        {:ok,
+         %{
+           cancel_commit_watchdog(state)
+           | turn: nil,
+             committed: "",
+             partial: "",
+             last_text: "",
+             settled_samples: state.accepted_samples
+         }}
+
+      _failure ->
+        {:error, :session_failed}
+    end
   end
 
   defp flush_candidate(%{committed: ""} = state), do: state
@@ -355,13 +351,6 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   defp cancel_commit_watchdog(%{commit_watchdog: {timer, _token}} = state) do
     Process.cancel_timer(timer)
     %{state | commit_watchdog: nil}
-  end
-
-  defp cancel_candidate(%{candidate: nil} = state), do: state
-
-  defp cancel_candidate(%{candidate: {timer, _token}} = state) do
-    Process.cancel_timer(timer)
-    %{state | candidate: nil}
   end
 
   defp join("", right), do: right

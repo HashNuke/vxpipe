@@ -15,6 +15,57 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechSemanticTest do
   alias Vxpipe.CallEngine.Usage.ProviderContext
   alias Vxpipe.CallEngine.Provider.MorseCodeTTS.Session, as: MorseSession
 
+  test "scoped cancellation preserves a newer current request and unrelated queued speech" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    capability = start_capability(maximum_requests: 2)
+    assert {:ok, _resource, :ready} = await_ready(capability)
+    current = request("current-scope", sink)
+    obsolete = request("queued-obsolete", sink)
+    retained = request("queued-retained", sink)
+    assert :ok = TextToSpeech.synthesize(capability, current)
+    assert_receive {:usage_probe_submitted, current_ref, _}
+    assert_receive {:test_audio_output, ^sink, _}
+    assert_receive {:usage_probe_audio_credited, ^current_ref, _}
+    assert :ok = TextToSpeech.synthesize(capability, obsolete)
+    assert :ok = TextToSpeech.synthesize(capability, retained)
+    assert {:ok, []} = TextToSpeech.interrupt(capability, [%{current | output_generation: 99}])
+    assert {:ok, [{^obsolete, 0}]} = TextToSpeech.interrupt(capability, [obsolete])
+    assert :ok = GenServer.call(semantic_provider(capability), :complete)
+    assert_receive {:test_audio_output_finish, ^sink, "current-scope"}
+    assert :ok = TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:vxpipe_tts_playback, ^capability, ^current, :completed}
+    assert_receive {:usage_probe_submitted, retained_ref, _}
+    assert_receive {:test_audio_output, ^sink, %{correlation_id: "queued-retained"}}
+    assert_receive {:usage_probe_audio_credited, ^retained_ref, _}
+  end
+
+  test "scoped current cancellation preserves unrelated pending speech" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+
+    capability =
+      start_capability(
+        provider: SpeechTTSCancellationProbe,
+        provider_private: [observer: self(), order: :callback_first]
+      )
+
+    assert {:ok, _resource, :ready} = await_ready(capability)
+    current = request("cancel-scoped-current", sink)
+    retained = request("retain-scoped-pending", sink)
+    assert :ok = TextToSpeech.synthesize(capability, current)
+    assert_receive {:probe_speak, reference}
+    assert :ok = TextToSpeech.synthesize(capability, retained)
+    task = Task.async(fn -> TextToSpeech.interrupt(capability, [current]) end)
+    assert_receive {:probe_cancel, ^reference, _}
+    assert Task.await(task, 500) == {:ok, [{current, 0}]}
+    assert {:error, :unavailable} = TextToSpeech.interrupt(capability, [current, retained])
+    assert {:ok, []} = TextToSpeech.interrupt(capability, [%{retained | output_generation: 99}])
+    refute_receive {:probe_speak, _}
+    assert :ok = GenServer.call(semantic_provider(capability), :emit_cancelled)
+    assert_receive {:probe_speak, next_reference}
+    refute next_reference == reference
+    assert :sys.get_state(capability).current.request == retained
+  end
+
   test "obsolete output cancels only its request and preserves recovery speech" do
     sink = start_supervised!({TestAudioOutputSink, observer: self(), block_output: true})
     capability = start_capability(provider_private: [observer: self(), hold_cancel?: true])
@@ -333,7 +384,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeechSemanticTest do
             participant_id: "agent-semantic",
             provider: {provider, []},
             provider_private: private_init,
-            maximum_requests: 1,
+            maximum_requests: Keyword.get(options, :maximum_requests, 1),
             usage: Keyword.get(options, :usage),
             name:
               {:via, Registry, {Vxpipe.CallEngine.RoomRegistry, {__MODULE__, self(), make_ref()}}}

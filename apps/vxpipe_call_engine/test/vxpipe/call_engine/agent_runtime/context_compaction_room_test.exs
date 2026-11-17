@@ -62,7 +62,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
 
     first = send_text(plan, room, caller, connection_id, "first request")
     assert_count(500)
-    assert_receive {:test_agent_runtime_stream, provider, _request}
+    assert_receive {:test_agent_runtime_stream, provider, first_request}
+    assert {:ok, shared_prompt} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    assert hd(first_request.messages).content =~ shared_prompt.text
+    assert hd(first_request.messages).content =~ "Help the caller."
     reply(provider, "first response")
     assert_turn_completed(first)
 
@@ -76,13 +79,20 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
     assert_count(700)
 
     assert_receive {:test_agent_runtime_input_count, counter, protected_request}
-    refute Enum.any?(protected_request.messages, &(&1.content == "first request"))
+
+    refute Enum.any?(protected_request.messages, fn message ->
+             message.origin == :caller and
+               JSON.decode!(message.content)["message"] == "first request"
+           end)
+
     send(counter, {:test_agent_runtime_input_tokens, 300})
 
     assert_receive {:test_agent_runtime_generate, compactor, summary_request}
     assert summary_request.tools == []
     assert summary_request.pending_invocations == []
     assert summary_request.model_context == %{}
+    {:ok, summary_prompt} = Vxpipe.AgentRuntime.Prompt.load(:conversation_summary)
+    assert List.first(summary_request.messages).content == summary_prompt.text
 
     fourth =
       send_text(plan, room, caller, connection_id, "queued fourth request",
@@ -102,14 +112,21 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
 
     assert_receive {:test_agent_runtime_stream, provider, third_request}
     assert Enum.any?(third_request.messages, &(&1.origin == :derived_summary))
-    assert List.last(third_request.messages).content == third.content
+    retained_summary = Enum.find(third_request.messages, &(&1.origin == :derived_summary))
+
+    assert JSON.decode!(retained_summary.content) == %{
+             "type" => "conversation_summary",
+             "text" => summary
+           }
+
+    assert JSON.decode!(List.last(third_request.messages).content)["message"] == third.content
     reply(provider, "third response")
     assert_turn_completed(third)
 
     assert_count(500)
     assert_receive {:test_agent_runtime_stream, provider, fourth_request}
     assert Enum.any?(fourth_request.messages, &(&1.origin == :derived_summary))
-    assert List.last(fourth_request.messages).content == fourth.content
+    assert JSON.decode!(List.last(fourth_request.messages).content)["message"] == fourth.content
     reply(provider, "fourth response")
     assert_turn_completed(fourth)
 
@@ -269,7 +286,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
 
   defp accepted_first_request?(%Fact{
          kind: :accepted_input,
-         payload: %{"content" => "first request"}
+         payload: %{
+           "content_format" => "structured_agent_message_v1",
+           "content" => %{"message" => "first request"}
+         }
        }),
        do: true
 
@@ -277,7 +297,10 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ContextCompactionRoomTest do
 
   defp generated_first_response?(%Fact{
          kind: :agent_output_generated,
-         payload: %{"text" => "first response"}
+         payload: %{
+           "content_format" => "structured_agent_message_v1",
+           "content" => %{"message" => "first response"}
+         }
        }),
        do: true
 

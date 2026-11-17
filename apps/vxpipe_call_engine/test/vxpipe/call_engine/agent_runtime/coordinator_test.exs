@@ -41,6 +41,53 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
     end)
   end
 
+  test "host-settled history gates queued requests until confirmed output is appended" do
+    runtime = start_runtime(history_mode: :host_settled)
+    first = command("settled-first", "First question")
+    second = command("settled-second", "Second question")
+    assert :ok = Coordinator.respond(runtime.coordinator, first)
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    assert {:ok, response} = ModelResponse.new(text: "generated full answer")
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, _coordinator, ^first}
+
+    assert :ok = Coordinator.respond(runtime.coordinator, second)
+    refute_receive {:test_agent_runtime_stream, _, _}
+    assert :ok = Coordinator.settle_output(runtime.coordinator, first, "confirmed prefix")
+    assert_receive {:test_agent_runtime_stream, second_provider, request}
+    assert [spoken] = Enum.filter(request.messages, &(&1.role == :assistant))
+    assert JSON.decode!(spoken.content)["message"] == "confirmed prefix"
+    assert JSON.decode!(spoken.content)["participant_id"] == "participant-agent"
+    assert :ignored = Coordinator.settle_output(runtime.coordinator, first, "late correction")
+    assert {:ok, response} = ModelResponse.new(text: "second reply")
+    send(second_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, _, ^second}
+    assert :ok = Coordinator.settle_output(runtime.coordinator, second, nil)
+  end
+
+  test "retains the admitted input snapshot while the command waits in the queue" do
+    runtime = start_runtime()
+    first = command("snapshot-first", "first")
+    queued = command("snapshot-queued", "second")
+
+    assert {:ok, input} =
+             Vxpipe.AgentRuntime.Input.participant(queued.participant_id, "second", :speaker)
+
+    queued = struct!(queued, model_input: input)
+
+    assert :ok = Coordinator.respond(runtime.coordinator, first)
+    assert_receive {:test_agent_runtime_stream, first_provider, _request}
+    assert :ok = Coordinator.respond(runtime.coordinator, queued)
+    assert {:ok, response} = ModelResponse.new(text: "First finished.")
+    send(first_provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:test_agent_runtime_stream, queued_provider, request}
+    assert JSON.decode!(List.last(request.messages).content)["agent_mode"] == "speaker"
+    assert {:ok, response} = ModelResponse.new(text: "Second finished.")
+    send(queued_provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_capability_text_complete, _coordinator, ^queued}
+  end
+
   test "projects a streamed Agent Runtime response through the existing capability contract" do
     runtime = start_runtime()
     command = command("streamed-runtime", "How are you?")
@@ -879,7 +926,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
          provider: Keyword.get(options, :provider, :local_fixture),
          usage_provider: usage_provider_context(),
          maximum_output_bytes: Keyword.get(options, :maximum_output_bytes, 4_096),
-         maximum_pending_requests: Keyword.get(options, :maximum_pending_requests, 2)}
+         maximum_pending_requests: Keyword.get(options, :maximum_pending_requests, 2),
+         history_mode: Keyword.get(options, :history_mode, :generated)}
       )
 
     invocation_supervisor =
@@ -903,6 +951,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.CoordinatorTest do
         {Session,
          name: session_name,
          instructions: "Answer briefly.",
+         history_mode: Keyword.get(options, :history_mode, :generated),
          model_provider: TestAgentRuntimeModelProvider,
          model: %{owner: self()},
          tools: Keyword.get(options, :tools, []),

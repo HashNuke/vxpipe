@@ -1,17 +1,18 @@
 defmodule Vxpipe.AgentRuntime.ModelResponse do
   @moduledoc "A bounded, normalized model response."
 
-  alias Vxpipe.AgentRuntime.ToolCall
+  alias Vxpipe.AgentRuntime.{ProviderReplay, ToolCall}
 
   @derive {Inspect, only: []}
   @enforce_keys [:text, :tool_calls, :usage, :provider_metadata]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [provider_replay: %{}]
 
   @type t :: %__MODULE__{
           text: String.t(),
           tool_calls: [ToolCall.t()],
           usage: map(),
-          provider_metadata: map()
+          provider_metadata: map(),
+          provider_replay: map()
         }
 
   @maximum_text_bytes 256 * 1_024
@@ -26,7 +27,8 @@ defmodule Vxpipe.AgentRuntime.ModelResponse do
              :text,
              tool_calls: [],
              usage: %{},
-             provider_metadata: %{}
+             provider_metadata: %{},
+             provider_replay: %{}
            ]),
          {:ok, text} <- validate_text(Keyword.get(attributes, :text)),
          {:ok, tool_calls} <- validate_tool_calls(Keyword.fetch!(attributes, :tool_calls)),
@@ -37,13 +39,15 @@ defmodule Vxpipe.AgentRuntime.ModelResponse do
              Keyword.fetch!(attributes, :provider_metadata),
              @maximum_provider_metadata_bytes
            ),
+         :ok <- ProviderReplay.validate(Keyword.fetch!(attributes, :provider_replay)),
          false <- text == "" and tool_calls == [] do
       {:ok,
        %__MODULE__{
          text: text,
          tool_calls: tool_calls,
          usage: usage,
-         provider_metadata: provider_metadata
+         provider_metadata: provider_metadata,
+         provider_replay: Keyword.fetch!(attributes, :provider_replay)
        }}
     else
       true -> {:error, :empty_response}
@@ -59,13 +63,15 @@ defmodule Vxpipe.AgentRuntime.ModelResponse do
         text: text,
         tool_calls: tool_calls,
         usage: usage,
-        provider_metadata: provider_metadata
+        provider_metadata: provider_metadata,
+        provider_replay: provider_replay
       }) do
     with {:ok, _text} <- validate_text(text),
          {:ok, _tool_calls} <- validate_tool_calls(tool_calls),
          {:ok, _usage} <- validate_metadata(usage, @maximum_usage_bytes),
          {:ok, _provider_metadata} <-
-           validate_metadata(provider_metadata, @maximum_provider_metadata_bytes) do
+           validate_metadata(provider_metadata, @maximum_provider_metadata_bytes),
+         :ok <- ProviderReplay.validate(provider_replay) do
       text != "" or tool_calls != []
     else
       _invalid -> false
