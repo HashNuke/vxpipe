@@ -138,8 +138,12 @@ replace a newer manual refresh or revive a disconnected connection.
 
 ## Model context and compaction
 
-Transient variable/pending-tool projections respect the active participant's
-permissions. Compaction uses the pinned model, credential and accepted native
+Transient variable projections respect the active participant's permissions.
+Pending invocation snapshots remain host-only control state for admission and
+compaction protection; they are excluded from model text, provider payloads and
+token estimates. Original native tool calls, running submission acknowledgments
+and later engine completion observations remain append-only conversation history.
+Compaction uses the pinned model, credential and accepted native
 routing options; it does not choose a new recipient. Its bounded summary request
 has no tools, variable projection or executor authority.
 

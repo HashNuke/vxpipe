@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 64 milestone specifications: 50 complete and 14 incomplete. Milestone 17, Telnyx calls and
+Status: 65 active milestone specifications: 50 complete and 15 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -192,9 +192,23 @@ progress without claiming the entire milestone is complete.
 59. [x] [Shared Telnyx applications and tenant overrides](shared-telnyx-applications.md) — Three checkpoints: persist defaults/overrides, route shared calls by number, and connect the production modal. All nine tasks verified: atomic configuration, populated migrations, shared routing, duplicate protection, production modal and all root gates. Tenant credentials require a tenant application; either override displays the tenant URL. Signed tenant application events also work at the platform endpoint. Migrate data without legacy fallback modes. [Post-review fixes](../20261113-1431-fix-telnyx-review.md) cover inherited caller-number editing and application-only permissions.
 60. [ ] [Voice agent input and output guardrails](voice-agent-guardrails.md) — Research/specification complete; implementation not started. Participant questions and confidence thresholds, inherited evaluator selection, Jev/OpenAI Decisions, input feedback or standard responses, bounded output regeneration, and permitted transcript/debug evidence. Native speech-to-speech is deferred.
 61. [x] [Provider voice picker](provider-voice-picker.md) — Shared production picker and authorized catalogs cover opening audio, defaults and participant TTS/STS. Provider compatibility research, 23 focused backend and 54 UI checks, and desktop/mobile Chrome inspection complete. No paid calls, persistent catalog infrastructure or deployment.
-62. [ ] [Provider turn detection and contextual barge-in](provider-turn-detection-and-contextual-barge-in.md) — In progress: the scoped Scribe change removes the local endpoint timer using provider silence notifications after committed text. Local/Silero waits and barge-in behavior are preserved. Six live cases, 5,314 default tests, root static checks and Lean pass. The production release is deployed with verified code identity and local/public health checks. Broader endpoint research, multilingual acknowledgment handling and the one-second target remain open.
-63. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README. Local QA release, migrations and container/system services are implemented; distribution and embedded acceptance remain incomplete.
-64. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+62. [ ] [Structured agent messages and append-only history](structured-agent-messages.md) — A/B/C complete and independently reviewed: attributed inputs/history and storage/viewers, stable native tool conversations, strict mode/message replies, pinned prompts/legacy compatibility, scoped native reasoning replay, configured transfer/Session restart, and actual desktop/phone Chrome audio. Latest root 5,403 tests / 0 failures / 387 excluded plus static/unused-lock and Lean pass (seed 918318). Selected OpenAI Luna retains strict schema/full tools and immutable submitted input prefixes. First audio1.99–4.99s remains above the voice target. D's native idle/timed-resumption implementation, configured/browser acceptance and independent Astra review are complete; its five groups remain open pending final current-source umbrella and Lean gates.
+63. [ ] [Voice agent turns, listening cues and spoken transcripts](voice-agent-turns-and-listening.md) — One combined milestone: A/B deliver ElevenLabs/Rime interrupted transcript and next-LLM history; C consumes the shared message protocol for semantic interruption and modes; D adds bounded CPU filtering; E delivers transcript-driven audible cues; F verifies telephone/language/resource coverage and the one-second target. All new checkpoints remain open; completed Scribe wait removal is retained as baseline evidence.
+64. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README. Local QA release, migrations and container/system services are implemented; distribution and embedded acceptance remain incomplete.
+65. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+
+The 2026-11-16 consolidation replaces the three active feature entries with one
+[combined voice milestone](voice-agent-turns-and-listening.md). It contains the
+voice-feature tasks in six meaningful checkpoints and a source coverage map. The
+[delivery review](../../docs/design/voice-conversation-iterations.md) explains the
+shared contracts and narrow dependencies. Existing milestone filenames remain
+as superseded references; their pending checklists are no longer duplicated.
+E's cue experiment can start early, and integrated cues need C's mode/purpose
+boundary rather than CPU classifier completion or TTS word timing. The completed
+Scribe evidence remains unchanged. The later requested
+[message-format milestone](structured-agent-messages.md) owns the generic format
+and tool-history work; voice checkpoints consume it without duplicate checklists.
+No new implementation completion is claimed.
 
 The 2026-11-14 [turn detection and barge-in plan](provider-turn-detection-and-contextual-barge-in.md)
 builds on completed speech/session and onset work. It replaces unconditional
@@ -606,6 +620,8 @@ in their own review sections; no independent-agent or implementation verificatio
 
 | Milestone | Review status | Evidence |
 | --- | --- | --- |
+| [Structured agent messages](structured-agent-messages.md#ownership-and-design-review) | Mode/idle and storage/viewer amendment independently reviewed | Astra xhigh found no material findings in mode/message replies, native idle with scoped acknowledgment, single timeout continuation, exact-target cancellation or the source-backed greeting/storage/viewer audit. Original native tools and no-playback-metadata rules persist; idle_timeout replaces caller_idle and call_state_changed is deferred. Four checkpoints, 30 task groups; A/B/C now implemented and independently reviewed, D's five groups remain open. |
+| [Combined voice behavior](voice-agent-turns-and-listening.md#design-review--separate-from-implementation) | Mode/idle integration independently reviewed | Astra xhigh confirmed message D → voice C → voice E is acyclic, common listener/message cues retain timing/quality gates, and timing/overlap/classifier evidence stays internal. All 72 voice tasks remain open. Historical Scribe evidence is unchanged. |
 | [Provider voice picker](provider-voice-picker.md#specification-review) | Implemented; local design review and acceptance complete | Shared production wiring, tenant/connection authorization, documented provider compatibility, bounded catalogs, focused tests and local Chrome evidence recorded. No live-provider or deployment claim. |
 | [Voice agent input and output guardrails](voice-agent-guardrails.md#specification-review) | Research/specification complete; locally reviewed | First-party API documentation, three anonymized source snapshots and current Vxpipe boundaries support the proposed contracts. Dependency order, complete-output gating, response-only retries, model history, thresholds, failure/cancellation, and permitted transcript/debug evidence were reviewed. No implementation or hosted verification is claimed. |
 | [Call-Spec-driven one-agent call](call-spec-driven-call.md#specification-review) | Reviewed; subset clarified | Prior agent review approved AgentServer readiness/teardown boundaries. Released-package probe verified repeated rounds and exposed alias loss; initial static keys must match Action names until the public binding extension exists. |
