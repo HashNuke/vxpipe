@@ -177,6 +177,20 @@ and [Gateway HTTP adapters](../../../apps/vxpipe_gateway/lib/vxpipe/gateway/http
 
 ## Connect an external MCP client
 
+Platform MCP access tokens last 60 minutes by default. Set
+`VXPIPE_MCP_ACCESS_TOKEN_TTL_SECONDS` to an integer from `1` to `86400` to change
+the lifetime of newly issued tokens, including tokens issued by refresh. Restart
+the application after changing this runtime setting. Existing tokens retain their
+original expiry. The authorization grant lasts 30 days; access tokens are capped
+by the grant's remaining lifetime, and refreshing does not extend that grant.
+
+Clients should refresh expired access tokens without another browser login,
+persist each replacement refresh token, and serialize refreshes for a shared
+credential. Reusing an already consumed refresh token revokes the authorization,
+including its replacement tokens. MCP session IDs are separate from OAuth
+credentials: after a deployment loses an in-memory session, initialize a new
+session using the existing authorization.
+
 Configure an OAuth-capable MCP client with `https://YOUR_HOST/mcp`. Complete
 Console login and consent. Do not attach a static Vxpipe API key. The client acts
 within the user's current role, tenant access and approved grant.
@@ -188,14 +202,13 @@ literal-loopback callback; the callback host, path and query must still match.
 The consent page shows the client name, optional website/logo, signed-in account,
 permissions and tenant scope. Expand **Connection details** to inspect the exact
 client ID and return address. Branding does not mean Vxpipe endorses the client.
-Allow or deny shows a confirmation in the same tab. Select **Back to my app** to
-return to the client. **Access approved** records permission; the client still
-needs to finish connecting. Approved access lasts 30 days and can be revoked
-earlier.
+Allow or deny redirects directly to the client's callback in the same tab.
+After approval, the client exchanges its authorization code to finish connecting.
+Approved access lasts 30 days and can be revoked earlier.
 
-For `codex mcp login vxpipe --no-browser`, select **Back to my app**, then copy the
-full callback URL from the address bar into Codex, even if that page cannot load.
-The Vxpipe confirmation URL is not the callback URL.
+For `codex mcp login vxpipe --no-browser`, copy the full callback URL from the
+address bar into Codex after approving, even if that page cannot load. Treat the
+callback URL as a credential; do not share or log it.
 
 The tool catalog exposes:
 

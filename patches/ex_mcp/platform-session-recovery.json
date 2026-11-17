@@ -1,0 +1,10 @@
+{
+  "revision": "5fa760207bb09fc3b19b3049bc481b5e55106095",
+  "patch_sha256": "47c05001438a46a6446e3840de4d2d5f37059b0a4eb5957114396bdff86e6752",
+  "files": {
+    "lib/ex_mcp/http_plug.ex": {
+      "original": "6e9a36634ab70059b8e5bd16097f3f4a52b9a77498c44a2d063d4d6f4c6abe22",
+      "patched": "f1da58cee75287421b1d2b90e4180339b1422ee4ae68ba68c502a692f1058f58"
+    }
+  }
+}

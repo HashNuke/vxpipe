@@ -34,7 +34,8 @@ defmodule Vxpipe.Persistence.OAuth.BorutaTokens do
     %{grant: grant} = context = BorutaContext.current()
     access = Transaction.random()
     refresh = Transaction.random()
-    expires = DateTime.add(Transaction.now(), 600)
+    lifetime = Application.fetch_env!(:vxpipe_persistence, :oauth_access_token_ttl_seconds)
+    expires = DateTime.add(Transaction.now(), lifetime)
 
     expires =
       if DateTime.compare(expires, grant.expires_at) == :gt, do: grant.expires_at, else: expires

@@ -20,7 +20,8 @@ defmodule Vxpipe.Persistence.OAuth.BorutaClients do
         redirect_uris: redirect_uris(client),
         supported_grant_types: client.metadata["grant_types"],
         token_endpoint_auth_methods: ["none"],
-        access_token_ttl: 600,
+        access_token_ttl:
+          Application.fetch_env!(:vxpipe_persistence, :oauth_access_token_ttl_seconds),
         authorization_code_ttl: 60,
         refresh_token_ttl: 2_592_000
       }

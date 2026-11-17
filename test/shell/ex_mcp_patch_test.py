@@ -45,6 +45,15 @@ class ExMCPPatchTest(unittest.TestCase):
         self.assertIn("preserve changes", result.stderr)
         self.assertEqual(source.read_bytes(), modified)
 
+    def test_preserves_unrecognized_session_recovery_source_changes(self):
+        source = self.root / "deps/ex_mcp/lib/ex_mcp/http_plug.ex"
+        modified = source.read_bytes() + b"\n# local session modification\n"
+        source.write_bytes(modified)
+        result = self.patch()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("preserve changes", result.stderr)
+        self.assertEqual(source.read_bytes(), modified)
+
     def test_rejects_modified_patch(self):
         patch = self.root / "patches/ex_mcp/runtime-request-credentials.patch"
         patch.write_bytes(patch.read_bytes() + b"\n")

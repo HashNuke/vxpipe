@@ -25,7 +25,7 @@ defmodule Vxpipe.Persistence.OAuthStoreTest do
              )
 
     assert token.token_type == "bearer"
-    assert token.expires_in in 598..600
+    assert token.expires_in in 3598..3600
     assert {:ok, identity} = Store.authenticate(token.access_token, OAuthFixtures.resource())
     assert identity.user.public_id == ctx.user.public_id
     assert identity.grant.public_id == issued.grant_id
@@ -59,6 +59,63 @@ defmodule Vxpipe.Persistence.OAuthStoreTest do
         ] do
       refute stored =~ raw
     end
+  end
+
+  test "configured access lifetime applies to code exchange and refresh", ctx do
+    previous = Application.fetch_env!(:vxpipe_persistence, :oauth_access_token_ttl_seconds)
+    Application.put_env(:vxpipe_persistence, :oauth_access_token_ttl_seconds, 60)
+
+    on_exit(fn ->
+      Application.put_env(:vxpipe_persistence, :oauth_access_token_ttl_seconds, previous)
+    end)
+
+    issued = issue!(ctx)
+
+    assert {:ok, token} =
+             Store.exchange(
+               OAuthFixtures.exchange(ctx.client.client_id, issued.code),
+               OAuthFixtures.resource()
+             )
+
+    assert token.expires_in in 58..60
+
+    assert {:ok, rotated} =
+             Store.exchange(
+               OAuthFixtures.refresh(ctx.client.client_id, token.refresh_token),
+               OAuthFixtures.resource()
+             )
+
+    assert rotated.expires_in in 58..60
+
+    for row <- Repo.all(Token) do
+      assert DateTime.diff(row.access_expires_at, row.inserted_at) in 59..60
+    end
+  end
+
+  test "access lifetime never extends the remaining grant lifetime", ctx do
+    issued = issue!(ctx)
+    expires = DateTime.add(DateTime.utc_now(), 30)
+
+    Repo.update_all(from(g in Grant, where: g.public_id == ^issued.grant_id),
+      set: [expires_at: expires]
+    )
+
+    assert {:ok, token} =
+             Store.exchange(
+               OAuthFixtures.exchange(ctx.client.client_id, issued.code),
+               OAuthFixtures.resource()
+             )
+
+    assert token.expires_in in 28..30
+
+    assert {:ok, rotated} =
+             Store.exchange(
+               OAuthFixtures.refresh(ctx.client.client_id, token.refresh_token),
+               OAuthFixtures.resource()
+             )
+
+    assert rotated.expires_in in 28..30
+    assert Enum.all?(Repo.all(Token), &(&1.access_expires_at == expires))
   end
 
   test "wrong verifier, resource, redirect and client do not consume a valid code", ctx do

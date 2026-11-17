@@ -33,6 +33,12 @@ against the session. This includes the `2025-06-18` offer sent by Codex CLI
 `0.167.2`, as well as `2025-11-25` clients. OAuth/CIMD support does not require a
 client to use the same dated MCP wire revision as the authorization guidance.
 
+When a deployment loses a session, supported older protocol headers still receive
+404 so the client can initialize again using its existing OAuth grant. A missing
+session must not be interpreted as a negotiation against the server's newest
+version and rejected as a 400 mismatch. The reviewed ExMCP session-recovery patch
+preserves this distinction; unsupported protocol headers remain 400 errors.
+
 ## Identity and validation
 
 A CIMD client ID is an exact HTTPS URL with a non-root path. Userinfo, query,

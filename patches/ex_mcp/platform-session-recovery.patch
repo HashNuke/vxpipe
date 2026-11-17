@@ -1,0 +1,40 @@
+diff --git a/lib/ex_mcp/http_plug.ex b/lib/ex_mcp/http_plug.ex
+index 8d71f90..9938d4b 100644
+--- a/lib/ex_mcp/http_plug.ex
++++ b/lib/ex_mcp/http_plug.ex
+@@ -2550,9 +2550,19 @@ defmodule ExMCP.HttpPlug do
+   end
+ 
+   defp validate_legacy_protocol_version(conn, _request, session_manager, session_id) do
+-    expected_version =
+-      session_protocol_version(session_manager, session_id) || VersionRegistry.latest_version()
++    case session_protocol_version(session_manager, session_id) do
++      :session_not_found ->
++        with {:ok, _conn} <-
++               validate_legacy_version_header(conn, nil, VersionRegistry.latest_version()) do
++          {:error, :session_not_found}
++        end
++
++      version ->
++        validate_legacy_version_header(conn, session_id, version || VersionRegistry.latest_version())
++    end
++  end
+ 
++  defp validate_legacy_version_header(conn, session_id, expected_version) do
+     case get_req_header(conn, "mcp-protocol-version") do
+       [version] when is_binary(version) ->
+         cond do
+@@ -2609,11 +2619,11 @@ defmodule ExMCP.HttpPlug do
+           Map.get(session, :protocol_version) || Map.get(session, "protocol_version")
+ 
+         _missing ->
+-          nil
++          :session_not_found
+       end
+     end
+   catch
+-    :exit, _reason -> nil
++    :exit, _reason -> :session_not_found
+   end
+ 
+   defp session_protocol_version(_session_manager, _session_id), do: nil

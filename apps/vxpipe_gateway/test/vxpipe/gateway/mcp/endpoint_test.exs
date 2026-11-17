@@ -99,6 +99,29 @@ defmodule Vxpipe.Gateway.MCP.EndpointTest do
     on_exit(fn -> ExMCP.SessionManager.terminate_session(session_id) end)
   end
 
+  test "a session lost on restart returns 404 for the Codex protocol version", context do
+    response =
+      call(
+        :post,
+        rpc("tools/list", 2),
+        context.options,
+        @secret,
+        "session-lost-on-restart",
+        "2025-06-18"
+      )
+
+    assert response.status == 404
+    assert get_resp_header(response, "mcp-session-id") == []
+    assert %{"error" => %{"message" => "Session not found"}} = JSON.decode!(response.resp_body)
+  end
+
+  test "an unsupported protocol version still returns 400 with a missing session", context do
+    response =
+      call(:post, rpc("ping", 2), context.options, @secret, "missing-session", "2099-01-01")
+
+    assert response.status == 400
+  end
+
   test "credentials are required on every HTTP method, with no alternate credential source",
        context do
     for method <- [:post, :get, :delete, :options] do

@@ -7,6 +7,17 @@ nonempty_env = fn name ->
   end
 end
 
+oauth_access_token_ttl_seconds =
+  case Integer.parse(nonempty_env.("VXPIPE_MCP_ACCESS_TOKEN_TTL_SECONDS") || "3600") do
+    {seconds, ""} when seconds in 1..86_400 ->
+      seconds
+
+    _invalid ->
+      raise "invalid VXPIPE_MCP_ACCESS_TOKEN_TTL_SECONDS: expected an integer from 1 to 86400"
+  end
+
+config :vxpipe_persistence, :oauth_access_token_ttl_seconds, oauth_access_token_ttl_seconds
+
 directory_origin =
   nonempty_env.("VXPIPE_INTEGRATIONS_DIRECTORY_ORIGIN") ||
     "https://integrations-api-production-2803.up.railway.app"
