@@ -149,7 +149,12 @@ defmodule Vxpipe.AgentRuntime.ContextPreparation do
        ) do
     outcome =
       with {:ok, compacted_conversation} <-
-             ConversationCompaction.apply(conversation, snapshot, result.summary),
+             ConversationCompaction.apply(
+               conversation,
+               snapshot,
+               result.summary,
+               Map.get(config, :summary_format, :legacy)
+             ),
            compacted_request <-
              ModelRequest.with_messages(
                request,

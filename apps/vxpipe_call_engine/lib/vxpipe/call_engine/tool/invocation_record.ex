@@ -18,6 +18,7 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
     :submission,
     :worker,
     :monitor,
+    :deadline_ms,
     :started_at,
     :status
   ]
@@ -25,9 +26,19 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
 
   @type t :: %__MODULE__{}
 
-  @spec new(InvocationSubmission.t(), pid(), reference()) :: t()
-  def new(%InvocationSubmission{} = submission, worker, monitor)
-      when is_pid(worker) and is_reference(monitor) do
+  @type running_execution :: %{
+          invocation_id: String.t(),
+          binding: Vxpipe.CallEngine.Tool.InvocationBinding.t(),
+          arguments: map(),
+          context: Vxpipe.CallEngine.Tool.Context.t(),
+          worker: pid(),
+          completion_target: pid(),
+          deadline_ms: integer()
+        }
+
+  @spec new(InvocationSubmission.t(), pid(), reference(), integer()) :: t()
+  def new(%InvocationSubmission{} = submission, worker, monitor, deadline_ms)
+      when is_pid(worker) and is_reference(monitor) and is_integer(deadline_ms) do
     %__MODULE__{
       invocation_id: submission.invocation_id,
       tool_name: submission.tool_name,
@@ -37,10 +48,31 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRecord do
       submission: submission,
       worker: worker,
       monitor: monitor,
+      deadline_ms: deadline_ms,
       started_at: System.monotonic_time(),
       status: :running
     }
   end
+
+  @spec running_execution(t(), pid()) :: {:ok, running_execution()} | {:error, :unavailable}
+  def running_execution(%__MODULE__{status: :running} = record, completion_target) do
+    if System.monotonic_time(:millisecond) < record.deadline_ms do
+      {:ok,
+       %{
+         invocation_id: record.invocation_id,
+         binding: record.submission.binding,
+         arguments: record.submission.arguments,
+         context: record.submission.context,
+         worker: record.worker,
+         completion_target: completion_target,
+         deadline_ms: record.deadline_ms
+       }}
+    else
+      {:error, :unavailable}
+    end
+  end
+
+  def running_execution(%__MODULE__{}, _completion_target), do: {:error, :unavailable}
 
   @spec same_submission?(t(), InvocationSubmission.t()) :: boolean()
   def same_submission?(%__MODULE__{} = record, %InvocationSubmission{} = submission) do

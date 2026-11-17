@@ -46,14 +46,7 @@ defmodule Vxpipe.AgentRuntime.CompactionConfiguration do
              :count
            ),
          {:ok, compactor} <-
-           callback(
-             Keyword.get(
-               options,
-               :compactor,
-               {ModelContextCompactor, %{model_provider: model_provider, model: model}}
-             ),
-             :compact
-           ) do
+           configured_compactor(options, model_provider, model) do
       {:ok,
        %{
          budget: budget,
@@ -81,8 +74,29 @@ defmodule Vxpipe.AgentRuntime.CompactionConfiguration do
       :input_token_counter,
       :input_token_timeout_ms,
       :compactor,
+      :summary_prompt,
       :compactor_timeout_ms
     ])
+  end
+
+  defp configured_compactor(options, provider, model) do
+    case Keyword.fetch(options, :compactor) do
+      {:ok, {ModelContextCompactor, state}} ->
+        with {:ok, pinned} <-
+               ModelContextCompactor.pin(state, Keyword.get(options, :summary_prompt)),
+             do: {:ok, {ModelContextCompactor, pinned}}
+
+      {:ok, custom} ->
+        callback(custom, :compact)
+
+      :error ->
+        with {:ok, config} <-
+               ModelContextCompactor.pin(
+                 %{model_provider: provider, model: model},
+                 Keyword.get(options, :summary_prompt)
+               ),
+             do: {:ok, {ModelContextCompactor, config}}
+    end
   end
 
   defp limit(options, key, model_provider, model) do

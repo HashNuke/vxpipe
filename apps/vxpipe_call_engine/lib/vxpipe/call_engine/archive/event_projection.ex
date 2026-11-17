@@ -1,6 +1,8 @@
 defmodule Vxpipe.CallEngine.Archive.EventProjection do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.Archive.MessagePayload
+
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechProgressed,
     AgentSpeechStarted,
@@ -72,11 +74,7 @@ defmodule Vxpipe.CallEngine.Archive.EventProjection do
        connection_id: event.connection_id,
        command_id: event.command_id,
        correlation_id: event.correlation_id,
-       payload: %{
-         "aggregated_by" => event.aggregated_by,
-         "text" => event.text,
-         "will_be_spoken" => event.will_be_spoken
-       }
+       payload: output_payload(event)
      )}
   end
 
@@ -168,4 +166,25 @@ defmodule Vxpipe.CallEngine.Archive.EventProjection do
   defp tool_common(event, attributes) do
     agent_common(event, [tool_call_id: event.tool_call_id] ++ attributes)
   end
+
+  defp output_payload(%TextOutput{agent_mode: mode} = event) when mode in [:speaker, :listener] do
+    %{
+      "type" => "participant_message",
+      "participant_id" => event.participant_id,
+      "message" => event.text,
+      "agent_mode" => Atom.to_string(mode)
+    }
+    |> MessagePayload.wrap()
+    |> Map.merge(%{
+      "aggregated_by" => event.aggregated_by,
+      "will_be_spoken" => event.will_be_spoken
+    })
+  end
+
+  defp output_payload(%TextOutput{} = event),
+    do: %{
+      "text" => event.text,
+      "aggregated_by" => event.aggregated_by,
+      "will_be_spoken" => event.will_be_spoken
+    }
 end

@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.Archive.Recorder do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Archive.Port
+  alias Vxpipe.CallEngine.Archive.{MessagePayload, Port}
   alias Vxpipe.CallEngine.LiveInspection.Buffer, as: LiveInspectionBuffer
   alias Vxpipe.CallEngine.Command.{CreateRoom, SendText}
 
@@ -166,9 +166,20 @@ defmodule Vxpipe.CallEngine.Archive.Recorder do
       correlation_id: command.correlation_id,
       occurred_at: DateTime.utc_now(:millisecond),
       source_policy: source_policy,
-      payload: %{"content" => command.content, "modality" => modality}
+      payload: input_payload(command, modality)
     )
   end
+
+  defp input_payload(%SendText{model_input: %Vxpipe.AgentRuntime.Input{} = input}, modality) do
+    input
+    |> Vxpipe.AgentRuntime.Input.encode()
+    |> JSON.decode!()
+    |> MessagePayload.wrap()
+    |> Map.put("modality", modality)
+  end
+
+  defp input_payload(%SendText{} = command, modality),
+    do: %{"content" => command.content, "modality" => modality}
 
   @spec delivered_output(t(), TextToSpeechRequest.t()) :: t()
   def delivered_output(%__MODULE__{} = recorder, %TextToSpeechRequest{} = request) do

@@ -167,6 +167,106 @@ defmodule Vxpipe.CallEngine.Tool.InvocationRegistryTest do
     send(second_execution, :release_submitted_host_tool)
   end
 
+  test "exposes only the canonical running execution for scoped platform control" do
+    {registry, _supervisor} = start_registry(maximum_invocations: 1, invocation_timeout_ms: 2_000)
+    binding = host_binding(:non_blocking)
+    arguments = %{"value" => "private-control-arguments"}
+    submitted_context = context()
+    before_submit = System.monotonic_time(:millisecond)
+
+    assert {:accepted, :non_blocking} =
+             InvocationRegistry.submit(
+               registry,
+               binding,
+               arguments,
+               submitted_context,
+               "control-call"
+             )
+
+    after_submit = System.monotonic_time(:millisecond)
+    assert_receive {:submitted_host_tool_started, task, "private-control-arguments"}
+    assert {:ok, execution} = InvocationRegistry.running_execution(registry, "control-call")
+    assert execution.invocation_id == "control-call"
+    assert execution.binding == binding
+    assert execution.arguments == arguments
+    assert execution.context == %{submitted_context | tool_call_id: "control-call"}
+    assert execution.completion_target == self()
+    assert is_pid(execution.worker)
+    assert execution.worker != task
+    assert execution.deadline_ms >= before_submit + 2_000
+    assert execution.deadline_ms <= after_submit + 2_000
+
+    assert {:accepted, :non_blocking} =
+             InvocationRegistry.submit(
+               registry,
+               binding,
+               arguments,
+               submitted_context,
+               "control-call"
+             )
+
+    assert {:ok, ^execution} = InvocationRegistry.running_execution(registry, "control-call")
+    assert {:error, :unavailable} = InvocationRegistry.running_execution(registry, "other-call")
+    refute inspect(:sys.get_state(registry)) =~ "private-control-arguments"
+    send(task, :release_submitted_host_tool)
+    assert_receive {:vxpipe_tool_completion_available, ^registry, "control-call"}
+    assert {:error, :unavailable} = InvocationRegistry.running_execution(registry, "control-call")
+    assert {:ok, lease} = InvocationRegistry.lease_next(registry, "control-consumer")
+    assert {:error, :unavailable} = InvocationRegistry.running_execution(registry, "control-call")
+
+    assert :ok =
+             InvocationRegistry.acknowledge_completion(registry, "control-call", lease.lease_id)
+
+    assert {:error, :unavailable} = InvocationRegistry.running_execution(registry, "control-call")
+  end
+
+  test "a running worker cannot authorize control beyond its invocation deadline" do
+    {registry, _supervisor} = start_registry(maximum_invocations: 1, invocation_timeout_ms: 500)
+
+    assert {:accepted, :non_blocking} =
+             InvocationRegistry.submit(
+               registry,
+               host_binding(:non_blocking),
+               %{"value" => "deadline"},
+               context(),
+               "deadline-control"
+             )
+
+    assert_receive {:submitted_host_tool_started, _task, "deadline"}
+    assert {:ok, execution} = InvocationRegistry.running_execution(registry, "deadline-control")
+    :ok = :sys.suspend(execution.worker)
+
+    on_exit(fn ->
+      try do
+        :sys.resume(execution.worker)
+      catch
+        :exit, _reason -> :ok
+      end
+    end)
+
+    remaining = max(0, execution.deadline_ms - System.monotonic_time(:millisecond))
+    Process.send_after(self(), :control_deadline_reached, remaining + 10)
+    assert_receive :control_deadline_reached, 1_000
+
+    assert {:error, :unavailable} =
+             InvocationRegistry.running_execution(registry, "deadline-control")
+
+    :ok = :sys.resume(execution.worker)
+    assert_receive {:vxpipe_tool_completion_available, ^registry, "deadline-control"}
+  end
+
+  test "running execution lookup rejects unavailable registries and malformed identifiers" do
+    {registry, _supervisor} = start_registry(maximum_invocations: 1)
+    assert {:error, :unavailable} = InvocationRegistry.running_execution(registry, nil)
+    assert {:error, :unavailable} = InvocationRegistry.running_execution(registry, "")
+
+    assert {:error, :unavailable} =
+             InvocationRegistry.running_execution(registry, String.duplicate("x", 257))
+
+    assert {:error, :unavailable} =
+             InvocationRegistry.running_execution(:missing_idle_registry, "call")
+  end
+
   test "does not start work after bounded submission reports unavailable" do
     {registry, _supervisor} = start_registry(maximum_invocations: 1)
     :ok = :sys.suspend(registry)

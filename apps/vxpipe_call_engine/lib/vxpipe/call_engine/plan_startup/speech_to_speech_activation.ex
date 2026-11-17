@@ -11,7 +11,13 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechToSpeechActivation do
   defstruct @enforce_keys
 
   def resolve(plan, participant, options) do
-    with prompt when is_binary(prompt) <- participant.prompt,
+    with :ok <- native_tools_supported(participant.tools),
+         {:ok, prompt} <-
+           Vxpipe.AgentRuntime.Protocol.instructions(
+             Vxpipe.CallEngine.ResolvedCallPlan.agent_protocol(plan),
+             participant.prompt,
+             :speech_to_speech
+           ),
          true <- byte_size(prompt) <= 65_536 and String.valid?(prompt),
          true <- map_size(participant.tools) <= 64,
          {:ok, variables} <-
@@ -34,9 +40,19 @@ defmodule Vxpipe.CallEngine.PlanStartup.SpeechToSpeechActivation do
   end
 
   def registry(plan, participant, options, remote_owner) when is_pid(remote_owner) do
-    with {:ok, variables} <- AgentActivation.variable_binding(plan, participant, options),
+    with :ok <- native_tools_supported(participant.tools),
+         {:ok, variables} <- AgentActivation.variable_binding(plan, participant, options),
          {:ok, descriptors} <- ToolDescriptors.compile(participant.tools, variables, remote_owner),
          do: ToolRegistry.new(descriptors)
+  end
+
+  defp native_tools_supported(tools) do
+    if Enum.any?(tools, fn
+         {_name, %{type: :platform, action: Vxpipe.CallEngine.Tool.Idle}} -> true
+         _other -> false
+       end),
+       do: {:error, :invalid_configuration},
+       else: :ok
   end
 
   defp prepare_tools(bindings, variables) do

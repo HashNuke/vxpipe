@@ -23,7 +23,16 @@ defmodule Vxpipe.Calls.PreparedCallFactory do
          {:ok, call_spec} <- outgoing_destination(call_spec, Keyword.get(options, :outgoing_to)),
          :ok <- CallSpecCredentials.check(call_spec, revision.tenant_key, options),
          {:ok, invocation} <- invocation(revision, initial_variables, transport, options),
-         {:ok, plan} <- CallPlanCompiler.compile(call_spec, invocation, options),
+         {:ok, plan} <-
+           CallPlanCompiler.compile(
+             call_spec,
+             invocation,
+             Keyword.put(
+               options,
+               :agent_protocol,
+               Map.get(revision.compiled_metadata, "agent_protocol")
+             )
+           ),
          {:ok, plan} <- CallSpecCredentials.pin(call_spec, plan, options),
          {:ok, plan} <- Vxpipe.CallEngine.prepare_call_audio(plan, options) do
       {:ok, prepared_call(plan, revision.routes, initial_variables, options)}
@@ -45,7 +54,12 @@ defmodule Vxpipe.Calls.PreparedCallFactory do
       {nil, to} when is_binary(to) ->
         if Regex.match?(@phone_number, to) do
           callee = %{callee | connection: %{callee.connection | number: to}}
-          {:ok, %{call_spec | participants: Map.put(call_spec.participants, callee.call_spec_key, callee)}}
+
+          {:ok,
+           %{
+             call_spec
+             | participants: Map.put(call_spec.participants, callee.call_spec_key, callee)
+           }}
         else
           {:error, :invalid_to}
         end

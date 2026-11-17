@@ -206,7 +206,15 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
              command_id: command_id,
              correlation_id: correlation_id,
              public_sequence: nil,
-             payload: %{"content" => "What time is it?", "modality" => "text"}
+             payload: %{
+               "content_format" => "structured_agent_message_v1",
+               "content" => %{
+                 "type" => "participant_message",
+                 "message" => "What time is it?",
+                 "agent_mode" => "listener"
+               },
+               "modality" => "text"
+             }
            } = fact!(facts, :accepted_input)
 
     assert caller_participant_id == caller.participant_id
@@ -280,7 +288,12 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
              public_sequence: 5,
              payload: %{
                "aggregated_by" => "sentence",
-               "text" => "The host action started.",
+               "content_format" => "structured_agent_message_v1",
+               "content" => %{
+                 "type" => "participant_message",
+                 "message" => "The host action started.",
+                 "agent_mode" => "speaker"
+               },
                "will_be_spoken" => false
              }
            } = fact!(facts, :agent_output_generated)
@@ -292,7 +305,14 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
              %Fact{
                kind: :agent_output_generated,
                public_sequence: 7,
-               payload: %{"text" => "The host action completed."}
+               payload: %{
+                 "content_format" => "structured_agent_message_v1",
+                 "content" => %{
+                   "type" => "participant_message",
+                   "message" => "The host action completed.",
+                   "agent_mode" => "speaker"
+                 }
+               }
              } ->
                true
 
@@ -342,7 +362,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     )
 
     assert_receive {:test_agent_runtime_stream, provider, request}
-    assert List.last(request.messages).content == "Hello there"
+    assert JSON.decode!(List.last(request.messages).content)["message"] == "Hello there"
     assert {:ok, response} = ModelResponse.new(text: "Hello back.")
     send(provider, {:test_agent_runtime_response, {:ok, response}})
 
@@ -386,7 +406,15 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     assert %Fact{
              kind: :accepted_input,
-             payload: %{"content" => "Hello there", "modality" => "audio"}
+             payload: %{
+               "content_format" => "structured_agent_message_v1",
+               "content" => %{
+                 "type" => "participant_message",
+                 "message" => "Hello there",
+                 "agent_mode" => "listener"
+               },
+               "modality" => "audio"
+             }
            } = fact!(facts, :accepted_input)
 
     stt_usage =
@@ -426,7 +454,15 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     assert %Fact{
              kind: :agent_output_generated,
-             payload: %{"text" => "Hello back.", "will_be_spoken" => true}
+             payload: %{
+               "content_format" => "structured_agent_message_v1",
+               "content" => %{
+                 "type" => "participant_message",
+                 "message" => "Hello back.",
+                 "agent_mode" => "speaker"
+               },
+               "will_be_spoken" => true
+             }
            } = generated
 
     assert %Fact{
@@ -980,7 +1016,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
     assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
 
     assert_receive {:test_agent_runtime_stream, provider, request}
-    assert List.last(request.messages).content == "What time is it?"
+    assert JSON.decode!(List.last(request.messages).content)["message"] == "What time is it?"
     assert {:ok, call} = ToolCall.new(id: "tool-clock", name: "get_current_time", arguments: %{})
     assert {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
     send(provider, {:test_agent_runtime_response, {:ok, response}})
@@ -1375,7 +1411,7 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     assert :ok = Vxpipe.CallEngine.TestTransferConnection.send_text(command)
     assert_receive {:test_agent_runtime_stream, provider, request}
-    assert List.last(request.messages).content == "Are you ready?"
+    assert JSON.decode!(List.last(request.messages).content)["message"] == "Are you ready?"
     assert {:ok, response} = ModelResponse.new(text: "Ready after restart.")
     send(provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
@@ -1617,8 +1653,11 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     assert_receive {:test_agent_runtime_stream, provider, request}
 
-    assert [%Message{role: :system, content: "Use the available host action."} | _messages] =
+    assert [%Message{role: :system, content: instructions} | _messages] =
              request.messages
+
+    {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    assert instructions == shared.text <> "\n\nUse the available host action."
 
     assert receiver.capabilities.model_inference.model == "test:scripted"
 
@@ -1698,8 +1737,11 @@ defmodule Vxpipe.CallEngine.CallSpecDrivenCallTest do
 
     assert_receive {:test_agent_runtime_stream, provider, request}
 
-    assert [%Message{role: :system, content: "Use the available host action."} | _history] =
+    assert [%Message{role: :system, content: instructions} | _history] =
              request.messages
+
+    {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    assert instructions == shared.text <> "\n\nUse the available host action."
 
     assert Enum.map(request.tools, & &1.name) == ["get_current_time"]
 

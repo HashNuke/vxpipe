@@ -176,6 +176,118 @@ defmodule Vxpipe.Persistence.CallDetailsSourceTest do
     assert component_status(unconfigured, "recording") == :unconfigured
   end
 
+  test "round-trips mixed message formats and trusted columns into deterministic publications",
+       context do
+    assistant = context.call.plan.participants["assistant"]
+
+    content = %{
+      "type" => "participant_message",
+      "participant_id" => assistant.participant_id,
+      "agent_mode" => "listener",
+      "message" => "嗯，okay"
+    }
+
+    payload = %{
+      "content_format" => "structured_agent_message_v1",
+      "content" => content,
+      "aggregated_by" => "sentence",
+      "will_be_spoken" => true
+    }
+
+    output =
+      fact(context, 2, :agent_output_generated,
+        participant_id: assistant.participant_id,
+        activation_id: assistant.activation_id,
+        source_participant_id: "trusted-source",
+        connection_id: "connection-typed",
+        command_id: "command-typed",
+        correlation_id: "correlation-typed",
+        payload: payload
+      )
+
+    legacy =
+      fact(context, 1, :accepted_input,
+        participant_id: "trusted-source",
+        payload: %{"content" => "{\"message\":\"literal\"}"}
+      )
+
+    tool =
+      fact(context, 3, :tool_call_completed,
+        tool_call_id: "native-tool",
+        participant_id: assistant.participant_id,
+        payload: %{"result" => %{"message" => "unchanged", "status" => "running"}}
+      )
+
+    closure =
+      fact(context, 4, :archive_stream_closed,
+        occurred_at: @ended_at,
+        payload: %{"accepted" => 3, "incomplete" => false}
+      )
+
+    for item <- [legacy, output, tool, output, closure] do
+      assert {:ok, ^item} = Calls.archive_call_fact(item, context.options)
+    end
+
+    assert {:ok, facts} = ArchiveStore.fetch_call_facts(Repo, @tenant_key, @call_id)
+    assert facts == [legacy, output, tool, closure]
+    assert {:ok, history} = Calls.fetch_call_history(context.principal, @call_id, context.options)
+    assert history.transcript == [legacy, output]
+    assert history.tool_history == [tool]
+
+    assert {:ok, assessment} =
+             CallDetailsSource.read([repo: Repo, recording: :unconfigured], @tenant_key, @call_id)
+
+    [published_legacy, published_output] = assessment.source.transcript
+    assert published_legacy["payload"] == legacy.payload
+    assert published_output["payload"] == payload
+
+    for field <- [
+          :participant_id,
+          :activation_id,
+          :source_participant_id,
+          :connection_id,
+          :command_id,
+          :correlation_id,
+          :public_sequence,
+          :sequence
+        ] do
+      assert published_output[Atom.to_string(field)] == Map.fetch!(output, field)
+    end
+
+    assert hd(assessment.source.tools)["payload"] == tool.payload
+
+    time = DateTime.add(@ended_at, 60, :second)
+
+    assert {:ok, decision} =
+             Vxpipe.Calls.PublicationWindow.evaluate(@ended_at, time, assessment.components)
+
+    assert {:ok, first} =
+             Vxpipe.Calls.CallDetailsSnapshot.new(
+               "mixed-publication",
+               time,
+               assessment.source,
+               decision
+             )
+
+    reordered = %{
+      assessment.source
+      | transcript: [
+          published_legacy,
+          %{published_output | "payload" => Map.new(Enum.reverse(payload))}
+        ]
+    }
+
+    assert {:ok, replay} =
+             Vxpipe.Calls.CallDetailsSnapshot.new("mixed-publication", time, reordered, decision)
+
+    assert first.contents == replay.contents
+    assert first.source_digest == replay.source_digest
+    assert first.checksum == replay.checksum
+    document = JSON.decode!(first.contents)
+    assert document["schema_version"] == "20260912.01"
+    assert Enum.at(document["transcript"], 1)["payload"] == payload
+  end
+
   test "publishes at the deadline and refreshes after late recording metadata", context do
     clock = start_supervised!({Agent, fn -> DateTime.add(@ended_at, 60, :second) end})
 

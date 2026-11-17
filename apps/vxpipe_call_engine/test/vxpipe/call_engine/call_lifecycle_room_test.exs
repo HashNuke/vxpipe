@@ -411,7 +411,13 @@ defmodule Vxpipe.CallEngine.CallLifecycleRoomTest do
     assert_receive {:test_agent_runtime_stream, idle_provider, idle_request}
     idle_prompt = List.last(idle_request.messages)
     assert idle_prompt.origin == :engine
-    assert idle_prompt.content =~ "caller has provided no new input"
+
+    assert JSON.decode!(idle_prompt.content) == %{
+             "type" => "platform_event",
+             "event" => "idle_timeout",
+             "data" => %{},
+             "agent_mode" => "listener"
+           }
 
     reply(idle_provider, "Are you still there?")
     assert_receive {:vxpipe_event, %TextOutput{text: "Are you still there?"}}

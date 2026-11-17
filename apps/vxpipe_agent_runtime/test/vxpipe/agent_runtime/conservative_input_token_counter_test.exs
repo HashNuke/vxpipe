@@ -39,7 +39,7 @@ defmodule Vxpipe.AgentRuntime.ConservativeInputTokenCounterTest do
 
     with_pending = %{with_tool | pending_invocations: [pending]}
     assert {:ok, pending_count} = ConservativeInputTokenCounter.count(nil, with_pending)
-    assert pending_count > tool_count
+    assert pending_count == tool_count
 
     with_variables =
       %{with_pending | model_context: %{"call_variables" => %{"order" => %{"id" => "17"}}}}
@@ -64,5 +64,15 @@ defmodule Vxpipe.AgentRuntime.ConservativeInputTokenCounterTest do
     assert {:ok, second_count} = ConservativeInputTokenCounter.count(nil, second)
     assert first_count == second_count
     assert first_count >= byte_size("policycalling你好世界")
+  end
+
+  test "structured dialogue budgets the provider schema sent on each request" do
+    base = ModelRequest.new([Message.system("policy")], [], [], %{})
+    assert {:ok, legacy} = ConservativeInputTokenCounter.count(nil, base)
+
+    assert {:ok, structured} =
+             ConservativeInputTokenCounter.count(nil, %{base | reply_protocol: :mode_message_v1})
+
+    assert structured >= legacy + byte_size(JSON.encode!(Vxpipe.AgentRuntime.Dialogue.schema()))
   end
 end

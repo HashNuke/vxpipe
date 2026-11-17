@@ -2,6 +2,7 @@ defmodule Vxpipe.Calls.CallHistory do
   @moduledoc "An authorized private projection of one call's archived history."
 
   alias Vxpipe.Calls.{ArchiveStatus, CallTimeline, VariableSnapshotHistory}
+  alias Vxpipe.CallEngine.Archive.MessagePayload
 
   @derive {Inspect,
            except: [
@@ -50,14 +51,9 @@ defmodule Vxpipe.Calls.CallHistory do
     }
   end
 
-  defp transcript_fact?(%{kind: :accepted_input, payload: %{"content" => content}}),
-    do: is_binary(content)
-
-  defp transcript_fact?(%{kind: :agent_output_generated, payload: %{"text" => text}}),
-    do: is_binary(text)
-
-  defp transcript_fact?(%{kind: :participant_transcription_final, payload: %{"text" => text}}),
-    do: is_binary(text)
+  defp transcript_fact?(%{kind: kind, payload: payload, participant_id: id}) do
+    MessagePayload.project(kind, payload, id) != nil
+  end
 
   defp transcript_fact?(_fact), do: false
 end

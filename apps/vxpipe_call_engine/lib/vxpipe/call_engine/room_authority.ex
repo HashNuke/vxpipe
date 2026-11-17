@@ -17,18 +17,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.OpeningAudio.{CachedPlaybackRequest, FilePlaybackRequest}
   alias Vxpipe.CallEngine.Tool.Context, as: ToolContext
+  alias Vxpipe.CallEngine.Tool.Idle.Request, as: IdleRequest
   alias Vxpipe.CallEngine.Tool.ParticipantTransfer.Request, as: TransferRequest
 
   alias Vxpipe.CallEngine.{
     Error,
     ResolvedCallPlan,
-    RoomMixer,
-    TextToSpeechRequest,
-    TranscriptRouter
+    TextToSpeechRequest
   }
 
   alias Vxpipe.CallEngine.Room.Snapshot
-  alias Vxpipe.CallEngine.MediaPolicy.Authority, as: MediaPolicyAuthority
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     AgentOutput,
@@ -38,6 +36,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     EndCall,
     FirstMessage,
     InputTurns,
+    MediaBindings,
+    IdleWait,
     OpeningAudio,
     OutgoingAdmission,
     OutgoingCall,
@@ -119,6 +119,17 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @spec idle(IdleRequest.t()) :: {:ok, map()} | {:error, :rejected | :unavailable}
+  def idle(%IdleRequest{} = request) do
+    GenServer.call(
+      via(request.context.tenant_id, request.context.room_id),
+      {:idle, request},
+      IdleRequest.execution_timeout_ms(request)
+    )
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   def speech_to_text_configuration(room_authority, %AttachConnection{} = command) do
     GenServer.call(room_authority, {:speech_to_text_configuration, command}, @call_timeout)
   end
@@ -162,11 +173,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
     with {:ok, call_lifecycle} <- StartupReadiness.bind(room_source, incarnation_id),
          {:ok, media_policy_authority} <-
-           bind_media_policy_authority(room_source, incarnation_id),
+           MediaBindings.bind_media_policy_authority(room_source, incarnation_id),
          {:ok, transcript_router} <-
-           bind_transcript_router(room_source, incarnation_id, media_policy_authority),
+           MediaBindings.bind_transcript_router(
+             room_source,
+             incarnation_id,
+             media_policy_authority
+           ),
          {:ok, room_mixer} <-
-           bind_room_mixer(room_source, incarnation_id, media_policy_authority) do
+           MediaBindings.bind_room_mixer(room_source, incarnation_id, media_policy_authority) do
       state =
         State.new(
           ArchiveRecorder.new(room_source, incarnation_id, options),
@@ -331,10 +346,25 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
   end
 
   def handle_call({:transfer_participant, %TransferRequest{} = request}, from, state) do
-    ParticipantTransfer.begin(request, from, state)
+    case ParticipantTransfer.begin(request, from, state) do
+      {:noreply, state} -> {:noreply, CallerIdle.reconcile(state)}
+      reply -> reply
+    end
+  end
+
+  def handle_call({:idle, %IdleRequest{} = request}, from, state) do
+    case IdleWait.begin(request, from, state) do
+      {:noreply, state} -> {:noreply, CallerIdle.reconcile(state)}
+      reply -> reply
+    end
   end
 
   @impl true
+  def handle_info({:vxpipe_idle_wait_deadline, token, phase}, state) do
+    state = IdleWait.deadline(token, phase, state)
+    {:noreply, CallerIdle.reconcile(state)}
+  end
+
   def handle_info(
         {[:alias | response_ref], _response} = message,
         %State{source_cutover: %{request_id: request_id}} = state
@@ -701,45 +731,6 @@ defmodule Vxpipe.CallEngine.RoomAuthority do
 
   defp initial_speech_to_text_runtime(%CreateRoom{}), do: %{}
   defp initial_speech_to_text_runtime(%ResolvedCallPlan{}), do: %{}
-
-  defp bind_media_policy_authority(%CreateRoom{}, _incarnation_id), do: {:ok, nil}
-
-  defp bind_media_policy_authority(%ResolvedCallPlan{}, incarnation_id) do
-    case MediaPolicyAuthority.whereis(incarnation_id) do
-      authority when is_pid(authority) -> {:ok, authority}
-      nil -> {:error, :media_policy_unavailable}
-    end
-  end
-
-  defp bind_transcript_router(%CreateRoom{}, _incarnation_id, nil), do: {:ok, nil}
-
-  defp bind_transcript_router(%ResolvedCallPlan{}, incarnation_id, media_policy_authority) do
-    case TranscriptRouter.whereis(incarnation_id) do
-      router when is_pid(router) ->
-        case MediaPolicyAuthority.register_enforcer(media_policy_authority, router) do
-          {:ok, _snapshot} -> {:ok, router}
-          {:error, _reason} -> {:error, :media_policy_unavailable}
-        end
-
-      nil ->
-        {:error, :transcript_router_unavailable}
-    end
-  end
-
-  defp bind_room_mixer(%CreateRoom{}, _incarnation_id, nil), do: {:ok, nil}
-
-  defp bind_room_mixer(%ResolvedCallPlan{}, incarnation_id, media_policy_authority) do
-    case RoomMixer.whereis(incarnation_id) do
-      mixer when is_pid(mixer) ->
-        case MediaPolicyAuthority.register_enforcer(media_policy_authority, mixer) do
-          {:ok, _snapshot} -> {:ok, mixer}
-          {:error, _reason} -> {:error, :media_policy_unavailable}
-        end
-
-      nil ->
-        {:error, :room_mixer_unavailable}
-    end
-  end
 
   defp begin_connection_startup(command, %{startup: startup, startup_ready?: false} = state)
        when startup != nil,

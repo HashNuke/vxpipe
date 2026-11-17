@@ -9,18 +9,63 @@ defmodule Vxpipe.AgentRuntime.ModelContextCompactor do
     CompactionRequest,
     CompactionResult,
     ModelRequest,
-    ModelResponse
+    ModelResponse,
+    Prompt
   }
+
+  @spec new(module(), term(), keyword()) :: {:ok, map()} | {:error, :prompt_unavailable}
+  def new(model_provider, model, options \\ []) do
+    directory =
+      Keyword.get(
+        options,
+        :prompt_directory,
+        Application.app_dir(:vxpipe_agent_runtime, "priv/prompts")
+      )
+
+    with {:ok, prompt} <- Prompt.load(:conversation_summary, directory) do
+      {:ok, %{model_provider: model_provider, model: model, summary_prompt: prompt}}
+    end
+  end
+
+  @doc false
+  @spec pin(map()) :: {:ok, map()} | {:error, :prompt_unavailable}
+  def pin(%{model_provider: _provider, model: _model, summary_prompt: %Prompt{}} = config),
+    do: {:ok, config}
+
+  def pin(%{summary_prompt: _invalid}), do: {:error, :prompt_unavailable}
+
+  def pin(%{model_provider: provider, model: model} = config) do
+    with {:ok, pinned} <- new(provider, model), do: {:ok, Map.merge(config, pinned)}
+  end
+
+  def pin(_config), do: {:error, :prompt_unavailable}
+
+  @doc false
+  @spec pin(map(), Prompt.t() | nil) :: {:ok, map()} | {:error, :prompt_unavailable}
+  def pin(config, nil), do: pin(config)
+
+  def pin(
+        %{model_provider: _provider, model: _model, summary_prompt: %Prompt{}} = config,
+        %Prompt{} = prompt
+      ),
+      do: {:ok, Map.put(config, :summary_prompt, prompt)}
+
+  def pin(%{summary_prompt: _invalid}, %Prompt{}), do: {:error, :prompt_unavailable}
+
+  def pin(%{model_provider: _provider, model: _model} = config, %Prompt{} = prompt),
+    do: {:ok, Map.put(config, :summary_prompt, prompt)}
+
+  def pin(_config, _prompt), do: {:error, :prompt_unavailable}
 
   @impl true
   def compact(
-        %{model_provider: model_provider, model: model},
+        %{model_provider: model_provider, model: model, summary_prompt: %Prompt{} = prompt},
         %CompactionRequest{} = request
       )
       when is_atom(model_provider) do
     model_request =
       request.messages
-      |> CompactionProjection.messages()
+      |> CompactionProjection.messages(prompt.text)
       |> ModelRequest.new([], [], %{}, request.correlation)
       |> ModelRequest.with_maximum_output_tokens(request.maximum_summary_tokens)
 
@@ -35,6 +80,10 @@ defmodule Vxpipe.AgentRuntime.ModelContextCompactor do
     _error -> {:error, :context_compaction_unavailable}
   catch
     _kind, _reason -> {:error, :context_compaction_unavailable}
+  end
+
+  def compact(%{model_provider: provider, model: model}, %CompactionRequest{} = request) do
+    with {:ok, config} <- new(provider, model), do: compact(config, request)
   end
 
   def compact(_state, %CompactionRequest{}),

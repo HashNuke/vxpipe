@@ -24,9 +24,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.State do
   defstruct @enforce_keys ++
               [
                 current: nil,
+                history_mode: :generated,
+                awaiting_output: nil,
                 readiness_resource: nil,
                 remote_mcp_owner: nil,
                 pending: :queue.new(),
+                idle_pause: nil,
+                idle_invocations: MapSet.new(),
                 completion_deferred?: false
               ]
 

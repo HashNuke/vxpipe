@@ -144,6 +144,7 @@ defmodule Vxpipe.Persistence.DemoSamplesTest do
              CallSpecStore.fetch_published_revision(Repo, context.tenant.key, sample.call_spec_id)
 
     assert published.revision == 1
+    assert published.compiled_metadata["agent_protocol"]["version"] == "legacy"
   end
 
   test "a missing demo binding is not created by installation", context do
@@ -186,7 +187,10 @@ defmodule Vxpipe.Persistence.DemoSamplesTest do
       |> Task.async_stream(
         fn _ ->
           DemoSamples.install(context.actor, context.tenant.key, context.options)
-        end, max_concurrency: 2, timeout: :infinity)
+        end,
+        max_concurrency: 2,
+        timeout: :infinity
+      )
       |> Enum.map(fn {:ok, {:ok, result}} -> result end)
 
     [first, second] = results
@@ -200,7 +204,9 @@ defmodule Vxpipe.Persistence.DemoSamplesTest do
                context.actor,
                context.tenant.key,
                entry.source,
-               Keyword.put(context.options, :call_spec_id, id)
+               context.options
+               |> Keyword.put(:call_spec_id, id)
+               |> Keyword.put(:agent_protocol_version, :legacy)
              )
 
     assert {:ok, [resumed | _]} =

@@ -109,6 +109,8 @@ defmodule Vxpipe.CallEngine.PlanStartup.AgentActivation do
       call_id: plan.call_id,
       owner: owner,
       system_prompt: receiver.prompt,
+      history_mode: :host_settled,
+      agent_protocol: ResolvedCallPlan.agent_protocol(plan),
       variable_binding: variable_binding,
       maximum_model_context_bytes:
         Keyword.get(settings, :maximum_model_context_bytes, 256 * 1_024),

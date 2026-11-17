@@ -1,26 +1,23 @@
 defmodule Vxpipe.CallEngine.RoomAuthority.CallerIdle do
   @moduledoc false
 
-  alias Vxpipe.CallEngine.Command.SendText
-  alias Vxpipe.CallEngine.{CallLifecycle, Id}
+  alias Vxpipe.CallEngine.CallLifecycle
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     OpeningAudio,
+    IdleNotification,
+    IdleWait,
     State,
     TextCapability,
     TurnState
   }
 
-  @notification """
-  Vxpipe engine notification: the caller has provided no new input during the configured idle \
-  interval. Follow your instructions to decide whether to speak, continue waiting silently, or \
-  invoke a permitted tool. Do not infer that the caller disconnected.
-  """
-
   @spec reconcile(State.t()) :: State.t()
   def reconcile(%State{call_lifecycle: nil} = state), do: state
 
   def reconcile(%State{} = state) do
+    state = IdleWait.reconcile(state)
+
     if eligible?(state) do
       _ = CallLifecycle.waiting(state.call_lifecycle)
     else
@@ -31,10 +28,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerIdle do
   end
 
   @spec activity(State.t()) :: State.t()
-  def activity(%State{call_lifecycle: nil} = state), do: state
-
   def activity(%State{} = state) do
-    _ = CallLifecycle.activity(state.call_lifecycle)
+    state = IdleWait.cancel(state, :participant_activity)
+    if state.call_lifecycle, do: CallLifecycle.activity(state.call_lifecycle)
     state
   end
 
@@ -67,28 +63,15 @@ defmodule Vxpipe.CallEngine.RoomAuthority.CallerIdle do
       OpeningAudio.admission(state.opening_audio) == :open and
       state.first_message.status == :completed and
       map_size(state.agent_turns) == 0 and
+      state.idle_wait == nil and
       map_size(state.background_tool_calls) == 0 and
       TextCapability.ready?(state) and
       waiting_connection(state) != nil
   end
 
   defp notification_command(state) do
-    {connection_id, connection} = waiting_connection(state)
-
-    SendText.new(
-      id: Id.generate(:command),
-      tenant_id: state.snapshot.tenant_id,
-      actor_id: connection.actor_id,
-      room_id: state.snapshot.room_id,
-      incarnation_id: state.snapshot.incarnation_id,
-      participant_id: connection.participant_id,
-      connection_id: connection_id,
-      correlation_id: Id.generate(:turn),
-      content: @notification,
-      run_immediately: false,
-      audio_response: true,
-      deadline: DateTime.add(DateTime.utc_now(), 5, :second)
-    )
+    {connection_id, _connection} = waiting_connection(state)
+    IdleNotification.new(state, connection_id)
   end
 
   defp waiting_connection(state) do

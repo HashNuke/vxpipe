@@ -1,11 +1,17 @@
 defmodule Vxpipe.AgentRuntime.ModelRequest do
-  @moduledoc "One normalized provider generation request."
+  @moduledoc """
+  One normalized provider generation request and its host control context.
+
+  pending_invocations is host-only bookkeeping for compaction and execution safety.
+  It is excluded from model-visible messages, provider wire payloads and token
+  estimates. Native historical tool calls and responses remain in messages.
+  """
 
   alias Vxpipe.AgentRuntime.{Message, ModelTool, PendingInvocation}
 
   @derive {Inspect, only: [:correlation]}
   @enforce_keys [:messages, :tools, :pending_invocations, :model_context, :correlation]
-  defstruct @enforce_keys ++ [maximum_output_tokens: nil]
+  defstruct @enforce_keys ++ [maximum_output_tokens: nil, reply_protocol: :legacy]
 
   @type t :: %__MODULE__{
           messages: [Message.t()],
@@ -13,7 +19,8 @@ defmodule Vxpipe.AgentRuntime.ModelRequest do
           pending_invocations: [PendingInvocation.t()],
           model_context: map(),
           correlation: map(),
-          maximum_output_tokens: pos_integer() | nil
+          maximum_output_tokens: pos_integer() | nil,
+          reply_protocol: :legacy | :mode_message_v1
         }
 
   @spec new([Message.t()], [ModelTool.t()], [PendingInvocation.t()], map()) :: t()

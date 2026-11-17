@@ -385,8 +385,10 @@ defmodule Vxpipe.CallEngine.ToolContractRoom do
           end
         end
 
+        latest = participant_message(List.last(request.messages))
+
         calls =
-          case List.last(request.messages) do
+          case latest do
             %Message{role: :user, origin: :caller, content: "TOOLS " <> encoded} ->
               Enum.map(JSON.decode!(encoded), fn item ->
                 {:ok, call} =
@@ -404,7 +406,7 @@ defmodule Vxpipe.CallEngine.ToolContractRoom do
           end
 
         text =
-          case {calls, List.last(request.messages)} do
+          case {calls, latest} do
             {[], %Message{role: :user, origin: :caller, content: content}} -> "REPLY " <> content
             {[], _continuation} -> "READY"
             {_calls, _message} -> ""
@@ -415,4 +417,16 @@ defmodule Vxpipe.CallEngine.ToolContractRoom do
         model_loop(observer)
     end
   end
+
+  defp participant_message(%Message{origin: :caller, content: content} = message) do
+    case JSON.decode(content) do
+      {:ok, %{"type" => "participant_message", "message" => text}} when is_binary(text) ->
+        %{message | content: text}
+
+      _legacy ->
+        message
+    end
+  end
+
+  defp participant_message(message), do: message
 end

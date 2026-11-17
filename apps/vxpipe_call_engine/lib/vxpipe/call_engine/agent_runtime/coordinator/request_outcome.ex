@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
   @moduledoc false
 
-  alias Vxpipe.AgentRuntime.Result
+  alias Vxpipe.AgentRuntime.{Dialogue, Result}
   alias Vxpipe.CallEngine.AgentRuntime.CompletionContinuation
   alias Vxpipe.CallEngine.AgentRuntime.Coordinator.ActiveRequest
   alias Vxpipe.CallEngine.Telemetry
@@ -13,6 +13,27 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
   @type outcome :: :advance | {:advance, completed_request()} | {:stop, atom()}
 
   @spec finish(ActiveRequest.t(), term(), keyword()) :: outcome()
+  def finish(
+        request,
+        {:ok,
+         %Result{status: :completed, dialogue: %Dialogue{agent_mode: :speaker, message: text}}},
+        options
+      )
+      when is_binary(text) do
+    finish(request, {:ok, Result.completed(text, %{})}, options)
+  end
+
+  def finish(
+        request,
+        {:ok, %Result{status: :completed, dialogue: %Dialogue{agent_mode: :listener}}},
+        options
+      ) do
+    # Listener cue intent is recognized but audio admission is disabled until the
+    # voice milestone supplies cue windows. It never acquires the speaker floor.
+    stop_telemetry(request, :ok, false, options)
+    complete_request(request, options)
+  end
+
   def finish(
         %ActiveRequest{} = request,
         {:ok, %Result{status: :completed, output: output}},
@@ -26,14 +47,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
         Enum.each(segments, &emit_text(request, &1, options))
         stop_telemetry(request, :ok, request.first_output_observed?, options)
 
-        case commit_completion(request, options) do
-          :advance ->
-            send(owner(options), {:vxpipe_capability_text_complete, self(), request.command})
-            {:advance, {:completed, request.command, request.correlation}}
-
-          {:stop, _reason} = stop ->
-            stop
-        end
+        complete_request(request, options)
 
       {:error, :invalid_response} ->
         fail_committed(request, :invalid_response, options)
@@ -54,6 +68,17 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.RequestOutcome do
 
   def finish(%ActiveRequest{} = request, _invalid, options) do
     fail_uncommitted(request, :provider_unavailable, options)
+  end
+
+  defp complete_request(request, options) do
+    case commit_completion(request, options) do
+      :advance ->
+        send(owner(options), {:vxpipe_capability_text_complete, self(), request.command})
+        {:advance, {:completed, request.command, request.correlation}}
+
+      {:stop, _reason} = stop ->
+        stop
+    end
   end
 
   @spec fail_uncommitted(ActiveRequest.t(), atom(), keyword()) :: outcome()

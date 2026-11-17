@@ -50,6 +50,14 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @spec interrupt(pid(), [TextToSpeechRequest.t()]) ::
+          {:ok, [{TextToSpeechRequest.t(), non_neg_integer()}]} | {:error, :unavailable}
+  def interrupt(capability, requests) when is_pid(capability) and is_list(requests) do
+    GenServer.call(capability, {:interrupt, requests}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @impl true
   def init(options) do
     owner = Keyword.fetch!(options, :owner)
@@ -115,6 +123,23 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
     end
   end
 
+  def handle_call({:interrupt, requests}, from, state) do
+    {selected, retained} = Enum.split_with(:queue.to_list(state.pending), &(&1 in requests))
+    pending = Enum.map(selected, &{&1, 0})
+    retained = :queue.from_list(retained)
+
+    cond do
+      state.current == nil or state.current.request not in requests ->
+        {:reply, {:ok, pending}, %{state | pending: retained}}
+
+      state.cancellation != nil ->
+        {:reply, {:error, :unavailable}, state}
+
+      true ->
+        interrupt_selected(from, state, pending, retained)
+    end
+  end
+
   def handle_call(:interrupt, _from, %{current: nil} = state) do
     interrupted = Enum.map(:queue.to_list(state.pending), &{&1, 0})
     {:reply, {:ok, interrupted}, %{state | pending: :queue.new()}}
@@ -127,8 +152,12 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
   end
 
   def handle_call(:interrupt, from, state) do
-    current = state.current
     pending = Enum.map(:queue.to_list(state.pending), &{&1, 0})
+    interrupt_selected(from, state, pending, :queue.new())
+  end
+
+  defp interrupt_selected(from, state, pending, retained) do
+    current = state.current
 
     with {:ok, ticket} <- Session.fence_output(state.session, current.handle),
          {:ok, played_ms, state} <- interrupt_output(current, state),
@@ -149,7 +178,7 @@ defmodule Vxpipe.CallEngine.Capability.TextToSpeech do
          state
          | cancellation: cancellation,
            current: %{current | phase: :cancelling},
-           pending: :queue.new()
+           pending: retained
        }}
     else
       {:error, :audio_output_failed, state} ->

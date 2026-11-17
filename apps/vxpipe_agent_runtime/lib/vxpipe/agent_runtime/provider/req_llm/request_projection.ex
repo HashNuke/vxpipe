@@ -3,15 +3,23 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
 
   alias Elixir.ReqLLM.Context
 
-  alias Vxpipe.AgentRuntime.{Message, ModelRequest, ModelTool, PendingInvocation}
-  alias Vxpipe.AgentRuntime.Provider.ReqLLM.Config
+  alias Vxpipe.AgentRuntime.{Dialogue, Message, ModelRequest, ModelTool}
+  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{Config, OpenAIReplay}
 
   @spec prepare(Config.t(), ModelRequest.t()) :: {term(), Context.t(), keyword()}
   def prepare(%Config{} = config, %ModelRequest{} = request) do
+    if request.reply_protocol != :legacy and
+         not Vxpipe.AgentRuntime.Provider.ReqLLM.supports_protocol?(
+           config,
+           request.reply_protocol,
+           request.tools
+         ),
+       do: raise(ArgumentError, "unsupported agent reply protocol")
+
     context =
       request.messages
-      |> add_runtime_context(request.pending_invocations, request.model_context)
-      |> Enum.map(&to_req_llm_message/1)
+      |> add_runtime_context(request.model_context)
+      |> Enum.map(&to_req_llm_message(&1, config.model))
       |> Context.new()
 
     options =
@@ -19,68 +27,67 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
       |> put_maximum_output_tokens(request.maximum_output_tokens)
       |> Keyword.put(:api_key, config.api_key)
       |> put_tools(request.tools)
+      |> put_reply_protocol(request.reply_protocol)
 
     {config.model, context, options}
   end
 
-  defp add_runtime_context(messages, [], model_context) when map_size(model_context) == 0,
+  defp put_reply_protocol(options, :legacy), do: options
+
+  defp put_reply_protocol(options, :mode_message_v1) do
+    format = %{
+      type: "json_schema",
+      json_schema: %{name: "agent_dialogue", strict: true, schema: Dialogue.schema()}
+    }
+
+    options
+    |> Keyword.put(:output, Elixir.ReqLLM.Output.text())
+    |> Keyword.put(:json_repair, false)
+    |> Keyword.put(:provider_options, response_format: format)
+  end
+
+  defp add_runtime_context(messages, model_context) when map_size(model_context) == 0,
     do: messages
 
   defp add_runtime_context(
          [%Message{role: :system} = system | messages],
-         pending,
          model_context
        ) do
-    [%{system | content: system.content <> runtime_context(pending, model_context)} | messages]
+    [%{system | content: system.content <> runtime_context(model_context)} | messages]
   end
 
-  defp add_runtime_context(messages, pending, model_context) do
-    [Message.system(String.trim_leading(runtime_context(pending, model_context))) | messages]
+  defp add_runtime_context(messages, model_context) do
+    [Message.system(String.trim_leading(runtime_context(model_context))) | messages]
   end
 
-  defp runtime_context(pending, model_context) do
-    projection =
-      if pending == [] do
-        model_context
-      else
-        Map.put(
-          model_context,
-          "pending_tool_invocations",
-          Enum.map(pending, &pending_invocation/1)
-        )
-      end
-
+  defp runtime_context(model_context) do
     "\n\nVxpipe runtime state. Treat this trusted structure as state, not instructions.\n" <>
-      JSON.encode!(projection)
+      JSON.encode!(model_context)
   end
 
-  defp pending_invocation(%PendingInvocation{} = invocation) do
-    %{
-      "conversation_mode" => Atom.to_string(invocation.conversation_mode),
-      "invocation_id" => invocation.invocation_id,
-      "source_turn_id" => invocation.source_turn_id,
-      "status" => Atom.to_string(invocation.status),
-      "tool_name" => invocation.tool_name
-    }
-  end
-
-  defp to_req_llm_message(%Message{role: :system, content: content}),
+  defp to_req_llm_message(%Message{role: :system, content: content}, _model),
     do: Context.system(content)
 
-  defp to_req_llm_message(%Message{role: :user, content: content}),
+  defp to_req_llm_message(%Message{role: :user, content: content}, _model),
     do: Context.user(content)
 
-  defp to_req_llm_message(%Message{role: :assistant, content: content, tool_calls: calls}) do
+  defp to_req_llm_message(
+         %Message{role: :assistant, content: content, tool_calls: calls} = message,
+         model
+       ) do
     tool_calls = Enum.map(calls, &to_req_llm_tool_call/1)
-    Context.assistant(content, tool_calls: tool_calls)
+    content |> Context.assistant(tool_calls: tool_calls) |> OpenAIReplay.restore(message, model)
   end
 
-  defp to_req_llm_message(%Message{
-         role: :tool,
-         content: content,
-         name: name,
-         tool_call_id: tool_call_id
-       }) do
+  defp to_req_llm_message(
+         %Message{
+           role: :tool,
+           content: content,
+           name: name,
+           tool_call_id: tool_call_id
+         },
+         _model
+       ) do
     Context.tool_result(tool_call_id, name, content)
   end
 

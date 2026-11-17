@@ -43,6 +43,7 @@ defmodule Vxpipe.Calls.EditorToolCatalogTest do
              {"host", "prepare_background_report"},
              {"platform", "get_current_time"},
              {"platform", "hangup"},
+             {"platform", "idle"},
              {"mcp", "find_slots"}
            ]
 
@@ -167,6 +168,6 @@ defmodule Vxpipe.Calls.EditorToolCatalogTest do
       )
 
     refute result.mcp_available
-    assert Enum.map(result.tools, & &1.tool) == ["get_current_time", "hangup"]
+    assert Enum.map(result.tools, & &1.tool) == ["get_current_time", "hangup", "idle"]
   end
 end

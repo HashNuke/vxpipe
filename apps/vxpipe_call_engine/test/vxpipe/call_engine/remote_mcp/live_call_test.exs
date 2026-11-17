@@ -983,7 +983,10 @@ defmodule Vxpipe.CallEngine.RemoteMCP.LiveCallTest do
     unrelated = send_text(plan, room, caller, connection_id, "What can we discuss meanwhile?")
 
     assert_receive {:test_agent_runtime_stream, unrelated_provider, unrelated_request}
-    assert List.last(unrelated_request.messages).content == unrelated.content
+
+    assert JSON.decode!(List.last(unrelated_request.messages).content)["message"] ==
+             unrelated.content
+
     assert_pending(unrelated_request, "remote-live-call")
     reply_with_text(unrelated_provider, "We can discuss your account options.")
 

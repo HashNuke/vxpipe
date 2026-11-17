@@ -4,6 +4,64 @@ defmodule Vxpipe.CallEngine.Archive.PortTest do
   alias Vxpipe.CallEngine.Archive.{Fact, Handoff, Port, Supervisor}
   alias Vxpipe.CallEngine.TestCollectingArchiveWriter
 
+  test "records structured admission in JSON maps while retaining trusted fact columns" do
+    handoff = open_archive()
+
+    port =
+      Port.new(
+        handoff,
+        %{
+          tenant_id: "tenant-archive",
+          call_id: "call-archive",
+          room_id: "room-archive",
+          incarnation_id: "rinc-archive"
+        },
+        %{"revision" => 7}
+      )
+
+    recorder = %Vxpipe.CallEngine.Archive.Recorder{
+      port: port,
+      participant_activations: %{"human" => "activation"}
+    }
+
+    {:ok, input} = Vxpipe.AgentRuntime.Input.participant("human", "hello", :speaker)
+
+    command =
+      struct!(Vxpipe.CallEngine.Command.SendText,
+        id: "cmd-structured",
+        tenant_id: "tenant-archive",
+        actor_id: "actor",
+        room_id: "room-archive",
+        incarnation_id: "rinc-archive",
+        participant_id: "human",
+        connection_id: "connection",
+        correlation_id: "correlation",
+        content: "hello",
+        model_input: input,
+        run_immediately: true,
+        audio_response: true,
+        deadline: DateTime.utc_now()
+      )
+
+    _ = Vxpipe.CallEngine.Archive.Recorder.accepted_input(recorder, command, :text)
+
+    assert_receive {:test_archive_fact,
+                    %Fact{
+                      kind: :accepted_input,
+                      participant_id: "human",
+                      activation_id: "activation",
+                      command_id: "cmd-structured",
+                      correlation_id: "correlation",
+                      payload: payload
+                    }}
+
+    assert payload == %{
+             "content_format" => "structured_agent_message_v1",
+             "modality" => "text",
+             "content" => JSON.decode!(Vxpipe.AgentRuntime.Input.encode(input))
+           }
+  end
+
   test "hands off an inspect-redacted fact with credentials removed and stable ordering" do
     handoff = open_archive()
 

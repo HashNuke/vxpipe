@@ -1323,8 +1323,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert_handoff_audio_order(monitor_client, 500, 250)
     assert :ok = send_rtvi_text(client, "talk-to-billing")
 
+    {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    expected_prompt = shared.text <> "\n\nHandle billing requests."
+
     assert_receive {:test_agent_runtime_stream, _provider,
-                    %{messages: [%{content: "Handle billing requests."} | _]}},
+                    %{messages: [%{content: ^expected_prompt} | _]}},
                    2_000
   end
 
@@ -1491,8 +1494,11 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         assert %{"id" => "held-during-tools"} = await_sideband(client, "error-response", 2_000)
         refute_receive {:test_tts_control, ^destination_tts, _greeting}, 50
 
+        {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+        expected_prompt = shared.text <> "\n\nHandle billing requests."
+
         refute_receive {:test_agent_runtime_stream, _model,
-                        %{messages: [%{content: "Handle billing requests."} | _]}},
+                        %{messages: [%{content: ^expected_prompt} | _]}},
                        0
 
         refute_receive {:DOWN, ^source_monitor, :process, ^source_tts, _}, 0
@@ -1555,8 +1561,8 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
              ]
 
       contents = Enum.map(request.messages, & &1.content)
-      assert "Please connect me to billing." in contents
-      assert "Billing is ready." in contents
+      assert "Please connect me to billing." in Enum.map(contents, &model_text/1)
+      assert "Billing is ready." in Enum.map(contents, &model_text/1)
 
       for marker <- [
             "held-during-mcp",
@@ -4000,7 +4006,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
     assert :ok = send_rtvi_text(client, "first-post-startup-turn")
     assert_receive {:test_agent_runtime_stream, _provider, request}, 2_000
     contents = Enum.map(request.messages, & &1.content)
-    assert "Reception is ready." in contents
+    assert "Reception is ready." in Enum.map(contents, &model_text/1)
     refute "Opening notice." in contents
     refute Enum.any?(contents, &String.contains?(&1, "initial-notice.wav"))
   end
@@ -4956,7 +4962,16 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
   end
 
   defp await_native_model_request(prompt, spoken) do
+    {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    prompt = shared.text <> "\n\n" <> prompt
     await_native_model_request(prompt, spoken, System.monotonic_time(:millisecond) + 2_000)
+  end
+
+  defp model_text(content) do
+    case JSON.decode(content) do
+      {:ok, %{"type" => "participant_message", "message" => text}} when is_binary(text) -> text
+      _native_or_legacy -> content
+    end
   end
 
   defp await_native_model_request(prompt, spoken, deadline) do
@@ -4965,7 +4980,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
         latest_user = Enum.find(Enum.reverse(request.messages), &(&1.role == :user))
 
         if match?([%{content: ^prompt} | _], request.messages) and
-             match?(%{content: ^spoken}, latest_user),
+             (latest_user != nil and model_text(latest_user.content) == spoken),
            do: {provider, request},
            else: await_native_model_request(prompt, spoken, deadline)
     after
@@ -5135,7 +5150,7 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
   defp assert_private_transfer_history(request) do
     contents = Enum.map(request.messages, & &1.content)
-    assert "Please connect me to human support." in contents
+    assert "Please connect me to human support." in Enum.map(contents, &model_text/1)
 
     for private <- ["Private desk notice:", "Held input marker.", "handoff.wav"] do
       refute Enum.any?(contents, &String.contains?(&1, private)),

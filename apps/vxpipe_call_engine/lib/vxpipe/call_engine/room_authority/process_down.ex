@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
 
   alias Vxpipe.CallEngine.RoomAuthority.{
     CallerIdle,
+    IdleWait,
     ConnectionLifecycle,
     OpeningAudio,
     OutgoingAdmission,
@@ -63,6 +64,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.ProcessDown do
   end
 
   defp process_down(monitor, reason, state) do
+    case IdleWait.worker_down(monitor, state) do
+      {:handled, state} -> {:noreply, CallerIdle.reconcile(state)}
+      :unhandled -> process_transfer_down(monitor, reason, state)
+    end
+  end
+
+  defp process_transfer_down(monitor, reason, state) do
     case ParticipantTransfer.worker_down(monitor, reason, state) do
       {:handled, state} ->
         {:noreply, state}

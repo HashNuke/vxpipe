@@ -49,6 +49,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
   end
 
   defp accept_authorized_text(command, capability, state) do
+    command = with_model_input(command, TurnState.mode(state))
     state = CallerIdle.activity(state)
 
     case AgentOutput.interrupt(command, state) do
@@ -140,6 +141,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
         command_id: Id.generate(:command),
         id: Id.generate(:turn),
         last_text: signal.text,
+        agent_mode: TurnState.mode(state),
         policy_revision: signal.policy_revision,
         provider_turn_index: signal.provider_turn_index,
         allocation_generation: signal.allocation_generation,
@@ -304,6 +306,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       {:ok, command}
       when state.text_capability != nil and state.speech_to_speech_runtime == nil and
              state.speech_to_speech_capability == nil ->
+        command = with_model_input(command, turn.agent_mode)
+
         case AgentOutput.interrupt(command, state) do
           {:ok, state} ->
             case FirstMessage.respond(state.text_capability, command, state) do
@@ -321,7 +325,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
 
                 state
                 |> Map.put(:archive_recorder, archive_recorder)
-                |> confirm_user(command.content)
+                |> confirm_user(command)
                 |> TurnState.put(command)
 
               {:error, reason} ->
@@ -452,7 +456,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
       )
 
     state = %{state | archive_recorder: archive_recorder}
-    state = confirm_user(state, command.content)
+    state = confirm_user(state, command)
     state = EventPublisher.publish(state, connection.pid, completed)
     %{state | next_sequence: state.next_sequence + 2}
   end
@@ -466,7 +470,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     )
   end
 
-  defp confirm_user(state, content) do
-    %{state | spoken_history: SpokenHistory.confirm_user(state.spoken_history, content)}
+  defp confirm_user(state, command) do
+    %{state | spoken_history: SpokenHistory.confirm_user(state.spoken_history, command)}
+  end
+
+  defp with_model_input(command, mode) do
+    {:ok, input} =
+      Vxpipe.AgentRuntime.Input.participant(command.participant_id, command.content, mode)
+
+    %{command | model_input: input}
   end
 end

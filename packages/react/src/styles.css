@@ -786,6 +786,11 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.vx-message-purpose {
+  color: var(--vx-muted);
+  font-size: 14px;
+}
+
 .vx-message small {
   display: block;
   margin-top: 8px;

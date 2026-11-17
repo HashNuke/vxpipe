@@ -17,7 +17,7 @@ defmodule Vxpipe.AgentRuntime.Integration.ReqLLMProviderTest do
   @moduletag :live_providers
   @moduletag :live_gemini
 
-  test "Gemini accepts an exact tool schema and its running continuation" do
+  test "Gemini accepts native running history, unrelated input and a later completion" do
     config = provider_config()
 
     tool = %ModelTool{
@@ -53,7 +53,7 @@ defmodule Vxpipe.AgentRuntime.Integration.ReqLLMProviderTest do
         invocation_id: call.id,
         tool_name: call.name,
         status: :running,
-        conversation_mode: :blocking,
+        conversation_mode: :non_blocking,
         source_turn_id: "turn_interop"
       )
 
@@ -72,12 +72,50 @@ defmodule Vxpipe.AgentRuntime.Integration.ReqLLMProviderTest do
         %{request_id: "interop_continuation"}
       )
 
+    {_model, projected, _options} = Provider.prepare_request(config, continuation_request)
+    [system | _] = Elixir.ReqLLM.Context.to_list(projected)
+    assert [%{text: system_text}] = system.content
+    assert system_text == hd(messages).content
+    refute system_text =~ "pending_tool_invocations"
+
     assert {:ok, %ModelResponse{text: text, tool_calls: []} = continuation_response} =
              Provider.stream(config, continuation_request, &emit_delta("continuation", &1))
 
     assert String.trim(text) != ""
     assert map_size(first_response.usage) > 0 or map_size(continuation_response.usage) > 0
     assert_received {:provider_delta, "continuation", delta} when byte_size(delta) > 0
+
+    unrelated_messages =
+      continuation_messages ++
+        [
+          Message.assistant(text, []),
+          Message.user("While that work is running, what is two plus two? Reply briefly.")
+        ]
+
+    unrelated =
+      ModelRequest.new(unrelated_messages, [], [pending], %{request_id: "interop_unrelated"})
+
+    assert {:ok, %ModelResponse{text: unrelated_text, tool_calls: []}} =
+             Provider.stream(config, unrelated, &emit_delta("unrelated", &1))
+
+    assert unrelated_text =~ "4" or String.downcase(unrelated_text) =~ "four"
+
+    completed_messages =
+      unrelated_messages ++
+        [
+          Message.assistant(unrelated_text, []),
+          Message.user(
+            "The test worker has completed vxpipe_interop_value with value vxpipe. Briefly report that result.",
+            :engine
+          )
+        ]
+
+    completed = ModelRequest.new(completed_messages, [], [], %{request_id: "interop_completed"})
+
+    assert {:ok, %ModelResponse{text: completed_text, tool_calls: []}} =
+             Provider.stream(config, completed, &emit_delta("completed", &1))
+
+    assert completed_text =~ "vxpipe"
   end
 
   test "Gemini accepts a transfer allowlist with destination-specific arguments" do
@@ -196,7 +234,6 @@ defmodule Vxpipe.AgentRuntime.Integration.ReqLLMProviderTest do
              Provider.new(
                api_key: System.fetch_env!("GEMINI_API_KEY"),
                model: "google:" <> Vxpipe.Providers.LiveModels.llm("google").model,
-               generation_options: [temperature: 0.0],
                streaming: true
              )
 

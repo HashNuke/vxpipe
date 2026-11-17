@@ -3,19 +3,25 @@ defmodule Vxpipe.AgentRuntime.Result do
 
   @derive {Inspect, only: [:status, :correlation, :reason]}
   @enforce_keys [:status, :correlation]
-  defstruct @enforce_keys ++ [:output, :reason]
+  defstruct @enforce_keys ++ [:output, :dialogue, :reason]
 
   @type status :: :completed | :failed | :cancelled
   @type t :: %__MODULE__{
           status: status(),
           correlation: map(),
           output: String.t() | nil,
+          dialogue: Vxpipe.AgentRuntime.Dialogue.t() | nil,
           reason: atom() | nil
         }
 
-  @spec completed(String.t(), map()) :: t()
+  @spec completed(String.t() | Vxpipe.AgentRuntime.Dialogue.t(), map()) :: t()
   def completed(output, correlation) when is_binary(output) and is_map(correlation) do
     %__MODULE__{status: :completed, output: output, correlation: correlation}
+  end
+
+  def completed(%Vxpipe.AgentRuntime.Dialogue{} = dialogue, correlation)
+      when is_map(correlation) do
+    %__MODULE__{status: :completed, dialogue: dialogue, correlation: correlation}
   end
 
   @spec failed(atom(), map()) :: t()

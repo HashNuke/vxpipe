@@ -9,6 +9,45 @@ defmodule Vxpipe.CallEngine.PlanStartup.STSConfigurationTest do
   alias Vxpipe.Providers.OpenAI.{GPTLive, GPTLiveSession}
   alias Vxpipe.Providers.ElevenLabs.RealtimeSession
 
+  test "native STS startup rejects the LLM-only idle operation even without publication validation" do
+    idle = %ToolBinding{
+      name: "idle",
+      type: :platform,
+      conversation_mode: :non_blocking,
+      action: Vxpipe.CallEngine.Tool.Idle,
+      remote: nil
+    }
+
+    receiver = %{participant() | tools: %{"idle" => idle}}
+    assert {:error, :invalid_configuration} = SpeechToSpeechActivation.resolve(nil, receiver, [])
+
+    assert {:error, :invalid_configuration} =
+             SpeechToSpeechActivation.registry(nil, receiver, [], self())
+  end
+
+  test "a pinned STS profile composes shared instructions and retains native provider declarations" do
+    {:ok, protocol} = Vxpipe.AgentRuntime.Protocol.capture()
+
+    assert {:ok, activation, _registry} =
+             SpeechToSpeechActivation.resolve(%{agent_protocol: protocol}, participant(), [])
+
+    assert activation.system_prompt ==
+             protocol["prompts"]["shared"]["text"] <> "\n\nprivate-prompt-marker"
+
+    refute activation.system_prompt =~ protocol["prompts"]["llm_dialogue"]["text"]
+
+    assert {:ok, {STSSession, _public}, private} =
+             SpeechToSpeechRuntime.provider(
+               {STSSession, [api_key: "synthetic-sts-secret"]},
+               [],
+               activation
+             )
+
+    config = Keyword.fetch!(private, :config)
+    assert config.system_prompt == activation.system_prompt
+    assert config.tools == [declaration()]
+  end
+
   test "native activation retains the text tool registry contract outside provider configuration" do
     plan = %{tenant_id: "tenant", room_id: "room"}
 

@@ -101,6 +101,29 @@ defmodule Vxpipe.CallEngine.OutgoingCallRoomTest do
     end
   end
 
+  test "uses idle_timeout for an answered outgoing callee" do
+    plan = plan(first_message: %{mode: "wait_for_input"})
+    assert {:ok, room} = start_call(plan)
+    assert_receive {:test_outbound_leg_connect, _, _, _}, 1_000
+    assert {:ok, _} = attach(plan, room)
+    CallEngine.TestCallStartup.await_ready(room.room_id)
+    assert_receive {:test_call_lifecycle_timer_scheduled, idle_timer, 15_000}, 1_000
+    assert :ok = TestCallLifecycleTimer.fire(idle_timer)
+    assert_receive {:test_agent_runtime_stream, model, request}, 1_000
+
+    assert JSON.decode!(List.last(request.messages).content) == %{
+             "type" => "platform_event",
+             "event" => "idle_timeout",
+             "data" => %{},
+             "agent_mode" => "listener"
+           }
+
+    {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: "Still a good time to talk?")
+    send(model, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:vxpipe_event, %CallEngine.Event.AgentTurnCompleted{}}, 1_000
+    refute_receive {:test_call_lifecycle_timer_scheduled, _, 15_000}, 0
+  end
+
   test "archives bounded dial, answer and end evidence once in local timestamp order" do
     plan = plan(first_message: %{mode: "wait_for_input"})
 

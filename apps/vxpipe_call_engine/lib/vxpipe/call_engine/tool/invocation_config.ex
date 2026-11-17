@@ -2,6 +2,8 @@ defmodule Vxpipe.CallEngine.Tool.InvocationConfig do
   @moduledoc false
 
   alias Vxpipe.CallEngine.ResolvedCallPlan.ToolBinding
+  alias Vxpipe.CallEngine.Tool.{Idle, InvocationBinding, InvocationSubmission}
+  alias Vxpipe.CallEngine.Tool.Idle.Request
 
   @keys [
     :tool_invocation_timeout_ms,
@@ -35,4 +37,18 @@ defmodule Vxpipe.CallEngine.Tool.InvocationConfig do
     |> Keyword.take(@keys)
     |> Keyword.put(:tool_invocation_timeout_ms, timeout)
   end
+
+  @spec for_invocation(InvocationSubmission.t(), pos_integer()) :: pos_integer()
+  def for_invocation(
+        %InvocationSubmission{binding: %InvocationBinding{handler: {:platform, Idle}}} =
+          submission,
+        configured_timeout_ms
+      ) do
+    case Request.new(submission.arguments, submission.context) do
+      {:ok, request} -> max(configured_timeout_ms, Request.execution_timeout_ms(request))
+      {:error, :invalid_arguments} -> configured_timeout_ms
+    end
+  end
+
+  def for_invocation(%InvocationSubmission{}, configured_timeout_ms), do: configured_timeout_ms
 end

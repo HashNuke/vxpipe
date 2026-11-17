@@ -81,6 +81,7 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodecTest do
     assert plan.direction == :incoming
     assert plan.ring_timeout_ms == nil
     assert plan.credential_bindings == nil
+    assert plan.agent_protocol == nil
     assert plan.wait_sounds.__struct__ == Vxpipe.CallEngine.CallSpec.WaitSounds
     assert plan.transfer_policy.__struct__ == Vxpipe.CallEngine.CallSpec.TransferPolicy
     caller = Map.fetch!(plan.participants, "caller")
@@ -169,6 +170,32 @@ defmodule Vxpipe.Persistence.ResolvedPlanCodecTest do
     assert {:ok, plan} = Vxpipe.Persistence.ResolvedPlanCodec.decode(encoded)
     assert plan.direction == :outgoing
     assert plan.ring_timeout_ms == 5_000
+  end
+
+  test "stored plans retain the complete instruction bundle without adopting current defaults" do
+    {:ok, snapshot} = Vxpipe.CallEngine.AgentProtocol.capture()
+
+    stored =
+      legacy_plan(%{})
+      |> Map.put(:agent_protocol, snapshot)
+      |> :erlang.term_to_binary([:deterministic])
+
+    assert {:ok, plan} = Vxpipe.Persistence.ResolvedPlanCodec.decode(stored)
+    assert plan.agent_protocol == snapshot
+
+    assert {:ok, reloaded} =
+             plan
+             |> Vxpipe.Persistence.ResolvedPlanCodec.encode()
+             |> Vxpipe.Persistence.ResolvedPlanCodec.decode()
+
+    assert reloaded.agent_protocol == snapshot
+
+    assert {:ok, historical} =
+             legacy_plan(%{})
+             |> :erlang.term_to_binary()
+             |> Vxpipe.Persistence.ResolvedPlanCodec.decode()
+
+    assert historical.agent_protocol == nil
   end
 
   defp legacy_plan(capabilities) do

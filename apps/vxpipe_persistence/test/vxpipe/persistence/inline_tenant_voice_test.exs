@@ -18,7 +18,9 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
       call_spec_repository: {CallSpecStore, Repo},
       call_repository: {CallStore, Repo},
       provider_credential_repository: {ProviderCredentialStore, [repo: Repo, keyring: keyring]},
-      registries: %{host_tools: %{}}
+      registries: %{host_tools: %{}},
+      # These credential/transport cases exercise existing Google publications.
+      agent_protocol_version: :legacy
     ]
 
     {:ok, tenant, issued} =
@@ -42,7 +44,7 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
     [tenant: tenant, other: other, principal: principal, options: options]
   end
 
-  test "provisions, saves, publishes and prepares a tenant voice plan without storing secrets",
+  test "provisions, saves, publishes and prepares a legacy tenant voice plan without storing secrets",
        ctx do
     assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source(), ctx.options)
     assert draft.validation_errors == []
@@ -74,6 +76,52 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
 
     assert claim.call.id == call.id
     assert claim.call.tenant_key == ctx.tenant.key
+  end
+
+  test "normal authoring preserves modern validation and supports the selected native profile",
+       ctx do
+    options = Keyword.delete(ctx.options, :agent_protocol_version)
+    assert {:ok, rejected} = Calls.save_call_spec(ctx.tenant.key, source(), options)
+    assert Enum.any?(rejected.validation_errors, &(&1["code"] == "unsupported_agent_protocol"))
+    assert rejected.compiled_metadata["agent_protocol"]["version"] == "mode_message_v1"
+
+    assert {:error, {:call_spec_not_publishable, _errors}} =
+             Calls.publish_call_spec(
+               ctx.tenant.key,
+               rejected.call_spec_id,
+               rejected.revision,
+               options
+             )
+
+    assert {:ok, _credential} =
+             ProviderCredentials.provision(
+               ctx.tenant.key,
+               "openai",
+               "default",
+               "api_key",
+               %{"api_key" => "synthetic-modern-private-marker"},
+               options
+             )
+
+    modern =
+      source()
+      |> Map.put(:name, "Modern tenant voice")
+      |> put_in([:defaults, :capabilities, :model_inference], %{
+        provider: "openai",
+        model: "gpt-6-luna"
+      })
+
+    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, modern, options)
+    assert draft.validation_errors == []
+    assert draft.compiled_metadata["agent_protocol"]["version"] == "mode_message_v1"
+
+    assert {:ok, published} =
+             Calls.publish_call_spec(ctx.tenant.key, draft.call_spec_id, draft.revision, options)
+
+    [route] = published.routes
+    assert {:ok, call, _token} = Calls.prepare_call(ctx.principal, route.key, %{}, options)
+    assert call.plan.agent_protocol == draft.compiled_metadata["agent_protocol"]
+    assert call.plan.participants["assistant"].capabilities.model_inference.provider == "openai"
   end
 
   test "persists the existing Zenmux selection and resolves only its named tenant credential",
@@ -108,7 +156,13 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
                )
     end
 
-    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, source, ctx.options)
+    assert {:ok, draft} =
+             Calls.save_call_spec(
+               ctx.tenant.key,
+               source,
+               Keyword.put(ctx.options, :agent_protocol_version, :legacy)
+             )
+
     assert draft.validation_errors == []
 
     assert {:ok, published} =

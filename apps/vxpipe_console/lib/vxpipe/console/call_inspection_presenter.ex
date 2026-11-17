@@ -2,6 +2,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
   @moduledoc "Converts database call-inspection records into the versioned JSON response."
 
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
+  alias Vxpipe.CallEngine.Archive.MessagePayload
   alias Vxpipe.CallEngine.ResolvedCallPlan
   alias Vxpipe.CallEngine.ResolvedCallPlan.Participant
 
@@ -257,36 +258,34 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     |> Enum.map(&encode_timeline_time/1)
   end
 
-  defp timeline_entity(%CallTimelineEntry{kind: :accepted_input} = entry, _names) do
-    case Map.get(entry.payload, "content") do
-      content when is_binary(content) -> message_entity(entry, content)
-      _missing -> activity_entity(entry, %{})
-    end
-  end
-
-  defp timeline_entity(%CallTimelineEntry{kind: :agent_output_generated} = entry, _names) do
-    case Map.get(entry.payload, "text") do
-      text when is_binary(text) -> message_entity(entry, text)
-      _missing -> activity_entity(entry, %{})
+  defp timeline_entity(%CallTimelineEntry{kind: kind} = entry, _names)
+       when kind in [:accepted_input, :agent_output_generated] do
+    case MessagePayload.project(kind, entry.payload, entry.participant_id) do
+      %{text: text} = content -> message_entity(entry, text, content)
+      nil -> activity_entity(entry, %{})
     end
   end
 
   defp timeline_entity(%CallTimelineEntry{} = entry, names), do: activity_entity(entry, names)
 
-  defp message_entity(entry, text) do
+  defp message_entity(entry, text, content) do
+    metadata =
+      content |> Map.drop([:text]) |> Map.new(fn {key, value} -> {Atom.to_string(key), value} end)
+
     %{
       "id" => entry.id,
       "revision" => revision(entry),
       "source_sequence" => entry.source_sequence,
       "kind" => "message",
       "occurred_at" => entry.occurred_at,
-      "value" => %{
-        "id" => entry.id,
-        "participant_id" => entry.participant_id,
-        "text" => text,
-        "occurred_at" => instant(entry.occurred_at),
-        "state" => "final"
-      }
+      "value" =>
+        Map.merge(metadata, %{
+          "id" => entry.id,
+          "participant_id" => entry.participant_id,
+          "text" => text,
+          "occurred_at" => instant(entry.occurred_at),
+          "state" => "final"
+        })
     }
   end
 

@@ -10,6 +10,7 @@ import type { ConsoleSnapshot } from "../src/types.js";
 export type Scenario =
   | "ready"
   | "conversation"
+  | "listening-cues"
   | "handoff"
   | "human-handoff"
   | "phone-caller"
@@ -424,6 +425,50 @@ export type ExampleScenario = "conversation" | "handoff" | "human-handoff";
 
 function fixtureSnapshot(scenario: Scenario): ConsoleSnapshot {
   let snapshot: ConsoleSnapshot = structuredClone(initial);
+  if (scenario === "listening-cues")
+    snapshot = {
+      ...snapshot,
+      activities: [],
+      toolCalls: [],
+      events: [],
+      messages: [
+        {
+          id: "cue-user-1",
+          participantId: "caller",
+          text: "I'm looking for a delivery later in the week. Let me check my calendar…",
+          occurredAt: "2026-09-16T22:30:02.000Z",
+          state: "final",
+          agentMode: "listener",
+        },
+        {
+          id: "cue-agent-1",
+          participantId: "assistant",
+          text: "Mm-hm.",
+          occurredAt: "2026-09-16T22:30:05.000Z",
+          state: "final",
+          agentMode: "listener",
+          outputPurpose: "backchannel",
+        },
+        {
+          id: "cue-user-2",
+          participantId: "caller",
+          text: "Friday afternoon would work best.",
+          occurredAt: "2026-09-16T22:30:08.000Z",
+          state: "final",
+          agentMode: "listener",
+        },
+        {
+          id: "cue-agent-2",
+          participantId: "assistant",
+          text: "I can check Friday afternoon for you. First, could you confirm your order number?",
+          occurredAt: "2026-09-16T22:30:10.000Z",
+          state: "interrupted",
+          agentMode: "speaker",
+          outputPurpose: "main_response",
+          spokenRange: { start: 0, end: 36 },
+        },
+      ],
+    };
   if (scenario === "ready" || scenario === "microphone-denied-ready")
     snapshot = {
       ...snapshot,

@@ -279,7 +279,10 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
 
     deliver_transcript(proof.caller_stt, request, 3, "Continue helping me.")
     assert_receive {:test_agent_runtime_stream, next_provider, next_request}, 2_000
-    assert Enum.any?(next_request.messages, &(&1.content == "Continue helping me."))
+
+    assert JSON.decode!(List.last(next_request.messages).content)["message"] ==
+             "Continue helping me."
+
     assert {:ok, next_response} = Vxpipe.AgentRuntime.ModelResponse.new(text: "Still here.")
     send(next_provider, {:test_agent_runtime_response, {:ok, next_response}})
     refute_receive {:test_opening_audio_fetch, _url, _limits}, 0
@@ -437,8 +440,11 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
   end
 
   defp discard_source_requests do
+    {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    expected = shared.text <> "\n\nRoute callers safely."
+
     receive do
-      {:test_agent_runtime_stream, _, %{messages: [%{content: "Route callers safely."} | _]}} ->
+      {:test_agent_runtime_stream, _, %{messages: [%{content: ^expected} | _]}} ->
         discard_source_requests()
     after
       0 -> :ok

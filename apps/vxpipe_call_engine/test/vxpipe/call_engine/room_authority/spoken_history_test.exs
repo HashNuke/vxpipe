@@ -4,6 +4,64 @@ defmodule Vxpipe.CallEngine.RoomAuthority.SpokenHistoryTest do
   alias Vxpipe.CallEngine.CallSpec.TransferHistory
   alias Vxpipe.CallEngine.RoomAuthority.SpokenHistory
 
+  test "preserves trusted input and spoken output attribution through transfer" do
+    alias Vxpipe.AgentRuntime.Input
+    alias Vxpipe.CallEngine.Command.SendText
+    alias Vxpipe.CallEngine.TextToSpeechRequest
+
+    {:ok, input} = Input.participant("human-one", "Actually, Friday", :speaker)
+
+    command =
+      struct!(SendText,
+        id: "command-one",
+        tenant_id: "tenant",
+        actor_id: "actor",
+        room_id: "room",
+        incarnation_id: "incarnation",
+        participant_id: "human-one",
+        connection_id: "connection",
+        correlation_id: "correlation",
+        content: "Actually, Friday",
+        run_immediately: true,
+        audio_response: true,
+        deadline: DateTime.utc_now(),
+        model_input: input
+      )
+
+    request =
+      struct!(TextToSpeechRequest,
+        tenant_id: "tenant",
+        room_id: "room",
+        incarnation_id: "incarnation",
+        participant_id: "agent-original",
+        source_participant_id: "human-one",
+        connection_id: "connection",
+        command_id: "command-one",
+        correlation_id: "correlation",
+        output_id: "output-one",
+        text: "Friday works.",
+        output_sink: self(),
+        output_generation: 0
+      )
+
+    history =
+      SpokenHistory.new()
+      |> SpokenHistory.confirm_user(command)
+      |> SpokenHistory.played_assistant(request)
+
+    [human, agent] = SpokenHistory.project(history, policy(:all_spoken))
+    assert human.content == Input.encode(input)
+
+    assert JSON.decode!(agent.content) == %{
+             "type" => "participant_message",
+             "participant_id" => "agent-original",
+             "message" => "Friday works.",
+             "agent_mode" => "speaker"
+           }
+
+    assert SpokenHistory.project(history, policy(:last_n_spoken, 1)) == [agent]
+  end
+
   test "projects only confirmed user and played assistant utterances under the pinned mode" do
     history =
       SpokenHistory.new()

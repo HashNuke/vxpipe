@@ -3,7 +3,7 @@ defmodule Vxpipe.AgentRuntime.ConservativeInputTokenCounter do
 
   @behaviour Vxpipe.AgentRuntime.InputTokenCounter
 
-  alias Vxpipe.AgentRuntime.{Message, ModelRequest, ModelTool, PendingInvocation, ToolCall}
+  alias Vxpipe.AgentRuntime.{Dialogue, Message, ModelRequest, ModelTool, ToolCall}
 
   @base_envelope_tokens 256
   @message_envelope_tokens 32
@@ -11,12 +11,13 @@ defmodule Vxpipe.AgentRuntime.ConservativeInputTokenCounter do
 
   @impl true
   def count(_state, %ModelRequest{} = request) do
-    projected = %{
-      "messages" => Enum.map(request.messages, &message/1),
-      "model_context" => request.model_context,
-      "pending_invocations" => Enum.map(request.pending_invocations, &pending_invocation/1),
-      "tools" => Enum.map(request.tools, &tool/1)
-    }
+    projected =
+      %{
+        "messages" => Enum.map(request.messages, &message/1),
+        "model_context" => request.model_context,
+        "tools" => Enum.map(request.tools, &tool/1)
+      }
+      |> put_dialogue_schema(request.reply_protocol)
 
     envelope_tokens =
       @base_envelope_tokens +
@@ -28,6 +29,11 @@ defmodule Vxpipe.AgentRuntime.ConservativeInputTokenCounter do
     _error -> {:error, :input_token_count_unavailable}
   end
 
+  defp put_dialogue_schema(projected, :mode_message_v1),
+    do: Map.put(projected, "response_schema", Dialogue.schema())
+
+  defp put_dialogue_schema(projected, _protocol), do: projected
+
   defp message(%Message{} = message) do
     %{
       "content" => message.content,
@@ -37,7 +43,11 @@ defmodule Vxpipe.AgentRuntime.ConservativeInputTokenCounter do
       "tool_call_id" => message.tool_call_id,
       "tool_calls" => Enum.map(message.tool_calls, &tool_call/1)
     }
+    |> put_replay(message.provider_replay)
   end
+
+  defp put_replay(message, replay) when replay == %{}, do: message
+  defp put_replay(message, replay), do: Map.put(message, "provider_replay", replay)
 
   defp tool_call(%ToolCall{} = call) do
     %{
@@ -53,16 +63,6 @@ defmodule Vxpipe.AgentRuntime.ConservativeInputTokenCounter do
       "description" => tool.description,
       "input_schema" => tool.input_schema,
       "name" => tool.name
-    }
-  end
-
-  defp pending_invocation(%PendingInvocation{} = invocation) do
-    %{
-      "conversation_mode" => Atom.to_string(invocation.conversation_mode),
-      "invocation_id" => invocation.invocation_id,
-      "source_turn_id" => invocation.source_turn_id,
-      "status" => Atom.to_string(invocation.status),
-      "tool_name" => invocation.tool_name
     }
   end
 

@@ -21,6 +21,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     ConnectionLifecycle,
     EventPublisher,
     FirstMessage,
+    IdleWait,
+    OutputHistory,
     SpeechToSpeech,
     SpokenHistory,
     State,
@@ -42,7 +44,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   def text(capability, command, text, %State{} = state) do
     connection = Map.get(state.connections, command.connection_id)
 
-    if TurnState.active?(state, command) and
+    if TurnState.active?(state, command) and TurnState.output_eligible?(state, command) and
+         IdleWait.output_allowed?(state, capability, command) and
          not MapSet.member?(state.held_participant_ids, command.participant_id) and
          TextCapability.current?(state, capability) and
          connection != nil and
@@ -65,6 +68,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
         command_id: command.id,
         correlation_id: command.correlation_id,
         text: text,
+        agent_mode: :speaker,
         aggregated_by: :sentence,
         will_be_spoken: will_be_spoken,
         occurred_at: occurred_at
@@ -74,6 +78,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
         EventPublisher.publish_transcript(state, connection.pid, output)
 
       state = %{state | next_sequence: state.next_sequence + 1}
+      state = TurnState.admit_output(state, command)
+
+      state =
+        if not will_be_spoken and
+             (not command.audio_response or
+                (state.text_to_speech_runtime == nil and state.text_to_speech_capability == nil)),
+           do: OutputHistory.confirm(state, command, output.id, text),
+           else: state
 
       if will_be_spoken do
         request = %TextToSpeechRequest{
@@ -94,9 +106,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
         case TextToSpeech.synthesize(state.text_to_speech_capability.pid, request) do
           :ok ->
-            TurnState.update(state, command, fn turn ->
-              %{turn | pending_speech: turn.pending_speech + 1}
-            end)
+            TurnState.begin_speech(state, request)
 
           {:error, _reason} ->
             send(connection.pid, {:vxpipe_connection_unavailable, :text_to_speech_unavailable})
@@ -112,6 +122,16 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
   @spec failed(pid(), struct(), term(), State.t()) :: State.t()
   def failed(capability, command, reason, %State{} = state) do
+    state = IdleWait.acknowledgment_failed(capability, command, state)
+
+    cond do
+      retired_current?(state, capability, command) -> settle_retired(state, command)
+      untracked_current?(state, capability, command) -> settle_untracked(state, command)
+      true -> fail_connected(capability, command, reason, state)
+    end
+  end
+
+  defp fail_connected(capability, command, reason, state) do
     connection = Map.get(state.connections, command.connection_id)
 
     if TurnState.active?(state, command) and
@@ -133,6 +153,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
         occurred_at: DateTime.utc_now(:millisecond)
       }
 
+      _ = OutputHistory.settle(state, command)
       state = EventPublisher.publish(state, connection.pid, event)
 
       # A failed opening releases its protection like a completed one; otherwise the
@@ -171,6 +192,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
   @spec text_complete(pid(), struct(), State.t()) :: State.t()
   def text_complete(capability, command, %State{} = state) do
+    cond do
+      retired_current?(state, capability, command) -> settle_retired(state, command)
+      untracked_current?(state, capability, command) -> settle_untracked(state, command)
+      true -> complete_connected(capability, command, state)
+    end
+  end
+
+  defp complete_connected(capability, command, state) do
     connection = Map.get(state.connections, command.connection_id)
 
     if TurnState.active?(state, command) and
@@ -222,10 +251,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     with {:ok, speech_requests} <- interrupt_text_to_speech(state),
          {:ok, _commands} <- interrupt_text_generation(state, turn_ids),
          {:ok, state} <- interrupt_speech_to_speech(state) do
-      played_by_turn =
-        Map.new(speech_requests, fn {request, played_ms} ->
-          {TurnState.key(request), played_ms}
-        end)
+      Enum.each(turns, &OutputHistory.settle(state, &1.command))
+
+      played_by_turn = played_by_turn(speech_requests)
 
       state = %{state | agent_turns: %{}}
 
@@ -257,6 +285,51 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     end
   end
 
+  def interrupt_idle(context, state) do
+    with {:ok, turns} <- TurnState.idle_targets(state, context),
+         requests = Enum.flat_map(turns, &TurnState.speech_targets(state, &1.command)),
+         {:ok, interrupted} <- interrupt_selected_speech(state, requests) do
+      played = played_by_turn(interrupted)
+
+      interrupter = %TurnInterrupter{
+        participant_id:
+          Map.get(context, :source_participant_id) || Map.get(context, :participant_id),
+        connection_id: context.connection_id,
+        command_id: Map.get(context, :command_id) || Map.get(context, :id),
+        correlation_id: context.correlation_id
+      }
+
+      state =
+        Enum.reduce(turns, state, fn turn, acc ->
+          _ = OutputHistory.settle(acc, turn.command)
+          acc = TurnState.delete(acc, turn.command)
+
+          emit_turn_interrupted(
+            turn.command,
+            interrupter,
+            Map.get(played, TurnState.key(turn.command), 0),
+            acc
+          )
+        end)
+
+      {:ok, state}
+    end
+  end
+
+  defp played_by_turn(requests) do
+    Enum.reduce(requests, %{}, fn {request, played_ms}, acc ->
+      Map.update(acc, TurnState.key(request), played_ms, &(&1 + played_ms))
+    end)
+  end
+
+  defp interrupt_selected_speech(_state, []), do: {:ok, []}
+
+  defp interrupt_selected_speech(%{text_to_speech_capability: nil}, _requests),
+    do: {:error, :unavailable}
+
+  defp interrupt_selected_speech(state, requests),
+    do: TextToSpeech.interrupt(state.text_to_speech_capability.pid, requests)
+
   @spec failure_reason(term()) ::
           :invalid_response | :provider_timeout | :provider_unavailable
   def failure_reason(reason)
@@ -267,6 +340,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
 
   defp authorized_text_to_speech?(capability, request, connection, state) do
     TurnState.active?(state, request) and state.text_to_speech_capability != nil and
+      request in TurnState.speech_targets(state, request) and
       state.text_to_speech_capability.pid == capability and connection != nil and
       connection.output_sink == request.output_sink and
       connection.participant_id == request.source_participant_id and
@@ -303,6 +377,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   end
 
   defp emit_turn_completed(%TextToSpeechRequest{} = request, connection, state) do
+    _ = OutputHistory.settle(state, request)
     event = struct!(AgentTurnCompleted, event_fields(request, state))
     state = EventPublisher.publish(state, connection.pid, event)
 
@@ -313,6 +388,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   end
 
   defp emit_turn_completed(command, connection, occurred_at, state) do
+    _ = OutputHistory.settle(state, command)
+
     event = %AgentTurnCompleted{
       id: Id.generate(:event),
       sequence: state.next_sequence,
@@ -339,22 +416,43 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
     archive_recorder = ArchiveRecorder.delivered_output(state.archive_recorder, request)
 
     spoken_history =
-      SpokenHistory.played_assistant(state.spoken_history, request.text)
+      SpokenHistory.played_assistant(state.spoken_history, request)
 
     state = %{state | archive_recorder: archive_recorder, spoken_history: spoken_history}
+    state = OutputHistory.confirm(state, request, request.output_id, request.text)
     settle_speech_segment(request, connection, state)
   end
 
   defp settle_speech_segment(request, connection, state) do
-    turn = TurnState.get(state, request)
-    turn = %{turn | pending_speech: max(turn.pending_speech - 1, 0)}
-    state = TurnState.replace(state, request, turn)
+    case TurnState.finish_speech(state, request) do
+      {:ok, state} ->
+        turn = TurnState.get(state, request)
 
-    if turn.generation_complete? and turn.pending_speech == 0 do
-      emit_turn_completed(request, connection, state)
-    else
-      state
+        if turn.generation_complete? and turn.pending_speech == 0,
+          do: emit_turn_completed(request, connection, state),
+          else: state
+
+      :stale ->
+        state
     end
+  end
+
+  defp retired_current?(state, capability, command) do
+    TurnState.active?(state, command) and not TurnState.output_eligible?(state, command) and
+      TextCapability.current?(state, capability)
+  end
+
+  defp untracked_current?(state, capability, command),
+    do: not TurnState.active?(state, command) and TextCapability.current?(state, capability)
+
+  defp settle_untracked(state, command) do
+    _ = OutputHistory.settle_untracked(state, command)
+    state
+  end
+
+  defp settle_retired(state, command) do
+    _ = OutputHistory.settle(state, command)
+    state |> TurnState.delete(command) |> FirstMessage.complete(command)
   end
 
   defp interrupt_text_to_speech(%{text_to_speech_capability: nil}), do: {:ok, []}

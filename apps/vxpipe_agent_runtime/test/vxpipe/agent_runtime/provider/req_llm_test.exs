@@ -81,7 +81,74 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
     assert options[:on_unsupported] == :error
   end
 
-  test "projects messages, exact tools, and pending state without private bindings" do
+  test "modern profiles reject object-operation overrides and permanently forced tools" do
+    {:ok, model} = Vxpipe.AgentRuntime.ModelOverrides.resolve(:openai, "gpt-6-luna")
+
+    {:ok, contract} =
+      Elixir.ReqLLM.Output.compile(
+        Elixir.ReqLLM.Output.object(Vxpipe.AgentRuntime.Dialogue.schema())
+      )
+
+    tool = %ModelTool{name: "lookup", description: "Lookup", input_schema: %{"type" => "object"}}
+
+    request = %{
+      ModelRequest.new([Message.user("SHORT")], [tool], [], %{})
+      | reply_protocol: :mode_message_v1
+    }
+
+    for generation_options <- [
+          [operation: :object, compiled_schema: contract.compiled_schema],
+          [output_repair: fn _output -> {:ok, %{}} end],
+          [tool_choice: :required],
+          [tool_choice: "required"],
+          [tool_choice: %{type: "function", function: %{name: "lookup"}}]
+        ] do
+      assert {:ok, config} =
+               Provider.new(
+                 api_key: "test-only",
+                 model: model,
+                 generation_options: generation_options
+               )
+
+      refute Provider.supports_protocol?(config, :mode_message_v1, [tool])
+      assert_raise ArgumentError, fn -> Provider.prepare_request(config, request) end
+      assert {_, _, _} = Provider.prepare_request(config, %{request | reply_protocol: :legacy})
+    end
+  end
+
+  test "modern selection excludes failed Google candidates and altered Responses protocols" do
+    {:ok, google} = Provider.new(api_key: "test-only", model: "google:gemini-3.5-flash-lite")
+    refute Provider.supports_protocol?(google, :mode_message_v1, [])
+    {:ok, model} = Vxpipe.AgentRuntime.ModelOverrides.resolve(:openai, "gpt-6-luna")
+    {:ok, supported} = Provider.new(api_key: "test-only", model: model)
+    assert Provider.supports_protocol?(supported, :mode_message_v1, [])
+
+    for options <- [
+          [provider_options: [previous_response_id: "old_response"]],
+          [provider_options: [response_format: %{type: "json_object"}]]
+        ] do
+      {:ok, config} =
+        Provider.new(api_key: "test-only", model: model, generation_options: options)
+
+      refute Provider.supports_protocol?(config, :mode_message_v1, [])
+    end
+
+    assert Provider.supports_protocol?(
+             %{supported | model: %{model | extra: %{}}},
+             :mode_message_v1,
+             []
+           )
+
+    for altered <- [
+          %{model | provider_model_id: "unverified-model-alias"},
+          %{model | extra: Map.put(model.extra, :wire, %{protocol: "openai_chat"})}
+        ] do
+      {:ok, config} = Provider.new(api_key: "test-only", model: altered)
+      refute Provider.supports_protocol?(config, :mode_message_v1, [])
+    end
+  end
+
+  test "projects native tools and business context while keeping pending control state private" do
     assert {:ok, config} =
              Provider.new(
                api_key: "runtime-secret",
@@ -149,8 +216,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
 
     projected = Context.to_list(context)
     assert Enum.map(projected, & &1.role) == [:system, :user, :assistant, :tool, :user]
-    assert message_text(List.first(projected)) =~ "pending_tool_invocations"
-    assert message_text(List.first(projected)) =~ "tool_call_2"
+    refute message_text(List.first(projected)) =~ "pending_tool_invocations"
+    refute message_text(List.first(projected)) =~ "tool_call_2"
     assert message_text(List.first(projected)) =~ "call_variables"
     assert message_text(List.first(projected)) =~ "order-17"
     assert message_text(List.last(projected)) == "The worker later completed."
@@ -196,6 +263,66 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
     assert metadata.request_id == "provider_request_1"
     assert metadata.provider_metadata.authorization == "[REDACTED]"
     refute inspect(normalized) =~ "private-secret"
+  end
+
+  test "structured profiles reject refusal and nonterminal output even if its JSON looks valid" do
+    response = %Response{
+      id: "reply",
+      model: "google:gemini-3.5-flash-lite",
+      context: Context.new(),
+      message: Context.assistant(~s({"agent_mode":"speaker","message":"Hello."})),
+      finish_reason: :stop
+    }
+
+    assert {:ok, _} = ResponseNormalizer.normalize(response, :mode_message_v1)
+
+    for reason <- [:length, :content_filter, :error, :incomplete, nil] do
+      assert {:error, :invalid_provider_response} =
+               ResponseNormalizer.normalize(%{response | finish_reason: reason}, :mode_message_v1)
+    end
+
+    refused = %{response | provider_meta: %{refusals: ["refused"]}}
+
+    assert {:error, :invalid_provider_response} =
+             ResponseNormalizer.normalize(refused, :mode_message_v1)
+  end
+
+  test "structured profiles reject reserved output calls and mixed results" do
+    text = ~s({"agent_mode":"speaker","message":"Hello."})
+    artifact = Elixir.ReqLLM.ToolCall.new("synthetic-json", "structured_output", text)
+
+    response = %Response{
+      id: "reply",
+      model: "google:gemini-3.5-flash-lite",
+      context: Context.new(),
+      message: Context.assistant(text, tool_calls: [artifact]),
+      finish_reason: :tool_calls
+    }
+
+    assert {:error, :invalid_provider_response} =
+             ResponseNormalizer.normalize(response, :mode_message_v1)
+
+    assert {:ok, %ModelResponse{tool_calls: [_]}} = ResponseNormalizer.normalize(response)
+
+    assert {:error, :invalid_provider_response} =
+             ResponseNormalizer.normalize(
+               %{response | finish_reason: :length},
+               :mode_message_v1
+             )
+
+    native = Elixir.ReqLLM.ToolCall.new("real-tool", "lookup", "{}")
+    mixed = %{response | message: Context.assistant(text, tool_calls: [native, artifact])}
+
+    assert {:error, :invalid_provider_response} =
+             ResponseNormalizer.normalize(mixed, :mode_message_v1)
+
+    mismatched = %{
+      response
+      | message: Context.assistant("Different prose", tool_calls: [artifact])
+    }
+
+    assert {:error, :invalid_provider_response} =
+             ResponseNormalizer.normalize(mismatched, :mode_message_v1)
   end
 
   test "materializes a ReqLLM stream, emits text, and closes its handle" do

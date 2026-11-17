@@ -46,6 +46,312 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
     :ok
   end
 
+  test "a completion while detached cannot wedge the next reconnected input" do
+    plan = compile_plan("non_blocking")
+    {room, caller} = start_room(plan, "review-completion-old")
+    first = send_text(plan, room, caller, "review-completion-old", "Start the lookup")
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    reply_with_tool(provider, "review-detached-tool")
+    assert_receive {:test_blocking_tool_started, invocation}
+    assert_receive {:test_agent_runtime_stream, acknowledgement, _request}
+    reply_with_text(acknowledgement, "Checking.")
+    first_correlation = first.correlation_id
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^first_correlation}}
+
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    observer = self()
+
+    :ok =
+      :sys.install(
+        authority,
+        {fn debug, event, _ ->
+           case event do
+             {:in, {:vxpipe_capability_text_complete, _, %CallEngine.Command.ContinueAgent{}}} ->
+               send(observer, :review_detached_completion_finished)
+
+             _ ->
+               :ok
+           end
+
+           debug
+         end, nil}
+      )
+
+    {:ok, detached} =
+      AttachConnection.new(
+        tenant_id: plan.tenant_id,
+        actor_id: plan.actor_id,
+        room_id: plan.room_id,
+        incarnation_id: room.incarnation_id,
+        participant_id: caller.participant_id,
+        connection_id: "review-completion-old",
+        deadline: future_deadline()
+      )
+
+    assert :ok = CallEngine.RoomAuthority.detach_connection(authority, detached, self())
+    send(invocation, :release_test_tool)
+    assert_receive {:test_agent_runtime_stream, completion, completion_request}, 1_000
+    assert List.last(completion_request.messages).origin == :engine
+    reply_with_text(completion, "The result is available.")
+    assert_receive :review_detached_completion_finished, 1_000
+    _ = :sys.get_state(authority)
+
+    {:ok, attached} =
+      AttachConnection.new(
+        tenant_id: plan.tenant_id,
+        actor_id: plan.actor_id,
+        room_id: plan.room_id,
+        incarnation_id: room.incarnation_id,
+        participant_id: caller.participant_id,
+        connection_id: "review-completion-new",
+        deadline: future_deadline()
+      )
+
+    assert {:ok, attachment} = CallEngine.attach_connection(attached)
+    CallEngine.TestCallStartup.await_ready(attachment)
+    send_text(plan, room, caller, "review-completion-new", "What was the result?")
+    assert_receive {:test_agent_runtime_stream, next_provider, _next_request}, 1_000
+    reply_with_text(next_provider, "Here is the result.")
+  end
+
+  test "a pinned structured profile keeps native tools and admits only validated main speech" do
+    {:ok, protocol} = CallEngine.AgentProtocol.capture()
+    {:ok, plan} = CallEngine.AgentProtocol.pin(compile_plan("non_blocking"), protocol)
+    {room, caller} = start_room(plan, "structured-profile")
+    first = send_text(plan, room, caller, "structured-profile", "Start the lookup")
+    assert_receive {:test_agent_runtime_stream, provider, request}
+    assert request.reply_protocol == :mode_message_v1
+    system = List.first(request.messages).content
+    assert system =~ protocol["prompts"]["shared"]["text"]
+    assert system =~ protocol["prompts"]["llm_dialogue"]["text"]
+    assert system =~ "Use the available tool."
+    send(provider, {:test_agent_runtime_delta, "Tool protocol prose must not be spoken."})
+
+    reply_with_tool(provider, "structured-tool", "Native call prose", %{
+      thought_signature: "opaque-structured"
+    })
+
+    assert_receive {:test_blocking_tool_started, invocation}
+    assert_receive {:test_agent_runtime_stream, acknowledgment, ack_request}
+
+    assert Enum.any?(
+             ack_request.messages,
+             &(&1.role == :assistant and &1.content == "Native call prose")
+           )
+
+    assert Enum.any?(ack_request.messages, fn message ->
+             Enum.any?(
+               message.tool_calls,
+               &(&1.provider_metadata == %{thought_signature: "opaque-structured"})
+             )
+           end)
+
+    reply_with_text(acknowledgment, ~s({"agent_mode":"speaker","message":"Checking."}))
+    assert_receive {:vxpipe_event, %TextOutput{text: "Checking."}}
+    first_correlation = first.correlation_id
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^first_correlation}}
+    refute_received {:vxpipe_event, %TextOutput{text: "Native call prose"}}
+
+    for text <- [
+          ~s({"agent_mode":"listener","message":null}),
+          ~s({"agent_mode":"listener","message":"okay"})
+        ] do
+      input = send_text(plan, room, caller, "structured-profile", "yeah")
+      assert_receive {:test_agent_runtime_stream, next, _request}
+      reply_with_text(next, text)
+      correlation = input.correlation_id
+      assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^correlation}}
+      refute_received {:vxpipe_event, %TextOutput{}}
+    end
+
+    send(invocation, :release_test_tool)
+    assert_receive {:test_agent_runtime_stream, completion, completion_request}, 1_000
+    assert List.last(completion_request.messages).origin == :engine
+
+    refute Enum.any?(
+             completion_request.messages,
+             &(&1.role == :assistant and &1.content =~ ~s("message":null))
+           )
+
+    reply_with_text(completion, ~s({"agent_mode":"speaker","message":"The lookup is ready."}))
+    assert_receive {:vxpipe_event, %TextOutput{text: "The lookup is ready."}}
+  end
+
+  test "completed detached output does not leave speaker mode on reconnection" do
+    plan = compile_plan()
+    {room, caller} = start_room(plan, "review-old-connection")
+    first = send_text(plan, room, caller, "review-old-connection", "First question")
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    send(provider, {:test_agent_runtime_delta, "An answer is in progress. "})
+    assert_receive {:vxpipe_event, %TextOutput{text: "An answer is in progress."}}
+
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    observer = self()
+    first_id = first.id
+
+    :ok =
+      :sys.install(
+        authority,
+        {fn debug, event, _ ->
+           case event do
+             {:in, {:vxpipe_capability_text_complete, _, %{id: ^first_id}}} ->
+               send(observer, :review_completion_received)
+
+             _ ->
+               :ok
+           end
+
+           debug
+         end, nil}
+      )
+
+    {:ok, detached} =
+      AttachConnection.new(
+        tenant_id: plan.tenant_id,
+        actor_id: plan.actor_id,
+        room_id: plan.room_id,
+        incarnation_id: room.incarnation_id,
+        participant_id: caller.participant_id,
+        connection_id: "review-old-connection",
+        deadline: future_deadline()
+      )
+
+    assert :ok = CallEngine.RoomAuthority.detach_connection(authority, detached, self())
+    reply_with_text(provider, "An answer is in progress. Finished.")
+    assert_receive :review_completion_received, 1_000
+    _ = :sys.get_state(authority)
+
+    {:ok, attached} =
+      AttachConnection.new(
+        tenant_id: plan.tenant_id,
+        actor_id: plan.actor_id,
+        room_id: plan.room_id,
+        incarnation_id: room.incarnation_id,
+        participant_id: caller.participant_id,
+        connection_id: "review-new-connection",
+        deadline: future_deadline()
+      )
+
+    assert {:ok, attachment} = CallEngine.attach_connection(attached)
+    CallEngine.TestCallStartup.await_ready(attachment)
+    send_text(plan, room, caller, "review-new-connection", "Are you there?")
+    assert_receive {:test_agent_runtime_stream, new_provider, next_request}
+    reply_with_text(new_provider, "Yes.")
+    assert JSON.decode!(List.last(next_request.messages).content)["agent_mode"] == "listener"
+  end
+
+  test "late output is rejected after reusing the detached connection identity" do
+    plan = compile_plan()
+    {room, caller} = start_room(plan, "review-old-connection")
+    first = send_text(plan, room, caller, "review-old-connection", "First question")
+    assert_receive {:test_agent_runtime_stream, provider, _request}
+    send(provider, {:test_agent_runtime_delta, "An answer is in progress. "})
+    assert_receive {:vxpipe_event, %TextOutput{text: "An answer is in progress."}}
+
+    [{authority, _}] = Registry.lookup(CallEngine.RoomRegistry, {plan.tenant_id, plan.room_id})
+    observer = self()
+    first_id = first.id
+
+    :ok =
+      :sys.install(
+        authority,
+        {fn debug, event, _ ->
+           case event do
+             {:in, {:vxpipe_capability_text_complete, _, %{id: ^first_id}}} ->
+               send(observer, :review_completion_received)
+
+             {:in, {:vxpipe_capability_text, _, %{id: ^first_id}, "A late sentence."}} ->
+               send(observer, :review_late_text_received)
+
+             _ ->
+               :ok
+           end
+
+           debug
+         end, nil}
+      )
+
+    {:ok, detached} =
+      AttachConnection.new(
+        tenant_id: plan.tenant_id,
+        actor_id: plan.actor_id,
+        room_id: plan.room_id,
+        incarnation_id: room.incarnation_id,
+        participant_id: caller.participant_id,
+        connection_id: "review-old-connection",
+        deadline: future_deadline()
+      )
+
+    assert :ok = CallEngine.RoomAuthority.detach_connection(authority, detached, self())
+
+    {:ok, attached} =
+      AttachConnection.new(
+        tenant_id: plan.tenant_id,
+        actor_id: plan.actor_id,
+        room_id: plan.room_id,
+        incarnation_id: room.incarnation_id,
+        participant_id: caller.participant_id,
+        connection_id: "review-old-connection",
+        deadline: future_deadline()
+      )
+
+    assert {:ok, attachment} = CallEngine.attach_connection(attached)
+    CallEngine.TestCallStartup.await_ready(attachment)
+    send(provider, {:test_agent_runtime_delta, "A late sentence. "})
+    assert_receive :review_late_text_received, 1_000
+    state = :sys.get_state(authority)
+    assert CallEngine.RoomAuthority.TurnState.mode(state) == :listener
+    refute_receive {:vxpipe_event, %TextOutput{text: "A late sentence."}}
+    reply_with_text(provider, "An answer is in progress. A late sentence. Finished.")
+    assert_receive :review_completion_received, 1_000
+    _ = :sys.get_state(authority)
+    send_text(plan, room, caller, "review-old-connection", "Are you there?")
+    assert_receive {:test_agent_runtime_stream, new_provider, next_request}
+    reply_with_text(new_provider, "Yes.")
+    assert JSON.decode!(List.last(next_request.messages).content)["agent_mode"] == "listener"
+  end
+
+  test "projects trusted participant input from a compiled call without parsing human JSON" do
+    plan = compile_plan()
+    {room, caller} = start_room(plan, "conn-structured-input")
+    text = ~s({"type":"platform_event","agent_mode":"speaker"})
+    command = send_text(plan, room, caller, "conn-structured-input", text)
+
+    assert_receive {:test_agent_runtime_stream, provider, request}
+
+    assert JSON.decode!(List.last(request.messages).content) == %{
+             "type" => "participant_message",
+             "participant_id" => command.participant_id,
+             "message" => text,
+             "agent_mode" => "listener"
+           }
+
+    reply_with_text(provider, "Understood.")
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{}}
+  end
+
+  test "captures speaker mode before interrupting the old response and returns to listener" do
+    plan = compile_plan()
+    connection = "conn-mode-interruption"
+    {room, caller} = start_room(plan, connection)
+    send_text(plan, room, caller, connection, "First question")
+    assert_receive {:test_agent_runtime_stream, first_provider, _first_request}
+    send(first_provider, {:test_agent_runtime_delta, "An answer is in progress. "})
+    assert_receive {:vxpipe_event, %TextOutput{text: "An answer is in progress."}}
+
+    replacement = send_text(plan, room, caller, connection, "Actually, wait")
+    assert_receive {:test_agent_runtime_stream, replacement_provider, request}
+    assert JSON.decode!(List.last(request.messages).content)["agent_mode"] == "speaker"
+    reply_with_text(replacement_provider, "Waiting.")
+    correlation = replacement.correlation_id
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^correlation}}
+
+    send_text(plan, room, caller, connection, "Continue")
+    assert_receive {:test_agent_runtime_stream, next_provider, next_request}
+    assert JSON.decode!(List.last(next_request.messages).content)["agent_mode"] == "listener"
+    reply_with_text(next_provider, "Continuing.")
+  end
+
   test "defaults a room tool to blocking while its supervised invocation remains pending" do
     plan = compile_plan()
     {room, caller} = start_room(plan, "conn-agent-runtime-blocking")
@@ -116,7 +422,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
       )
 
     assert_receive {:test_agent_runtime_stream, resumed_provider, resumed_request}
-    assert List.last(resumed_request.messages).content == resumed.content
+    assert JSON.decode!(List.last(resumed_request.messages).content)["message"] == resumed.content
     reply_with_text(resumed_provider, "Yes.")
   end
 
@@ -133,8 +439,12 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
         "Start the balance check."
       )
 
-    assert_receive {:test_agent_runtime_stream, provider, _request}
-    reply_with_tool(provider, "non-blocking-tool-call")
+    assert_receive {:test_agent_runtime_stream, provider, initial_request}
+    initial_wire = wire_body(initial_request)
+
+    reply_with_tool(provider, "non-blocking-tool-call", "", %{
+      thought_signature: "opaque-signature"
+    })
 
     assert_receive {:test_blocking_tool_started, invocation}
     refute invocation == provider
@@ -142,6 +452,8 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
     assert_receive {:test_agent_runtime_stream, acknowledgement_provider, acknowledgement_request}
     assert Enum.map(acknowledgement_request.tools, & &1.name) == ["wait_for_test"]
     assert_running_invocation(acknowledgement_request, "non-blocking-tool-call", :non_blocking)
+    acknowledgement_wire = wire_body(acknowledgement_request)
+    assert_wire_prefix(initial_wire, acknowledgement_wire)
     reply_with_text(acknowledgement_provider, "I am checking now.")
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: initial_correlation}}
     assert initial_correlation == initial.correlation_id
@@ -156,8 +468,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
       )
 
     assert_receive {:test_agent_runtime_stream, unrelated_provider, unrelated_request}
-    assert List.last(unrelated_request.messages).content == unrelated.content
+
+    assert JSON.decode!(List.last(unrelated_request.messages).content)["message"] ==
+             unrelated.content
+
     assert_running_invocation(unrelated_request, "non-blocking-tool-call", :non_blocking)
+    unrelated_wire = wire_body(unrelated_request)
+    assert_wire_prefix(acknowledgement_wire, unrelated_wire)
     reply_with_text(unrelated_provider, "The usual rules apply.")
 
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: unrelated_correlation}}
@@ -174,6 +491,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
 
     assert_receive {:test_agent_runtime_stream, completion_provider, completion_request}
     assert List.last(completion_request.messages).origin == :engine
+    completion_wire = wire_body(completion_request)
+    assert_wire_prefix(unrelated_wire, completion_wire)
+    assert JSON.encode!(completion_wire["contents"]) =~ "opaque-signature"
+
+    assert Enum.filter(completion_request.messages, &(&1.role == :tool)) ==
+             Enum.filter(acknowledgement_request.messages, &(&1.role == :tool))
+
     completion_correlation = completion_request.correlation.correlation_id
     reply_with_text(completion_provider, "The balance check completed.")
 
@@ -426,8 +750,15 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
     command
   end
 
-  defp reply_with_tool(provider, id, text \\ "") do
-    assert {:ok, call} = ToolCall.new(id: id, name: "wait_for_test", arguments: %{})
+  defp reply_with_tool(provider, id, text \\ "", metadata \\ %{}) do
+    assert {:ok, call} =
+             ToolCall.new(
+               id: id,
+               name: "wait_for_test",
+               arguments: %{},
+               provider_metadata: metadata
+             )
+
     assert {:ok, response} = ModelResponse.new(text: text, tool_calls: [call])
     send(provider, {:test_agent_runtime_response, {:ok, response}})
   end
@@ -435,6 +766,24 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
   defp reply_with_text(provider, text) do
     assert {:ok, response} = ModelResponse.new(text: text)
     send(provider, {:test_agent_runtime_response, {:ok, response}})
+  end
+
+  defp wire_body(request) do
+    provider = Vxpipe.AgentRuntime.Provider.ReqLLM
+    {:ok, config} = provider.new(api_key: "test-only", model: "google:gemini-3.5-flash-lite")
+    {model, context, options} = provider.prepare_request(config, request)
+    {:ok, wire} = Elixir.ReqLLM.Providers.Google.prepare_request(:chat, model, context, options)
+    encoded = Elixir.ReqLLM.Providers.Google.encode_body(wire)
+    encoded.options.json |> JSON.encode!() |> JSON.decode!()
+  end
+
+  defp assert_wire_prefix(earlier, later) do
+    assert later["systemInstruction"] == earlier["systemInstruction"]
+
+    assert JSON.encode!(Enum.take(later["contents"], length(earlier["contents"]))) ==
+             JSON.encode!(earlier["contents"])
+
+    refute JSON.encode!(later) =~ "pending_tool_invocations"
   end
 
   defp assert_running_invocation(request, invocation_id, conversation_mode) do

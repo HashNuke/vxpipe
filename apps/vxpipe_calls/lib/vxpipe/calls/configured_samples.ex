@@ -96,6 +96,8 @@ defmodule Vxpipe.Calls.ConfiguredSamples do
   end
 
   defp ensure_revision([], actor, tenant, source, _repository, options) do
+    options = Keyword.put(options, :agent_protocol_version, :legacy)
+
     with {:ok, draft} <- CallSpecAuthoring.save(actor, tenant, source, options),
          {:ok, published} <-
            CallSpecAuthoring.publish(actor, tenant, draft.call_spec_id, draft.revision, options) do

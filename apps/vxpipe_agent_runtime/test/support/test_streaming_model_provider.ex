@@ -2,6 +2,9 @@ defmodule Vxpipe.AgentRuntime.TestStreamingModelProvider do
   @behaviour Vxpipe.AgentRuntime.ModelProvider
 
   @impl true
+  def supports_protocol?(_model, :mode_message_v1, _tools?), do: true
+
+  @impl true
   def generate(model, request) do
     send(Map.fetch!(model, :test_owner), {:unexpected_buffered_generation, self(), request})
     {:error, :unexpected_buffered_generation}

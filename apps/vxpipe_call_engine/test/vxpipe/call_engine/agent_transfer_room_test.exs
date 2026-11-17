@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
   use ExUnit.Case, async: false
 
-  alias Vxpipe.AgentRuntime.{Message, ModelResponse, ToolCall}
+  alias Vxpipe.AgentRuntime.{Message, ModelResponse, Protocol, ToolCall}
 
   alias Vxpipe.CallEngine
   alias Vxpipe.CallEngine.Archive.Fact
@@ -23,6 +23,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
   alias Vxpipe.CallEngine.Event.{
     AgentTurnCompleted,
+    AgentTurnFailed,
     TextOutput,
     ToolCallCompleted,
     ToolCallFailed
@@ -83,8 +84,10 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert_receive {:test_agent_runtime_stream, source_provider, source_request}
 
-    assert [%Message{role: :system, content: "Route callers safely."} | _history] =
+    assert [%Message{role: :system, content: instructions} | _history] =
              source_request.messages
+
+    assert instructions == system_prompt("Route callers safely.")
 
     assert Enum.map(source_request.tools, & &1.name) == ["transfer"]
 
@@ -174,6 +177,156 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     send(destination_provider, {:test_agent_runtime_response, {:ok, destination_response}})
   end
 
+  test "modern transfer pins its prompt and decoder and recovers speech after a rejected reply" do
+    configure_text_to_speech(ready_on_start: true)
+    directory = Path.join(System.tmp_dir!(), unique_id("vxpipe-transfer-prompts"))
+    File.cp_r!(Application.app_dir(:vxpipe_agent_runtime, "priv/prompts"), directory)
+    on_exit(fn -> File.rm_rf!(directory) end)
+    prompt_path = Path.join(directory, "llm-dialogue-system.md")
+    packaged = File.read!(prompt_path)
+    pinned_marker = unique_id("Published transfer contract")
+    File.write!(prompt_path, packaged <> "\n" <> pinned_marker <> "\n")
+    {:ok, protocol} = Protocol.capture(directory)
+    File.write!(prompt_path, packaged <> "\nEdited after publication marker.\n")
+    {:ok, edited} = Protocol.capture(directory)
+    refute edited == protocol
+
+    {:ok, plan} =
+      compile_plan(text_to_speech: true, transfer_history: %{mode: "all_spoken"})
+      |> CallEngine.AgentProtocol.pin(protocol)
+
+    caller = Map.fetch!(plan.participants, "caller")
+    billing = Map.fetch!(plan.participants, "billing")
+    {:ok, room} = CallEngine.TestCallStartup.start_call(plan)
+    assert_receive {:test_tts_transport_started, source_voice, _}
+    sink = start_supervised!({CallEngine.TestAudioOutputSink, observer: self()})
+
+    {:ok, attachment} =
+      AttachConnection.new(
+        tenant_id: plan.tenant_id,
+        actor_id: plan.actor_id,
+        room_id: plan.room_id,
+        incarnation_id: room.incarnation_id,
+        participant_id: caller.participant_id,
+        connection_id: "connection-transfer",
+        deadline: future_deadline()
+      )
+
+    {:ok, _attached} = CallEngine.TestTransferConnection.attach(attachment, sink)
+    CallEngine.TestCallStartup.await_ready(room.room_id)
+
+    :ok =
+      CallEngine.TestTransferConnection.send_text(
+        send_command(plan, room, caller, "Please transfer me.")
+      )
+
+    {source, source_request} = receive_request_for_prompt("Route callers safely.", protocol)
+    assert source_request.reply_protocol == :mode_message_v1
+    assert hd(source_request.messages).content =~ pinned_marker
+    refute hd(source_request.messages).content =~ "Edited after publication marker"
+
+    {:ok, call} =
+      ToolCall.new(
+        id: "modern-pinned-transfer",
+        name: "transfer",
+        arguments: %{"destination" => "billing"}
+      )
+
+    {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(source, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "modern-pinned-transfer"}},
+                   2_000
+
+    assert_receive {:test_tts_transport_started, destination_voice, _}
+    assert destination_voice != source_voice
+
+    invalid = send_command(plan, room, caller, "Can billing help?")
+    :ok = CallEngine.TestTransferConnection.send_text(invalid)
+    {destination, request} = receive_request_for_prompt("Handle billing requests.", protocol)
+    assert request.reply_protocol == :mode_message_v1
+    {:ok, expected} = Protocol.instructions(protocol, "Handle billing requests.", :llm)
+    assert hd(request.messages).content == expected
+    assert expected =~ pinned_marker
+    refute expected =~ "Edited after publication marker"
+    {:ok, response} = ModelResponse.new(text: "Unstructured prose must be rejected.")
+    send(destination, {:test_agent_runtime_response, {:ok, response}})
+    correlation = invalid.correlation_id
+
+    assert_receive {:vxpipe_event,
+                    %AgentTurnFailed{correlation_id: ^correlation, reason: :invalid_response}}
+
+    refute_received {:test_tts_control, ^destination_voice, _}
+
+    resumed = send_command(plan, room, caller, "Please try again.")
+    :ok = CallEngine.TestTransferConnection.send_text(resumed)
+    {destination, recovered} = receive_request_for_prompt("Handle billing requests.", protocol)
+    assert recovered.reply_protocol == :mode_message_v1
+    assert hd(recovered.messages).content == expected
+
+    refute Enum.any?(
+             recovered.messages,
+             &(&1.role == :assistant and &1.content =~ "Unstructured prose")
+           )
+
+    {:ok, response} =
+      ModelResponse.new(text: ~s({"agent_mode":"speaker","message":"Billing can help."}))
+
+    send(destination, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_control, ^destination_voice, speak}
+    assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Billing can help."}
+    complete_spoken_response(destination_voice, sink, "modern-billing", resumed.correlation_id)
+    correlation = resumed.correlation_id
+    participant_id = billing.participant_id
+
+    assert_receive {:vxpipe_event,
+                    %AgentTurnCompleted{
+                      correlation_id: ^correlation,
+                      participant_id: ^participant_id
+                    }}
+
+    [{activation, _value}] =
+      Registry.lookup(
+        CallEngine.RoomRegistry,
+        {:agent_activation, billing.activation_id, :supervisor}
+      )
+
+    session = AgentActivationSupervisor.whereis_child(billing.activation_id, :session)
+    monitor = Process.monitor(session)
+    :ok = Supervisor.terminate_child(activation, :session)
+    assert_receive {:DOWN, ^monitor, :process, ^session, :shutdown}
+    {:ok, replacement} = Supervisor.restart_child(activation, :session)
+    assert replacement != session
+
+    restarted = send_command(plan, room, caller, "Are you still there?")
+    :ok = CallEngine.TestTransferConnection.send_text(restarted)
+    {destination, request} = receive_request_for_prompt("Handle billing requests.", protocol)
+    assert request.reply_protocol == :mode_message_v1
+    assert hd(request.messages).content == expected
+
+    {:ok, response} =
+      ModelResponse.new(text: ~s({"agent_mode":"speaker","message":"Still here."}))
+
+    send(destination, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_control, ^destination_voice, speak}
+    assert JSON.decode!(speak) == %{"type" => "Speak", "text" => "Still here."}
+
+    complete_spoken_response(
+      destination_voice,
+      sink,
+      "restarted-billing",
+      restarted.correlation_id
+    )
+
+    correlation = restarted.correlation_id
+
+    assert_receive {:vxpipe_event,
+                    %AgentTurnCompleted{
+                      correlation_id: ^correlation,
+                      participant_id: ^participant_id
+                    }}
+  end
+
   test "all_spoken seeds confirmed caller input but excludes generated unplayed output" do
     plan = compile_plan(transfer_history: %{mode: "all_spoken"})
     caller = Map.fetch!(plan.participants, "caller")
@@ -215,11 +368,125 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       receive_request_for_prompt("Handle billing requests.")
 
     assert Enum.map(destination_request.messages, &{&1.role, &1.content}) == [
-             {:system, "Handle billing requests."},
-             {:user, "Remember invoice 17."},
-             {:user, "Please transfer me to billing."},
-             {:user, "Can you see what I told reception?"}
+             {:system, system_prompt("Handle billing requests.")},
+             {:user,
+              JSON.encode!(%{
+                "type" => "participant_message",
+                "participant_id" => caller.participant_id,
+                "agent_mode" => "listener",
+                "message" => "Remember invoice 17."
+              })},
+             {:user,
+              JSON.encode!(%{
+                "type" => "participant_message",
+                "participant_id" => caller.participant_id,
+                "agent_mode" => "listener",
+                "message" => "Please transfer me to billing."
+              })},
+             {:user,
+              JSON.encode!(%{
+                "type" => "participant_message",
+                "participant_id" => caller.participant_id,
+                "agent_mode" => "listener",
+                "message" => "Can you see what I told reception?"
+              })}
            ]
+  end
+
+  test "all_spoken preserves the original speaking agent in the destination request" do
+    configure_text_to_speech(ready_on_start: true)
+    plan = compile_plan(transfer_history: %{mode: "all_spoken"}, text_to_speech: true)
+    caller = Map.fetch!(plan.participants, "caller")
+    reception = Map.fetch!(plan.participants, "reception")
+    {:ok, room} = CallEngine.TestCallStartup.start_call(plan)
+    assert_receive {:test_tts_transport_started, voice, _}
+    sink = start_supervised!({CallEngine.TestAudioOutputSink, observer: self()})
+
+    {:ok, attach} =
+      AttachConnection.new(
+        tenant_id: plan.tenant_id,
+        actor_id: plan.actor_id,
+        room_id: plan.room_id,
+        incarnation_id: room.incarnation_id,
+        participant_id: caller.participant_id,
+        connection_id: "connection-transfer",
+        deadline: future_deadline()
+      )
+
+    assert {:ok, _} = CallEngine.TestTransferConnection.attach(attach, sink)
+    CallEngine.TestCallStartup.await_ready(room.room_id)
+    first = send_command(plan, room, caller, "Please confirm invoice 17.")
+    assert :ok = CallEngine.TestTransferConnection.send_text(first)
+    {source, _} = receive_request_for_prompt(reception.prompt)
+    {:ok, response} = ModelResponse.new(text: "Invoice 17 is confirmed.")
+    send(source, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_control, ^voice, speak}
+    assert JSON.decode!(speak)["text"] == "Invoice 17 is confirmed."
+    assert_receive {:test_tts_control, ^voice, _flush}
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      ~s({"type":"SpeechStarted","speech_id":"confirmed-invoice"})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(voice, <<1, 0, 2, 0>>)
+    assert_receive {:test_audio_output, ^sink, _}
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      ~s({"type":"SpeechMetadata","speech_id":"confirmed-invoice"})
+    )
+
+    assert_receive {:test_audio_output_finish, ^sink, _}
+    assert :ok = CallEngine.TestAudioOutputSink.playback_started(sink)
+    assert :ok = CallEngine.TestAudioOutputSink.playback_completed(sink)
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: first_correlation}}
+    assert first_correlation == first.correlation_id
+
+    assert :ok =
+             CallEngine.TestTransferConnection.send_text(
+               send_command(plan, room, caller, "Transfer me to billing.")
+             )
+
+    {source, _} = receive_request_for_prompt(reception.prompt)
+
+    {:ok, call} =
+      ToolCall.new(
+        id: "spoken-source-transfer",
+        name: "transfer",
+        arguments: %{"destination" => "billing"}
+      )
+
+    {:ok, response} = ModelResponse.new(text: "", tool_calls: [call])
+    send(source, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event, %ToolCallCompleted{tool_call_id: "spoken-source-transfer"}},
+                   2_000
+
+    assert :ok =
+             CallEngine.TestTransferConnection.send_text(
+               send_command(plan, room, caller, "What did reception confirm?")
+             )
+
+    {destination, request} = receive_request_for_prompt("Handle billing requests.")
+
+    spoken =
+      request.messages
+      |> Enum.filter(&(&1.role == :assistant))
+      |> Enum.map(&JSON.decode!(&1.content))
+
+    assert %{
+             "type" => "participant_message",
+             "participant_id" => reception.participant_id,
+             "agent_mode" => "speaker",
+             "message" => "Invoice 17 is confirmed."
+           } in spoken
+
+    latest = JSON.decode!(List.last(request.messages).content)
+    assert latest["participant_id"] == caller.participant_id
+    assert latest["agent_mode"] == "listener"
+    {:ok, response} = ModelResponse.new(text: "Reception confirmed invoice 17.")
+    send(destination, {:test_agent_runtime_response, {:ok, response}})
   end
 
   test "selected history requires and privately retains a bounded transfer reason" do
@@ -304,8 +571,14 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       receive_request_for_prompt("Handle billing requests.")
 
     assert Enum.map(destination_request.messages, &{&1.role, &1.content}) == [
-             {:system, "Handle billing requests."},
-             {:user, "Can you help with this invoice?"}
+             {:system, system_prompt("Handle billing requests.")},
+             {:user,
+              JSON.encode!(%{
+                "type" => "participant_message",
+                "participant_id" => caller.participant_id,
+                "agent_mode" => "listener",
+                "message" => "Can you help with this invoice?"
+              })}
            ]
 
     assert destination_request.model_context == %{
@@ -421,12 +694,13 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert_receive {:test_agent_runtime_stream, next_provider, next_request}, 2_000
 
-    assert [%Message{role: :system, content: "Route callers safely."} | _history] =
+    assert [%Message{role: :system, content: instructions} | _history] =
              next_request.messages
 
-    assert Enum.any?(next_request.messages, fn message ->
-             message.role == :user and message.content == "Are you still there?"
-           end)
+    assert instructions == system_prompt("Route callers safely.")
+
+    assert JSON.decode!(List.last(next_request.messages).content)["message"] ==
+             "Are you still there?"
 
     assert {:ok, next_response} = ModelResponse.new(text: "Yes.")
     send(next_provider, {:test_agent_runtime_response, {:ok, next_response}})
@@ -540,8 +814,10 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     assert_receive {:test_agent_runtime_stream, next_provider, next_request}, 2_000
 
-    assert [%Message{role: :system, content: "Route callers safely."} | _history] =
+    assert [%Message{role: :system, content: instructions} | _history] =
              next_request.messages
+
+    assert instructions == system_prompt("Route callers safely.")
 
     refute Enum.any?(next_request.messages, &(&1.content == held.content))
 
@@ -967,9 +1243,21 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     {provider, request} = receive_request_for_prompt("Route callers safely.")
 
     assert Enum.map(request.messages, &{&1.role, &1.content}) == [
-             {:system, "Route callers safely."},
-             {:user, "Please send me back to reception."},
-             {:user, "Can reception continue helping me?"}
+             {:system, system_prompt("Route callers safely.")},
+             {:user,
+              JSON.encode!(%{
+                "type" => "participant_message",
+                "participant_id" => caller.participant_id,
+                "agent_mode" => "listener",
+                "message" => "Please send me back to reception."
+              })},
+             {:user,
+              JSON.encode!(%{
+                "type" => "participant_message",
+                "participant_id" => caller.participant_id,
+                "agent_mode" => "listener",
+                "message" => "Can reception continue helping me?"
+              })}
            ]
 
     assert {:ok, transfer_call} =
@@ -999,6 +1287,77 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                       text: "Billing is ready."
                     }},
                    100
+  end
+
+  test "a configured transfer retires quiet before its held caller can receive expiry" do
+    plan =
+      compile_plan(
+        billing_model: "test:blocked-unavailable",
+        reception_tools: %{"idle" => %{type: "platform", tool: "idle"}}
+      )
+
+    {:ok, protocol} = CallEngine.AgentProtocol.capture()
+    {:ok, plan} = CallEngine.AgentProtocol.pin(plan, protocol)
+    caller = Map.fetch!(plan.participants, "caller")
+    source = Map.fetch!(plan.participants, "reception")
+    assert {:ok, room} = CallEngine.TestCallStartup.start_call_raw(plan)
+    attach_caller(plan, room, caller)
+    command = send_command(plan, room, caller, "Wait while transfer is prepared")
+    assert :ok = CallEngine.send_text(command)
+    assert_receive {:test_agent_runtime_stream, model, _request}
+
+    {:ok, idle} =
+      ToolCall.new(
+        id: "idle-before-transfer",
+        name: "idle",
+        arguments: %{"duration_seconds" => 1}
+      )
+
+    {:ok, response} = ModelResponse.new(text: "", tool_calls: [idle])
+    send(model, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_agent_runtime_stream, acknowledgment, _request}
+
+    {:ok, silence} =
+      ModelResponse.new(text: JSON.encode!(%{"agent_mode" => "listener", "message" => nil}))
+
+    send(acknowledgment, {:test_agent_runtime_response, {:ok, silence}})
+    correlation = command.correlation_id
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^correlation}}
+    authority = room_authority(plan)
+    before_transfer = :sys.get_state(authority)
+    assert before_transfer.idle_wait.phase == :quiet
+    token = before_transfer.idle_wait.token
+    transfer = transfer_request(plan, room, caller, source, "transfer-during-idle")
+    task = Task.async(fn -> RoomAuthority.transfer(transfer) end)
+    assert_receive {:test_agent_runtime_model_preparing, blocked_preparer}, 2_000
+    on_exit(fn -> send(blocked_preparer, :release_test_agent_runtime_model) end)
+    held = :sys.get_state(authority)
+    assert MapSet.member?(held.held_participant_ids, caller.participant_id)
+    assert held.idle_wait == nil
+    send(authority, {:vxpipe_idle_wait_deadline, token, :quiet})
+
+    assert_receive {:vxpipe_event,
+                    %ToolCallCompleted{
+                      tool_call_id: "idle-before-transfer",
+                      result: %{"status" => "cancelled", "reason" => "source_replaced"}
+                    }},
+                   1_000
+
+    refute_receive {:test_agent_runtime_stream, _, _}, 1_100
+    send(blocked_preparer, :release_test_agent_runtime_model)
+    assert Task.await(task, 3_000) == {:error, :unavailable}
+    assert :sys.get_state(authority).held_participant_ids == MapSet.new()
+    assert :ok = CallEngine.send_text(send_command(plan, room, caller, "Continue here"))
+    assert_receive {:test_agent_runtime_stream, resumed, request}
+    assert JSON.decode!(List.last(request.messages).content)["message"] == "Continue here"
+
+    assert Enum.count(
+             request.messages,
+             &(&1.origin == :engine and &1.content =~ ~s("status":"cancelled"))
+           ) == 1
+
+    refute Enum.any?(request.messages, &(&1.content =~ ~s("event":"idle_timeout")))
+    send(resumed, {:test_agent_runtime_response, {:ok, silence}})
   end
 
   defp compile_plan(options \\ []) do
@@ -1043,7 +1402,7 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
                      transfer_history: reception_transfer_history,
                      first_message: %{mode: "wait_for_input"},
                      capabilities: agent_capabilities("test:scripted", text_to_speech?),
-                     tools: %{},
+                     tools: Keyword.get(options, :reception_tools, %{}),
                      variable_permissions: reception_permissions,
                      transfers: ["billing"]
                    },
@@ -1119,6 +1478,27 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
       Vxpipe.CallEngine.Application,
       Keyword.put(settings, :text_to_speech, text_to_speech)
     )
+  end
+
+  defp complete_spoken_response(voice, sink, speech_id, correlation) do
+    assert_receive {:test_tts_control, ^voice, _flush}
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      JSON.encode!(%{"type" => "SpeechStarted", "speech_id" => speech_id})
+    )
+
+    TestTextToSpeechTransport.deliver_audio(voice, <<1, 0, 2, 0>>)
+    assert_receive {:test_audio_output, ^sink, %{correlation_id: ^correlation}}
+
+    TestTextToSpeechTransport.deliver_control(
+      voice,
+      JSON.encode!(%{"type" => "SpeechMetadata", "speech_id" => speech_id})
+    )
+
+    assert_receive {:test_audio_output_finish, ^sink, ^correlation}
+    :ok = CallEngine.TestAudioOutputSink.playback_started(sink)
+    :ok = CallEngine.TestAudioOutputSink.playback_completed(sink)
   end
 
   defp variable_setup(options) do
@@ -1216,18 +1596,36 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     }
   end
 
+  defp system_prompt(authored) do
+    {:ok, shared} = Vxpipe.AgentRuntime.Prompt.load(:shared)
+    shared.text <> "\n\n" <> authored
+  end
+
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)
 
-  defp receive_request_for_prompt(prompt) do
+  defp receive_request_for_prompt(prompt, protocol \\ nil) do
+    expected =
+      if is_nil(protocol) do
+        system_prompt(prompt)
+      else
+        {:ok, instructions} = Protocol.instructions(protocol, prompt, :llm)
+        instructions
+      end
+
     receive do
       {:test_agent_runtime_stream, provider,
-       %{messages: [%Message{role: :system, content: ^prompt} | _history]} = request} ->
+       %{messages: [%Message{role: :system, content: ^expected} | _history]} = request} ->
         {provider, request}
 
       {:test_agent_runtime_stream, provider, _stale_source_request} ->
-        assert {:ok, response} = ModelResponse.new(text: "Transfer in progress.")
+        text =
+          if is_nil(protocol),
+            do: "Transfer in progress.",
+            else: ~s({"agent_mode":"listener","message":null})
+
+        assert {:ok, response} = ModelResponse.new(text: text)
         send(provider, {:test_agent_runtime_response, {:ok, response}})
-        receive_request_for_prompt(prompt)
+        receive_request_for_prompt(prompt, protocol)
     after
       2_000 -> flunk("timed out waiting for agent prompt #{inspect(prompt)}")
     end

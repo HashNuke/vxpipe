@@ -37,6 +37,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
       :request_supervisor,
       :remote_mcp_owner,
       :owner,
+      :history_mode,
       :provider,
       :usage_provider,
       :maximum_completed_requests,
@@ -46,7 +47,9 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
   end
 
   defp validate_values(options) do
-    with activation_id when is_binary(activation_id) and activation_id != "" <-
+    with history_mode when history_mode in [:generated, :host_settled] <-
+           Keyword.get(options, :history_mode, :generated),
+         activation_id when is_binary(activation_id) and activation_id != "" <-
            Keyword.get(options, :activation_id),
          agent_participant_id when is_binary(agent_participant_id) and agent_participant_id != "" <-
            Keyword.get(options, :agent_participant_id),
@@ -73,6 +76,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
       {:ok,
        %{
          activation_id: activation_id,
+         history_mode: history_mode,
          agent_participant_id: agent_participant_id,
          call_id: call_id,
          session: session,
@@ -94,6 +98,7 @@ defmodule Vxpipe.CallEngine.AgentRuntime.Coordinator.Configuration do
   defp build_state(values) do
     %State{
       activation_id: values.activation_id,
+      history_mode: values.history_mode,
       agent_participant_id: values.agent_participant_id,
       call_id: values.call_id,
       completion_consumer_id: "agent-runtime-completion:" <> values.activation_id,

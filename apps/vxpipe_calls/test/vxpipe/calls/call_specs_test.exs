@@ -9,6 +9,70 @@ defmodule Vxpipe.Calls.CallSpecsTest do
              CallSpecs.resolve_telephony_route(:application, "phone", "+15550001000", [])
   end
 
+  test "new revisions pin protocol instructions while historical publications stay legacy", %{
+    tenant: tenant,
+    options: options
+  } do
+    source = Map.put(call_spec_input(), :wait_sounds, nil)
+    assert {:ok, revision} = CallSpecs.save(tenant.key, source, options)
+
+    assert %{"version" => "mode_message_v1", "prompts" => prompts} =
+             revision.compiled_metadata["agent_protocol"]
+
+    assert Enum.sort(Map.keys(prompts)) == ["conversation_summary", "llm_dialogue", "shared"]
+    assert {:ok, prepared} = Vxpipe.Calls.PreparedCallFactory.build(revision, %{}, :web, options)
+    assert prepared.plan.agent_protocol == revision.compiled_metadata["agent_protocol"]
+
+    assert {:ok, unchanged} =
+             Vxpipe.Calls.PreparedCallFactory.build(
+               revision,
+               %{},
+               :web,
+               Keyword.put(options, :agent_protocol_version, :legacy)
+             )
+
+    assert unchanged.plan.agent_protocol == prepared.plan.agent_protocol
+
+    historical = %{
+      revision
+      | compiled_metadata: Map.delete(revision.compiled_metadata, "agent_protocol")
+    }
+
+    assert {:ok, legacy} = Vxpipe.Calls.PreparedCallFactory.build(historical, %{}, :web, options)
+    assert legacy.plan.agent_protocol == nil
+
+    corrupt = %{
+      revision
+      | compiled_metadata:
+          Map.put(revision.compiled_metadata, "agent_protocol", %{"version" => "future"})
+    }
+
+    assert {:error, _} = Vxpipe.Calls.PreparedCallFactory.build(corrupt, %{}, :web, options)
+  end
+
+  test "a trusted sample owner can explicitly create a pinned legacy revision", %{
+    tenant: tenant,
+    options: options
+  } do
+    assert {:ok, revision} =
+             CallSpecs.save(
+               tenant.key,
+               call_spec_input(),
+               Keyword.put(options, :agent_protocol_version, :legacy)
+             )
+
+    assert revision.compiled_metadata["agent_protocol"]["version"] == "legacy"
+    assert {:ok, prepared} = Vxpipe.Calls.PreparedCallFactory.build(revision, %{}, :web, options)
+    assert prepared.plan.agent_protocol == revision.compiled_metadata["agent_protocol"]
+
+    assert {:error, :invalid_protocol} =
+             CallSpecs.save(
+               tenant.key,
+               call_spec_input(),
+               Keyword.put(options, :agent_protocol_version, :unknown)
+             )
+  end
+
   setup do
     repository = start_supervised!(TestMemoryRepository)
 

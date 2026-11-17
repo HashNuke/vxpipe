@@ -28,19 +28,31 @@ defmodule Vxpipe.AgentRuntime.ConversationCompaction do
   def snapshot(_conversation, _pending_invocation_ids, _options),
     do: {:error, :invalid_compaction_options}
 
-  @spec apply(Conversation.t(), ConversationCompactionSnapshot.t(), String.t()) ::
+  @spec apply(
+          Conversation.t(),
+          ConversationCompactionSnapshot.t(),
+          String.t(),
+          :legacy | :structured
+        ) ::
           {:ok, Conversation.t()}
           | {:error, :invalid_summary | :stale_compaction_snapshot}
-  def apply(%Conversation{} = current, %ConversationCompactionSnapshot{} = snapshot, summary)
-      when is_binary(summary) do
+  def apply(current, snapshot, summary, format \\ :legacy)
+
+  def apply(
+        %Conversation{} = current,
+        %ConversationCompactionSnapshot{} = snapshot,
+        summary,
+        format
+      )
+      when is_binary(summary) and format in [:legacy, :structured] do
     if String.valid?(summary) and String.trim(summary) != "" do
-      apply_if_current(current, snapshot, summary)
+      apply_if_current(current, snapshot, summary, format)
     else
       {:error, :invalid_summary}
     end
   end
 
-  def apply(%Conversation{}, %ConversationCompactionSnapshot{}, _summary),
+  def apply(%Conversation{}, %ConversationCompactionSnapshot{}, _summary, _format),
     do: {:error, :invalid_summary}
 
   defp select(entries, pending_invocation_ids, recent_entries) do
@@ -84,7 +96,7 @@ defmodule Vxpipe.AgentRuntime.ConversationCompaction do
     end)
   end
 
-  defp apply_if_current(current, snapshot, summary) do
+  defp apply_if_current(current, snapshot, summary, format) do
     base_count = length(snapshot.base_entries)
     {current_base, appended_entries} = Enum.split(current.entries, base_count)
 
@@ -96,7 +108,11 @@ defmodule Vxpipe.AgentRuntime.ConversationCompaction do
         Enum.flat_map(snapshot.selected_entries, &Entry.source_correlations/1)
 
       summary_entry =
-        Entry.summary([Message.summary(summary)], source_correlations, durable_correlations)
+        Entry.summary(
+          [Message.summary(summary, format)],
+          source_correlations,
+          durable_correlations
+        )
 
       entries =
         snapshot.leading_entries ++

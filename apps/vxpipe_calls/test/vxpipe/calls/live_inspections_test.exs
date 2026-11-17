@@ -141,6 +141,67 @@ defmodule Vxpipe.Calls.LiveInspectionsTest do
     refute Map.has_key?(inspection, :records)
   end
 
+  test "versioned speech has the same attributed payload in live and archived projections" do
+    content = %{
+      "type" => "participant_message",
+      "participant_id" => "assistant-live",
+      "agent_mode" => "listener",
+      "message" => "Mm-hm."
+    }
+
+    payload = %{"content_format" => "structured_agent_message_v1", "content" => content}
+
+    engine = %{
+      engine_fact(:tool_call_started, 1, ~U[2026-09-09 16:00:01Z])
+      | kind: :agent_output_generated,
+        tool_call_id: nil,
+        payload: payload
+    }
+
+    snapshot = %{engine_snapshot() | records: [engine], latest_fact_sequence: 1}
+    source = start_supervised!({TestLiveInspectionSource, snapshot: snapshot})
+
+    assert {:ok, live} =
+             Calls.inspect_live_call(principal("tenant-live"), "call-live",
+               live_inspection_source: TestLiveInspectionSource.source(source)
+             )
+
+    assert {:ok, archived} = Vxpipe.Calls.EngineArchiveProjection.project(engine)
+
+    history =
+      Vxpipe.Calls.CallHistory.new(
+        [archived],
+        %Vxpipe.Calls.VariableSnapshotHistory{snapshots: [], latest: nil}
+      )
+
+    assert history.transcript == [archived]
+    assert [entry] = live.timeline
+    assert entry.payload == archived.payload
+    assert entry.participant_id == archived.participant_id
+
+    denied = %{
+      engine
+      | source_policy: %{"save_transcripts" => false},
+        payload:
+          Map.put(payload, "metadata", %{
+            "raw_response" => JSON.encode!(content),
+            "nested" => [%{"message" => "private cue", "summary" => "private summary"}]
+          })
+    }
+
+    snapshot = %{snapshot | records: [denied]}
+
+    assert {:ok, filtered} =
+             Vxpipe.Calls.LiveCallInspection.from_engine(snapshot, "tenant-live", "call-live")
+
+    assert [denied_entry] = filtered.timeline
+
+    assert denied_entry.payload == %{
+             "content_format" => "structured_agent_message_v1",
+             "metadata" => %{"nested" => [%{}]}
+           }
+  end
+
   defp engine_snapshot do
     %EngineSnapshot{
       tenant_id: "tenant-live",

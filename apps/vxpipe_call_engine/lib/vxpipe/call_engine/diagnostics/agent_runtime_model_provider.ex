@@ -26,6 +26,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.AgentRuntimeModelProvider do
   def streaming?(%Config{}), do: true
 
   @impl true
+  def supports_protocol?(%Config{}, :mode_message_v1, _tools), do: true
+
+  @impl true
   def generate(%Config{} = config, %ModelRequest{} = request) do
     run(config, request, fn _text -> :ok end)
   end
@@ -40,14 +43,21 @@ defmodule Vxpipe.CallEngine.Diagnostics.AgentRuntimeModelProvider do
     with {:ok, input} <- latest_input(request.messages),
          {:ok, fixture} <- ModelFixture.take(config.fixture, input) do
       wait(fixture.delay_ms)
-      response(fixture, emit)
+      response(fixture, emit, request.reply_protocol)
     else
       _unavailable -> {:error, :provider_unavailable}
     end
   end
 
-  defp response(%{scenario: scenario, response: text}, emit)
+  defp response(%{scenario: scenario, response: text}, emit, protocol)
        when scenario in [:success, :delay] do
+    # The deterministic model fixture authors the selected response contract.
+    text =
+      case protocol do
+        :mode_message_v1 -> JSON.encode!(%{agent_mode: "speaker", message: text})
+        :legacy -> text
+      end
+
     with :ok <- emit.(text),
          {:ok, response} <- ModelResponse.new(text: text) do
       {:ok, response}
@@ -57,9 +67,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.AgentRuntimeModelProvider do
     end
   end
 
-  defp response(%{scenario: :failure}, _emit), do: {:error, :provider_unavailable}
-  defp response(%{scenario: :missing}, _emit), do: {:error, :invalid_provider_response}
-  defp response(_fixture, _emit), do: {:error, :invalid_provider_response}
+  defp response(%{scenario: :failure}, _emit, _protocol), do: {:error, :provider_unavailable}
+  defp response(%{scenario: :missing}, _emit, _protocol), do: {:error, :invalid_provider_response}
+  defp response(_fixture, _emit, _protocol), do: {:error, :invalid_provider_response}
 
   defp latest_input(messages) do
     messages

@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
   @moduledoc false
 
-  alias Vxpipe.AgentRuntime.Session
+  alias Vxpipe.AgentRuntime.{Prompt, Protocol, Session}
 
   alias Vxpipe.CallEngine.AgentActivationSupervisor
   alias Vxpipe.CallEngine.RemoteMCP.Activation, as: RemoteActivation
@@ -27,7 +27,10 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
     request_supervisor = child_ref(activation_id, :request_supervisor)
     session = child_ref(activation_id, :session)
 
-    with {:ok, tools} <-
+    with {:ok, instructions} <- instructions(options),
+         {:ok, reply_protocol} <- Protocol.reply_protocol(Keyword.get(options, :agent_protocol)),
+         true <- idle_protocol_supported?(Keyword.fetch!(options, :tools), reply_protocol),
+         {:ok, tools} <-
            ToolDescriptors.compile(
              Keyword.fetch!(options, :tools),
              Keyword.get(options, :variable_binding),
@@ -53,13 +56,28 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
              invocation_supervisor,
              options
            ),
-           session_child(coordinator, invocation_registry, session, tools, options)
+           session_child(
+             coordinator,
+             invocation_registry,
+             session,
+             tools,
+             instructions,
+             Keyword.put(options, :reply_protocol, reply_protocol)
+           )
          ]}
     else
       _invalid -> {:error, :invalid_configuration}
     end
   rescue
     _exception -> {:error, :invalid_configuration}
+  end
+
+  defp idle_protocol_supported?(tools, reply_protocol) do
+    reply_protocol == :mode_message_v1 or
+      not Enum.any?(tools, fn
+        {_name, %{type: :platform, action: Vxpipe.CallEngine.Tool.Idle}} -> true
+        _other -> false
+      end)
   end
 
   defp request_supervisor_child(request_supervisor) do
@@ -118,6 +136,7 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
        agent_participant_id: Keyword.fetch!(options, :agent_participant_id),
        call_id: Keyword.fetch!(options, :call_id),
        session: session,
+       history_mode: Keyword.get(options, :history_mode, :generated),
        invocation_registry: invocation_registry,
        request_supervisor: request_supervisor,
        remote_mcp_owner: remote_mcp_owner(activation_id, options),
@@ -169,9 +188,28 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
     )
   end
 
-  defp session_child(coordinator, invocation_registry, session, tools, options) do
+  defp instructions(options) do
+    authored = Keyword.fetch!(options, :system_prompt)
+
+    case Keyword.get(options, :agent_protocol) do
+      nil -> legacy_instructions(authored, options)
+      snapshot -> Protocol.instructions(snapshot, authored, :llm)
+    end
+  end
+
+  defp legacy_instructions(authored, options) do
+    if Keyword.get(options, :history_mode, :generated) == :host_settled do
+      with {:ok, shared} <- Prompt.load(:shared), do: {:ok, shared.text <> "\n\n" <> authored}
+    else
+      {:ok, authored}
+    end
+  end
+
+  defp session_child(coordinator, invocation_registry, session, tools, instructions, options) do
     session_options = [
-      instructions: Keyword.fetch!(options, :system_prompt),
+      instructions: instructions,
+      history_mode: Keyword.get(options, :history_mode, :generated),
+      reply_protocol: Keyword.fetch!(options, :reply_protocol),
       model_provider: Keyword.fetch!(options, :model_provider),
       model: Keyword.get(options, :model),
       tools: tools,
@@ -194,13 +232,25 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
         :model_context_source,
         model_context_source(Keyword.get(options, :model_context_source))
       )
-      |> put_optional(:context_compaction, Keyword.get(options, :context_compaction))
+      |> put_optional(:context_compaction, compaction_options(options))
 
     Supervisor.child_spec(
       {Session, session_options},
       id: :session,
       restart: :permanent
     )
+  end
+
+  defp compaction_options(options) do
+    compaction = Keyword.get(options, :context_compaction)
+    snapshot = Keyword.get(options, :agent_protocol)
+
+    if snapshot != nil and is_list(compaction) and Keyword.get(compaction, :enabled, false) do
+      {:ok, prompt} = Protocol.summary_prompt(snapshot)
+      Keyword.put(compaction, :summary_prompt, prompt)
+    else
+      compaction
+    end
   end
 
   defp child_ref(activation_id, role),

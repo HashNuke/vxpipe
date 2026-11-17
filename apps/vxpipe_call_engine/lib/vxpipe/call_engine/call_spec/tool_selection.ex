@@ -40,7 +40,7 @@ defmodule Vxpipe.CallEngine.CallSpec.ToolSelection do
          {:ok, tool_input} <- CallSpecValidation.fetch(input, :tool, code, message, path),
          {:ok, tool} <-
            CallSpecValidation.identifier(tool_input, code, message, path ++ ["tool"]),
-         {:ok, conversation_mode} <- conversation_mode(input, code, message, path),
+         {:ok, conversation_mode} <- conversation_mode(type, tool, input, code, message, path),
          {:ok, integration} <- integration(type, input, code, message, path) do
       {:ok,
        %__MODULE__{
@@ -53,7 +53,22 @@ defmodule Vxpipe.CallEngine.CallSpec.ToolSelection do
     end
   end
 
-  defp conversation_mode(input, code, message, path) do
+  defp conversation_mode(:platform, "idle", input, code, message, path) do
+    case Map.get(input, :conversation_mode, "non_blocking") do
+      value when value in ["non_blocking", :non_blocking] ->
+        {:ok, :non_blocking}
+
+      _invalid ->
+        CallSpecValidation.invalid(
+          code,
+          message,
+          path ++ ["conversation_mode"],
+          "idle must remain non-blocking so new participant input can resume the conversation"
+        )
+    end
+  end
+
+  defp conversation_mode(_type, _tool, input, code, message, path) do
     CallSpecValidation.enum(
       Map.get(input, :conversation_mode, "blocking"),
       [blocking: "blocking", non_blocking: "non_blocking"],

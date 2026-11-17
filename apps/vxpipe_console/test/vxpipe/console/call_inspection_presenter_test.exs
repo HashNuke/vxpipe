@@ -27,6 +27,57 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
 
   @tenant_key "tenantkey1234567"
 
+  test "projects typed and legacy speech without exposing control JSON or invented attribution" do
+    inspection = result()
+
+    content = %{
+      "type" => "participant_message",
+      "participant_id" => "assistant-runtime",
+      "message" => "okay",
+      "agent_mode" => "listener"
+    }
+
+    payload = %{"content_format" => "structured_agent_message_v1", "content" => content}
+    base_time = ~U[2026-09-16 09:00:00Z]
+
+    facts = [
+      fact(:agent_output_generated, 1, base_time,
+        participant_id: "assistant-runtime",
+        payload: payload
+      ),
+      fact(:agent_output_generated, 2, base_time,
+        participant_id: "assistant-runtime",
+        payload: %{payload | "content" => %{content | "message" => nil}}
+      ),
+      fact(:accepted_input, 3, base_time,
+        participant_id: "caller-runtime",
+        payload: %{"content" => "{\"message\":\"literal\"}"}
+      ),
+      fact(:agent_output_generated, 4, base_time,
+        participant_id: "assistant-runtime",
+        payload:
+          payload |> Map.put("content_format", "future") |> Map.put("text", "must not fall back")
+      ),
+      fact(:agent_output_generated, 5, base_time,
+        participant_id: "caller-runtime",
+        payload: payload
+      )
+    ]
+
+    history = CallHistory.new(facts, %VariableSnapshotHistory{snapshots: [], latest: nil})
+    response = CallInspectionPresenter.present(%{inspection | history: history})
+
+    messages =
+      response["timeline"] |> Enum.filter(&(&1["kind"] == "message")) |> Enum.map(& &1["value"])
+
+    assert Enum.map(messages, & &1["text"]) == ["okay", "{\"message\":\"literal\"}"]
+    assert hd(messages)["participant_id"] == "assistant-runtime"
+    assert hd(messages)["agent_mode"] == "listener"
+    assert hd(messages)["output_purpose"] == "backchannel"
+    refute Map.has_key?(List.last(messages), "agent_mode")
+    assert Enum.map(history.transcript, & &1.sequence) == [1, 3]
+  end
+
   for {from, expected} <- [
         {nil, nil},
         {"+15550001001", %{"kind" => "phone", "phone_number" => "+15550001001"}},

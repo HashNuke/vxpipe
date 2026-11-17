@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     AgentSpeechStarted,
     AgentTurnCompleted,
     AgentTurnInterrupted,
+    AgentTurnFailed,
     ParticipantTurnCompleted,
     ParticipantTurnStarted,
     TextOutput
@@ -45,7 +46,7 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     agent_runtime =
       original
       |> Keyword.fetch!(:agent_runtime)
-      |> Keyword.put(:fixture, {TestEchoModelProvider, []})
+      |> Keyword.put(:fixture, {TestEchoModelProvider, [observer: self()]})
 
     Application.put_env(
       :vxpipe_call_engine,
@@ -111,6 +112,95 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     finish_synthesis(transport, sink, "second", <<2, 0>>)
     assert_receive {:vxpipe_event, %AgentSpeechStarted{sequence: 6}}
     assert_receive {:vxpipe_event, %AgentTurnCompleted{sequence: 7}}
+  end
+
+  test "structured speech is validated before synthesis and silence or malformed replies produce no audio" do
+    sink = start_supervised!({TestAudioOutputSink, observer: self()})
+    settings = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+
+    Application.put_env(
+      :vxpipe_call_engine,
+      Vxpipe.CallEngine.Application,
+      Keyword.update!(
+        settings,
+        :agent_runtime,
+        &Keyword.put(&1, :fixture, {TestAgentRuntimeModelProvider, [owner: self()]})
+      )
+    )
+
+    {:ok, protocol} = CallEngine.AgentProtocol.capture()
+    room_id = unique_id("structured-tts")
+
+    {_plan, room, participant} =
+      TestTurnCall.start(room_id, text_to_speech: true, agent_protocol: protocol)
+
+    assert_receive {:test_tts_transport_started, transport, _}
+    {participant, connection_id} = attach(room, participant, "structured-tts", sink)
+    TestCallStartup.await_ready(room_id)
+    command = send_command(room, participant, connection_id, "turn-stream", "hello")
+    assert :ok = TestTransferConnection.send_text(command)
+    assert_receive {:test_agent_runtime_stream, provider, request}
+    assert request.reply_protocol == :mode_message_v1
+    emit_model_chunk(provider, ~s({"agent_mode":"speaker","message":"Only))
+    refute_receive {:test_tts_control, ^transport, _}
+    refute_received {:vxpipe_event, %TextOutput{}}
+
+    {:ok, response} =
+      ModelResponse.new(text: ~s({"agent_mode":"speaker","message":"Only admitted words."}))
+
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+    assert_receive {:vxpipe_event,
+                    %TextOutput{text: "Only admitted words.", agent_mode: :speaker}}
+
+    assert_receive {:test_tts_control, ^transport, speak}
+    assert JSON.decode!(speak)["text"] == "Only admitted words."
+    assert_receive {:test_tts_control, ^transport, _flush}
+    finish_synthesis(transport, sink, "structured", <<1, 0>>)
+    assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "turn-stream"}}
+
+    for {text, expected} <- [
+          {~s({"agent_mode":"listener","message":null}), :complete},
+          {~s({"agent_mode":"listener","message":"okay"}), :complete},
+          {~s({"agent_mode":"speaker","message":null}), :failed}
+        ] do
+      correlation = unique_id("silent")
+      command = send_command(room, participant, connection_id, correlation, "yeah")
+      assert :ok = TestTransferConnection.send_text(command)
+      assert_receive {:test_agent_runtime_stream, provider, _}
+      {:ok, response} = ModelResponse.new(text: text)
+      send(provider, {:test_agent_runtime_response, {:ok, response}})
+
+      case expected do
+        :complete ->
+          assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^correlation}}
+
+        :failed ->
+          assert_receive {:vxpipe_event,
+                          %AgentTurnFailed{
+                            correlation_id: ^correlation,
+                            reason: :invalid_response
+                          }}
+      end
+
+      refute_received {:vxpipe_event, %TextOutput{}}
+      refute_received {:test_tts_control, ^transport, _}
+    end
+
+    command = send_command(room, participant, connection_id, "after-failure", "try again")
+    assert :ok = TestTransferConnection.send_text(command)
+    assert_receive {:test_agent_runtime_stream, provider, request}
+    assert Enum.any?(request.messages, &(&1.content =~ "Only admitted words."))
+
+    refute Enum.any?(
+             request.messages,
+             &(&1.role == :assistant and &1.content =~ ~s("message":null))
+           )
+
+    {:ok, response} = ModelResponse.new(text: ~s({"agent_mode":"speaker","message":"Ready."}))
+    send(provider, {:test_agent_runtime_response, {:ok, response}})
+    assert_receive {:test_tts_control, ^transport, speak}
+    assert JSON.decode!(speak)["text"] == "Ready."
   end
 
   test "routes agent text to PCM and sequences speaking events around sink playout" do
@@ -226,6 +316,15 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
       )
 
     assert :ok = TestTransferConnection.send_text(first)
+    assert_receive {:test_echo_model_request, first_request}
+
+    assert JSON.decode!(List.last(first_request.messages).content) == %{
+             "type" => "participant_message",
+             "participant_id" => first_participant.participant_id,
+             "agent_mode" => "listener",
+             "message" => first.content
+           }
+
     assert_receive {:vxpipe_event, %ParticipantTurnStarted{sequence: 1}}
     assert_receive {:vxpipe_event, %ParticipantTurnCompleted{sequence: 2}}
 
@@ -258,6 +357,19 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
       )
 
     assert :ok = TestTransferConnection.send_text(interruption)
+    assert_receive {:test_echo_model_request, second_request}
+
+    users =
+      second_request.messages
+      |> Enum.filter(&(&1.role == :user))
+      |> Enum.map(&JSON.decode!(&1.content))
+
+    assert Enum.map(users, & &1["participant_id"]) == [
+             first_participant.participant_id,
+             second_participant.participant_id
+           ]
+
+    assert Enum.map(users, & &1["agent_mode"]) == ["listener", "speaker"]
     assert_receive {:test_audio_output_interrupt, ^first_sink, "turn-first", 20}
     assert_receive {:test_tts_control, ^transport, interrupt_control}
 

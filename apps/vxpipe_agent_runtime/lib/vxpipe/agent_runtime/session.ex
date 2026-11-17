@@ -6,6 +6,7 @@ defmodule Vxpipe.AgentRuntime.Session do
   alias Vxpipe.AgentRuntime.{
     Conversation,
     Event,
+    Input,
     Message,
     Readiness,
     Request,
@@ -25,6 +26,7 @@ defmodule Vxpipe.AgentRuntime.Session do
     :correlation,
     :request_timer,
     :termination_reason,
+    pending_output: nil,
     status: :idle,
     submission_phase: :idle,
     cancel_callers: []
@@ -33,6 +35,14 @@ defmodule Vxpipe.AgentRuntime.Session do
   @type server :: GenServer.server()
   @maximum_recorded_assistant_bytes 64 * 1_024
 
+  @doc "Pins packaged compactor instructions into the restartable child specification."
+  def child_spec(options) do
+    case SessionConfiguration.pin_compaction(options) do
+      {:ok, pinned} -> super(pinned)
+      {:error, _reason} -> raise ArgumentError, "invalid agent session compaction configuration"
+    end
+  end
+
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options) when is_list(options) do
     genserver_options = Keyword.take(options, [:name])
@@ -40,16 +50,36 @@ defmodule Vxpipe.AgentRuntime.Session do
     GenServer.start_link(__MODULE__, session_options, genserver_options)
   end
 
-  @spec request(server(), String.t(), map(), timeout()) :: {:ok, Result.t()} | {:error, atom()}
+  @spec request(server(), String.t() | Input.t(), map(), timeout()) ::
+          {:ok, Result.t()} | {:error, atom()}
   def request(server, input, correlation, timeout \\ :infinity) do
     GenServer.call(server, {:request, :caller, input, correlation}, timeout)
   end
 
-  @spec continue(server(), String.t(), map(), timeout()) ::
+  @spec continue(server(), String.t() | Input.t(), map(), timeout()) ::
           {:ok, Result.t()} | {:error, atom()}
   def continue(server, input, correlation, timeout \\ :infinity) do
     GenServer.call(server, {:request, :engine, input, correlation}, timeout)
   end
+
+  @doc """
+  Retains a trusted engine observation without starting model generation.
+
+  A nonempty durable correlation makes repeated delivery idempotent. Existing
+  observations remain unchanged. Generation and pending host settlement must
+  finish before another observation can be retained.
+  """
+  @spec record_engine(server(), String.t() | Input.t(), map(), timeout()) ::
+          :ok | {:error, atom()}
+  def record_engine(server, input, correlation, timeout \\ 5_000)
+
+  def record_engine(server, input, correlation, timeout)
+      when is_map(correlation) and map_size(correlation) > 0 do
+    GenServer.call(server, {:record_engine, input, correlation}, timeout)
+  end
+
+  def record_engine(_server, _input, _correlation, _timeout),
+    do: {:error, :invalid_correlation}
 
   @spec record_assistant(server(), String.t(), map(), timeout()) ::
           :ok | {:error, :busy | :invalid_message}
@@ -62,6 +92,21 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   def record_assistant(_server, _text, _correlation, _timeout),
     do: {:error, :invalid_message}
+
+  @doc """
+  Closes the outstanding host-settled output before the next model request.
+
+  Supply a spoken_assistant message containing only supported delivered text,
+  or nil when delivery is known zero or unknown. The host retains that evidence;
+  no playback diagnostics enter conversation history. Late/duplicate settlements
+  cannot append or rewrite history.
+  """
+  @spec settle_output(server(), map(), Message.t() | nil, timeout()) ::
+          :ok | {:error, :busy | :stale_settlement | :invalid_message}
+  def settle_output(server, correlation, message, timeout \\ 5_000)
+      when is_map(correlation) do
+    GenServer.call(server, {:settle_output, correlation, message}, timeout)
+  end
 
   @spec status(server()) :: :idle | :busy
   def status(server), do: GenServer.call(server, :status)
@@ -119,8 +164,13 @@ defmodule Vxpipe.AgentRuntime.Session do
   end
 
   @impl true
-  def handle_call({:request, origin, input, correlation}, caller, %{status: :idle} = state) do
+  def handle_call(
+        {:request, origin, input, correlation},
+        caller,
+        %{status: :idle, pending_output: nil} = state
+      ) do
     with {:ok, request} <- Request.new(input, correlation, origin: origin) do
+      state = admit_input(state, request)
       emit(state.configuration.event_destination, Event.new(:request_started, correlation))
       session = self()
       token = make_ref()
@@ -215,17 +265,55 @@ defmodule Vxpipe.AgentRuntime.Session do
     {:reply, {:error, :busy}, state}
   end
 
-  def handle_call({:record_assistant, text, correlation}, _caller, %{status: :idle} = state) do
-    if valid_assistant_message?(text) do
+  def handle_call(
+        {:record_engine, input, correlation},
+        _caller,
+        %{status: :idle, pending_output: nil} = state
+      )
+      when is_map(correlation) and map_size(correlation) > 0 do
+    with {:ok, request} <- Request.new(input, correlation, origin: :engine),
+         true <- String.valid?(request.input) and String.trim(request.input) != "" do
       conversation =
-        Conversation.append_exchange(
-          state.conversation,
-          [Message.assistant(text, [])],
-          correlation,
-          :discardable
-        )
+        if Conversation.durable?(state.conversation, correlation) do
+          state.conversation
+        else
+          Conversation.append_exchange(
+            state.conversation,
+            [Message.user(request.input, :engine)],
+            correlation,
+            :durable
+          )
+        end
 
       {:reply, :ok, %{state | conversation: conversation}}
+    else
+      false -> {:reply, {:error, :invalid_input}, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:record_engine, _input, _correlation}, _caller, state),
+    do: {:reply, {:error, :busy}, state}
+
+  def handle_call(
+        {:record_assistant, text, correlation},
+        _caller,
+        %{status: :idle, pending_output: nil} = state
+      ) do
+    if valid_assistant_message?(text) do
+      if state.configuration.history_mode == :host_settled do
+        {:reply, :ok, %{state | pending_output: correlation}}
+      else
+        conversation =
+          Conversation.append_exchange(
+            state.conversation,
+            [Message.assistant(text, [])],
+            correlation,
+            :discardable
+          )
+
+        {:reply, :ok, %{state | conversation: conversation}}
+      end
     else
       {:reply, {:error, :invalid_message}, state}
     end
@@ -234,6 +322,30 @@ defmodule Vxpipe.AgentRuntime.Session do
   def handle_call({:record_assistant, _text, _correlation}, _caller, state) do
     {:reply, {:error, :busy}, state}
   end
+
+  def handle_call(
+        {:settle_output, correlation, message},
+        _caller,
+        %{status: :idle, pending_output: correlation} = state
+      )
+      when is_map(correlation) do
+    if valid_settled_message?(message, state.configuration.maximum_output_bytes) do
+      conversation =
+        if message == nil,
+          do: state.conversation,
+          else: Conversation.append_exchange(state.conversation, [message], correlation, :durable)
+
+      {:reply, :ok, %{state | conversation: conversation, pending_output: nil}}
+    else
+      {:reply, {:error, :invalid_message}, state}
+    end
+  end
+
+  def handle_call({:settle_output, _correlation, _message}, _caller, %{status: :busy} = state),
+    do: {:reply, {:error, :busy}, state}
+
+  def handle_call({:settle_output, _correlation, _message}, _caller, state),
+    do: {:reply, {:error, :stale_settlement}, state}
 
   def handle_call(:status, _caller, state), do: {:reply, state.status, state}
 
@@ -362,7 +474,7 @@ defmodule Vxpipe.AgentRuntime.Session do
   def handle_info(_message, state), do: {:noreply, state}
 
   defp normalize_result({:ok, output, %Conversation{} = conversation}, correlation, state)
-       when is_binary(output) do
+       when is_binary(output) or is_struct(output, Vxpipe.AgentRuntime.Dialogue) do
     result = Result.completed(output, correlation)
 
     {{:ok, result}, Event.new(:response_completed, correlation),
@@ -383,6 +495,24 @@ defmodule Vxpipe.AgentRuntime.Session do
     String.valid?(text) and String.trim(text) != "" and
       byte_size(text) <= @maximum_recorded_assistant_bytes
   end
+
+  defp valid_settled_message?(nil, _maximum), do: true
+
+  defp valid_settled_message?(message, maximum), do: Message.valid_spoken?(message, maximum)
+
+  defp admit_input(%{configuration: %{history_mode: :host_settled}} = state, request) do
+    conversation =
+      Conversation.append_exchange(
+        state.conversation,
+        [Message.user(request.input, request.origin)],
+        request.correlation,
+        :durable
+      )
+
+    %{state | conversation: conversation, pending_output: request.correlation}
+  end
+
+  defp admit_input(state, _request), do: state
 
   defp clear_request(state) do
     state = cancel_request_timer(state)

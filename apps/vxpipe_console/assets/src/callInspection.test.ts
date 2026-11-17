@@ -10,6 +10,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+test("decodes optional dialogue metadata while preserving literal display text", () => {
+  const response = responseFixture("ended");
+  const entity = response.timeline[0]!;
+  Object.assign(entity.value, { agent_mode: "listener", output_purpose: "backchannel", text: "嗯，okay" });
+  const parsed = parseCallInspectionResponse(response);
+  expect(parsed.timeline[0]).toMatchObject({ kind: "message", value: {
+    text: "嗯，okay", agentMode: "listener", outputPurpose: "backchannel",
+  }});
+  Object.assign(entity.value, { agent_mode: "invalid" });
+  expect(() => parseCallInspectionResponse(response)).toThrow(CallInspectionResponseError);
+});
+
 test("preserves both the phone caller ID and the SIP identity", () => {
   const response = responseFixture("ended");
   const caller = response.participants[0]!;
