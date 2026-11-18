@@ -12,3 +12,10 @@
 
 - All 1,162 frontend tests pass across 148 files, including four added regressions for integration labels and saved inaccessible references. TypeScript passes. Format, warnings-as-errors compile, strict Credo and unused-dependency checks pass.
 - Root umbrella attempt hit two unrelated AgentRuntime timeout assertions (DialogueSessionTest:98 and ContextPreparationTest:134). Stopped the broad run after failures; both isolated cases pass with max_cases=1. No clean full umbrella pass is claimed.
+
+## Production release
+
+- Committed implementation as `50663a4b128f31e9dbef1cc3c1c18f6946a8a7a3` before production assets/release builds. Both succeeded. ESLint has no errors and the existing SetupDialog hook warning.
+- Retained previous image as `vxpipe:before-integration-labels-20261118`. Deployed image `sha256:51d2ac0fdaf9e7c09d9291bb1aa58cf7258395b280ab9c7a474744d42b8e1aaf` through the systemd migration/restart workflow.
+- Container OCI revision matches the implementation commit. Service is active/running, Result=success, NRestarts=0. Local and public health endpoints return `ok`; served admin JavaScript and CSS hashes match the assembled release.
+- Google AI Studio agent-protocol enablement remains separate and unimplemented; no user call specs were changed.
