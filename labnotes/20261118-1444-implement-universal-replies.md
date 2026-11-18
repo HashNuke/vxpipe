@@ -454,3 +454,31 @@ dependency gates pass. No speech/source state-machine implementation changed.
 - Checked C tasks 1 and 4 based on reviewed transport audit and registry/matrix
   evidence. C lifecycle and remaining enabled live acceptance stay open; milestone
   index stays unchecked. The approved Zenmux deferral is explicit, not a pass.
+
+### Buffered Chat Completions usage provenance
+
+The retained remaining1 Fireworks buffered failure exposed missing output-count
+provenance. Independent Astra local-HTTP proofs also found malformed nested
+reasoning usage could incorrectly authorize correction. Converted both matrices
+into permanent public Session tests across DeepSeek, Fireworks, OpenRouter and
+Zenmux, buffered and streamed. Pin a known context budget in fixtures to isolate
+usage from Zenmux's absent catalog context limit. Red: 96 cases, 12 failures;
+reported positive/zero output rejected and malformed reasoning accepted only in
+buffered responses. No live calls or protected environment reads for this proof.
+
+The SDK buffered decoder now merges just normalized reporting/completeness facts
+into parsed usage, preserving provider fields. Strict DialogueRepair is unchanged.
+Green: all 96 cases pass, including missing, malformed, inferred and forged usage
+controls. Cumulative patch preparation passes fresh/repeat, all six prior states
+and refusal of unknown local edits. Independent Astra checkpoint review is clean: 104 focused tests and 72 additional
+adversarial cases pass, including explicit null/zero, integer-string counts,
+floats/booleans, negative reasoning, invalid cached counts and forged provenance.
+Root format, compile, Credo and unused-dependency checks pass. Full umbrella and
+fixed remaining2 live conversations are still running; no final gate claimed.
+
+The fixed remaining2 live run finished: six conversations, three failures.
+OpenRouter both modes and DeepSeek buffered passed; the latter demonstrates actual
+bounded correction with reported usage. Both Fireworks failures have explicit
+`length` completion and zero public text at the 2,048-token cap. DeepSeek streaming
+emitted host-envelope fields after lookup, so the post-tool no-correction rule
+correctly rejected it. Retained all evidence; live acceptance stays open.

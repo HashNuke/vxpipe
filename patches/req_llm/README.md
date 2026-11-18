@@ -87,3 +87,9 @@ syntax quoted in private reasoning; the default retains legacy behavior. No flag
 is sent in provider JSON. All five preceding prepared source states upgrade to
 the same final hashes. See `router_replay_wire_test.exs` and
 `router_native_call_test.exs` for real HTTP regressions.
+
+Buffered Chat Completions responses retain normalized `usage_reported` and
+`billing_usage_complete` facts, matching streaming validation without replacing
+provider-specific usage fields. This permits bounded correction with explicitly
+reported output (including zero), while missing or malformed usage remains
+ineligible. Public Session HTTP regressions cover all four compatible transports.

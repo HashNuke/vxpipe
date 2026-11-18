@@ -1,0 +1,10 @@
+--- a/lib/req_llm/provider/defaults.ex
++++ b/lib/req_llm/provider/defaults.ex
+@@ -1240,0 +1241,7 @@
++
++    usage_facts =
++      usage
++      |> ReqLLM.Usage.normalize()
++      |> Map.take([:usage_reported, :billing_usage_complete])
++
++    usage = Map.merge(usage, usage_facts)

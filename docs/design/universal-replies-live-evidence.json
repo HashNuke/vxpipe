@@ -6587,6 +6587,951 @@
           "tool_choice": "default"
         }
       ]
+    },
+    {
+      "attempt": "remaining2",
+      "description": "Identical six remaining-provider conversations after buffered usage validation; unchanged prompts, assertions and 2048-token cap",
+      "result": "6 tests, 3 failures (10 excluded)",
+      "failures": [
+        "fireworks buffered completion: finish_reason length, no public text",
+        "fireworks streaming cue: finish_reason length, no public text",
+        "deepseek streaming lookup continuation: extra participant_id/type fields; correction forbidden after tool dispatch"
+      ],
+      "steps": [
+        {
+          "usage": [
+            {
+              "output_tokens": 206,
+              "input_tokens": 1600,
+              "reasoning_tokens": 186,
+              "total_tokens": 1806
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1499,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 154,
+              "input_tokens": 1701,
+              "reasoning_tokens": 115,
+              "total_tokens": 1855
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 739,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 246,
+              "input_tokens": 1796,
+              "reasoning_tokens": 233,
+              "total_tokens": 2042
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 715,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 1182,
+              "input_tokens": 1831,
+              "reasoning_tokens": 1168,
+              "total_tokens": 3013
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 3115,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 258,
+              "input_tokens": 1912,
+              "reasoning_tokens": 229,
+              "total_tokens": 2170
+            },
+            {
+              "output_tokens": 87,
+              "input_tokens": 2219,
+              "reasoning_tokens": 71,
+              "total_tokens": 2306
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1212,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 1900,
+              "input_tokens": 2066,
+              "reasoning_tokens": 1888,
+              "total_tokens": 3966
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 4198,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "invalid_provider_response",
+          "elapsed_ms": 4484,
+          "model_attempts": 1,
+          "semantic_outcome": "failed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 281,
+              "input_tokens": 1600,
+              "reasoning_tokens": 262,
+              "total_tokens": 1881
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 853,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 218,
+              "input_tokens": 1700,
+              "reasoning_tokens": 179,
+              "total_tokens": 1918
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 916,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 109,
+              "input_tokens": 1795,
+              "reasoning_tokens": 96,
+              "total_tokens": 1904
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 528,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "fireworks",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "invalid_provider_response",
+          "elapsed_ms": 5101,
+          "model_attempts": 1,
+          "semantic_outcome": "failed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1339,
+              "reasoning_tokens": 0,
+              "total_tokens": 1357
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 946,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 38,
+              "input_tokens": 1426,
+              "reasoning_tokens": 0,
+              "total_tokens": 1464
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1078,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 13,
+              "input_tokens": 1508,
+              "reasoning_tokens": 0,
+              "total_tokens": 1521
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 800,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 1543,
+              "reasoning_tokens": 0,
+              "total_tokens": 1555
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 670,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1610,
+              "reasoning_tokens": 0,
+              "total_tokens": 1628
+            },
+            {
+              "output_tokens": 15,
+              "input_tokens": 1653,
+              "reasoning_tokens": 0,
+              "total_tokens": 1668
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1395,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 1717,
+              "reasoning_tokens": 0,
+              "total_tokens": 1729
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 839,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1791,
+              "reasoning_tokens": 0,
+              "total_tokens": 1809
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 515,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 1844,
+              "reasoning_tokens": 0,
+              "total_tokens": 1855
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 732,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "elapsed_ms": 0,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 1912,
+              "reasoning_tokens": 0,
+              "total_tokens": 1923
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 653,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 1595,
+              "reasoning_tokens": 0,
+              "total_tokens": 1619
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 590,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 38,
+              "input_tokens": 1693,
+              "reasoning_tokens": 0,
+              "total_tokens": 1731
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 906,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 1780,
+              "reasoning_tokens": 0,
+              "total_tokens": 1791
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 724,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 1816,
+              "reasoning_tokens": 0,
+              "total_tokens": 1828
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1288,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 40,
+              "input_tokens": 1887,
+              "reasoning_tokens": 0,
+              "total_tokens": 1927
+            },
+            {
+              "output_tokens": 15,
+              "input_tokens": 1969,
+              "reasoning_tokens": 0,
+              "total_tokens": 1984
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1499,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 2038,
+              "reasoning_tokens": 0,
+              "total_tokens": 2062
+            },
+            {
+              "output_tokens": 12,
+              "input_tokens": 2111,
+              "reasoning_tokens": 0,
+              "total_tokens": 2123
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1225,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 30,
+              "input_tokens": 2114,
+              "reasoning_tokens": 0,
+              "total_tokens": 2144
+            },
+            {
+              "output_tokens": 18,
+              "input_tokens": 2193,
+              "reasoning_tokens": 0,
+              "total_tokens": 2211
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1825,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 2171,
+              "reasoning_tokens": 0,
+              "total_tokens": 2182
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 806,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "elapsed_ms": 0,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 25,
+              "input_tokens": 2243,
+              "reasoning_tokens": 0,
+              "total_tokens": 2268
+            },
+            {
+              "output_tokens": 13,
+              "input_tokens": 2317,
+              "reasoning_tokens": 0,
+              "total_tokens": 2330
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1858,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1339,
+              "reasoning_tokens": 0,
+              "total_tokens": 1357
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 811,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 38,
+              "input_tokens": 1426,
+              "reasoning_tokens": 0,
+              "total_tokens": 1464
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 940,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 13,
+              "input_tokens": 1508,
+              "reasoning_tokens": 0,
+              "total_tokens": 1521
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 783,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 1543,
+              "reasoning_tokens": 0,
+              "total_tokens": 1555
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 603,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1610,
+              "reasoning_tokens": 0,
+              "total_tokens": 1628
+            },
+            {
+              "output_tokens": 15,
+              "input_tokens": 1652,
+              "reasoning_tokens": 0,
+              "total_tokens": 1667
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1595,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 1716,
+              "reasoning_tokens": 0,
+              "total_tokens": 1728
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 981,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1789,
+              "reasoning_tokens": 0,
+              "total_tokens": 1807
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 541,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 1842,
+              "reasoning_tokens": 0,
+              "total_tokens": 1853
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 598,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "elapsed_ms": 1,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 1910,
+              "reasoning_tokens": 0,
+              "total_tokens": 1921
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "openrouter",
+          "model": "google/gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 730,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 1595,
+              "reasoning_tokens": 0,
+              "total_tokens": 1618
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 904,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 38,
+              "input_tokens": 1692,
+              "reasoning_tokens": 0,
+              "total_tokens": 1730
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 835,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 1779,
+              "reasoning_tokens": 0,
+              "total_tokens": 1790
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 1059,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 1815,
+              "reasoning_tokens": 0,
+              "total_tokens": 1827
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "elapsed_ms": 540,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 40,
+              "input_tokens": 1886,
+              "reasoning_tokens": 0,
+              "total_tokens": 1926
+            },
+            {
+              "output_tokens": 27,
+              "input_tokens": 1967,
+              "reasoning_tokens": 0,
+              "total_tokens": 1994
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "invalid_dialogue",
+          "elapsed_ms": 1528,
+          "model_attempts": 2,
+          "semantic_outcome": "failed"
+        }
+      ]
     }
   ],
   "interpretation": "Attempts through examples1 used authored-only instructions, plain caller input and delayed pending-state updates. Retained as standalone diagnostic evidence, not configured-call acceptance. Subsequent protocol1 corrects fixture fidelity.",

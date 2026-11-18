@@ -187,3 +187,19 @@ and one streamed conversation each, using the identical ten-step fixture and
 reviewed LiveModels selections. Do not alter instructions or expected outcomes
 during this run. Retain every step and failure. This extends the already passing
 Google/OpenAI matrix; Zenmux live cases remain explicitly deferred by the user.
+
+## Buffered usage validation follow-up — remaining2
+
+After the 96-case deterministic usage matrix passes, repeat exactly the same six
+`live_universal_remaining` conversations once each. The only runtime change is
+buffered usage reporting/completeness normalization; leave all fixture prompts and
+semantic assertions unchanged. This also checks whether the retained DeepSeek
+buffered listener-cue failure repeats. Keep all remaining1 failures and every
+remaining2 outcome. Zenmux live acceptance remains deferred.
+
+Result: three conversations pass (OpenRouter both modes and DeepSeek buffered).
+DeepSeek buffered uses successful bounded correction for unrelated/completion
+responses. Fireworks buffered completion and streaming cue end with `length`
+and no public text at the unchanged 2,048-token cap. DeepSeek streaming returns
+extra host-envelope fields after native lookup; correction correctly remains
+forbidden after dispatch. All outcomes are retained; this is not full acceptance.

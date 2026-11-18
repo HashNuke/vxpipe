@@ -27,12 +27,20 @@
 +       when is_binary(type) and type != "" and not is_struct(detail),
 +       do: detail
 +
-@@ -1248 +1252,3 @@
+@@ -1236,0 +1241,7 @@
++
++    usage_facts =
++      usage
++      |> ReqLLM.Usage.normalize()
++      |> Map.take([:usage_reported, :billing_usage_complete])
++
++    usage = Map.merge(usage, usage_facts)
+@@ -1248 +1259,3 @@
 -    chunks = content_chunks ++ openai_reasoning_details_chunks(raw_message, model.provider)
 +    chunks =
 +      router_model_chunks(data, model.provider) ++
 +        content_chunks ++ openai_reasoning_details_chunks(raw_message, model.provider)
-@@ -1319,8 +1325 @@
+@@ -1319,8 +1332 @@
 -              case delta do
 -                %{"reasoning_details" => details} when is_list(details) and details != [] ->
 -                  reasoning_details = decode_openai_reasoning_details(details, model.provider)
@@ -42,10 +50,10 @@
 -                  []
 -              end
 +              openai_reasoning_details_chunks(delta, model.provider)
-@@ -1378 +1377 @@
+@@ -1378 +1384 @@
 -    choices_chunks ++ usage_chunks
 +    router_model_chunks(data, model.provider) ++ choices_chunks ++ usage_chunks
-@@ -1478,0 +1478,10 @@
+@@ -1478,0 +1485,10 @@
 +  defp openai_reasoning_details_chunks(%{"reasoning" => value}, provider)
 +       when provider in [:openrouter, :zenmux] and not is_nil(value) and not is_binary(value) do
 +    [ReqLLM.StreamChunk.meta(%{reasoning_details: [%{"invalid_reasoning_details" => true}]})]
@@ -56,13 +64,13 @@
 +    [ReqLLM.StreamChunk.meta(%{reasoning_details: [%{"invalid_reasoning_details" => true}]})]
 +  end
 +
-@@ -1486,0 +1496,5 @@
+@@ -1486,0 +1503,5 @@
 +  defp openai_reasoning_details_chunks(%{"reasoning_details" => value}, provider)
 +       when provider in [:openrouter, :zenmux] and not is_nil(value) and not is_list(value) do
 +    [ReqLLM.StreamChunk.meta(%{reasoning_details: [%{"invalid_reasoning_details" => true}]})]
 +  end
 +
-@@ -1487,0 +1502,14 @@
+@@ -1487,0 +1509,14 @@
 +
 +  defp router_model_chunks(data, provider) when provider in [:openrouter, :zenmux] do
 +    if Map.has_key?(data, "model") do
