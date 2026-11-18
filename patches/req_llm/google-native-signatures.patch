@@ -19,8 +19,111 @@
 @@ -2088 +2082 @@
 -            |> Enum.filter(&Map.has_key?(&1, "text"))
 +            |> Enum.filter(&(Map.has_key?(&1, "text") and Map.get(&1, "thought") != true))
+@@ -2096 +2090,2 @@
+-              "content" => json_text
++              "content" => json_text,
++              "reasoning_details" => extract_reasoning_details_from_parts(parts)
+@@ -2199,3 +2194,5 @@
+-  defp put_part_thought_signature(%ReqLLM.ToolCall{} = call, %{"thoughtSignature" => signature})
+-       when is_binary(signature) and signature != "" do
+-    ReqLLM.ToolCall.put_metadata(call, %{thought_signature: signature})
++  defp put_part_thought_signature(%ReqLLM.ToolCall{} = call, %{"functionCall" => function} = part) do
++    metadata = %{}
++      |> maybe_put(:thought_signature, Map.get(part, "thoughtSignature"))
++      |> maybe_put(:google_call_id, Map.get(function, "id"))
++    ReqLLM.ToolCall.put_metadata(call, metadata)
+@@ -2251 +2247,0 @@
+-    |> Enum.filter(&(Map.get(&1, "thought", false) == true))
+@@ -2255,3 +2251,3 @@
+-        text: part["text"],
+-        signature: part["thoughtSignature"],
+-        encrypted?: part["thoughtSignature"] != nil,
++        text: nil,
++        signature: nil,
++        encrypted?: false,
+@@ -2259 +2255 @@
+-        format: "google-gemini-v1",
++        format: "google-generate-content-parts-v1",
+@@ -2261 +2257 @@
+-        provider_data: %{"thought" => true}
++        provider_data: %{"part" => part}
+@@ -2532,2 +2528,2 @@
+-      %{data: data} when is_map(data) -> decode_google_event(data, model)
+-      data when is_map(data) -> decode_google_event(data, model)
++      %{data: data} when is_map(data) -> decode_google_event_with_parts(data, model)
++      data when is_map(data) -> decode_google_event_with_parts(data, model)
+@@ -2535,0 +2532,6 @@
++  end
++
++  defp decode_google_event_with_parts(data, model) do
++    chunks = decode_google_event(data, model)
++    details = data |> first_candidate_parts() |> extract_reasoning_details_from_parts()
++    if details == [], do: chunks, else: [ReqLLM.StreamChunk.meta(%{reasoning_details: details})] ++ chunks
+@@ -2632,0 +2635,10 @@
++  end
++
++  defp preserve_message_tool_call_metadata(%{tool_call_id: id} = message, metadata_by_id) do
++    metadata = Map.get(metadata_by_id, id, %{})
++    Map.put(message, :req_llm_google_call_id, Map.get(metadata, :google_call_id) || Map.get(metadata, "google_call_id"))
++  end
++
++  defp preserve_message_tool_call_metadata(%{"tool_call_id" => id} = message, metadata_by_id) do
++    metadata = Map.get(metadata_by_id, id, %{})
++    Map.put(message, :req_llm_google_call_id, Map.get(metadata, :google_call_id) || Map.get(metadata, "google_call_id"))
+@@ -2784 +2796 @@
+-    parts = thought_parts ++ content_parts ++ tool_call_parts ++ tool_result_parts
++    parts = google_replay_parts(message) || (thought_parts ++ content_parts ++ tool_call_parts ++ tool_result_parts)
+@@ -2786,0 +2799,11 @@
++  end
++
++  defp google_replay_parts(message) do
++    details = Map.get(message, :reasoning_details) || Map.get(message, "reasoning_details") || []
++    case details do
++      [%ReqLLM.Message.ReasoningDetails{format: "google-generate-content-parts-v1"} | _] ->
++        Enum.map(details, fn %ReqLLM.Message.ReasoningDetails{
++          provider: :google, format: "google-generate-content-parts-v1", provider_data: %{"part" => part}
++        } -> part end)
++      _ -> nil
++    end
+@@ -2888 +2911 @@
+-      functionCall: %{name: name, args: Jason.decode!(args)},
++      functionCall: %{name: name, args: Jason.decode!(args)} |> maybe_put(:id, google_native_call_id(tool_call)),
+@@ -2900 +2923 @@
+-      functionCall: %{name: name, args: Jason.decode!(args)},
++      functionCall: %{name: name, args: Jason.decode!(args)} |> maybe_put(:id, google_native_call_id(tool_call)),
+@@ -2912 +2935 @@
+-      functionCall: %{name: name, args: Jason.decode!(args)},
++      functionCall: %{name: name, args: Jason.decode!(args)} |> maybe_put(:id, google_native_call_id(tool_call)),
+@@ -2917,0 +2941,5 @@
++
++  defp google_native_call_id(tool_call) do
++    metadata = ReqLLM.ToolCall.metadata(tool_call)
++    Map.get(metadata, :google_call_id) || Map.get(metadata, "google_call_id")
++  end
+@@ -2949 +2977 @@
+-      }
++      } |> maybe_put(:id, tool_result_call_id(message))
+@@ -2964 +2992 @@
+-      }
++      } |> maybe_put(:id, tool_result_call_id(message))
+@@ -2966,0 +2995,3 @@
++
++  defp tool_result_call_id(%{req_llm_google_call_id: id}), do: id
++  defp tool_result_call_id(_), do: nil
+@@ -3543 +3574 @@
+-          meta = %{id: call_id}
++          meta = %{id: call_id} |> maybe_put(:google_call_id, Map.get(call, "id"))
 --- a/lib/req_llm/stream_server.ex
 +++ b/lib/req_llm/stream_server.ex
 @@ -1460 +1460 @@
 -      if state.object_json_mode? do
 +      if state.object_json_mode? and state.provider_mod != ReqLLM.Providers.Google do
+--- a/lib/req_llm/providers/google/response_builder.ex
++++ b/lib/req_llm/providers/google/response_builder.ex
+@@ -31 +31,5 @@
+-      reasoning_details = extract_google_reasoning_details(chunks)
++      reasoning_details =
++        case response.message.reasoning_details do
++          [%ReqLLM.Message.ReasoningDetails{format: "google-generate-content-parts-v1"} | _] = details -> details
++          _ -> extract_google_reasoning_details(chunks)
++        end

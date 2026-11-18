@@ -20,14 +20,16 @@ def apply_patch(root):
     if not version or version.group(1) != manifest["hex_version"] or digest(patch) != manifest["patch_sha256"]:
         raise ValueError("ReqLLM version or patch checksum differs from the reviewed manifest")
     actual = {name: digest(dependency / name) for name in manifest["files"]}
-    previous = manifest.get("previous")
-    if previous and digest(patch.parent / previous["patch_file"]) != previous["patch_sha256"]:
-        raise ValueError("ReqLLM upgrade patch checksum differs from the reviewed manifest")
+    upgrades = ([manifest["previous"]] if manifest.get("previous") else []) + manifest.get("older", [])
+    for previous in upgrades:
+        if digest(patch.parent / previous["patch_file"]) != previous["patch_sha256"]:
+            raise ValueError("ReqLLM upgrade patch checksum differs from the reviewed manifest")
     if all(actual[name] == hashes["patched"] for name, hashes in manifest["files"].items()):
         print("ReqLLM native signature patch verified")
         return
     if not all(actual[name] == hashes["original"] for name, hashes in manifest["files"].items()):
-        if previous and actual == previous["files"]:
+        previous = next((candidate for candidate in upgrades if actual == candidate["files"]), None)
+        if previous:
             patch = patch.parent / previous["patch_file"]
         else:
             raise ValueError("ReqLLM sources differ from reviewed states; preserve changes and review the patch")

@@ -1,6 +1,6 @@
 # Universal structured replies across LLM integrations
 
-Status: checkpoint A locally implemented and independently reviewed.
+Status: checkpoint A and B's native-wire/replay slices locally implemented and independently reviewed.
 Complete provider conversation parity, live acceptance and release remain open. The milestone index
 owns ordering. User direction, 2026-11-18: no structured-response allowlist;
 every LLM integration must support the common agent reply contract.
@@ -108,7 +108,7 @@ scenario through actual request projection, streaming, tool execution and histor
   surfaces, with the portable path for unsupported combinations. Keep strategy
   stable across rounds. Add reproducible dependency changes/patches only if a
   demonstrated gap requires them; never edit `deps/` as the delivered fix.
-- [ ] Generalize replay dispatch while preserving bounded opaque metadata, source
+- [x] Generalize replay dispatch while preserving bounded opaque metadata, source
   binding and exact native call/result pairing. Cover Google signatures/role folding
   and the existing OpenAI reasoning/phase regression without leaking replay into
   speech, transcript storage or summaries.
@@ -283,3 +283,17 @@ subcheckpoint after proving/fixing private thought contamination and both nested
 and flat builtin-tool options. Independent 8 tests and patch preparation pass;
 final runtime child 185 tests pass (9 excluded). Broader umbrella verification
 continues, and the remaining B–F gates stay open.
+
+## Implementation evidence — B, Google replay and pairing
+
+A provider replay dispatcher retains OpenAI's existing reasoning/phase behavior
+and adds bounded Google ordered-Part replay. Canonical byte ranges and call indices
+preserve public/private/empty signed Parts without alternate public text/arguments.
+Source/model binding rejects redacted, removed or incompatible history. Actual
+buffered and streaming continuations verify original Parts, native ID provenance,
+call/result pairing and role folding with an unchanged prior history prefix.
+
+Independent Astra xhigh review is clean after proved fixes for public-part and
+empty-carrier signatures. Final independent 10 tests, fresh/repeat/prior-state
+patch upgrades and root static gates pass. Live receptionist/Hangup and the full
+configured conversation matrix remain pending, so checkpoint B is not complete.

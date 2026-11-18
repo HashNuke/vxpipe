@@ -35,12 +35,13 @@ class ReqLLMPatchTest(unittest.TestCase):
             self.assertEqual(digest(source), manifest["files"][name]["patched"])
             APPLY(root)
             # A checkout already prepared by the preceding release upgrades safely.
-            upgrade = patch.parent / manifest["previous"]["patch_file"]
-            subprocess.run(["patch", "--batch", "-R", "-p1", "-i", str(upgrade)],
-                           cwd=root / "deps/req_llm", check=True, capture_output=True)
-            self.assertEqual(digest(source), manifest["previous"]["files"][name])
-            APPLY(root)
-            self.assertEqual(digest(source), manifest["files"][name]["patched"])
+            for previous in [manifest["previous"]] + manifest.get("older", []):
+                upgrade = patch.parent / previous["patch_file"]
+                subprocess.run(["patch", "--batch", "-R", "-p1", "-i", str(upgrade)],
+                               cwd=root / "deps/req_llm", check=True, capture_output=True)
+                self.assertEqual(digest(source), previous["files"][name])
+                APPLY(root)
+                self.assertEqual(digest(source), manifest["files"][name]["patched"])
             source.write_text(source.read_text() + "\n# local unreviewed edit\n")
             changed = source.read_bytes()
             with self.assertRaisesRegex(ValueError, "sources differ"):

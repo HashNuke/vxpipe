@@ -4,7 +4,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
   alias Elixir.ReqLLM.Context
 
   alias Vxpipe.AgentRuntime.{Message, ModelRequest, ModelTool}
-  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{Config, OpenAIReplay, ReplyStrategy}
+  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{Config, Replay, ReplyStrategy}
 
   @spec prepare(Config.t(), ModelRequest.t()) :: {term(), Context.t(), keyword()}
   def prepare(%Config{} = config, %ModelRequest{} = request) do
@@ -63,7 +63,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
          model
        ) do
     tool_calls = Enum.map(calls, &to_req_llm_tool_call/1)
-    content |> Context.assistant(tool_calls: tool_calls) |> OpenAIReplay.restore(message, model)
+    content |> Context.assistant(tool_calls: tool_calls) |> Replay.restore(message, model)
   end
 
   defp to_req_llm_message(

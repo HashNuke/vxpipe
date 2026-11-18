@@ -1,4 +1,4 @@
-# ReqLLM native-call signature patch
+# ReqLLM Google wire patch
 
 ReqLLM 1.29.0's Google buffered chat decoder converts a `functionCall` into the
 common tool shape without attaching its `thoughtSignature`. Its object decoder
@@ -39,3 +39,17 @@ The buffered object decoder also concatenated `thought: true` text into public
 JSON. Its text filter now excludes thinking parts, matching streaming behavior.
 The native wire test reproduces private thinking followed by valid dialogue and
 asserts only the original dialogue reaches the runtime text boundary.
+
+Google continuation regressions extend the patch to retain private reasoning
+in buffered object JSON responses and native function call/result IDs in encoded
+history. The runtime owns strict replay binding and bounds; the dependency patch
+only preserves existing provider protocol fields. The manifest supports both
+previous committed patch states, each tested against the same final hashes.
+
+Signatures are not limited to thinking chunks. The patch captures ordered raw
+Google Parts in typed private SDK records, including public and empty signed
+Parts, and prevents the Google streaming builder from overwriting them. Runtime
+replay stores canonical text/call references instead of duplicate public data.
+Outbound reconstructed Parts preserve order and attributes; native ID provenance
+controls whether calls/results carry IDs, leaving originally ID-less calls intact.
+The permanent Google replay wire/bounds tests cover these contracts in both modes.

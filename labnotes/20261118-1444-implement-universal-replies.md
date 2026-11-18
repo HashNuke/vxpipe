@@ -143,3 +143,51 @@ dependency gates pass. No speech/source state-machine implementation changed.
   cases, patch preparation/upgrade and whitespace checks pass. Temporary review
   files removed. Final runtime child 185 tests pass (9 excluded). B replay,
   conversation and live acceptance remain open.
+
+### B: Google replay subcheckpoint (in progress)
+
+- Initial real buffered/streamed continuation test failed because runtime replay
+  was empty. Added replay dispatch plus a bounded Google record binding private
+  reasoning and native call metadata to source text/calls and provider/model IDs.
+  Existing OpenAI reasoning/phase tests remain green.
+- An ordinary no-tool native dialogue test then failed: ReqLLM object JSON decode
+  discarded reasoning_details. Extended the checksum-pinned patch to retain them;
+  fresh and both prior released patch states converge through tested upgrades.
+- Native continuation wire also dropped supplied call/result IDs. A failing test
+  proved missing lookup_1 in functionCall. Google's official content.proto requires
+  matching IDs when supplied; patched the encoder to retain both sides. The result
+  content remains ReqLLM's existing JSON-string wrapper, not a changed tool result.
+- Broader replay adversarial/history tests and independent review remain pending.
+- The prior native-wire umbrella run completed: 5,489 tests, zero failures (it
+  included runtime 182 before final native-wire additions). Current replay runtime
+  child 187 tests pass, 9 excluded. OpenAI replay remains green; independent review
+  and current replay umbrella verification are running.
+- Self-review found ambiguous atom/string signature aliases could undercount
+  private metadata. Permanent bounds test reproduced acceptance of a 70,000-byte
+  original signature after normalization selected a short duplicate. Rejecting
+  duplicate aliases makes the test pass. Reasoning accumulation then refactored
+  to prepend/reverse without changing ordered replay.
+- Astra review proved signatures on public text and empty streamed thought Parts
+  were lost; preserving them as ordinary reasoning would also move signed Parts.
+  Replaced reasoning-only storage with ordered GoogleParts references to canonical
+  public bytes/call indices, retaining private text and optional attributes exactly.
+  The SDK captures typed raw Parts; runtime normalization removes duplicate public
+  text/arguments, and projection reconstructs validated Parts for exact encoding.
+- Added native-ID provenance so SDK-generated local dispatch IDs are not inserted
+  into originally ID-less signed calls/results. Existing supplied-ID test remains.
+- Streaming initially still failed: Google's ResponseBuilder overwrote explicit
+  raw-Part records using thinking chunks. Patched it to retain explicit records;
+  four focused tests pass, including public signatures, middle thoughts and empty
+  carriers in buffered/streamed layouts. Independent re-review is pending.
+- Final Astra xhigh signoff: no remaining actionable findings in Google replay
+  and pairing scope. Independent final 10 tests pass (seed 990027), following the
+  original 12 proof tests and fresh/repeat/both-upgrade patch checks. Permanent
+  tests now cover Unicode ordered Parts and absent native IDs in both modes.
+  Bounds fixtures use valid Part coverage and valid-small controls so aliases and
+  combined-size rejection cannot pass for unrelated missing-layout errors.
+- Latest full runtime child before final test expansion: 189 tests pass, 9 excluded;
+  final six Google-focused tests and static root gates pass. Current umbrella run
+  was started with the earlier 187-test replay slice; completion not yet recorded.
+- Final runtime child: 191 tests pass, 9 excluded. Prior replay umbrella run finished
+  successfully: 5,494 tests, zero failures. A fresh umbrella run now covers the
+  final ordered-Part implementation; live acceptance remains pending.

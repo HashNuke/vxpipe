@@ -254,3 +254,32 @@ none can bypass the host-owned history/output checks. Applying a runtime output
 cap removes conflicting native token aliases before encoding. Google buffered
 chat required the [checked-in native-signature patch](../../patches/req_llm/README.md)
 to retain upstream function-call signatures in subsequent tool-result requests.
+
+### Google continuation records
+
+Google signatures can belong to public text, private thinking, function calls or
+empty streaming carriers. A reasoning-only record loses their original Part
+layout. The Google replay adapter therefore stores an ordered layout: byte ranges
+into canonical public text, indices into canonical tool calls, private thinking
+text, and the original optional thought/signature attributes. Public text and
+arguments are never copied into replay. Restoring requires complete, ordered,
+non-overlapping coverage of public text and calls, including zero-length carriers.
+A source digest binds the original text, call IDs, names, arguments and metadata;
+provider, catalog model and wire model must also match. Unknown Part fields and
+variants fail closed. The record and tool signatures share a 64 KiB bound.
+
+The SDK's private typed Part records are consumed at normalization. Projection
+reconstructs them from validated canonical source data so the encoder preserves
+signed Part order and does not reclassify public text as private thinking. These
+records never become speech, transcript content or summary text. Existing generic
+history/compaction ownership remains unchanged.
+
+ReqLLM's buffered object decoder and streaming response builder need reproducible
+patches to preserve all Parts, including empty signature carriers. Native-ID
+provenance is retained separately from runtime-generated dispatch IDs. Supplied
+IDs are replayed and echoed in results; absent original IDs stay absent. Google's
+[FunctionCall/FunctionResponse protocol](https://github.com/googleapis/googleapis/blob/master/google/ai/generativelanguage/v1beta/content.proto)
+requires matching IDs when supplied, while its
+[thought-signature guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking/thought-signatures)
+requires preserving the signed Part's original placement. Encoding from references
+rather than alternate public text preserves both constraints.

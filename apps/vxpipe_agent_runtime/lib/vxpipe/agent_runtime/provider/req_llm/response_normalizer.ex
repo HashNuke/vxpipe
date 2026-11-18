@@ -3,7 +3,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ResponseNormalizer do
 
   alias Elixir.ReqLLM.Response
   alias Vxpipe.AgentRuntime.{ModelResponse, ToolCall}
-  alias Vxpipe.AgentRuntime.Provider.ReqLLM.OpenAIReplay
+  alias Vxpipe.AgentRuntime.Provider.ReqLLM.Replay
 
   @spec normalize(Response.t(), :legacy | :mode_message_v1) ::
           {:ok, ModelResponse.t()} | {:error, atom()}
@@ -33,7 +33,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ResponseNormalizer do
   end
 
   defp capture_replay(:mode_message_v1, model, response, text, calls),
-    do: OpenAIReplay.capture(model, response, text, calls)
+    do: Replay.capture(model, response, text, calls)
 
   defp capture_replay(_protocol, _model, _response, _text, _calls), do: {:ok, %{}}
 
