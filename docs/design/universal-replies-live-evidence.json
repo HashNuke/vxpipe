@@ -3100,8 +3100,2482 @@
         }
       ],
       "notes": "Buffered lookup returned invalid_provider_response. Streamed lookup spoke the expected acknowledgment without submitting the required native tool, so the case failed after the semantic reply check. No conversation acceptance claimed."
+    },
+    {
+      "attempt": "configured1",
+      "description": "Configured portable selection and explicit native tool ordering; six cases",
+      "result": "6 tests, 2 failures (2 excluded)",
+      "failed_cases": [
+        "google modern receptionist conversation streaming=true",
+        "google portable receptionist conversation streaming=true"
+      ],
+      "steps": [
+        {
+          "usage": [
+            {
+              "input_tokens": 1355,
+              "output_tokens": 47,
+              "reasoning_tokens": 18,
+              "total_tokens": 1402
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2903,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1446,
+              "output_tokens": 60,
+              "reasoning_tokens": 12,
+              "total_tokens": 1506
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1603,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1530,
+              "output_tokens": 32,
+              "reasoning_tokens": 11,
+              "total_tokens": 1562
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1830,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1564,
+              "output_tokens": 44,
+              "reasoning_tokens": 22,
+              "total_tokens": 1608
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1885,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1633,
+              "output_tokens": 20,
+              "reasoning_tokens": 0,
+              "total_tokens": 1653
+            },
+            {
+              "input_tokens": 1691,
+              "output_tokens": 23,
+              "reasoning_tokens": 0,
+              "total_tokens": 1714
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 3022,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1757,
+              "output_tokens": 46,
+              "reasoning_tokens": 25,
+              "total_tokens": 1803
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 3277,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1831,
+              "output_tokens": 38,
+              "reasoning_tokens": 11,
+              "total_tokens": 1869
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2824,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1886,
+              "output_tokens": 39,
+              "reasoning_tokens": 18,
+              "total_tokens": 1925
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "idle",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1853,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "openai_responses",
+          "step": "cancel",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 1,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1944,
+              "output_tokens": 84,
+              "reasoning_tokens": 63,
+              "total_tokens": 2028
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "after_cancel",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1997,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1370,
+              "output_tokens": 17,
+              "reasoning_tokens": 0,
+              "total_tokens": 1387
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 516,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1458,
+              "output_tokens": 38,
+              "reasoning_tokens": 0,
+              "total_tokens": 1496
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1181,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1542,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1553
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 477,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1576,
+              "output_tokens": 13,
+              "reasoning_tokens": 0,
+              "total_tokens": 1589
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 720,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1646,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1664
+            },
+            {
+              "input_tokens": 1707,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1722
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1207,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1773,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1785
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 538,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1849,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1867
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 555,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1904,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1915
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 618,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 1,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1962,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1973
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "failed",
+          "elapsed_ms": 576,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1370,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1388
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 537,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1459,
+              "output_tokens": 38,
+              "reasoning_tokens": 0,
+              "total_tokens": 1497
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 784,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1543,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1554
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 604,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1577,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1589
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 540,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1646,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1664
+            },
+            {
+              "input_tokens": 1706,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1721
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1451,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1772,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1784
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 543,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1847,
+              "output_tokens": 30,
+              "reasoning_tokens": 0,
+              "total_tokens": 1877
+            },
+            {
+              "input_tokens": 1923,
+              "output_tokens": 21,
+              "reasoning_tokens": 0,
+              "total_tokens": 1944
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1632,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1902,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1913
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 543,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 1,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1960,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1971
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 541,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1370,
+              "output_tokens": 17,
+              "reasoning_tokens": 0,
+              "total_tokens": 1387
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 417,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1458,
+              "output_tokens": 38,
+              "reasoning_tokens": 0,
+              "total_tokens": 1496
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 810,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1542,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1553
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 406,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1576,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1588
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 768,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1645,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1663
+            },
+            {
+              "input_tokens": 1705,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1720
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2169,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1771,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1783
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 487,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1846,
+              "output_tokens": 30,
+              "reasoning_tokens": 0,
+              "total_tokens": 1876
+            },
+            {
+              "input_tokens": 1922,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1940
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1092,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1901,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1912
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 426,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 1,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1959,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1970
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "failed",
+          "elapsed_ms": 597,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1355,
+              "output_tokens": 45,
+              "reasoning_tokens": 18,
+              "total_tokens": 1400
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2244,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1444,
+              "output_tokens": 67,
+              "reasoning_tokens": 19,
+              "total_tokens": 1511
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2122,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1528,
+              "output_tokens": 32,
+              "reasoning_tokens": 11,
+              "total_tokens": 1560
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1547,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1562,
+              "output_tokens": 44,
+              "reasoning_tokens": 22,
+              "total_tokens": 1606
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1713,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1631,
+              "output_tokens": 20,
+              "reasoning_tokens": 0,
+              "total_tokens": 1651
+            },
+            {
+              "input_tokens": 1691,
+              "output_tokens": 23,
+              "reasoning_tokens": 0,
+              "total_tokens": 1714
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 4673,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1757,
+              "output_tokens": 46,
+              "reasoning_tokens": 25,
+              "total_tokens": 1803
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1696,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1833,
+              "output_tokens": 43,
+              "reasoning_tokens": 16,
+              "total_tokens": 1876
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1997,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1888,
+              "output_tokens": 45,
+              "reasoning_tokens": 24,
+              "total_tokens": 1933
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "idle",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2124,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "openai_responses",
+          "step": "cancel",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 1,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1946,
+              "output_tokens": 46,
+              "reasoning_tokens": 25,
+              "total_tokens": 1992
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "after_cancel",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1765,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1370,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1388
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 640,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1459,
+              "output_tokens": 38,
+              "reasoning_tokens": 0,
+              "total_tokens": 1497
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 487,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1543,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1554
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 661,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1577,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 1593
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 522,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1647,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1665
+            },
+            {
+              "input_tokens": 1708,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1723
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1482,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1774,
+              "output_tokens": 24,
+              "reasoning_tokens": 0,
+              "total_tokens": 1798
+            },
+            {
+              "input_tokens": 1844,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1856
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1256,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1850,
+              "output_tokens": 30,
+              "reasoning_tokens": 0,
+              "total_tokens": 1880
+            },
+            {
+              "input_tokens": 1926,
+              "output_tokens": 21,
+              "reasoning_tokens": 0,
+              "total_tokens": 1947
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1093,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1905,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1916
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 485,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 1,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1963,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1975
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 727,
+          "model_attempts": 1
+        }
+      ],
+      "notes": "Both OpenAI and both buffered Google cases pass. Both streamed Google cases return listener/null at after_cancel; all preceding steps pass."
+    },
+    {
+      "attempt": "resume1",
+      "description": "Explicit speaker resumption after cancellation; all six cases",
+      "result": "6 tests, 0 failures (2 excluded)",
+      "failed_cases": [],
+      "steps": [
+        {
+          "usage": [
+            {
+              "input_tokens": 1370,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1388
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 756,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1459,
+              "output_tokens": 38,
+              "reasoning_tokens": 0,
+              "total_tokens": 1497
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 791,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1543,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1554
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 852,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1577,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1589
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1242,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1646,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1664
+            },
+            {
+              "input_tokens": 1707,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1722
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1206,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1773,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1785
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 605,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1849,
+              "output_tokens": 30,
+              "reasoning_tokens": 0,
+              "total_tokens": 1879
+            },
+            {
+              "input_tokens": 1925,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1943
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2359,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1904,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1915
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 725,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 1,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1970,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1982
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 478,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1355,
+              "output_tokens": 57,
+              "reasoning_tokens": 30,
+              "total_tokens": 1412
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2637,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1443,
+              "output_tokens": 74,
+              "reasoning_tokens": 26,
+              "total_tokens": 1517
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1961,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1527,
+              "output_tokens": 56,
+              "reasoning_tokens": 35,
+              "total_tokens": 1583
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2242,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1561,
+              "output_tokens": 72,
+              "reasoning_tokens": 50,
+              "total_tokens": 1633
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2130,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1630,
+              "output_tokens": 20,
+              "reasoning_tokens": 0,
+              "total_tokens": 1650
+            },
+            {
+              "input_tokens": 1690,
+              "output_tokens": 23,
+              "reasoning_tokens": 0,
+              "total_tokens": 1713
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 3185,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1756,
+              "output_tokens": 43,
+              "reasoning_tokens": 22,
+              "total_tokens": 1799
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2454,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1832,
+              "output_tokens": 42,
+              "reasoning_tokens": 15,
+              "total_tokens": 1874
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1561,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1887,
+              "output_tokens": 35,
+              "reasoning_tokens": 14,
+              "total_tokens": 1922
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "idle",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1709,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "openai_responses",
+          "step": "cancel",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 0,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1953,
+              "output_tokens": 36,
+              "reasoning_tokens": 15,
+              "total_tokens": 1989
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "after_cancel",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1503,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1355,
+              "output_tokens": 44,
+              "reasoning_tokens": 16,
+              "total_tokens": 1399
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2280,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1445,
+              "output_tokens": 63,
+              "reasoning_tokens": 15,
+              "total_tokens": 1508
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1758,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1529,
+              "output_tokens": 29,
+              "reasoning_tokens": 8,
+              "total_tokens": 1558
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1529,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1563,
+              "output_tokens": 44,
+              "reasoning_tokens": 21,
+              "total_tokens": 1607
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1847,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1632,
+              "output_tokens": 20,
+              "reasoning_tokens": 0,
+              "total_tokens": 1652
+            },
+            {
+              "input_tokens": 1692,
+              "output_tokens": 23,
+              "reasoning_tokens": 0,
+              "total_tokens": 1715
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2746,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1758,
+              "output_tokens": 53,
+              "reasoning_tokens": 32,
+              "total_tokens": 1811
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1660,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1834,
+              "output_tokens": 50,
+              "reasoning_tokens": 23,
+              "total_tokens": 1884
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1706,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1889,
+              "output_tokens": 34,
+              "reasoning_tokens": 13,
+              "total_tokens": 1923
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "idle",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1486,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "openai_responses",
+          "step": "cancel",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 0,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1955,
+              "output_tokens": 64,
+              "reasoning_tokens": 43,
+              "total_tokens": 2019
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "after_cancel",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 2395,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1370,
+              "output_tokens": 17,
+              "reasoning_tokens": 0,
+              "total_tokens": 1387
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 455,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1458,
+              "output_tokens": 38,
+              "reasoning_tokens": 0,
+              "total_tokens": 1496
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 623,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1542,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1553
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 528,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1576,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1588
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 593,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1645,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1663
+            },
+            {
+              "input_tokens": 1705,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1720
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1581,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1771,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1783
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 536,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1846,
+              "output_tokens": 30,
+              "reasoning_tokens": 0,
+              "total_tokens": 1876
+            },
+            {
+              "input_tokens": 1922,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1940
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1023,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1901,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1912
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 604,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 1,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1967,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1979
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 612,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1370,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1388
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 761,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1459,
+              "output_tokens": 38,
+              "reasoning_tokens": 0,
+              "total_tokens": 1497
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 483,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1543,
+              "output_tokens": 13,
+              "reasoning_tokens": 0,
+              "total_tokens": 1556
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 478,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1577,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1592
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 542,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1646,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1664
+            },
+            {
+              "input_tokens": 1707,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1722
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 959,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1773,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1785
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 665,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1849,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1867
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 558,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1904,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1915
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1071,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 1,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1970,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1982
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 539,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1370,
+              "output_tokens": 17,
+              "reasoning_tokens": 0,
+              "total_tokens": 1387
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 713,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1458,
+              "output_tokens": 38,
+              "reasoning_tokens": 0,
+              "total_tokens": 1496
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 604,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1542,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1553
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 719,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1576,
+              "output_tokens": 13,
+              "reasoning_tokens": 0,
+              "total_tokens": 1589
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 538,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1646,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1664
+            },
+            {
+              "input_tokens": 1706,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1721
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1329,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1772,
+              "output_tokens": 24,
+              "reasoning_tokens": 0,
+              "total_tokens": 1796
+            },
+            {
+              "input_tokens": 1842,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1854
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 1142,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1847,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1865
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 734,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1902,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1913
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 470,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "semantic_outcome": "not_applicable",
+          "elapsed_ms": 0,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1968,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1980
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "tool_choice": "default",
+          "outcome": "completed",
+          "semantic_outcome": "passed",
+          "elapsed_ms": 602,
+          "model_attempts": 1
+        }
+      ]
     }
   ],
   "interpretation": "Attempts through examples1 used authored-only instructions, plain caller input and delayed pending-state updates. Retained as standalone diagnostic evidence, not configured-call acceptance. Subsequent protocol1 corrects fixture fidelity.",
-  "metric_scope": "outcome is the runtime Session result. It is not semantic acceptance. Older rows predate tightened semantic assertions and semantic_outcome. Aggregate test results and failed_cases are authoritative for each run; every failed attempt is retained."
+  "metric_scope": "outcome is the runtime Session result. It is not semantic acceptance. Older rows predate tightened semantic assertions and semantic_outcome. Aggregate test results and failed_cases are authoritative for each run; every failed attempt is retained.",
+  "controlled_hangup_runs": [
+    {
+      "attempt": "hangup1",
+      "result": "2 tests, 0 failures",
+      "rooms": [
+        {
+          "protocol": "mode_message_v1",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "ended",
+          "native_action": "hangup",
+          "elapsed_ms": 1015
+        },
+        {
+          "protocol": "mode_message_v1",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "outcome": "ended",
+          "native_action": "hangup",
+          "elapsed_ms": 1456
+        }
+      ]
+    }
+  ]
 }

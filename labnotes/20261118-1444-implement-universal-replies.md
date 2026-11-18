@@ -310,3 +310,38 @@ dependency gates pass. No speech/source state-machine implementation changed.
   admission, pinned encoding across tools/AUTO options and later metadata changes.
   Full runtime child: 202 tests pass, 17 live exclusions. Root static gates pass;
   prior usage umbrella run continues. No new live acceptance is claimed here.
+
+### Configured conversation and real Hangup acceptance
+
+- Clarified the synthetic author's native lookup ordering after usage1's premature
+  acknowledgment; added bounded SDK finish/status/count diagnostics without raw
+  payloads. Configured1: six cases, four pass, two fail. All OpenAI and buffered
+  Google cases pass; both streamed Google cases return listener/null only at the
+  final after-cancel response. All earlier scenario steps pass, including lookup.
+- Extended permanent full-helper loopback control to actual streaming HTTP. Seven
+  fixture-contract tests pass, including cancellation/recovery in both modes.
+  Defined a six-case follow-up with an explicit speaker resumption request; same
+  cancellation timing, output assertion and tools. Result pending.
+- New Console live test provisions encrypted temporary credentials, saves/publishes,
+  prepares a pinned modern plan, attaches a local text caller and requests actual
+  end_call with current_time also available. Google and OpenAI both complete the
+  real Hangup action and terminate the room. Two tests pass; no telephone calls,
+  external contacts or user specs involved. Metrics retained in evidence JSON.
+- Current root usage run exposed STSMCPRoomTest input_format returning not_ready
+  while the test expected ready. Independent review is investigating the reproduced
+  failure before any green-suite claim. This is outside the modified reply path.
+- Explicit-resumption live run: six cases pass, zero failures, covering configured
+  and explicit portable Google plus OpenAI in both modes. Together with two real
+  published Hangup rooms, this completes B's live scenarios. Prior failures stay
+  retained; C–F and deployment remain open. Milestone B's final task is checked.
+- Independent root-failure reproduction: 100 unchanged focused MCP cases had six
+  failures (both not_ready input format and a stale preparing result). Extracted
+  the sibling test's provider-ready trace/state handshake and await it before
+  launching the MCP readiness probe. MCP remains gated, preserving the contract;
+  no production readiness or speech state machine changed. Focused verification
+  and independent repeat/review are running.
+- Final Astra xhigh acceptance review is clean. MCP handshake repeat: 100 pass
+  after six failures in the unchanged 100; focused real file: 17 pass. Removed
+  the newly unused sibling binding. Current full helper: seven pass. Reviewer
+  matched all configured1/resume1 sixty-row metrics and both Hangup room records
+  to their logs. Root static checks pass; fresh full umbrella run is in progress.

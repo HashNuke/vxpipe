@@ -19,6 +19,17 @@ defmodule Vxpipe.AgentRuntime.LiveObservedProvider do
   @impl true
   def stream(config, request, emit), do: observe(Provider.stream(config, request, emit), request)
 
+  def observe_transport(_event, _measurements, metadata, _config) do
+    IO.puts(
+      "UNIVERSAL_REPLY_TRANSPORT " <>
+        JSON.encode!(%{
+          finish_reason: metadata[:finish_reason],
+          http_status: metadata[:http_status],
+          summary: Map.take(metadata[:response_summary] || %{}, [:tool_call_count, :text_bytes])
+        })
+    )
+  end
+
   defp observe({:ok, response} = result, request) do
     # Only used by the synthetic live fixture. Never log config, headers or replay.
     IO.puts(

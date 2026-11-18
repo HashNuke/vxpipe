@@ -19,18 +19,24 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversationTest do
     :ok
   end
 
-  @tag capture_log: true
-  test "a valid full conversation passes" do
-    url = fixture(nil, nil)
+  for streaming <- [false, true] do
+    @tag capture_log: true
+    test "a valid full conversation passes with streaming=#{streaming}" do
+      streaming = unquote(streaming)
+      url = fixture(nil, nil, streaming)
 
-    output =
-      capture_io(fn ->
-        assert :ok = LiveUniversalConversation.run("google", false, :portable_json, base_url: url)
-      end)
+      output =
+        capture_io(fn ->
+          assert :ok =
+                   LiveUniversalConversation.run("google", streaming, :portable_json,
+                     base_url: url
+                   )
+        end)
 
-    rows = evidence(output)
-    assert length(rows) == 10
-    assert Enum.all?(rows, &(&1["semantic_outcome"] in ["passed", "not_applicable"]))
+      rows = evidence(output)
+      assert length(rows) == 10
+      assert Enum.all?(rows, &(&1["semantic_outcome"] in ["passed", "not_applicable"]))
+    end
   end
 
   for {step, bad} <- [
@@ -58,7 +64,7 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversationTest do
     end
   end
 
-  defp fixture(bad_step, bad_text) do
+  defp fixture(bad_step, bad_text, streaming \\ false) do
     DialogueWireServer.start(self(), fn body ->
       last_part = body["contents"] |> List.last() |> Map.fetch!("parts") |> List.last()
 
@@ -111,10 +117,14 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversationTest do
             dialogue("after_cancel", "speaker", "READY", bad_step, bad_text)
         end
 
-      {"application/json",
-       JSON.encode!(%{
-         candidates: [%{content: %{role: "model", parts: [part]}, finishReason: "STOP"}]
-       })}
+      payload =
+        JSON.encode!(%{
+          candidates: [%{content: %{role: "model", parts: [part]}, finishReason: "STOP"}]
+        })
+
+      if streaming,
+        do: {"text/event-stream", "data: " <> payload <> "\n\n"},
+        else: {"application/json", payload}
     end)
   end
 

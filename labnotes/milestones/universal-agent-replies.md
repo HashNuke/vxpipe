@@ -1,7 +1,7 @@
 # Universal structured replies across LLM integrations
 
-Status: checkpoint A and B's native-wire/replay slices locally implemented and independently reviewed.
-Complete provider conversation parity, live acceptance and release remain open. The milestone index
+Status: checkpoints A and B implemented, with configured Google/OpenAI conversation
+and controlled Hangup acceptance recorded. Checkpoints C–F and release remain open. The milestone index
 owns ordering. User direction, 2026-11-18: no structured-response allowlist;
 every LLM integration must support the common agent reply contract.
 
@@ -112,7 +112,7 @@ scenario through actual request projection, streaming, tool execution and histor
   binding and exact native call/result pairing. Cover Google signatures/role folding
   and the existing OpenAI reasoning/phase regression without leaking replay into
   speech, transcript storage or summaries.
-- [ ] Reproduce earlier Google malformed/fenced-output and unwanted-tool scenarios
+- [x] Reproduce earlier Google malformed/fenced-output and unwanted-tool scenarios
   with all tools present. Run the user's `gemini-3.5-flash-lite` selection with a
   synthetic receptionist fixture (no copied caller information), including a real
   controlled Hangup invocation and a separate continuing-tool conversation.
@@ -314,3 +314,23 @@ were tightened. Earlier per-step completed outcomes mean runtime completion only
 case results and failure lists remain retained. No passing run of the tightened
 fixture, real-room Hangup, all-six-provider acceptance or deployment is claimed.
 These findings do not close checkpoint B or change the index status.
+
+## Implementation evidence — B, configured acceptance
+
+The final fixed six-case conversation run passes Google configured/explicit portable
+and OpenAI in buffered/streamed modes. Each case covers all ten steps, one native
+lookup, truthful running acknowledgment, unrelated input, trusted completion, idle,
+cancellation and explicit resumption. Prior failures remain in the linked evidence.
+Google selects portable encoding from resolved metadata; native encoding and
+ordered replay remain covered by actual local HTTP fixtures, with full tools and
+logical/provider-normalized history prefix checks. OpenAI native wire/replay
+regressions remain green.
+
+Two additional Console live cases save/publish and prepare new encrypted-credential
+synthetic plans, invoke the real authorized Hangup action, observe its ending result
+and monitor room teardown. Both Google and OpenAI pass. No telephone destination or
+user-owned spec is touched. A deterministic full-helper streaming recovery case
+and semantic adversarial regressions pass. The full umbrella rerun exposed a
+separate MCP test ordering race; its test-only handshake fix passes 100 independent
+repetitions after six failures in the original 100. Final Astra xhigh acceptance
+review is clean. Full umbrella verification continues; these checks do not close C–F.

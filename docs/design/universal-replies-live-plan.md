@@ -126,3 +126,38 @@ unmeasured correction. After preserving raw reported-output facts in the SDK
 patch, run exactly the two portable Google cases with the reviewed, tightened
 fixture. This isolates the correction/protocol path; native strategy selection
 is unchanged and still has its separately recorded live failures.
+
+## Configured selection and explicit tool ordering
+
+After the reviewed capability-selection change, run the six intended Google and
+OpenAI cases once. Keep the fixed ten-step scenario and full tool set. Clarify the
+synthetic author's lookup workflow: first submit the native call and wait for its
+running result, then speak the fixed acknowledgment. The caller requests only the
+lookup, avoiding a simultaneous instruction to speak the acknowledgment before a
+result exists. This responds to usage1's observed acknowledgment without submission;
+it does not remove tool assertions or change production prompts.
+
+Record SDK stop-event finish reason, HTTP status and text/tool counts in diagnostic
+logs, without raw payloads, headers, arguments or private metadata. Retain every
+failed case. This trial does not substitute for the separate real Hangup room.
+
+## Controlled published Hangup rooms
+
+Run one synthetic persisted/prepared room for Google and one for OpenAI. Provision
+only temporary encrypted test credentials through the authorized live runner;
+save and publish a new synthetic spec, then prepare its pinned modern plan. Attach
+a local text caller and request end_call once, with current_time also available.
+Assert the actual platform tool starts/completes with status ending and the room
+monitor reports termination. No telephone destination, external contact or user
+spec is involved. Record provider/model, actual action, elapsed time and result.
+This gate is separate from the continuing lookup conversation.
+
+## Explicit resumption after cancellation
+
+Configured1 passed four of six cases. Both Google streaming cases completed the
+first nine steps but returned listener/null to the final terse READY request.
+The deterministic full streaming HTTP fixture passes, including cancellation and
+recovery, without stale idle output. Make the caller's resumption explicit:
+resume answering in speaker mode with exactly READY. Retain the same mode/output
+assertion, cancellation timing and full tools. Run all six cases once; preserve
+configured1's two failures rather than treating them as successful recovery.

@@ -19,6 +19,17 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
                 "It closes at 5 in the afternoon. These hours apply Monday through Friday."
 
   def run(provider, streaming, strategy \\ :configured, generation_overrides \\ []) do
+    handler = {__MODULE__, make_ref()}
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        [:req_llm, :request, :stop],
+        &Vxpipe.AgentRuntime.LiveObservedProvider.observe_transport/4,
+        nil
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
     selection = Vxpipe.Providers.LiveModels.llm(provider)
 
     assert {:ok, options} =
@@ -104,7 +115,7 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
              step(
                session,
                "lookup",
-               "Call lookup once to check sample reference DEMO-42, then say exactly: The lookup is running.",
+               "Call lookup exactly once with reference DEMO-42. First wait for its native result before speaking.",
                evidence
              )
 
@@ -160,7 +171,12 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
     record(evidence, "cancel", elapsed, :cancelled, [attempt | events()])
 
     assert %{agent_mode: :speaker, message: ready} =
-             step(session, "after_cancel", "Reply briefly with READY.", evidence)
+             step(
+               session,
+               "after_cancel",
+               "Resume answering now. Use speaker mode and reply with exactly READY.",
+               evidence
+             )
 
     assert String.upcase(ready) =~ "READY"
     refute_received {:tool_submitted, _, _, _, _, _}
@@ -320,7 +336,8 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
     "You are the synthetic Northstar office receptionist. Office hours are 9 to 5 Monday to Friday. " <>
       "Use speaker mode for answers. When asked to wait silently or on idle_timeout, use listener mode with null message. " <>
       "When asked to say Go ahead and keep listening, use listener mode with message Go ahead. " <>
-      "Use lookup exactly once when explicitly asked, then acknowledge that it is running; do not claim it has completed. " <>
+      "Use lookup exactly once when explicitly asked. After its native result reports running, say exactly The lookup is running. " <>
+      "Do not give that acknowledgment before the native tool result, or claim that the lookup has completed. " <>
       "Never repeat lookup for a running reference. Report a later trusted completion when it arrives. " <>
       "Do not call hangup unless explicitly requested. Keep responses concise except when asked for three sentences."
   end
