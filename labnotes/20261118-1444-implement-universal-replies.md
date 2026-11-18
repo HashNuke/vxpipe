@@ -383,3 +383,25 @@ dependency gates pass. No speech/source state-machine implementation changed.
   207 tests, zero failures (17 live exclusions). Root format, warnings-as-errors
   compilation, strict Credo, unused dependencies and patch preparation pass.
   Umbrella run is still active with Gateway failures being investigated separately.
+
+### Gateway verification repair
+
+- B acceptance umbrella run finished: 5,510 tests, two failures, both Gateway;
+  all other applications passed. Seed 659133. The Twilio cue-loss case exhausted
+  the approved 750 ms recovery budget. Its five focused scenarios, entire 14-test
+  harness and 21 cue-loss executions passed independently. Prior outgoing-call
+  review notes record the same intermittent timeout; the stalled step is still
+  unknown, so no deadline or production change is justified yet.
+- Astra proved the WebRTC MCP handoff failure is a test teardown race. It kept the
+  real caller request active, induced its worker failure, held the coordinator's
+  settlement call with a sys hook, then destroyed the MCP fixture. Room termination
+  reproduced the root output_history_unavailable stack. Ordinary repetitions had
+  passed, so the deterministic scheduling proof—not those passes—establishes it.
+- The test now ends the call and observes its monitored remote_hangup shutdown
+  before returning, while ExUnit-supervised dependencies remain available. The
+  positive proof left a real continuation pending, closed the call, then destroyed
+  the fixture. Four permanent cases pass; independent Astra review is clean with
+  12 executions of all four modes and zero failures (seed 659133). No production
+  lifecycle or speech-state code changed; no Lean lane needed for this test repair.
+- The phone recovery timeout remains unresolved. Full umbrella acceptance must be
+  rerun after the ongoing router checkpoint and this repair; no all-green claim.
