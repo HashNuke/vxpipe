@@ -157,11 +157,11 @@ usage. Upstream unavailability leaves live evidence pending rather than fabricat
 **Exit:** the configured integration selected in the editor can be saved, published
 and used through Console/API admission, with historical publications preserved.
 
-- [ ] Add failing tests at Calls, Persistence and Console boundaries showing valid
+- [x] Add failing tests at Calls, Persistence and Console boundaries showing valid
   Google and other LLM specs pass both draft save and publish without the removed
   profile error. Invalid source/credentials/options still fail without inserting
   a revision or discarding browser edits.
-- [ ] Cover preparation, activation restart, transfer, compaction and newly saved
+- [x] Cover preparation, activation restart, transfer, compaction and newly saved
   protocol snapshots. Keep earlier publications' legacy semantics, and reject
   malformed/unknown bundles. Review sample installers' explicit legacy selection;
   do not use samples as a hidden compatibility bypass.
@@ -388,3 +388,21 @@ transport/delivery cases, three native lifecycle controls and seven adversarial
 privacy/bounds/stale-settlement/recovery cases. Full runtime suite before the
 seven added controls: 360 tests, zero failures. Astra xhigh final review is clean;
 root static gates pass. C task 2 is complete; enabled live acceptance remains open.
+
+
+## Implementation evidence — D, authoring and compatibility
+
+The original A failing eligibility regressions are extended with real configured
+selections for all six integrations through Persistence save/publish/prepare and
+Console browser-authenticated save/publish APIs. Invalid options and missing
+credentials leave rows, saved source and publication pointers unchanged; SDK
+request-start observers verify no inference. Malformed known-version snapshots
+fail preparation/activation, and configured-sample resumption retains its modern
+snapshot. Intentional new legacy samples remain explicit compatibility fixtures.
+
+Existing tests cover pinned instructions through transfer, rejected-reply recovery
+and Session restart, historical/unknown bundles, configured labels and visibility,
+and browser edits/error placement. Compaction tests verify publication prompt
+pinning and actually execute with the original prompt after its source file is
+changed. Independent Astra review is clean: 84 tests pass, two excluded. D tasks
+1 and 2 are complete; stale guidance and rendered acceptance remain open.

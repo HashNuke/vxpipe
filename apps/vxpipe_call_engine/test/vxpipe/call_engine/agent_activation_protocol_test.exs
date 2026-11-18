@@ -45,6 +45,25 @@ defmodule Vxpipe.CallEngine.AgentActivationProtocolTest do
     assert config.instructions =~ protocol["prompts"]["llm_dialogue"]["text"]
   end
 
+  test "activation rejects malformed known-version publication bundles" do
+    {:ok, snapshot} = Protocol.capture()
+
+    state = %{
+      model_provider: Vxpipe.CallEngine.TestAgentRuntimeModelProvider,
+      model: %{owner: self()}
+    }
+
+    for invalid <- [
+          put_in(snapshot, ["prompts", "llm_dialogue", "revision"], String.duplicate("0", 64)),
+          update_in(snapshot, ["prompts"], &Map.delete(&1, "shared")),
+          Map.put(snapshot, "unrecognized", true),
+          put_in(snapshot, ["prompts", "shared", "unexpected"], "value")
+        ] do
+      assert {:error, :invalid_configuration} =
+               RuntimeGraph.children(options(invalid, {ModelContextCompactor, state}))
+    end
+  end
+
   test "an explicit legacy bundle retains its decoder and shared instructions" do
     {:ok, protocol} = Vxpipe.CallEngine.AgentProtocol.capture(:legacy)
 

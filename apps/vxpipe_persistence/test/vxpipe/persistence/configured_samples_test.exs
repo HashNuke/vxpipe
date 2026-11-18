@@ -81,6 +81,8 @@ defmodule Vxpipe.Persistence.ConfiguredSamplesTest do
     assert {:ok, call} = Calls.fetch_call(c.config.tenant_key, token.call_id, c.options)
     assert call.call_spec_id == draft.call_spec_id
     assert call.call_spec_revision == draft.revision
+    assert draft.compiled_metadata["agent_protocol"]["version"] == "mode_message_v1"
+    assert call.plan.agent_protocol == draft.compiled_metadata["agent_protocol"]
     assert Repo.aggregate(Vxpipe.Persistence.Schema.CallSpecRevision, :count) == 1
   end
 

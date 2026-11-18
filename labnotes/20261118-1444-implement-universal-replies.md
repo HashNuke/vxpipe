@@ -543,3 +543,36 @@ All seven pass; focused preceding 23 pass; runtime child 360/0. Root static gate
 and unused dependencies pass. Checked C2: milestone 11/24 (46%). The concurrent
 umbrella run has now passed Gateway 890/0, including both prior failure sites;
 it predates this lifecycle change and is not final-release verification.
+
+### Modern authoring and publication compatibility coverage
+
+Extended the existing A Google/OpenAI public authoring regression to all six
+installed integrations in Persistence: save/publish/prepare retains the modern
+snapshot, configured selection and credential privacy. Invalid option types and
+missing credentials do not create rows. Console's actual browser-authenticated
+JSON authoring boundary now saves/publishes all six real provider selections;
+invalid updates retain source, latest revision and published pointer. Both lanes
+observe SDK request-start telemetry and reject inference during authoring.
+
+Added malformed known-version publication bundles (bad prompt hash, missing
+prompt, extra bundle/prompt fields) through Calls preparation and activation.
+Configured-sample resumption asserts the existing modern snapshot is preserved;
+explicit legacy sample creation remains intentional compatibility coverage.
+These are coverage additions for behavior already implemented, not new runtime
+changes; the earlier A regressions supplied the failing eligibility evidence.
+Focused checks: Persistence28/0 (2 exclusions), Console24/0, Calls17/0,
+activation5/0, sample resumption6/0. Independent review is pending. Rendered editor
+and transcript evidence, stale guidance and live acceptance remain outstanding.
+
+The concurrent umbrella run completed successfully: 5,654 tests, zero failures,
+seed844757; root command exited0. Application counts: Identity101, Providers222,
+MCP35, Runtime336, CallEngine2528, Calls392, Gateway890, Artifacts20,
+Persistence551, Console579. Both earlier Gateway failure sites passed. This run
+started before the lifecycle implementation (Runtime336), while later app tests
+included the new authoring coverage, so a fresh final umbrella remains required
+once remaining changes settle. Local evidence log: `vxpipe-universal-c-root.log`.
+
+Astra authoring checkpoint review is clean: 84 independent tests pass, two
+excluded. Existing actual compaction prompt test plus activation publication
+pinning closes the apparent custom-summary gap. Checked D1/D2; milestone13/24
+(54%). No UI/rendered or live acceptance claim is made by these backend tests.

@@ -48,6 +48,22 @@ defmodule Vxpipe.Calls.CallSpecsTest do
     }
 
     assert {:error, _} = Vxpipe.Calls.PreparedCallFactory.build(corrupt, %{}, :web, options)
+
+    snapshot = revision.compiled_metadata["agent_protocol"]
+
+    for invalid <- [
+          put_in(snapshot, ["prompts", "llm_dialogue", "revision"], String.duplicate("0", 64)),
+          update_in(snapshot, ["prompts"], &Map.delete(&1, "shared")),
+          Map.put(snapshot, "unrecognized", true),
+          put_in(snapshot, ["prompts", "shared", "unexpected"], "value")
+        ] do
+      malformed = %{
+        revision
+        | compiled_metadata: Map.put(revision.compiled_metadata, "agent_protocol", invalid)
+      }
+
+      assert {:error, _} = Vxpipe.Calls.PreparedCallFactory.build(malformed, %{}, :web, options)
+    end
   end
 
   test "a trusted sample owner can explicitly create a pinned legacy revision", %{
