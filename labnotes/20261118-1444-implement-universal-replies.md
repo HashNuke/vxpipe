@@ -665,3 +665,16 @@ adversarial malformed, fragmented, large and tool-bearing refusal cases with
 known usage and repair budget. All reject with one HTTP request, no correction,
 no tool dispatch and no public delta. The patch does not introduce a transport
 memory cap. E1 still needs the registry-wide terminal matrix.
+
+### Shared contract documentation
+
+Added the LLM integration authoring contract and user-facing reply/failure guidance:
+normal editor/API authoring has no reply identity allowlist; native schema is an
+optional transport enhancement, full tools remain available, and upstream failures
+are not successful silence. Documented bounded correction, private replay and
+required conformance evidence. Updated design status without claiming full live
+acceptance or release. Independent review caught and corrected an overbroad
+"newly saved" statement: explicit legacy sample/embedding fixtures may still create
+legacy publications. Final Astra xhigh documentation review is clean; scoped
+whitespace and new local links verified. Final milestone/index synchronization
+remains part of release acceptance.

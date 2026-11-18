@@ -1,7 +1,10 @@
 # Universal structured replies for LLM integrations
 
-Status: implementation in progress, 2026-11-18; shared eligibility and portable
-projection and bounded correction are implemented; full provider acceptance remains open.
+Status: implementation and acceptance in progress, 2026-11-18. Shared eligibility,
+transport strategies, bounded correction, private replay and authoring/browser
+compatibility are implemented. Remaining provider live acceptance and final
+conformance/release gates remain open; Zenmux live checks are explicitly deferred
+by the user, while its deterministic coverage remains required.
 The user's requirement is definitive: remove the structured-reply allowlist and
 support the shared agent response contract across every LLM integration.
 The contracts below govern implementation; the milestone records completed
@@ -191,8 +194,8 @@ of their names. Buffered and streaming HTTP fixtures verify these boundaries.
 OpenAI replay compatibility now checks the Responses transport independently of
 reply eligibility. New replay records bind both catalog and actual wire model IDs;
 older records default the wire ID to their recorded model ID. No opaque record may
-cross a changed model or transport. This does not yet implement other providers'
-opaque continuation records.
+cross a changed model or transport. This initial slice was followed by the Google, direct-chat and router replay
+implementations described below.
 
 The initial review identified two lifecycle constraints for bounded correction: output limits currently apply per attempt, and
 legacy blocking acknowledgments deliberately omit tools. Correction requires
