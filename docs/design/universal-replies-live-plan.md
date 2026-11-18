@@ -231,3 +231,18 @@ validated through the same chat preparation. Preserve this fixture error as an
 attempt failure. Add an offline all-six-selection budget preflight and set the
 common fixture cap to 4,096. No further live run is included in this completed
 two-repetition plan; define a new plan after the lifecycle work and review.
+
+## Rendered full-call acceptance — browser2
+
+After the local real-controller editor fixture passes for Google and OpenAI, run
+exactly two `live_universal_browser` cases: Google AI Studio's configured
+`gemini-3.5-flash-lite` and configured OpenAI, once each. Use the existing Chrome
+playground scenario (short/long/silent, native asynchronous lookup, unrelated
+input, real completion, later input and both native idle variants) and actual
+Deepgram TTS. Both use a 4,096-token output cap. Keep native tools, strict dialogue
+validation, speech-frame assertions and existing timeout checks unchanged.
+The separately rendered editor writes use synthetic credentials and real
+controllers/storage; the real calls use separate synthetic published specs with
+runner-provided credentials. They are not the same publication. No telephone
+number or user spec is touched. Retain both successes and failures, plus rendered
+desktop/mobile captures, and do not call Storybook evidence full-call acceptance.

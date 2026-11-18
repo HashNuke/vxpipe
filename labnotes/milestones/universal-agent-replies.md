@@ -168,7 +168,7 @@ and used through Console/API admission, with historical publications preserved.
 - [x] Remove obsolete OpenAI-profile-only UI guidance and provider documentation.
   Preserve configured integration labels, tenant/platform permissions and saved
   inaccessible references. Do not filter the catalog by schema-native capability.
-- [ ] Inspect a rendered configured editor and a real controlled call for Google AI
+- [x] Inspect a rendered configured editor and a real controlled call for Google AI
   Studio plus a contrasting integration. Verify only speech text appears in the
   transcript; control JSON and private replay never appear in user-facing output.
 
@@ -419,3 +419,22 @@ green2/0, frontend41/0 plus final fixture11/0, static/type checks and independen
 Astra review pass. Agent-browser Chrome desktop/mobile rendered the full message
 and Show action in the participant Models tab without overflow. This is narrow
 changed-copy evidence; D4 configured editor/live-call acceptance remains open.
+
+
+## Implementation evidence — D, rendered configured acceptance
+
+The real editor/controller fixture saves and publishes separate synthetic Google
+and OpenAI specs; exact source, modern protocol and stored published revision are
+independently verified (2/0, independently repeated 2/0). The browser2 real-call
+lane passes both providers with actual Deepgram speech, native lookup and real
+completion, unrelated input, silence and both idle variants. Desktop and phone
+editor/call captures were inspected. The editor and call publications are separate;
+the editor fixture does not pretend its synthetic credentials can make live calls.
+
+Independent review reproduced and fixed missing negative assertions for transcript
+JSON leakage and forced Google tool mode. Eight assertion controls pass; both
+retained live transcripts pass the stronger output-versus-TTS checks offline.
+The Google mode assertion was added after browser2; deterministic actual-wire
+coverage verifies optional tool mode, rather than claiming it ran in browser2.
+Final Astra xhigh review is clean. See the retained browser2 metrics in the
+[live evidence](../../docs/design/universal-replies-live-evidence.json).

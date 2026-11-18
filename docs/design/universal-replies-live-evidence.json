@@ -8926,5 +8926,311 @@
       "user_direction": "skip zenmax for now. continue with the rest",
       "scope": "Defer live acceptance; retain implementation and deterministic conformance coverage."
     }
+  ],
+  "rendered_browser_runs": [
+    {
+      "attempt": "browser2",
+      "result": "2 tests, 0 failures",
+      "seed": 131244,
+      "editor_result": "2 tests, 0 failures; independently repeated 2 tests, 0 failures",
+      "scope": "Separate synthetic editor publications and real-call publications; real Deepgram TTS; desktop and phone captures inspected. No phone calls or user specs changed.",
+      "assertion_followup": "Captured browser output, per-case output and every timeline bot-output were checked against actual TTS text after adding negative controls. Google optional tool-mode guard added after this run; native encoding covered separately by deterministic tests.",
+      "calls": [
+        {
+          "provider": "openai",
+          "requests": 14,
+          "configured_max_tokens": 4096,
+          "speech_requests": 9,
+          "audio_packets": 2176,
+          "speech_frames": 1725,
+          "tools_started": 3,
+          "tools_completed": 3,
+          "cases": [
+            {
+              "audioFrames": 38,
+              "completed": true,
+              "completedAt": 7271,
+              "firstAudioAt": 6709.600000023842,
+              "firstAudioMs": 3869.200000047684,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 5759.600000023842,
+              "sentAt": 2840.399999976158,
+              "text": "SHORT"
+            },
+            {
+              "audioFrames": 1393,
+              "completed": true,
+              "completedAt": 41984.70000004768,
+              "firstAudioAt": 12042.399999976158,
+              "firstAudioMs": 4087.100000023842,
+              "output": [
+                "In the quiet garden, morning light gathers on dew-bright leaves while bees drift between lavender and roses, and a small fountain threads silver sounds through the paths; beneath the old apple tree, seedlings wait in dark, generous soil, ready for summer, as the gardener turns compost, trims the herbs, and welcomes each new green shoot with patience and delight."
+              ],
+              "outputAt": 11523.600000023842,
+              "sentAt": 7955.299999952316,
+              "text": "LONG"
+            },
+            {
+              "audioFrames": 0,
+              "completed": true,
+              "completedAt": 44628,
+              "firstAudioMs": null,
+              "output": [],
+              "sentAt": 42645.5,
+              "text": "QUIET"
+            },
+            {
+              "audioFrames": 39,
+              "completed": true,
+              "completedAt": 52706.10000002384,
+              "firstAudioAt": 52408.70000004768,
+              "firstAudioMs": 6930.700000047684,
+              "output": [
+                "Checking"
+              ],
+              "outputAt": 50754.79999995232,
+              "sentAt": 45478,
+              "text": "LOOKUP"
+            },
+            {
+              "audioFrames": 37,
+              "completed": true,
+              "completedAt": 57973.39999997616,
+              "firstAudioAt": 57057.70000004768,
+              "firstAudioMs": 3446.100000023842,
+              "output": [
+                "Four"
+              ],
+              "outputAt": 56483.60000002384,
+              "sentAt": 53611.60000002384,
+              "text": "MATH"
+            },
+            {
+              "audioFrames": 71,
+              "completed": true,
+              "completedAt": 63740,
+              "firstAudioAt": 62040.79999995232,
+              "firstAudioMs": 3491.399999976158,
+              "output": [
+                "Lookup complete."
+              ],
+              "outputAt": 61309.70000004768,
+              "sentAt": 58549.39999997616,
+              "text": "TOOL_COMPLETION"
+            },
+            {
+              "audioFrames": 27,
+              "completed": true,
+              "completedAt": 70379,
+              "firstAudioAt": 69857.29999995232,
+              "firstAudioMs": 5452.299999952316,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 67447.20000004768,
+              "sentAt": 64405,
+              "text": "SHORT"
+            },
+            {
+              "audioFrames": 66,
+              "completed": true,
+              "completedAt": 86021.60000002384,
+              "firstAudioAt": 84858.10000002384,
+              "firstAudioMs": 13880.600000023842,
+              "output": [
+                "Okay, I will wait."
+              ],
+              "outputAt": 81275.10000002384,
+              "sentAt": 70977.5,
+              "text": "IDLE_SPOKEN"
+            },
+            {
+              "audioFrames": 26,
+              "completed": true,
+              "completedAt": 102899.60000002384,
+              "firstAudioAt": 102423.10000002384,
+              "firstAudioMs": 15864,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 101471.60000002384,
+              "sentAt": 86559.10000002384,
+              "text": "IDLE_SPOKEN_TIMEOUT"
+            },
+            {
+              "audioFrames": 0,
+              "completed": true,
+              "completedAt": 111534.79999995232,
+              "firstAudioMs": null,
+              "output": [],
+              "sentAt": 103541.79999995232,
+              "text": "IDLE_SILENT"
+            },
+            {
+              "audioFrames": 28,
+              "completed": true,
+              "completedAt": 131040.79999995232,
+              "firstAudioAt": 130571.89999997616,
+              "firstAudioMs": 18436.799999952316,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 127265.39999997616,
+              "sentAt": 112135.10000002384,
+              "text": "IDLE_SILENT_TIMEOUT"
+            }
+          ]
+        },
+        {
+          "provider": "google",
+          "requests": 14,
+          "configured_max_tokens": 4096,
+          "speech_requests": 9,
+          "audio_packets": 1968,
+          "speech_frames": 2000,
+          "tools_started": 3,
+          "tools_completed": 3,
+          "cases": [
+            {
+              "audioFrames": 32,
+              "completed": true,
+              "completedAt": 3684.8000000715256,
+              "firstAudioAt": 3103.100000023842,
+              "firstAudioMs": 1511.100000023842,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 2196.600000023842,
+              "sentAt": 1592,
+              "text": "SHORT"
+            },
+            {
+              "audioFrames": 1612,
+              "completed": true,
+              "completedAt": 37295.90000009537,
+              "firstAudioAt": 8303.200000047684,
+              "firstAudioMs": 4026,
+              "output": [
+                "A vibrant garden blooms under the warm summer sun, filled with a colorful array of fragrant roses, delicate lilies, and lush green ferns swaying gently in the morning breeze while busy bees dance from flower to flower, creating a peaceful sanctuary of natural beauty and tranquility that refreshes the soul and invites everyone to pause and appreciate the wonders of the growing earth."
+              ],
+              "outputAt": 5460.100000023842,
+              "sentAt": 4277.200000047684,
+              "text": "LONG"
+            },
+            {
+              "audioFrames": 0,
+              "completed": true,
+              "completedAt": 39011.300000071526,
+              "firstAudioMs": null,
+              "output": [],
+              "sentAt": 37916.20000004768,
+              "text": "QUIET"
+            },
+            {
+              "audioFrames": 39,
+              "completed": true,
+              "completedAt": 42903.10000002384,
+              "firstAudioAt": 42201.90000009537,
+              "firstAudioMs": 2572.7000000476837,
+              "output": [
+                "Checking"
+              ],
+              "outputAt": 41290.20000004768,
+              "sentAt": 39629.20000004768,
+              "text": "LOOKUP"
+            },
+            {
+              "audioFrames": 43,
+              "completed": true,
+              "completedAt": 46097.300000071526,
+              "firstAudioAt": 45451.60000002384,
+              "firstAudioMs": 1923.600000023842,
+              "output": [
+                "Four"
+              ],
+              "outputAt": 44608.10000002384,
+              "sentAt": 43528,
+              "text": "MATH"
+            },
+            {
+              "audioFrames": 73,
+              "completed": true,
+              "completedAt": 49507,
+              "firstAudioAt": 48184.90000009537,
+              "firstAudioMs": 1454.3000000715256,
+              "output": [
+                "Lookup complete."
+              ],
+              "outputAt": 47328.60000002384,
+              "sentAt": 46730.60000002384,
+              "text": "TOOL_COMPLETION"
+            },
+            {
+              "audioFrames": 31,
+              "completed": true,
+              "completedAt": 52190.10000002384,
+              "firstAudioAt": 51667.90000009537,
+              "firstAudioMs": 1463.9000000953674,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 50767.800000071526,
+              "sentAt": 50204,
+              "text": "SHORT"
+            },
+            {
+              "audioFrames": 75,
+              "completed": true,
+              "completedAt": 56291.10000002384,
+              "firstAudioAt": 55784.40000009537,
+              "firstAudioMs": 2970.2000000476837,
+              "output": [
+                "Okay, I will wait."
+              ],
+              "outputAt": 53955.70000004768,
+              "sentAt": 52814.20000004768,
+              "text": "IDLE_SPOKEN"
+            },
+            {
+              "audioFrames": 50,
+              "completed": true,
+              "completedAt": 68601.10000002384,
+              "firstAudioAt": 68700.30000007153,
+              "firstAudioMs": 10897.300000071526,
+              "output": [
+                "Ready again"
+              ],
+              "outputAt": 66837.10000002384,
+              "sentAt": 57803,
+              "text": "IDLE_SPOKEN_TIMEOUT"
+            },
+            {
+              "audioFrames": 0,
+              "completed": true,
+              "completedAt": 71264,
+              "firstAudioMs": null,
+              "output": [],
+              "sentAt": 70149.70000004768,
+              "text": "IDLE_SILENT"
+            },
+            {
+              "audioFrames": 45,
+              "completed": true,
+              "completedAt": 83672.80000007153,
+              "firstAudioAt": 83783.30000007153,
+              "firstAudioMs": 11958.100000023842,
+              "output": [
+                "Ready again"
+              ],
+              "outputAt": 81900.20000004768,
+              "sentAt": 71825.20000004768,
+              "text": "IDLE_SILENT_TIMEOUT"
+            }
+          ]
+        }
+      ]
+    }
   ]
 }

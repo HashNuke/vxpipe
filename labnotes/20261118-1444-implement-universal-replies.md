@@ -600,3 +600,55 @@ with both residual historical/test-only eligibility statements corrected. Root
 format/compile/Credo/unused and frontend typecheck pass. Checked D3:14/24 (58%).
 Configured rendered editor save/publish and actual rendered Google/contrasting
 calls remain D4; the Storybook screenshots do not substitute for them.
+
+### Rendered configured editor/call acceptance in progress
+
+Added a loopback-only real-editor fixture with actual authoring controllers,
+synthetic tenant credentials, persistence and independent saved/publication reads.
+Chrome clicks Save as draft and Publish; fixture state observers only report the
+result. This tests the rendered editor/controller boundary, while browser-session
+auth and API-key authorization remain covered by existing endpoint tests.
+The first fixture build lacked WAV asset handling; adding file loaders addresses
+its imported wait-sound assets. The next blank-page diagnostic found that the
+entry file and editor imports resolve React from different workspace roots;
+normalize fixture bundling to the Console's React packages. These are fixture
+bring-up failures, not successful rendered evidence.
+
+Extended the existing tagged real-call Chrome lane to configured Google and
+OpenAI with the same conversation, real TTS and native tool scenario. Google wire
+checks assert real full tools and portable instructions; OpenAI retains its prior
+schema/prefix checks. No live execution yet; define the fixed two-case plan before
+running. The current shared model catalog advertises no native-schema capability
+for the remaining four selections. Independent probes confirm unsafe generic SDK
+object modes (tool removal/synthetic schema tools/cap changes), so no speculative
+native-strategy switch is made to address stochastic invalid output.
+
+The real editor fixture now passes both configured Google and OpenAI cases
+(2 tests, 0 failures, seed 79999). Bring-up also exposed the existing 100-character agent
+prompt minimum, Plug clearing the sent response body, and an accessibility-tree
+race while the save menu closes. The fixture now uses a valid prompt, observes
+successful response status rather than decoding a cleared body, and waits for
+Publish to leave an aria-hidden ancestor. Independent database reads prove exact
+source preservation, modern protocol and published revision 1. All four desktop
+and phone captures were visually inspected: configured models and published
+state are visible, with usable mobile settings. The fixture does not configure
+speech services or claim a real call. Fixed browser2 live execution has started;
+D4 remains unchecked until its call acceptance and review finish.
+
+Current runtime conformance regression passes: 367 tests, 0 failures, 25 excluded.
+Root format, compile with warnings-as-errors, strict Credo and unused-dependency
+checks also pass for the browser checkpoint. The final umbrella release gate is
+still pending; these results do not replace it.
+
+Browser2 finished: Google and OpenAI, 2 tests/0 failures, seed 131244. Both ran
+real native asynchronous lookup, unrelated input, real completion, silent/null,
+spoken and silent idle expiry and actual Deepgram audio. All four call captures
+were visually inspected. Independent review reproduced two acceptance-test gaps:
+raw JSON in browser output could pass when TTS was clean, and Google ANY tool
+mode was not rejected. Added shared browser assertions with five passing negative
+and positive controls; replayed both captured browser results through the stronger
+transcript assertions successfully. The new Google optional-mode assertion was
+added after browser2 began and is not claimed as executed in that live run.
+The editor itself independently repeats 2/0. Final independent D4 review is clean: eight positive/negative assertion controls
+pass, both retained browser transcripts pass offline, and no additional paid run
+is needed solely for the mode guard. D4 is complete (15/24 tasks, 62.5%).
