@@ -287,6 +287,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
       assert body["generationConfig"]["responseMimeType"] == "application/json"
       assert body["generationConfig"]["responseJsonSchema"] == Dialogue.schema()
       assert body["generationConfig"]["maxOutputTokens"] == 100
+      assert body["toolConfig"] in [nil, %{"functionCallingConfig" => %{"mode" => "AUTO"}}]
       [%{"functionDeclarations" => declared}] = body["tools"]
       assert Enum.map(declared, & &1["name"]) == ["hangup", "lookup"]
       assert JSON.encode!(body["systemInstruction"]) =~ "agent_mode"

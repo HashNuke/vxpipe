@@ -1,0 +1,2902 @@
+{
+  "date": "2026-11-18",
+  "dependency": "req_llm 1.29.0 with repository Google replay patch",
+  "runs": [
+    {
+      "attempt": "attempt1",
+      "description": "Initial configured native strategies",
+      "result": "4 tests, 2 failures",
+      "steps": [
+        {
+          "usage": [
+            {
+              "input_tokens": 320,
+              "output_tokens": 25,
+              "reasoning_tokens": 0,
+              "total_tokens": 345
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 5523,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 365,
+              "output_tokens": 97,
+              "reasoning_tokens": 36,
+              "total_tokens": 462
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 5546,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 444,
+              "output_tokens": 34,
+              "reasoning_tokens": 13,
+              "total_tokens": 478
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2539,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 460,
+              "output_tokens": 60,
+              "reasoning_tokens": 38,
+              "total_tokens": 520
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2550,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 503,
+              "output_tokens": 20,
+              "reasoning_tokens": 0,
+              "total_tokens": 523
+            },
+            {
+              "input_tokens": 560,
+              "output_tokens": 67,
+              "reasoning_tokens": 37,
+              "total_tokens": 627
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 4709,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 608,
+              "output_tokens": 57,
+              "reasoning_tokens": 31,
+              "total_tokens": 665
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2446,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 679,
+              "output_tokens": 56,
+              "reasoning_tokens": 29,
+              "total_tokens": 735
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2213,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 734,
+              "output_tokens": 38,
+              "reasoning_tokens": 17,
+              "total_tokens": 772
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "idle",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 1767,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "openai_responses",
+          "step": "cancel",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "cancelled",
+          "elapsed_ms": 0,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 756,
+              "output_tokens": 63,
+              "reasoning_tokens": 42,
+              "total_tokens": 819
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "after_cancel",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2826,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 288,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 302
+            },
+            {
+              "input_tokens": 344,
+              "output_tokens": 31,
+              "reasoning_tokens": 0,
+              "total_tokens": 375
+            }
+          ],
+          "strategy": "google_object",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 1964,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 396,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 412
+            },
+            {
+              "input_tokens": 454,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 472
+            },
+            {
+              "input_tokens": 514,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 532
+            },
+            {
+              "input_tokens": 574,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 592
+            },
+            {
+              "input_tokens": 635,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 653
+            },
+            {
+              "input_tokens": 696,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 714
+            },
+            {
+              "input_tokens": 757,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 775
+            },
+            {
+              "input_tokens": 817,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 835
+            }
+          ],
+          "strategy": "google_object",
+          "step": "long",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "model_round_limit",
+          "elapsed_ms": 4998,
+          "model_attempts": 8
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 288,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 302
+            },
+            {
+              "input_tokens": 345,
+              "output_tokens": 31,
+              "reasoning_tokens": 0,
+              "total_tokens": 376
+            }
+          ],
+          "strategy": "google_object",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 1492,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 397,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 413
+            },
+            {
+              "input_tokens": 456,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 472
+            },
+            {
+              "input_tokens": 514,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 530
+            },
+            {
+              "input_tokens": 573,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 589
+            },
+            {
+              "input_tokens": 632,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 648
+            },
+            {
+              "input_tokens": 691,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 707
+            },
+            {
+              "input_tokens": 750,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 766
+            },
+            {
+              "input_tokens": 809,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 825
+            }
+          ],
+          "strategy": "google_object",
+          "step": "long",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "model_round_limit",
+          "elapsed_ms": 4854,
+          "model_attempts": 8
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 320,
+              "output_tokens": 25,
+              "reasoning_tokens": 0,
+              "total_tokens": 345
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2702,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 365,
+              "output_tokens": 134,
+              "reasoning_tokens": 81,
+              "total_tokens": 499
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 4608,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 436,
+              "output_tokens": 48,
+              "reasoning_tokens": 27,
+              "total_tokens": 484
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 6443,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 452,
+              "output_tokens": 41,
+              "reasoning_tokens": 19,
+              "total_tokens": 493
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2488,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 495,
+              "output_tokens": 20,
+              "reasoning_tokens": 0,
+              "total_tokens": 515
+            },
+            {
+              "input_tokens": 554,
+              "output_tokens": 63,
+              "reasoning_tokens": 33,
+              "total_tokens": 617
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 4449,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 602,
+              "output_tokens": 39,
+              "reasoning_tokens": 13,
+              "total_tokens": 641
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 3659,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 675,
+              "output_tokens": 37,
+              "reasoning_tokens": 10,
+              "total_tokens": 712
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2426,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 730,
+              "output_tokens": 38,
+              "reasoning_tokens": 17,
+              "total_tokens": 768
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "idle",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2462,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "openai_responses",
+          "step": "cancel",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "cancelled",
+          "elapsed_ms": 0,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 752,
+              "output_tokens": 72,
+              "reasoning_tokens": 51,
+              "total_tokens": 824
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "after_cancel",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2481,
+          "model_attempts": 1
+        }
+      ],
+      "failed_cases": [
+        "google modern receptionist conversation streaming=false",
+        "google modern receptionist conversation streaming=true"
+      ]
+    },
+    {
+      "attempt": "portable1",
+      "description": "Google portable comparison",
+      "result": "2 tests, 2 failures (4 excluded)",
+      "steps": [
+        {
+          "usage": [
+            {
+              "input_tokens": 288,
+              "output_tokens": 26,
+              "reasoning_tokens": 0,
+              "total_tokens": 314
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 984,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 335,
+              "output_tokens": 55,
+              "reasoning_tokens": 0,
+              "total_tokens": 390
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 862,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 411,
+              "output_tokens": 13,
+              "reasoning_tokens": 0,
+              "total_tokens": 424
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 878,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 423,
+              "output_tokens": 24,
+              "reasoning_tokens": 0,
+              "total_tokens": 447
+            },
+            {
+              "input_tokens": 493,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 505
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 1704,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 462,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 480
+            },
+            {
+              "input_tokens": 521,
+              "output_tokens": 41,
+              "reasoning_tokens": 0,
+              "total_tokens": 562
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "invalid_dialogue",
+          "elapsed_ms": 1265,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 288,
+              "output_tokens": 21,
+              "reasoning_tokens": 0,
+              "total_tokens": 309
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 821,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 330,
+              "output_tokens": 52,
+              "reasoning_tokens": 0,
+              "total_tokens": 382
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 831,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 403,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 414
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 480,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 415,
+              "output_tokens": 24,
+              "reasoning_tokens": 0,
+              "total_tokens": 439
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "invalid_dialogue",
+          "elapsed_ms": 662,
+          "model_attempts": 1
+        }
+      ],
+      "failed_cases": [
+        "google portable receptionist conversation streaming=true",
+        "google portable receptionist conversation streaming=false"
+      ]
+    },
+    {
+      "attempt": "portable2",
+      "description": "Google portable with response observation",
+      "result": "2 tests, 2 failures (4 excluded)",
+      "steps": [
+        {
+          "usage": [
+            {
+              "input_tokens": 288,
+              "output_tokens": 26,
+              "reasoning_tokens": 0,
+              "total_tokens": 314
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 889,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 335,
+              "output_tokens": 56,
+              "reasoning_tokens": 0,
+              "total_tokens": 391
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 757,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 412,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 423
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 548,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 424,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 436
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 824,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 463,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 481
+            },
+            {
+              "input_tokens": 524,
+              "output_tokens": 41,
+              "reasoning_tokens": 0,
+              "total_tokens": 565
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "invalid_dialogue",
+          "elapsed_ms": 954,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 288,
+              "output_tokens": 26,
+              "reasoning_tokens": 0,
+              "total_tokens": 314
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 724,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 335,
+              "output_tokens": 59,
+              "reasoning_tokens": 0,
+              "total_tokens": 394
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 708,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 418,
+              "output_tokens": 13,
+              "reasoning_tokens": 0,
+              "total_tokens": 431
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 546,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 430,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 442
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 664,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 469,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 487
+            },
+            {
+              "input_tokens": 529,
+              "output_tokens": 37,
+              "reasoning_tokens": 0,
+              "total_tokens": 566
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "invalid_dialogue",
+          "elapsed_ms": 1385,
+          "model_attempts": 2
+        }
+      ],
+      "failed_cases": [
+        "google portable receptionist conversation streaming=true",
+        "google portable receptionist conversation streaming=false"
+      ]
+    },
+    {
+      "attempt": "prompt1",
+      "description": "Clarified history-envelope instructions; six cases",
+      "result": "6 tests, 4 failures",
+      "steps": [
+        {
+          "usage": [
+            {
+              "output_tokens": 27,
+              "input_tokens": 343,
+              "reasoning_tokens": 0,
+              "total_tokens": 370
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "elapsed_ms": 840,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 58,
+              "input_tokens": 391,
+              "reasoning_tokens": 0,
+              "total_tokens": 449
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "elapsed_ms": 673,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 473,
+              "reasoning_tokens": 0,
+              "total_tokens": 484
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "elapsed_ms": 620,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 485,
+              "reasoning_tokens": 0,
+              "total_tokens": 509
+            },
+            {
+              "output_tokens": 24,
+              "input_tokens": 555,
+              "reasoning_tokens": 0,
+              "total_tokens": 579
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "elapsed_ms": 1165,
+          "model_attempts": 2,
+          "outcome": "invalid_dialogue"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 25,
+              "input_tokens": 370,
+              "reasoning_tokens": 0,
+              "total_tokens": 395
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "elapsed_ms": 3627,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 79,
+              "input_tokens": 415,
+              "reasoning_tokens": 28,
+              "total_tokens": 494
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "elapsed_ms": 4068,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 37,
+              "input_tokens": 484,
+              "reasoning_tokens": 16,
+              "total_tokens": 521
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "elapsed_ms": 2504,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 63,
+              "input_tokens": 500,
+              "reasoning_tokens": 41,
+              "total_tokens": 563
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "elapsed_ms": 3858,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 20,
+              "input_tokens": 543,
+              "reasoning_tokens": 0,
+              "total_tokens": 563
+            },
+            {
+              "output_tokens": 59,
+              "input_tokens": 600,
+              "reasoning_tokens": 27,
+              "total_tokens": 659
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "elapsed_ms": 4046,
+          "model_attempts": 2,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 50,
+              "input_tokens": 650,
+              "reasoning_tokens": 24,
+              "total_tokens": 700
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "elapsed_ms": 1974,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 56,
+              "input_tokens": 721,
+              "reasoning_tokens": 27,
+              "total_tokens": 777
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "elapsed_ms": 2092,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 19,
+              "input_tokens": 778,
+              "reasoning_tokens": 0,
+              "total_tokens": 797
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "idle",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "elapsed_ms": 1662,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [],
+          "strategy": "openai_responses",
+          "step": "cancel",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "elapsed_ms": 0,
+          "model_attempts": 1,
+          "outcome": "cancelled"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 45,
+              "input_tokens": 800,
+              "reasoning_tokens": 24,
+              "total_tokens": 845
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "after_cancel",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "elapsed_ms": 1958,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 14,
+              "input_tokens": 343,
+              "reasoning_tokens": 0,
+              "total_tokens": 357
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 399,
+              "reasoning_tokens": 0,
+              "total_tokens": 413
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 456,
+              "reasoning_tokens": 0,
+              "total_tokens": 470
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 512,
+              "reasoning_tokens": 0,
+              "total_tokens": 526
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 568,
+              "reasoning_tokens": 0,
+              "total_tokens": 582
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 625,
+              "reasoning_tokens": 0,
+              "total_tokens": 639
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 681,
+              "reasoning_tokens": 0,
+              "total_tokens": 695
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 738,
+              "reasoning_tokens": 0,
+              "total_tokens": 752
+            }
+          ],
+          "strategy": "google_object",
+          "step": "short",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "elapsed_ms": 5511,
+          "model_attempts": 8,
+          "outcome": "model_round_limit"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 14,
+              "input_tokens": 343,
+              "reasoning_tokens": 0,
+              "total_tokens": 357
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 399,
+              "reasoning_tokens": 0,
+              "total_tokens": 413
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 456,
+              "reasoning_tokens": 0,
+              "total_tokens": 470
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 512,
+              "reasoning_tokens": 0,
+              "total_tokens": 526
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 569,
+              "reasoning_tokens": 0,
+              "total_tokens": 583
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 626,
+              "reasoning_tokens": 0,
+              "total_tokens": 640
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 683,
+              "reasoning_tokens": 0,
+              "total_tokens": 697
+            },
+            {
+              "output_tokens": 14,
+              "input_tokens": 739,
+              "reasoning_tokens": 0,
+              "total_tokens": 753
+            }
+          ],
+          "strategy": "google_object",
+          "step": "short",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "elapsed_ms": 5161,
+          "model_attempts": 8,
+          "outcome": "model_round_limit"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 25,
+              "input_tokens": 343,
+              "reasoning_tokens": 0,
+              "total_tokens": 368
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "elapsed_ms": 545,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 53,
+              "input_tokens": 389,
+              "reasoning_tokens": 0,
+              "total_tokens": 442
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "elapsed_ms": 729,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 466,
+              "reasoning_tokens": 0,
+              "total_tokens": 477
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "elapsed_ms": 527,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 478,
+              "reasoning_tokens": 0,
+              "total_tokens": 490
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "elapsed_ms": 424,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 517,
+              "reasoning_tokens": 0,
+              "total_tokens": 535
+            },
+            {
+              "output_tokens": 41,
+              "input_tokens": 578,
+              "reasoning_tokens": 0,
+              "total_tokens": 619
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "elapsed_ms": 1213,
+          "model_attempts": 2,
+          "outcome": "invalid_dialogue"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 25,
+              "input_tokens": 370,
+              "reasoning_tokens": 0,
+              "total_tokens": 395
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "elapsed_ms": 1795,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 83,
+              "input_tokens": 415,
+              "reasoning_tokens": 27,
+              "total_tokens": 498
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "elapsed_ms": 2080,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 33,
+              "input_tokens": 489,
+              "reasoning_tokens": 12,
+              "total_tokens": 522
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "elapsed_ms": 1661,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 67,
+              "input_tokens": 505,
+              "reasoning_tokens": 45,
+              "total_tokens": 572
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "elapsed_ms": 2456,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 20,
+              "input_tokens": 548,
+              "reasoning_tokens": 0,
+              "total_tokens": 568
+            },
+            {
+              "output_tokens": 51,
+              "input_tokens": 606,
+              "reasoning_tokens": 21,
+              "total_tokens": 657
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "elapsed_ms": 6543,
+          "model_attempts": 2,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 39,
+              "input_tokens": 654,
+              "reasoning_tokens": 13,
+              "total_tokens": 693
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "elapsed_ms": 3018,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 47,
+              "input_tokens": 726,
+              "reasoning_tokens": 20,
+              "total_tokens": 773
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "elapsed_ms": 2836,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 19,
+              "input_tokens": 781,
+              "reasoning_tokens": 0,
+              "total_tokens": 800
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "idle",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "elapsed_ms": 1714,
+          "model_attempts": 1,
+          "outcome": "completed"
+        },
+        {
+          "usage": [],
+          "strategy": "openai_responses",
+          "step": "cancel",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "elapsed_ms": 1,
+          "model_attempts": 1,
+          "outcome": "cancelled"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 113,
+              "input_tokens": 803,
+              "reasoning_tokens": 92,
+              "total_tokens": 916
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "after_cancel",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "elapsed_ms": 2457,
+          "model_attempts": 1,
+          "outcome": "completed"
+        }
+      ],
+      "failed_cases": [
+        "google portable receptionist conversation streaming=true",
+        "google modern receptionist conversation streaming=false",
+        "google modern receptionist conversation streaming=true",
+        "google portable receptionist conversation streaming=false"
+      ]
+    },
+    {
+      "attempt": "auto1",
+      "description": "Explicit AUTO with abbreviated fixture instructions",
+      "result": "2 tests, 2 failures (6 excluded)",
+      "steps": [
+        {
+          "usage": [
+            {
+              "input_tokens": 343,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 357
+            },
+            {
+              "input_tokens": 399,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 413
+            },
+            {
+              "input_tokens": 456,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 470
+            },
+            {
+              "input_tokens": 512,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 526
+            },
+            {
+              "input_tokens": 568,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 582
+            },
+            {
+              "input_tokens": 624,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 638
+            },
+            {
+              "input_tokens": 680,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 694
+            },
+            {
+              "input_tokens": 736,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 750
+            }
+          ],
+          "strategy": "google_object",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "model_round_limit",
+          "elapsed_ms": 6413,
+          "model_attempts": 8
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 343,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 357
+            },
+            {
+              "input_tokens": 399,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 413
+            },
+            {
+              "input_tokens": 456,
+              "output_tokens": 23,
+              "reasoning_tokens": 0,
+              "total_tokens": 479
+            }
+          ],
+          "strategy": "google_object",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 2043,
+          "model_attempts": 3
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 503,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 521
+            },
+            {
+              "input_tokens": 564,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 582
+            },
+            {
+              "input_tokens": 625,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 643
+            },
+            {
+              "input_tokens": 686,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 704
+            },
+            {
+              "input_tokens": 746,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 764
+            },
+            {
+              "input_tokens": 806,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 824
+            },
+            {
+              "input_tokens": 866,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 884
+            },
+            {
+              "input_tokens": 926,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 944
+            }
+          ],
+          "strategy": "google_object",
+          "step": "long",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "model_round_limit",
+          "elapsed_ms": 5461,
+          "model_attempts": 8
+        }
+      ],
+      "failed_cases": [
+        "google explicit AUTO conversation streaming=true",
+        "google explicit AUTO conversation streaming=false"
+      ]
+    },
+    {
+      "attempt": "examples1",
+      "description": "Shared format examples with abbreviated fixture instructions",
+      "result": "2 tests, 2 failures (6 excluded)",
+      "steps": [
+        {
+          "usage": [
+            {
+              "output_tokens": 21,
+              "input_tokens": 406,
+              "reasoning_tokens": 0,
+              "total_tokens": 427
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "streaming": false,
+          "elapsed_ms": 870,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 54,
+              "input_tokens": 448,
+              "reasoning_tokens": 0,
+              "total_tokens": 502
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "streaming": false,
+          "elapsed_ms": 585,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 523,
+              "reasoning_tokens": 0,
+              "total_tokens": 534
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "streaming": false,
+          "elapsed_ms": 543,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 535,
+              "reasoning_tokens": 0,
+              "total_tokens": 547
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "streaming": false,
+          "elapsed_ms": 376,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 574,
+              "reasoning_tokens": 0,
+              "total_tokens": 592
+            },
+            {
+              "output_tokens": 27,
+              "input_tokens": 635,
+              "reasoning_tokens": 0,
+              "total_tokens": 662
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "invalid_dialogue",
+          "streaming": false,
+          "elapsed_ms": 1006,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 25,
+              "input_tokens": 406,
+              "reasoning_tokens": 0,
+              "total_tokens": 431
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "streaming": true,
+          "elapsed_ms": 1385,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 48,
+              "input_tokens": 452,
+              "reasoning_tokens": 0,
+              "total_tokens": 500
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "streaming": true,
+          "elapsed_ms": 634,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 524,
+              "reasoning_tokens": 0,
+              "total_tokens": 535
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "streaming": true,
+          "elapsed_ms": 627,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 536,
+              "reasoning_tokens": 0,
+              "total_tokens": 548
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "streaming": true,
+          "elapsed_ms": 1098,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 575,
+              "reasoning_tokens": 0,
+              "total_tokens": 593
+            },
+            {
+              "output_tokens": 27,
+              "input_tokens": 635,
+              "reasoning_tokens": 0,
+              "total_tokens": 662
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "invalid_dialogue",
+          "streaming": true,
+          "elapsed_ms": 1323,
+          "model_attempts": 2
+        }
+      ],
+      "failed_cases": [
+        "google portable receptionist conversation streaming=false",
+        "google portable receptionist conversation streaming=true"
+      ]
+    },
+    {
+      "attempt": "protocol1",
+      "description": "Full configured protocol, attributed input and immediate pending state; eight cases due ExUnit include precedence",
+      "result": "8 tests, 7 failures",
+      "steps": [
+        {
+          "usage": [
+            {
+              "input_tokens": 1351,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1369
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 798,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1415,
+              "output_tokens": 46,
+              "reasoning_tokens": 0,
+              "total_tokens": 1461
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 781,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1507,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1518
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 552,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1541,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1553
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 959,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1602,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1620
+            },
+            {
+              "input_tokens": 1663,
+              "output_tokens": 29,
+              "reasoning_tokens": 0,
+              "total_tokens": 1692
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 945,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1738,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 1754
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 450,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1811,
+              "output_tokens": 37,
+              "reasoning_tokens": 0,
+              "total_tokens": 1848
+            },
+            {
+              "input_tokens": 1894,
+              "output_tokens": 25,
+              "reasoning_tokens": 0,
+              "total_tokens": 1919
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 3475,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1873,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1884
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 744,
+          "model_attempts": 1
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "cancelled",
+          "elapsed_ms": 1,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1931,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1942
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 498,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1351,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 1365
+            },
+            {
+              "input_tokens": 1407,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 1421
+            },
+            {
+              "input_tokens": 1463,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 1477
+            },
+            {
+              "input_tokens": 1519,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 1533
+            },
+            {
+              "input_tokens": 1576,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 1590
+            },
+            {
+              "input_tokens": 1632,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 1646
+            },
+            {
+              "input_tokens": 1688,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 1702
+            },
+            {
+              "input_tokens": 1744,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 1758
+            }
+          ],
+          "strategy": "google_object",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "model_round_limit",
+          "elapsed_ms": 5261,
+          "model_attempts": 8
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1351,
+              "output_tokens": 24,
+              "reasoning_tokens": 0,
+              "total_tokens": 1375
+            }
+          ],
+          "strategy": "google_object",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 654,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1421,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1436
+            },
+            {
+              "input_tokens": 1479,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1494
+            },
+            {
+              "input_tokens": 1536,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1551
+            },
+            {
+              "input_tokens": 1593,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1608
+            },
+            {
+              "input_tokens": 1651,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1666
+            },
+            {
+              "input_tokens": 1708,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1723
+            },
+            {
+              "input_tokens": 1766,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1781
+            },
+            {
+              "input_tokens": 1824,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1839
+            }
+          ],
+          "strategy": "google_object",
+          "step": "long",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "model_round_limit",
+          "elapsed_ms": 4832,
+          "model_attempts": 8
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1336,
+              "output_tokens": 41,
+              "reasoning_tokens": 12,
+              "total_tokens": 1377
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 1968,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1402,
+              "output_tokens": 70,
+              "reasoning_tokens": 22,
+              "total_tokens": 1472
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 1857,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1486,
+              "output_tokens": 35,
+              "reasoning_tokens": 14,
+              "total_tokens": 1521
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 3307,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1520,
+              "output_tokens": 20,
+              "reasoning_tokens": 0,
+              "total_tokens": 1540
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 1476,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1581,
+              "output_tokens": 20,
+              "reasoning_tokens": 0,
+              "total_tokens": 1601
+            },
+            {
+              "input_tokens": 1639,
+              "output_tokens": 28,
+              "reasoning_tokens": 0,
+              "total_tokens": 1667
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 3491,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1706,
+              "output_tokens": 37,
+              "reasoning_tokens": 11,
+              "total_tokens": 1743
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 1866,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1778,
+              "output_tokens": 40,
+              "reasoning_tokens": 13,
+              "total_tokens": 1818
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "streaming": true,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2135,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1351,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 1365
+            },
+            {
+              "input_tokens": 1407,
+              "output_tokens": 19,
+              "reasoning_tokens": 0,
+              "total_tokens": 1426
+            }
+          ],
+          "strategy": "google_object",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 1095,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1472,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 1488
+            },
+            {
+              "input_tokens": 1531,
+              "output_tokens": 43,
+              "reasoning_tokens": 0,
+              "total_tokens": 1574
+            }
+          ],
+          "strategy": "google_object",
+          "step": "long",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 1203,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1620,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1631
+            }
+          ],
+          "strategy": "google_object",
+          "step": "silent",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 717,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1654,
+              "output_tokens": 14,
+              "reasoning_tokens": 0,
+              "total_tokens": 1668
+            },
+            {
+              "input_tokens": 1711,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 1727
+            },
+            {
+              "input_tokens": 1769,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 1785
+            },
+            {
+              "input_tokens": 1827,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 1843
+            },
+            {
+              "input_tokens": 1884,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 1900
+            },
+            {
+              "input_tokens": 1942,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 1958
+            },
+            {
+              "input_tokens": 2001,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 2017
+            },
+            {
+              "input_tokens": 2059,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 2077
+            }
+          ],
+          "strategy": "google_object",
+          "step": "cue",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "model_round_limit",
+          "elapsed_ms": 5070,
+          "model_attempts": 8
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1351,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1369
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 664,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1415,
+              "output_tokens": 64,
+              "reasoning_tokens": 0,
+              "total_tokens": 1479
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 590,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1525,
+              "output_tokens": 11,
+              "reasoning_tokens": 0,
+              "total_tokens": 1536
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 760,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1559,
+              "output_tokens": 12,
+              "reasoning_tokens": 0,
+              "total_tokens": 1571
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 468,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1620,
+              "output_tokens": 18,
+              "reasoning_tokens": 0,
+              "total_tokens": 1638
+            },
+            {
+              "input_tokens": 1680,
+              "output_tokens": 24,
+              "reasoning_tokens": 0,
+              "total_tokens": 1704
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 1125,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1750,
+              "output_tokens": 16,
+              "reasoning_tokens": 0,
+              "total_tokens": 1766
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 422,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1822,
+              "output_tokens": 35,
+              "reasoning_tokens": 0,
+              "total_tokens": 1857
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "streaming": false,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "invalid_dialogue",
+          "elapsed_ms": 656,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1351,
+              "output_tokens": 23,
+              "reasoning_tokens": 0,
+              "total_tokens": 1374
+            }
+          ],
+          "strategy": "google_object",
+          "step": "short",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 601,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1420,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1435
+            },
+            {
+              "input_tokens": 1477,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1492
+            },
+            {
+              "input_tokens": 1535,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1550
+            },
+            {
+              "input_tokens": 1593,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1608
+            },
+            {
+              "input_tokens": 1650,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1665
+            },
+            {
+              "input_tokens": 1708,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1723
+            },
+            {
+              "input_tokens": 1764,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1779
+            },
+            {
+              "input_tokens": 1821,
+              "output_tokens": 15,
+              "reasoning_tokens": 0,
+              "total_tokens": 1836
+            }
+          ],
+          "strategy": "google_object",
+          "step": "long",
+          "provider": "google",
+          "streaming": true,
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "model_round_limit",
+          "elapsed_ms": 4775,
+          "model_attempts": 8
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1336,
+              "output_tokens": 25,
+              "reasoning_tokens": 0,
+              "total_tokens": 1361
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2741,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1399,
+              "output_tokens": 131,
+              "reasoning_tokens": 76,
+              "total_tokens": 1530
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2523,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1490,
+              "output_tokens": 32,
+              "reasoning_tokens": 11,
+              "total_tokens": 1522
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 1992,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1524,
+              "output_tokens": 56,
+              "reasoning_tokens": 34,
+              "total_tokens": 1580
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2695,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1585,
+              "output_tokens": 20,
+              "reasoning_tokens": 0,
+              "total_tokens": 1605
+            },
+            {
+              "input_tokens": 1642,
+              "output_tokens": 28,
+              "reasoning_tokens": 0,
+              "total_tokens": 1670
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 4194,
+          "model_attempts": 2
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1709,
+              "output_tokens": 42,
+              "reasoning_tokens": 16,
+              "total_tokens": 1751
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 2394,
+          "model_attempts": 1
+        },
+        {
+          "usage": [
+            {
+              "input_tokens": 1780,
+              "output_tokens": 40,
+              "reasoning_tokens": 13,
+              "total_tokens": 1820
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "streaming": false,
+          "model": "gpt-6-luna",
+          "outcome": "completed",
+          "elapsed_ms": 3145,
+          "model_attempts": 1
+        }
+      ],
+      "failed_cases": [
+        "google explicit AUTO conversation streaming=false",
+        "google modern receptionist conversation streaming=true",
+        "openai modern receptionist conversation streaming=true",
+        "google modern receptionist conversation streaming=false",
+        "google portable receptionist conversation streaming=false",
+        "google explicit AUTO conversation streaming=true",
+        "openai modern receptionist conversation streaming=false"
+      ],
+      "notes": "Both OpenAI failures were semantic case-sensitive READY assertions on valid lowercase ready text. All four native Google variants failed; portable buffered failed at completion; portable streamed passed. AUTO variants share strategy/mode with default in these old step metrics; failed_cases preserves case names. Future metrics include tool_choice."
+    }
+  ],
+  "interpretation": "Attempts through examples1 used authored-only instructions, plain caller input and delayed pending-state updates. Retained as standalone diagnostic evidence, not configured-call acceptance. Subsequent protocol1 corrects fixture fidelity.",
+  "metric_scope": "outcome is the runtime Session result. It is not semantic acceptance. Older rows predate tightened semantic assertions and semantic_outcome. Aggregate test results and failed_cases are authoritative for each run; every failed attempt is retained."
+}

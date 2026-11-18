@@ -297,3 +297,20 @@ Independent Astra xhigh review is clean after proved fixes for public-part and
 empty-carrier signatures. Final independent 10 tests, fresh/repeat/prior-state
 patch upgrades and root static gates pass. Live receptionist/Hangup and the full
 configured conversation matrix remain pending, so checkpoint B is not complete.
+
+## Live acceptance investigation — gate still open
+
+The [fixed live plan](../../docs/design/universal-replies-live-plan.md) and
+[retained metrics](../../docs/design/universal-replies-live-evidence.json) record
+all initial and diagnostic attempts. Initial fixture instructions were incomplete;
+corrected tests compose the captured protocol, attribute caller input and publish
+pending state before acknowledgment. The corrected trial completed the Google
+portable streaming conversation, while native Google still looped on tools and
+buffered portable failed a later reply. Both OpenAI cases in that trial hit an
+incorrect case-sensitive status assertion on valid lowercase text.
+
+Independent review then proved overly permissive semantic checks and those checks
+were tightened. Earlier per-step completed outcomes mean runtime completion only;
+case results and failure lists remain retained. No passing run of the tightened
+fixture, real-room Hangup, all-six-provider acceptance or deployment is claimed.
+These findings do not close checkpoint B or change the index status.

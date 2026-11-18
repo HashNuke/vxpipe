@@ -191,3 +191,63 @@ dependency gates pass. No speech/source state-machine implementation changed.
 - Final runtime child: 191 tests pass, 9 excluded. Prior replay umbrella run finished
   successfully: 5,494 tests, zero failures. A fresh umbrella run now covers the
   final ordered-Part implementation; live acceptance remains pending.
+
+### Live conversation investigation
+
+- Final ordered-Part root suite completed: 5,498 tests, zero failures. No release
+  yet: configured acceptance and remaining integration gates are open.
+- Defined the fixed synthetic receptionist scenario before running it in
+  `docs/design/universal-replies-live-plan.md`. Added a host-settled Session harness
+  with both lookup and hangup declared, pending lookup, trusted later completion,
+  idle, cancellation and recovery. Lookup has no external side effect; real room
+  Hangup is still separate and pending.
+- Initial four configured conversations: OpenAI buffered and streaming pass;
+  Google native object reaches model-round limits with unwanted lookup calls.
+  Both Google portable comparison cases also fail (listener cue or post-tool
+  extra fields). A second portable diagnostic pair proves copying `type` and
+  `participant_id` from settled history into replies.
+- Clarified the shared system instructions without changing decoder/history/tools.
+  Focused tests: 19 pass. Fixed six-case trial still fails all four Google cases;
+  both OpenAI cases pass. Native loops on lookup; portable still copies history
+  envelope fields. This prompt change alone is not a demonstrated remedy.
+- Retained every attempt's step counts, elapsed times, reported usage and failure
+  outcomes in `docs/design/universal-replies-live-evidence.json`. Raw synthetic
+  diagnostic output stays outside version control. No protected environment file
+  was read or changed; all live requests ran through the authorized runner.
+- Astra reviewer is tracing actual projected request instructions/encoding for a
+  reproducible omission. No production strategy downgrade or permission table
+  has been introduced. Further live acceptance remains pending.
+- Explicit AUTO did not resolve native Google loops; two additional shared format
+  examples did not resolve portable post-tool output. Both experiments retained.
+  Reverted all experimental production prompt edits because no remedy was proved.
+- Independent real-HTTP review proved instructions survive byte-for-byte through
+  all four Google strategy/mode combinations and after native tool results.
+  Self-review then found fixture gaps: missing captured Protocol instructions,
+  unstructured caller input and delayed pending snapshots. Corrected all three;
+  prior runs describe standalone diagnostics, not configured activation evidence.
+- Corrected protocol trial: Google portable streaming completed all ten steps;
+  buffered portable still failed at asynchronous completion. Native Google still
+  loops with or without explicit AUTO. An OpenAI valid lowercase ready reply
+  exposed an overly strict semantic assertion; made status/cue matching case
+  insensitive without relaxing dialogue validation.
+- ExUnit --only includes took precedence over the diagnostic --exclude, so the
+  protocol trial ran eight instead of six cases. Recorded all cases; moved the
+  selection tag onto just the six intended tests and added tool_choice to future
+  metrics. This was a harness selection error, not a hidden successful rerun.
+- Astra reproduced a false-positive acceptance harness: one false long sentence,
+  a premature completed lookup, arithmetic14 and NOT READY all passed substring
+  checks. Tightened command wording/semantic checks and added semantic_outcome
+  alongside runtime outcome. Older evidence explicitly distinguishes runtime
+  completion from case acceptance. Added missing callback @impl annotations.
+  No live run of these tightened checks is claimed yet; local review continues.
+- Re-review proved reversed hours could still pass keyword-based long-answer checks.
+  Replaced that language grading with a fixed requested three-sentence statement
+  over eighty bytes and exact normalized comparison. Reviewer independently
+  reconciled all seven evidence runs against retained logs with no omissions.
+- Final Astra xhigh harness review: no remaining actionable findings. Permanent
+  six-case loopback regression matrix includes a valid complete conversation and
+  independent rejection of each proved false-positive class. Six tests pass;
+  root strict Credo and whitespace checks pass. Self-review bound the fixture's
+  dummy API key to LiveModels' selected environment variable (no ambient key
+  dependency). Root umbrella rerun remains in progress; last complete run passed
+  5,498 tests. Usage-provenance red tests belong to the next checkpoint.
