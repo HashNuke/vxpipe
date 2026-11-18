@@ -8,11 +8,11 @@ defmodule Vxpipe.AgentRuntime.Integration.UniversalRepliesTest do
   for streaming <- [false, true] do
     @tag :live_gemini
     @tag :live_universal_auto
-    test "google explicit AUTO conversation streaming=#{streaming}" do
+    test "google native explicit AUTO conversation streaming=#{streaming}" do
       Vxpipe.AgentRuntime.LiveUniversalConversation.run(
         "google",
         unquote(streaming),
-        :configured,
+        :google_object,
         tool_choice: :auto
       )
     end

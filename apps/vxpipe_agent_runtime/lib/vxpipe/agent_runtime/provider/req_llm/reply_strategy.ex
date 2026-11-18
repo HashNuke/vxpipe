@@ -9,11 +9,14 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ReplyStrategy do
   def select(%LLMDB.Model{provider: :google} = model, options) do
     provider_options = Keyword.get(options, :provider_options, [])
 
-    # ReqLLM's object encoder omits builtins; chat retains them alongside native tools.
-    if Enum.any?(
-         [:google_grounding, :google_url_context],
-         fn key -> Keyword.has_key?(provider_options, key) or Keyword.has_key?(options, key) end
-       ) do
+    # Capability metadata chooses encoding, never protocol admission. SDK request
+    # preparation alone proves encodability, not affirmative schema support.
+    # ReqLLM's object encoder also omits builtins; chat retains them with tools.
+    if not Elixir.ReqLLM.ModelHelpers.json_schema?(model) or
+         Enum.any?(
+           [:google_grounding, :google_url_context],
+           fn key -> Keyword.has_key?(provider_options, key) or Keyword.has_key?(options, key) end
+         ) do
       :portable_json
     else
       google_strategy(model)

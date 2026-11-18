@@ -26,7 +26,9 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
       ]
     ]
 
-    for parts <- layouts, streaming <- [false, true] do
+    for parts <- layouts,
+        streaming <- [false, true],
+        strategy <- [:google_object, :portable_json] do
       url =
         DialogueWireServer.start(self(), fn _ ->
           if streaming do
@@ -54,6 +56,8 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
           streaming: streaming,
           generation_options: [base_url: url]
         )
+
+      config = %{config | reply_strategy: strategy}
 
       request = %{
         ModelRequest.new([Message.user("Hello")], [], [], %{})
@@ -87,7 +91,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
       }
     ]
 
-    for streaming <- [false, true] do
+    for streaming <- [false, true], strategy <- [:google_object, :portable_json] do
       url =
         DialogueWireServer.start(self(), fn body ->
           output =
@@ -112,6 +116,8 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
           streaming: streaming,
           generation_options: [base_url: url]
         )
+
+      config = %{config | reply_strategy: strategy}
 
       tool = %ModelTool{
         name: "lookup",
@@ -157,7 +163,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
   test "reasoning on an ordinary native dialogue reply remains private and replayable" do
     text = ~s({"agent_mode":"speaker","message":"Hello."})
 
-    for streaming <- [false, true] do
+    for streaming <- [false, true], strategy <- [:google_object, :portable_json] do
       url =
         DialogueWireServer.start(self(), fn _ ->
           payload =
@@ -193,6 +199,8 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
           generation_options: [base_url: url]
         )
 
+      config = %{config | reply_strategy: strategy}
+
       request = %{
         ModelRequest.new([Message.user("Hello")], [], [], %{})
         | reply_protocol: :mode_message_v1
@@ -213,7 +221,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
   test "buffered and streamed private reasoning survives native tool continuation" do
     text = ~s({"agent_mode":"listener","message":null})
 
-    for streaming <- [false, true] do
+    for streaming <- [false, true], strategy <- [:google_object, :portable_json] do
       url =
         DialogueWireServer.start(self(), fn body ->
           parts =
@@ -256,6 +264,8 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
           streaming: streaming,
           generation_options: [base_url: url]
         )
+
+      config = %{config | reply_strategy: strategy}
 
       tool = %ModelTool{
         name: "lookup",

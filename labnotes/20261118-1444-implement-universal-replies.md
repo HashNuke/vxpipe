@@ -291,3 +291,22 @@ dependency gates pass. No speech/source state-machine implementation changed.
   Permanent usage/replay eight tests and all root static gates pass. New full
   umbrella run is in progress. This checkpoint fixes accounting consistency;
   it does not claim the still-failing live conversation acceptance.
+
+### Google encoding capability selection
+
+- Added a failing configuration-boundary test: absent/false schema capability
+  metadata previously selected native object solely because SDK preparation worked.
+  Red: expected portable, got google_object. Models remain admitted in every case.
+- Require affirmative resolved schema metadata plus the existing SDK preparation
+  probe for native Google encoding. False/missing metadata pins portable without
+  permission gating or dynamic downgrade. Do not infer that metadata proves an
+  upstream feature absent or caused prior loops.
+- Native wire fixtures explicitly supply schema capability evidence; Google replay
+  tests now exercise both native and portable encoders in both response modes.
+  The explicit-AUTO diagnostic remains pinned native for future comparisons.
+  Initial strategy/wire tests: 7 pass. Broader verification/review pending.
+- Final Astra xhigh encoding-selection review is clean. Eleven changed-boundary
+  tests pass independently; two additional proofs confirm nil/empty capability
+  admission, pinned encoding across tools/AUTO options and later metadata changes.
+  Full runtime child: 202 tests pass, 17 live exclusions. Root static gates pass;
+  prior usage umbrella run continues. No new live acceptance is claimed here.

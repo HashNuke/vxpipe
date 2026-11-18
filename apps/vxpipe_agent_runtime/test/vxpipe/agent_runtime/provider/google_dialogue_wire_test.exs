@@ -36,7 +36,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
       {:ok, config} =
         Provider.new(
           api_key: "test-only",
-          model: "google:gemini-3.5-flash-lite",
+          model: native_model(),
           streaming: false,
           generation_options:
             Keyword.put(options, :req_http_options, plug: {Req.Test, __MODULE__})
@@ -102,7 +102,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
       {:ok, config} =
         Provider.new(
           api_key: "test-only",
-          model: "google:gemini-3.5-flash-lite",
+          model: native_model(),
           streaming: streaming,
           generation_options: [base_url: url]
         )
@@ -159,7 +159,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
     {:ok, config} =
       Provider.new(
         api_key: "test-only",
-        model: "google:gemini-3.5-flash-lite",
+        model: native_model(),
         streaming: true,
         generation_options: [base_url: url]
       )
@@ -205,7 +205,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
       {:ok, config} =
         Provider.new(
           api_key: "test-only",
-          model: "google:gemini-3.5-flash-lite",
+          model: native_model(),
           streaming: streaming,
           generation_options: [base_url: url]
         )
@@ -256,7 +256,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
       assert {:ok, config} =
                Provider.new(
                  api_key: "test-only",
-                 model: "google:gemini-3.5-flash-lite",
+                 model: native_model(),
                  streaming: streaming,
                  generation_options: [base_url: url, max_tokens: 100]
                )
@@ -292,5 +292,10 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
       assert Enum.map(declared, & &1["name"]) == ["hangup", "lookup"]
       assert JSON.encode!(body["systemInstruction"]) =~ "agent_mode"
     end
+  end
+
+  defp native_model do
+    {:ok, model} = Vxpipe.AgentRuntime.ModelOverrides.resolve(:google, "gemini-3.5-flash-lite")
+    %{model | capabilities: Map.put(model.capabilities, :json, %{schema: true})}
   end
 end

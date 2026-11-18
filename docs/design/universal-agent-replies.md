@@ -308,3 +308,20 @@ components for this check. If either final component decreases below a previousl
 reported component, correction is disabled; generic max-of-combined counters
 could otherwise undercount consumed output. No inferred counter or fabricated
 billing value is introduced. Normal increasing final components remain eligible.
+
+### Affirmative native encoding evidence
+
+Google native schema selection now requires affirmative resolved `json.schema`
+capability metadata as well as successful SDK schema-plus-tools preparation.
+Absent or false capability metadata selects the portable instructed/validated path;
+it does not deny configuration, saving, publishing or the modern protocol. Existing
+builtin-tool exclusions still preserve the portable encoder's full tool surface.
+The chosen encoding remains pinned for the Session; there is no error-triggered
+strategy switch or legacy fallback.
+
+The earlier offline SDK probe alone established that a request could be encoded,
+not affirmative support for that combination. Lack of affirmative metadata does
+not prove the provider lacks schema support and does not establish the cause of
+observed live tool loops. Tests supply explicit capability evidence to exercise
+native encoding and cover replay in both strategies. No production model-ID list
+or catalog exclusion is introduced.
