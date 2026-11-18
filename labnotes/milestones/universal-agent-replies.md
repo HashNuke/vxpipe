@@ -205,7 +205,7 @@ future LLM integrations inherit the same contract and conformance requirements.
 - [x] Update the durable design, integration authoring guide, usage documentation,
   prior profile-policy notices and this milestone/index together. Explain generic
   support versus actual upstream request failures without promising infallible JSON.
-- [ ] Verify the release contains no provider/model reply allowlist, no substitute
+- [x] Verify the release contains no provider/model reply allowlist, no substitute
   catalog exclusion and no implicit legacy fallback. Retain ordinary model and
   credential validation and the shared strict decoder.
 - [ ] Commit the accepted implementation before building/deploying `vxpipe.service`;
@@ -481,3 +481,20 @@ C3/E2 remain open under the current policy; the user has been asked explicitly
 whether to retain mandatory streamed acceptance or permit documented model failures
 after all other gates pass. No answer or deployment authorization beyond the
 original completion condition is inferred.
+
+
+## Implementation evidence — F, packaged content audit
+
+The production candidate at `bc90b0aa` builds successfully. Source tracing and 26
+independent focused checks verify identity-free reply admission, encoding-only
+capability selection, no schema-based catalog exclusion or implicit modern/legacy
+fallback, retained ordinary validation and the shared strict decoder. Packaged
+contract probes verify future-model portable encoding and decoder rejection cases;
+twelve executable module digests match production compilation. Independent review
+also extracted all 6,140 BEAM files from a never-started candidate container and
+verified byte-for-byte equality with the assembled release. The obsolete profile
+module is absent; OCI revision matches the accepted implementation checkpoint.
+
+F2 is complete. A recovery image is retained, but the running service remains on
+its prior image. Full umbrella verification, current live acceptance policy and
+actual deployment/smoke evidence remain separate gates.

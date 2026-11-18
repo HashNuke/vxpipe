@@ -738,3 +738,23 @@ recovery speech assertions remain intact. Green1/0; full Twilio+Telnyx harnesses
 31/0; independent recovery selections5/0 and Astra review clean. No production
 speech/source-cutover state changed, so no new Lean lane is required. Full root
 verification is running again with the regression and all-six terminal matrix.
+
+### Production candidate preparation, not deployment
+
+Production dependency compilation, minified assets and release assembly pass.
+The candidate image `vxpipe:universal-replies-bc90b0aa` is `sha256:6bfc66e5d055fbdec89bb2c69d1f9e5af0f3c1bb9de50ca89fff8a62b2bd69e0` with OCI revision
+`bc90b0aa5182d48f8b0c0e8312284a70aecf2ec3`. The running image was retained as
+`vxpipe:before-universal-replies-20261118-51d2ac0fdaf9` (`sha256:51d2ac0fdaf9e7c09d9291bb1aa58cf7258395b280ab9c7a474744d42b8e1aaf`). The service has not
+been restarted, migrated or replaced.
+
+Packaged offline checks pass for modern admission, unknown-protocol rejection,
+portable future-model encoding and strict null/duplicate/extra-field decoding.
+Twelve packaged executable BEAM code digests match the current production build;
+the obsolete DialogueProfile module is absent. Whole-file hashes initially differed
+because release assembly strips debug information; executable-code comparison is
+the relevant identity check. Independent packaged-evidence review is clean: both audits repeat successfully,
+and all 6,140 BEAM files extracted from a never-started candidate container match
+the assembled release byte-for-byte. Image-extracted contract probes pass; OCI
+revision matches, obsolete profile is absent and the running image is unchanged.
+The disposable inspection container was removed. F2 checked:19/24 (79.2%).
+This does not close live acceptance, the full umbrella gate or deployment.
