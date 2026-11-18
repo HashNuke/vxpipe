@@ -96,3 +96,17 @@ rehearsed against packaged release; creates no saved specs/credentials, makes no
 external calls, completes a real turn with host attribution and orderly teardown.
 The smoke uses release eval in a separate VM inside the deployed container because
 service distribution is disabled; public health/assets verify the running service.
+
+## Deployment
+
+Deployed audited `03e449c0` image at 21:44:43 UTC. Packaged migrations exit 0;
+service active. Initial Python default-User-Agent health requests received403
+while curl returned200/ok. Interrupted that verifier before its false rollback;
+no rollback occurred. Explicit release-verification User-Agent reproduces200/ok.
+Verification-only rerun passes health, exact hashes for four public frontend
+assets, actual image/OCI revision and the isolated deployed-container Room smoke.
+Smoke completes a real turn with host attribution, orderly full-tree teardown,
+and zero remaining rooms. It uses no persistence or external providers. Removed
+its temporary container files. Running-service health/assets separately verified.
+Prior51d2 recovery image/tag retained; no user specs or credentials modified.
+All24 milestone tasks close with final evidence commit; Zenmux remains deferred.

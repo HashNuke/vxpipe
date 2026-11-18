@@ -12744,5 +12744,59 @@
         }
       ]
     }
-  ]
+  ],
+  "release_verification": {
+    "revision": "03e449c0d146ef2280660076bb0b1446caf468e6",
+    "image": "sha256:5b9e40183fd29c2895f518b45ab6a1b15ad9ba11d27e29a249708a88fff4dd0c",
+    "tag": "vxpipe:universal-replies-03e449c0",
+    "health": "ok",
+    "service": "active",
+    "assets": [
+      {
+        "asset": "assets/app-a6b30ac333fa660023340454728418df.js",
+        "sha256": "71247e5e2f27bc51ebb314b15cb62d66d4f302640d078185954a2618d57798ce",
+        "status": 200
+      },
+      {
+        "asset": "assets/app-50a0ae9357ee5dae52d20a7050a83622.css",
+        "sha256": "a553de8b46d42d3986a8933ab2690e769f5517eea810492acf0015fb674ec127",
+        "status": 200
+      },
+      {
+        "asset": "assets/admin-81eb78c713f16aa8b2cf5442e7192b3d.js",
+        "sha256": "9be02c2225f53d3aa7026d653f6a5ede445a05067051983581817a7c8ec4f283",
+        "status": 200
+      },
+      {
+        "asset": "assets/live-6605ff1f7b8401b30f50c198779d005f.js",
+        "sha256": "8bdc4c93ed4c95c04e1f9cc9c52a25987105ea714aec68b1205890ee392ae0ee",
+        "status": 200
+      }
+    ],
+    "smoke": {
+      "protocol": "mode_message_v1",
+      "result": "passed",
+      "smoke": "deployed-image-isolated-room",
+      "reply_fields": 4,
+      "room_started": true,
+      "turn_completed": true,
+      "host_attribution": true,
+      "orderly_teardown": true,
+      "active_rooms_after": 0,
+      "external_providers": false,
+      "persistence": false
+    },
+    "recovery_image": "sha256:51d2ac0fdaf9e7c09d9291bb1aa58cf7258395b280ab9c7a474744d42b8e1aaf",
+    "recovery_tag": "vxpipe:before-universal-replies-20261118-51d2ac0fdaf9",
+    "deployed_at": "2026-11-18T21:44:43Z",
+    "packaged_migrations": "systemd ExecStartPre exited 0 at 21:44:43 UTC",
+    "root_verification": {
+      "tests": 5892,
+      "failures": 0,
+      "excluded": 409,
+      "seed": 914326
+    },
+    "smoke_scope": "Isolated VM inside the deployed container using production CallEngine and a synthetic connection; public health and assets separately verify the running service. No persistence or external calls.",
+    "verification_note": "Default Python User-Agent received HTTP403 while curl health was healthy. Stopped the verifier before rollback; verification-only rerun with explicit release-verification User-Agent passed. No rollback or application change occurred."
+  }
 }

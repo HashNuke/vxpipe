@@ -2,8 +2,8 @@
 
 Updated on 2026-11-18 for the user-directed strict four-field reply correction. This distinguishes
 exercised behavior from successful live acceptance. The
-[milestone](../../labnotes/milestones/universal-agent-replies.md) remains incomplete;
-no deployment is claimed. Zenmux live acceptance is deferred by explicit user
+[milestone](../../labnotes/milestones/universal-agent-replies.md) is complete;
+audited implementation `03e449c0` is deployed to `vxpipe.service`. Zenmux live acceptance is deferred by explicit user
 direction, not reported as passed.
 
 ## Integration matrix
@@ -99,3 +99,14 @@ The refreshed `envelope-room1` run passes all four cases: two real Hangup action
 and two Chrome/Deepgram-TTS conversations. Both desktop and phone captures were
 inspected. The full transcript/speech matching assertions and Google tool-mode
 guard executed in this run (unlike the historical browser2 follow-up).
+
+## Release verification
+
+The audited `03e449c0` image is running on `vxpipe.service` as of 21:44:43 UTC.
+Packaged migrations exited 0. Public health and four frontend asset hashes match
+the release. A synthetic in-memory Room in an isolated VM inside the deployed
+container completed a structured turn with host attribution and orderly teardown,
+leaving zero active rooms. This smoke uses no persistence or external providers;
+health/assets separately verify the running service. The previous image is retained
+for recovery. Exact image/hash details and the request-identity verifier correction
+are recorded in the machine-readable evidence and milestone.

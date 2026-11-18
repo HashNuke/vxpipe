@@ -1,10 +1,9 @@
 # Universal structured replies across LLM integrations
 
-Status: shared implementation and corrected four-field live acceptance pass for
-all five enabled integrations; Zenmux live acceptance is deferred. Final root
-verification passes; deployment/evidence remain open. The milestone index
-owns ordering. User direction, 2026-11-18: no structured-response allowlist;
-every LLM integration must support the common agent reply contract.
+Status: **complete — 24/24 tasks (100%)**, 2026-11-18, under the explicit
+Zenmux live deferral below. Strict four-field replies, all five enabled live
+integrations, full umbrella verification and audited deployment are complete.
+The milestone index owns ordering. No provider/model structured-reply allowlist.
 
 Approved scope change, 2026-11-18: after the live runner reported a missing
 `ZENMUX_API_KEY`, the user directed “skip zenmax for now. continue with the rest”.
@@ -209,11 +208,11 @@ future LLM integrations inherit the same contract and conformance requirements.
 - [x] Verify the release contains no provider/model reply allowlist, no substitute
   catalog exclusion and no implicit legacy fallback. Retain ordinary model and
   credential validation and the shared strict decoder.
-- [ ] Commit the accepted implementation before building/deploying `vxpipe.service`;
+- [x] Commit the accepted implementation before building/deploying `vxpipe.service`;
   retain a recovery image, run packaged migrations and verify image revision,
   public health and frontend assets. Use an authorized synthetic call for smoke
   verification rather than modifying the user's spec or placing an unsolicited call.
-- [ ] Commit release evidence and synchronize completion status only after every
+- [x] Commit release evidence and synchronize completion status only after every
   exit is verified. Recovery uses the prior image; this milestone does not require
   rewriting stored call specs or credentials.
 
@@ -554,3 +553,32 @@ production asset build/type check passes. New real browser calls and four render
 captures are verified. Independent Astra xhigh review confirms E4 complete; no
 source-cutover or speech-state transition changed, so no additional Lean lane
 is triggered. Readiness is **22/24 tasks (91.7%)**; only F3/F4 release tasks remain.
+
+## Deployed release and final completion
+
+Deployed implementation `03e449c0d146ef2280660076bb0b1446caf468e6` on 2026-11-18
+at 21:44:43 UTC. `vxpipe.service` is active on the independently audited image
+`sha256:5b9e40183fd29c2895f518b45ab6a1b15ad9ba11d27e29a249708a88fff4dd0c`.
+The existing systemd ExecStartPre ran packaged migrations successfully (exit 0).
+The image OCI revision matches; public `/healthz` returns HTTP200/ok. Public app
+JS/CSS, admin JS and live JS all return HTTP200 and exactly match packaged SHA256.
+
+The deployed-image smoke creates a synthetic in-memory Room, completes a modern
+turn with the actual host participant identity, observes orderly full-tree teardown
+and leaves zero active rooms. It runs via release eval in an isolated VM inside
+the deployed container (distribution is disabled); public health/assets separately
+verify the running service. It creates no saved call spec/credential and makes no
+external provider or phone call. Temporary smoke files were removed.
+
+The verifier's default Python request identity initially received HTTP403 while
+curl remained healthy. Stopped that verifier before rollback and reran verification
+only with an explicit release-verification User-Agent: all checks pass. The app
+was unchanged, never rolled back, and retains the same deployment start time.
+
+Recovery image remains `vxpipe:before-universal-replies-20261118-51d2ac0fdaf9`
+(`sha256:51d2ac0fdaf9e7c09d9291bb1aa58cf7258395b280ab9c7a474744d42b8e1aaf`).
+No stored specs or credentials were rewritten. Full evidence is retained in the
+[conformance record](../../docs/design/universal-replies-conformance.md) and
+[machine-readable record](../../docs/design/universal-replies-live-evidence.json).
+F3/F4 close with the release-evidence commit; all 24 tasks are complete under the
+approved Zenmux live deferral.
