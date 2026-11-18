@@ -194,3 +194,25 @@
 +      reported = Map.update!(reported, :output, &(&1 and consistent?))
 +      usage = Map.put(response_with_reasoning.usage || %{}, :usage_reported, reported)
 +      {:ok, %{response_with_reasoning | usage: usage}}
+--- a/lib/req_llm/providers/fireworks_ai.ex
++++ b/lib/req_llm/providers/fireworks_ai.ex
+@@ -324 +324 @@
+-  `reasoning_details`, `reasoning_content`), renders `reasoning_effort`
++  `reasoning_details`), renders `reasoning_effort`
+@@ -360 +360 @@
+-  # documented message shape. Three fields commonly survive round-tripping
++  # documented message shape. Two fields commonly survive round-tripping
+@@ -367,2 +366,0 @@
+-  #   * `reasoning_content` — the OpenAI-compat reasoning string that
+-  #     thinking-content parts encode for OpenAI-style providers
+@@ -370,2 +368,3 @@
+-  # Strip all three from outbound messages so multi-turn conversations
+-  # don't blow up the second the model emits a reasoning preamble.
++  # Keep reasoning_content: Fireworks documents it as necessary for
++  # interleaved thinking across native tool calls. Strip only the unsupported
++  # metadata and OpenRouter-shaped reasoning_details fields.
+@@ -376,3 +375 @@
+-    "reasoning_details",
+-    :reasoning_content,
+-    "reasoning_content"
++    "reasoning_details"

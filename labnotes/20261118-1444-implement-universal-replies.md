@@ -345,3 +345,41 @@ dependency gates pass. No speech/source state-machine implementation changed.
   the newly unused sibling binding. Current full helper: seven pass. Reviewer
   matched all configured1/resume1 sixty-row metrics and both Hangup room records
   to their logs. Root static checks pass; fresh full umbrella run is in progress.
+
+### Direct Chat Completions reasoning preservation
+
+- C audit found replay dispatch discards non-Google/non-OpenAI private reasoning.
+  Added real HTTP tests before implementation for DeepSeek/Fireworks buffered and
+  streamed native tool continuation. Corrected the Fireworks fixture to use public
+  ProviderSelection/model overrides; then all four failed at the outgoing field:
+  DeepSeek empty string, Fireworks absent. Red log: chat-reasoning-red.
+- Added bounded direct-transport replay with public source/call, provider, model
+  and wire-model binding. Streaming SDK emits a duplicate typed reasoning record;
+  accept only the exact unsigned duplicate, reject unrecognized private layouts.
+  Original guard rejected streamed responses; corrected from observed synthetic
+  SDK evidence. Temporary probe logging was removed.
+- Fireworks still failed because ReqLLM explicitly strips reasoning_content.
+  Current official Fireworks guide requires it for interleaved tool thinking.
+  Extended the reproducible cumulative patch to retain that field only, preserving
+  other field filtering and all four previous-state upgrades. Installer tests pass.
+- Four wire cases now pass, including changed source/call metadata, model/wire
+  model/provider, extra envelope fields and over-limit replay rejection. Added a
+  focused design record with sources, rejected alternatives and explicit remaining
+  router and host-settlement decisions. No C checkbox is checked yet. Astra review
+  and broader verification are pending; B's root suite remains running.
+- Astra reproduced two failures when reasoning arrived in two SSE chunks: the SDK
+  emits one duplicate record per chunk, not one per response. Added that split to
+  the permanent wire test; both streamed cases failed before changing the codec.
+  Validate the ordered contiguous record sequence and compare joined text exactly.
+  Regenerated Fireworks patch fragments with zero context to remove patch-file
+  whitespace errors; repeat/fresh/all-upgrade checks and diff check pass.
+- Runtime suite before the chunk correction: 207 tests, zero failures (17 live
+  exclusions); static root gates pass. B's root run passed all 2,528 CallEngine
+  tests but hit a Gateway phone-transfer recovery deadline. Independent review
+  is reproducing it; no green umbrella claim or deployment.
+- Final Astra xhigh re-review is clean. Independent split-stream/Unicode and
+  malformed-detail/bounds checks pass (three tests, seed 949588), including gaps,
+  reordering, mismatched text and signed/foreign records. Final runtime suite:
+  207 tests, zero failures (17 live exclusions). Root format, warnings-as-errors
+  compilation, strict Credo, unused dependencies and patch preparation pass.
+  Umbrella run is still active with Gateway failures being investigated separately.

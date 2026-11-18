@@ -1,4 +1,4 @@
-# ReqLLM Google wire patch
+# ReqLLM wire patches
 
 ReqLLM 1.29.0's Google buffered chat decoder converts a `functionCall` into the
 common tool shape without attaching its `thoughtSignature`. Its object decoder
@@ -68,3 +68,12 @@ For streams, reporting facts come from the last model/usage event rather than
 ReqLLM's generic OR merge. A final absent or malformed count revokes correction;
 an intermediate missing count followed by complete final usage remains eligible.
 The private per-event marker does not change the shared counter merge behavior.
+
+The cumulative patch also retains Fireworks `reasoning_content` in outgoing
+assistant messages. ReqLLM 1.29.0 strips it even though Fireworks documents its
+use for interleaved thinking. Other rejected fields remain stripped. The direct
+DeepSeek/Fireworks wire regression demonstrates the lost field and its restoration
+in buffered and streamed tool continuations. See the
+[transport investigation](../../docs/design/universal-replies-chat-replay.md).
+The historical patch filenames remain stable; the manifest now covers Fireworks
+as well as Google and upgrades all four previously prepared source states.

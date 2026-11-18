@@ -334,3 +334,14 @@ and semantic adversarial regressions pass. The full umbrella rerun exposed a
 separate MCP test ordering race; its test-only handshake fix passes 100 independent
 repetitions after six failures in the original 100. Final Astra xhigh acceptance
 review is clean. Full umbrella verification continues; these checks do not close C–F.
+
+## Implementation evidence — C, direct reasoning replay in progress
+
+The [Chat Completions transport investigation](../../docs/design/universal-replies-chat-replay.md)
+records the direct DeepSeek/Fireworks reasoning codec and the narrow reproducible
+Fireworks SDK field-filter patch. Real outgoing HTTP tests cover both modes,
+including multi-event reasoning, native calls/results, full tools and rejection of
+changed source/model replay. Initial four field-loss failures and a later pair of
+stream-chunk failures were reproduced before their fixes. Router replay, ordinary
+host-settled reasoning, full lifecycle coverage and configured live acceptance
+remain pending; no C task is checked off by this incremental change.
