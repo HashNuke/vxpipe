@@ -718,3 +718,23 @@ release verification and deployment are not claimed. Frontend typecheck and 62
 focused flow/error-presentation tests pass. The root run reproduced the preexisting
 Twilio custom-url/destination recovery timeout; other completed applications are
 green. Investigation is active and no deadline has been widened.
+
+### Deterministic Twilio acknowledgment fixture repair
+
+The final root attempt completed 5,731 tests with one failure (seed 584895):
+Twilio custom-url/destination recovery awaited a model request while an earlier
+synthetic acknowledgment had never completed TTS. Unlike the earlier 750 ms
+recovery observation, room recovery/binding checks had already succeeded.
+Independent tracing held the model acknowledgment until after transfer failure
+and reproduced the missing recovery request. Coordinator correctly waited for
+prior speech settlement; this was a fixture scheduling defect.
+
+Added that delayed acknowledgment as a permanent Twilio case. It failed at the
+same assertion before the fix (1/1); the shared phone helper now completes earlier
+mock TTS Speak requests while awaiting the recovery model request, reusing its
+existing synthetic SpeechStarted/audio/SpeechMetadata path. Original 2-second
+wait, production 750 ms recovery budget, room/caller/source invariants and actual
+recovery speech assertions remain intact. Green1/0; full Twilio+Telnyx harnesses
+31/0; independent recovery selections5/0 and Astra review clean. No production
+speech/source-cutover state changed, so no new Lean lane is required. Full root
+verification is running again with the regression and all-six terminal matrix.

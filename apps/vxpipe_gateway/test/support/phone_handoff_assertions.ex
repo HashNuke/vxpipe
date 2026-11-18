@@ -241,7 +241,9 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
     refute_receive {:test_stt_transport_started, _, _}, 0
     refute_receive {:test_tts_transport_started, _, _}, 0
 
-    assert_receive {:test_agent_runtime_stream, provider, request}, 2_000
+    {provider, request} =
+      await_recovery_request(source_tts, System.monotonic_time(:millisecond) + 2_000)
+
     recovery = List.last(request.messages).content
     assert recovery =~ ~s("type":"tool_invocation_completion")
     assert recovery =~ ~s("status":"failed")
@@ -315,6 +317,43 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
     token
   end
 
+  # Recovery can arrive before the source acknowledgment finishes. Drive the
+  # fake TTS provider while waiting so normal speech settlement can unblock it.
+  defp await_recovery_request(voice, deadline) do
+    receive do
+      {:test_agent_runtime_stream, provider, request} ->
+        {provider, request}
+
+      {:test_tts_control, ^voice, control} ->
+        case JSON.decode!(control) do
+          %{"type" => "Speak", "text" => earlier} when is_binary(earlier) ->
+            complete_earlier_speech(voice)
+
+          _other ->
+            :ok
+        end
+
+        await_recovery_request(voice, deadline)
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        flunk("missing recovery model request after completing earlier mock speech")
+    end
+  end
+
+  defp complete_earlier_speech(voice) do
+    CallEngine.TestTextToSpeechTransport.deliver_control(
+      voice,
+      JSON.encode!(%{type: "SpeechStarted", speech_id: "transfer-acknowledgement"})
+    )
+
+    CallEngine.TestTextToSpeechTransport.deliver_audio(voice, tone(750, 48_000, 960))
+
+    CallEngine.TestTextToSpeechTransport.deliver_control(
+      voice,
+      JSON.encode!(%{type: "SpeechMetadata", speech_id: "transfer-acknowledgement"})
+    )
+  end
+
   def await_recovery_speech(voice, deadline), do: await_recovery_speech(voice, deadline, [])
 
   defp await_recovery_speech(voice, deadline, observed) do
@@ -329,17 +368,7 @@ defmodule Vxpipe.Gateway.PhoneHandoffAssertions do
             # the handoff interrupts it. Complete the mock provider request.
             # Establish an output turn before completing an uncancelled request.
             # A fenced request discards these bytes through the same provider path.
-            CallEngine.TestTextToSpeechTransport.deliver_control(
-              voice,
-              JSON.encode!(%{type: "SpeechStarted", speech_id: "transfer-acknowledgement"})
-            )
-
-            CallEngine.TestTextToSpeechTransport.deliver_audio(voice, tone(750, 48_000, 960))
-
-            CallEngine.TestTextToSpeechTransport.deliver_control(
-              voice,
-              JSON.encode!(%{type: "SpeechMetadata", speech_id: "transfer-acknowledgement"})
-            )
+            complete_earlier_speech(voice)
 
             facts =
               {:speak, byte_size(earlier), String.contains?(earlier, "We can continue."),
