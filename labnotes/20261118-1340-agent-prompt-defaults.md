@@ -26,4 +26,12 @@
 - Stricter saves exposed intentionally incomplete identity/CLI fixtures and legacy sample fixtures. Identity fixtures now include a runnable fixture model, sample fixtures explicitly use their legacy sample protocol, and the outgoing missing-caller-ID regression now expects rejection at save. No production compatibility fallback was added.
 - Root umbrella attempt hit an unrelated DeadlineTest 300ms assertion and ended without complete umbrella totals. The isolated same-seed case passes. An existing BillingEnrichmentTest 100ms assertion failed under concurrent load; the final sequential Calls suite passes unchanged. No clean single-process full-umbrella pass is claimed.
 - Format, warnings-as-errors compile, strict Credo, unused-dependency check and TypeScript pass. ESLint has no errors and one pre-existing SetupDialog hook warning.
-- Final browser confirmation highlights the actual Model dropdown for the unsupported-profile error; generic errors stay in the summary. Production release pending.
+- Final browser confirmation highlights the actual Model dropdown for the unsupported-profile error; generic errors stay in the summary. Production release verified below.
+
+## Production release
+
+- Committed implementation as `8e1d248cf1deb384ce779fa57ff0bb507db0daaa` before building production assets and the assembled release; both builds succeeded.
+- Retained the previous image as `vxpipe:before-agent-validation-20261118`. Built image `sha256:c35fc9e9a3a424aa7087f212489c24ce0f7b25a235380f67ae2c710bccb3e533` with the implementation commit in its OCI revision label.
+- Restarted `vxpipe.service` through systemd, including its packaged migration preflight. The running container matches the new image and revision; service reports active/running, success and zero restarts. Caddy is active.
+- Local and public health endpoints both return `ok`. Public admin JavaScript and CSS SHA-256 hashes match the assembled release; running CallSpecs and CallSpecErrors bytecode hashes also match.
+- Existing Gemini profile restrictions remain unchanged. This release fixes validation/defaults and error placement; it does not enable Gemini structured-agent support or modify user call specs.
