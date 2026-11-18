@@ -1,5 +1,10 @@
 # Structured agent messages and append-only history
 
+Policy update, 2026-11-18: the user requires the common reply contract across every
+LLM integration without a provider/model allowlist. The [universal reply follow-up](universal-agent-replies.md)
+supersedes the selected-profile eligibility policy below. Existing implementation
+and acceptance evidence remains historical; universal support is not yet implemented.
+
 Status: all four checkpoints complete and independently reviewed, 2026-11-17.
 Final verification passes 5,446 tests with zero failures and 387 exclusions
 (seed 469087), all static/dependency gates and Lean. Configured idle and live

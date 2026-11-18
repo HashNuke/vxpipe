@@ -1,0 +1,226 @@
+# Universal structured replies across LLM integrations
+
+Status: investigation and specification complete; implementation not started.
+All implementation and acceptance checkboxes remain open. The milestone index
+owns ordering. User direction, 2026-11-18: no structured-response allowlist;
+every LLM integration must support the common agent reply contract.
+
+## Runnable outcome
+
+An author selects any configured LLM integration, saves and publishes a valid
+call spec, and runs an agent conversation using the same `agent_mode`/`message`
+contract. It speaks, stays silent, calls Hangup and other authorized native tools,
+handles later results and continues with truthful settled history. No provider or
+model is rejected solely because it is absent from a structured-reply allowlist.
+Google AI Studio with `gemini-3.5-flash-lite` is the explicit regression case,
+not a new special-case permission entry.
+
+## Prerequisites and design sources
+
+Read before implementation:
+
+- [Universal reply design and investigation](../../docs/design/universal-agent-replies.md).
+- Completed [structured messages/history](structured-agent-messages.md), including
+  [original contracts](../../docs/design/structured-agent-messages.md) and its
+  [implementation evidence](../20261116-1642-implement-structured-messages.md).
+- Completed [ReqLLM runtime](reqllm-agent-runtime.md),
+  [shared participant tool execution](shared-participant-tool-execution.md), and
+  [context compaction/native routing](context-compaction-and-native-fallback.md).
+- Completed [draft/publication workflow](call-spec-drafts-and-publications.md).
+
+This milestone supersedes only the prior selected-profile eligibility policy.
+It precedes the remaining [voice behavior work](voice-agent-turns-and-listening.md)
+in the index. Precise speech timing, a new voice policy, new provider integrations,
+new credentials, STS protocol changes and schema-format changes are not prerequisites
+or scope. Existing tenant/platform visibility rules remain in force.
+
+## Contracts and completion rules
+
+- One shared schema, decoder, request lifecycle and typed result across integrations.
+  Native schema encoding may differ; speaker/listener and tool semantics may not.
+- Remove identity-based protocol gates from plan validation, session configuration,
+  request projection and replay compatibility. Keep legitimate independent validation.
+- Native JSON Schema is optional. A portable instructed/validated JSON path is
+  required when native schema plus tools is unavailable. No approval list disguised
+  as capability flags, catalog filtering or model-specific tests.
+- Retain the full authorized native tool set on every round. Do not replace tools
+  with a forced schema function, invent tool success, replay side effects or drop
+  signatures/reasoning needed for continuation.
+- No partial or invalid response reaches speech or settled history. Preserve output
+  bounds, cancellation, deadlines, usage, null semantics and host settlement.
+- Proposed one-attempt correction is bounded as described in the design. Resolve
+  and document its precise request/history accounting before code, with no retry
+  after tool dispatch and no tool dispatch from repair responses.
+- Historical legacy publications remain readable and runnable under their pinned
+  semantics. No live provider call during save/publish; no automatic downgrade.
+- Evidence includes all six installed LLM integrations. Missing credentials or
+  failing acceptance leave the relevant checks open; they never justify restoring
+  an allowlist or declaring the whole milestone complete.
+- Every checkpoint follows red-green-refactor and keeps implementation, focused
+  tests and checkpoint notes together. Early checkpoints are runnable locally;
+  production release waits for the complete acceptance checkpoint.
+
+## Checkpoints and dependency order
+
+| Checkpoint | Runnable result | Depends on |
+| --- | --- | --- |
+| A | One portable modern dialogue path, without identity gates | Prerequisites above |
+| B | Google AI Studio and existing OpenAI run full tool conversations | A |
+| C | Remaining installed LLM integrations run the same contract | B |
+| D | Save/publish, activation and historical publication flows work end to end | C |
+| E | Registry-wide conformance and configured-call evidence are complete | D |
+| F | Verified production release and maintained integration requirements | E |
+
+## Checkpoint A — Shared contract without the allowlist
+
+**Exit:** local real-adapter requests for a non-allowlisted model can produce
+validated dialogue and native tool rounds through the ordinary Session, without
+any provider/model eligibility table.
+
+- [ ] Add failing public-boundary tests for non-OpenAI models and unfamiliar valid
+  model IDs in plan compilation and modern Session configuration. Enumerate installed
+  LLM manifests so a newly added integration cannot silently escape coverage.
+- [ ] Replace `DialogueProfile` identity eligibility and callers in AgentProtocol,
+  SessionConfiguration and RequestProjection with shared protocol/options validation.
+  Separate OpenAI replay compatibility from the deleted allowlist. Preserve unknown
+  protocol, idle-on-STS and other real configuration errors.
+- [ ] Introduce the semantic request strategy boundary and portable instructed-JSON
+  path using the existing schema/prompts. Provider identity may select wire encoding,
+  never permission to use the reply contract. Keep the full tool set and strict decoder.
+- [ ] Resolve private strategy pinning and bounded correction details in the design;
+  implement and test budgets, cancellation, repair context exclusion, usage and
+  side-effect prohibitions. Invalid final output remains a typed failure.
+
+Acceptance: strict valid/invalid/null/duplicate/extra-field cases, partial streams,
+refusal, over-limit output, stale completion, cancel during repair, and absence of
+speech/tool effects on invalid or repair responses. Standalone legacy sessions remain
+unchanged. Do not enable a second tool loop to implement recovery.
+
+## Checkpoint B — Google AI Studio and OpenAI conversation parity
+
+**Exit:** configured Google AI Studio and OpenAI agents pass the same multi-turn
+scenario through actual request projection, streaming, tool execution and history.
+
+- [ ] Capture actual encoded buffered and streaming requests for Google AI Studio
+  and OpenAI. Prove schema placement, instructions, full native tools and decoding;
+  do not infer correct wire output from high-level SDK options.
+- [ ] Implement native schema encoding where supported through ReqLLM's existing
+  surfaces, with the portable path for unsupported combinations. Keep strategy
+  stable across rounds. Add reproducible dependency changes/patches only if a
+  demonstrated gap requires them; never edit `deps/` as the delivered fix.
+- [ ] Generalize replay dispatch while preserving bounded opaque metadata, source
+  binding and exact native call/result pairing. Cover Google signatures/role folding
+  and the existing OpenAI reasoning/phase regression without leaking replay into
+  speech, transcript storage or summaries.
+- [ ] Reproduce earlier Google malformed/fenced-output and unwanted-tool scenarios
+  with all tools present. Run the user's `gemini-3.5-flash-lite` selection with a
+  synthetic receptionist fixture (no copied caller information), including a real
+  controlled Hangup invocation and a separate continuing-tool conversation.
+
+Acceptance: short/long dialogue, listener/null, listener cue, native tool call,
+acknowledgment, unrelated input, async completion, subsequent reply, idle timeout
+and cancellation. Compare logical and provider-normalized history prefixes. Record
+request counts, failures, latency and usage; do not select only passing runs.
+
+## Checkpoint C — Every remaining LLM integration
+
+**Exit:** DeepSeek, Fireworks, OpenRouter and Zenmux each run the same modern
+conversation without a new per-model permission entry.
+
+- [ ] Apply the common strategy boundary to all four integrations. Audit actual
+  transport capabilities and native routing options rather than assuming their
+  OpenAI-compatible endpoints share all OpenAI semantics.
+- [ ] Preserve each integration's required reasoning/signature/tool metadata across
+  buffered and streamed responses, compaction, interruption and recovery. Check
+  that router changes cannot reuse replay scoped to a different downstream model.
+- [ ] Exercise a representative configured model for each integration and the
+  portable path independently of native schema support. Test unavailable native
+  metadata without a save/publish rejection or silent legacy downgrade.
+- [ ] Make the common harness fail if any registered LLM integration is omitted.
+  Record native/JSON-mode/portable paths actually exercised, model/transport
+  identifiers and dependency versions; model names in fixtures are evidence,
+  never production eligibility configuration.
+
+Acceptance: the B conversation matrix for every integration, plus routed provider
+failure, incompatible replay, malformed JSON, no repeated tool effects and truthful
+usage. Upstream unavailability leaves live evidence pending rather than fabricated.
+
+## Checkpoint D — Authoring, activation and compatibility
+
+**Exit:** the configured integration selected in the editor can be saved, published
+and used through Console/API admission, with historical publications preserved.
+
+- [ ] Add failing tests at Calls, Persistence and Console boundaries showing valid
+  Google and other LLM specs pass both draft save and publish without the removed
+  profile error. Invalid source/credentials/options still fail without inserting
+  a revision or discarding browser edits.
+- [ ] Cover preparation, activation restart, transfer, compaction and newly saved
+  protocol snapshots. Keep earlier publications' legacy semantics, and reject
+  malformed/unknown bundles. Review sample installers' explicit legacy selection;
+  do not use samples as a hidden compatibility bypass.
+- [ ] Remove obsolete OpenAI-profile-only UI guidance and provider documentation.
+  Preserve configured integration labels, tenant/platform permissions and saved
+  inaccessible references. Do not filter the catalog by schema-native capability.
+- [ ] Inspect a rendered configured editor and a real controlled call for Google AI
+  Studio plus a contrasting integration. Verify only speech text appears in the
+  transcript; control JSON and private replay never appear in user-facing output.
+
+Acceptance: compile/save/publish/read/restart, unchanged public source shape,
+legacy read/prepare, unknown protocol failure, no live inference on authoring,
+correct error field routing and authorized visibility.
+
+## Checkpoint E — Complete conformance evidence
+
+**Exit:** all six integrations have deterministic conformance and configured live
+acceptance evidence, with no excluded integration and no remaining allowlist.
+
+- [ ] Run one shared adversarial matrix: ordinary/tool/async/idle rounds, malformed
+  and oversized output, duplicate keys, refusal/truncation, unknown mode, null,
+  opaque replay, cancellation, deadline, bounded correction and recovery.
+- [ ] Run tagged live provider cases through `bin/livetests run`, using permitted
+  configured credentials without reading or modifying the protected live-provider
+  environment file. Add missing shared cases to existing provider lanes. Report
+  unavailable credentials explicitly; keep that integration's gate unchecked.
+- [ ] Record the six-integration evidence matrix, full tool availability, actual
+  submitted schema/JSON strategy, immutable history and absence of repeated side
+  effects. Include the exact Google model reported by the user. Define a fixed
+  scenario/repetition plan before running, and retain failed attempts.
+- [ ] Run required root format, compile-with-warnings-as-errors, strict Credo,
+  umbrella tests and unused-dependency checks; relevant frontend/type checks and
+  rendered inspection; Lean if source-cutover or speech-state behavior changes.
+  Resolve project-owned failures and distinguish unrelated failures in evidence.
+
+## Checkpoint F — Documentation and release
+
+**Exit:** the accepted shared implementation is committed, deployed and verified;
+future LLM integrations inherit the same contract and conformance requirements.
+
+- [ ] Update the durable design, integration authoring guide, usage documentation,
+  prior profile-policy notices and this milestone/index together. Explain generic
+  support versus actual upstream request failures without promising infallible JSON.
+- [ ] Verify the release contains no provider/model reply allowlist, no substitute
+  catalog exclusion and no implicit legacy fallback. Retain ordinary model and
+  credential validation and the shared strict decoder.
+- [ ] Commit the accepted implementation before building/deploying `vxpipe.service`;
+  retain a recovery image, run packaged migrations and verify image revision,
+  public health and frontend assets. Use an authorized synthetic call for smoke
+  verification rather than modifying the user's spec or placing an unsolicited call.
+- [ ] Commit release evidence and synchronize completion status only after every
+  exit is verified. Recovery uses the prior image; this milestone does not require
+  rewriting stored call specs or credentials.
+
+## Specification review — separate from implementation
+
+Reviewed locally on 2026-11-18 against source, installed dependency code, historical
+Google/OpenAI evidence and current primary provider documentation. No independent
+agent review, live inference or implementation verification is claimed.
+
+The review identified and incorporated: duplicate eligibility gates; OpenAI request
+options in a shared path; replay coupled to identity eligibility; a generic fallback
+needed for universal support; unsafe synthetic-schema-tool shortcuts; side-effect
+risks in retries; registry-wide coverage; routed replay compatibility; legacy
+publication pinning; and save/publish/UI parity. Dependencies are completed milestones
+already preceding this entry; voice policy and external credentials are not hidden
+implementation dependencies. Credential absence blocks live acceptance, not design
+or an integration's eligibility. Proposed recovery/pinning details must be resolved
+in A before implementation, not silently invented in a later provider checkpoint.

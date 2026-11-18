@@ -1,5 +1,10 @@
 # Simple structured messages for LLM agents
 
+Policy update, 2026-11-18: the user requires the common reply contract across every
+LLM integration without a provider/model allowlist. The [universal reply follow-up](universal-agent-replies.md)
+supersedes the selected-profile eligibility policy below. Existing implementation
+and acceptance evidence remains historical; universal support is not yet implemented.
+
 Status: checkpoints A/B/C/D complete and independently reviewed, 2026-11-17.
 Attributed input, settled history, storage/viewer projections, stable native tool
 history, validated mode/message replies and bounded native idle are implemented.
