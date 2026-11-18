@@ -1,3 +1,4 @@
+import { setupProviders } from "../setupCatalog";
 import { CredentialNamesContext } from "./credential-names";
 import type { CatalogCapability, ModelCatalog } from "../modelCatalog";
 import { useContext } from "react";
@@ -21,13 +22,17 @@ type Props = {
   inherited?: CapabilitySelection;
 };
 
-const providerNames: Record<string, string> = { morse: "MorseCode Local", morse_code_api: "MorseCode API" };
+const providerNames: Record<string, string> = { ...Object.fromEntries(setupProviders.map(({ id, name }) => [id, name])), morse: "MorseCode Local" };
 
 /** Public model and voice remain separate; adapters own their wire-format mapping. */
 export function CapabilityFields({ kind, path, value, onChange, catalog, disabled, issues, defaultLabel = "Not configured", defaultDisabled = false, inherited }: Props) {
   const credentialNames = useContext(CredentialNamesContext);
   const voiceCatalog = useContext(VoiceCatalogContext);
   const providers = catalog[kind] ?? {};
+  const providerChoices = Object.keys(providers).sort().map(provider => ({ value: provider, label: Object.hasOwn(providerNames, provider) ? providerNames[provider]! : provider }));
+  if (value && !Object.hasOwn(providers, value.provider)) {
+    providerChoices.push({ value: value.provider, label: `${Object.hasOwn(providerNames, value.provider) ? providerNames[value.provider] : value.provider} (saved)` });
+  }
   const models = value && Object.hasOwn(providers, value.provider) ? providers[value.provider]! : [];
   const model = models.find((model) => model.id === value?.model);
   const voices = model?.voices;
@@ -35,7 +40,7 @@ export function CapabilityFields({ kind, path, value, onChange, catalog, disable
   return <fieldset disabled={disabled} className="grid min-w-0 gap-4 [&_[data-field-path]]:space-y-1.5 [&_[data-slot=label]]:text-xs [&_[data-slot=label]]:text-muted-foreground">
     <div className="grid grid-cols-2 items-start gap-3">
       <ChoiceField label="Provider" path={[...path, "provider"]} issues={issues} disabled={disabled}
-        value={value?.provider ?? ""} choices={[...(inherited ? [] : [{ value: "", label: defaultLabel, disabled: defaultDisabled }]), ...Object.keys(providers).sort().map((provider) => ({ value: provider, label: providerNames[provider] ?? provider }))]}
+        value={value?.provider ?? ""} choices={[...(inherited ? [] : [{ value: "", label: defaultLabel, disabled: defaultDisabled }]), ...providerChoices]}
         onChange={(provider) => {
           if (provider === inherited?.provider) { onChange(undefined); return; }
           const selected = provider ? recommendedSelection(catalog, kind, provider, credentialNames) : undefined;

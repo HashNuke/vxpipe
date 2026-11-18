@@ -134,10 +134,10 @@ test("agent voice choices preserve saved values and reset to the newly selected 
   expect(saved()).toEqual(initial.source);
   const tts = within(screen.getByRole("region", { name: "Text to speech" }));
   fireEvent.keyDown(tts.getByRole("combobox", { name: "Provider" }), { key: "ArrowDown" });
-  fireEvent.click(await screen.findByRole("option", { name: "cartesia" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Cartesia" }));
   expect(saved().participants.intake.capabilities.text_to_speech).toEqual(recommendedSelection(modelCatalogFixture, "text_to_speech", "cartesia"));
   fireEvent.keyDown(tts.getByRole("combobox", { name: "Provider" }), { key: "ArrowDown" });
-  fireEvent.click(await screen.findByRole("option", { name: "deepgram" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Deepgram" }));
   expect(saved().participants.intake.capabilities.text_to_speech).toEqual({ provider: "deepgram", model: "flux", options: { voice: "hannah" } });
 });
 test("agent permissions and presence edit the selected participant only", async () => {

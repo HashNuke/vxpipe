@@ -43,7 +43,7 @@ async function choose(label: string, option: string) {
 test("choosing a provider selects its public recommended model and a separate voice picker", async () => {
   render(<Harness />);
   expect(saved()).toBeNull();
-  await choose("Provider", "deepgram");
+  await choose("Provider", "Deepgram");
   expect(saved()).toEqual({ provider: "deepgram", model: "flux", options: { voice: "hannah" } });
   expect(screen.getByRole("combobox", { name: "Model" })).toHaveTextContent("Flux");
   fireEvent.keyDown(screen.getByRole("combobox", { name: "Model" }), { key: "ArrowDown" });
@@ -98,7 +98,7 @@ test("advanced options are preserved without generic option controls", async () 
 
 test.each([true, false])("API-authored vad=%s survives provider and model changes without a control", async (vad) => {
   render(<Harness kind="speech_to_text" initial={{ provider: "deepgram", model: "flux-general-en", vad }} />);
-  await choose("Provider", "google");
+  await choose("Provider", "Google AI Studio");
   expect(saved()).toEqual({ provider: "google", model: "live", vad });
   await choose("Model", "Next");
   expect(saved()).toEqual({ provider: "google", model: "next", vad });
@@ -126,7 +126,26 @@ test("without a catalog client the manual voice input is unavailable", () => {
 
 test("new provider selections bind to the configured connection while model changes keep it", async () => {
   render(<CredentialNamesContext value={{ deepgram: ["office"] }}><Harness /></CredentialNamesContext>);
-  await choose("Provider", "deepgram");
+  await choose("Provider", "Deepgram");
   expect(saved().credential_name).toBe("office");
   expect(voiceClient.get).toHaveBeenLastCalledWith(expect.objectContaining({ credential_name: "office" }), "hannah", expect.any(AbortSignal));
+});
+
+test.each(["model_inference", "text_to_speech", "speech_to_text"] as const)("%s uses integration names and only the authorized catalog", async (kind) => {
+  const models = [{ id: "test", name: "Test", default: true, voices: null }];
+  render(<CapabilityFields kind={kind} path={[kind]} catalog={{ [kind]: { google: models, elevenlabs: models, morse: models } }} onChange={vi.fn()} />);
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Provider" }), { key: "ArrowDown" });
+  expect((await screen.findAllByRole("option")).map(option => option.textContent)).toEqual(["Not configured", "ElevenLabs", "Google AI Studio", "MorseCode Local"]);
+});
+
+test("saved unavailable integrations retain their name and binding without appearing in new fields", async () => {
+  const onChange = vi.fn();
+  const value = { provider: "google", model: "saved-model", credential_name: "platform-google" };
+  const props = { kind: "model_inference" as const, path: ["model"], catalog: {}, onChange };
+  const view = render(<CapabilityFields {...props} value={value} />);
+  expect(screen.getByRole("combobox", { name: "Provider" })).toHaveTextContent("Google AI Studio (saved)");
+  expect(onChange).not.toHaveBeenCalled();
+  view.rerender(<CapabilityFields {...props} />);
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Provider" }), { key: "ArrowDown" });
+  expect((await screen.findAllByRole("option")).map(option => option.textContent)).toEqual(["Not configured"]);
 });
