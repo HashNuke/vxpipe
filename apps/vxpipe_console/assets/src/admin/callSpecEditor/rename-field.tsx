@@ -10,7 +10,7 @@ export function RenameField({ name, label, displayLabel, path, disabled, onRenam
     catch (error) { setError(error instanceof Error ? error.message : "That name could not be changed."); reportFailure("Couldn't rename. Check the name and try again."); }
   }
   return <div onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } }}>
-    <TextField layout={layout} labelClassName={labelClassName} label={label} displayLabel={displayLabel} path={path} disabled={disabled} value={draft} onChange={setDraft} />
+    <TextField exactIssuePath layout={layout} labelClassName={labelClassName} label={label} displayLabel={displayLabel} path={path} disabled={disabled} value={draft} onChange={setDraft} />
     {error && <p role="alert" className="mt-1 text-xs text-destructive">{error}</p>}
   </div>;
 }

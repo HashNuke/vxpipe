@@ -1,5 +1,5 @@
 import { useCallback, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { closestField, IssueContext, type IssueRequest, type IssueField } from "./issue-context";
+import { closestField, matchesField, IssueContext, type IssueRequest, type IssueField } from "./issue-context";
 import { locateIssue } from "./errorPresentation";
 import type { CallSpecSource, SourceIssue } from "./types";
 
@@ -7,12 +7,12 @@ export function IssueScope({ issues, request, includeIssue, children }: { includ
   const [fields, setFields] = useState(new Map<HTMLElement, IssueField>());
   const summary = useRef<HTMLElement | null>(null);
   const focused = useRef<{ id: number; distance: number } | null>(null);
-  const register = useCallback((element: HTMLElement, path: string[], id: string, control: boolean) => {
-    setFields((current) => new Map(current).set(element, { path, id, control }));
+  const register = useCallback((element: HTMLElement, path: string[], id: string, control: boolean, exact: boolean) => {
+    setFields((current) => new Map(current).set(element, { path, id, control, exact }));
     return () => setFields((current) => { const next = new Map(current); next.delete(element); return next; });
   }, []);
   const setSummary = useCallback((element: HTMLElement | null) => { summary.current = element; }, []);
-  const visible = issues.filter((issue) => !includeIssue || includeIssue(issue) || [...fields.values()].some(({ path }) => path.length > 0 && path.length <= issue.path.length && path.every((part, index) => part === issue.path[index])));
+  const visible = issues.filter((issue) => !includeIssue || includeIssue(issue) || [...fields.values()].some((field) => field.path.length > 0 && matchesField(field, issue.path)));
   const fieldIssues = new Map<string, SourceIssue[]>();
   for (const issue of visible) {
     const id = closestField(fields, issue.path)?.[1].id;
