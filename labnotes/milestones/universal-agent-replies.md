@@ -192,7 +192,7 @@ acceptance evidence, with no excluded integration and no remaining allowlist.
   submitted schema/JSON strategy, immutable history and absence of repeated side
   effects. Include the exact Google model reported by the user. Define a fixed
   scenario/repetition plan before running, and retain failed attempts.
-- [ ] Run required root format, compile-with-warnings-as-errors, strict Credo,
+- [x] Run required root format, compile-with-warnings-as-errors, strict Credo,
   umbrella tests and unused-dependency checks; relevant frontend/type checks and
   rendered inspection; Lean if source-cutover or speech-state behavior changes.
   Resolve project-owned failures and distinguish unrelated failures in evidence.
@@ -498,3 +498,20 @@ module is absent; OCI revision matches the accepted implementation checkpoint.
 F2 is complete. A recovery image is retained, but the running service remains on
 its prior image. Full umbrella verification, current live acceptance policy and
 actual deployment/smoke evidence remain separate gates.
+
+
+## Implementation evidence — E, final root verification
+
+The complete root rerun exits successfully: **5,853 tests, zero failures,
+409 excluded**, seed 856309. Per application: Identity101, Providers35, MCP222,
+AgentRuntime528, CallEngine2529, Calls392, Gateway891, Artifacts20, Persistence551,
+Console584. This includes the registry-wide terminal matrix and the permanent
+late-acknowledgment recovery regression. The preceding 5,731-test run's single
+Gateway failure remains documented with its deterministic fixture-only fix.
+
+Root format, compile with warnings-as-errors, strict Credo and unused-dependency
+checks pass. Frontend type checking and 62 focused flow/error-presentation tests
+pass. Rendered editor/call desktop and phone checks and independent packaged
+release inspection are recorded above. No production speech/source-cutover state
+changed in the verification repair, so no additional Lean lane is required.
+E4 is complete; C3/E2 live acceptance and F3/F4 deployment/evidence remain open.

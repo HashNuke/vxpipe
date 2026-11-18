@@ -565,8 +565,8 @@ activation5/0, sample resumption6/0. Independent review is pending. Rendered edi
 and transcript evidence, stale guidance and live acceptance remain outstanding.
 
 The concurrent umbrella run completed successfully: 5,654 tests, zero failures,
-seed844757; root command exited0. Application counts: Identity101, Providers222,
-MCP35, Runtime336, CallEngine2528, Calls392, Gateway890, Artifacts20,
+seed844757; root command exited0. Application counts: Identity101, Providers35,
+MCP222, Runtime336, CallEngine2528, Calls392, Gateway890, Artifacts20,
 Persistence551, Console579. Both earlier Gateway failure sites passed. This run
 started before the lifecycle implementation (Runtime336), while later app tests
 included the new authoring coverage, so a fresh final umbrella remains required
@@ -758,3 +758,30 @@ the assembled release byte-for-byte. Image-extracted contract probes pass; OCI
 revision matches, obsolete profile is absent and the running image is unchanged.
 The disposable inspection container was removed. F2 checked:19/24 (79.2%).
 This does not close live acceptance, the full umbrella gate or deployment.
+
+### Buffered/streamed request parity diagnostic
+
+While the final root rerun and acceptance-policy question remained pending, ran a
+local HTTP comparison for DeepSeek, Fireworks and OpenRouter using their configured
+models/options and captured shared protocol. For identical initial and native-tool
+continuation inputs, encoded requests are equal after removing only stream and
+stream_options (3 tests/0 failures, seed 798878). Instructions, history, declarations,
+routing and output budget are included in that equality. No external requests or
+production edits occurred. This narrow diagnostic does not claim full-conversation
+semantic equivalence or replace failing live cases; it found no transport mismatch
+to justify another live trial. Temporary proof/log remain outside the repository.
+
+### Final root gate
+
+Root rerun exits 0: 5,853 tests, zero failures, 409 exclusions, seed 856309.
+Counts: Identity101/Providers35/MCP222/Runtime528/CallEngine2529/Calls392/
+Gateway891/Artifacts20/Persistence551/Console584. It includes the new all-six
+terminal matrix and permanent delayed-ack phone recovery case. Static root gates
+all pass, frontend typecheck passes, focused flow-editor30 and error-presentation32
+pass. Existing desktop/phone rendered evidence and reviewed image audit remain
+applicable. E4 checked:20/24 tasks (83.3%). Independent final evidence review is
+clean after correcting swapped Providers/MCP labels (35/222 respectively); the
+aggregate is unchanged. No deployment or successful streamed live acceptance is
+inferred. All independent verification and candidate preparation are complete;
+current streamed acceptance and deployment remain gated on the pending explicit
+policy decision. No automatic additional live trial is planned.
