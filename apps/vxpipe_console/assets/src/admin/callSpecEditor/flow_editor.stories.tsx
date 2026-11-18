@@ -73,8 +73,8 @@ export const SaveBlocked: Story = { args: { scenario: "invalid" }, play: async (
   const body = within(canvasElement.ownerDocument.body); await saveDraft(body);
   await expect(body.getByText("Fix 2 issues before saving")).toBeVisible();
 } };
-export const Saved: Story = actionStory({ status: 201, revision: 4 }, "Saved as revision 4");
-export const Published: Story = actionStory({ status: 200, revision: 3 }, "Published revision 3", "Publish");
+export const Saved: Story = actionStory({ status: 201, revision: 4 }, "Draft saved");
+export const Published: Story = actionStory({ status: 200, revision: 3 }, "Published", "Publish");
 export const BackendFieldError: Story = actionStory({ status: 422, error: { code: "invalid_call_spec", path: ["participants", "intake", "prompt"], reason: "is required" } }, "Couldn't save: Agent intake › Prompt is required");
 export const BackendUnmappedError: Story = actionStory({ status: 422, error: { code: "invalid_call_spec", path: ["future_field"], reason: "This field is not supported." } }, "Couldn't save: This field is not supported.");
 export const NotPublishable: Story = actionStory({ status: 409, error: { code: "call_spec_not_publishable", path: ["participants", "intake", "prompt"], reason: "requires a supported configuration" } }, "Couldn't publish: Agent intake › Prompt requires a supported configuration", "Publish");

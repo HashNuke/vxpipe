@@ -1,3 +1,4 @@
+import { parseCallSpecPublication } from "../callSpecPublication";
 import { parseSourceJson, stringifySourceJson } from "./source-json";
 import { catalogCapabilities, parseModelCatalog, type ModelCatalog } from "../modelCatalog";
 import type { EditorSnapshot } from "./editor-state";
@@ -39,7 +40,8 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
       document.readOnly = true;
       document.notice = `Viewing revision ${saved.revision}. This saved revision is read-only.`;
     }
-    return { document, saved: { callSpecId: id, revision: saved.revision, publishedRevision: saved.published_revision } };
+    const publication = parseCallSpecPublication(saved.publication);
+    return { document, saved: { callSpecId: id, revision: saved.revision, publishedRevision: saved.published_revision, ...(publication ? { publication } : {}) } };
   }
   const execute: ExecuteEditorRequest = async (request, signal) => {
     const writes = `/api/tenants/${encodeURIComponent(tenant)}/call-specs`;
@@ -63,7 +65,8 @@ export function createEditorApi(tenant: string, csrf: string, fetch: EditorFetch
     }
     const saved = record(body) ? body.call_spec : undefined;
     if (!record(saved) || typeof saved.call_spec_id !== "string" || !saved.call_spec_id || !revision(saved.revision)) throw new Error("Invalid saved revision");
-    return { status: response.status, callSpecId: saved.call_spec_id, revision: saved.revision };
+    const publication = parseCallSpecPublication(saved.publication);
+    return { status: response.status, callSpecId: saved.call_spec_id, revision: saved.revision, ...(publication ? { publication } : {}) };
   };
   async function catalog(signal: AbortSignal): Promise<ModelCatalog> {
     const entries = await Promise.all(catalogCapabilities.map(async (capability) => {

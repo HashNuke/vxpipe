@@ -58,13 +58,13 @@ test("new route creates a spec, replaces its URL without losing edits, and publi
   expect(fetch.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   writeInitialPrompt();
   saveDraft();
-  await screen.findByText("Saved as revision 2");
+  await screen.findByText("Draft saved");
   const submitted = fetch.mock.calls.find(([, init]) => init?.method === "POST");
   expect(Object.keys(JSON.parse(String(submitted?.[1]?.body)))).toEqual(["source"]);
   await waitFor(() => expect(window.location.pathname).toBe("/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf"));
   expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("New draft");
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
-  await screen.findByText("Published revision 2");
+  await screen.findByText("Published");
   expect(fetch).toHaveBeenCalledWith("/api/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf/revisions/2/publish", expect.objectContaining({ body: "{}" }));
 });
 
@@ -74,7 +74,7 @@ test("Publish creates and publishes a new draft across URL replacement without r
   await createIncoming();
   writeInitialPrompt();
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
-  await screen.findByText("Published revision 2");
+  await screen.findByText("Published");
   expect(window.location.pathname).toBe("/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   const writes = fetch.mock.calls.filter(([, init]) => init?.method === "POST");
   expect(writes).toHaveLength(2);
@@ -166,7 +166,7 @@ test("URL replacement after creation preserves changes made during the request",
   saveDraft();
   fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), { target: { value: "Newer prompt" } });
   await act(async () => complete(await reply({ call_spec: stored }, 201)));
-  expect(await screen.findByText("Saved as revision 2")).toBeVisible();
+  expect(await screen.findByText("Draft saved")).toBeVisible();
   expect(window.location.pathname).toBe("/admin/tenants/AAAAAAAAAAAAAAAA/call-specs/1c94f0f7-05d5-4919-a7d5-01d7250e4caf");
   expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveValue("Newer prompt");
   expect(screen.getByText("Unsaved changes")).toBeVisible();
@@ -190,7 +190,7 @@ test("the list opens a saved spec by its server-generated public UUID", async ()
   render(<App csrfToken="csrf" fetchImpl={fetch} />);
   fireEvent.click(await screen.findByRole("link", { name: "Existing API-authored spec" }));
   expect(await screen.findByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Original");
-  expect(screen.getByText("v2")).toBeVisible();
+  expect(screen.getByRole("button", { name: "v1 · Unpublished changes" })).toBeVisible();
 });
 
 
@@ -218,7 +218,7 @@ test("outgoing creation requires a phone service and saves the chosen direction"
   fireEvent.click(await screen.findByRole("option", { name: "Office phone" }));
   fireEvent.click(screen.getByRole("button", { name: "Create call spec" }));
   await screen.findByRole("button", { name: "More actions" }); writeInitialPrompt(); saveDraft();
-  await screen.findByText("Saved as revision 2");
+  await screen.findByText("Draft saved");
   const submitted = fetch.mock.calls.find(([, init]) => init?.method === "POST");
   const saved = JSON.parse(String(submitted?.[1]?.body)).source;
   expect(saved.incoming_call).toBeUndefined();
@@ -292,7 +292,7 @@ test.each([
   expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
   const catalogsBeforePublish = fetch.mock.calls.filter(([path]) => /\/voices\?/.test(String(path))).length;
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
-  await screen.findByText("Published revision 3");
+  await screen.findByText("Published");
   const selected = site === "opening" && persisted.source.opening_audio?.type === "text" ? persisted.source.opening_audio.text_to_speech : site === "participant" ? persisted.source.participants.assistant!.capabilities![capability] : persisted.source.defaults!.capabilities![capability];
   expect(selected).toEqual({ ...selection, options: { ...selection.options, voice: "chosen-voice" } });
   expect(fetch.mock.calls.filter(([path]) => /\/voices\?/.test(String(path)))).toHaveLength(catalogsBeforePublish);

@@ -1,3 +1,5 @@
+import { PublicationStatus } from "./publication-status";
+import type { CallSpecPublication } from "../callSpecPublication";
 import { StoryNavigationContext } from "../stories/storyNavigation";
 import { StoryPageBreadcrumbs } from "../stories/StoryPageBreadcrumbs";
 import { useContext, useRef, type FormEventHandler, type ReactNode } from "react"
@@ -18,6 +20,8 @@ export type EditorHeaderProps = {
   flowName?: string | null;
   revision?: number;
   publishedRevision?: number;
+  publicationStatus?: ReactNode;
+  publication?: CallSpecPublication;
   dirty?: boolean;
   issueCount?: number;
   readOnly?: boolean;
@@ -48,6 +52,8 @@ export function FlowEditorHeader({
   layout = "canvas",
   revision,
   publishedRevision,
+  publicationStatus,
+  publication,
   dirty = false,
   issueCount = 0,
   readOnly = false,
@@ -102,8 +108,10 @@ export function FlowEditorHeader({
             </button>
           </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {revision !== undefined && <Badge variant="secondary" title={`Revision ${revision}`}>v{revision}</Badge>}
-          {publishedRevision !== undefined && <Badge variant="outline">Published: {publishedRevision}</Badge>}
+          {publicationStatus ?? <PublicationStatus publication={publication ?? {
+            version: publishedRevision ?? null, revision: publishedRevision ?? null,
+            unpublishedChanges: revision !== publishedRevision, draftSavedAt: null, history: [],
+          }} />}
           {dirty && <span>Unsaved changes</span>}
           {readOnly && <Badge variant="outline">Read only</Badge>}
         </div>

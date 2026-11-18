@@ -23,7 +23,7 @@ test("one replaceable toast exposes recovery actions; only success auto-dismisse
   const { rerender } = render(<EditorToast feedback={{ tone: "error", message: "Could not save", persistent: true, action: "retry" }} onAction={action} onDismiss={dismiss} />);
   fireEvent.click(screen.getByRole("button", { name: "Retry" })); expect(action).toHaveBeenCalledWith("retry");
   act(() => vi.advanceTimersByTime(10000)); expect(dismiss).not.toHaveBeenCalled();
-  rerender(<EditorToast feedback={{ tone: "success", message: "Saved as revision 4", persistent: false }} onAction={action} onDismiss={dismiss} />);
+  rerender(<EditorToast feedback={{ tone: "success", message: "Draft saved", persistent: false }} onAction={action} onDismiss={dismiss} />);
   expect(screen.queryByText("Could not save")).not.toBeInTheDocument();
   act(() => vi.advanceTimersByTime(6000)); expect(dismiss).toHaveBeenCalledOnce();
 });

@@ -16,9 +16,18 @@ Call-spec IDs are database integers encoded as decimal strings, such as `"123"`.
 They are allocated by the server and are not editable slugs or UUIDs. Names are
 display labels and need not be unique. Every lookup remains tenant-scoped.
 
-Saving appends an immutable revision. **Publish** makes a chosen revision available
-to new calls and updates its incoming routes. A prepared/running call remains
-pinned to its revision. Saving or publishing never dials a phone number.
+Saving updates the working draft without changing the published version number.
+**Publish** creates the next version for changed content and updates its incoming
+routes. Publishing unchanged content keeps the live version and routes. A
+prepared/running call remains pinned to its original immutable source revision.
+Saving or publishing never dials a phone number.
+
+The editor and list show **v6 Published** or **v6 · Unpublished changes**, and
+**Draft** before the first publication. Unsaved browser edits are marked separately.
+Click the editor badge to see the latest three published versions and dates, with
+**Live** marking the current one. Saved unpublished changes appear above them with
+the last-save date. This is a reference list, not a version-switching control.
+Existing installations may initially show only their known current publication.
 
 In the editor, **Publish** saves valid unsaved edits first, then publishes that
 saved revision. Use **Save as draft**

@@ -10,6 +10,8 @@ export type CallSpecSummary = {
   name: string | null;
   latestRevision: number;
   publishedRevision: number | null;
+  publishedVersion?: number | null;
+  unpublishedChanges?: boolean;
   callCount: number;
   updatedAt: string;
 };

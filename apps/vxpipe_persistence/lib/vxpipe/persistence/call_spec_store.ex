@@ -5,7 +5,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
 
   import Ecto.Query
 
-  alias Vxpipe.Persistence.{CallSpecId, TelnyxRouting}
+  alias Vxpipe.Persistence.{CallSpecId, CallSpecPublications, TelnyxRouting}
   alias Ecto.Multi
   alias Vxpipe.Calls.{CallSpecRevision, ParticipantRoute, TelephonyRoute}
   alias Vxpipe.Persistence.Schema.{CallSpec, Tenant}
@@ -112,6 +112,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
        }} ->
         {:ok,
          to_revision(
+           repo,
            call_spec,
            stored_revision,
            stored_routes,
@@ -149,6 +150,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
       {call_spec, revision} ->
         {:ok,
          to_revision(
+           repo,
            call_spec,
            revision,
            revision.participant_routes,
@@ -204,66 +206,21 @@ defmodule Vxpipe.Persistence.CallSpecStore do
       |> Multi.run(:selection, fn repo, _changes ->
         fetch_stored_revision(repo, tenant_key, call_spec_id, revision_number)
       end)
-      |> Multi.run(:number_assignments, fn repo, %{selection: {call_spec, revision}} ->
-        numbers =
-          repo.all(
-            from(r in StoredTelephonyRoute,
-              where: r.call_spec_revision_id == ^revision.id,
-              select: r.number
-            )
-          )
+      |> Multi.run(:changed?, fn repo, %{selection: {call_spec, revision}} ->
+        live =
+          if call_spec.published_revision_id,
+            do: repo.get!(StoredRevision, call_spec.published_revision_id)
 
-        conflict? =
-          repo.exists?(
-            from(r in StoredTelephonyRoute,
-              join: v in assoc(r, :call_spec_revision),
-              join: s in assoc(v, :call_spec),
-              where:
-                r.tenant_id == ^call_spec.tenant_id and r.number in ^numbers and
-                  s.id != ^call_spec.id and not is_nil(r.published_at) and
-                  s.published_revision_id == v.id
-            )
-          )
-
-        if conflict? or TelnyxRouting.publication_conflict?(repo, call_spec, revision),
-          do: {:error, :phone_number_in_use},
-          else: {:ok, :available}
+        {:ok, is_nil(live) or live.source != revision.source}
       end)
-      |> Multi.run(:disable_old_routes, fn repo, %{selection: {call_spec, _revision}} ->
-        route_query = routes_for_call_spec(call_spec.id)
-        {count, _rows} = repo.update_all(route_query, set: [published_at: nil])
-        {:ok, count}
-      end)
-      |> Multi.run(:disable_old_telephony_routes, fn repo, %{selection: {call_spec, _revision}} ->
-        route_query = telephony_routes_for_call_spec(call_spec.id)
-        {count, _rows} = repo.update_all(route_query, set: [published_at: nil])
-        {:ok, count}
-      end)
-      |> Multi.run(:enable_routes, fn repo, %{selection: {_call_spec, revision}} ->
-        route_query =
-          from(route in StoredRoute, where: route.call_spec_revision_id == ^revision.id)
-
-        {count, _rows} = repo.update_all(route_query, set: [published_at: published_at])
-        {:ok, count}
-      end)
-      |> Multi.run(:enable_telephony_routes, fn repo, %{selection: {_call_spec, revision}} ->
-        route_query =
-          from(route in StoredTelephonyRoute,
-            where: route.call_spec_revision_id == ^revision.id
-          )
-
-        {count, _rows} = repo.update_all(route_query, set: [published_at: published_at])
-        {:ok, count}
-      end)
-      |> Multi.update(:call_spec, fn %{selection: {call_spec, revision}} ->
-        CallSpec.changeset(call_spec, %{
-          published_revision_id: revision.id,
-          published_at: published_at
-        })
+      |> Multi.merge(fn %{changed?: changed?, selection: selection} ->
+        if changed?, do: publication_changes(selection, published_at), else: Multi.new()
       end)
 
     case repo.transaction(multi) do
-      {:ok, %{call_spec: call_spec, selection: {_call_spec, revision}}} ->
+      {:ok, %{selection: {selected_spec, revision}} = changes} ->
+        call_spec = Map.get(changes, :call_spec, selected_spec)
+
         routes =
           repo.all(from(route in StoredRoute, where: route.call_spec_revision_id == ^revision.id))
 
@@ -274,11 +231,81 @@ defmodule Vxpipe.Persistence.CallSpecStore do
             )
           )
 
-        {:ok, to_revision(call_spec, revision, routes, telephony_routes, tenant_key)}
+        {:ok, to_revision(repo, call_spec, revision, routes, telephony_routes, tenant_key)}
 
       {:error, _operation, reason, _changes} ->
         {:error, reason}
     end
+  end
+
+  defp publication_changes({call_spec, revision}, published_at) do
+    Multi.new()
+    |> Multi.run(:number_assignments, fn repo, _changes ->
+      numbers =
+        repo.all(
+          from(r in StoredTelephonyRoute,
+            where: r.call_spec_revision_id == ^revision.id,
+            select: r.number
+          )
+        )
+
+      conflict? =
+        repo.exists?(
+          from(r in StoredTelephonyRoute,
+            join: v in assoc(r, :call_spec_revision),
+            join: s in assoc(v, :call_spec),
+            where:
+              r.tenant_id == ^call_spec.tenant_id and r.number in ^numbers and
+                s.id != ^call_spec.id and not is_nil(r.published_at) and
+                s.published_revision_id == v.id
+          )
+        )
+
+      if conflict? or TelnyxRouting.publication_conflict?(repo, call_spec, revision),
+        do: {:error, :phone_number_in_use},
+        else: {:ok, :available}
+    end)
+    |> Multi.run(:disable_old_routes, fn repo, _changes ->
+      route_query = routes_for_call_spec(call_spec.id)
+      {count, _rows} = repo.update_all(route_query, set: [published_at: nil])
+      {:ok, count}
+    end)
+    |> Multi.run(:disable_old_telephony_routes, fn repo, _changes ->
+      route_query = telephony_routes_for_call_spec(call_spec.id)
+      {count, _rows} = repo.update_all(route_query, set: [published_at: nil])
+      {:ok, count}
+    end)
+    |> Multi.run(:enable_routes, fn repo, _changes ->
+      route_query =
+        from(route in StoredRoute, where: route.call_spec_revision_id == ^revision.id)
+
+      {count, _rows} = repo.update_all(route_query, set: [published_at: published_at])
+      {:ok, count}
+    end)
+    |> Multi.run(:enable_telephony_routes, fn repo, _changes ->
+      route_query =
+        from(route in StoredTelephonyRoute,
+          where: route.call_spec_revision_id == ^revision.id
+        )
+
+      {count, _rows} = repo.update_all(route_query, set: [published_at: published_at])
+      {:ok, count}
+    end)
+    |> Multi.update(:call_spec, fn _changes ->
+      CallSpec.changeset(call_spec, %{
+        published_revision_id: revision.id,
+        published_version: (call_spec.published_version || 0) + 1,
+        published_at: published_at
+      })
+    end)
+    |> Multi.run(:publication, fn repo, %{call_spec: call_spec} ->
+      repo.insert(%Vxpipe.Persistence.Schema.CallSpecPublication{
+        call_spec_id: call_spec.id,
+        call_spec_revision_id: revision.id,
+        version: call_spec.published_version,
+        published_at: published_at
+      })
+    end)
   end
 
   @impl true
@@ -439,7 +466,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
     )
   end
 
-  defp to_revision(call_spec, revision, routes, telephony_routes, tenant_key) do
+  defp to_revision(repo, call_spec, revision, routes, telephony_routes, tenant_key) do
     published? = call_spec.published_revision_id == revision.id
 
     %CallSpecRevision{
@@ -462,6 +489,7 @@ defmodule Vxpipe.Persistence.CallSpecStore do
         )
         |> Enum.sort_by(& &1.participant_ref),
       published_at: if(published?, do: call_spec.published_at),
+      publication: CallSpecPublications.read(repo, call_spec.id),
       inserted_at: revision.inserted_at
     }
   end

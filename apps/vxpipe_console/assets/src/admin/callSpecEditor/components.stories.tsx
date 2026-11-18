@@ -41,7 +41,7 @@ export const Header: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole("button", { name: "Edit call spec name" })).toBeEnabled();
     await expect(canvas.getByRole("button", { name: "More actions" })).toBeEnabled();
-    await expect(canvas.getByText("Published: 2")).toBeVisible();
+    await expect(canvas.getByText("v2 · Unpublished changes")).toBeVisible();
   },
 };
 export const HeaderSaving: Story = {

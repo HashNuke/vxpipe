@@ -12,7 +12,7 @@ test("a validation failure persists through retries and publish success, then cl
   expect(retry.toast?.action).toBe("retry");
   const published = applyActionResult(retry, source, "publish", { status: 200, revision: 3 });
   expect(published.backend).toEqual(result.error);
-  expect(published.toast?.message).toBe("Published revision 3");
+  expect(published.toast?.message).toBe("Published");
   expect(applyActionResult(published, source, "save", { status: 201, revision: 4 }).backend).toBeUndefined();
 });
 test("edits retain the action outcome but clear only the edited backend field", () => {

@@ -179,7 +179,7 @@ defmodule Vxpipe.Persistence.DemoSamplesTest do
     end
   end
 
-  test "concurrent installers reuse IDs and resume an unpublished matching revision", context do
+  test "concurrent installers reuse IDs and preserve publication for an identical saved revision", context do
     provision(context.tenant.key, ["deepgram", "google"], context.options)
 
     results =
@@ -215,7 +215,7 @@ defmodule Vxpipe.Persistence.DemoSamplesTest do
     assert resumed.call_spec_id == id
     assert resumed.revision == 2
 
-    assert {:ok, %{revision: 2}} =
+    assert {:ok, %{revision: 1, publication: %{version: 1, unpublished_changes: false}}} =
              CallSpecStore.fetch_published_revision(Repo, context.tenant.key, id)
   end
 

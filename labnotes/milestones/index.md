@@ -1,6 +1,6 @@
 # Call Spec implementation milestones
 
-Status: 65 active milestone specifications: 50 complete and 15 incomplete. Milestone 17, Telnyx calls and
+Status: 66 active milestone specifications: 51 complete and 15 incomplete. Milestone 17, Telnyx calls and
 phone transfers, is complete. A signed incoming Telnyx call runs through the ordinary pinned room,
 agent, media, transfer, private-briefing, press-1 acceptance, privacy-barrier, and human bridge path;
 duplicate events and a simulated post-admission storage outage do not recreate or reroute it.
@@ -196,6 +196,7 @@ progress without claiming the entire milestone is complete.
 63. [ ] [Voice agent turns, listening cues and spoken transcripts](voice-agent-turns-and-listening.md) — One combined milestone: A/B deliver ElevenLabs/Rime interrupted transcript and next-LLM history; C consumes the shared message protocol for semantic interruption and modes; D adds bounded CPU filtering; E delivers transcript-driven audible cues; F verifies telephone/language/resource coverage and the one-second target. All new checkpoints remain open; completed Scribe wait removal is retained as baseline evidence.
 64. [ ] [Embedded and container delivery](embedded-and-container-delivery.md) — Deliver Docker as the primary package under `ghcr.io/vxpipe/vxpipe`, with source at `HashNuke/vxpipe`, components also usable as libraries in Elixir hosts and a Docker quick start in the README. Local QA release, migrations and container/system services are implemented; distribution and embedded acceptance remain incomplete.
 65. [ ] [Whole-call retention and deletion](call-retention.md) — Sweep expired calls only after every call record and external artifact producer is established, deleting external artifacts before database records.
+66. [x] [Call spec drafts and publications](call-spec-drafts-and-publications.md) — Complete: one visible working draft, publication-only version numbers, combined status badges and bounded reference-only history.
 
 The 2026-11-16 consolidation replaces the three active feature entries with one
 [combined voice milestone](voice-agent-turns-and-listening.md). It contains the

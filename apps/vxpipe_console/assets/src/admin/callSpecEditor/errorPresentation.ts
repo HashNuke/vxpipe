@@ -1,10 +1,11 @@
+import type { CallSpecPublication } from "../callSpecPublication";
 import { catalogCapabilities } from "../modelCatalog";
 import type { CallSpecSource, SourceIssue } from "./types";
 import { record } from "./validationFields";
 
 export type IssueLocation = { nodeId: string; tab: string; field: string[]; label: string };
 export type AuthoringError = { code: string; path?: string[]; reason?: string };
-export type ActionResult = { status?: number; revision?: number; error?: AuthoringError; clientIssues?: SourceIssue[] };
+export type ActionResult = { status?: number; revision?: number; publication?: CallSpecPublication; error?: AuthoringError; clientIssues?: SourceIssue[] };
 export type ActionFeedback = {
   tone: "success" | "error";
   message: string;
@@ -75,7 +76,7 @@ export function actionOutcome(source: CallSpecSource, action: "save" | "publish"
     return { tone: "error", persistent: true, message: `Fix ${result.clientIssues.length} ${result.clientIssues.length === 1 ? "issue" : "issues"} before ${verb}`, action: "show", issue, location: locateIssue(source, issue.path) };
   }
   if (result.status && result.status >= 200 && result.status < 300) return {
-    tone: "success", persistent: false, message: `${action === "save" ? "Saved as" : "Published"} revision ${result.revision}`,
+    tone: "success", persistent: false, message: action === "save" ? "Draft saved" : result.publication?.version ? `Version ${result.publication.version} published` : "Published",
   };
   const error = result.error;
   const path = error?.path ?? [];

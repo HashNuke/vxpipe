@@ -295,7 +295,9 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
 
       assert mcp ==
                read
-               |> Map.take(~w(call_spec_id revision latest_revision published_revision))
+               |> Map.take(
+                 ~w(call_spec_id revision latest_revision published_revision publication)
+               )
                |> Map.put("call_spec_definition", read["source"])
 
       assert mcp["call_spec_definition"] == source
@@ -308,15 +310,23 @@ defmodule Vxpipe.Console.PlatformMCPEndpointTest do
           revision: 1
         })
 
-      assert publication["structuredContent"] == %{
-               "call_spec_id" => id,
-               "published_revision" => 1
-             }
+      assert %{
+               "call_spec_id" => ^id,
+               "published_revision" => 1,
+               "publication" => %{
+                 "version" => 1,
+                 "revision" => 1,
+                 "unpublished_changes" => true
+               }
+             } = publication["structuredContent"]
 
       historical = rest(secret, base <> "/" <> id <> "?revision=1") |> json_response(200)
       assert historical["call_spec"]["source"] == spec_source()
       assert historical["call_spec"]["latest_revision"] == 2
       assert historical["call_spec"]["published_revision"] == 1
+
+      assert historical["call_spec"]["publication"] ==
+               publication["structuredContent"]["publication"]
 
       listed = rest(secret, base) |> json_response(200)
 

@@ -45,6 +45,22 @@ defmodule Vxpipe.Gateway.CallSpecJSON do
           }
         )
     }
+    |> with_publication(revision.publication)
+  end
+
+  defp with_publication(result, nil), do: result
+
+  defp with_publication(result, publication) do
+    Map.put(result, :publication, %{
+      version: publication.version,
+      revision: publication.revision,
+      unpublished_changes: publication.unpublished_changes,
+      draft_saved_at: DateTime.to_iso8601(publication.draft_saved_at),
+      history:
+        Enum.map(publication.history, fn event ->
+          %{version: event.version, published_at: DateTime.to_iso8601(event.published_at)}
+        end)
+    })
   end
 
   defp summary(spec) do
@@ -56,5 +72,15 @@ defmodule Vxpipe.Gateway.CallSpecJSON do
       call_count: spec.call_count,
       updated_at: DateTime.to_iso8601(spec.updated_at)
     }
+    |> with_summary_publication(spec)
   end
+
+  defp with_summary_publication(result, %{unpublished_changes: nil}), do: result
+
+  defp with_summary_publication(result, spec),
+    do:
+      Map.merge(result, %{
+        published_version: spec.published_version,
+        unpublished_changes: spec.unpublished_changes
+      })
 end
