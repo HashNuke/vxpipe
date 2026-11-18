@@ -98,11 +98,13 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
       items =
         Enum.map(
           projected.call_specs,
-          &%{
-            call_spec_id: &1.id,
-            latest_revision: &1.latest_revision,
-            published_revision: &1.published_revision
-          }
+          &(Map.take(&1, [
+              :latest_revision,
+              :published_revision,
+              :published_version,
+              :unpublished_changes
+            ])
+            |> Map.put(:call_spec_id, &1.id))
         )
 
       {:ok, %{items: items, pagination: projected.pagination}}
@@ -118,7 +120,16 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
              Keyword.put(options, :revision, args["revision"])
            ) do
       %{call_spec: spec} = CallSpecJSON.read(fetched)
-      result = Map.take(spec, [:call_spec_id, :revision, :latest_revision, :published_revision])
+
+      result =
+        Map.take(spec, [
+          :call_spec_id,
+          :revision,
+          :latest_revision,
+          :published_revision,
+          :publication
+        ])
+
       {:ok, Map.put(result, :call_spec_definition, spec.source)}
     end
   end
@@ -139,7 +150,7 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
       {:ok,
        revision
        |> CallSpecJSON.write_revision()
-       |> Map.take([:call_spec_id, :revision, :validation_errors])}
+       |> Map.take([:call_spec_id, :revision, :validation_errors, :publication])}
     end
   end
 
@@ -151,8 +162,17 @@ defmodule Vxpipe.Gateway.MCP.CallSpecTools do
              args["call_spec_id"],
              args["revision"],
              options
-           ),
-         do: {:ok, %{call_spec_id: revision.call_spec_id, published_revision: revision.revision}}
+           ) do
+      projection = CallSpecJSON.write_revision(revision)
+
+      published_revision =
+        if revision.publication, do: revision.publication.revision, else: revision.revision
+
+      {:ok,
+       projection
+       |> Map.take([:call_spec_id, :publication])
+       |> Map.put(:published_revision, published_revision)}
+    end
   end
 
   def call(actor, "list_services", args, options) do

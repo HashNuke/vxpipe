@@ -27,7 +27,7 @@ test("saving snapshots the submitted source and preserves later edits on success
   expect(completed.pending).toBeUndefined();
   expect(isDirty(completed)).toBe(true);
   expect(isDirty(editName(completed, "Submitted"))).toBe(false);
-  expect(completed.feedback.toast?.message).toBe("Saved as revision 4");
+  expect(completed.feedback.toast?.message).toBe("Draft saved");
 });
 
 test("a first save records the server ID and makes an unchanged new spec publishable", () => {
@@ -90,4 +90,23 @@ test("incomplete success metadata is retryable and never claims the draft was sa
   expect(result.saved).toBeUndefined();
   expect(isDirty(result)).toBe(true);
   expect(result.feedback.toast).toMatchObject({ tone: "error", action: "retry" });
+});
+
+test("authoritative publication metadata survives repeated saves and a no-op publish", () => {
+  const publication = { version: 1, revision: 2, unpublishedChanges: false, draftSavedAt: "2026-11-17T12:00:00Z",
+    history: [{ version: 1, publishedAt: "2026-11-17T11:00:00Z" }] };
+  let state = createEditorState({ document, saved: { callSpecId: "appointments", revision: 3, publishedRevision: 2, publication } });
+  for (const revision of [4, 5]) {
+    state = editorReducer(state, { type: "start", action: "save" });
+    state = editorReducer(state, { type: "complete", id: state.pending!.id, result: { status: 201, revision, publication } });
+    expect(state.saved?.publication?.version).toBe(1);
+    expect(state.feedback.toast?.message).toBe("Draft saved");
+  }
+  state = editorReducer(state, { type: "start", action: "publish" });
+  state = editorReducer(editName(state, "Edits made while publishing"), { type: "complete", id: state.pending!.id,
+    result: { status: 200, revision: 5, publication } });
+  expect(state.saved?.publishedRevision).toBe(2);
+  expect(state.saved?.publication?.history).toEqual(publication.history);
+  expect(state.feedback.toast?.message).toBe("Version 1 published");
+  expect(isDirty(state)).toBe(true);
 });

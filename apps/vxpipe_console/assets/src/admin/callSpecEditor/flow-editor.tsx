@@ -143,7 +143,7 @@ export function CallSpecEditor({ snapshot, catalog, lookups, execute, backHref, 
       onConnect={(from, to) => { change((document) => setTransfer(document, from, to, true), "Couldn't connect these participants. Choose an agent and a transfer destination."); }}
       inspector={inspector} inspectorTitle={selectedNodeId === "$entry" ? "Entry settings" : selectedNodeId ? `Participant ${selectedNodeId}` : "Call settings"} inspectorRequest={inspectorRequest}
       onBreadcrumbNavigate={href => depart({ kind: "leave", href })}
-      backHref={backHref} onBack={() => depart({ kind: "leave", href: backHref })} revision={state.saved?.revision} publishedRevision={state.saved?.publishedRevision ?? undefined}
+      backHref={backHref} onBack={() => depart({ kind: "leave", href: backHref })} revision={state.saved?.revision} publishedRevision={state.saved?.publishedRevision ?? undefined} publication={state.saved?.publication}
       dirty={dirty} issueCount={state.clientIssues.length} saving={state.pending?.action === "save"} publishing={state.pending?.action === "publish"} loading={reloading}
       saveDisabled={state.feedback.saveDisabled || hasJsonDrafts} jsonDraftCount={Object.keys(jsonDrafts).length} onShowJsonDraft={reviewJsonDraft}
       authoringDisabled={state.feedback.authoringDisabled || state.feedback.sessionExpired}

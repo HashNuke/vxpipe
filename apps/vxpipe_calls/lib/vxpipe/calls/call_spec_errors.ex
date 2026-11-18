@@ -107,8 +107,38 @@ defmodule Vxpipe.Calls.CallSpecErrors do
        when code in ["invalid_call_spec", "unsupported_call_plan"],
        do: validator_error(code, details)
 
+  defp project(%Error{code: :call_spec_resolution_failed, details: details}),
+    do: validator_error(:unsupported_call_plan, details)
+
+  defp project(%{"code" => "call_spec_resolution_failed", "details" => details}),
+    do: validator_error(:unsupported_call_plan, details)
+
+  defp project(%Error{code: :unsupported_agent_protocol, details: details}),
+    do: protocol_error(details)
+
+  defp project(%{"code" => "unsupported_agent_protocol", "details" => details}),
+    do: protocol_error(details)
+
   defp project(_error),
     do: field_error(:invalid_call_spec, %{}, "The call spec could not be validated.")
+
+  defp protocol_error(details) do
+    path = if is_map(details), do: Map.get(details, "path", []), else: []
+
+    reason =
+      if is_list(path) and List.last(path) == "tools" do
+        "Idle requires an LLM agent. Remove Idle or choose LLM + Text-to-Speech in Models."
+      else
+        "The agent reply configuration could not be validated. Review the highlighted settings."
+      end
+
+    details =
+      if is_map(details) and is_list(path) and List.last(path) == "model_inference",
+        do: Map.put(details, "path", path ++ ["model"]),
+        else: details
+
+    field_error(:unsupported_call_plan, details, reason)
+  end
 
   defp validator_error(code, details) when is_map(details) do
     reason = Map.get(details, "reason")

@@ -60,6 +60,48 @@ host registration, tenant-over-platform precedence and credential deletion. Room
 startup also runs with poisoned obsolete application speech settings to verify
 that neither startup stage reads them.
 
+## LLM reply contract
+
+Ordinary editor/API authoring uses the shared `mode_message_v1` contract across
+every installed LLM integration. Explicit legacy sample and embedding fixtures
+retain their compatibility path. Provider and model identities do not grant
+structured-reply eligibility. Normal model resolution, public option validation,
+credentials and tool permissions still apply; authoring does not call the model.
+
+Agent Runtime owns the strict final dialogue decoder and the native tool loop.
+A reply requires exactly `type: "participant_message"`, `participant_id`,
+`agent_mode` and `message`. The participant ID is a 1–128 character identifier
+starting with an ASCII letter/digit, followed by letters/digits, underscores or
+hyphens. Attribution does not override the host's speaker identity. Two-field
+modern replies are rejected. Speaker requires nonblank text;
+listener accepts nonblank text or null. Do not add a provider-specific parser,
+extract JSON from prose, fabricate successful silence, or introduce implicit
+legacy fallback. Raw JSON and private reasoning must never reach speech or the
+user-facing transcript.
+
+The adapter pins a transport strategy for the activation. Native schema encoding
+is an enhancement where the selected transport demonstrably supports it together
+with native tools. Unknown capabilities use shared instructed JSON with the same
+strict decoder. Preserve every authorized native tool on ordinary, result,
+asynchronous completion and idle rounds. Never force a synthetic schema tool or
+remove real tools to obtain a valid answer.
+
+An integration must preserve refusal/truncation signals and truthful usage
+provenance through both buffered and streaming decoding. Required continuation
+metadata stays bounded, private and bound to the exact provider, model and source
+message. Router replay must not move opaque data to another upstream model.
+Canonical speech settlement and context compaction have explicit replay rules;
+public history alone is not a private native continuation checkpoint.
+
+Run actual encoded HTTP fixtures in both modes, the shared strict-dialogue and
+lifecycle tests, and a configured live conversation before reporting acceptance.
+The registry coverage guard must fail when an installed LLM is missing. Live
+failures and unavailable credentials remain explicit evidence; a successful save
+or a native-schema capability flag is not a successful conversation. See the
+[reply design](../../design/universal-agent-replies.md) and
+[acceptance milestone](../../../labnotes/milestones/universal-agent-replies.md)
+for the current implementation and outstanding gates.
+
 ## Speech adapter checklist
 
 1. Implement `Speech.STTProvider`, `TTSProvider` or `STSProvider` as appropriate.

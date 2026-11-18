@@ -95,3 +95,28 @@ test("Show opens the section modal and focuses its constraint when variables are
   expect(await screen.findByRole("dialog", { name: "Edit section" })).toBeVisible();
   expect(screen.getByRole("textbox", { name: "contact undeclared required field 1" })).toHaveFocus();
 });
+
+test("call-spec-wide errors stay in the summary instead of blaming an unrelated field", () => {
+  const problem = { ...issue, path: [], reason: "Could not validate the call spec" };
+  render(<Fields issues={[problem]} request={{ id: 1, path: [] }} />);
+  expect(screen.getByRole("region", { name: "Other issues in this tab" })).toHaveTextContent(problem.reason);
+  expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveAttribute("aria-invalid", "false");
+  expect(screen.getByRole("region", { name: "Other issues in this tab" })).toHaveFocus();
+});
+
+test("model errors stay off the participant key across inspector tabs", async () => {
+  const { AgentInspector } = await import("./agent-inspector");
+  const { editorFixture } = await import("./editorFixtures");
+  const { modelCatalogFixture } = await import("../modelCatalogFixtures");
+  const problem = { ...issue, path: ["participants", "intake", "capabilities", "model_inference", "model"], reason: "The agent reply configuration could not be validated. Review the highlighted settings." };
+  const props = { document: editorFixture, onChange: vi.fn(), participantKey: "intake", catalog: modelCatalogFixture, lookups: { telephonyServices: [], credentialNames: {}, mcpIntegrations: [] }, issues: [problem] };
+  const view = render(<AgentInspector {...props} tab="prompt" />);
+  expect(screen.getByRole("textbox", { name: "Participant key" })).toHaveAttribute("aria-invalid", "false");
+  expect(screen.queryByText(problem.reason)).not.toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("aria-description", "1 issue");
+  view.rerender(<AgentInspector {...props} tab="voice" />);
+  expect(screen.getByRole("textbox", { name: "Participant key" })).toHaveAttribute("aria-invalid", "false");
+  expect(screen.getAllByText(problem.reason)).toHaveLength(1);
+  view.rerender(<AgentInspector {...props} tab="prompt" issues={[{ ...problem, path: ["participants", "intake"], reason: "Invalid participant key" }]} />);
+  expect(screen.getByRole("textbox", { name: "Participant key" })).toHaveAccessibleDescription("Invalid participant key");
+});

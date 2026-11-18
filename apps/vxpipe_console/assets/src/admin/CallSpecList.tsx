@@ -16,19 +16,17 @@ export function CallSpecList({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] table-fixed border-collapse text-left">
+      <table className="w-full min-w-[760px] table-fixed border-collapse text-left">
         <caption className="sr-only">Call specs</caption>
         <colgroup>
-          <col className="w-[40%]" />
-          <col className="w-[12%]" />
-          <col className="w-[12%]" />
-          <col className="w-[18%]" />
-          <col className="w-[18%]" />
+          <col className="w-[34%]" />
+          <col className="w-[10%]" />
+          <col className="w-[34%]" />
+          <col className="w-[22%]" />
         </colgroup>
         <thead className="border-b border-[var(--admin-line)]">
           <tr className="font-mono text-xs font-bold uppercase tracking-[0.05em] text-[var(--admin-muted)]">
             <th className="px-4 py-3" scope="col">Name</th>
-            <th className="px-4 py-3" scope="col">Version</th>
             <th className="px-4 py-3 text-right" scope="col">Calls</th>
             <th className="px-4 py-3" scope="col">State</th>
             <th className="px-4 py-3" scope="col">Updated</th>

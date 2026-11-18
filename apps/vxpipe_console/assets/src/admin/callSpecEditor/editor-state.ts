@@ -1,10 +1,11 @@
+import type { CallSpecPublication } from "../callSpecPublication";
 import { stringifySourceJson } from "./source-json";
 import { applyActionResult, emptyActionFeedback, feedbackAfterEdit, type EditorActionFeedback } from "./action-feedback";
 import type { ActionFeedback, ActionResult } from "./errorPresentation";
 import type { CallSpecSource, SourceDocument, SourceIssue } from "./types";
 import { validateSource } from "./validation";
 
-export type SavedRevision = { callSpecId: string; revision: number; publishedRevision: number | null };
+export type SavedRevision = { callSpecId: string; revision: number; publishedRevision: number | null; publication?: CallSpecPublication };
 export type EditorSnapshot = { document: SourceDocument; saved?: SavedRevision };
 export type EditorRequest = {
   id: number;
@@ -86,7 +87,10 @@ function completeAction(state: EditorState, id: number, received: EditorResult):
   const next = { ...state, pending: undefined, feedback };
   if (feedback.toast?.tone !== "success") return next;
   if (request.action === "save") {
-    const saved = { callSpecId: callSpecId!, revision: received.revision!, publishedRevision: state.saved?.publishedRevision ?? null };
+    const saved = { callSpecId: callSpecId!, revision: received.revision!,
+      publishedRevision: received.publication ? received.publication.revision : state.saved?.publishedRevision ?? null,
+      ...(received.publication ? { publication: received.publication } : {}),
+    };
     // Publish the clicked snapshot, even if the user has edited again while saving.
     return { ...next, savedSource: request.source, saved,
       ...(request.publishAfterSave ? {
@@ -96,5 +100,8 @@ function completeAction(state: EditorState, id: number, received: EditorResult):
           callSpecId: saved.callSpecId, revision: saved.revision },
       } : {}) };
   }
-  return { ...next, saved: { ...state.saved!, publishedRevision: request.revision! } };
+  return { ...next, saved: { ...state.saved!,
+    publishedRevision: received.publication ? received.publication.revision : request.revision!,
+    ...(received.publication ? { publication: received.publication } : {}),
+  } };
 }

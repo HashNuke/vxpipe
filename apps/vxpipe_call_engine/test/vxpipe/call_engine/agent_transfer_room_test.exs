@@ -220,7 +220,13 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
         send_command(plan, room, caller, "Please transfer me.")
       )
 
-    {source, source_request} = receive_request_for_prompt("Route callers safely.", protocol)
+    {source, source_request} =
+      receive_request_for_prompt(
+        "Route callers safely.",
+        protocol,
+        Map.fetch!(plan.participants, "reception").participant_id
+      )
+
     assert source_request.reply_protocol == :mode_message_v1
     assert hd(source_request.messages).content =~ pinned_marker
     refute hd(source_request.messages).content =~ "Edited after publication marker"
@@ -243,9 +249,17 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     invalid = send_command(plan, room, caller, "Can billing help?")
     :ok = CallEngine.TestTransferConnection.send_text(invalid)
-    {destination, request} = receive_request_for_prompt("Handle billing requests.", protocol)
+
+    {destination, request} =
+      receive_request_for_prompt("Handle billing requests.", protocol, billing.participant_id)
+
     assert request.reply_protocol == :mode_message_v1
-    {:ok, expected} = Protocol.instructions(protocol, "Handle billing requests.", :llm)
+    {:ok, pinned} = Protocol.instructions(protocol, "Handle billing requests.", :llm)
+
+    expected =
+      pinned <>
+        "\n\nCurrent agent participant_id: " <> JSON.encode!(billing.participant_id) <> "."
+
     assert hd(request.messages).content == expected
     assert expected =~ pinned_marker
     refute expected =~ "Edited after publication marker"
@@ -260,7 +274,10 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     resumed = send_command(plan, room, caller, "Please try again.")
     :ok = CallEngine.TestTransferConnection.send_text(resumed)
-    {destination, recovered} = receive_request_for_prompt("Handle billing requests.", protocol)
+
+    {destination, recovered} =
+      receive_request_for_prompt("Handle billing requests.", protocol, billing.participant_id)
+
     assert recovered.reply_protocol == :mode_message_v1
     assert hd(recovered.messages).content == expected
 
@@ -270,7 +287,10 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
            )
 
     {:ok, response} =
-      ModelResponse.new(text: ~s({"agent_mode":"speaker","message":"Billing can help."}))
+      ModelResponse.new(
+        text:
+          ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Billing can help."})
+      )
 
     send(destination, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:test_tts_control, ^destination_voice, speak}
@@ -300,12 +320,18 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
     restarted = send_command(plan, room, caller, "Are you still there?")
     :ok = CallEngine.TestTransferConnection.send_text(restarted)
-    {destination, request} = receive_request_for_prompt("Handle billing requests.", protocol)
+
+    {destination, request} =
+      receive_request_for_prompt("Handle billing requests.", protocol, billing.participant_id)
+
     assert request.reply_protocol == :mode_message_v1
     assert hd(request.messages).content == expected
 
     {:ok, response} =
-      ModelResponse.new(text: ~s({"agent_mode":"speaker","message":"Still here."}))
+      ModelResponse.new(
+        text:
+          ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Still here."})
+      )
 
     send(destination, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:test_tts_control, ^destination_voice, speak}
@@ -1318,7 +1344,15 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
     assert_receive {:test_agent_runtime_stream, acknowledgment, _request}
 
     {:ok, silence} =
-      ModelResponse.new(text: JSON.encode!(%{"agent_mode" => "listener", "message" => nil}))
+      ModelResponse.new(
+        text:
+          JSON.encode!(%{
+            "type" => "participant_message",
+            "participant_id" => "agent",
+            "agent_mode" => "listener",
+            "message" => nil
+          })
+      )
 
     send(acknowledgment, {:test_agent_runtime_response, {:ok, silence}})
     correlation = command.correlation_id
@@ -1603,13 +1637,15 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
 
   defp future_deadline, do: DateTime.add(DateTime.utc_now(), 5, :second)
 
-  defp receive_request_for_prompt(prompt, protocol \\ nil) do
+  defp receive_request_for_prompt(prompt, protocol \\ nil, participant_id \\ nil) do
     expected =
       if is_nil(protocol) do
         system_prompt(prompt)
       else
         {:ok, instructions} = Protocol.instructions(protocol, prompt, :llm)
-        instructions
+
+        instructions <>
+          "\n\nCurrent agent participant_id: " <> JSON.encode!(participant_id) <> "."
       end
 
     receive do
@@ -1621,11 +1657,12 @@ defmodule Vxpipe.CallEngine.AgentTransferRoomTest do
         text =
           if is_nil(protocol),
             do: "Transfer in progress.",
-            else: ~s({"agent_mode":"listener","message":null})
+            else:
+              ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
 
         assert {:ok, response} = ModelResponse.new(text: text)
         send(provider, {:test_agent_runtime_response, {:ok, response}})
-        receive_request_for_prompt(prompt, protocol)
+        receive_request_for_prompt(prompt, protocol, participant_id)
     after
       2_000 -> flunk("timed out waiting for agent prompt #{inspect(prompt)}")
     end

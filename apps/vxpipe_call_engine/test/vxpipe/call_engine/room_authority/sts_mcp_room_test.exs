@@ -119,6 +119,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
   test "MCP readiness waits outside capability control and keeps caller input closed" do
     context = scene(test_gate_initialization: true) |> start_room(false)
     assert_receive {:test_remote_mcp_initializing, initializer}, 1_000
+    await_provider_ready(context)
     owner = Tree.remote_mcp_owner(context.capability)
     :erlang.trace(owner, true, [:receive])
     tasks = start_supervised!({Task.Supervisor, name: {:global, {__MODULE__, make_ref()}}})
@@ -235,13 +236,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
 
     # Consume the fixture's original ready signal before replaying the opposite
     # ordering; otherwise that queued signal can race the deliberate delay.
+    await_provider_ready(context)
     authority = context.authority
-    capability = context.capability
-    :erlang.trace(authority, true, [:receive])
-
-    unless :sys.get_state(authority).speech_to_speech_capability.provider_ready? do
-      assert_receive {:trace, ^authority, :receive, {:vxpipe_sts_ready, ^capability}}, 1_000
-    end
 
     # Delay the provider notification independently of MCP completion.
     :sys.replace_state(context.authority, fn state ->
@@ -530,6 +526,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.STSMCPRoomTest do
       plan: compile_plan(store, tenant, destination, native_model),
       result: result
     }
+  end
+
+  defp await_provider_ready(%{authority: authority, capability: capability}) do
+    :erlang.trace(authority, true, [:receive])
+
+    unless :sys.get_state(authority).speech_to_speech_capability.provider_ready? do
+      assert_receive {:trace, ^authority, :receive, {:vxpipe_sts_ready, ^capability}}, 1_000
+    end
   end
 
   defp start_room(%{plan: plan, store: store} = scene, ready? \\ true) do

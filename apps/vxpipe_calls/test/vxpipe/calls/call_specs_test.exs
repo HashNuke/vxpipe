@@ -48,6 +48,22 @@ defmodule Vxpipe.Calls.CallSpecsTest do
     }
 
     assert {:error, _} = Vxpipe.Calls.PreparedCallFactory.build(corrupt, %{}, :web, options)
+
+    snapshot = revision.compiled_metadata["agent_protocol"]
+
+    for invalid <- [
+          put_in(snapshot, ["prompts", "llm_dialogue", "revision"], String.duplicate("0", 64)),
+          update_in(snapshot, ["prompts"], &Map.delete(&1, "shared")),
+          Map.put(snapshot, "unrecognized", true),
+          put_in(snapshot, ["prompts", "shared", "unexpected"], "value")
+        ] do
+      malformed = %{
+        revision
+        | compiled_metadata: Map.put(revision.compiled_metadata, "agent_protocol", invalid)
+      }
+
+      assert {:error, _} = Vxpipe.Calls.PreparedCallFactory.build(malformed, %{}, :web, options)
+    end
   end
 
   test "a trusted sample owner can explicitly create a pinned legacy revision", %{
@@ -135,16 +151,14 @@ defmodule Vxpipe.Calls.CallSpecsTest do
         {Vxpipe.Calls.Test.MCPCatalogFixture, {:ok, []}}
       )
 
-    assert {:ok, unavailable} = CallSpecs.save(tenant.key, source, revoked)
-    assert unavailable.validation_errors != []
+    rejected_options = Keyword.put(revoked, :call_spec_id, draft.call_spec_id)
+    assert {:error, _} = CallSpecs.save(tenant.key, source, rejected_options)
 
-    assert {:error, _} =
-             CallSpecs.publish(
-               tenant.key,
-               unavailable.call_spec_id,
-               unavailable.revision,
-               revoked
-             )
+    assert {:error, :not_found} =
+             CallSpecs.fetch(tenant.key, draft.call_spec_id, 2, options)
+
+    assert {:ok, unchanged} = CallSpecs.fetch(tenant.key, draft.call_spec_id, 1, options)
+    assert unchanged.source == draft.source
   end
 
   test "keeps a saved draft route unavailable until publication", %{

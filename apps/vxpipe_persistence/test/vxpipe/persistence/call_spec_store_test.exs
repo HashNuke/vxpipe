@@ -37,6 +37,141 @@ defmodule Vxpipe.Persistence.CallSpecStoreTest do
     [tenant: tenant, options: options]
   end
 
+  test "draft saves do not advance publication versions and unchanged publication preserves live routes",
+       %{tenant: tenant, options: options} do
+    assert {:ok, first} = CallSpecs.save(tenant.key, call_spec_input(), options)
+
+    edit_options =
+      options
+      |> Keyword.put(:call_spec_id, first.call_spec_id)
+      |> Keyword.put(:uuid_generator, &Ecto.UUID.generate/0)
+
+    assert {:ok, second} =
+             CallSpecs.save(tenant.key, Map.put(call_spec_input(), :name, "Ready"), edit_options)
+
+    assert {:ok, third} = CallSpecs.save(tenant.key, second.source, edit_options)
+    assert third.publication.version == nil
+    assert third.publication.history == []
+
+    assert {:ok, live} =
+             CallSpecs.publish(tenant.key, third.call_spec_id, third.revision, options)
+
+    assert live.publication.version == 1
+    assert live.publication.revision == third.revision
+    refute live.publication.unpublished_changes
+    assert [event] = live.publication.history
+    assert event.version == 1
+
+    assert {:ok, changed} =
+             CallSpecs.save(tenant.key, Map.put(third.source, "name", "Changed"), edit_options)
+
+    assert changed.publication.version == 1
+    assert changed.publication.unpublished_changes
+    assert changed.publication.draft_saved_at == changed.inserted_at
+
+    assert {:ok, {_, [listed], _}} =
+             Vxpipe.Persistence.AdminStore.list_call_specs(Repo, tenant.key, 25, 0)
+
+    assert listed.published_version == 1
+    assert listed.unpublished_changes
+    assert {:ok, reverted} = CallSpecs.save(tenant.key, third.source, edit_options)
+    refute reverted.publication.unpublished_changes
+
+    assert {:ok, {_, [listed], _}} =
+             Vxpipe.Persistence.AdminStore.list_call_specs(Repo, tenant.key, 25, 0)
+
+    refute listed.unpublished_changes
+
+    assert {:ok, no_op} =
+             CallSpecs.publish(tenant.key, reverted.call_spec_id, reverted.revision, options)
+
+    assert no_op.revision == reverted.revision
+    assert no_op.published_at == nil
+    assert no_op.publication == reverted.publication
+    assert no_op.publication.history == [event]
+
+    assert {:ok, {:ok, nested}} =
+             Repo.transaction(fn ->
+               CallSpecs.publish(tenant.key, reverted.call_spec_id, reverted.revision, options)
+             end)
+
+    assert nested.publication == no_op.publication
+
+    assert {:ok, still_live} =
+             CallSpecStore.fetch_published_revision(Repo, tenant.key, first.call_spec_id)
+
+    assert still_live.revision == third.revision
+    assert still_live.routes == live.routes
+    assert still_live.published_at == live.published_at
+  end
+
+  test "publication history is bounded and republishing an older source is a new publication", %{
+    tenant: tenant,
+    options: options
+  } do
+    assert {:ok, first} = CallSpecs.save(tenant.key, call_spec_input(), options)
+
+    assert {:ok, initial} =
+             CallSpecs.publish(tenant.key, first.call_spec_id, first.revision, options)
+
+    edit_options =
+      options
+      |> Keyword.put(:call_spec_id, first.call_spec_id)
+      |> Keyword.put(:uuid_generator, &Ecto.UUID.generate/0)
+
+    for number <- 2..4 do
+      assert {:ok, draft} =
+               CallSpecs.save(
+                 tenant.key,
+                 Map.put(first.source, "name", "Version #{number}"),
+                 edit_options
+               )
+
+      assert {:ok, live} =
+               CallSpecs.publish(tenant.key, draft.call_spec_id, draft.revision, options)
+
+      assert live.publication.version == number
+    end
+
+    assert {:ok, restored} =
+             CallSpecs.publish(tenant.key, first.call_spec_id, first.revision, options)
+
+    assert restored.publication.version == 5
+    assert restored.publication.revision == first.revision
+    assert restored.publication.unpublished_changes
+    assert Enum.map(restored.publication.history, & &1.version) == [5, 4, 3]
+    assert restored.source == initial.source
+
+    assert {:error, :not_found} =
+             CallSpecs.fetch("another-tenant", first.call_spec_id, first.revision, options)
+  end
+
+  test "a preserved legacy version continues from its existing number", %{
+    tenant: tenant,
+    options: options
+  } do
+    assert {:ok, draft} = CallSpecs.save(tenant.key, call_spec_input(), options)
+    assert {:ok, _} = CallSpecs.publish(tenant.key, draft.call_spec_id, draft.revision, options)
+    id = String.to_integer(draft.call_spec_id)
+    Repo.query!("UPDATE call_specs SET published_version = 6 WHERE id = $1", [id])
+    Repo.query!("UPDATE call_spec_publications SET version = 6 WHERE call_spec_id = $1", [id])
+
+    assert {:ok, changed} =
+             CallSpecs.save(
+               tenant.key,
+               Map.put(draft.source, "name", "Next"),
+               Keyword.put(options, :call_spec_id, draft.call_spec_id)
+             )
+
+    assert changed.publication.version == 6
+
+    assert {:ok, published} =
+             CallSpecs.publish(tenant.key, draft.call_spec_id, changed.revision, options)
+
+    assert published.publication.version == 7
+    assert Enum.map(published.publication.history, & &1.version) == [7, 6]
+  end
+
   test "call spec references are the database primary key", %{tenant: tenant, options: options} do
     assert {:ok, draft} = CallSpecs.save(tenant.key, call_spec_input(), options)
     assert {id, ""} = Integer.parse(draft.call_spec_id)
@@ -234,6 +369,13 @@ defmodule Vxpipe.Persistence.CallSpecStoreTest do
 
     assert {:error, :phone_number_in_use} =
              CallSpecs.publish(tenant.key, second.call_spec_id, second.revision, options)
+
+    assert {:ok, failed} =
+             CallSpecs.fetch(tenant.key, second.call_spec_id, second.revision, options)
+
+    assert failed.publication.version == nil
+    assert failed.publication.history == []
+    assert Repo.aggregate(Vxpipe.Persistence.Schema.CallSpecPublication, :count) == 1
 
     assert {:ok, replacement} =
              CallSpecs.save(

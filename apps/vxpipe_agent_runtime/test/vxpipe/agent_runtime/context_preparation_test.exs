@@ -142,7 +142,7 @@ defmodule Vxpipe.AgentRuntime.ContextPreparationTest do
     configuration =
       budget()
       |> config()
-      |> Map.put(:compactor_timeout_ms, 50)
+      |> Map.put(:compactor_timeout_ms, 500)
 
     task = Task.async(fn -> ContextPreparation.prepare(conversation, request, configuration) end)
 

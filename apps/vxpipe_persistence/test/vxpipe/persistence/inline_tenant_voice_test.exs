@@ -78,50 +78,91 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
     assert claim.call.tenant_key == ctx.tenant.key
   end
 
-  test "normal authoring preserves modern validation and supports the selected native profile",
-       ctx do
-    options = Keyword.delete(ctx.options, :agent_protocol_version)
-    assert {:ok, rejected} = Calls.save_call_spec(ctx.tenant.key, source(), options)
-    assert Enum.any?(rejected.validation_errors, &(&1["code"] == "unsupported_agent_protocol"))
-    assert rejected.compiled_metadata["agent_protocol"]["version"] == "mode_message_v1"
+  for {provider, model} <- [
+        {"google", "gemini-3.5-flash-lite"},
+        {"openai", "gpt-6-luna"},
+        {"deepseek", "deepseek-flash"},
+        {"fireworks", "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"},
+        {"openrouter", "google/gemini-3.5-flash-lite"},
+        {"zenmux", "openai/gpt-4o"}
+      ] do
+    test "modern #{provider} authoring publishes and prepares without inference", ctx do
+      provider = unquote(provider)
+      options = Keyword.delete(ctx.options, :agent_protocol_version)
+      observer = {__MODULE__, make_ref()}
 
-    assert {:error, {:call_spec_not_publishable, _errors}} =
-             Calls.publish_call_spec(
-               ctx.tenant.key,
-               rejected.call_spec_id,
-               rejected.revision,
-               options
-             )
+      :ok =
+        :telemetry.attach(
+          observer,
+          [:req_llm, :request, :start],
+          fn _event, _measurements, _metadata, owner -> send(owner, :authoring_inference) end,
+          self()
+        )
 
-    assert {:ok, _credential} =
-             ProviderCredentials.provision(
-               ctx.tenant.key,
-               "openai",
-               "default",
-               "api_key",
-               %{"api_key" => "synthetic-modern-private-marker"},
-               options
-             )
+      on_exit(fn -> :telemetry.detach(observer) end)
 
-    modern =
-      source()
-      |> Map.put(:name, "Modern tenant voice")
-      |> put_in([:defaults, :capabilities, :model_inference], %{
-        provider: "openai",
-        model: "gpt-6-luna"
-      })
+      assert {:ok, _credential} =
+               ProviderCredentials.provision(
+                 ctx.tenant.key,
+                 provider,
+                 "modern",
+                 "api_key",
+                 %{"api_key" => "synthetic-modern-private-marker"},
+                 options
+               )
 
-    assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, modern, options)
-    assert draft.validation_errors == []
-    assert draft.compiled_metadata["agent_protocol"]["version"] == "mode_message_v1"
+      modern =
+        source()
+        |> Map.put(:name, "Modern tenant voice " <> provider)
+        |> put_in([:defaults, :capabilities, :model_inference], %{
+          provider: provider,
+          model: unquote(model),
+          credential_name: "modern"
+        })
 
-    assert {:ok, published} =
-             Calls.publish_call_spec(ctx.tenant.key, draft.call_spec_id, draft.revision, options)
+      assert {:ok, draft} = Calls.save_call_spec(ctx.tenant.key, modern, options)
+      assert draft.validation_errors == []
+      assert draft.compiled_metadata["agent_protocol"]["version"] == "mode_message_v1"
 
-    [route] = published.routes
-    assert {:ok, call, _token} = Calls.prepare_call(ctx.principal, route.key, %{}, options)
-    assert call.plan.agent_protocol == draft.compiled_metadata["agent_protocol"]
-    assert call.plan.participants["assistant"].capabilities.model_inference.provider == "openai"
+      assert {:ok, published} =
+               Calls.publish_call_spec(
+                 ctx.tenant.key,
+                 draft.call_spec_id,
+                 draft.revision,
+                 options
+               )
+
+      [route] = published.routes
+      assert {:ok, call, _token} = Calls.prepare_call(ctx.principal, route.key, %{}, options)
+      assert call.plan.agent_protocol == draft.compiled_metadata["agent_protocol"]
+      selection = call.plan.participants["assistant"].capabilities.model_inference
+      assert selection.provider == provider
+      assert selection.model == unquote(model)
+      refute :erlang.term_to_binary(call) =~ "synthetic-modern-private-marker"
+
+      before = row_counts()
+      update_options = Keyword.put(options, :call_spec_id, draft.call_spec_id)
+
+      for invalid <- [
+            put_in(modern, [:defaults, :capabilities, :model_inference, :options], %{
+              max_tokens: "invalid"
+            }),
+            put_in(
+              modern,
+              [:defaults, :capabilities, :model_inference, :credential_name],
+              "missing"
+            )
+          ] do
+        assert {:error, _error} = Calls.save_call_spec(ctx.tenant.key, invalid, update_options)
+        assert row_counts() == before
+      end
+
+      assert {:ok, current} =
+               Calls.fetch_call_spec(ctx.tenant.key, draft.call_spec_id, 1, options)
+
+      assert current.source == draft.source
+      refute_received :authoring_inference
+    end
   end
 
   test "persists the existing Zenmux selection and resolves only its named tenant credential",

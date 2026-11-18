@@ -30,7 +30,10 @@ defmodule Vxpipe.AgentRuntime.ConservativeInputTokenCounter do
   end
 
   defp put_dialogue_schema(projected, :mode_message_v1),
-    do: Map.put(projected, "response_schema", Dialogue.schema())
+    do:
+      projected
+      |> Map.put("response_schema", Dialogue.schema())
+      |> Map.put("dialogue_instructions", Dialogue.instructions())
 
   defp put_dialogue_schema(projected, _protocol), do: projected
 

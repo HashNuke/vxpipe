@@ -51,6 +51,29 @@ saved connection get independent live sessions. Transferring away or ending the
 call retires those sessions. Separate background refresh jobs may still contact
 the server to maintain the tenant catalog; they do not reuse a call's session.
 
+## LLM replies
+
+LLM agents saved through ordinary editor/API authoring share one reply contract
+across configured integrations.
+You do not need to choose an OpenAI model or a model with native JSON Schema to
+save and publish an agent. The model must still resolve normally, its options
+must be valid, and a usable configured credential is required. Saving or
+publishing validates configuration without making a live model request.
+
+Vxpipe separates speech from conversation control. A speaker reply contains text;
+a listener reply may contain a brief cue or remain silent. Only validated speech
+text reaches audio and the transcript. Existing historical legacy publications
+keep their captured behavior until explicitly replaced. Compatibility sample
+installers can also create explicitly legacy publications.
+
+A configured model can still refuse, time out, truncate its output, or return an
+invalid reply. These are request failures, not successful silence. Vxpipe may
+make one bounded format-correction attempt before any tool has been submitted,
+within the original request deadline and remaining measured output allowance.
+It does not repeat tool effects to repair a reply or silently change providers.
+Generic integration support does not guarantee every upstream response will be
+valid; test the selected model with your actual agent instructions and tools.
+
 ## Conversation behavior
 
 `conversation_mode` defaults to `blocking`. The selected tool must finish before

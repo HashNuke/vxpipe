@@ -39,6 +39,9 @@ defmodule Vxpipe.Calls.CallSpecAuthoringTest do
     source = %{
       "schema_version" => "20261004.01",
       "incoming_call" => %{"caller" => "caller", "handled_by" => "assistant"},
+      "defaults" => %{
+        "capabilities" => %{"model_inference" => %{"provider" => "fixture", "model" => "test"}}
+      },
       "participants" => %{
         "caller" => %{
           "type" => "human",

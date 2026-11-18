@@ -97,3 +97,17 @@ test("model choices exclude unconfigured or unavailable providers before fetchin
   expect(Object.keys(catalog.text_to_speech!)).toEqual(["elevenlabs"]);
   expect(fetch.mock.calls.filter(([path]) => String(path).includes("/models"))).toHaveLength(1);
 });
+
+test("reads and writes publication metadata independently from immutable revision IDs", async () => {
+  const publication = { version: 2, revision: 7, unpublished_changes: false, draft_saved_at: "2026-11-17T12:00:00Z",
+    history: [{ version: 2, published_at: "2026-11-17T11:00:00Z" }] };
+  const fetch = vi.fn(() => reply({ call_spec: { ...stored, revision: 9, latest_revision: 9, published_revision: 7, publication } }));
+  const api = createEditorApi("tenant", "csrf", fetch);
+  const signal = new AbortController().signal;
+  const snapshot = await api.read("hello", signal);
+  expect(snapshot.saved?.publication).toEqual({ version: 2, revision: 7, unpublishedChanges: false, draftSavedAt: "2026-11-17T12:00:00Z",
+    history: [{ version: 2, publishedAt: "2026-11-17T11:00:00Z" }] });
+  const result = await api.execute({ id: 1, action: "publish", source: snapshot.document.source, callSpecId: "hello", revision: 9 }, signal);
+  expect(result.revision).toBe(9);
+  expect(result.publication).toEqual(snapshot.saved?.publication);
+});

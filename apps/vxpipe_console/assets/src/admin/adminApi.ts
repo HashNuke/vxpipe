@@ -542,6 +542,8 @@ function parseCallSpec(value: unknown): CallSpecSummary {
       (typeof value.name === "string" && value.name.length > 0)
     ) ||
     !isPositiveInteger(value.latest_revision) ||
+    (value.published_version !== undefined && !(value.published_version === null || isPositiveInteger(value.published_version))) ||
+    (value.unpublished_changes !== undefined && typeof value.unpublished_changes !== "boolean") ||
     !(
       value.published_revision === null ||
       (isPositiveInteger(value.published_revision) &&
@@ -559,6 +561,8 @@ function parseCallSpec(value: unknown): CallSpecSummary {
     name: value.name,
     latestRevision: value.latest_revision,
     publishedRevision: value.published_revision,
+    ...(value.published_version !== undefined ? { publishedVersion: value.published_version as number | null } : {}),
+    ...(typeof value.unpublished_changes === "boolean" ? { unpublishedChanges: value.unpublished_changes } : {}),
     callCount: value.call_count,
     updatedAt: value.updated_at,
   };

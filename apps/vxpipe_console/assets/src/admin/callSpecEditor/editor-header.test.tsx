@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { FlowEditorHeader, FlowNameDialog } from "./editor-header";
 import { FlowEditorToolbar } from "./editor-toolbar";
@@ -6,6 +6,34 @@ import { FlowEditorToolbar } from "./editor-toolbar";
 afterEach(cleanup);
 
 const callbacks = () => ({ onEditFlowName: vi.fn(), onSaveDraft: vi.fn(), onPublish: vi.fn(), onShowIssues: vi.fn() });
+
+test("a publication status slot replaces revision counters without hiding unsaved edits", () => {
+  render(<FlowEditorHeader backHref="/specs" revision={7} publishedRevision={6} dirty
+    publicationStatus={<><button>Published v6</button><span>Unpublished changes</span></>} {...callbacks()} />);
+  expect(screen.getByRole("button", { name: "Published v6" })).toBeVisible();
+  expect(screen.getByText("Unpublished changes")).toBeVisible();
+  expect(screen.getByText("Unsaved changes")).toBeVisible();
+  expect(screen.queryByText("v7")).not.toBeInTheDocument();
+  expect(screen.queryByText("v6 Published")).not.toBeInTheDocument();
+});
+
+test("publication badge uses the published number and opens a reference-only history", async () => {
+  render(<FlowEditorHeader backHref="/specs" revision={12} publishedRevision={9} dirty publication={{
+    version: 6, revision: 9, unpublishedChanges: true, draftSavedAt: "2026-11-17T12:00:00Z",
+    history: [{ version: 6, publishedAt: "2026-11-17T11:00:00Z" }, { version: 5, publishedAt: "2026-11-16T10:00:00Z" }],
+  }} {...callbacks()} />);
+  const badge = screen.getByRole("button", { name: "v6 · Unpublished changes" });
+  badge.focus();
+  fireEvent.click(badge);
+  const dialog = within(screen.getByRole("dialog", { name: "Version history" }));
+  expect(dialog.getByText("Showing 2 recent published versions")).toBeVisible();
+  expect(dialog.getByText("Unpublished changes")).toBeVisible();
+  expect(dialog.getByText("Live")).toBeVisible();
+  expect(dialog.queryByRole("button", { name: /View|Continue editing/ })).not.toBeInTheDocument();
+  expect(screen.queryByText("v12")).not.toBeInTheDocument();
+  fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+  await waitFor(() => expect(badge).toHaveFocus());
+});
 
 test("publish and its menu are grouped; Save as draft is revealed and saves an unsaved spec", () => {
   const actions = callbacks();
@@ -25,8 +53,8 @@ test("publish and its menu are grouped; Save as draft is revealed and saves an u
 test("header exposes revision, published state and actionable validation without blocking Save", () => {
   const actions = callbacks();
   render(<FlowEditorHeader backHref="/specs" flowName="Reception" revision={3} publishedRevision={2} issueCount={2} dirty {...actions} />);
-  expect(screen.getByText("v3")).toHaveAttribute("title", "Revision 3");
-  expect(screen.getByText("Published: 2")).toBeInTheDocument();
+  expect(screen.queryByText("v3")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "v2 · Unpublished changes" })).toBeInTheDocument();
   expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "2 issues" }));
   expect(actions.onShowIssues).toHaveBeenCalledOnce();

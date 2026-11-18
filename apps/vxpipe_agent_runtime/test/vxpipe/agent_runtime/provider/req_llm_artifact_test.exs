@@ -4,8 +4,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMArtifactTest do
   alias Elixir.ReqLLM.{Context, Response, ToolCall}
   alias Vxpipe.AgentRuntime.Provider.ReqLLM.ResponseNormalizer
 
-  test "buffered native calls cannot masquerade as Google stream artifacts" do
-    text = ~s({"agent_mode":"speaker","message":"Hello."})
+  test "native structured_output calls remain tool calls rather than dialogue artifacts" do
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
     call = ToolCall.new("real-buffered-call", "structured_output", text)
 
     response = %Response{
@@ -18,7 +18,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMArtifactTest do
 
     assert {:ok, %{tool_calls: [_]}} = ResponseNormalizer.normalize(response)
 
-    assert {:error, :invalid_provider_response} =
+    assert {:ok, %{tool_calls: [%{name: "structured_output", id: "real-buffered-call"}]}} =
              ResponseNormalizer.normalize(response, :mode_message_v1)
   end
 end

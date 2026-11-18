@@ -143,6 +143,8 @@ defmodule Vxpipe.Persistence.AdminStore do
           name: fragment("?->>'name'", latest.source),
           latest_revision: latest.revision,
           published_revision: published.revision,
+          published_version: call_spec.published_version,
+          unpublished_changes: fragment("? IS DISTINCT FROM ?", latest.source, published.source),
           call_count: coalesce(calls.value, 0),
           updated_at: latest.inserted_at
         }
@@ -170,6 +172,8 @@ defmodule Vxpipe.Persistence.AdminStore do
           call_spec.name,
           call_spec.latest_revision,
           call_spec.published_revision,
+          call_spec.published_version,
+          call_spec.unpublished_changes,
           call_spec.call_count,
           call_spec.updated_at,
           coalesce(total.value, 0)
@@ -410,24 +414,27 @@ defmodule Vxpipe.Persistence.AdminStore do
   defp call_spec_page([]), do: {:error, :tenant_not_found}
 
   defp call_spec_page([
-         {key, tenant_name, tenant_inserted_at, nil, nil, nil, nil, nil, nil, total}
+         {key, tenant_name, tenant_inserted_at, nil, nil, nil, nil, nil, nil, nil, nil, total}
        ]) do
     tenant = %DomainTenant{key: key, name: tenant_name, inserted_at: tenant_inserted_at}
     {:ok, {tenant, [], total}}
   end
 
   defp call_spec_page(rows) do
-    [{key, tenant_name, tenant_inserted_at, _, _, _, _, _, _, total} | _rest] = rows
+    [{key, tenant_name, tenant_inserted_at, _, _, _, _, _, _, _, _, total} | _rest] = rows
     tenant = %DomainTenant{key: key, name: tenant_name, inserted_at: tenant_inserted_at}
 
     call_specs =
       Enum.map(rows, fn {_key, _tenant_name, _tenant_inserted_at, id, name, latest_revision,
-                         published_revision, call_count, updated_at, ^total} ->
+                         published_revision, published_version, unpublished_changes, call_count,
+                         updated_at, ^total} ->
         %CallSpecSummary{
           id: id,
           name: name,
           latest_revision: latest_revision,
           published_revision: published_revision,
+          published_version: published_version,
+          unpublished_changes: unpublished_changes,
           call_count: call_count,
           updated_at: updated_at
         }

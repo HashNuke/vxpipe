@@ -17,7 +17,7 @@
         },
         "assistant": {
           "type": "agent",
-          "prompt": "Help the caller."
+          "prompt": "Help the caller with their request. Ask one clear question at a time, confirm the relevant details, and explain the next step before ending the call."
         },
         "support": {
           "type": "human",
@@ -41,7 +41,7 @@
         },
         "assistant": {
           "type": "agent",
-          "prompt": "Help the caller."
+          "prompt": "Help the caller with their request. Ask one clear question at a time, confirm the relevant details, and explain the next step before ending the call."
         },
         "support": {
           "type": "human",

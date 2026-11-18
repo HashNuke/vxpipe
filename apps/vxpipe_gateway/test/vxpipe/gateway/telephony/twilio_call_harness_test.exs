@@ -362,15 +362,16 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     end
   end
 
-  for {mode, loss} <- [
-        {:defaults, nil},
-        {:custom_url, nil},
-        {:silent_all, nil},
-        {:custom_url, :destination},
-        {:silent_all, :cue}
+  for {mode, loss, late_ack?} <- [
+        {:defaults, nil, false},
+        {:custom_url, nil, false},
+        {:silent_all, nil, false},
+        {:custom_url, :destination, false},
+        {:silent_all, :cue, false},
+        {:custom_url, :destination, true}
       ] do
-    @tag transfer_wait_mode: mode, phone_loss: loss
-    test "runs one signed incoming call through private press-1 phone transfer after storage loss with #{mode} waits #{loss || :ready}",
+    @tag transfer_wait_mode: mode, phone_loss: loss, late_transfer_ack: late_ack?
+    test "runs one signed incoming call through private press-1 phone transfer after storage loss with #{mode} waits #{loss || :ready} late_ack=#{late_ack?}",
          context do
       incoming = post_voice(context)
       assert incoming.status == 200
@@ -416,7 +417,8 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
 
       assert_receive {:test_stt_transport_started, stt_transport, _connection}, 2_000
 
-      begin_transfer(stt_transport, inbound_transport, context.plan)
+      held_ack =
+        begin_transfer(stt_transport, inbound_transport, context.plan, context.late_transfer_ack)
 
       assert_receive {:test_twilio_dial, dial}, 2_000
       assert dial.leg_id == @outgoing_leg_id
@@ -485,6 +487,19 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
         )
 
       if context.phone_loss do
+        if held_ack do
+          # Reproduce completion arriving before the model's spoken acknowledgment.
+          # The fake TTS provider must settle that speech before recovery can run.
+          token = proof.failure_token
+          assert_receive {:phone_transfer_failed, ^token, _} = failed, 2_000
+          send(self(), failed)
+          {provider, response} = held_ack
+          send(provider, {:test_agent_runtime_response, {:ok, response}})
+          assert_receive {:test_tts_control, ^source_tts, control}, 2_000
+          assert %{"type" => "Speak", "text" => "Connecting support."} = JSON.decode!(control)
+          send(self(), {:test_tts_control, source_tts, control})
+        end
+
         Vxpipe.Gateway.PhoneHandoffAssertions.recovery(proof, source_tts)
         refute_receive {:DOWN, ^source_monitor, :process, ^source_agent, _}, 0
       else
@@ -596,7 +611,7 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     )
   end
 
-  defp begin_transfer(stt_transport, socket, plan) do
+  defp begin_transfer(stt_transport, socket, plan, late_ack?) do
     TestSpeechToTextTransport.deliver(
       stt_transport,
       ~s({"type":"Connected","request_id":"request-twilio-harness","sequence_id":0})
@@ -631,7 +646,13 @@ defmodule Vxpipe.Gateway.Telephony.TwilioCallHarnessTest do
     send(source_provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:test_agent_runtime_stream, acknowledgement_provider, _}, 2_000
     assert {:ok, acknowledgement} = ModelResponse.new(text: "Connecting support.")
-    send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
+
+    if late_ack? do
+      {acknowledgement_provider, acknowledgement}
+    else
+      send(acknowledgement_provider, {:test_agent_runtime_response, {:ok, acknowledgement}})
+      nil
+    end
   end
 
   defp assert_caller_audio(stt_transport, socket) do

@@ -58,7 +58,7 @@ test("keeps tenant context and real call spec links visible", () => {
 
   expect(screen.getByRole("heading", { name: "Call Specs" })).toBeVisible();
   expect(screen.getByRole("columnheader", { name: "Name" })).toBeVisible();
-  expect(screen.getByRole("columnheader", { name: "Version" })).toBeVisible();
+  expect(screen.queryByRole("columnheader", { name: "Version" })).not.toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "Calls" })).toBeVisible();
   expect(screen.queryByText("CallSpec")).not.toBeInTheDocument();
   expect(screen.queryByText("Revision")).not.toBeInTheDocument();
@@ -88,14 +88,12 @@ test("keeps tenant context and real call spec links visible", () => {
   expect(selectCallSpec).toHaveBeenCalledWith("delivery-rescheduling");
 });
 
-test("keeps edited published specs published with a separate changes indicator", () => {
+test("shows publication versions with saved-change status", () => {
   render(<TenantCallSpecsPage state={populated} />);
 
-  expect(screen.getAllByText("Published")).toHaveLength(2);
+  expect(screen.getByText("v2 Published")).toBeVisible();
   const changed = screen.getByRole("row", { name: /Delivery rescheduling/ });
-  expect(within(changed).getByText("Published")).toBeVisible();
-  expect(within(changed).getByText("Unpublished changes")).toBeVisible();
-  expect(screen.getAllByText("Unpublished changes")).toHaveLength(1);
+  expect(within(changed).getByText("v3 · Unpublished changes")).toBeVisible();
   expect(screen.queryByText("Draft changes")).not.toBeInTheDocument();
   expect(screen.getByText("Draft")).toBeVisible();
   expect(

@@ -54,8 +54,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.AgentRuntimeModelProvider do
     # The deterministic model fixture authors the selected response contract.
     text =
       case protocol do
-        :mode_message_v1 -> JSON.encode!(%{agent_mode: "speaker", message: text})
-        :legacy -> text
+        :mode_message_v1 ->
+          JSON.encode!(%{
+            type: "participant_message",
+            participant_id: "agent",
+            agent_mode: "speaker",
+            message: text
+          })
+
+        :legacy ->
+          text
       end
 
     with :ok <- emit.(text),

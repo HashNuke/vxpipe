@@ -78,14 +78,17 @@ jobs:
       - name: Fetch locked Mix dependencies
         run: mix deps.get --check-locked
 
-      - name: Apply and compile reviewed ExMCP transport patch
+      - name: Apply and compile reviewed dependency patches
         run: |
           bin/patch-ex-mcp
           mix deps.compile ex_mcp --include-children
+          bin/patch-req-llm
+          mix deps.compile req_llm
 
       - name: Test dependency preparation
         run: |
           python3 test/shell/ex_mcp_patch_test.py
+          python3 test/shell/req_llm_patch_test.py
           python3 test/shell/setup_test.py
 
       - name: Check formatting

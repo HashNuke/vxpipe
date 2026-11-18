@@ -63,10 +63,10 @@ test("new agents require a user-written prompt before saving", async () => {
   expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveAttribute("aria-invalid", "true");
   fill("Prompt", "   "); saveDraft();
   expect(props.execute).not.toHaveBeenCalled();
-  fill("Prompt", "Help customers change their appointment."); saveDraft();
+  fill("Prompt", "Help customers change their appointment. Ask for the current booking, confirm their preferred new time, and explain the next steps."); saveDraft();
   await waitFor(() => expect(props.execute).toHaveBeenCalledOnce());
   expect(props.execute).toHaveBeenCalledWith(expect.objectContaining({ source: expect.objectContaining({
-    participants: expect.objectContaining({ agent: expect.objectContaining({ prompt: "Help customers change their appointment." }) }),
+    participants: expect.objectContaining({ agent: expect.objectContaining({ prompt: "Help customers change their appointment. Ask for the current booking, confirm their preferred new time, and explain the next steps." }) }),
   }) }), expect.any(AbortSignal));
 });
 
@@ -76,12 +76,12 @@ test("source edits save exactly, update revision badges and publish the saved re
   expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Renamed call");
   expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled();
   saveDraft();
-  expect(await screen.findByText("Saved as revision 4")).toBeVisible();
+  expect(await screen.findByText("Draft saved")).toBeVisible();
   expect(props.execute).toHaveBeenCalledWith(expect.objectContaining({ action: "save", source: { ...snapshot.document.source, name: "Renamed call" } }), expect.any(AbortSignal));
   props.execute.mockResolvedValue({ status: 200, revision: 4 });
   click("Publish");
-  expect(await screen.findByText("Published revision 4")).toBeVisible();
-  expect(screen.getByText("Published: 4")).toBeVisible();
+  expect(await screen.findByText("Published")).toBeVisible();
+  expect(screen.getByText("v4 Published")).toBeVisible();
   expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
 });
 
@@ -117,7 +117,7 @@ test("backend field errors survive unrelated edits and disappear when their fiel
   expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveAttribute("aria-invalid", "true");
   rename("Renamed draft");
   expect(screen.getByText("needs a greeting")).toBeVisible();
-  fill("Prompt", "Hello. How can I help?");
+  fill("Prompt", "Hello. How can I help? Listen carefully to the caller, ask one question at a time, and confirm the details before taking action.");
   expect(screen.queryByText("needs a greeting")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "1 issue" })).not.toBeInTheDocument();
 });
@@ -126,7 +126,7 @@ test("retry uses current source and replaces the previous notification", async (
   const props = properties(); props.execute.mockRejectedValueOnce(new Error("offline"));
   render(<CallSpecEditor {...props} />); saveDraft();
   await screen.findByText("Couldn't save. Try again"); rename("Retry draft"); click("Retry");
-  await screen.findByText("Saved as revision 4");
+  await screen.findByText("Draft saved");
   expect(props.execute).toHaveBeenLastCalledWith(expect.objectContaining({ source: expect.objectContaining({ name: "Retry draft" }) }), expect.any(AbortSignal));
   expect(screen.getAllByLabelText("Notification")).toHaveLength(1);
 });
@@ -148,8 +148,7 @@ test("conflict reload asks before discarding changes and replaces them only afte
   await screen.findByText("This spec changed while saving. Reload to see the latest revision"); click("Reload");
   expect(props.onReload).not.toHaveBeenCalled();
   fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Reload latest revision" }));
-  await screen.findByText("v8");
-  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent(snapshot.document.source.name!);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent(snapshot.document.source.name!));
 });
 
 test.each([{ width: 1440, readOnly: false }, { width: 390, readOnly: false }, { width: 1440, readOnly: true }])("a transfer edge opens its source's Transfers tab at $width px with readOnly=$readOnly", ({ width, readOnly }) => {
@@ -227,7 +226,7 @@ test("a failed reload keeps the current draft and offers another reload", async 
   await screen.findByText("This spec changed while saving. Reload to see the latest revision"); click("Reload"); click("Reload latest revision");
   await screen.findByText("Couldn't reload. Your changes are still here.");
   expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Keep draft");
-  expect(screen.getByText("v3")).toBeVisible();
+  expect(screen.getByText("Draft")).toBeVisible();
   expect(screen.getByRole("button", { name: "Reload" })).toBeEnabled();
 });
 
@@ -235,7 +234,7 @@ test("the browser unload guard clears after saving and is absent for historical 
   const props = properties(); const view = render(<CallSpecEditor {...props} />);
   rename("New name");
   const dirty = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(dirty); expect(dirty.defaultPrevented).toBe(true);
-  saveDraft(); await screen.findByText("Saved as revision 4");
+  saveDraft(); await screen.findByText("Draft saved");
   // The saved status can render before the effect removes the unload listener.
   await waitFor(() => {
     const saved = new Event("beforeunload", { cancelable: true });
@@ -341,4 +340,19 @@ test("retrying a failed save waits for unapplied JSON edits", async () => {
   click("Participant JSON"); click("Retry");
   expect(props.execute).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue('{');
+});
+
+test("an invalid reply configuration error opens the participant Models tab, not tool visibility", async () => {
+  const props = properties();
+  const reason = "The agent reply configuration could not be validated. Review the highlighted settings.";
+  props.execute.mockResolvedValue({ status: 422, error: { code: "unsupported_call_plan", path: ["participants", "intake", "capabilities", "model_inference", "model"], reason } });
+  render(<CallSpecEditor {...props} />);
+  rename("Changed before rejection");
+  saveDraft();
+  await screen.findByText(`Couldn't save: Agent intake › Model inference ${reason}`);
+  click("Show");
+  expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByText(reason)).toBeVisible();
+  expect(screen.queryByRole("combobox", { name: "Default tool visibility" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Changed before rejection");
 });

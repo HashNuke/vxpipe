@@ -1,7 +1,7 @@
 defmodule Vxpipe.CallEngine.AgentProtocol do
-  @moduledoc "Pins a publication's instruction bundle and checks selected agent profiles."
+  @moduledoc "Pins a publication's instruction bundle and validates protocol-specific agent capabilities."
 
-  alias Vxpipe.AgentRuntime.{Protocol, Provider.ReqLLM}
+  alias Vxpipe.AgentRuntime.Protocol
   alias Vxpipe.CallEngine.{Error, ResolvedCallPlan}
 
   @spec capture(:legacy | :mode_message_v1) :: {:ok, map()} | {:error, atom()}
@@ -11,8 +11,7 @@ defmodule Vxpipe.CallEngine.AgentProtocol do
   @spec pin(ResolvedCallPlan.t(), map() | nil) :: {:ok, ResolvedCallPlan.t()} | {:error, term()}
   def pin(%ResolvedCallPlan{} = plan, snapshot) do
     with :ok <- Protocol.validate(snapshot),
-         :ok <- idle_profiles(plan, snapshot),
-         :ok <- supported_participants(plan, snapshot) do
+         :ok <- idle_profiles(plan, snapshot) do
       {:ok, %{plan | agent_protocol: snapshot}}
     end
   end
@@ -40,48 +39,6 @@ defmodule Vxpipe.CallEngine.AgentProtocol do
           )}}
       else
         {:cont, :ok}
-      end
-    end)
-  end
-
-  defp supported_participants(_plan, nil), do: :ok
-  defp supported_participants(_plan, %{"version" => "legacy"}), do: :ok
-
-  defp supported_participants(plan, _snapshot) do
-    Enum.reduce_while(plan.participants, :ok, fn {_key, participant}, :ok ->
-      case participant.capabilities.model_inference do
-        nil ->
-          {:cont, :ok}
-
-        %{provider: "fixture"} ->
-          {:cont, :ok}
-
-        selection ->
-          if ReqLLM.supports_protocol_model?(
-               selection.provider,
-               selection.model,
-               Map.keys(participant.tools)
-             ) do
-            {:cont, :ok}
-          else
-            error =
-              Error.new(
-                :unsupported_agent_protocol,
-                "The selected model does not support the agent reply protocol.",
-                details: %{
-                  "path" => [
-                    "participants",
-                    participant.call_spec_key,
-                    "capabilities",
-                    "model_inference"
-                  ],
-                  "reason" =>
-                    "mode_message_v1 requires a verified structured dialogue and native-tool profile"
-                }
-              )
-
-            {:halt, {:error, error}}
-          end
       end
     end)
   end

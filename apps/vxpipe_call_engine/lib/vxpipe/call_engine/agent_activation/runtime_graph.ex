@@ -192,8 +192,18 @@ defmodule Vxpipe.CallEngine.AgentActivation.RuntimeGraph do
     authored = Keyword.fetch!(options, :system_prompt)
 
     case Keyword.get(options, :agent_protocol) do
-      nil -> legacy_instructions(authored, options)
-      snapshot -> Protocol.instructions(snapshot, authored, :llm)
+      nil ->
+        legacy_instructions(authored, options)
+
+      snapshot ->
+        with {:ok, instructions} <- Protocol.instructions(snapshot, authored, :llm) do
+          if snapshot["version"] == "mode_message_v1" do
+            identity = JSON.encode!(Keyword.fetch!(options, :agent_participant_id))
+            {:ok, instructions <> "\n\nCurrent agent participant_id: " <> identity <> "."}
+          else
+            {:ok, instructions}
+          end
+        end
     end
   end
 

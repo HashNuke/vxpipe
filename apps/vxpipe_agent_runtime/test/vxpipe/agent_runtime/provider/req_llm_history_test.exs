@@ -48,7 +48,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMHistoryTest do
 
   test "structured dialogue uses one native strict schema with or without native tools" do
     owner = self()
-    text = ~s({"agent_mode":"speaker","message":"Hello."})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
 
     Req.Test.expect(__MODULE__, 2, fn connection ->
       body = connection |> Req.Test.raw_body() |> JSON.decode!()
@@ -104,7 +104,58 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMHistoryTest do
     end
   end
 
-  test "structured output's reserved adapter name cannot be published as an application tool" do
+  test "portable Google dialogue runs through Session with real encoded HTTP and host settlement" do
+    alias Vxpipe.AgentRuntime.{Event, Session}
+    owner = self()
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
+
+    Req.Test.expect(__MODULE__, fn connection ->
+      send(owner, {:portable_wire, connection |> Req.Test.raw_body() |> JSON.decode!()})
+
+      Req.Test.json(connection, %{
+        candidates: [%{content: %{role: "model", parts: [%{text: text}]}, finishReason: "STOP"}]
+      })
+    end)
+
+    {:ok, config} =
+      Provider.new(
+        api_key: "test-only",
+        model: "google:gemini-3.5-flash-lite",
+        streaming: false,
+        generation_options: [req_http_options: [plug: {Req.Test, __MODULE__}]]
+      )
+
+    session =
+      start_supervised!(
+        {Session,
+         [
+           instructions: "Be concise",
+           history_mode: :host_settled,
+           reply_protocol: :mode_message_v1,
+           model_provider: Provider,
+           model: config,
+           pending_context_source:
+             {Vxpipe.AgentRuntime.TestPendingContextSource, %{owner: self(), result: {:ok, []}}},
+           event_destination: self()
+         ]}
+      )
+
+    assert {:ok,
+            %{
+              status: :completed,
+              output: nil,
+              dialogue: %{agent_mode: :speaker, message: "Hello."}
+            }} =
+             Session.request(session, "Hello", %{request_id: "portable"})
+
+    assert_receive {:portable_wire, body}
+    assert JSON.encode!(body["systemInstruction"]) =~ "agent_mode"
+    refute Map.has_key?(body, "response_format")
+    refute_received {:agent_runtime_event, %Event{kind: :text_delta}}
+    assert :ok = Session.settle_output(session, %{request_id: "portable"}, nil)
+  end
+
+  test "structured output is an ordinary native tool name without synthetic schema tools" do
     {:ok, model} = Vxpipe.AgentRuntime.ModelOverrides.resolve(:openai, "gpt-6-luna")
     {:ok, config} = Provider.new(api_key: "test-only", model: model)
 
@@ -114,14 +165,15 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMHistoryTest do
       input_schema: %{"type" => "object"}
     }
 
-    refute Provider.supports_protocol?(config, :mode_message_v1, [tool])
+    assert Provider.supports_protocol?(config, :mode_message_v1, [tool])
 
     request = %{
       ModelRequest.new([Message.user("hello")], [tool], [], %{})
       | reply_protocol: :mode_message_v1
     }
 
-    assert_raise ArgumentError, fn -> Provider.prepare_request(config, request) end
+    assert {_, _, options} = Provider.prepare_request(config, request)
+    assert [%{name: "structured_output"}] = options[:tools]
     assert {_, _, _} = Provider.prepare_request(config, %{request | reply_protocol: :legacy})
   end
 
@@ -136,7 +188,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMHistoryTest do
           %{
             content: %{
               role: "model",
-              parts: [%{text: ~s({"agent_mode":"listener","message":null})}]
+              parts: [%{text: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})}]
             },
             finishReason: "STOP"
           }

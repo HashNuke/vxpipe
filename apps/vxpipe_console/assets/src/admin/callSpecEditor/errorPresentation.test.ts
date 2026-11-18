@@ -39,8 +39,8 @@ test("description issues stay in the issues list instead of targeting removed fo
 });
 
 test("success and local rejection outcomes carry revision and first issue", () => {
-  expect(actionOutcome(source, "save", { status: 201, revision: 3 })).toMatchObject({ tone: "success", message: "Saved as revision 3", persistent: false });
-  expect(actionOutcome(source, "publish", { status: 200, revision: 3 })).toMatchObject({ tone: "success", message: "Published revision 3" });
+  expect(actionOutcome(source, "save", { status: 201, revision: 3 })).toMatchObject({ tone: "success", message: "Draft saved", persistent: false });
+  expect(actionOutcome(source, "publish", { status: 200, revision: 3 })).toMatchObject({ tone: "success", message: "Published" });
   const issue = { code: "invalid_call_spec", path: ["participants", "assistant", "prompt"], reason: "is required" };
   expect(actionOutcome(source, "save", { clientIssues: [issue, issue] })).toMatchObject({ message: "Fix 2 issues before saving", action: "show", location: { nodeId: "assistant" } });
   expect(actionOutcome(source, "publish", { status: 409, error: { ...issue, code: "call_spec_not_publishable" } })).toMatchObject({ message: "Couldn't publish: Agent assistant › Prompt is required", action: "show", persistent: true });

@@ -1,5 +1,12 @@
 # Simple structured messages for LLM agents
 
+Policy update, 2026-11-18: the user requires the common reply contract across every
+LLM integration without a provider/model allowlist. The [universal reply follow-up](universal-agent-replies.md)
+supersedes the selected-profile eligibility policy below. Existing implementation
+and acceptance evidence below remains historical. The common runtime path and
+identity-gate removal are implemented; the universal milestone tracks outstanding
+configured live, rendered and release acceptance.
+
 Status: checkpoints A/B/C/D complete and independently reviewed, 2026-11-17.
 Attributed input, settled history, storage/viewer projections, stable native tool
 history, validated mode/message replies and bounded native idle are implemented.
@@ -11,7 +18,7 @@ call_state_changed, uses agent_mode/message for assistant replies, and allows
 listener-mode backchannels. Playback/classifier diagnostics stay internal and
 existing tool formats stay unchanged. The subsequent user clarification resolves stop-and-wait through an idle tool,
 with optional spoken acknowledgment before the quiet interval. Ordinary dialogue
-returns only agent_mode/message; interrupt_agent is no longer required. This is
+returns type, participant_id, agent_mode and message; interrupt_agent is not required. This is
 a specification of the full protocol; its native idle and audible listener-cue
 sections retain their separate implementation milestones.
 
@@ -32,7 +39,7 @@ and the existing engine completion observation retain their original encoding.
 | --- | --- |
 | Participant input | Runtime constructs `type: "participant_message"`, `participant_id`, nonempty `message`, `agent_mode`. |
 | Proposed platform input | Runtime constructs `type: "platform_event"`, `event`, `data`, `agent_mode` only for an explained application input. These event names are proposed, not current wire types. |
-| Common assistant dialogue response | Exactly `agent_mode` and nullable `message`; listener text is a cue, speaker text is a main reply. Stop-and-wait is the native idle tool. Runtime supplies identity/type in history. |
+| Common assistant dialogue response | Exactly `type: "participant_message"`, bounded `participant_id`, `agent_mode` and nullable `message`; listener text is a cue, speaker text is a main reply. Stop-and-wait is the native idle tool. Runtime supplies identity/type in history. |
 | Assistant speech in history | Same dialogue content with runtime-supplied `participant_id` and supported spoken `message` plus output mode; no playback metadata. |
 | Native tool exchange | Original call/result roles, content, IDs, arguments and opaque metadata, unchanged. No agent_mode. |
 | Async application completion | Existing engine-origin user message containing the tool_invocation_completion payload and trust preamble, unchanged. No agent_mode or replacement tool_result envelope. |
@@ -125,25 +132,28 @@ schema, unchanged tools and exact input-item prefix on every request. Configured
 transfer/recovery, budget, browser and first-audio evidence is recorded below;
 it does not claim the broader voice latency target.
 
-The adapter explicitly projects the provider's native
+The original OpenAI adapter explicitly projected the provider's native
 format. ReqLLM's automatic object mode selects a forced structured_output
 function when business tools are present; its streamed Responses path also
-discards compiled_schema. Neither is evidence that strict text.format reached
-the provider. Keep the strategy fixed across all rounds and preserve legacy
-Google publications. Google's unsupported modern candidates receive no automatic
-fallback. Internal modern configuration must retain the declared Responses wire;
-caller-supplied provider options, object operations, other output contracts or
-permanently forced tool choices fail compatibility validation. Public OpenAI
-selections already exclude provider options. Legacy configuration retains its
-separate compatibility rules. See [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
+discards compiled_schema. Neither established that strict text.format reached
+the provider. That original candidate pinned the Responses wire across all rounds
+and preserved legacy Google publications without an automatic legacy fallback.
+Its compatibility checks rejected caller overrides of provider options, object
+operations, output contracts and permanently forced tool choices. These are
+historical OpenAI-candidate details; the universal design now owns transport
+strategy selection while preserving host-owned reply contracts and separate
+legacy semantics. Public OpenAI selections continue to exclude provider options. See [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
 
-Both Google candidates failed configured-call acceptance and are excluded from
-modern support. The rejected prompt-guided candidate used text generation and
+At the original 2026-11-17 checkpoint, both Google candidates failed configured-call
+acceptance and were excluded from modern support. That eligibility policy is now
+superseded; the failures remain historical evidence, not admission rules. The rejected prompt-guided candidate used text generation and
 pinned raw-JSON instructions for every round. Runtime validation correctly
 rejected malformed results, but could not make their generation reliable.
-Other new LLM profiles fail validation until their complete combination is
-verified; existing legacy publications retain their providers. Runtime fixture
-adapters explicitly declare protocol support.
+The original policy also rejected unverified LLM profiles. The universal runtime
+now admits every installed LLM integration under the shared reply contract, with
+strict output validation and real model/options/credential checks. Existing legacy
+publications keep their pinned semantics. See the universal design for current
+transport strategies and acceptance evidence.
 
 The earlier native JSON-schema candidate failed the stronger acceptance test:
 with the authorized tool still available, SHORT returned an unwanted native
@@ -463,26 +473,19 @@ these labels are not permission to expose arbitrary call state.
 
 ### Mode-based assistant replies
 
-The model returns exactly agent_mode and message for final dialogue. Use message
-consistently for participant dialogue content too; native tool results and
-conversation_summary retain their separate formats. Runtime supplies identity
-and historical content type; no model-authored type, participant_id, turn or
-interrupt_agent field is required for the final dialogue object.
+The model returns exactly type, participant_id, agent_mode and message for final
+dialogue, matching the envelope in assistant history. This is the user-directed
+2026-11-18 correction: two-field modern replies are rejected. Use
+`type: "participant_message"` and the application-supplied current agent identity
+(`agent` for standalone sessions without one). Native tool results and
+conversation_summary retain their separate formats. Returned attribution does
+not override runtime identity or prove delivery.
 
 ```json
 [
-  {
-    "agent_mode": "listener",
-    "message": null
-  },
-  {
-    "agent_mode": "listener",
-    "message": "okayyy"
-  },
-  {
-    "agent_mode": "speaker",
-    "message": "I'll look into your order details."
-  }
+  {"type":"participant_message","participant_id":"agent-1","agent_mode":"listener","message":null},
+  {"type":"participant_message","participant_id":"agent-1","agent_mode":"listener","message":"okayyy"},
+  {"type":"participant_message","participant_id":"agent-1","agent_mode":"speaker","message":"I'll look into your order details."}
 ]
 ```
 

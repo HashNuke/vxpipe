@@ -29,7 +29,7 @@ test("default capability edits preserve participant overrides and untouched sour
   render(<Harness />);
   const tts = within(screen.getByRole("region", { name: "Text to speech" }));
   fireEvent.keyDown(tts.getByRole("combobox", { name: "Provider" }), { key: "ArrowDown" });
-  fireEvent.click(await screen.findByRole("option", { name: "deepgram" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Deepgram" }));
   const saved = JSON.parse(screen.getByTestId("source").textContent!);
   expect(saved.defaults.capabilities.text_to_speech).toEqual({ provider: "deepgram", model: "flux", options: { voice: "hannah" } });
   expect(saved.defaults.capabilities.output_speech_to_text).toEqual(initial.source.defaults.capabilities?.output_speech_to_text);

@@ -190,6 +190,104 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       %{tenant: tenant, other: other, authenticated: authenticate()}
     end
 
+    for {provider, model} <- [
+          {"google", "gemini-3.5-flash-lite"},
+          {"openai", "gpt-6-luna"},
+          {"deepseek", "deepseek-flash"},
+          {"fireworks", "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b"},
+          {"openrouter", "google/gemini-3.5-flash-lite"},
+          {"zenmux", "openai/gpt-4o"}
+        ] do
+      test "editor saves and publishes modern #{provider} without inference", %{
+        tenant: tenant,
+        authenticated: auth
+      } do
+        alias Vxpipe.Persistence.{CredentialKeyring, ProviderCredentialStore, Repo}
+        provider = unquote(provider)
+
+        {:ok, keyring} =
+          CredentialKeyring.new("modern-editor", %{
+            "modern-editor" => :crypto.strong_rand_bytes(32)
+          })
+
+        settings = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
+
+        Application.put_env(
+          :vxpipe_calls,
+          Vxpipe.Calls,
+          Keyword.put(
+            settings,
+            :provider_credential_repository,
+            {ProviderCredentialStore, [repo: Repo, keyring: keyring]}
+          )
+        )
+
+        assert {:ok, _credential} =
+                 Vxpipe.Calls.ProviderCredentials.provision(
+                   tenant.key,
+                   provider,
+                   "modern",
+                   "api_key",
+                   %{"api_key" => "synthetic-editor-private-marker"},
+                   []
+                 )
+
+        observer = {__MODULE__, make_ref()}
+
+        :ok =
+          :telemetry.attach(
+            observer,
+            [:req_llm, :request, :start],
+            fn _event, _measurements, _metadata, owner -> send(owner, :authoring_inference) end,
+            self()
+          )
+
+        on_exit(fn -> :telemetry.detach(observer) end)
+
+        source =
+          put_in(editor_source(), ["defaults", "capabilities", "model_inference"], %{
+            "provider" => provider,
+            "model" => unquote(model),
+            "credential_name" => "modern"
+          })
+
+        path = "/api/tenants/#{tenant.key}/call-specs"
+        saved = write(auth, :post, path, %{"source" => source}) |> json_response(201)
+        id = saved["call_spec"]["call_spec_id"]
+
+        published =
+          write(auth, :post, path <> "/#{id}/revisions/1/publish", %{}) |> json_response(200)
+
+        assert published["call_spec"]["published"]
+        assert {:ok, revision} = Vxpipe.Calls.fetch_call_spec(tenant.key, id, 1)
+        assert revision.compiled_metadata["agent_protocol"]["version"] == "mode_message_v1"
+        assert revision.source == source
+        refute inspect(published) =~ "synthetic-editor-private-marker"
+
+        for invalid <- [
+              put_in(source, ["defaults", "capabilities", "model_inference", "options"], %{
+                "max_tokens" => "invalid"
+              }),
+              put_in(
+                source,
+                ["defaults", "capabilities", "model_inference", "credential_name"],
+                "missing"
+              )
+            ] do
+          rejected =
+            write(auth, :put, path <> "/#{id}", %{"source" => invalid}) |> json_response(422)
+
+          assert rejected["error"]["path"] != []
+          current = auth |> recycle() |> https_get(path <> "/#{id}") |> json_response(200)
+          assert current["call_spec"]["latest_revision"] == 1
+          assert current["call_spec"]["published_revision"] == 1
+          assert current["call_spec"]["source"] == source
+        end
+
+        refute_received :authoring_inference
+      end
+    end
+
     for action <- [:update, :publish] do
       test "legacy #{action} uses shared write authority without an extra read grant", %{
         tenant: tenant
@@ -643,10 +741,11 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       assert json_response(anonymous, 401)["error"]["code"] == "session_required"
     end
 
-    test "publish projects the stored compiler error and storage faults remain value-free", %{
-      tenant: tenant,
-      authenticated: auth
-    } do
+    test "save rejects compiler errors without advancing revisions and storage faults remain value-free",
+         %{
+           tenant: tenant,
+           authenticated: auth
+         } do
       path = "/admin/api/tenants/#{tenant.key}/call-specs"
 
       source =
@@ -654,16 +753,17 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
           "lookup" => %{"type" => "host", "tool" => "unregistered"}
         })
 
-      saved = write(auth, :post, path, %{"source" => source}) |> json_response(201)
-      assert [error] = saved["call_spec"]["validation_errors"]
+      saved = write(auth, :post, path, %{"source" => editor_source()}) |> json_response(201)
       id = saved["call_spec"]["call_spec_id"]
+      rejected = write(auth, :put, path <> "/#{id}", %{"source" => source}) |> json_response(422)
+      assert rejected["error"]["path"] != []
 
-      published =
-        write(auth, :post, path <> "/#{id}/revisions/1/publish", %{}) |> json_response(409)
+      assert auth
+             |> recycle()
+             |> https_get(path <> "/#{id}")
+             |> json_response(200)
+             |> get_in(["call_spec", "latest_revision"]) == 1
 
-      assert published["error"]["code"] == "call_spec_not_publishable"
-      assert published["error"]["path"] == error["path"]
-      assert published["error"]["reason"] == error["reason"]
       settings = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
 
       Application.put_env(

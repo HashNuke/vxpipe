@@ -16,7 +16,9 @@ defmodule Vxpipe.Persistence.DemoSamplesTest do
   setup do
     {:ok, keyring} = CredentialKeyring.new("test", %{"test" => :crypto.strong_rand_bytes(32)})
 
+    # Sample sources use the explicitly supported legacy sample protocol.
     options = [
+      agent_protocol_version: :legacy,
       credential_repository: {CredentialStore, Repo},
       call_spec_repository: {CallSpecStore, Repo},
       demo_tenant_repository: {DemoTenantStore, Repo},
@@ -179,7 +181,7 @@ defmodule Vxpipe.Persistence.DemoSamplesTest do
     end
   end
 
-  test "concurrent installers reuse IDs and resume an unpublished matching revision", context do
+  test "concurrent installers reuse IDs and preserve publication for an identical saved revision", context do
     provision(context.tenant.key, ["deepgram", "google"], context.options)
 
     results =
@@ -215,7 +217,7 @@ defmodule Vxpipe.Persistence.DemoSamplesTest do
     assert resumed.call_spec_id == id
     assert resumed.revision == 2
 
-    assert {:ok, %{revision: 2}} =
+    assert {:ok, %{revision: 1, publication: %{version: 1, unpublished_changes: false}}} =
              CallSpecStore.fetch_published_revision(Repo, context.tenant.key, id)
   end
 

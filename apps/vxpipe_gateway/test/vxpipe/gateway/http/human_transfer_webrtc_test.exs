@@ -1590,6 +1590,12 @@ defmodule Vxpipe.Gateway.HTTP.HumanTransferWebRTCTest do
 
       send(execution, :release_test_remote_mcp)
       refute_receive {:test_opening_audio_fetch, _url, _limits}, 0
+
+      # Close the room while its MCP fixtures are still available. ExUnit stops
+      # supervised fixtures before on_exit callbacks, which can race settlement.
+      monitor = Process.monitor(authority)
+      assert :ok = CallEngine.end_call(plan.tenant_id, plan.room_id, room.incarnation_id)
+      assert_receive {:DOWN, ^monitor, :process, ^authority, {:shutdown, :remote_hangup}}, 2_000
     end
   end
 

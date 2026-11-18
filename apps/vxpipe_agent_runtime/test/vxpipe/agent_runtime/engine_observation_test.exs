@@ -105,7 +105,7 @@ defmodule Vxpipe.AgentRuntime.EngineObservationTest do
   end
 
   defp finish(provider, task) do
-    {:ok, response} = ModelResponse.new(text: ~s({"agent_mode":"listener","message":null}))
+    {:ok, response} = ModelResponse.new(text: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}))
     send(provider, {:test_stream_response, {:ok, response}})
     assert {:ok, %{status: :completed}} = Task.await(task)
   end

@@ -7,8 +7,8 @@ defmodule Vxpipe.AgentRuntime.PromptTest do
     assert {:ok, prompt} = Prompt.load(:llm_dialogue)
     assert prompt.text =~ "raw JSON"
     assert prompt.text =~ "code fences"
-    assert prompt.text =~ "Stored assistant history records"
-    assert prompt.text =~ ~s({"agent_mode":"speaker","message":"Hello."})
+    assert prompt.text =~ "matching the participant envelope used in history"
+    assert prompt.text =~ ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
   end
 
   test "explicit built-in compactors pin the same source while custom callback state stays owned" do

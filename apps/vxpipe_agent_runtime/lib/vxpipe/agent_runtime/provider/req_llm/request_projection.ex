@@ -3,8 +3,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
 
   alias Elixir.ReqLLM.Context
 
-  alias Vxpipe.AgentRuntime.{Dialogue, Message, ModelRequest, ModelTool}
-  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{Config, OpenAIReplay}
+  alias Vxpipe.AgentRuntime.{Message, ModelRequest, ModelTool}
+  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{Config, Replay, ReplyStrategy, RouterReplay}
 
   @spec prepare(Config.t(), ModelRequest.t()) :: {term(), Context.t(), keyword()}
   def prepare(%Config{} = config, %ModelRequest{} = request) do
@@ -18,32 +18,21 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
 
     context =
       request.messages
+      |> ReplyStrategy.instruct(request.reply_protocol)
       |> add_runtime_context(request.model_context)
-      |> Enum.map(&to_req_llm_message(&1, config.model))
+      |> Enum.map(&to_req_llm_message(&1, config.model, config.generation_options))
       |> Context.new()
 
     options =
       config.generation_options
-      |> put_maximum_output_tokens(request.maximum_output_tokens)
+      |> put_maximum_output_tokens(request.maximum_output_tokens, config.model)
       |> Keyword.put(:api_key, config.api_key)
       |> put_tools(request.tools)
-      |> put_reply_protocol(request.reply_protocol)
+      |> ReplyStrategy.options(request.reply_protocol, config.reply_strategy)
+      |> RouterReplay.native_tools(config.model, request.reply_protocol)
 
-    {config.model, context, options}
-  end
-
-  defp put_reply_protocol(options, :legacy), do: options
-
-  defp put_reply_protocol(options, :mode_message_v1) do
-    format = %{
-      type: "json_schema",
-      json_schema: %{name: "agent_dialogue", strict: true, schema: Dialogue.schema()}
-    }
-
-    options
-    |> Keyword.put(:output, Elixir.ReqLLM.Output.text())
-    |> Keyword.put(:json_repair, false)
-    |> Keyword.put(:provider_options, response_format: format)
+    {model, options} = RouterReplay.project(config.model, options, request.messages)
+    {model, context, options}
   end
 
   defp add_runtime_context(messages, model_context) when map_size(model_context) == 0,
@@ -65,18 +54,22 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
       JSON.encode!(model_context)
   end
 
-  defp to_req_llm_message(%Message{role: :system, content: content}, _model),
+  defp to_req_llm_message(%Message{role: :system, content: content}, _model, _options),
     do: Context.system(content)
 
-  defp to_req_llm_message(%Message{role: :user, content: content}, _model),
+  defp to_req_llm_message(%Message{role: :user, content: content}, _model, _options),
     do: Context.user(content)
 
   defp to_req_llm_message(
          %Message{role: :assistant, content: content, tool_calls: calls} = message,
-         model
+         model,
+         options
        ) do
     tool_calls = Enum.map(calls, &to_req_llm_tool_call/1)
-    content |> Context.assistant(tool_calls: tool_calls) |> OpenAIReplay.restore(message, model)
+
+    content
+    |> Context.assistant(tool_calls: tool_calls)
+    |> Replay.restore(message, model, options)
   end
 
   defp to_req_llm_message(
@@ -86,7 +79,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
            name: name,
            tool_call_id: tool_call_id
          },
-         _model
+         _model,
+         _options
        ) do
     Context.tool_result(tool_call_id, name, content)
   end
@@ -112,11 +106,36 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
     )
   end
 
-  defp put_maximum_output_tokens(options, nil), do: options
+  defp put_maximum_output_tokens(options, nil, _model), do: options
 
-  defp put_maximum_output_tokens(options, maximum_output_tokens) do
+  defp put_maximum_output_tokens(options, maximum_output_tokens, model) do
+    key =
+      Enum.find(
+        [:max_output_tokens, :max_completion_tokens, :max_tokens],
+        &Keyword.has_key?(options, &1)
+      ) || token_option(model)
+
     options
     |> Keyword.drop([:max_tokens, :max_completion_tokens, :max_output_tokens])
-    |> Keyword.put(:max_tokens, maximum_output_tokens)
+    |> Keyword.update(
+      :provider_options,
+      [],
+      &Keyword.drop(&1, [:max_tokens, :max_completion_tokens, :max_output_tokens])
+    )
+    |> Keyword.put(key, maximum_output_tokens)
+  end
+
+  defp token_option(model) do
+    case Elixir.ReqLLM.RequestPlan.openai_surface(model) do
+      {:ok, :openai_responses, _, _} ->
+        :max_output_tokens
+
+      _other ->
+        case get_in(model.extra || %{}, ["constraints", "token_limit_key"]) do
+          "max_completion_tokens" -> :max_completion_tokens
+          "max_output_tokens" -> :max_output_tokens
+          _other -> :max_tokens
+        end
+    end
   end
 end

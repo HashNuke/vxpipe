@@ -6,19 +6,23 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     Conversation,
     ContextPreparation,
     Dialogue,
+    DialogueRepair,
     Executor,
     Message,
     ModelContext,
     ModelRequest,
     ModelResponse,
     PendingContext,
+    PendingReplyReplay,
     Request,
     StreamBudget,
     ToolRegistry
   }
 
   @spec run(Conversation.t(), Request.t(), map()) ::
-          {:ok, String.t(), Conversation.t()} | {:error, atom()}
+          {:ok, String.t() | Dialogue.t(), Conversation.t()}
+          | {:ok, Dialogue.t(), Conversation.t(), PendingReplyReplay.t()}
+          | {:error, atom()}
   def run(%Conversation{} = conversation, %Request{} = request, config) when is_map(config) do
     staged_messages =
       if config.history_mode == :host_settled,
@@ -47,11 +51,13 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
              model_context,
              request.correlation
            )
-           |> Map.put(:reply_protocol, config.reply_protocol),
+           |> Map.put(:reply_protocol, config.reply_protocol)
+           |> DialogueRepair.bound(config.reply_repair_policy),
          {:ok, prepared_conversation, model_request} <-
            prepare_context(conversation, model_request, config),
          :ok <- config.emit_model_attempt_started.(),
-         {:ok, response} <- generate_observed_response(config, model_request, output) do
+         {:ok, response} <- generate_observed_response(config, model_request, output),
+         {:ok, response} <- maybe_correct(response, model_request, round, config) do
       handle_response(
         response,
         prepared_conversation,
@@ -66,6 +72,34 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
       _invalid -> {:error, :invalid_provider_response}
     end
   end
+
+  defp maybe_correct(
+         %ModelResponse{tool_calls: []} = response,
+         model_request,
+         1,
+         %{reply_protocol: :mode_message_v1, maximum_model_rounds: rounds} = config
+       )
+       when rounds > 1 do
+    case Dialogue.decode(response.text, config.maximum_output_bytes) do
+      {:error, :invalid_dialogue} ->
+        with {:ok, repair} <-
+               DialogueRepair.prepare(config.reply_repair_policy, model_request, response),
+             :ok <- config.emit_model_attempt_started.(),
+             {:ok, corrected} <- generate_observed_response(config, repair, []),
+             true <- corrected.tool_calls == [],
+             {:ok, _dialogue} <- Dialogue.decode(corrected.text, config.maximum_output_bytes) do
+          {:ok, corrected}
+        else
+          false -> {:error, :invalid_dialogue}
+          {:error, _reason} = error -> error
+        end
+
+      _valid_or_bounded_failure ->
+        {:ok, response}
+    end
+  end
+
+  defp maybe_correct(response, _model_request, _round, _config), do: {:ok, response}
 
   defp handle_response(
          %ModelResponse{tool_calls: []} = response,
@@ -86,7 +120,10 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
           config.history_mode
         )
 
-      {:ok, complete_output, conversation}
+      case PendingReplyReplay.prepare(response, complete_output, config) do
+        nil -> {:ok, complete_output, conversation}
+        pending -> {:ok, complete_output, conversation, pending}
+      end
     end
   end
 
@@ -105,7 +142,7 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
           [],
           next_output,
           round + 1,
-          not blocking?,
+          config.reply_protocol == :mode_message_v1 or not blocking?,
           request,
           config
         )

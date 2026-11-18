@@ -1,13 +1,14 @@
 defmodule Vxpipe.AgentRuntime.SessionConfiguration do
   @moduledoc false
 
-  alias Vxpipe.AgentRuntime.{CompactionConfiguration, Message, ToolRegistry}
+  alias Vxpipe.AgentRuntime.{CompactionConfiguration, DialogueRepair, Message, ToolRegistry}
 
   @derive {Inspect, only: []}
   @enforce_keys [
     :instructions,
     :history_mode,
     :reply_protocol,
+    :reply_repair_policy,
     :initial_messages,
     :model_provider,
     :model,
@@ -42,16 +43,27 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
              Keyword.get(options, :model),
              Keyword.get(options, :context_compaction)
            ) do
-      case preparation do
-        nil ->
-          {:ok, options}
+      options =
+        case preparation do
+          nil ->
+            options
 
-        %{compactor: compactor} ->
-          compaction =
-            options |> Keyword.fetch!(:context_compaction) |> Keyword.put(:compactor, compactor)
+          %{compactor: compactor} ->
+            compaction =
+              options |> Keyword.fetch!(:context_compaction) |> Keyword.put(:compactor, compactor)
 
-          {:ok, Keyword.put(options, :context_compaction, compaction)}
-      end
+            Keyword.put(options, :context_compaction, compaction)
+        end
+
+      {:ok,
+       Keyword.put_new_lazy(options, :reply_repair_policy, fn ->
+         DialogueRepair.pin(
+           Keyword.get(options, :reply_protocol, :legacy),
+           Keyword.get(options, :model_provider),
+           Keyword.get(options, :model),
+           preparation
+         )
+       end)}
     end
   end
 
@@ -99,6 +111,16 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
              Keyword.get(options, :model),
              Keyword.get(options, :context_compaction)
            ),
+         reply_repair_policy =
+           Keyword.get_lazy(options, :reply_repair_policy, fn ->
+             DialogueRepair.pin(
+               reply_protocol,
+               model_provider,
+               Keyword.get(options, :model),
+               context_preparation
+             )
+           end),
+         true <- DialogueRepair.valid?(reply_repair_policy, reply_protocol),
          {:ok, commit_timeout_ms} <- positive(Keyword.get(options, :commit_timeout_ms, 1_000)),
          {:ok, request_timeout_ms} <-
            positive(Keyword.get(options, :request_timeout_ms, 30_000)),
@@ -109,6 +131,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
          instructions: instructions,
          history_mode: history_mode,
          reply_protocol: reply_protocol,
+         reply_repair_policy: reply_repair_policy,
          initial_messages: initial_messages,
          model_provider: model_provider,
          model: Keyword.get(options, :model),
@@ -157,6 +180,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       model_provider: config.model_provider,
       history_mode: config.history_mode,
       reply_protocol: config.reply_protocol,
+      reply_repair_policy: config.reply_repair_policy,
       model: config.model,
       tool_registry: config.tool_registry,
       executor: config.executor,
@@ -185,6 +209,7 @@ defmodule Vxpipe.AgentRuntime.SessionConfiguration do
       :instructions,
       :history_mode,
       :reply_protocol,
+      :reply_repair_policy,
       :initial_messages,
       :model_provider,
       :model,

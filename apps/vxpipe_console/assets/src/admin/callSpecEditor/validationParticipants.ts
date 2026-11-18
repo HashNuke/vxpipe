@@ -17,7 +17,11 @@ export function validateParticipant(fields: Fields, source: ObjectValue, key: st
     fields.text(item.transfer_notice, [...path, "transfer_notice"], 4096, true);
     connection(fields, source, key, item.connection, [...path, "connection"]);
   } else if (item.type === "agent") {
-    fields.text(item.prompt, [...path, "prompt"], 32768);
+    if (typeof item.prompt !== "string" || Array.from(item.prompt.trim()).length < 100) {
+      fields.issue([...path, "prompt"], "Write at least 100 characters of instructions for this agent.");
+    } else if (new TextEncoder().encode(item.prompt).length > 32768) {
+      fields.issue([...path, "prompt"], "This prompt is too long. Shorten the instructions and try again.");
+    }
     firstMessage(fields, item, path);
     tools(fields, item, path);
     transfers(fields, item, key, path, participants);

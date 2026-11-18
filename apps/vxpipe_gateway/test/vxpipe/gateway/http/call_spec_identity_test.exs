@@ -53,7 +53,7 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecIdentityTest do
     end
 
     created = request(ctx, :post, ctx.path, %{"source" => source()})
-    assert created.status == 201
+    assert created.status == 201, created.resp_body
     first = JSON.decode!(created.resp_body)["call_spec"]
     id = first["call_spec_id"]
     assert id =~ ~r/\A[1-9][0-9]*\z/
@@ -93,7 +93,13 @@ defmodule Vxpipe.Gateway.HTTP.CallSpecIdentityTest do
           "type" => "human",
           "connection" => %{"service" => "web", "mode" => "receive", "admission" => "start_call"}
         },
-        "assistant" => %{"type" => "agent", "prompt" => "Help."}
+        "assistant" => %{
+          "type" => "agent",
+          "prompt" => "Help.",
+          "capabilities" => %{
+            "model_inference" => %{"provider" => "fixture", "model" => "test:identity"}
+          }
+        }
       }
     }
   end

@@ -27,6 +27,7 @@ defmodule Vxpipe.AgentRuntime.Session do
     :request_timer,
     :termination_reason,
     pending_output: nil,
+    pending_replay: nil,
     status: :idle,
     submission_phase: :idle,
     cancel_callers: []
@@ -35,7 +36,7 @@ defmodule Vxpipe.AgentRuntime.Session do
   @type server :: GenServer.server()
   @maximum_recorded_assistant_bytes 64 * 1_024
 
-  @doc "Pins packaged compactor instructions into the restartable child specification."
+  @doc "Pins compactor instructions and reply recovery policy into the restartable child specification."
   def child_spec(options) do
     case SessionConfiguration.pin_compaction(options) do
       {:ok, pinned} -> super(pinned)
@@ -302,7 +303,7 @@ defmodule Vxpipe.AgentRuntime.Session do
       ) do
     if valid_assistant_message?(text) do
       if state.configuration.history_mode == :host_settled do
-        {:reply, :ok, %{state | pending_output: correlation}}
+        {:reply, :ok, %{state | pending_output: correlation, pending_replay: nil}}
       else
         conversation =
           Conversation.append_exchange(
@@ -330,12 +331,15 @@ defmodule Vxpipe.AgentRuntime.Session do
       )
       when is_map(correlation) do
     if valid_settled_message?(message, state.configuration.maximum_output_bytes) do
+      message = Vxpipe.AgentRuntime.PendingReplyReplay.settle(state.pending_replay, message)
+
       conversation =
         if message == nil,
           do: state.conversation,
           else: Conversation.append_exchange(state.conversation, [message], correlation, :durable)
 
-      {:reply, :ok, %{state | conversation: conversation, pending_output: nil}}
+      {:reply, :ok,
+       %{state | conversation: conversation, pending_output: nil, pending_replay: nil}}
     else
       {:reply, {:error, :invalid_message}, state}
     end
@@ -473,6 +477,16 @@ defmodule Vxpipe.AgentRuntime.Session do
 
   def handle_info(_message, state), do: {:noreply, state}
 
+  defp normalize_result(
+         {:ok, output, %Conversation{} = conversation,
+          %Vxpipe.AgentRuntime.PendingReplyReplay{} = pending},
+         correlation,
+         state
+       ) do
+    {reply, event, state} = normalize_result({:ok, output, conversation}, correlation, state)
+    {reply, event, %{state | pending_replay: pending}}
+  end
+
   defp normalize_result({:ok, output, %Conversation{} = conversation}, correlation, state)
        when is_binary(output) or is_struct(output, Vxpipe.AgentRuntime.Dialogue) do
     result = Result.completed(output, correlation)
@@ -509,7 +523,12 @@ defmodule Vxpipe.AgentRuntime.Session do
         :durable
       )
 
-    %{state | conversation: conversation, pending_output: request.correlation}
+    %{
+      state
+      | conversation: conversation,
+        pending_output: request.correlation,
+        pending_replay: nil
+    }
   end
 
   defp admit_input(state, _request), do: state

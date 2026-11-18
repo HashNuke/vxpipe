@@ -41,3 +41,15 @@ test("variable nullable overrides accept booleans without exposing them as UI fi
   const invalid = changed(source, [{ path: [...path, "properties", "name", "nullable"], value: "yes" }]);
   expect(validateSource(invalid)).toEqual(expect.arrayContaining([expect.objectContaining({ path: [...path, "properties", "name", "nullable"], reason: "must be a boolean" })]));
 });
+
+test.each(["", " ".repeat(120), "a".repeat(99), "🙂".repeat(99)])("short prompts give actionable guidance (%s)", (prompt) => {
+  const source = changed(fixture.bases.incoming, [{ path: ["participants", "assistant", "prompt"], value: prompt }]);
+  expect(validateSource(source)).toContainEqual(expect.objectContaining({
+    path: ["participants", "assistant", "prompt"], reason: "Write at least 100 characters of instructions for this agent.",
+  }));
+});
+
+test.each(["a".repeat(100), "🙂".repeat(100)])("100-character prompts are accepted (%s)", (prompt) => {
+  const source = changed(fixture.bases.incoming, [{ path: ["participants", "assistant", "prompt"], value: prompt }]);
+  expect(validateSource(source).filter((issue) => issue.path.at(-1) === "prompt")).toEqual([]);
+});

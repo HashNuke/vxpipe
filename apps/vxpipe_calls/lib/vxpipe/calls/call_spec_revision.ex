@@ -17,12 +17,13 @@ defmodule Vxpipe.Calls.CallSpecRevision do
     :published_at,
     :inserted_at
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [publication: nil]
 
   @type t :: %__MODULE__{
           tenant_key: String.t(),
           call_spec_id: String.t(),
           revision: pos_integer(),
+          publication: map() | nil,
           schema_version: String.t(),
           source: map(),
           source_digest: String.t(),
