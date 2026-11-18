@@ -13,13 +13,16 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
     ModelRequest,
     ModelResponse,
     PendingContext,
+    PendingReplyReplay,
     Request,
     StreamBudget,
     ToolRegistry
   }
 
   @spec run(Conversation.t(), Request.t(), map()) ::
-          {:ok, String.t(), Conversation.t()} | {:error, atom()}
+          {:ok, String.t() | Dialogue.t(), Conversation.t()}
+          | {:ok, Dialogue.t(), Conversation.t(), PendingReplyReplay.t()}
+          | {:error, atom()}
   def run(%Conversation{} = conversation, %Request{} = request, config) when is_map(config) do
     staged_messages =
       if config.history_mode == :host_settled,
@@ -117,7 +120,10 @@ defmodule Vxpipe.AgentRuntime.RequestRunner do
           config.history_mode
         )
 
-      {:ok, complete_output, conversation}
+      case PendingReplyReplay.prepare(response, complete_output, config) do
+        nil -> {:ok, complete_output, conversation}
+        pending -> {:ok, complete_output, conversation, pending}
+      end
     end
   end
 

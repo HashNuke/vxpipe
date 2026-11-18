@@ -92,8 +92,11 @@ the wire tests and remains open.
 Host settlement deliberately replaces generated dialogue with actual spoken
 history. Preserving reasoning for ordinary final answers across that boundary
 must not replay unspoken output or attach source-bound signatures to edited text.
-The direct tool-exchange fix does not resolve that separate lifecycle contract;
-it remains a C acceptance requirement, alongside interruption and compaction.
+The full-delivery unsigned policy below resolves ordinary direct reasoning.
+Native exchange recovery and protected-tail compaction retain unchanged records;
+selected summary prefixes and canonical source rewrites invalidate their opaque
+replay. A Session restart imports public host history, not a native replay
+checkpoint. None of these boundaries may transplant opaque data to rewritten text.
 
 OpenRouter's [reasoning guide](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)
 requires the original ordered sequence of reasoning detail blocks on continuation.
@@ -160,3 +163,30 @@ including source/model tampering checks. Run `python3 test/shell/req_llm_patch_t
 from the root for fresh, repeated, previous-state and unknown-edit preparation
 checks. Live acceptance for these providers remains pending; synthetic HTTP
 responses establish encoding behavior, not upstream availability or compliance.
+
+## Unsigned reasoning after full host delivery
+
+DeepSeek's [thinking-mode contract](https://api-docs.deepseek.com/guides/thinking_mode/)
+requires prior reasoning on requests declaring tools, including ordinary final
+answers. Public Session HTTP fixtures reproduced that the previous host settlement dropped
+that unsigned reasoning even when the full dialogue is delivered. The direct
+DeepSeek/Fireworks codec can safely carry unsigned text across a canonical speech
+rewrite; opaque or signed formats cannot use that rule.
+
+Retain a bounded private pending candidate only after a validated successful final
+reply. Validate its original source/model with the direct codec before staging.
+Keep the existing bounded replay plus a digest of dialogue mode/text; retain no
+alternate raw public JSON or arguments. Do not expose this candidate in Result,
+events, speech, transcript storage or compaction summaries. On valid settlement,
+only exact full text and mode permit rebinding the unsigned source digest to the
+actual canonical spoken Message. Edited/partial/nil delivery discards the
+candidate. New admission, failure/cancellation and successful settlement clear
+it; stale/invalid settlement cannot attach it to another request. Fixed greetings
+have no generated candidate. Existing native tool exchanges remain immutable.
+
+Rejected alternatives: copying all replay would transplant signatures onto
+rewritten content; preserving raw final JSON would retain unspoken/alternate
+public history; dropping every ordinary unsigned record violates the direct
+provider continuation contract. Signed/opaque final replay is invalidated by
+canonical rewriting. Tool-call records retain exact signed content, and protected
+compaction tails/cancellation/recovery must preserve those records unchanged.

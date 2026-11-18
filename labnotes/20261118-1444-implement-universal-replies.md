@@ -515,3 +515,31 @@ Astra cap/evidence review is clean: independent helper 9/0; every historical run
 is preserved, all 60 new emitted rows retain the actual attempted 8,192 cap, and
 all four Fireworks offline rejections are explicitly recorded. Corrected 4,096
 configuration passes all six preflight selections. No production change.
+
+### Full-delivery unsigned reasoning lifecycle
+
+Independent Astra public Session HTTP reproduction found direct unsigned final
+reasoning absent from subsequent tool-enabled requests even after full delivery.
+DeepSeek's primary thinking-mode contract explicitly requires preceding reasoning
+when tools are declared. Permanent DeepSeek/Fireworks buffered/streamed fixtures
+failed four full-delivery cases out of twenty; partial, edited, mode-changed and
+nil-delivery controls passed. The private pending candidate now validates original
+source/model, retains bounded replay plus a mode/text digest, and rebinds only
+on exact full host settlement. Public Result/events and generated/legacy history
+remain unchanged; signed/opaque shapes are not candidates. Design and rejected
+alternatives are recorded in the transport investigation.
+
+Focused green: 23 cases, including accepted native-exchange cancellation/failure
+recovery and protected-tail compaction without private summarizer input. No Lean
+lane is indicated: this changes runtime history settlement metadata, not source
+cutover or speech-state transitions. Independent final review and runtime/static
+verification remain in progress; C2 is not yet checked off.
+
+Final lifecycle review is clean. Adopted seven adversarial controls covering
+source/model/provider tampering, malformed/oversized shapes, Unicode, private
+Result/events/Inspect, stale/invalid/duplicate settlements, admission fencing,
+fixed greetings, cancellation/failure and exact-once retained reasoning recovery.
+All seven pass; focused preceding 23 pass; runtime child 360/0. Root static gates
+and unused dependencies pass. Checked C2: milestone 11/24 (46%). The concurrent
+umbrella run has now passed Gateway 890/0, including both prior failure sites;
+it predates this lifecycle change and is not final-release verification.

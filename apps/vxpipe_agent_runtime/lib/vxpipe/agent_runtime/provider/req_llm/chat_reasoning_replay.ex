@@ -59,6 +59,26 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ChatReasoningReplay do
     end
   end
 
+  def settlement_candidate(response, %{provider: provider} = model)
+      when provider in [:deepseek, :fireworks_ai] do
+    source = Message.assistant(response.text, [], response.provider_replay)
+
+    if response.tool_calls == [] and response.provider_replay != %{} do
+      _validated = restore(Elixir.ReqLLM.Context.assistant(response.text), source, model)
+      {:ok, response.provider_replay}
+    else
+      :none
+    end
+  rescue
+    _invalid -> :none
+  end
+
+  def settlement_candidate(_response, _model), do: :none
+
+  def bind_settled(replay, %Message{} = message) do
+    %{message | provider_replay: Map.put(replay, "source_digest", digest(message.content, []))}
+  end
+
   defp valid_part?(%ContentPart{type: type, text: text, metadata: metadata})
        when type in [:text, :thinking],
        do: is_binary(text) and metadata == %{}

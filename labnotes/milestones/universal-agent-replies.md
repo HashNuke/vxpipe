@@ -137,7 +137,7 @@ conversation without a new per-model permission entry.
 - [x] Apply the common strategy boundary to all four integrations. Audit actual
   transport capabilities and native routing options rather than assuming their
   OpenAI-compatible endpoints share all OpenAI semantics.
-- [ ] Preserve each integration's required reasoning/signature/tool metadata across
+- [x] Preserve each integration's required reasoning/signature/tool metadata across
   buffered and streamed responses, compaction, interruption and recovery. Check
   that router changes cannot reuse replay scoped to a different downstream model.
 - [ ] Exercise a representative configured model for each integration and the
@@ -371,3 +371,20 @@ prior patch upgrades pass. Runtime suite: 240 tests, zero failures, 25 live
 exclusions. Root static gates pass. The prior full umbrella's WebRTC teardown
 race is fixed and reviewed separately; its intermittent phone recovery timeout
 remains under investigation. No full-green umbrella or release claim is made.
+
+
+## Implementation evidence — C, replay lifecycle
+
+Unsigned direct reasoning now survives exact full host delivery, source-verified
+before private staging and rebound only to matching canonical speech/mode.
+Partial, edited, absent and mode-changed deliveries invalidate the candidate.
+Signed/opaque final metadata is never transplanted onto rewritten speech. Native
+exchanges retain exact replay/call/result records through cancellation, failure
+recovery and protected-tail compaction; summaries exclude private replay. Restart
+imports public host history rather than native replay checkpoints.
+
+Red: four full-delivery failures in twenty direct transport cases. Green: twenty
+transport/delivery cases, three native lifecycle controls and seven adversarial
+privacy/bounds/stale-settlement/recovery cases. Full runtime suite before the
+seven added controls: 360 tests, zero failures. Astra xhigh final review is clean;
+root static gates pass. C task 2 is complete; enabled live acceptance remains open.
