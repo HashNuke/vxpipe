@@ -700,3 +700,21 @@ modern tool/idle Room suites. Independent strengthened matrix/lifecycle run is
 169/0. Added its exact failure-reason and no-raw-output assertions permanently;
 final matrix rerun is 121/0. E1 checked: 16/24 tasks (66.7%). No claim of complete
 live acceptance, final root success or deployment is made.
+
+### Evidence consolidation and remaining gates
+
+Added the consolidated six-integration matrix with actual selected encodings,
+wire/tool/history test ownership, explicit historical/latest distinctions and
+Zenmux live deferral. Independent review corrected the selected Zenmux live fixture
+to openai/gpt-4o and verified 14 passes/30 heterogeneous remaining-provider cases,
+including four Fireworks configuration failures. These counts are not a reliability
+estimate or a clean current-revision run. E3 and F1 are complete: 18/24 tasks (75%).
+C3/E2 stay open while the explicit acceptance-policy question is pending.
+
+The F2 source audit is independently clean (26 focused tests): no reply-identity
+allowlist, schema-based catalog filter or implicit modern-to-legacy downgrade;
+model/options/credential validation and strict Dialogue decoding remain. Binary
+release verification and deployment are not claimed. Frontend typecheck and 62
+focused flow/error-presentation tests pass. The root run reproduced the preexisting
+Twilio custom-url/destination recovery timeout; other completed applications are
+green. Investigation is active and no deadline has been widened.

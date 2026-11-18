@@ -188,7 +188,7 @@ acceptance evidence, with no excluded integration and no remaining allowlist.
   configured credentials without reading or modifying the protected live-provider
   environment file. Add missing shared cases to existing provider lanes. Report
   unavailable credentials explicitly; keep that integration's gate unchecked.
-- [ ] Record the six-integration evidence matrix, full tool availability, actual
+- [x] Record the six-integration evidence matrix, full tool availability, actual
   submitted schema/JSON strategy, immutable history and absence of repeated side
   effects. Include the exact Google model reported by the user. Define a fixed
   scenario/repetition plan before running, and retain failed attempts.
@@ -202,7 +202,7 @@ acceptance evidence, with no excluded integration and no remaining allowlist.
 **Exit:** the accepted shared implementation is committed, deployed and verified;
 future LLM integrations inherit the same contract and conformance requirements.
 
-- [ ] Update the durable design, integration authoring guide, usage documentation,
+- [x] Update the durable design, integration authoring guide, usage documentation,
   prior profile-policy notices and this milestone/index together. Explain generic
   support versus actual upstream request failures without promising infallible JSON.
 - [ ] Verify the release contains no provider/model reply allowlist, no substitute
@@ -462,3 +462,22 @@ stronger exact-reason/no-output assertions now retained permanently. The separat
 refusal review passed 104 cases, including malformed, fragmented, large and
 tool-bearing markers with measured repair budgets. Live acceptance, final umbrella
 checks and release remain independent open gates.
+
+
+## Implementation evidence — E/F, recorded outcomes and documentation
+
+The [consolidated matrix](../../docs/design/universal-replies-conformance.md)
+separates deterministic wire/tool/history proof from live results, historical
+success from current failures, configuration failures from provider outcomes, and
+Zenmux's approved live deferral from a pass. All fixed attempts remain in the
+machine-readable record. Remaining4 has three buffered passes and three streamed
+failures; this is not current-revision streaming acceptance. Independent Astra
+review verified the counts, model identities and scope of every claim.
+
+The durable design, integration authoring guide, user guidance, prior profile-policy
+notice and index describe the shared implementation, intentional legacy fixtures
+and upstream failure limits. E3 recording and F1 documentation are complete.
+C3/E2 remain open under the current policy; the user has been asked explicitly
+whether to retain mandatory streamed acceptance or permit documented model failures
+after all other gates pass. No answer or deployment authorization beyond the
+original completion condition is inferred.
