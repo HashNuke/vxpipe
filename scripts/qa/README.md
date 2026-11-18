@@ -5,6 +5,8 @@ release with compiled assets first, then run as the checkout owner with Docker
 access and sudo privileges:
 
 ```sh
+bin/patch-req-llm
+MIX_ENV=prod mix deps.compile req_llm
 MIX_ENV=prod mix assets.deploy
 MIX_ENV=prod mix release vxpipe --overwrite
 scripts/qa/install-services

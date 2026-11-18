@@ -35,7 +35,7 @@ defmodule Vxpipe.AgentRuntime.Session do
   @type server :: GenServer.server()
   @maximum_recorded_assistant_bytes 64 * 1_024
 
-  @doc "Pins packaged compactor instructions into the restartable child specification."
+  @doc "Pins compactor instructions and reply recovery policy into the restartable child specification."
   def child_spec(options) do
     case SessionConfiguration.pin_compaction(options) do
       {:ok, pinned} -> super(pinned)

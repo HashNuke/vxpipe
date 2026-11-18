@@ -25,7 +25,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
 
     options =
       config.generation_options
-      |> put_maximum_output_tokens(request.maximum_output_tokens)
+      |> put_maximum_output_tokens(request.maximum_output_tokens, config.model)
       |> Keyword.put(:api_key, config.api_key)
       |> put_tools(request.tools)
       |> ReplyStrategy.options(request.reply_protocol, config.reply_strategy)
@@ -99,11 +99,36 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
     )
   end
 
-  defp put_maximum_output_tokens(options, nil), do: options
+  defp put_maximum_output_tokens(options, nil, _model), do: options
 
-  defp put_maximum_output_tokens(options, maximum_output_tokens) do
+  defp put_maximum_output_tokens(options, maximum_output_tokens, model) do
+    key =
+      Enum.find(
+        [:max_output_tokens, :max_completion_tokens, :max_tokens],
+        &Keyword.has_key?(options, &1)
+      ) || token_option(model)
+
     options
     |> Keyword.drop([:max_tokens, :max_completion_tokens, :max_output_tokens])
-    |> Keyword.put(:max_tokens, maximum_output_tokens)
+    |> Keyword.update(
+      :provider_options,
+      [],
+      &Keyword.drop(&1, [:max_tokens, :max_completion_tokens, :max_output_tokens])
+    )
+    |> Keyword.put(key, maximum_output_tokens)
+  end
+
+  defp token_option(model) do
+    case Elixir.ReqLLM.RequestPlan.openai_surface(model) do
+      {:ok, :openai_responses, _, _} ->
+        :max_output_tokens
+
+      _other ->
+        case get_in(model.extra || %{}, ["constraints", "token_limit_key"]) do
+          "max_completion_tokens" -> :max_completion_tokens
+          "max_output_tokens" -> :max_output_tokens
+          _other -> :max_tokens
+        end
+    end
   end
 end

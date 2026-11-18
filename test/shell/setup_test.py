@@ -23,6 +23,7 @@ class SetupTest(unittest.TestCase):
         shutil.copytree(REPOSITORY / "bin", self.root / "bin")
         # Dependencies are faked here; the real patch has its own clean-checkout tests.
         (self.root / "bin/patch-ex-mcp").write_text("#!/bin/bash\nexit 0\n")
+        (self.root / "bin/patch-req-llm").write_text("#!/bin/bash\nexit 0\n")
         self.fake = self.base / "tools"
         self.fake.mkdir()
         for tool in ("python3", "git", "bash", "dirname"):
@@ -333,8 +334,9 @@ assert not list((root / '.vxpipe').glob('.worktree.json.*'))
         log.write_text("")
         result = self.setup(SETUP_COMMAND_LOG=str(log))
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertEqual(log.read_text().splitlines()[:5],
-                         ["deps.get", "deps.compile ex_mcp --include-children", "deps.compile ex_mcp --include-children",
+        self.assertEqual(log.read_text().splitlines()[:7],
+                         ["deps.get", "deps.compile ex_mcp --include-children", "deps.compile req_llm",
+                          "deps.compile ex_mcp --include-children", "deps.compile req_llm",
                           "assets.setup", "assets.build"])
         self.assertIn("bin/dev", result.stdout)
         self.assertIn("mix test", result.stdout)
@@ -347,6 +349,15 @@ assert not list((root / '.vxpipe').glob('.worktree.json.*'))
         result = self.setup(SETUP_COMMAND_LOG=str(log))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("transport patch failed", result.stdout)
+        self.assertEqual(log.read_text().splitlines(), ["deps.get"])
+
+    def test_req_llm_patch_failure_stops_before_dependency_compilation(self):
+        (self.root / "bin/patch-req-llm").write_text("#!/bin/bash\nexit 1\n")
+        self.tool("mix", 'printf "%s\\n" "$*" >> "$SETUP_COMMAND_LOG"')
+        log = self.base / "commands"
+        result = self.setup(SETUP_COMMAND_LOG=str(log))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("native signature patch failed", result.stdout)
         self.assertEqual(log.read_text().splitlines(), ["deps.get"])
 
     def test_shared_build_overrides_fail_before_writing_metadata(self):

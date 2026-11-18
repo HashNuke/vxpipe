@@ -75,4 +75,31 @@ defmodule Vxpipe.AgentRuntime.ConservativeInputTokenCounterTest do
 
     assert structured >= legacy + byte_size(JSON.encode!(Vxpipe.AgentRuntime.Dialogue.schema()))
   end
+
+  test "modern estimate covers the real portable request instructions" do
+    alias Vxpipe.AgentRuntime.Provider.ReqLLM, as: Provider
+    {:ok, config} = Provider.new(api_key: "test-only", model: "google:gemini-3.5-flash-lite")
+
+    request = %{
+      ModelRequest.new([Message.user("Hi")], [], [], %{})
+      | reply_protocol: :mode_message_v1
+    }
+
+    {_, context, _} = Provider.prepare_request(config, request)
+
+    wire_text =
+      context
+      |> Elixir.ReqLLM.Context.to_list()
+      |> Enum.flat_map(& &1.content)
+      |> Enum.map_join(& &1.text)
+
+    assert {:ok, count} = ConservativeInputTokenCounter.count(nil, request)
+
+    assert {:ok, legacy} =
+             ConservativeInputTokenCounter.count(nil, %{request | reply_protocol: :legacy})
+
+    assert count - legacy >=
+             byte_size(wire_text) - byte_size("Hi") +
+               byte_size(JSON.encode!(Vxpipe.AgentRuntime.Dialogue.schema()))
+  end
 end

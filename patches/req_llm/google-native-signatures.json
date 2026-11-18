@@ -1,0 +1,10 @@
+{
+  "hex_version": "1.29.0",
+  "patch_sha256": "b4f27d384a87b487fc4fbab91d0a21557265bbcb22515fb28e28dbc3d77bc9c4",
+  "files": {
+    "lib/req_llm/providers/google.ex": {
+      "original": "91bd9a8c70c0abea810e66a50b7313e528ed7eee36f2b826868861c002f1cc32",
+      "patched": "835745920e776d56f7a591cf3b9b4a38c4ce9be95261ee52bff9f860a7ea0500"
+    }
+  }
+}

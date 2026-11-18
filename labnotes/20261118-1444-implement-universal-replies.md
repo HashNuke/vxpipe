@@ -51,3 +51,49 @@ compile warnings-as-errors, strict Credo and unused-dependency checks pass.
 Umbrella run seed 608437 is still in progress at this checkpoint; its runtime
 child had one 50ms compactor scheduling timeout. The unchanged focused test
 passes with the same seed. No clean full umbrella run is claimed yet.
+
+## A — Bounded correction and native tool continuation
+
+- Resolved private `bounded_once_v1` policy before code: pin limits in restartable
+  child options, one first-round-only correction under original worker/deadline,
+  finite remaining output allowance, explicit reported-output provenance, private
+  measured repair context, no compaction/commit or native dispatch from repair.
+- Red Session tests: 7 tests / 5 expected failures (414764), including no repair,
+  missing output cap and tool-less modern blocking acknowledgments. Nine final
+  lifecycle tests cover both attempts' usage, privacy, cancellation, deadlines,
+  exhausted/untrusted budgets, no repair after dispatch, restart and tighter reserve.
+- Astra's design probe proved Google fills absent usage with zero or reasoning-only
+  counts. Added a real-adapter regression: two HTTP requests occurred without a
+  trustworthy allowance. Added explicit provenance gating; missing provenance
+  disables only correction. Positive OpenAI real-wire repair submits caps 100/90.
+- Red accounting test measured only 214 additional units versus 641 required for the
+  actual dialogue instructions and schema. The shared conservative counter now
+  accounts for both through Dialogue-owned instructions.
+- Google real-adapter blocking tool continuation exposed a ReqLLM 1.29.0 buffered
+  chat bug: the second wire request used a dummy signature instead of the returned
+  thoughtSignature (523544 passes after fix; initial failure 243688). Added exact-source
+  patch/manifest and repeatable bootstrap/CI/release preparation. The patch reuses
+  ReqLLM's existing object-path signature helper; no direct deps edit is delivered.
+- Positive real OpenAI repair first exposed wrong token-option projection
+  (118370: provider_unavailable). Preserve the selected transport's token option
+  when applying the remaining allowance; real HTTP 100/90 assertions now pass.
+- Full runtime child 177 tests pass, 9 exclusions (234505). Initial full root run
+  (608437) finished 5471 tests with 2 failures: 50ms compactor scheduling timeout and
+  Gateway identity fixture missing required model selection. The former passed
+  isolated but received a 500ms test-only budget; the latter was reproduced with
+  the typed unsupported_call_plan response and repaired with an explicit fixture
+  model. Both ownership contracts remain unchanged.
+- Astra implementation review found native token caps overriding runtime caps
+  (wire 100 instead of 37), and namespaced provider containers bypassing history
+  checks. Permanent tests failed 2/14 (789139); Config now stores ReqLLM-normalized
+  options after strict validation, and projection removes nested cap aliases.
+  Both flat/namespaced wire cases and option guards pass 14/14 (701406).
+- Reviewer also reproduced 21/33 setup fixture failures from the new patch step.
+  The fixture now stubs both dependency patchers and asserts compile/failure order;
+  34 setup tests pass. The ReqLLM patch preparation test passes fresh/repeat/unknown
+  source checks. Astra xhigh re-review is clean (independent correction/wire 15 tests pass,
+  seed 257253; setup 34/34 and patch 1/1). Final umbrella verification remains pending.
+
+Final runtime child after option normalization: 178 tests, zero failures, 9 exclusions
+(seed 293510). Root format, warnings-as-errors compile, strict Credo and unused
+dependency gates pass. No speech/source state-machine implementation changed.

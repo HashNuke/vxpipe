@@ -76,8 +76,18 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.Config do
     with {:ok, provider} <- Elixir.ReqLLM.provider(model.provider),
          options <- Keyword.put(generation_options, :on_unsupported, :error),
          {:ok, processed} <-
-           Elixir.ReqLLM.Provider.Options.process(provider, :chat, model, options) do
-      {:ok, options, processed}
+           Elixir.ReqLLM.Provider.Options.process(provider, :chat, model, options),
+         {:ok, normalized} <-
+           Elixir.ReqLLM.Provider.Options.normalize_namespaced_provider_options(
+             provider,
+             :chat,
+             model,
+             generation_options
+           ),
+         {:ok, normalized} <-
+           Elixir.ReqLLM.Provider.Options.normalize_flat_provider_options(provider, normalized),
+         true <- protected_options_absent?(normalized) do
+      {:ok, Keyword.put(normalized, :on_unsupported, :error), processed}
     end
   rescue
     _error -> {:error, :invalid_generation_options}

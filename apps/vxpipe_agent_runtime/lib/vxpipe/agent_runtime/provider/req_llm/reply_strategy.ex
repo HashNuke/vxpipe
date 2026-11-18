@@ -14,11 +14,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ReplyStrategy do
   def instruct(messages, :legacy), do: messages
 
   def instruct(messages, :mode_message_v1) do
-    instructions =
-      "Return final dialogue as one raw JSON object matching this schema, without fences or prose. " <>
-        "Native tool calls remain available; never encode a tool call inside message. " <>
-        "speaker requires a nonempty message; listener permits null or a nonempty message. " <>
-        JSON.encode!(Dialogue.schema())
+    instructions = Dialogue.instructions()
 
     case messages do
       [%Message{role: :system} = system | rest] ->

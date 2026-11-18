@@ -7,6 +7,15 @@ defmodule Vxpipe.AgentRuntime.Dialogue do
 
   @type t :: %__MODULE__{agent_mode: :listener | :speaker, message: String.t() | nil}
 
+  @doc false
+  @spec instructions() :: String.t()
+  def instructions do
+    "Return final dialogue as one raw JSON object matching this schema, without fences or prose. " <>
+      "Native tool calls remain available; never encode a tool call inside message. " <>
+      "speaker requires a nonempty message; listener permits null or a nonempty message. " <>
+      JSON.encode!(schema())
+  end
+
   @spec schema() :: map()
   def schema do
     %{

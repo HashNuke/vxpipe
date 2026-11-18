@@ -1,7 +1,7 @@
 # Universal structured replies across LLM integrations
 
-Status: checkpoint A in progress; shared eligibility and portable request projection implemented.
-Correction, complete conversation parity and live acceptance remain open. The milestone index
+Status: checkpoint A locally implemented and independently reviewed.
+Complete provider conversation parity, live acceptance and release remain open. The milestone index
 owns ordering. User direction, 2026-11-18: no structured-response allowlist;
 every LLM integration must support the common agent reply contract.
 
@@ -87,7 +87,7 @@ any provider/model eligibility table.
 - [x] Introduce the semantic request strategy boundary and portable instructed-JSON
   path using the existing schema/prompts. Provider identity may select wire encoding,
   never permission to use the reply contract. Keep the full tool set and strict decoder.
-- [ ] Resolve private strategy pinning and bounded correction details in the design;
+- [x] Resolve private strategy pinning and bounded correction details in the design;
   implement and test budgets, cancellation, repair context exclusion, usage and
   side-effect prohibitions. Invalid final output remains a typed failure.
 
@@ -237,8 +237,31 @@ Responses schema/tool wire checks remain green.
 
 Focused verification: 24 runtime provider tests, 7 plan/idle tests and 23 persistence
 tests pass (2 persistence integration exclusions). This is local deterministic
-evidence, not live provider or checkpoint-A completion. Bounded correction and
-the blocking-tool acknowledgement tool-set contract still require implementation.
+evidence, not live provider acceptance. At this first subcheckpoint, correction
+and the blocking-tool declaration contract were pending; both are implemented
+in the following subcheckpoint.
 Astra xhigh review found no remaining issues in this subcheckpoint after three
 reproduced corrections. Full umbrella verification remains in progress.
 See [checkpoint labnote](../20261118-1444-implement-universal-replies.md).
+
+## Implementation evidence — A, bounded correction
+
+The private bounded_once_v1 policy is captured with restartable Session options.
+Its first-round-only correction shares the original worker/deadline, preserves
+native tool declarations, rejects tool dispatch from repair, meters both attempts
+and excludes malformed output/correction instructions from settled history.
+Explicit reported-output provenance, finite remaining output and measured input
+capacity are required. Unknown usage disables correction, never protocol admission.
+Modern blocking continuations retain tools; legacy behavior is unchanged.
+
+Real-adapter fixtures prove OpenAI correction caps of 100 then 90 and Google
+native tool/signature/result continuation through Session. They exposed and fixed
+transport token-option projection and a ReqLLM buffered Google signature loss.
+The delivered exact-source dependency patch is integrated into setup, CI and
+production build guidance, with checksum/repeatability tests.
+
+Astra xhigh re-review found no remaining actionable issues after reproducing and
+fixing native option cap precedence, namespaced history overrides and setup fixture
+failures. Independent correction/wire tests, 34 setup tests and the patch test
+pass. Root static gates pass; the full umbrella rerun is still in progress.
+No configured live-provider acceptance or deployment is claimed.

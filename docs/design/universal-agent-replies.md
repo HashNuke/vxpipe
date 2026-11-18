@@ -1,10 +1,11 @@
 # Universal structured replies for LLM integrations
 
 Status: implementation in progress, 2026-11-18; shared eligibility and portable
-projection are implemented, while recovery and full provider acceptance remain open.
+projection and bounded correction are implemented; full provider acceptance remains open.
 The user's requirement is definitive: remove the structured-reply allowlist and
 support the shared agent response contract across every LLM integration.
-Implementation details below are the proposed design, not completed behavior.
+The contracts below govern implementation; the milestone records completed
+behavior and remaining acceptance evidence.
 
 Implementation owner: [milestone](../../labnotes/milestones/universal-agent-replies.md).
 Research evidence: [labnotes](../../labnotes/20261118-1435-universal-agent-replies.md).
@@ -12,7 +13,7 @@ This supersedes the OpenAI-only eligibility policy in the
 [structured-message design](structured-agent-messages.md), not its message,
 history, tool, privacy, settlement or idle contracts.
 
-## Findings
+## Findings at investigation
 
 The common response already exists in `Vxpipe.AgentRuntime.Dialogue`: exactly
 `agent_mode` and `message`, with listener/null, listener/text and speaker/text
@@ -20,9 +21,9 @@ allowed. Duplicate keys, extra fields, blank text and speaker/null are rejected.
 RequestRunner buffers modern replies and decodes the complete final result before
 speech admission. Native tool rounds remain distinct from dialogue.
 
-The restriction is introduced at several boundaries:
+At the investigation baseline, the restriction appeared at several boundaries:
 
-| Boundary | Current implementation | Required change |
+| Boundary | Baseline implementation | Required change |
 | --- | --- | --- |
 | Call-plan validation | `CallEngine.AgentProtocol.supported_participants/2` calls ReqLLM's model-support predicate | Remove protocol eligibility by provider/model identity; keep real source, credential, tool and protocol-version validation. |
 | Session configuration | `SessionConfiguration` checks `supports_protocol?/3` | Validate the shared protocol implementation and options, not membership in a model list. |
@@ -182,10 +183,63 @@ older records default the wire ID to their recorded model ID. No opaque record m
 cross a changed model or transport. This does not yet implement other providers'
 opaque continuation records.
 
-Before bounded correction is implemented, its remaining policy work must address
-two observed lifecycle constraints: output limits currently apply per attempt, and
-legacy blocking acknowledgments deliberately omit tools. Correction will require
+The initial review identified two lifecycle constraints for bounded correction: output limits currently apply per attempt, and
+legacy blocking acknowledgments deliberately omit tools. Correction requires
 a finite trustworthy remaining output allowance; absence of one cannot authorize
-an extra full-budget attempt. Modern full-tool acknowledgments must be specified
-and tested separately while retaining the legacy behavior. The milestone remains
-open until these contracts and their cancellation/history evidence are complete.
+an extra full-budget attempt. Modern full-tool acknowledgments retain legacy behavior separately. The resolved
+policy and its implementation evidence follow below; full provider acceptance
+continues in the milestone.
+
+## Bounded correction policy — resolved before implementation
+
+The private `bounded_once_v1` policy is pinned in the Session child specification,
+with the selected provider configuration and transport strategy. It is an execution
+policy for the existing valid dialogue contract, not a new public protocol or a
+publication migration. Legacy snapshots retain legacy execution. Existing modern
+snapshots continue to mean exactly the same valid mode/message result; correction
+only gives invalid, effect-free output one bounded opportunity to satisfy it.
+Unknown private policy versions fail configuration instead of silently changing it.
+
+Correction runs inside the existing RequestRunner task and Session request token.
+The original timer, cancellation and stale-result fence cover both attempts. It is
+available only on the first model round, with no native submissions, after successful
+provider normalization and `invalid_dialogue` from the final decoder. Refusal,
+truncation, transport error, output overflow and any earlier submission cannot
+trigger correction. A correction consumes the next model attempt/round; a one-round
+limit disables it. There is never a third attempt or a separate tool executor.
+
+A finite original output allowance is required. Pin the tighter available provider
+output limit and configured compaction output reserve; submit that cap on the first
+attempt. Subtract the reported first-attempt output-token usage before correction.
+Require explicit `usage_reported.output == true` provenance, as well as an integer
+count: normalized zero-fill or reasoning-only partial measurements do not establish
+an allowance. Missing, contradictory, noninteger or exhausted output usage disables
+correction. Absent provenance disables correction only, never integration admission.
+The correction request receives only the remaining allowance, with the same byte
+and stream-event bounds. Input must fit the pinned context window, reserving the
+remaining output tokens, using the shared conservative input accounting plus the
+complete dialogue instructions. Unknown context capacity or failed measurement
+also disables correction. The policy does not claim a shared billing ceiling for
+repeated input tokens: each attempt's actual input/output usage is emitted normally.
+
+Build repair context from the already prepared request plus the malformed assistant
+response (including compatible private replay) and a fixed correction instruction.
+Do not fetch new context, compact, commit, or settle these private additions. Retain
+the complete native tool declarations on the correction request, but reject any
+returned tool calls before dispatch. Only a valid final dialogue can reach host
+settlement. Malformed repair, repair tools and exhausted budgets remain typed
+failures, never successful silence. Subsequent caller input sees neither malformed
+output nor correction instructions.
+
+Modern blocking-tool acknowledgments keep the complete authorized tool declarations,
+like all other modern rounds, and still use the one existing executor and round
+limit. Blocking controls conversation admission, not the schema transport's tools.
+Legacy tool-less acknowledgments retain their existing behavior. Neither path may
+repeat a previous side effect as part of correction.
+
+The correction wire tests also established two integration-boundary fixes. Provider
+option namespaces/maps are normalized through ReqLLM after strict validation, so
+none can bypass the host-owned history/output checks. Applying a runtime output
+cap removes conflicting native token aliases before encoding. Google buffered
+chat required the [checked-in native-signature patch](../../patches/req_llm/README.md)
+to retain upstream function-call signatures in subsequent tool-result requests.

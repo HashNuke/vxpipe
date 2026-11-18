@@ -106,6 +106,14 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
             ]
           ],
           [previous_response_id: "unowned-history"],
+          [
+            provider_options: [
+              openai: [
+                previous_response_id: "unowned-history",
+                tool_outputs: [%{call_id: "unowned", output: "invented"}]
+              ]
+            ]
+          ],
           [context_management: [%{type: "compaction"}]],
           [provider_options: [context_management: [%{type: "compaction"}]]],
           [tool_choice: :required],
