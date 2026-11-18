@@ -36,3 +36,13 @@
 
 - Confirmed changes were still uncommitted and absent from the running systemd-managed container. Release uses the existing Docker/systemd path, with packaged migrations before startup.
 - Deployment will build production assets and the named release from the committed checkpoint, retain the previous image for recovery, and verify service health, migration state and deployed assets.
+
+## Release verification — 2026-11-18
+
+- Committed feature checkpoint as `55957cda` and built production assets and the named release successfully. Container image `vxpipe:55957cda` carries the full commit in its OCI revision label.
+- Retained the previous image as `vxpipe:before-publications-20261118`. Restarted through `vxpipe.service`; no proxy configuration changes were needed.
+- Pre-restart running-state query returned only the two documented stale November 13 records, older than the previous container startup. No call records were modified.
+- Systemd reports active/running, successful startup and zero automatic restarts. Caddy remains active. Both loopback and public HTTPS health endpoints return `ok`.
+- Running container image and revision label match the built feature checkpoint. Public fingerprinted admin JavaScript and CSS SHA-256 hashes match the release artifacts exactly.
+- Packaged migration step succeeded and reported migrations already up. Read-only checks confirm migration `20261117152000` is applied, every live spec has matching publication counter/history metadata, and the publication backend module is packaged.
+- Release evidence is recorded separately after deployment; no additional application code changed. The earlier combined umbrella-test limitations remain documented above.
