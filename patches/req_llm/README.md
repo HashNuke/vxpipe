@@ -53,3 +53,18 @@ replay stores canonical text/call references instead of duplicate public data.
 Outbound reconstructed Parts preserve order and attributes; native ID provenance
 controls whether calls/results carry IDs, leaving originally ID-less calls intact.
 The permanent Google replay wire/bounds tests cover these contracts in both modes.
+
+The live acceptance investigation also exposed inconsistent Google usage
+provenance. Buffered decoding retained token counters but lost whether output was
+reported; streamed normalization could mark synthesized zero counters as reported.
+The patch carries reporting facts from raw `usageMetadata` through both paths.
+Explicit nonnegative candidate counts (including explicit zero), with absent or
+valid reasoning counts, permit the runtime's bounded correction policy; inferred,
+missing or malformed output counts do not. Reasoning tokens still consume the cap.
+`google_usage_repair_test.exs` exercises native and portable encoding in both modes,
+including known, zero, reasoning, missing, inferred and malformed counts.
+The ordered-Part source-state upgrade is also checksum-verified by the installer.
+For streams, reporting facts come from the last model/usage event rather than
+ReqLLM's generic OR merge. A final absent or malformed count revokes correction;
+an intermediate missing count followed by complete final usage remains eligible.
+The private per-event marker does not change the shared counter merge behavior.

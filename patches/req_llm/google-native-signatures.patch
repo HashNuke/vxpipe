@@ -10,20 +10,50 @@
 -            opts_with_tokens
 -        end
 -
-@@ -1690 +1681,4 @@
+@@ -708,0 +700 @@
++      usage_reported: google_usage_reported(usage_metadata),
+@@ -718,0 +711,17 @@
++  # Preserve reporting facts before normalization introduces fallback counters.
++  defp google_usage_reported(metadata) when is_map(metadata) do
++    reasoning_known? = not Map.has_key?(metadata, "thoughtsTokenCount") or
++      not is_nil(google_metadata_count(metadata, "thoughtsTokenCount"))
++    %{
++      input: not is_nil(google_metadata_count(metadata, "promptTokenCount")),
++      output: reasoning_known? and not is_nil(google_metadata_count(metadata, "candidatesTokenCount"))
++    }
++  end
++
++  defp google_usage_reported(_metadata), do: %{input: false, output: false}
++
++  defp put_google_usage_provenance(response, body) do
++    reported = google_usage_reported(Map.get(body, "usageMetadata"))
++    %{response | usage: Map.put(response.usage || %{}, :usage_reported, reported)}
++  end
++
+@@ -758,0 +768 @@
++      usage_reported: %{input: false, output: false},
+@@ -1667 +1677 @@
+-                response
++                put_google_usage_provenance(response, body)
+@@ -1690 +1700,4 @@
 -            response_with_reasoning = attach_reasoning_details(response, reasoning_details)
 +            response_with_reasoning =
 +              response
 +              |> attach_function_call_thought_signatures(body)
 +              |> attach_reasoning_details(reasoning_details)
-@@ -2088 +2082 @@
+@@ -1715 +1728,3 @@
+-              put_raw_finish_provider_meta(response_with_grounding, body)
++              response_with_grounding
++              |> put_raw_finish_provider_meta(body)
++              |> put_google_usage_provenance(body)
+@@ -2088 +2103 @@
 -            |> Enum.filter(&Map.has_key?(&1, "text"))
 +            |> Enum.filter(&(Map.has_key?(&1, "text") and Map.get(&1, "thought") != true))
-@@ -2096 +2090,2 @@
+@@ -2096 +2111,2 @@
 -              "content" => json_text
 +              "content" => json_text,
 +              "reasoning_details" => extract_reasoning_details_from_parts(parts)
-@@ -2199,3 +2194,5 @@
+@@ -2199,3 +2215,5 @@
 -  defp put_part_thought_signature(%ReqLLM.ToolCall{} = call, %{"thoughtSignature" => signature})
 -       when is_binary(signature) and signature != "" do
 -    ReqLLM.ToolCall.put_metadata(call, %{thought_signature: signature})
@@ -32,34 +62,48 @@
 +      |> maybe_put(:thought_signature, Map.get(part, "thoughtSignature"))
 +      |> maybe_put(:google_call_id, Map.get(function, "id"))
 +    ReqLLM.ToolCall.put_metadata(call, metadata)
-@@ -2251 +2247,0 @@
+@@ -2251 +2268,0 @@
 -    |> Enum.filter(&(Map.get(&1, "thought", false) == true))
-@@ -2255,3 +2251,3 @@
+@@ -2255,3 +2272,3 @@
 -        text: part["text"],
 -        signature: part["thoughtSignature"],
 -        encrypted?: part["thoughtSignature"] != nil,
 +        text: nil,
 +        signature: nil,
 +        encrypted?: false,
-@@ -2259 +2255 @@
+@@ -2259 +2276 @@
 -        format: "google-gemini-v1",
 +        format: "google-generate-content-parts-v1",
-@@ -2261 +2257 @@
+@@ -2261 +2278 @@
 -        provider_data: %{"thought" => true}
 +        provider_data: %{"part" => part}
-@@ -2532,2 +2528,2 @@
+@@ -2532,2 +2549,2 @@
 -      %{data: data} when is_map(data) -> decode_google_event(data, model)
 -      data when is_map(data) -> decode_google_event(data, model)
 +      %{data: data} when is_map(data) -> decode_google_event_with_parts(data, model)
 +      data when is_map(data) -> decode_google_event_with_parts(data, model)
-@@ -2535,0 +2532,6 @@
+@@ -2535,0 +2553,20 @@
 +  end
 +
 +  defp decode_google_event_with_parts(data, model) do
 +    chunks = decode_google_event(data, model)
 +    details = data |> first_candidate_parts() |> extract_reasoning_details_from_parts()
-+    if details == [], do: chunks, else: [ReqLLM.StreamChunk.meta(%{reasoning_details: details})] ++ chunks
-@@ -2632,0 +2635,10 @@
++    metadata = if details == [], do: %{}, else: %{reasoning_details: details}
++    metadata =
++      if Map.has_key?(data, "candidates") or Map.has_key?(data, "usageMetadata") do
++        raw_usage = Map.get(data, "usageMetadata")
++        raw_usage = if is_map(raw_usage), do: raw_usage, else: %{}
++        metadata
++        |> Map.put(:google_usage_reported, google_usage_reported(raw_usage))
++        |> Map.put(:google_output_components, %{
++          candidates: google_metadata_count(raw_usage, "candidatesTokenCount") || 0,
++          reasoning: google_metadata_count(raw_usage, "thoughtsTokenCount") || 0
++        })
++      else
++        metadata
++      end
++    if metadata == %{}, do: chunks, else: [ReqLLM.StreamChunk.meta(metadata)] ++ chunks
+@@ -2632,0 +2670,10 @@
 +  end
 +
 +  defp preserve_message_tool_call_metadata(%{tool_call_id: id} = message, metadata_by_id) do
@@ -70,10 +114,10 @@
 +  defp preserve_message_tool_call_metadata(%{"tool_call_id" => id} = message, metadata_by_id) do
 +    metadata = Map.get(metadata_by_id, id, %{})
 +    Map.put(message, :req_llm_google_call_id, Map.get(metadata, :google_call_id) || Map.get(metadata, "google_call_id"))
-@@ -2784 +2796 @@
+@@ -2784 +2831 @@
 -    parts = thought_parts ++ content_parts ++ tool_call_parts ++ tool_result_parts
 +    parts = google_replay_parts(message) || (thought_parts ++ content_parts ++ tool_call_parts ++ tool_result_parts)
-@@ -2786,0 +2799,11 @@
+@@ -2786,0 +2834,11 @@
 +  end
 +
 +  defp google_replay_parts(message) do
@@ -85,34 +129,44 @@
 +        } -> part end)
 +      _ -> nil
 +    end
-@@ -2888 +2911 @@
+@@ -2888 +2946 @@
 -      functionCall: %{name: name, args: Jason.decode!(args)},
 +      functionCall: %{name: name, args: Jason.decode!(args)} |> maybe_put(:id, google_native_call_id(tool_call)),
-@@ -2900 +2923 @@
+@@ -2900 +2958 @@
 -      functionCall: %{name: name, args: Jason.decode!(args)},
 +      functionCall: %{name: name, args: Jason.decode!(args)} |> maybe_put(:id, google_native_call_id(tool_call)),
-@@ -2912 +2935 @@
+@@ -2912 +2970 @@
 -      functionCall: %{name: name, args: Jason.decode!(args)},
 +      functionCall: %{name: name, args: Jason.decode!(args)} |> maybe_put(:id, google_native_call_id(tool_call)),
-@@ -2917,0 +2941,5 @@
+@@ -2917,0 +2976,5 @@
 +
 +  defp google_native_call_id(tool_call) do
 +    metadata = ReqLLM.ToolCall.metadata(tool_call)
 +    Map.get(metadata, :google_call_id) || Map.get(metadata, "google_call_id")
 +  end
-@@ -2949 +2977 @@
+@@ -2949 +3012 @@
 -      }
 +      } |> maybe_put(:id, tool_result_call_id(message))
-@@ -2964 +2992 @@
+@@ -2964 +3027 @@
 -      }
 +      } |> maybe_put(:id, tool_result_call_id(message))
-@@ -2966,0 +2995,3 @@
+@@ -2966,0 +3030,3 @@
 +
 +  defp tool_result_call_id(%{req_llm_google_call_id: id}), do: id
 +  defp tool_result_call_id(_), do: nil
-@@ -3543 +3574 @@
+@@ -3543 +3609 @@
 -          meta = %{id: call_id}
 +          meta = %{id: call_id} |> maybe_put(:google_call_id, Map.get(call, "id"))
+@@ -3560,8 +3626 @@
+-  defp convert_google_usage_for_streaming(nil),
+-    do: %{
+-      input_tokens: 0,
+-      output_tokens: 0,
+-      total_tokens: 0,
+-      cached_tokens: 0,
+-      reasoning_tokens: 0
+-    }
++  defp convert_google_usage_for_streaming(nil), do: google_zero_usage()
 --- a/lib/req_llm/stream_server.ex
 +++ b/lib/req_llm/stream_server.ex
 @@ -1460 +1460 @@
@@ -127,3 +181,22 @@
 +          [%ReqLLM.Message.ReasoningDetails{format: "google-generate-content-parts-v1"} | _] = details -> details
 +          _ -> extract_google_reasoning_details(chunks)
 +        end
+@@ -33 +37,17 @@
+-      {:ok, response_with_reasoning}
++      # Reporting facts describe the final provider event, not an OR over earlier
++      # partial snapshots. A final missing count cannot authorize a correction.
++      reported = Enum.reduce(chunks, %{input: false, output: false}, fn
++        %StreamChunk{metadata: %{google_usage_reported: reported}}, _previous -> reported
++        _chunk, previous -> previous
++      end)
++      {last, maximum} = Enum.reduce(chunks, {%{candidates: 0, reasoning: 0}, %{candidates: 0, reasoning: 0}}, fn
++        %StreamChunk{metadata: %{google_output_components: counts}}, {_last, maximum} ->
++          {counts, Map.merge(maximum, counts, fn _key, old, new -> max(old, new) end)}
++        _chunk, previous -> previous
++      end)
++      # Combined-counter max merging cannot account for decreasing/missing
++      # components. Keep the reported counters, but do not grant repair credit.
++      consistent? = last.candidates == maximum.candidates and last.reasoning == maximum.reasoning
++      reported = Map.update!(reported, :output, &(&1 and consistent?))
++      usage = Map.put(response_with_reasoning.usage || %{}, :usage_reported, reported)
++      {:ok, %{response_with_reasoning | usage: usage}}

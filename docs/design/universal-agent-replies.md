@@ -283,3 +283,28 @@ requires matching IDs when supplied, while its
 [thought-signature guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking/thought-signatures)
 requires preserving the signed Part's original placement. Encoding from references
 rather than alternate public text preserves both constraints.
+
+### Google reported-usage provenance
+
+Live buffered/streamed comparison and local raw-HTTP reproduction showed an SDK
+normalization asymmetry: buffered decoding lost output-reporting flags, while
+streamed missing counts acquired flags from synthesized zeros. Preserve flags
+from raw Google usage metadata before defaults are introduced. Explicit candidate
+counts, with absent or valid reasoning counts, are reported output; total-minus-
+input inference is not sufficient provenance for correction. Valid explicit zero
+is distinct from missing zero. Reasoning remains part of consumed output tokens.
+
+Rejected relaxing DialogueRepair to trust every numeric normalized counter: that
+would authorize correction without a measured allowance. The shared policy stays
+unchanged; unknown usage disables correction without rejecting the integration.
+The cumulative SDK patch and all prior source-state upgrade paths carry the fix.
+Focused wire tests verify bounded second-request caps and missing/malformed usage
+rejection in native/portable buffered/streamed modes. Live acceptance remains
+separately tracked in the retained evidence; this fix alone does not close B.
+
+Stream provenance is final-event scoped: a previous reported output flag cannot
+mask a missing final counter. Google also retains private raw candidate/reasoning
+components for this check. If either final component decreases below a previously
+reported component, correction is disabled; generic max-of-combined counters
+could otherwise undercount consumed output. No inferred counter or fabricated
+billing value is introduced. Normal increasing final components remain eligible.

@@ -1,0 +1,80 @@
+--- a/lib/req_llm/providers/google.ex
++++ b/lib/req_llm/providers/google.ex
+@@ -699,0 +700 @@
++      usage_reported: google_usage_reported(usage_metadata),
+@@ -709,0 +711,17 @@
++  # Preserve reporting facts before normalization introduces fallback counters.
++  defp google_usage_reported(metadata) when is_map(metadata) do
++    reasoning_known? = not Map.has_key?(metadata, "thoughtsTokenCount") or
++      not is_nil(google_metadata_count(metadata, "thoughtsTokenCount"))
++    %{
++      input: not is_nil(google_metadata_count(metadata, "promptTokenCount")),
++      output: reasoning_known? and not is_nil(google_metadata_count(metadata, "candidatesTokenCount"))
++    }
++  end
++
++  defp google_usage_reported(_metadata), do: %{input: false, output: false}
++
++  defp put_google_usage_provenance(response, body) do
++    reported = google_usage_reported(Map.get(body, "usageMetadata"))
++    %{response | usage: Map.put(response.usage || %{}, :usage_reported, reported)}
++  end
++
+@@ -749,0 +768 @@
++      usage_reported: %{input: false, output: false},
+@@ -1658 +1677 @@
+-                response
++                put_google_usage_provenance(response, body)
+@@ -1709 +1728,3 @@
+-              put_raw_finish_provider_meta(response_with_grounding, body)
++              response_with_grounding
++              |> put_raw_finish_provider_meta(body)
++              |> put_google_usage_provenance(body)
+@@ -2537 +2558,15 @@
+-    if details == [], do: chunks, else: [ReqLLM.StreamChunk.meta(%{reasoning_details: details})] ++ chunks
++    metadata = if details == [], do: %{}, else: %{reasoning_details: details}
++    metadata =
++      if Map.has_key?(data, "candidates") or Map.has_key?(data, "usageMetadata") do
++        raw_usage = Map.get(data, "usageMetadata")
++        raw_usage = if is_map(raw_usage), do: raw_usage, else: %{}
++        metadata
++        |> Map.put(:google_usage_reported, google_usage_reported(raw_usage))
++        |> Map.put(:google_output_components, %{
++          candidates: google_metadata_count(raw_usage, "candidatesTokenCount") || 0,
++          reasoning: google_metadata_count(raw_usage, "thoughtsTokenCount") || 0
++        })
++      else
++        metadata
++      end
++    if metadata == %{}, do: chunks, else: [ReqLLM.StreamChunk.meta(metadata)] ++ chunks
+@@ -3591,8 +3626 @@
+-  defp convert_google_usage_for_streaming(nil),
+-    do: %{
+-      input_tokens: 0,
+-      output_tokens: 0,
+-      total_tokens: 0,
+-      cached_tokens: 0,
+-      reasoning_tokens: 0
+-    }
++  defp convert_google_usage_for_streaming(nil), do: google_zero_usage()
+--- a/lib/req_llm/providers/google/response_builder.ex
++++ b/lib/req_llm/providers/google/response_builder.ex
+@@ -37 +37,17 @@
+-      {:ok, response_with_reasoning}
++      # Reporting facts describe the final provider event, not an OR over earlier
++      # partial snapshots. A final missing count cannot authorize a correction.
++      reported = Enum.reduce(chunks, %{input: false, output: false}, fn
++        %StreamChunk{metadata: %{google_usage_reported: reported}}, _previous -> reported
++        _chunk, previous -> previous
++      end)
++      {last, maximum} = Enum.reduce(chunks, {%{candidates: 0, reasoning: 0}, %{candidates: 0, reasoning: 0}}, fn
++        %StreamChunk{metadata: %{google_output_components: counts}}, {_last, maximum} ->
++          {counts, Map.merge(maximum, counts, fn _key, old, new -> max(old, new) end)}
++        _chunk, previous -> previous
++      end)
++      # Combined-counter max merging cannot account for decreasing/missing
++      # components. Keep the reported counters, but do not grant repair credit.
++      consistent? = last.candidates == maximum.candidates and last.reasoning == maximum.reasoning
++      reported = Map.update!(reported, :output, &(&1 and consistent?))
++      usage = Map.put(response_with_reasoning.usage || %{}, :usage_reported, reported)
++      {:ok, %{response_with_reasoning | usage: usage}}

@@ -2895,6 +2895,211 @@
         "openai modern receptionist conversation streaming=false"
       ],
       "notes": "Both OpenAI failures were semantic case-sensitive READY assertions on valid lowercase ready text. All four native Google variants failed; portable buffered failed at completion; portable streamed passed. AUTO variants share strategy/mode with default in these old step metrics; failed_cases preserves case names. Future metrics include tool_choice."
+    },
+    {
+      "attempt": "usage1",
+      "description": "Portable Google with tightened fixture and single-event usage provenance fix",
+      "result": "2 tests, 2 failures (6 excluded)",
+      "failed_cases": [
+        "google portable receptionist conversation streaming=false",
+        "google portable receptionist conversation streaming=true"
+      ],
+      "steps": [
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 1351,
+              "reasoning_tokens": 0,
+              "total_tokens": 1375
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 919,
+          "streaming": false,
+          "tool_choice": "default",
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 38,
+              "input_tokens": 1446,
+              "reasoning_tokens": 0,
+              "total_tokens": 1484
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 510,
+          "streaming": false,
+          "tool_choice": "default",
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 1530,
+              "reasoning_tokens": 0,
+              "total_tokens": 1541
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 609,
+          "streaming": false,
+          "tool_choice": "default",
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 1564,
+              "reasoning_tokens": 0,
+              "total_tokens": 1576
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 880,
+          "streaming": false,
+          "tool_choice": "default",
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "invalid_provider_response",
+          "elapsed_ms": 1082,
+          "streaming": false,
+          "tool_choice": "default",
+          "model_attempts": 1,
+          "semantic_outcome": "failed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1351,
+              "reasoning_tokens": 0,
+              "total_tokens": 1369
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 617,
+          "streaming": true,
+          "tool_choice": "default",
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 38,
+              "input_tokens": 1440,
+              "reasoning_tokens": 0,
+              "total_tokens": 1478
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 1281,
+          "streaming": true,
+          "tool_choice": "default",
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 11,
+              "input_tokens": 1524,
+              "reasoning_tokens": 0,
+              "total_tokens": 1535
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 455,
+          "streaming": true,
+          "tool_choice": "default",
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 12,
+              "input_tokens": 1558,
+              "reasoning_tokens": 0,
+              "total_tokens": 1570
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 619,
+          "streaming": true,
+          "tool_choice": "default",
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1628,
+              "reasoning_tokens": 0,
+              "total_tokens": 1646
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "completed",
+          "elapsed_ms": 409,
+          "streaming": true,
+          "tool_choice": "default",
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        }
+      ],
+      "notes": "Buffered lookup returned invalid_provider_response. Streamed lookup spoke the expected acknowledgment without submitting the required native tool, so the case failed after the semantic reply check. No conversation acceptance claimed."
     }
   ],
   "interpretation": "Attempts through examples1 used authored-only instructions, plain caller input and delayed pending-state updates. Retained as standalone diagnostic evidence, not configured-call acceptance. Subsequent protocol1 corrects fixture fidelity.",

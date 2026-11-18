@@ -1,10 +1,10 @@
 {
   "hex_version": "1.29.0",
-  "patch_sha256": "5b6cc958749e592f52bb3044b4dd779e0648867053ef6f9b0e0e5b7203c08dec",
+  "patch_sha256": "55fbd7389be7526ed50cada6cb37cdf65f7f7189164fdb9eb89263d778ca5cc2",
   "files": {
     "lib/req_llm/providers/google.ex": {
       "original": "91bd9a8c70c0abea810e66a50b7313e528ed7eee36f2b826868861c002f1cc32",
-      "patched": "7a23f4e98c1a9ff1d27639e97113692e34bc4cedf9b74f81d345209c88562256"
+      "patched": "e3e3be080233f0c72baf83670ac64b275680ed93d69f68fcd46ad24f584346b0"
     },
     "lib/req_llm/stream_server.ex": {
       "original": "2846d11f1b54f67aab39f6ea5f9ad24c7518c25b26435ca28c27cf8fd8fc4554",
@@ -12,19 +12,28 @@
     },
     "lib/req_llm/providers/google/response_builder.ex": {
       "original": "5ce184aa18e2ef6123999d57d092e8a142c31ed6b53337272f4bad2adb18f274",
-      "patched": "65e195dd2b3de91747132f51c8377b52c02b03225665e290253fb55fa1bb4a50"
+      "patched": "a50bdce164f8e7e5d79a7dcf637ddfaae14cf7284f7ae06abc116987d1003a9f"
     }
   },
   "previous": {
     "files": {
-      "lib/req_llm/providers/google.ex": "42241be32412fe5823d8efd1623183ab3ac7a37e2c37ad32152d20cbb778b478",
+      "lib/req_llm/providers/google.ex": "7a23f4e98c1a9ff1d27639e97113692e34bc4cedf9b74f81d345209c88562256",
       "lib/req_llm/stream_server.ex": "b414e4bd667e5d2ecd8a5627fb32a059e731ff6d2d42ecc3241384f5f1bc7103",
-      "lib/req_llm/providers/google/response_builder.ex": "5ce184aa18e2ef6123999d57d092e8a142c31ed6b53337272f4bad2adb18f274"
+      "lib/req_llm/providers/google/response_builder.ex": "65e195dd2b3de91747132f51c8377b52c02b03225665e290253fb55fa1bb4a50"
     },
-    "patch_file": "google-reasoning-replay-upgrade.patch",
-    "patch_sha256": "b054cc49feb092b59919dc34cb126678ac5ea71af30b4bca96e84c4eb0e21795"
+    "patch_file": "google-ordered-parts-upgrade.patch",
+    "patch_sha256": "46f079caef22e7bb33f590905d777e5bfc27a8e89270b8440f7600de5607e3d7"
   },
   "older": [
+    {
+      "files": {
+        "lib/req_llm/providers/google.ex": "42241be32412fe5823d8efd1623183ab3ac7a37e2c37ad32152d20cbb778b478",
+        "lib/req_llm/stream_server.ex": "b414e4bd667e5d2ecd8a5627fb32a059e731ff6d2d42ecc3241384f5f1bc7103",
+        "lib/req_llm/providers/google/response_builder.ex": "5ce184aa18e2ef6123999d57d092e8a142c31ed6b53337272f4bad2adb18f274"
+      },
+      "patch_file": "google-reasoning-replay-upgrade.patch",
+      "patch_sha256": "5daa1f331015b809edee35b6651b86c0eb46b07831dd5c303d1227393e2a1105"
+    },
     {
       "files": {
         "lib/req_llm/providers/google.ex": "835745920e776d56f7a591cf3b9b4a38c4ce9be95261ee52bff9f860a7ea0500",
@@ -32,7 +41,7 @@
         "lib/req_llm/providers/google/response_builder.ex": "5ce184aa18e2ef6123999d57d092e8a142c31ed6b53337272f4bad2adb18f274"
       },
       "patch_file": "google-output-cap-upgrade.patch",
-      "patch_sha256": "e7728751d18c546fec7ec740699d04a23cafc11f32bff218237cc0ff425362d4"
+      "patch_sha256": "02b2e5cefb409fd2c1220f8a825772b15fb5584d14a400235a1bd1c9877c2eff"
     }
   ]
 }

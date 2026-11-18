@@ -117,3 +117,12 @@ checks. The long-response command now supplies one fixed three-sentence office
 statement (over eighty bytes), compared exactly apart from case and the terminal
 period. This checks the long-dialogue contract without an unreliable language
 grader. Other exact short commands retain their same intended meaning.
+
+## Google usage provenance correction trial
+
+Local raw-HTTP tests reproduced buffered Google dropping explicit usage-reporting
+facts (disabling safe correction) and streamed zero-filled missing counts enabling
+unmeasured correction. After preserving raw reported-output facts in the SDK
+patch, run exactly the two portable Google cases with the reviewed, tightened
+fixture. This isolates the correction/protocol path; native strategy selection
+is unchanged and still has its separately recorded live failures.

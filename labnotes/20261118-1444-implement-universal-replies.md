@@ -251,3 +251,43 @@ dependency gates pass. No speech/source state-machine implementation changed.
   dummy API key to LiveModels' selected environment variable (no ambient key
   dependency). Root umbrella rerun remains in progress; last complete run passed
   5,498 tests. Usage-provenance red tests belong to the next checkpoint.
+
+### Google usage provenance checkpoint
+
+- New raw-HTTP test first failed on buffered known output usage (no correction).
+  Negative streaming case also failed: missing/partial output counts authorized
+  correction after SDK zero-filling. Final red run: 2 tests, 2 expected failures.
+- Preserved reported-input/output flags from raw Google usage metadata across
+  buffered chat/object and streaming paths; no change to shared correction policy.
+  Explicit candidates plus optional valid reasoning counts are known output;
+  missing/inferred/malformed output stays unknown. Reasoning counts consume cap.
+- Initial focused repair/wire run: 6 tests pass. Added explicit zero, reasoning and
+  malformed controls in all four encoding/mode combinations. Fresh/repeated and
+  all three prior-source patch upgrades pass, preserving unknown local edits.
+- Defined one fixed two-case portable Google trial after this fix, using the
+  reviewed configured protocol and exact semantic fixture; result still pending.
+  Native Google strategy selection remains unchanged and its acceptance open.
+- Expanded four-way usage matrix passes, including known zero/combined reasoning
+  counts and absent/inferred/malformed counter rejection. Independent reviewer
+  then proved a multi-event stream could OR an old true flag over a final missing
+  count (eight red variants). Added per-event private flags and select the final
+  event's reporting facts in Google's response builder. Intermediate partial then
+  complete final usage remains eligible; final missing/invalid usage revokes repair.
+- Portable live usage trial: both cases failed and are retained. Buffered lookup
+  returned invalid_provider_response; streamed lookup gave the expected spoken
+  acknowledgment without actually calling the required native tool. No new live
+  acceptance is claimed. These failures differ from the earlier usage bug.
+- Review additionally proved combined-counter merging could undercount when an
+  earlier thinking count7 disappeared or decreased while candidates increased
+  from10 to20. Added a Google-only raw-component consistency fence: final candidate
+  and thinking counts may not drop below previously reported components to grant
+  correction. Normal final20+7 keeps the safe cap73. Permanent usage/replay tests:
+  8 pass. Independent final re-review is pending.
+- Prior full umbrella harness run completed: 5,498 tests, zero failures. It predates
+  the new usage/regression additions; current full rerun will cover those changes.
+- Final Astra xhigh usage review is clean: 14 independent adversarial tests pass,
+  plus a terminal usage-only SSE positive with candidate10/thinking3 and cap87.
+  Fresh/repeat/all prior-source patch upgrades and refusal of unknown edits pass.
+  Permanent usage/replay eight tests and all root static gates pass. New full
+  umbrella run is in progress. This checkpoint fixes accounting consistency;
+  it does not claim the still-failing live conversation acceptance.
