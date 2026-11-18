@@ -66,3 +66,11 @@ test("new human transfers require transfer admission, while stale references can
   expect(() => setTransfer(source, "assistant", "human", true)).toThrow("transfer");
   expect(setTransfer(source, "assistant", "human", false).source.participants.assistant).toMatchObject({transfers: []});
 });
+
+test("new agents start with Hangup without changing existing participants", () => {
+  const initial = document();
+  const next = addParticipant(initial, "new_agent", "agent");
+  expect(next.source.participants.new_agent).toMatchObject({ tools: { hangup: { type: "platform", tool: "hangup" } } });
+  expect(next.source.participants.assistant).toEqual(initial.source.participants.assistant);
+  expect(addParticipant(initial, "guest", "human").source.participants.guest).not.toHaveProperty("tools");
+});

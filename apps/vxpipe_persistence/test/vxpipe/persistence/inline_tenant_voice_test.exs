@@ -81,17 +81,12 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
   test "normal authoring preserves modern validation and supports the selected native profile",
        ctx do
     options = Keyword.delete(ctx.options, :agent_protocol_version)
-    assert {:ok, rejected} = Calls.save_call_spec(ctx.tenant.key, source(), options)
-    assert Enum.any?(rejected.validation_errors, &(&1["code"] == "unsupported_agent_protocol"))
-    assert rejected.compiled_metadata["agent_protocol"]["version"] == "mode_message_v1"
+    before_count = Repo.aggregate(Vxpipe.Persistence.Schema.CallSpecRevision, :count)
 
-    assert {:error, {:call_spec_not_publishable, _errors}} =
-             Calls.publish_call_spec(
-               ctx.tenant.key,
-               rejected.call_spec_id,
-               rejected.revision,
-               options
-             )
+    assert {:error, %Vxpipe.CallEngine.Error{code: :unsupported_agent_protocol}} =
+             Calls.save_call_spec(ctx.tenant.key, source(), options)
+
+    assert Repo.aggregate(Vxpipe.Persistence.Schema.CallSpecRevision, :count) == before_count
 
     assert {:ok, _credential} =
              ProviderCredentials.provision(

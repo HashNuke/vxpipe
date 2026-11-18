@@ -643,10 +643,11 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
       assert json_response(anonymous, 401)["error"]["code"] == "session_required"
     end
 
-    test "publish projects the stored compiler error and storage faults remain value-free", %{
-      tenant: tenant,
-      authenticated: auth
-    } do
+    test "save rejects compiler errors without advancing revisions and storage faults remain value-free",
+         %{
+           tenant: tenant,
+           authenticated: auth
+         } do
       path = "/admin/api/tenants/#{tenant.key}/call-specs"
 
       source =
@@ -654,16 +655,17 @@ defmodule Vxpipe.Console.AdminCallSpecsEndpointTest do
           "lookup" => %{"type" => "host", "tool" => "unregistered"}
         })
 
-      saved = write(auth, :post, path, %{"source" => source}) |> json_response(201)
-      assert [error] = saved["call_spec"]["validation_errors"]
+      saved = write(auth, :post, path, %{"source" => editor_source()}) |> json_response(201)
       id = saved["call_spec"]["call_spec_id"]
+      rejected = write(auth, :put, path <> "/#{id}", %{"source" => source}) |> json_response(422)
+      assert rejected["error"]["path"] != []
 
-      published =
-        write(auth, :post, path <> "/#{id}/revisions/1/publish", %{}) |> json_response(409)
+      assert auth
+             |> recycle()
+             |> https_get(path <> "/#{id}")
+             |> json_response(200)
+             |> get_in(["call_spec", "latest_revision"]) == 1
 
-      assert published["error"]["code"] == "call_spec_not_publishable"
-      assert published["error"]["path"] == error["path"]
-      assert published["error"]["reason"] == error["reason"]
       settings = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
 
       Application.put_env(

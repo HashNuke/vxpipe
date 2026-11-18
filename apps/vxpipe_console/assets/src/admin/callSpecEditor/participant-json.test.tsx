@@ -23,13 +23,13 @@ const source = () => parseSourceJson(screen.getByTestId("source").textContent!) 
 
 test("participant JSON edits only that participant and preserves exact option integers", () => {
   render(<Harness />); click("Participant JSON");
-  const participant = { ...editorFixture.source.participants.intake, prompt: "Updated prompt", capabilities: { model_inference: { provider: "google", model: "gemini-2.5-flash", options: { limit: "EXACT" }, provider_options: { nested: [true, null] } } } };
+  const participant = { ...editorFixture.source.participants.intake, prompt: "Updated prompt: Help callers schedule appointments. Ask one clear question at a time, confirm their preferred date, and explain what happens next.", capabilities: { model_inference: { provider: "google", model: "gemini-2.5-flash", options: { limit: "EXACT" }, provider_options: { nested: [true, null] } } } };
   fill(JSON.stringify(participant).replace('"EXACT"', '9007199254740993'));
   expect(source()).toEqual(editorFixture.source);
   click("Apply JSON");
   expect(source()).toEqual({ ...editorFixture.source, participants: { ...editorFixture.source.participants, intake: { ...participant, capabilities: { ...participant.capabilities, model_inference: { ...participant.capabilities.model_inference, options: { limit: 9007199254740993n } } } } } });
   click("Participant JSON");
-  expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveValue("Updated prompt");
+  expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveValue("Updated prompt: Help callers schedule appointments. Ask one clear question at a time, confirm their preferred date, and explain what happens next.");
 });
 
 test("invalid JSON and invalid participant fields retain source and explain the problem", () => {

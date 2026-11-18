@@ -43,7 +43,7 @@ export function newCallSpec(catalog: ModelCatalog, choice: NewCallDirection): So
         [entry]: { type: "human", connection: choice.direction === "outgoing"
           ? { service: choice.service, mode: "dial", admission: "start_call" }
           : { service: "web", mode: "receive", admission: "start_call" } },
-        assistant: { type: "agent", prompt: "", ...(choice.direction === "incoming" ? { first_message: { mode: "wait_for_input" as const } } : {}), tools: {}, transfers: [] },
+        assistant: { type: "agent", prompt: "", ...(choice.direction === "incoming" ? { first_message: { mode: "wait_for_input" as const } } : {}), tools: { hangup: { type: "platform", tool: "hangup" } }, transfers: [] },
       },
     },
   };

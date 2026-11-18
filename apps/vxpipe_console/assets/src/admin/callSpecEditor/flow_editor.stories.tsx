@@ -126,3 +126,8 @@ export const IssuesList: Story = { args: { scenario: "invalid" }, play: async ({
   const body = within(canvasElement.ownerDocument.body); await userEvent.click(body.getByRole("button", { name: "2 issues" }));
   await expect(body.getByRole("dialog", { name: "Call spec issues" })).toBeVisible();
 } };
+
+export const UnsupportedAgentModel: Story = actionStory({ status: 422, error: {
+  code: "unsupported_call_plan", path: ["participants", "intake", "capabilities", "model_inference", "model"],
+  reason: "This model is not supported for agent replies yet. Choose a supported model in Models.",
+} }, "Couldn't save: Agent intake › Model inference This model is not supported for agent replies yet. Choose a supported model in Models.");

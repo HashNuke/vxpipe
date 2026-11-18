@@ -16,7 +16,9 @@ defmodule Vxpipe.Persistence.DemoSamplesTest do
   setup do
     {:ok, keyring} = CredentialKeyring.new("test", %{"test" => :crypto.strong_rand_bytes(32)})
 
+    # Sample sources use the explicitly supported legacy sample protocol.
     options = [
+      agent_protocol_version: :legacy,
       credential_repository: {CredentialStore, Repo},
       call_spec_repository: {CallSpecStore, Repo},
       demo_tenant_repository: {DemoTenantStore, Repo},

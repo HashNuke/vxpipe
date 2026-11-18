@@ -129,10 +129,13 @@ defmodule Vxpipe.Calls.CallSpecs do
          {:ok, protocol} <-
            Vxpipe.CallEngine.AgentProtocol.capture(
              Keyword.get(options, :agent_protocol_version, :mode_message_v1)
+           ),
+         :ok <-
+           validate_support(
+             call_spec,
+             tenant_key,
+             Keyword.put(options, :agent_protocol, protocol)
            ) do
-      validation_errors =
-        validate_support(call_spec, tenant_key, Keyword.put(options, :agent_protocol, protocol))
-
       routes = participant_routes(call_spec, tenant_key, options)
       telephony_routes = telephony_routes(call_spec, tenant_key)
 
@@ -144,7 +147,7 @@ defmodule Vxpipe.Calls.CallSpecs do
         source: source,
         source_digest: source_digest(source),
         compiled_metadata: Map.put(compiled_metadata(call_spec), "agent_protocol", protocol),
-        validation_errors: validation_errors,
+        validation_errors: [],
         routes: routes,
         telephony_routes: telephony_routes,
         published_at: nil,
@@ -209,10 +212,10 @@ defmodule Vxpipe.Calls.CallSpecs do
              room_id: "call_spec-validation-room"
            ),
          {:ok, _plan} <- CallPlanCompiler.compile(call_spec, invocation, options) do
-      []
+      :ok
     else
-      {:error, %Error{} = error} -> [Error.to_public(error)]
-      {:error, reason} -> [%{"code" => "configuration_unavailable", "reason" => inspect(reason)}]
+      {:error, %Error{} = error} -> {:error, error}
+      {:error, _reason} -> {:error, :call_spec_validation_unavailable}
     end
   end
 

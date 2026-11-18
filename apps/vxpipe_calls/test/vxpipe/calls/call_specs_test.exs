@@ -135,16 +135,14 @@ defmodule Vxpipe.Calls.CallSpecsTest do
         {Vxpipe.Calls.Test.MCPCatalogFixture, {:ok, []}}
       )
 
-    assert {:ok, unavailable} = CallSpecs.save(tenant.key, source, revoked)
-    assert unavailable.validation_errors != []
+    rejected_options = Keyword.put(revoked, :call_spec_id, draft.call_spec_id)
+    assert {:error, _} = CallSpecs.save(tenant.key, source, rejected_options)
 
-    assert {:error, _} =
-             CallSpecs.publish(
-               tenant.key,
-               unavailable.call_spec_id,
-               unavailable.revision,
-               revoked
-             )
+    assert {:error, :not_found} =
+             CallSpecs.fetch(tenant.key, draft.call_spec_id, 2, options)
+
+    assert {:ok, unchanged} = CallSpecs.fetch(tenant.key, draft.call_spec_id, 1, options)
+    assert unchanged.source == draft.source
   end
 
   test "keeps a saved draft route unavailable until publication", %{

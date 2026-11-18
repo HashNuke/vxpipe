@@ -9,7 +9,7 @@ export function AgentPromptPanel({ document, onChange, issues, participantKey }:
   const generated = document.source.outgoing_call?.handled_by === participantKey;
   const defaultMode = generated ? "generated" : "wait_for_input";
   return <fieldset disabled={document.readOnly} className="space-y-5">
-    <TextField label="Prompt" path={[...path, "prompt"]} issues={issues} disabled={document.readOnly} value={target.prompt} multiline rows={10} hint="Instructions for how this agent should handle the conversation."
+    <TextField label="Prompt" path={[...path, "prompt"]} issues={issues} disabled={document.readOnly} value={target.prompt} multiline rows={10} hint="Describe how this agent should handle the conversation. Use at least 100 characters."
       onChange={(prompt) => onChange(editSource(document, (source) => { agent(source, participantKey).prompt = prompt; }))} />
     <ChoiceField label="First message" path={[...path, "first_message", "mode"]} issues={issues} disabled={document.readOnly} value={target.first_message?.mode ?? defaultMode}
       choices={[{ value: "wait_for_input", label: "Wait for input" }, { value: "generated", label: "Generated" }, { value: "fixed", label: "Fixed text" }]}

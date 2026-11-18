@@ -13,6 +13,7 @@ type IssueContextValue = {
 export const IssueContext = createContext<IssueContextValue | null>(null);
 const prefix = (a: string[], b: string[]) => a.length <= b.length && a.every((part, index) => part === b[index]);
 export function closestField(fields: Map<HTMLElement, IssueField>, path: string[]) {
+  if (path.length === 0) return undefined;
   // A newly opened dialog owns a duplicate path ahead of its underlying card.
   const entries = [...fields].reverse();
   return entries.filter(([, field]) => prefix(field.path, path)).sort((a, b) => b[1].path.length - a[1].path.length || Number(b[1].control) - Number(a[1].control))[0]

@@ -80,6 +80,10 @@ Provider capabilities include `model_inference`, `speech_to_text`,
 provider requests. They return `{providers}` or `{models}` unless pagination is
 requested, which selects `{items,pagination}`.
 
+Saving a draft runs compiler validation and rejects unsupported configurations
+before inserting a revision. Historical invalid drafts remain readable, but
+cannot be published until corrected and saved again.
+
 ## Create and join a call
 
 ```http

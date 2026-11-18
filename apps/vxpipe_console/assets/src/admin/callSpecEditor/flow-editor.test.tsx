@@ -63,10 +63,10 @@ test("new agents require a user-written prompt before saving", async () => {
   expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveAttribute("aria-invalid", "true");
   fill("Prompt", "   "); saveDraft();
   expect(props.execute).not.toHaveBeenCalled();
-  fill("Prompt", "Help customers change their appointment."); saveDraft();
+  fill("Prompt", "Help customers change their appointment. Ask for the current booking, confirm their preferred new time, and explain the next steps."); saveDraft();
   await waitFor(() => expect(props.execute).toHaveBeenCalledOnce());
   expect(props.execute).toHaveBeenCalledWith(expect.objectContaining({ source: expect.objectContaining({
-    participants: expect.objectContaining({ agent: expect.objectContaining({ prompt: "Help customers change their appointment." }) }),
+    participants: expect.objectContaining({ agent: expect.objectContaining({ prompt: "Help customers change their appointment. Ask for the current booking, confirm their preferred new time, and explain the next steps." }) }),
   }) }), expect.any(AbortSignal));
 });
 
@@ -117,7 +117,7 @@ test("backend field errors survive unrelated edits and disappear when their fiel
   expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveAttribute("aria-invalid", "true");
   rename("Renamed draft");
   expect(screen.getByText("needs a greeting")).toBeVisible();
-  fill("Prompt", "Hello. How can I help?");
+  fill("Prompt", "Hello. How can I help? Listen carefully to the caller, ask one question at a time, and confirm the details before taking action.");
   expect(screen.queryByText("needs a greeting")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "1 issue" })).not.toBeInTheDocument();
 });
@@ -340,4 +340,19 @@ test("retrying a failed save waits for unapplied JSON edits", async () => {
   click("Participant JSON"); click("Retry");
   expect(props.execute).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue('{');
+});
+
+test("an unsupported model error opens the participant Models tab, not tool visibility", async () => {
+  const props = properties();
+  const reason = "This model is not supported for agent replies yet. Choose a supported model in Models.";
+  props.execute.mockResolvedValue({ status: 422, error: { code: "unsupported_call_plan", path: ["participants", "intake", "capabilities", "model_inference", "model"], reason } });
+  render(<CallSpecEditor {...props} />);
+  rename("Changed before rejection");
+  saveDraft();
+  await screen.findByText(`Couldn't save: Agent intake › Model inference ${reason}`);
+  click("Show");
+  expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByText(reason)).toBeVisible();
+  expect(screen.queryByRole("combobox", { name: "Default tool visibility" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Edit call spec name" })).toHaveTextContent("Changed before rejection");
 });

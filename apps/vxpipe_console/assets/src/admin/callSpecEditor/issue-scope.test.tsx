@@ -95,3 +95,11 @@ test("Show opens the section modal and focuses its constraint when variables are
   expect(await screen.findByRole("dialog", { name: "Edit section" })).toBeVisible();
   expect(screen.getByRole("textbox", { name: "contact undeclared required field 1" })).toHaveFocus();
 });
+
+test("call-spec-wide errors stay in the summary instead of blaming an unrelated field", () => {
+  const problem = { ...issue, path: [], reason: "Could not validate the call spec" };
+  render(<Fields issues={[problem]} request={{ id: 1, path: [] }} />);
+  expect(screen.getByRole("region", { name: "Other issues in this tab" })).toHaveTextContent(problem.reason);
+  expect(screen.getByRole("textbox", { name: "Prompt" })).toHaveAttribute("aria-invalid", "false");
+  expect(screen.getByRole("region", { name: "Other issues in this tab" })).toHaveFocus();
+});

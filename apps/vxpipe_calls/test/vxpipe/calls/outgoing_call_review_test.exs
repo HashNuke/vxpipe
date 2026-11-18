@@ -37,15 +37,10 @@ defmodule Vxpipe.Calls.OutgoingCallReviewTest do
   # Issue 3: the gateway dialer refuses a service without an outbound number
   # (OutgoingLegDialer), so every request for this spec fails at dial time with a
   # retryable 503. Admission must refuse it up front instead.
-  test "an outgoing spec whose service has no outbound number cannot be published", c do
-    assert {:ok, draft} = Calls.save_call_spec(c.tenant.key, source(), c.options)
-
-    assert {:error, {:call_spec_not_publishable, [error]}} =
-             Calls.publish_call_spec(c.tenant.key, draft.call_spec_id, 1, c.options)
-
-    # The credential is fine; the caller ID is missing. Say so (2026-10-06 review).
-    assert error["code"] == "telephony_caller_id_missing"
-    assert error["details"]["path"] == ["participants", "callee", "connection", "service"]
+  test "an outgoing spec whose service has no outbound number cannot be saved", c do
+    assert {:error, error} = Calls.save_call_spec(c.tenant.key, source(), c.options)
+    assert error.code == :telephony_caller_id_missing
+    assert error.details["path"] == ["participants", "callee", "connection", "service"]
   end
 
   test "an unresolvable outgoing service still reports an unavailable credential", c do

@@ -7,8 +7,9 @@ sidebar:
 
 Open a tenant's **Call specs**, then create a spec or select an existing one.
 Choose incoming or outgoing when creating it; direction cannot change in later
-revisions. Give each agent a nonempty prompt, select its capabilities and define
-the transfers it may request.
+revisions. In the editor, give each agent a prompt of at least 100 characters, select its
+capabilities and define the transfers it may request. New agents start with the
+Hangup tool enabled; you can edit or remove it in Tools.
 
 ## Identity and publication
 
@@ -31,7 +32,10 @@ Existing installations may initially show only their known current publication.
 
 In the editor, **Publish** saves valid unsaved edits first, then publishes that
 saved revision. Use **Save as draft**
-in the actions menu to save without publishing.
+in the actions menu to save without publishing. Both actions reject invalid call
+specs, including unsupported model/tool combinations. A failed save creates no
+revision and keeps your unsaved edits in the editor. Errors point to the relevant
+participant or setting.
 
 The editor's ellipsis menu opens the JSON source. Current new source uses
 `schema_version: "20261004.01"`. Use the

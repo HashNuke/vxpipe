@@ -50,3 +50,10 @@ test("adapter-owned public options accompany a recommended model", () => {
   const catalog: ModelCatalog = { speech_to_text: { deepgram: [{ id: "flux-general-multi", name: "Flux", default: true, voices: null, options: { encoding: "linear16", sample_rate: 48000 } }] } };
   expect(recommendedSelection(catalog, "speech_to_text", "deepgram")).toEqual({ provider: "deepgram", model: "flux-general-multi", options: { encoding: "linear16", sample_rate: 48000 } });
 });
+
+test("incoming and outgoing starter agents include Hangup", () => {
+  for (const choice of [{ direction: "incoming" }, { direction: "outgoing", service: "office" }] as const) {
+    const doc = newCallSpec(modelCatalogFixture, choice);
+    expect(doc.source.participants.assistant).toHaveProperty("tools.hangup", { type: "platform", tool: "hangup" });
+  }
+});
