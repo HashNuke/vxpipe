@@ -181,7 +181,7 @@ correct error field routing and authorized visibility.
 **Exit:** all six integrations have deterministic conformance and configured live
 acceptance evidence, with no excluded integration and no remaining allowlist.
 
-- [ ] Run one shared adversarial matrix: ordinary/tool/async/idle rounds, malformed
+- [x] Run one shared adversarial matrix: ordinary/tool/async/idle rounds, malformed
   and oversized output, duplicate keys, refusal/truncation, unknown mode, null,
   opaque replay, cancellation, deadline, bounded correction and recovery.
 - [ ] Run tagged live provider cases through `bin/livetests run`, using permitted
@@ -438,3 +438,27 @@ The Google mode assertion was added after browser2; deterministic actual-wire
 coverage verifies optional tool mode, rather than claiming it ran in browser2.
 Final Astra xhigh review is clean. See the retained browser2 metrics in the
 [live evidence](../../docs/design/universal-replies-live-evidence.json).
+
+
+## Implementation evidence — E, deterministic conformance
+
+The registry-checked terminal matrix runs ten shared outcomes through actual local
+HTTP and public Session admission for all six integrations, buffered and streamed
+(121/0). It asserts exact failure reasons, no public text delta, no raw result
+output and one HTTP request. Valid speaker/cue/silence controls distinguish real
+protocol rejection from accidental configuration or transport failure.
+
+This matrix composes with the shared dialogue/session/repair suites for ordinary,
+engine-origin, async and idle input, correction, cancellation and deadline; the
+six-provider wire replay union for native metadata; replay lifecycle and settlement
+suites for recovery/compaction; and modern tool-conversation/idle Room tests for
+actual executor behavior. It does not claim six copies of every lifecycle test.
+Raw refusal markers found during this audit now survive SDK normalization and
+fail before dialogue/tool admission. The pinned patch upgrades every reviewed
+historical source state.
+
+Independent Astra xhigh review is clean: 169 matrix/lifecycle tests pass, including
+stronger exact-reason/no-output assertions now retained permanently. The separate
+refusal review passed 104 cases, including malformed, fragmented, large and
+tool-bearing markers with measured repair budgets. Live acceptance, final umbrella
+checks and release remain independent open gates.

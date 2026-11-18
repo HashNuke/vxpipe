@@ -678,3 +678,25 @@ acceptance or release. Independent review caught and corrected an overbroad
 legacy publications. Final Astra xhigh documentation review is clean; scoped
 whitespace and new local links verified. Final milestone/index synchronization
 remains part of release acceptance.
+
+### Fixed remaining-provider run and shared terminal matrix
+
+Remaining4 completed exactly the planned six cases: 6 tests, 3 failures. All three
+buffered conversations pass all ten steps. Fireworks streaming returned valid
+"Okay" instead of "Four" after a bounded correction; OpenRouter streaming spoke
+the running acknowledgment without native lookup submission; DeepSeek streaming
+returned forbidden host-envelope fields after lookup and was rejected without
+post-dispatch correction. All emitted step metrics and failures are retained.
+No automatic rerun follows this plan. The deterministic terminal matrix now runs
+ten shared valid/adversarial responses across all six integrations and both modes,
+with a registry completeness guard: 121/0. Its initial valid-control assertion
+incorrectly compared a Dialogue struct to a bare map (36 failures); changing it
+to a field pattern corrected the fixture. Independent matrix and acceptance
+reviews are pending. This is not a claim of final live acceptance.
+
+Final E1 review supports deterministic closure using the registry-wide raw-terminal
+matrix plus existing shared lifecycle, six-provider replay, usage-correction and
+modern tool/idle Room suites. Independent strengthened matrix/lifecycle run is
+169/0. Added its exact failure-reason and no-raw-output assertions permanently;
+final matrix rerun is 121/0. E1 checked: 16/24 tasks (66.7%). No claim of complete
+live acceptance, final root success or deployment is made.
