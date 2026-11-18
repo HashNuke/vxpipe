@@ -20,10 +20,12 @@ class ReqLLMPatchTest(unittest.TestCase):
             (root / "mix.lock").write_text((ROOT / "mix.lock").read_text())
             name = "lib/req_llm/providers/google.ex"
             source = root / "deps/req_llm" / name
-            source.parent.mkdir(parents=True)
-            shutil.copyfile(ROOT / "deps/req_llm" / name, source)
             patch = root / "patches/req_llm/google-native-signatures.patch"
             manifest = json.loads(patch.with_suffix(".json").read_text())
+            for filename in manifest["files"]:
+                target = root / "deps/req_llm" / filename
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / "deps/req_llm" / filename, target)
             digest = runpy.run_path(str(ROOT / "bin/patch-req-llm"))["digest"]
             if digest(source) == manifest["files"][name]["patched"]:
                 subprocess.run(["patch", "--batch", "-R", "-p1", "-i", str(patch)],
@@ -32,6 +34,13 @@ class ReqLLMPatchTest(unittest.TestCase):
             APPLY(root)
             self.assertEqual(digest(source), manifest["files"][name]["patched"])
             APPLY(root)
+            # A checkout already prepared by the preceding release upgrades safely.
+            upgrade = patch.parent / manifest["previous"]["patch_file"]
+            subprocess.run(["patch", "--batch", "-R", "-p1", "-i", str(upgrade)],
+                           cwd=root / "deps/req_llm", check=True, capture_output=True)
+            self.assertEqual(digest(source), manifest["previous"]["files"][name])
+            APPLY(root)
+            self.assertEqual(digest(source), manifest["files"][name]["patched"])
             source.write_text(source.read_text() + "\n# local unreviewed edit\n")
             changed = source.read_bytes()
             with self.assertRaisesRegex(ValueError, "sources differ"):

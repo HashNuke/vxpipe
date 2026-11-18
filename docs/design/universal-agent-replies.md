@@ -166,7 +166,7 @@ production deployment was performed for this investigation.
 The first implementation slice deletes identity eligibility from plan pinning and
 replaces DialogueProfile with shared option validation. Model resolution, credential
 validation, protocol validation and idle-on-STS checks retain their owners. The
-name `structured_output` is no longer reserved: the runtime uses text output and
+name `structured_output` is no longer reserved: the runtime consumes raw text and
 never creates a synthetic schema tool.
 
 ReqLLM configuration pins a private reply strategy alongside its immutable resolved
@@ -176,6 +176,17 @@ Both retain the same decoder and native tools. Provider options such as Google
 authentication and native routing survive projection; output/protocol overrides
 and forced tools remain invalid. Native encoding for other transports follows in
 the provider checkpoints. Legacy requests do not receive either modern overlay.
+
+The Google checkpoint adds native object encoding when ReqLLM can prepare an
+object request with the shared schema and a native tool. This is an offline SDK
+probe, not inference or a model permission list; unsupported combinations keep
+portable JSON. Configured Google Search/URL-context options also select portable
+JSON because the SDK object encoder omits those builtins. Selection is fixed with
+the configuration, including rounds without
+tools. The native path retains raw text for the same strict decoder. Its exact-source
+dependency patch preserves explicit output caps below 200 and suppresses Google's
+SDK-generated schema tool chunk, while preserving actual native calls regardless
+of their names. Buffered and streaming HTTP fixtures verify these boundaries.
 
 OpenAI replay compatibility now checks the Responses transport independently of
 reply eligibility. New replay records bind both catalog and actual wire model IDs;

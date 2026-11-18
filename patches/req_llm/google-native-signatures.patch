@@ -1,8 +1,26 @@
 --- a/lib/req_llm/providers/google.ex
 +++ b/lib/req_llm/providers/google.ex
-@@ -1690 +1690,4 @@
+@@ -349,9 +348,0 @@
+-      opts_with_tokens =
+-        case Keyword.get(opts_with_tokens, :max_tokens) do
+-          tokens when is_integer(tokens) and tokens < 200 ->
+-            Keyword.put(opts_with_tokens, :max_tokens, 200)
+-
+-          _tokens ->
+-            opts_with_tokens
+-        end
+-
+@@ -1690 +1681,4 @@
 -            response_with_reasoning = attach_reasoning_details(response, reasoning_details)
 +            response_with_reasoning =
 +              response
 +              |> attach_function_call_thought_signatures(body)
 +              |> attach_reasoning_details(reasoning_details)
+@@ -2088 +2082 @@
+-            |> Enum.filter(&Map.has_key?(&1, "text"))
++            |> Enum.filter(&(Map.has_key?(&1, "text") and Map.get(&1, "thought") != true))
+--- a/lib/req_llm/stream_server.ex
++++ b/lib/req_llm/stream_server.ex
+@@ -1460 +1460 @@
+-      if state.object_json_mode? do
++      if state.object_json_mode? and state.provider_mod != ReqLLM.Providers.Google do

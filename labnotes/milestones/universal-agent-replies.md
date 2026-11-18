@@ -101,10 +101,10 @@ unchanged. Do not enable a second tool loop to implement recovery.
 **Exit:** configured Google AI Studio and OpenAI agents pass the same multi-turn
 scenario through actual request projection, streaming, tool execution and history.
 
-- [ ] Capture actual encoded buffered and streaming requests for Google AI Studio
+- [x] Capture actual encoded buffered and streaming requests for Google AI Studio
   and OpenAI. Prove schema placement, instructions, full native tools and decoding;
   do not infer correct wire output from high-level SDK options.
-- [ ] Implement native schema encoding where supported through ReqLLM's existing
+- [x] Implement native schema encoding where supported through ReqLLM's existing
   surfaces, with the portable path for unsupported combinations. Keep strategy
   stable across rounds. Add reproducible dependency changes/patches only if a
   demonstrated gap requires them; never edit `deps/` as the delivered fix.
@@ -265,3 +265,21 @@ fixing native option cap precedence, namespaced history overrides and setup fixt
 failures. Independent correction/wire tests, 34 setup tests and the patch test
 pass. Root static gates pass; the full umbrella rerun is still in progress.
 No configured live-provider acceptance or deployment is claimed.
+
+## Implementation evidence — B, native wire subcheckpoint
+
+Actual local HTTP captures exercise Google and OpenAI buffered and streamed
+schema encoding, full tools and output caps. Google selects native schema plus
+tools through an offline SDK preparation probe; unsupported combinations keep
+portable JSON. Raw malformed/fenced/duplicate output retains the shared strict
+decoder, and real named tools retain signatures. The pinned dependency patch
+corrects explicit cap inflation, synthetic Google schema tool chunks and private
+thinking text concatenated into public JSON. Source-state upgrade and repeat
+application are tested. Replay generalization and configured live conversations
+remain unchecked; these wire fixtures do not constitute live acceptance.
+
+Final Astra xhigh re-review found no remaining actionable issue in this
+subcheckpoint after proving/fixing private thought contamination and both nested
+and flat builtin-tool options. Independent 8 tests and patch preparation pass;
+final runtime child 185 tests pass (9 excluded). Broader umbrella verification
+continues, and the remaining B–F gates stay open.

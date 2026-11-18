@@ -1,10 +1,22 @@
 {
   "hex_version": "1.29.0",
-  "patch_sha256": "b4f27d384a87b487fc4fbab91d0a21557265bbcb22515fb28e28dbc3d77bc9c4",
+  "patch_sha256": "e9b49c472db512fdd42502edc0e4e00d567487e409deefe8fe97b3cb98d7072a",
   "files": {
     "lib/req_llm/providers/google.ex": {
       "original": "91bd9a8c70c0abea810e66a50b7313e528ed7eee36f2b826868861c002f1cc32",
-      "patched": "835745920e776d56f7a591cf3b9b4a38c4ce9be95261ee52bff9f860a7ea0500"
+      "patched": "42241be32412fe5823d8efd1623183ab3ac7a37e2c37ad32152d20cbb778b478"
+    },
+    "lib/req_llm/stream_server.ex": {
+      "original": "2846d11f1b54f67aab39f6ea5f9ad24c7518c25b26435ca28c27cf8fd8fc4554",
+      "patched": "b414e4bd667e5d2ecd8a5627fb32a059e731ff6d2d42ecc3241384f5f1bc7103"
     }
+  },
+  "previous": {
+    "files": {
+      "lib/req_llm/providers/google.ex": "835745920e776d56f7a591cf3b9b4a38c4ce9be95261ee52bff9f860a7ea0500",
+      "lib/req_llm/stream_server.ex": "2846d11f1b54f67aab39f6ea5f9ad24c7518c25b26435ca28c27cf8fd8fc4554"
+    },
+    "patch_file": "google-output-cap-upgrade.patch",
+    "patch_sha256": "51281563c12b25dd59b523c7318f8dc08353a9adc7a786c340b491184aa6ba95"
   }
 }

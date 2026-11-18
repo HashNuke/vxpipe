@@ -97,3 +97,49 @@ passes with the same seed. No clean full umbrella run is claimed yet.
 Final runtime child after option normalization: 178 tests, zero failures, 9 exclusions
 (seed 293510). Root format, warnings-as-errors compile, strict Credo and unused
 dependency gates pass. No speech/source state-machine implementation changed.
+
+### B: Google native wire subcheckpoint (in progress)
+
+- A's umbrella rerun completed successfully: 5,484 tests, zero failures (the
+  runtime child had 177 tests at that run's start; the later focused child run
+  included its final 178 tests). No live evidence is implied.
+- Added a loopback HTTP fixture capturing buffered and streamed encoded Google
+  requests. Initial red: missing responseMimeType. Native object selection now
+  probes ReqLLM request preparation offline with schema plus an ordinary tool;
+  unsupported combinations retain portable JSON, without rejecting configuration.
+- The next red proved ReqLLM raised a requested 100-token cap to 200. A further
+  streaming red proved it fabricated a structured_output call from JSON. Expanded
+  the checksum-pinned dependency patch to preserve the cap and avoid Google-only
+  synthetic tool chunks; object extraction still uses raw response text.
+- Fresh and preceding-release patch upgrades pass the shell test. Added raw
+  invalid JSON, native signature and unfamiliar-model portable regressions.
+- One concurrent test run encountered a loopback request without Content-Length;
+  diagnostic added to identify the request. Isolated native wire test passes;
+  broader verification and independent review are pending.
+- OpenAI's actual Responses buffered/streaming HTTP test passes with the same
+  schema, native tools and 100-token cap. Combined Google reproduction seed719580
+  passes after the diagnostic change; the missing-length request did not recur.
+- Independent review and a permanent new test both reproduced buffered native
+  thinking text concatenated with JSON. The dependency text filter now excludes
+  thought:true parts. General reasoning replay remains the next B subcheckpoint.
+- Runtime child: 182 tests pass (9 excluded) before the final OpenAI/thinking
+  regressions were added. Format/compile/strict Credo/unused-dependency pass;
+  setup 34 and patch fresh/repeat/upgrade test pass. Full umbrella rerun in progress.
+- Review reproduced a second native enhancement regression: configured Google
+  Search/URL-context builtins disappeared from object wire output. Permanent
+  buffered wire test failed with only custom declarations present; strategy
+  selection now inspects canonical options and pins portable JSON when either
+  builtin option is configured. Both builtins and custom tools remain encoded.
+- Replaced the manual TCP fixture after a second timeout in independent review.
+  Bandit (already locked at 1.12.5) is now a direct test-only dependency of the
+  runtime child; it owns HTTP parsing and connection lifecycle. Seven combined
+  Google/OpenAI wire cases pass against the replacement.
+- Re-review proved the SDK also accepts flat builtin option aliases that remain
+  outside provider_options after normalization. Extended the permanent wire test
+  to nested, flat and namespaced options: flat failed with missing builtins before
+  selection checked both locations, and all three forms now pass (seed306434).
+- Final Astra xhigh review: no remaining actionable issue in native-wire scope;
+  independent 8 tests include the original alias proof plus current Google/OpenAI
+  cases, patch preparation/upgrade and whitespace checks pass. Temporary review
+  files removed. Final runtime child 185 tests pass (9 excluded). B replay,
+  conversation and live acceptance remain open.

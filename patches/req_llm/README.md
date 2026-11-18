@@ -23,3 +23,19 @@ fresh application, repeatability and preservation of unknown local edits.
 
 Remove this patch only after upgrading to a dependency version that passes this
 wire regression without it; update the pinned source evidence at that time.
+
+The Google native object wire regression also proves two SDK mismatches:
+`prepare_request(:object)` raised an explicit 100-token cap to 200, and streaming
+JSON synthesized a `structured_output` call absent from the provider response.
+The patch preserves explicit caps and disables that synthesis for Google, whose
+stream response builder already extracts objects from raw text. Actual native
+calls (including a real tool named `structured_output`) remain untouched. Raw
+fenced/duplicate JSON remains available to the runtime's shared strict decoder.
+
+The manifest includes an exact-state upgrade from the preceding signature-only
+patch. Fresh installs and already prepared checkouts converge on the same hashes.
+
+The buffered object decoder also concatenated `thought: true` text into public
+JSON. Its text filter now excludes thinking parts, matching streaming behavior.
+The native wire test reproduces private thinking followed by valid dialogue and
+asserts only the original dialogue reaches the runtime text boundary.

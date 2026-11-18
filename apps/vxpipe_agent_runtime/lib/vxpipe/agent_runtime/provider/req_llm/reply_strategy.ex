@@ -3,11 +3,48 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ReplyStrategy do
 
   alias Vxpipe.AgentRuntime.{Dialogue, Message}
 
-  @spec select(LLMDB.Model.t()) :: :openai_responses | :portable_json
-  def select(model) do
+  @spec select(LLMDB.Model.t(), keyword()) :: :google_object | :openai_responses | :portable_json
+  def select(model, options \\ [])
+
+  def select(%LLMDB.Model{provider: :google} = model, options) do
+    provider_options = Keyword.get(options, :provider_options, [])
+
+    # ReqLLM's object encoder omits builtins; chat retains them alongside native tools.
+    if Enum.any?(
+         [:google_grounding, :google_url_context],
+         fn key -> Keyword.has_key?(provider_options, key) or Keyword.has_key?(options, key) end
+       ) do
+      :portable_json
+    else
+      google_strategy(model)
+    end
+  end
+
+  def select(model, _options) do
     case Elixir.ReqLLM.RequestPlan.openai_surface(model) do
       {:ok, :openai_responses, _module, _warnings} -> :openai_responses
       _other -> :portable_json
+    end
+  end
+
+  defp google_strategy(model) do
+    {:ok, contract} = Elixir.ReqLLM.Output.compile(google_output())
+
+    tool =
+      Elixir.ReqLLM.Tool.new!(
+        name: "dialogue_capability_probe",
+        description: "Offline request preparation probe",
+        parameter_schema: %{"type" => "object", "properties" => %{}},
+        callback: fn _ -> {:error, :offline_probe} end
+      )
+
+    case Elixir.ReqLLM.Providers.Google.prepare_request(:object, model, "probe",
+           api_key: "offline-probe",
+           tools: [tool],
+           compiled_schema: contract.compiled_schema
+         ) do
+      {:ok, _request} -> :google_object
+      {:error, _unsupported} -> :portable_json
     end
   end
 
@@ -34,6 +71,9 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ReplyStrategy do
       |> Keyword.put(:json_repair, false)
 
     case strategy do
+      :google_object ->
+        Keyword.put(options, :output, google_output())
+
       :portable_json ->
         options
 
@@ -51,4 +91,6 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ReplyStrategy do
         )
     end
   end
+
+  defp google_output, do: Elixir.ReqLLM.Output.object(Dialogue.schema())
 end
