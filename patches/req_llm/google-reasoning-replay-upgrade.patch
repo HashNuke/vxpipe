@@ -231,7 +231,19 @@
 @@ -1378 +1384 @@
 -    choices_chunks ++ usage_chunks
 +    router_model_chunks(data, model.provider) ++ choices_chunks ++ usage_chunks
-@@ -1478,0 +1485,10 @@
+@@ -1430 +1436,3 @@
+-    content_chunks ++ reasoning_chunks ++ image_chunks ++ tool_call_chunks
++
++    content_chunks ++
++      reasoning_chunks ++ image_chunks ++ tool_call_chunks ++ decode_openai_refusal(message)
+@@ -1433,0 +1442,6 @@
++
++  defp decode_openai_refusal(%{"refusal" => refusal}) when refusal not in [nil, ""] do
++    [ReqLLM.StreamChunk.meta(%{native_refusal: refusal})]
++  end
++
++  defp decode_openai_refusal(_), do: []
+@@ -1478,0 +1493,10 @@
 +  defp openai_reasoning_details_chunks(%{"reasoning" => value}, provider)
 +       when provider in [:openrouter, :zenmux] and not is_nil(value) and not is_binary(value) do
 +    [ReqLLM.StreamChunk.meta(%{reasoning_details: [%{"invalid_reasoning_details" => true}]})]
@@ -242,13 +254,13 @@
 +    [ReqLLM.StreamChunk.meta(%{reasoning_details: [%{"invalid_reasoning_details" => true}]})]
 +  end
 +
-@@ -1486,0 +1503,5 @@
+@@ -1486,0 +1511,5 @@
 +  defp openai_reasoning_details_chunks(%{"reasoning_details" => value}, provider)
 +       when provider in [:openrouter, :zenmux] and not is_nil(value) and not is_list(value) do
 +    [ReqLLM.StreamChunk.meta(%{reasoning_details: [%{"invalid_reasoning_details" => true}]})]
 +  end
 +
-@@ -1487,0 +1509,14 @@
+@@ -1487,0 +1517,14 @@
 +
 +  defp router_model_chunks(data, provider) when provider in [:openrouter, :zenmux] do
 +    if Map.has_key?(data, "model") do
@@ -263,6 +275,10 @@
 +  defp decode_openai_reasoning_details(details, provider)
 +       when is_list(details) and provider in [:openrouter, :zenmux],
 +       do: details
+@@ -1615 +1658,2 @@
+-    content_chunks ++ reasoning_chunks ++ image_chunks ++ tool_call_chunks
++    content_chunks ++
++      reasoning_chunks ++ image_chunks ++ tool_call_chunks ++ decode_openai_refusal(delta)
 --- a/lib/req_llm/providers/openrouter.ex
 +++ b/lib/req_llm/providers/openrouter.ex
 @@ -57,0 +58,5 @@
@@ -359,12 +375,20 @@
 -
 --- a/lib/req_llm/provider/defaults/response_builder.ex
 +++ b/lib/req_llm/provider/defaults/response_builder.ex
-@@ -99,0 +100 @@
+@@ -99,0 +100,2 @@
 +      |> put_router_model(chunks, model.provider)
-@@ -103 +104 @@
++      |> put_native_refusals(chunks)
+@@ -103 +105 @@
 -      model: materialize_model(profile, metadata, model),
 +      model: provider_meta[:router_response_model] || materialize_model(profile, metadata, model),
-@@ -120,0 +122,21 @@
+@@ -120,0 +123,28 @@
++
++  defp put_native_refusals(meta, chunks) do
++    refusals =
++      for %StreamChunk{type: :meta, metadata: %{native_refusal: value}} <- chunks, do: value
++
++    if refusals == [], do: meta, else: Map.put(meta, :refusals, refusals)
++  end
 +
 +  defp put_router_model(provider_meta, chunks, provider)
 +       when provider in [:openrouter, :zenmux] do

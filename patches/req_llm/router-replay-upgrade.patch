@@ -8,3 +8,31 @@
 +      |> Map.take([:usage_reported, :billing_usage_complete])
 +
 +    usage = Map.merge(usage, usage_facts)
+@@ -1429 +1436,3 @@
+-    content_chunks ++ reasoning_chunks ++ image_chunks ++ tool_call_chunks
++
++    content_chunks ++
++      reasoning_chunks ++ image_chunks ++ tool_call_chunks ++ decode_openai_refusal(message)
+@@ -1432,0 +1442,6 @@
++
++  defp decode_openai_refusal(%{"refusal" => refusal}) when refusal not in [nil, ""] do
++    [ReqLLM.StreamChunk.meta(%{native_refusal: refusal})]
++  end
++
++  defp decode_openai_refusal(_), do: []
+@@ -1643 +1658,2 @@
+-    content_chunks ++ reasoning_chunks ++ image_chunks ++ tool_call_chunks
++    content_chunks ++
++      reasoning_chunks ++ image_chunks ++ tool_call_chunks ++ decode_openai_refusal(delta)
+--- a/lib/req_llm/provider/defaults/response_builder.ex
++++ b/lib/req_llm/provider/defaults/response_builder.ex
+@@ -100,0 +101 @@
++      |> put_native_refusals(chunks)
+@@ -120,0 +122,7 @@
++  end
++
++  defp put_native_refusals(meta, chunks) do
++    refusals =
++      for %StreamChunk{type: :meta, metadata: %{native_refusal: value}} <- chunks, do: value
++
++    if refusals == [], do: meta, else: Map.put(meta, :refusals, refusals)

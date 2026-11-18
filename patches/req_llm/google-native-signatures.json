@@ -1,6 +1,6 @@
 {
   "hex_version": "1.29.0",
-  "patch_sha256": "8f33b1a284e9642db049c048c3973d33f1dd96a1e41067e455fb02eda61a9254",
+  "patch_sha256": "74e059d979c385fda27b5a0d0d7cf80ab994d33c690851e40f8ad149be80bd3d",
   "files": {
     "lib/req_llm/providers/google.ex": {
       "original": "91bd9a8c70c0abea810e66a50b7313e528ed7eee36f2b826868861c002f1cc32",
@@ -20,7 +20,7 @@
     },
     "lib/req_llm/provider/defaults.ex": {
       "original": "0d0265bff11a3447bee0b0a34ff053ccd6afee1c3d13c4580a98bbfb296875c0",
-      "patched": "7f5e5997e71f11fb669541f388f520ff6ab8a4455279c1bc4458a6428db2fb59"
+      "patched": "16305eeb475d916f582770cebfee02f0a1855112c6f78ee7ff333a329cbb3752"
     },
     "lib/req_llm/providers/openrouter.ex": {
       "original": "d633d14766bea64c89596df1d364ac5e63004e8b6366cc0d6d7fea0c32506e97",
@@ -28,7 +28,7 @@
     },
     "lib/req_llm/provider/defaults/response_builder.ex": {
       "original": "806e8068cca94d5f531ae752dbae96d5811ebf15008713161b5f29777f91d5d8",
-      "patched": "642c8ed603035b2242eac0b960a91bb3d2625bfe07b842396a8831fcb6455919"
+      "patched": "4d2f963a1807432e0b7e1939ff0538bccedb9beab21bf142161566170a19da5e"
     },
     "lib/req_llm/providers/zenmux.ex": {
       "original": "c3f2e77144fbce03272b7777c2ae6859a96cac2751de76f10ae69c78fcf86120",
@@ -41,15 +41,29 @@
       "lib/req_llm/stream_server.ex": "b414e4bd667e5d2ecd8a5627fb32a059e731ff6d2d42ecc3241384f5f1bc7103",
       "lib/req_llm/providers/google/response_builder.ex": "a50bdce164f8e7e5d79a7dcf637ddfaae14cf7284f7ae06abc116987d1003a9f",
       "lib/req_llm/providers/fireworks_ai.ex": "feeda925140eaac11e47292ef8034bfda75027ff80028cb8da098614a2050dab",
-      "lib/req_llm/provider/defaults.ex": "35b803846cc50259fbad0feb033becf41adb183d297441aa1a82c9dadb24b395",
+      "lib/req_llm/provider/defaults.ex": "7f5e5997e71f11fb669541f388f520ff6ab8a4455279c1bc4458a6428db2fb59",
       "lib/req_llm/providers/openrouter.ex": "0f54952a7e04b44879a17c8616c45137f93f89bdcbcc5c28ddc2cee317f3151c",
       "lib/req_llm/provider/defaults/response_builder.ex": "642c8ed603035b2242eac0b960a91bb3d2625bfe07b842396a8831fcb6455919",
       "lib/req_llm/providers/zenmux.ex": "beddc5f6b7654c4814301e3faca762ff2544e9113abf49a183d026f3b644ce80"
     },
-    "patch_file": "router-replay-upgrade.patch",
-    "patch_sha256": "2039d326a0e8efabc6bb44668ccdd9160d3f6bd4089355575de8e8d238b2e0b6"
+    "patch_file": "chat-usage-provenance-upgrade.patch",
+    "patch_sha256": "c391295f0afcff45b82f5074d7fd8ea70798ea245a1871b1ae3338fd7b9d3c6a"
   },
   "older": [
+    {
+      "files": {
+        "lib/req_llm/providers/google.ex": "e3e3be080233f0c72baf83670ac64b275680ed93d69f68fcd46ad24f584346b0",
+        "lib/req_llm/stream_server.ex": "b414e4bd667e5d2ecd8a5627fb32a059e731ff6d2d42ecc3241384f5f1bc7103",
+        "lib/req_llm/providers/google/response_builder.ex": "a50bdce164f8e7e5d79a7dcf637ddfaae14cf7284f7ae06abc116987d1003a9f",
+        "lib/req_llm/providers/fireworks_ai.ex": "feeda925140eaac11e47292ef8034bfda75027ff80028cb8da098614a2050dab",
+        "lib/req_llm/provider/defaults.ex": "35b803846cc50259fbad0feb033becf41adb183d297441aa1a82c9dadb24b395",
+        "lib/req_llm/providers/openrouter.ex": "0f54952a7e04b44879a17c8616c45137f93f89bdcbcc5c28ddc2cee317f3151c",
+        "lib/req_llm/provider/defaults/response_builder.ex": "642c8ed603035b2242eac0b960a91bb3d2625bfe07b842396a8831fcb6455919",
+        "lib/req_llm/providers/zenmux.ex": "beddc5f6b7654c4814301e3faca762ff2544e9113abf49a183d026f3b644ce80"
+      },
+      "patch_file": "router-replay-upgrade.patch",
+      "patch_sha256": "6c0aa2e7e431c13f8e629b8c435002bc0bbd9d4a5d2daa8fb35fa54fa3d8fb87"
+    },
     {
       "files": {
         "lib/req_llm/providers/google.ex": "e3e3be080233f0c72baf83670ac64b275680ed93d69f68fcd46ad24f584346b0",
@@ -62,7 +76,7 @@
         "lib/req_llm/providers/zenmux.ex": "c3f2e77144fbce03272b7777c2ae6859a96cac2751de76f10ae69c78fcf86120"
       },
       "patch_file": "fireworks-reasoning-upgrade.patch",
-      "patch_sha256": "7a28bc3c1fd76daa8ca34292803174cd4f2fff4de6c682d32088de2aac149fef"
+      "patch_sha256": "ae6183b47c85b40edec0b086e1ce72ce0430e1360a53e3b3fecc917701a2c1d1"
     },
     {
       "files": {
@@ -76,7 +90,7 @@
         "lib/req_llm/providers/zenmux.ex": "c3f2e77144fbce03272b7777c2ae6859a96cac2751de76f10ae69c78fcf86120"
       },
       "patch_file": "google-usage-provenance-upgrade.patch",
-      "patch_sha256": "0d90610988546a4e7867bc3ae22cbf6626a8a4db4cf7f529eb28fe55e0e8a646"
+      "patch_sha256": "30ad159165218870fb50b6bd5dccce85e768e3efd471920d1d3116489f1e0405"
     },
     {
       "files": {
@@ -90,7 +104,7 @@
         "lib/req_llm/providers/zenmux.ex": "c3f2e77144fbce03272b7777c2ae6859a96cac2751de76f10ae69c78fcf86120"
       },
       "patch_file": "google-ordered-parts-upgrade.patch",
-      "patch_sha256": "64f3285b3ca941bd0e3f7b43373f500fe6b90f127fc82de1f16d727190aa2d3a"
+      "patch_sha256": "d2722aa862d3003c6d47ec1a26d1f41c73a087b6f08d05b387649cee2ec092cb"
     },
     {
       "files": {
@@ -104,7 +118,7 @@
         "lib/req_llm/providers/zenmux.ex": "c3f2e77144fbce03272b7777c2ae6859a96cac2751de76f10ae69c78fcf86120"
       },
       "patch_file": "google-reasoning-replay-upgrade.patch",
-      "patch_sha256": "d955230ab2e150486c52fe2f8a558fd64513d456e56b3b876f1a829a4b493fc5"
+      "patch_sha256": "307cf3e5898a292d1a4d775e1bba31aa7b3750ab8cf57ef342643b7d38d4cecd"
     },
     {
       "files": {
@@ -118,7 +132,7 @@
         "lib/req_llm/providers/zenmux.ex": "c3f2e77144fbce03272b7777c2ae6859a96cac2751de76f10ae69c78fcf86120"
       },
       "patch_file": "google-output-cap-upgrade.patch",
-      "patch_sha256": "91b6c36686531e4b0a16b6545a4143cbae4b2ccee0dc94c89e812ff2fb43b877"
+      "patch_sha256": "174a4bf7d1369bc24aaab1be2bc6d69fda56cfa299dd846573654466a76631b4"
     }
   ]
 }

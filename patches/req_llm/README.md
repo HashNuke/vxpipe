@@ -93,3 +93,12 @@ Buffered Chat Completions responses retain normalized `usage_reported` and
 provider-specific usage fields. This permits bounded correction with explicitly
 reported output (including zero), while missing or malformed usage remains
 ineligible. Public Session HTTP regressions cover all four compatible transports.
+
+Native Chat Completions refusal fields now survive buffered decoding and early
+stream deltas even when later chunks contain valid dialogue and a normal stop.
+The response builder exposes these fields through ReqLLM's refusal metadata;
+the shared runtime rejects them before dialogue or tool admission. Null and empty
+markers remain compatible. `chat_refusal_wire_test.exs` exercises all four
+compatible transports in both modes, including exactly-one-request controls.
+The manifest upgrades the preceding usage-provenance state as well as every
+older reviewed source state. This is a decoder fix, not a retry or model policy.

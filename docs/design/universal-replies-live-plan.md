@@ -246,3 +246,17 @@ controllers/storage; the real calls use separate synthetic published specs with
 runner-provided credentials. They are not the same publication. No telephone
 number or user spec is touched. Retain both successes and failures, plus rendered
 desktop/mobile captures, and do not call Storybook evidence full-call acceptance.
+
+## Reviewed lifecycle and valid common budget — remaining4
+
+After browser2 finishes and the separately reproduced native-refusal fix passes
+review, run exactly the six `live_universal_remaining` cases
+(DeepSeek, Fireworks and OpenRouter, buffered and streaming once each). Use the
+reviewed lifecycle implementation and the offline-validated common 4,096-token
+budget. Keep the ten-step scenario, selected models, strict semantic assertions,
+full tools, request deadlines and correction restrictions unchanged. This tests
+whether the valid budget avoids Fireworks reasoning exhaustion and records actual
+post-tool behavior after the replay lifecycle work. It does not presume that
+DeepSeek's previously invalid replies are fixed. Retain all earlier failures and
+all outcomes from this run; Zenmux live acceptance remains deferred. No automatic
+rerun is authorized by this plan.

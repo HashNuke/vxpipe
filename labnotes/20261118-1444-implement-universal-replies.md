@@ -652,3 +652,16 @@ added after browser2 began and is not claimed as executed in that live run.
 The editor itself independently repeats 2/0. Final independent D4 review is clean: eight positive/negative assertion controls
 pass, both retained browser transcripts pass offline, and no additional paid run
 is needed solely for the mode guard. D4 is complete (15/24 tasks, 62.5%).
+
+The E1 audit separately reproduced raw Chat Completions refusal loss in all four
+compatible transports, buffered and streamed (16 tests/8 failures). The decoder
+ignored native refusal fields. A pinned dependency patch now carries refusal
+metadata through both builders; the original regression is 16/0. Expanded controls
+cover an early marker-only stream chunk, later valid text/stop, null/empty/absent
+markers and exactly one HTTP request. Combined refusal/usage/replay regression:
+164 tests/0 failures. Patch preparation passes fresh, repeat and all historical
+upgrade states. Independent Astra xhigh review is clean: 104 tests pass, including 64 added
+adversarial malformed, fragmented, large and tool-bearing refusal cases with
+known usage and repair budget. All reject with one HTTP request, no correction,
+no tool dispatch and no public delta. The patch does not introduce a transport
+memory cap. E1 still needs the registry-wide terminal matrix.
