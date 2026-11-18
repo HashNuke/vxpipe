@@ -482,3 +482,36 @@ bounded correction with reported usage. Both Fireworks failures have explicit
 `length` completion and zero public text at the 2,048-token cap. DeepSeek streaming
 emitted host-envelope fields after lookup, so the post-tool no-correction rule
 correctly rejected it. Retained all evidence; live acceptance stays open.
+
+### Reasoning-cap live follow-up
+
+The explicit Fireworks `length` failures motivate increasing the common live
+fixture cap from 2,048 to 8,192 and recording it in step evidence. This is bounded
+test configuration, not a production retry/schema-policy change. Defined exactly
+two six-case repetitions before running them, with unchanged prompts/assertions
+and all failed attempts retained. No initial red test is needed for this
+configuration-only change; the full local helper tests verify its path.
+
+Both planned higher-cap repetitions finished with four failures each. Fireworks
+never reached HTTP: ReqLLM rejects/caps buffered max_tokens above 4,096, and strict
+public selection rejects the resulting warning (streaming selection traverses
+that same chat validation). DeepSeek both modes returned invalid post-tool host
+envelopes; OpenRouter both modes passed. Added offline all-six live-selection
+budget preflight: 9 tests, one expected failure at 8,192. Corrected the common
+fixture cap to 4,096. Retained both entire attempts; no further stochastic reruns
+until the lifecycle fix and a new fixed plan.
+
+The corrected cap preflight and full helper suite pass: nine tests, zero failures.
+Astra's D coverage audit found existing protocol snapshot, transfer/restart,
+legacy, editor edit-retention and authorized catalog coverage; avoid duplicating
+those harnesses. Remaining focused gaps: modern other-four Persistence and real
+provider Console authoring, invalid modern options/credentials without revision
+changes or inference, malformed known-version bundles, configured-sample snapshot
+assertion, stale model-eligibility error guidance, and rendered editor/call
+acceptance. Audit checks passed Calls/errors 19, Persistence/codec 6 and frontend
+editor/catalog/errors 41. Source locations and full findings remain in review
+messages; these observations do not check off D acceptance.
+Astra cap/evidence review is clean: independent helper 9/0; every historical run
+is preserved, all 60 new emitted rows retain the actual attempted 8,192 cap, and
+all four Fireworks offline rejections are explicitly recorded. Corrected 4,096
+configuration passes all six preflight selections. No production change.

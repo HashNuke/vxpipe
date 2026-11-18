@@ -11,6 +11,23 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversationTest do
     assert Enum.sort(covered) == Enum.sort(installed)
   end
 
+  test "every planned live selection accepts the common output budget before HTTP" do
+    for {provider, _tag} <- Vxpipe.AgentRuntime.LiveUniversalConversation.providers() do
+      selection = Vxpipe.Providers.LiveModels.llm(provider)
+
+      assert {:ok, _options} =
+               Vxpipe.AgentRuntime.ProviderSelection.translate(
+                 provider,
+                 selection.model,
+                 %{
+                   "max_tokens" =>
+                     Vxpipe.AgentRuntime.LiveUniversalConversation.maximum_output_tokens()
+                 },
+                 selection.specific
+               )
+    end
+  end
+
   import ExUnit.CaptureIO
   alias Vxpipe.AgentRuntime.{DialogueWireServer, LiveUniversalConversation}
 

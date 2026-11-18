@@ -203,3 +203,31 @@ responses. Fireworks buffered completion and streaming cue end with `length`
 and no public text at the unchanged 2,048-token cap. DeepSeek streaming returns
 extra host-envelope fields after native lookup; correction correctly remains
 forbidden after dispatch. All outcomes are retained; this is not full acceptance.
+
+## Reasoning-cap follow-up — remaining3a and remaining3b
+
+The two explicit `length` failures in remaining2 establish that the original
+2,048-token fixture limit can be consumed by private reasoning before any public
+reply. Increase the common fixture cap to 8,192 for every integration and record
+the configured cap in each evidence row. This changes test configuration only;
+production budgets, strict validation, one correction limit and the prohibition
+on correction after tool dispatch remain unchanged.
+
+Run exactly two repetitions of the same six remaining-provider conversations
+(remaining3a then remaining3b), regardless of the first repetition's result.
+Keep model selections, prompts, semantic assertions, tools and the 60-second
+logical-request deadline unchanged. Retain both repetitions and all earlier
+failures. Report individual case outcomes and failure rates; do not describe
+successful acceptance as a guarantee of infallible upstream output. Zenmux live
+cases remain deferred. This plan targets reasoning truncation; it does not claim
+to fix the separate DeepSeek post-tool extra-field response.
+
+Both repetitions finished with four failures: Fireworks both modes rejected the
+8,192-token configuration before HTTP; DeepSeek both modes again returned extra
+host-envelope fields after lookup; OpenRouter both modes passed. The proposed
+fixture cap was invalid: ReqLLM Fireworks caps non-streaming requests at 4,096 and
+our public option validation rejects that warning. Streaming selection is also
+validated through the same chat preparation. Preserve this fixture error as an
+attempt failure. Add an offline all-six-selection budget preflight and set the
+common fixture cap to 4,096. No further live run is included in this completed
+two-repetition plan; define a new plan after the lifecycle work and review.

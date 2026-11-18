@@ -18,6 +18,8 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
   @long_reply "The Northstar office opens at 9 in the morning. " <>
                 "It closes at 5 in the afternoon. These hours apply Monday through Friday."
 
+  def maximum_output_tokens, do: 4_096
+
   def providers do
     [
       {"google", :live_gemini},
@@ -47,7 +49,7 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
              ProviderSelection.translate(
                provider,
                selection.model,
-               %{"max_tokens" => 2_048},
+               %{"max_tokens" => maximum_output_tokens()},
                selection.specific
              )
 
@@ -90,7 +92,8 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
       model: selection.model,
       streaming: streaming,
       tool_choice: Keyword.get(config.generation_options, :tool_choice, :default),
-      strategy: config.reply_strategy
+      strategy: config.reply_strategy,
+      maximum_output_tokens: config.maximum_output_tokens
     }
 
     assert %{agent_mode: :speaker, message: greeting} =
