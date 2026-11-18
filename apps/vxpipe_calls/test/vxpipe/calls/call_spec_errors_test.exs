@@ -4,7 +4,7 @@ defmodule Vxpipe.Calls.CallSpecErrorsTest do
   alias Vxpipe.CallEngine.Error
   alias Vxpipe.Calls.CallSpecErrors
 
-  test "unsupported model errors preserve their location with safe actionable guidance" do
+  test "reply configuration errors preserve their location with safe actionable guidance" do
     path = ["participants", "receptionist", "capabilities", "model_inference"]
     details = %{"path" => path, "reason" => "private provider details"}
     error = Error.new(:unsupported_agent_protocol, "private message", details: details)
@@ -15,7 +15,7 @@ defmodule Vxpipe.Calls.CallSpecErrorsTest do
       assert projected.code == "unsupported_call_plan"
 
       assert projected.reason ==
-               "This model is not supported for agent replies yet. Choose a supported model in Models."
+               "The agent reply configuration could not be validated. Review the highlighted settings."
 
       refute inspect(projected) =~ "private"
     end

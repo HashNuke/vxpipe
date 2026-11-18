@@ -165,7 +165,7 @@ and used through Console/API admission, with historical publications preserved.
   protocol snapshots. Keep earlier publications' legacy semantics, and reject
   malformed/unknown bundles. Review sample installers' explicit legacy selection;
   do not use samples as a hidden compatibility bypass.
-- [ ] Remove obsolete OpenAI-profile-only UI guidance and provider documentation.
+- [x] Remove obsolete OpenAI-profile-only UI guidance and provider documentation.
   Preserve configured integration labels, tenant/platform permissions and saved
   inaccessible references. Do not filter the catalog by schema-native capability.
 - [ ] Inspect a rendered configured editor and a real controlled call for Google AI
@@ -406,3 +406,16 @@ and browser edits/error placement. Compaction tests verify publication prompt
 pinning and actually execute with the original prompt after its source file is
 changed. Independent Astra review is clean: 84 tests pass, two excluded. D tasks
 1 and 2 are complete; stale guidance and rendered acceptance remain open.
+
+
+## Implementation evidence — D, eligibility guidance
+
+The editor's legacy supported-model rejection is replaced with factual reply
+configuration guidance; Idle-specific guidance and field routing remain intact.
+Frontend error fixtures and the original structured-message design now clearly
+mark the superseded eligibility policy. Existing configured labels, permissions,
+saved inaccessible references and catalog behavior are unchanged. Red2/1 then
+green2/0, frontend41/0 plus final fixture11/0, static/type checks and independent
+Astra review pass. Agent-browser Chrome desktop/mobile rendered the full message
+and Show action in the participant Models tab without overflow. This is narrow
+changed-copy evidence; D4 configured editor/live-call acceptance remains open.

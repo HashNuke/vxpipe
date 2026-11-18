@@ -108,7 +108,7 @@ test("model errors stay off the participant key across inspector tabs", async ()
   const { AgentInspector } = await import("./agent-inspector");
   const { editorFixture } = await import("./editorFixtures");
   const { modelCatalogFixture } = await import("../modelCatalogFixtures");
-  const problem = { ...issue, path: ["participants", "intake", "capabilities", "model_inference", "model"], reason: "This model is not supported for agent replies yet." };
+  const problem = { ...issue, path: ["participants", "intake", "capabilities", "model_inference", "model"], reason: "The agent reply configuration could not be validated. Review the highlighted settings." };
   const props = { document: editorFixture, onChange: vi.fn(), participantKey: "intake", catalog: modelCatalogFixture, lookups: { telephonyServices: [], credentialNames: {}, mcpIntegrations: [] }, issues: [problem] };
   const view = render(<AgentInspector {...props} tab="prompt" />);
   expect(screen.getByRole("textbox", { name: "Participant key" })).toHaveAttribute("aria-invalid", "false");

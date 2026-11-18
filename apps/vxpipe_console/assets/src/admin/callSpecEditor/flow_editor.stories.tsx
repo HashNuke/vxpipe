@@ -127,7 +127,7 @@ export const IssuesList: Story = { args: { scenario: "invalid" }, play: async ({
   await expect(body.getByRole("dialog", { name: "Call spec issues" })).toBeVisible();
 } };
 
-export const UnsupportedAgentModel: Story = actionStory({ status: 422, error: {
+export const InvalidAgentReplyConfiguration: Story = actionStory({ status: 422, error: {
   code: "unsupported_call_plan", path: ["participants", "intake", "capabilities", "model_inference", "model"],
-  reason: "This model is not supported for agent replies yet. Choose a supported model in Models.",
-} }, "Couldn't save: Agent intake › Model inference This model is not supported for agent replies yet. Choose a supported model in Models.");
+  reason: "The agent reply configuration could not be validated. Review the highlighted settings.",
+} }, "Couldn't save: Agent intake › Model inference The agent reply configuration could not be validated. Review the highlighted settings.");

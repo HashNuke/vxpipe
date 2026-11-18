@@ -129,7 +129,7 @@ defmodule Vxpipe.Calls.CallSpecErrors do
       if is_list(path) and List.last(path) == "tools" do
         "Idle requires an LLM agent. Remove Idle or choose LLM + Text-to-Speech in Models."
       else
-        "This model is not supported for agent replies yet. Choose a supported model in Models."
+        "The agent reply configuration could not be validated. Review the highlighted settings."
       end
 
     details =

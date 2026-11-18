@@ -3,7 +3,9 @@
 Policy update, 2026-11-18: the user requires the common reply contract across every
 LLM integration without a provider/model allowlist. The [universal reply follow-up](universal-agent-replies.md)
 supersedes the selected-profile eligibility policy below. Existing implementation
-and acceptance evidence remains historical; universal support is not yet implemented.
+and acceptance evidence below remains historical. The common runtime path and
+identity-gate removal are implemented; the universal milestone tracks outstanding
+configured live, rendered and release acceptance.
 
 Status: checkpoints A/B/C/D complete and independently reviewed, 2026-11-17.
 Attributed input, settled history, storage/viewer projections, stable native tool
@@ -130,25 +132,28 @@ schema, unchanged tools and exact input-item prefix on every request. Configured
 transfer/recovery, budget, browser and first-audio evidence is recorded below;
 it does not claim the broader voice latency target.
 
-The adapter explicitly projects the provider's native
+The original OpenAI adapter explicitly projected the provider's native
 format. ReqLLM's automatic object mode selects a forced structured_output
 function when business tools are present; its streamed Responses path also
-discards compiled_schema. Neither is evidence that strict text.format reached
-the provider. Keep the strategy fixed across all rounds and preserve legacy
-Google publications. Google's unsupported modern candidates receive no automatic
-fallback. Internal modern configuration must retain the declared Responses wire;
-caller-supplied provider options, object operations, other output contracts or
-permanently forced tool choices fail compatibility validation. Public OpenAI
-selections already exclude provider options. Legacy configuration retains its
-separate compatibility rules. See [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
+discards compiled_schema. Neither established that strict text.format reached
+the provider. That original candidate pinned the Responses wire across all rounds
+and preserved legacy Google publications without an automatic legacy fallback.
+Its compatibility checks rejected caller overrides of provider options, object
+operations, output contracts and permanently forced tool choices. These are
+historical OpenAI-candidate details; the universal design now owns transport
+strategy selection while preserving host-owned reply contracts and separate
+legacy semantics. Public OpenAI selections continue to exclude provider options. See [OpenAI structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
 
-Both Google candidates failed configured-call acceptance and are excluded from
-modern support. The rejected prompt-guided candidate used text generation and
+At the original 2026-11-17 checkpoint, both Google candidates failed configured-call
+acceptance and were excluded from modern support. That eligibility policy is now
+superseded; the failures remain historical evidence, not admission rules. The rejected prompt-guided candidate used text generation and
 pinned raw-JSON instructions for every round. Runtime validation correctly
 rejected malformed results, but could not make their generation reliable.
-Other new LLM profiles fail validation until their complete combination is
-verified; existing legacy publications retain their providers. Runtime fixture
-adapters explicitly declare protocol support.
+The original policy also rejected unverified LLM profiles. The universal runtime
+now admits every installed LLM integration under the shared reply contract, with
+strict output validation and real model/options/credential checks. Existing legacy
+publications keep their pinned semantics. See the universal design for current
+transport strategies and acceptance evidence.
 
 The earlier native JSON-schema candidate failed the stronger acceptance test:
 with the authorized tool still available, SHORT returned an unwanted native

@@ -342,9 +342,9 @@ test("retrying a failed save waits for unapplied JSON edits", async () => {
   expect(screen.getByRole("textbox", { name: "Participant JSON" })).toHaveValue('{');
 });
 
-test("an unsupported model error opens the participant Models tab, not tool visibility", async () => {
+test("an invalid reply configuration error opens the participant Models tab, not tool visibility", async () => {
   const props = properties();
-  const reason = "This model is not supported for agent replies yet. Choose a supported model in Models.";
+  const reason = "The agent reply configuration could not be validated. Review the highlighted settings.";
   props.execute.mockResolvedValue({ status: 422, error: { code: "unsupported_call_plan", path: ["participants", "intake", "capabilities", "model_inference", "model"], reason } });
   render(<CallSpecEditor {...props} />);
   rename("Changed before rejection");

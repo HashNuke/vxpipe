@@ -576,3 +576,27 @@ Astra authoring checkpoint review is clean: 84 independent tests pass, two
 excluded. Existing actual compaction prompt test plus activation publication
 pinning closes the apparent custom-summary gap. Checked D1/D2; milestone13/24
 (54%). No UI/rendered or live acceptance claim is made by these backend tests.
+
+### Obsolete eligibility guidance
+
+Replaced the former supported-model rejection message with factual reply
+configuration guidance while preserving model-field and Idle-tool error routing.
+Red projection test: 2 cases, one expected old-wording failure; green2/0.
+Frontend field routing and edit retention tests pass41/0. Updated the existing
+Storybook error fixture and superseded-policy notice in the original structured
+message design; prior Google failures remain historical evidence.
+
+Applied Impeccable's clarify workflow to the existing Console surface without
+changing visual identity. Agent-browser Chrome required its normal no-sandbox
+flag in this environment. Rendered the error in desktop1360x900 and mobile390x844:
+Show opens participant Models, the field and toast display the full message,
+configured Google label remains visible, and document width stays390 on mobile.
+The first mobile capture caught the drawer transition; the settled capture shows
+its correct full-width layout. No layout change was needed. This Storybook check
+verifies changed guidance only, not D4 configured editor/call acceptance.
+
+Final D3 review is clean: independent Calls2/0, frontend41/0 and finalfixture11/0,
+with both residual historical/test-only eligibility statements corrected. Root
+format/compile/Credo/unused and frontend typecheck pass. Checked D3:14/24 (58%).
+Configured rendered editor save/publish and actual rendered Google/contrasting
+calls remain D4; the Storybook screenshots do not substitute for them.
