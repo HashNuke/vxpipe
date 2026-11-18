@@ -7,7 +7,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
 
   alias Vxpipe.AgentRuntime.Provider.ReqLLM.{
     Config,
-    DialogueProfile,
+    DialogueOptions,
     RequestProjection,
     ResponseNormalizer
   }
@@ -15,13 +15,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
   @spec new(keyword()) :: {:ok, Config.t()} | {:error, :invalid_configuration}
   defdelegate new(options), to: Config
 
-  @doc "Whether a model has verified structured dialogue and native-tool support."
-  defdelegate supports_protocol_model?(provider, model, tool_names \\ []),
-    to: DialogueProfile,
-    as: :supports_model?
-
   @impl true
-  defdelegate supports_protocol?(config, protocol, tools), to: DialogueProfile, as: :supports?
+  defdelegate supports_protocol?(config, protocol, tools), to: DialogueOptions, as: :supports?
 
   @impl true
   def readiness(%Config{}), do: :ready

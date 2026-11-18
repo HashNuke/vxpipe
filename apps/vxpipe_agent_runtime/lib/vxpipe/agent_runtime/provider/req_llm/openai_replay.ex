@@ -3,13 +3,13 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.OpenAIReplay do
 
   alias Elixir.ReqLLM.Message.ReasoningDetails
   alias Vxpipe.AgentRuntime.{Message, ProviderReplay}
-  alias Vxpipe.AgentRuntime.Provider.ReqLLM.DialogueProfile
 
   @keys ~w(format provider model source_digest reasoning_items phase)
   @phases [nil, "commentary", "final_answer"]
 
   @spec capture(term(), term(), String.t(), list()) :: {:ok, map()} | {:error, atom()}
-  def capture(%LLMDB.Model{provider: :openai, id: id}, response, text, calls) do
+  def capture(%LLMDB.Model{provider: :openai} = model, response, text, calls) do
+    id = model.id
     message = response.message
     metadata = message.metadata
     details = message.reasoning_details || []
@@ -28,6 +28,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.OpenAIReplay do
             "format" => "openai_responses_v1",
             "provider" => "openai",
             "model" => id,
+            "wire_model" => model.provider_model_id || id,
             "source_digest" => digest(text, calls),
             "reasoning_items" => items,
             "phase" => phase
@@ -47,12 +48,15 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.OpenAIReplay do
   def restore(projected, %Message{provider_replay: replay}, _model) when replay == %{},
     do: projected
 
-  def restore(projected, %Message{} = source, %LLMDB.Model{provider: :openai, id: id} = model) do
+  def restore(projected, %Message{} = source, %LLMDB.Model{provider: :openai} = model) do
+    id = model.id
     replay = source.provider_replay
 
-    with true <- DialogueProfile.compatible_model?(model),
+    with true <-
+           match?({:ok, :openai_responses, _, _}, Elixir.ReqLLM.RequestPlan.openai_surface(model)),
          :ok <- ProviderReplay.validate(replay),
-         true <- Enum.sort(Map.keys(replay)) == Enum.sort(@keys),
+         true <- Enum.sort(Map.keys(Map.delete(replay, "wire_model"))) == Enum.sort(@keys),
+         true <- Map.get(replay, "wire_model", id) == (model.provider_model_id || id),
          %{
            "format" => "openai_responses_v1",
            "provider" => "openai",

@@ -78,15 +78,28 @@ defmodule Vxpipe.Persistence.InlineTenantVoiceTest do
     assert claim.call.tenant_key == ctx.tenant.key
   end
 
-  test "normal authoring preserves modern validation and supports the selected native profile",
+  test "normal authoring saves and publishes Google and OpenAI with the modern protocol",
        ctx do
     options = Keyword.delete(ctx.options, :agent_protocol_version)
-    before_count = Repo.aggregate(Vxpipe.Persistence.Schema.CallSpecRevision, :count)
+    assert {:ok, google} = Calls.save_call_spec(ctx.tenant.key, source(), options)
+    assert google.validation_errors == []
+    assert google.compiled_metadata["agent_protocol"]["version"] == "mode_message_v1"
 
-    assert {:error, %Vxpipe.CallEngine.Error{code: :unsupported_agent_protocol}} =
-             Calls.save_call_spec(ctx.tenant.key, source(), options)
+    assert {:ok, publication} =
+             Calls.publish_call_spec(
+               ctx.tenant.key,
+               google.call_spec_id,
+               google.revision,
+               options
+             )
 
-    assert Repo.aggregate(Vxpipe.Persistence.Schema.CallSpecRevision, :count) == before_count
+    [google_route] = publication.routes
+
+    assert {:ok, google_call, _token} =
+             Calls.prepare_call(ctx.principal, google_route.key, %{}, options)
+
+    assert google_call.plan.participants["assistant"].capabilities.model_inference.provider ==
+             "google"
 
     assert {:ok, _credential} =
              ProviderCredentials.provision(

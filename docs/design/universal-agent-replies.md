@@ -1,6 +1,7 @@
 # Universal structured replies for LLM integrations
 
-Status: investigated and proposed, 2026-11-18; implementation has not started.
+Status: implementation in progress, 2026-11-18; shared eligibility and portable
+projection are implemented, while recovery and full provider acceptance remain open.
 The user's requirement is definitive: remove the structured-reply allowlist and
 support the shared agent response contract across every LLM integration.
 Implementation details below are the proposed design, not completed behavior.
@@ -158,3 +159,33 @@ Vxpipe acceptance results:
 
 No provider credentials were read and no live inference, runtime change or
 production deployment was performed for this investigation.
+
+## Implementation decisions — initial shared boundary
+
+The first implementation slice deletes identity eligibility from plan pinning and
+replaces DialogueProfile with shared option validation. Model resolution, credential
+validation, protocol validation and idle-on-STS checks retain their owners. The
+name `structured_output` is no longer reserved: the runtime uses text output and
+never creates a synthetic schema tool.
+
+ReqLLM configuration pins a private reply strategy alongside its immutable resolved
+model. The initial strategies are OpenAI Responses schema encoding (selected from
+ReqLLM's transport resolution) and portable instructed JSON for other transports.
+Both retain the same decoder and native tools. Provider options such as Google
+authentication and native routing survive projection; output/protocol overrides
+and forced tools remain invalid. Native encoding for other transports follows in
+the provider checkpoints. Legacy requests do not receive either modern overlay.
+
+OpenAI replay compatibility now checks the Responses transport independently of
+reply eligibility. New replay records bind both catalog and actual wire model IDs;
+older records default the wire ID to their recorded model ID. No opaque record may
+cross a changed model or transport. This does not yet implement other providers'
+opaque continuation records.
+
+Before bounded correction is implemented, its remaining policy work must address
+two observed lifecycle constraints: output limits currently apply per attempt, and
+legacy blocking acknowledgments deliberately omit tools. Correction will require
+a finite trustworthy remaining output allowance; absence of one cannot authorize
+an extra full-budget attempt. Modern full-tool acknowledgments must be specified
+and tested separately while retaining the legacy behavior. The milestone remains
+open until these contracts and their cancellation/history evidence are complete.

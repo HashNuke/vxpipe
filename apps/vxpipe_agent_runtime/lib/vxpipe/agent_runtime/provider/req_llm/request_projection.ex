@@ -3,8 +3,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
 
   alias Elixir.ReqLLM.Context
 
-  alias Vxpipe.AgentRuntime.{Dialogue, Message, ModelRequest, ModelTool}
-  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{Config, OpenAIReplay}
+  alias Vxpipe.AgentRuntime.{Message, ModelRequest, ModelTool}
+  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{Config, OpenAIReplay, ReplyStrategy}
 
   @spec prepare(Config.t(), ModelRequest.t()) :: {term(), Context.t(), keyword()}
   def prepare(%Config{} = config, %ModelRequest{} = request) do
@@ -18,6 +18,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
 
     context =
       request.messages
+      |> ReplyStrategy.instruct(request.reply_protocol)
       |> add_runtime_context(request.model_context)
       |> Enum.map(&to_req_llm_message(&1, config.model))
       |> Context.new()
@@ -27,23 +28,9 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
       |> put_maximum_output_tokens(request.maximum_output_tokens)
       |> Keyword.put(:api_key, config.api_key)
       |> put_tools(request.tools)
-      |> put_reply_protocol(request.reply_protocol)
+      |> ReplyStrategy.options(request.reply_protocol, config.reply_strategy)
 
     {config.model, context, options}
-  end
-
-  defp put_reply_protocol(options, :legacy), do: options
-
-  defp put_reply_protocol(options, :mode_message_v1) do
-    format = %{
-      type: "json_schema",
-      json_schema: %{name: "agent_dialogue", strict: true, schema: Dialogue.schema()}
-    }
-
-    options
-    |> Keyword.put(:output, Elixir.ReqLLM.Output.text())
-    |> Keyword.put(:json_repair, false)
-    |> Keyword.put(:provider_options, response_format: format)
   end
 
   defp add_runtime_context(messages, model_context) when map_size(model_context) == 0,

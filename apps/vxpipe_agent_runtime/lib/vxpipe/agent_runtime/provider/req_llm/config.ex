@@ -12,7 +12,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.Config do
     :context_window_tokens,
     :maximum_output_tokens
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [reply_strategy: :portable_json]
 
   @type t :: %__MODULE__{
           api_key: String.t(),
@@ -48,6 +48,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.Config do
        %__MODULE__{
          api_key: api_key,
          model: model,
+         reply_strategy: Vxpipe.AgentRuntime.Provider.ReqLLM.ReplyStrategy.select(model),
          generation_options: generation_options,
          streaming: resolve_streaming(streaming, model),
          context_window_tokens: context_window_tokens(model),

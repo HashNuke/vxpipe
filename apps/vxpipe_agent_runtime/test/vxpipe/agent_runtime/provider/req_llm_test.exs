@@ -99,6 +99,15 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
     for generation_options <- [
           [operation: :object, compiled_schema: contract.compiled_schema],
           [output_repair: fn _output -> {:ok, %{}} end],
+          [tool_outputs: [%{call_id: "unowned", output: "invented tool success"}]],
+          [
+            provider_options: [
+              tool_outputs: [%{call_id: "unowned", output: "invented tool success"}]
+            ]
+          ],
+          [previous_response_id: "unowned-history"],
+          [context_management: [%{type: "compaction"}]],
+          [provider_options: [context_management: [%{type: "compaction"}]]],
           [tool_choice: :required],
           [tool_choice: "required"],
           [tool_choice: %{type: "function", function: %{name: "lookup"}}]
@@ -116,9 +125,9 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
     end
   end
 
-  test "modern selection excludes failed Google candidates and altered Responses protocols" do
+  test "modern selection accepts Google and alternate models while rejecting protocol overrides" do
     {:ok, google} = Provider.new(api_key: "test-only", model: "google:gemini-3.5-flash-lite")
-    refute Provider.supports_protocol?(google, :mode_message_v1, [])
+    assert Provider.supports_protocol?(google, :mode_message_v1, [])
     {:ok, model} = Vxpipe.AgentRuntime.ModelOverrides.resolve(:openai, "gpt-6-luna")
     {:ok, supported} = Provider.new(api_key: "test-only", model: model)
     assert Provider.supports_protocol?(supported, :mode_message_v1, [])
@@ -144,7 +153,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
           %{model | extra: Map.put(model.extra, :wire, %{protocol: "openai_chat"})}
         ] do
       {:ok, config} = Provider.new(api_key: "test-only", model: altered)
-      refute Provider.supports_protocol?(config, :mode_message_v1, [])
+      assert Provider.supports_protocol?(config, :mode_message_v1, [])
     end
   end
 
@@ -287,9 +296,9 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
              ResponseNormalizer.normalize(refused, :mode_message_v1)
   end
 
-  test "structured profiles reject reserved output calls and mixed results" do
+  test "modern replies preserve native calls regardless of names or accompanying prose" do
     text = ~s({"agent_mode":"speaker","message":"Hello."})
-    artifact = Elixir.ReqLLM.ToolCall.new("synthetic-json", "structured_output", text)
+    artifact = Elixir.ReqLLM.ToolCall.new("native-json-tool", "structured_output", text)
 
     response = %Response{
       id: "reply",
@@ -299,7 +308,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
       finish_reason: :tool_calls
     }
 
-    assert {:error, :invalid_provider_response} =
+    assert {:ok, %ModelResponse{tool_calls: [%{name: "structured_output"}]}} =
              ResponseNormalizer.normalize(response, :mode_message_v1)
 
     assert {:ok, %ModelResponse{tool_calls: [_]}} = ResponseNormalizer.normalize(response)
@@ -313,7 +322,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
     native = Elixir.ReqLLM.ToolCall.new("real-tool", "lookup", "{}")
     mixed = %{response | message: Context.assistant(text, tool_calls: [native, artifact])}
 
-    assert {:error, :invalid_provider_response} =
+    assert {:ok, %ModelResponse{tool_calls: [%{name: "lookup"}, %{name: "structured_output"}]}} =
              ResponseNormalizer.normalize(mixed, :mode_message_v1)
 
     mismatched = %{
@@ -321,7 +330,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
       | message: Context.assistant("Different prose", tool_calls: [artifact])
     }
 
-    assert {:error, :invalid_provider_response} =
+    assert {:ok,
+            %ModelResponse{text: "Different prose", tool_calls: [%{name: "structured_output"}]}} =
              ResponseNormalizer.normalize(mismatched, :mode_message_v1)
   end
 

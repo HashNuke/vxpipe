@@ -1,7 +1,7 @@
 # Universal structured replies across LLM integrations
 
-Status: investigation and specification complete; implementation not started.
-All implementation and acceptance checkboxes remain open. The milestone index
+Status: checkpoint A in progress; shared eligibility and portable request projection implemented.
+Correction, complete conversation parity and live acceptance remain open. The milestone index
 owns ordering. User direction, 2026-11-18: no structured-response allowlist;
 every LLM integration must support the common agent reply contract.
 
@@ -77,14 +77,14 @@ or scope. Existing tenant/platform visibility rules remain in force.
 validated dialogue and native tool rounds through the ordinary Session, without
 any provider/model eligibility table.
 
-- [ ] Add failing public-boundary tests for non-OpenAI models and unfamiliar valid
+- [x] Add failing public-boundary tests for non-OpenAI models and unfamiliar valid
   model IDs in plan compilation and modern Session configuration. Enumerate installed
   LLM manifests so a newly added integration cannot silently escape coverage.
-- [ ] Replace `DialogueProfile` identity eligibility and callers in AgentProtocol,
+- [x] Replace `DialogueProfile` identity eligibility and callers in AgentProtocol,
   SessionConfiguration and RequestProjection with shared protocol/options validation.
   Separate OpenAI replay compatibility from the deleted allowlist. Preserve unknown
   protocol, idle-on-STS and other real configuration errors.
-- [ ] Introduce the semantic request strategy boundary and portable instructed-JSON
+- [x] Introduce the semantic request strategy boundary and portable instructed-JSON
   path using the existing schema/prompts. Provider identity may select wire encoding,
   never permission to use the reply contract. Keep the full tool set and strict decoder.
 - [ ] Resolve private strategy pinning and bounded correction details in the design;
@@ -224,3 +224,21 @@ already preceding this entry; voice policy and external credentials are not hidd
 implementation dependencies. Credential absence blocks live acceptance, not design
 or an integration's eligibility. Proposed recovery/pinning details must be resolved
 in A before implementation, not silently invented in a later provider checkpoint.
+
+## Implementation evidence — A, first subcheckpoint
+
+Registry-driven Session configuration and plan compile/pin tests cover all six
+installed LLM integrations; resolved future model IDs exercise identity-independent
+Session admission. Initial tests failed on the former eligibility checks. Google
+modern save/publish also failed before removal and now passes with preparation;
+legacy publication and idle-on-STS restrictions remain covered. A real ReqLLM HTTP
+fixture through Session validates Google dialogue with host settlement. OpenAI
+Responses schema/tool wire checks remain green.
+
+Focused verification: 24 runtime provider tests, 7 plan/idle tests and 23 persistence
+tests pass (2 persistence integration exclusions). This is local deterministic
+evidence, not live provider or checkpoint-A completion. Bounded correction and
+the blocking-tool acknowledgement tool-set contract still require implementation.
+Astra xhigh review found no remaining issues in this subcheckpoint after three
+reproduced corrections. Full umbrella verification remains in progress.
+See [checkpoint labnote](../20261118-1444-implement-universal-replies.md).
