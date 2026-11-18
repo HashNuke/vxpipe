@@ -55,3 +55,44 @@ final implementation review is clean after the transfer fixture correction.
   log (not a completed successful suite); root attempt 2 starts on the final
   source/fixture revision. The bounded cancellation fixture also keeps its
   partial fragment below the 60-byte cap; independent rerun 5/0, seed 366780.
+
+- Refreshed room acceptance: combined `envelope-room1` 4 tests, zero failures,
+  seed 519372; both real Hangup actions and both Chrome/Deepgram-TTS calls pass.
+  Desktop/phone screenshots inspected for both integrations. All transcript/TTS
+  matching and Google native tool-mode assertions executed. C3/E2 complete.
+- Implementation checkpoint `03e449c0` pushed. New release assembled; 14 packaged
+  module code digests match production compilation, strict four-field probes pass.
+  Candidate image built; independent image audit pending. No deployment yet.
+
+- Independent F2 image audit is clean: 6,983 files including 6,140 BEAMs match
+  assembled release exactly. Extracted decoder rejects old two-field replies,
+  attribution remains nonauthoritative, actual activation identity is supplied,
+  legacy behavior and future-model admission remain intact. Packaged prompt
+  matches source; 14 executable digests match production compilation.
+  Candidate: vxpipe:universal-replies-03e449c0, image
+  sha256:5b9e40183fd29c2895f518b45ab6a1b15ad9ba11d27e29a249708a88fff4dd0c.
+  Never-started disposable audit container removed. Running service unchanged.
+
+- Root attempt 2 received SIGTERM before the Call Engine summary. Although its
+  wrapper reported exit 0, the incomplete run is not passing evidence. Cause is
+  not established; independent image-audit cleanup touched only its never-started
+  disposable container. Root attempt 3 runs in a dedicated persistent tmux
+  session with an explicit completion/exit record to avoid tool-session lifetime
+  affecting verification. No production code changed for this interruption.
+
+## Final acceptance
+
+Root attempt 3 exits 0 at 21:43:13 UTC: 5,892 tests, zero failures, 409 excluded,
+seed 914326, all ten umbrella apps complete. Independent Astra xhigh E4 review
+is clean. Final format/compile/strict-Credo/unused-dependency checks pass;
+production asset build includes a passing type check. No source-cutover or speech
+state transition changed, so no extra Lean lane is required. Readiness 22/24;
+only deployment and final release evidence remain.
+
+Deployment plan independently reviewed: exact candidate/recovery image guards,
+full-suite terminal guard, existing systemd packaged migration preflight, public
+health and packaged frontend asset SHA256 checks. Isolated synthetic Room smoke
+rehearsed against packaged release; creates no saved specs/credentials, makes no
+external calls, completes a real turn with host attribution and orderly teardown.
+The smoke uses release eval in a separate VM inside the deployed container because
+service distribution is disabled; public health/assets verify the running service.

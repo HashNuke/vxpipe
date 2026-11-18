@@ -1,7 +1,8 @@
 # Universal structured replies across LLM integrations
 
-Status: checkpoints A and B implemented, with configured Google/OpenAI conversation
-and controlled Hangup acceptance recorded. Checkpoints C–F and release remain open. The milestone index
+Status: shared implementation and corrected four-field live acceptance pass for
+all five enabled integrations; Zenmux live acceptance is deferred. Final root
+verification passes; deployment/evidence remain open. The milestone index
 owns ordering. User direction, 2026-11-18: no structured-response allowlist;
 every LLM integration must support the common agent reply contract.
 
@@ -140,7 +141,7 @@ conversation without a new per-model permission entry.
 - [x] Preserve each integration's required reasoning/signature/tool metadata across
   buffered and streamed responses, compaction, interruption and recovery. Check
   that router changes cannot reuse replay scoped to a different downstream model.
-- [ ] Exercise a representative configured model for each integration and the
+- [x] Exercise a representative configured model for each integration and the
   portable path independently of native schema support. Test unavailable native
   metadata without a save/publish rejection or silent legacy downgrade.
 - [x] Make the common harness fail if any registered LLM integration is omitted.
@@ -184,7 +185,7 @@ acceptance evidence, with no excluded integration and no remaining allowlist.
 - [x] Run one shared adversarial matrix: ordinary/tool/async/idle rounds, malformed
   and oversized output, duplicate keys, refusal/truncation, unknown mode, null,
   opaque replay, cancellation, deadline, bounded correction and recovery.
-- [ ] Run tagged live provider cases through `bin/livetests run`, using permitted
+- [x] Run tagged live provider cases through `bin/livetests run`, using permitted
   configured credentials without reading or modifying the protected live-provider
   environment file. Add missing shared cases to existing provider lanes. Report
   unavailable credentials explicitly; keep that integration's gate unchecked.
@@ -192,7 +193,7 @@ acceptance evidence, with no excluded integration and no remaining allowlist.
   submitted schema/JSON strategy, immutable history and absence of repeated side
   effects. Include the exact Google model reported by the user. Define a fixed
   scenario/repetition plan before running, and retain failed attempts.
-- [ ] Run required root format, compile-with-warnings-as-errors, strict Credo,
+- [x] Run required root format, compile-with-warnings-as-errors, strict Credo,
   umbrella tests and unused-dependency checks; relevant frontend/type checks and
   rendered inspection; Lean if source-cutover or speech-state behavior changes.
   Resolve project-owned failures and distinguish unrelated failures in evidence.
@@ -205,7 +206,7 @@ future LLM integrations inherit the same contract and conformance requirements.
 - [x] Update the durable design, integration authoring guide, usage documentation,
   prior profile-policy notices and this milestone/index together. Explain generic
   support versus actual upstream request failures without promising infallible JSON.
-- [ ] Verify the release contains no provider/model reply allowlist, no substitute
+- [x] Verify the release contains no provider/model reply allowlist, no substitute
   catalog exclusion and no implicit legacy fallback. Retain ordinary model and
   credential validation and the shared strict decoder.
 - [ ] Commit the accepted implementation before building/deploying `vxpipe.service`;
@@ -526,3 +527,30 @@ reply fields and explicitly rejects backward compatibility. See
 reopened until the changed contract passes root verification and a new release
 candidate is audited. C3/E2 remain open pending corrected live acceptance; no
 acceptance-policy waiver is being inferred. Zenmux live deferral still applies.
+
+Corrected live acceptance: `envelope1` passes all six DeepSeek/Fireworks/OpenRouter
+buffered/streamed conversations; `envelope-primary1` passes all four configured
+Google/OpenAI conversations. Models, tools, 4096-token cap and semantic assertions
+are unchanged. `envelope-room1` passes two real Hangup and two Chrome/TTS calls;
+desktop and phone renders inspected. C3/E2 are complete under the approved Zenmux
+live deferral, with all previous failed attempts preserved. No acceptance waiver
+was needed. E4/F2 verification remains in progress.
+
+Updated candidate F2 audit: implementation `03e449c0`, image
+`sha256:5b9e40183fd29c2895f518b45ab6a1b15ad9ba11d27e29a249708a88fff4dd0c`,
+tag `vxpipe:universal-replies-03e449c0`. Independent Astra xhigh review copied
+/app/lib from a never-started disposable container: all 6,983 files (6,140 BEAMs)
+exactly match the assembled release. Extracted strict four-field decoder, host
+identity, legacy and future-model probes pass; prompt matches source; 14 module
+code digests match production compilation. Disposable container removed. F2 is
+complete; old running image and recovery tag remain unchanged pending E4.
+
+Final E4 verification after the correction: root attempt 3 completes with exit 0,
+**5,892 tests, zero failures, 409 excluded**, seed **914326** across all ten apps.
+Identity 101; MCP 222; Providers 35; Agent Runtime 567; Call Engine 2,529; Calls
+392; Gateway 891; Artifacts 20; Persistence 551; Console 584. Final format,
+warnings-as-errors compilation, strict Credo and unused-dependency checks pass;
+production asset build/type check passes. New real browser calls and four rendered
+captures are verified. Independent Astra xhigh review confirms E4 complete; no
+source-cutover or speech-state transition changed, so no additional Lean lane
+is triggered. Readiness is **22/24 tasks (91.7%)**; only F3/F4 release tasks remain.

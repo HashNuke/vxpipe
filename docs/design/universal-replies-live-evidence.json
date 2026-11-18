@@ -12054,6 +12054,28 @@
           "elapsed_ms": 1456
         }
       ]
+    },
+    {
+      "attempt": "envelope-room1",
+      "result": "2 Hangup cases pass within combined 4-test run, zero failures",
+      "rooms": [
+        {
+          "protocol": "mode_message_v1",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "outcome": "ended",
+          "native_action": "hangup",
+          "elapsed_ms": 1192
+        },
+        {
+          "protocol": "mode_message_v1",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "outcome": "ended",
+          "native_action": "hangup",
+          "elapsed_ms": 1360
+        }
+      ]
     }
   ],
   "router_provenance_runs": [
@@ -12416,6 +12438,306 @@
               ],
               "outputAt": 81900.20000004768,
               "sentAt": 71825.20000004768,
+              "text": "IDLE_SILENT_TIMEOUT"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "attempt": "envelope-room1",
+      "result": "2 Chrome/TTS cases pass within combined 4-test run, zero failures",
+      "seed": 519372,
+      "scope": "Fresh configured synthetic publications with strict four-field replies; real Deepgram TTS, native lookup/idle and transcript-to-speech assertions. Desktop and phone captures inspected. No external phone calls or user records modified.",
+      "calls": [
+        {
+          "provider": "openai",
+          "requests": 14,
+          "speech_requests": 9,
+          "audio_packets": 1652,
+          "speech_frames": 1623,
+          "tools_started": 3,
+          "tools_completed": 3,
+          "cases": [
+            {
+              "audioFrames": 41,
+              "completed": true,
+              "completedAt": 5193.599999904633,
+              "firstAudioAt": 4522.599999904633,
+              "firstAudioMs": 2296.1999999284744,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 3754.6999999284744,
+              "sentAt": 2226.399999976158,
+              "text": "SHORT"
+            },
+            {
+              "audioFrames": 1230,
+              "completed": true,
+              "completedAt": 34163.799999952316,
+              "firstAudioAt": 11591.5,
+              "firstAudioMs": 5746.100000023842,
+              "output": [
+                "A garden can become a peaceful refuge where sunlight warms the soil, rain nourishes new growth, and fragrant herbs mingle with bright flowers; with a little care, paths invite quiet walks, birds find shelter among the branches, and every season brings its own colors, textures, and small surprises to enjoy."
+              ],
+              "outputAt": 9582.399999976158,
+              "sentAt": 5845.399999976158,
+              "text": "LONG"
+            },
+            {
+              "audioFrames": 0,
+              "completed": true,
+              "completedAt": 36600.5,
+              "firstAudioMs": null,
+              "output": [],
+              "sentAt": 34764.199999928474,
+              "text": "QUIET"
+            },
+            {
+              "audioFrames": 42,
+              "completed": true,
+              "completedAt": 42834.29999995232,
+              "firstAudioAt": 42470.89999997616,
+              "firstAudioMs": 5209.899999976158,
+              "output": [
+                "Checking"
+              ],
+              "outputAt": 40819.5,
+              "sentAt": 37261,
+              "text": "LOOKUP"
+            },
+            {
+              "audioFrames": 53,
+              "completed": true,
+              "completedAt": 47446,
+              "firstAudioAt": 46404,
+              "firstAudioMs": 2577.2000000476837,
+              "output": [
+                "Four"
+              ],
+              "outputAt": 45975.699999928474,
+              "sentAt": 43826.79999995232,
+              "text": "MATH"
+            },
+            {
+              "audioFrames": 80,
+              "completed": true,
+              "completedAt": 52281.59999990463,
+              "firstAudioAt": 50571.09999990463,
+              "firstAudioMs": 2536.099999904633,
+              "output": [
+                "Lookup complete."
+              ],
+              "outputAt": 49852.29999995232,
+              "sentAt": 48035,
+              "text": "TOOL_COMPLETION"
+            },
+            {
+              "audioFrames": 36,
+              "completed": true,
+              "completedAt": 55968.89999997616,
+              "firstAudioAt": 55337.699999928474,
+              "firstAudioMs": 2419.7999999523163,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 54670.59999990463,
+              "sentAt": 52917.89999997616,
+              "text": "SHORT"
+            },
+            {
+              "audioFrames": 65,
+              "completed": true,
+              "completedAt": 61789.79999995232,
+              "firstAudioAt": 60470.29999995232,
+              "firstAudioMs": 3912.799999952316,
+              "output": [
+                "Okay, I will wait."
+              ],
+              "outputAt": 59700.199999928474,
+              "sentAt": 56557.5,
+              "text": "IDLE_SPOKEN"
+            },
+            {
+              "audioFrames": 38,
+              "completed": true,
+              "completedAt": 75292.69999992847,
+              "firstAudioAt": 74679.59999990463,
+              "firstAudioMs": 12324.299999952316,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 73934.5,
+              "sentAt": 62355.29999995232,
+              "text": "IDLE_SPOKEN_TIMEOUT"
+            },
+            {
+              "audioFrames": 0,
+              "completed": true,
+              "completedAt": 79326.39999997616,
+              "firstAudioMs": null,
+              "output": [],
+              "sentAt": 75956.09999990463,
+              "text": "IDLE_SILENT"
+            },
+            {
+              "audioFrames": 38,
+              "completed": true,
+              "completedAt": 92651.19999992847,
+              "firstAudioAt": 92020.59999990465,
+              "firstAudioMs": 12063.099999904633,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 91471.69999992847,
+              "sentAt": 79957.5,
+              "text": "IDLE_SILENT_TIMEOUT"
+            }
+          ]
+        },
+        {
+          "provider": "google",
+          "requests": 14,
+          "speech_requests": 9,
+          "audio_packets": 1500,
+          "speech_frames": 1380,
+          "tools_started": 3,
+          "tools_completed": 3,
+          "cases": [
+            {
+              "audioFrames": 33,
+              "completed": true,
+              "completedAt": 4852.799999952316,
+              "firstAudioAt": 4201.5,
+              "firstAudioMs": 1376,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 3473.399999976158,
+              "sentAt": 2825.5,
+              "text": "SHORT"
+            },
+            {
+              "audioFrames": 973,
+              "completed": true,
+              "completedAt": 27538.69999992847,
+              "firstAudioAt": 10599.5,
+              "firstAudioMs": 5120.900000095367,
+              "output": [
+                "A vibrant garden flourishes beneath the warm summer sun, featuring rows of blooming red roses, delicate lavender bushes buzzing with busy bees, and a trickling stone fountain that invites gentle songbirds to rest among the lush green foliage."
+              ],
+              "outputAt": 6385.599999904633,
+              "sentAt": 5478.599999904633,
+              "text": "LONG"
+            },
+            {
+              "audioFrames": 0,
+              "completed": true,
+              "completedAt": 28861,
+              "firstAudioMs": null,
+              "output": [],
+              "sentAt": 28153.39999997616,
+              "text": "QUIET"
+            },
+            {
+              "audioFrames": 38,
+              "completed": true,
+              "completedAt": 32579.89999997616,
+              "firstAudioAt": 32281.599999904633,
+              "firstAudioMs": 2869.7999999523163,
+              "output": [
+                "Checking"
+              ],
+              "outputAt": 30521,
+              "sentAt": 29411.799999952316,
+              "text": "LOOKUP"
+            },
+            {
+              "audioFrames": 43,
+              "completed": true,
+              "completedAt": 35368.199999928474,
+              "firstAudioAt": 34481.59999990463,
+              "firstAudioMs": 955.2999999523164,
+              "output": [
+                "Four"
+              ],
+              "outputAt": 34054.199999928474,
+              "sentAt": 33526.299999952316,
+              "text": "MATH"
+            },
+            {
+              "audioFrames": 80,
+              "completed": true,
+              "completedAt": 38722.5,
+              "firstAudioAt": 38298.09999990463,
+              "firstAudioMs": 2308.599999904633,
+              "output": [
+                "Lookup complete."
+              ],
+              "outputAt": 36678.199999928474,
+              "sentAt": 35989.5,
+              "text": "TOOL_COMPLETION"
+            },
+            {
+              "audioFrames": 35,
+              "completed": true,
+              "completedAt": 42047.89999997616,
+              "firstAudioAt": 42298.699999928474,
+              "firstAudioMs": 2065.1999999284744,
+              "output": [
+                "Ready."
+              ],
+              "outputAt": 40721.79999995232,
+              "sentAt": 40233.5,
+              "text": "SHORT"
+            },
+            {
+              "audioFrames": 74,
+              "completed": true,
+              "completedAt": 46613.89999997616,
+              "firstAudioAt": 45881.199999928474,
+              "firstAudioMs": 2420.1999999284744,
+              "output": [
+                "Okay, I will wait."
+              ],
+              "outputAt": 44454,
+              "sentAt": 43461,
+              "text": "IDLE_SPOKEN"
+            },
+            {
+              "audioFrames": 50,
+              "completed": true,
+              "completedAt": 58835,
+              "firstAudioAt": 58830.5,
+              "firstAudioMs": 10805.400000095367,
+              "output": [
+                "Ready again"
+              ],
+              "outputAt": 57303.09999990463,
+              "sentAt": 48025.09999990463,
+              "text": "IDLE_SPOKEN_TIMEOUT"
+            },
+            {
+              "audioFrames": 0,
+              "completed": true,
+              "completedAt": 61283.39999997616,
+              "firstAudioMs": null,
+              "output": [],
+              "sentAt": 60292.79999995232,
+              "text": "IDLE_SILENT"
+            },
+            {
+              "audioFrames": 54,
+              "completed": true,
+              "completedAt": 73573,
+              "firstAudioAt": 73463.19999992847,
+              "firstAudioMs": 11580.100000023842,
+              "output": [
+                "Ready again"
+              ],
+              "outputAt": 71962.79999995232,
+              "sentAt": 61883.09999990463,
               "text": "IDLE_SILENT_TIMEOUT"
             }
           ]

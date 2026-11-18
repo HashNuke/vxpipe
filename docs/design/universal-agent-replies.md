@@ -2,8 +2,9 @@
 
 Status: implementation and acceptance in progress, 2026-11-18. Shared eligibility,
 transport strategies, bounded correction, private replay and authoring/browser
-compatibility are implemented. Remaining provider live acceptance and final
-conformance/release gates remain open; Zenmux live checks are explicitly deferred
+compatibility are implemented. The corrected four-field contract passes all ten
+configured runtime conversations and four real Hangup/browser cases. Final root
+verification passes 5,892 tests; release remains open; Zenmux live checks are explicitly deferred
 by the user, while its deterministic coverage remains required.
 The user's requirement is definitive: remove the structured-reply allowlist and
 support the shared agent response contract across every LLM integration.

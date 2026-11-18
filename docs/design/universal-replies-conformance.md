@@ -10,8 +10,8 @@ direction, not reported as passed.
 
 | Integration and live model | Selected reply encoding | Deterministic evidence | Latest applicable live result |
 | --- | --- | --- | --- |
-| Google AI Studio `gemini-3.5-flash-lite` | Portable instructed JSON for configured metadata; native schema with affirmative capability evidence | Both encodings and both modes; ordered Parts/signatures; exact native call/result pairing | `resume1`: configured and explicit portable conversations pass in both modes. `browser2`: editor publication and real Chrome/TTS call pass. |
-| OpenAI `gpt-6-luna` | Native Responses schema | Both modes; strict schema and full tools; source/model-bound replay | `resume1`: both modes pass. `browser2`: editor publication and real Chrome/TTS call pass. |
+| Google AI Studio `gemini-3.5-flash-lite` | Portable instructed JSON for configured metadata; native schema with affirmative capability evidence | Both encodings and both modes; ordered Parts/signatures; exact native call/result pairing | `envelope-primary1`: configured buffered/streamed conversations pass; `envelope-room1`: real Hangup and Chrome/TTS call pass. Prior editor publication remains verified. |
+| OpenAI `gpt-6-luna` | Native Responses schema | Both modes; strict schema and full tools; source/model-bound replay | `envelope-primary1`: configured buffered/streamed conversations pass; `envelope-room1`: real Hangup and Chrome/TTS call pass. Prior editor publication remains verified. |
 | DeepSeek `deepseek-flash` | Portable instructed JSON | Both modes; unsigned reasoning replay and exact full-speech settlement | `envelope1`: buffered and streaming full conversations pass after fixing our reply/history inconsistency. |
 | Fireworks `accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b` | Portable instructed JSON | Both modes; reasoning replay, usage provenance and settlement | `envelope1`: buffered and streaming full conversations pass with unchanged semantic assertions. |
 | OpenRouter `google/gemini-3.5-flash-lite` | Portable instructed JSON | Both modes; raw reasoning details, reported-model provenance and pinned continuation routing | `envelope1`: buffered and streaming full conversations pass, including the required native lookup. |
@@ -91,6 +91,11 @@ The user identified that our assistant history already used type/participant_id.
 DeepSeek's `remaining4` response copied that format, while our decoder expected
 only mode/message. The user directed one strict four-field reply contract. The
 earlier result remains a historical failed run but is not evidence that DeepSeek
-was wrong to mirror our own history. The corrected remaining-provider live run passes. Primary transport verification
-and a new release candidate are still required; the earlier candidate predates
-this change.
+was wrong to mirror our own history. All ten configured runtime conversations and all four refreshed real Hangup/Chrome
+cases pass. The updated candidate image audit is independently clean; root verification
+passes 5,892 tests, zero failures, 409 excluded (seed 914326). The earlier candidate predates this change.
+
+The refreshed `envelope-room1` run passes all four cases: two real Hangup actions
+and two Chrome/Deepgram-TTS conversations. Both desktop and phone captures were
+inspected. The full transcript/speech matching assertions and Google tool-mode
+guard executed in this run (unlike the historical browser2 follow-up).
