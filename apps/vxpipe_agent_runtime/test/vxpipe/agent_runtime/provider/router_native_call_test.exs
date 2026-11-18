@@ -11,7 +11,7 @@ defmodule Vxpipe.AgentRuntime.Provider.RouterNativeCallTest do
     test "reasoning cannot invent or overwrite native calls #{provider} #{streaming} native=#{native_call?}" do
       streaming = unquote(streaming)
       native_call? = unquote(native_call?)
-      text = if native_call?, do: "", else: ~s({"agent_mode":"listener","message":null})
+      text = if native_call?, do: "", else: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
 
       url =
         DialogueWireServer.start(self(), fn body ->

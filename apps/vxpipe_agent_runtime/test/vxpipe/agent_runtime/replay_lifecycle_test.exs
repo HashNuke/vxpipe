@@ -63,7 +63,7 @@ defmodule Vxpipe.AgentRuntime.ReplayLifecycleTest do
       assert assistant in recovered.messages
       assert Enum.count(recovered.messages, &(&1.tool_call_id == call.id)) == 1
       refute_received {:tool_submitted, _, _, _, _, _}
-      {:ok, final} = ModelResponse.new(text: ~s({"agent_mode":"listener","message":null}))
+      {:ok, final} = ModelResponse.new(text: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}))
       send(provider, {:test_stream_response, {:ok, final}})
       assert {:ok, %{status: :completed}} = Task.await(next)
     end

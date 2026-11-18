@@ -69,7 +69,11 @@ structured-reply eligibility. Normal model resolution, public option validation,
 credentials and tool permissions still apply; authoring does not call the model.
 
 Agent Runtime owns the strict final dialogue decoder and the native tool loop.
-A reply has exactly `agent_mode` and `message`: speaker requires nonblank text;
+A reply requires exactly `type: "participant_message"`, `participant_id`,
+`agent_mode` and `message`. The participant ID is a 1–128 character identifier
+starting with an ASCII letter/digit, followed by letters/digits, underscores or
+hyphens. Attribution does not override the host's speaker identity. Two-field
+modern replies are rejected. Speaker requires nonblank text;
 listener accepts nonblank text or null. Do not add a provider-specific parser,
 extract JSON from prose, fabricate successful silence, or introduce implicit
 legacy fallback. Raw JSON and private reasoning must never reach speech or the

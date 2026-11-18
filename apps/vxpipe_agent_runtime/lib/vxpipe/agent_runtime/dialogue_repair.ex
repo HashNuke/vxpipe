@@ -7,7 +7,10 @@ defmodule Vxpipe.AgentRuntime.DialogueRepair do
   defstruct @enforce_keys ++ [version: :bounded_once_v1]
 
   @instruction "The previous final response was invalid. Return exactly one valid raw JSON " <>
-                 "dialogue object with agent_mode and message. Do not use fences, extra fields " <>
+                 "dialogue object with type, participant_id, agent_mode and message. " <>
+                 "type must be participant_message; use the current agent participant_id " <>
+                 "supplied by the application, or agent if none is supplied. " <>
+                 "Do not use fences, extra fields " <>
                  "or tools. speaker requires nonempty text; listener permits null or nonempty text."
 
   def pin(:legacy, _provider, _model, _preparation), do: nil

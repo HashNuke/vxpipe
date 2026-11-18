@@ -8,7 +8,8 @@ defmodule Vxpipe.Console.UniversalBrowserAssertionsTest do
 
   for surface <- ["output", "cases", "timeline"] do
     test "rejects control JSON on browser #{surface} despite clean TTS" do
-      leak = ~s({"agent_mode":"speaker","message":"Four"})
+      leak =
+        ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Four"})
 
       changed =
         case unquote(surface) do

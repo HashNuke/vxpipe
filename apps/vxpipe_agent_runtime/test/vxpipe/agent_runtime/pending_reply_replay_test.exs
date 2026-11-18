@@ -17,7 +17,7 @@ defmodule Vxpipe.AgentRuntime.PendingReplyReplayTest do
 
   test "only source verified bounded unsigned replay can become a pending candidate" do
     {:ok, config} = Provider.new(model: "deepseek:deepseek-flash", api_key: "test-only")
-    text = ~s({"agent_mode":"speaker","message":"Café."})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Café."})
     upstream = ReqLLM.Context.assistant(text)
 
     upstream = %{
@@ -204,7 +204,7 @@ defmodule Vxpipe.AgentRuntime.PendingReplyReplayTest do
         content =
           if text == "invalid",
             do: "not dialogue",
-            else: ~s({"agent_mode":"speaker","message":"Hello."})
+            else: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
 
         message = %{role: "assistant", content: content, reasoning_content: "private sentinel"}
 

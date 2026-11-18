@@ -141,12 +141,20 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     assert :ok = TestTransferConnection.send_text(command)
     assert_receive {:test_agent_runtime_stream, provider, request}
     assert request.reply_protocol == :mode_message_v1
-    emit_model_chunk(provider, ~s({"agent_mode":"speaker","message":"Only))
+
+    emit_model_chunk(
+      provider,
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Only)
+    )
+
     refute_receive {:test_tts_control, ^transport, _}
     refute_received {:vxpipe_event, %TextOutput{}}
 
     {:ok, response} =
-      ModelResponse.new(text: ~s({"agent_mode":"speaker","message":"Only admitted words."}))
+      ModelResponse.new(
+        text:
+          ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Only admitted words."})
+      )
 
     send(provider, {:test_agent_runtime_response, {:ok, response}})
 
@@ -160,9 +168,12 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "turn-stream"}}
 
     for {text, expected} <- [
-          {~s({"agent_mode":"listener","message":null}), :complete},
-          {~s({"agent_mode":"listener","message":"okay"}), :complete},
-          {~s({"agent_mode":"speaker","message":null}), :failed}
+          {~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}),
+           :complete},
+          {~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":"okay"}),
+           :complete},
+          {~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":null}),
+           :failed}
         ] do
       correlation = unique_id("silent")
       command = send_command(room, participant, connection_id, correlation, "yeah")
@@ -197,7 +208,12 @@ defmodule Vxpipe.CallEngine.TextToSpeechTurnTest do
              &(&1.role == :assistant and &1.content =~ ~s("message":null))
            )
 
-    {:ok, response} = ModelResponse.new(text: ~s({"agent_mode":"speaker","message":"Ready."}))
+    {:ok, response} =
+      ModelResponse.new(
+        text:
+          ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Ready."})
+      )
+
     send(provider, {:test_agent_runtime_response, {:ok, response}})
     assert_receive {:test_tts_control, ^transport, speak}
     assert JSON.decode!(speak)["text"] == "Ready."

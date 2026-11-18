@@ -9878,6 +9878,2156 @@
           "semantic_outcome": "passed"
         }
       ]
+    },
+    {
+      "attempt": "envelope1",
+      "description": "User-directed strict four-field reply envelope matching existing assistant history; fixed six-case run, unchanged models, tools, 4096-token cap and scenario assertions. No two-field compatibility.",
+      "result": "6 tests, 0 failures (10 excluded)",
+      "failures": [],
+      "passed_cases": [
+        {
+          "provider": "deepseek",
+          "streaming": false
+        },
+        {
+          "provider": "deepseek",
+          "streaming": true
+        },
+        {
+          "provider": "fireworks",
+          "streaming": false
+        },
+        {
+          "provider": "fireworks",
+          "streaming": true
+        },
+        {
+          "provider": "openrouter",
+          "streaming": false
+        },
+        {
+          "provider": "openrouter",
+          "streaming": true
+        }
+      ],
+      "steps": [
+        {
+          "usage": [
+            {
+              "output_tokens": 212,
+              "input_tokens": 1772,
+              "reasoning_tokens": 182,
+              "total_tokens": 1984
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 1406,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 393,
+              "input_tokens": 1871,
+              "reasoning_tokens": 342,
+              "total_tokens": 2264
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 1291,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 132,
+              "input_tokens": 1966,
+              "reasoning_tokens": 107,
+              "total_tokens": 2098
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 689,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 273,
+              "input_tokens": 2006,
+              "reasoning_tokens": 247,
+              "total_tokens": 2279
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 1070,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 191,
+              "input_tokens": 2087,
+              "reasoning_tokens": 162,
+              "total_tokens": 2278
+            },
+            {
+              "output_tokens": 290,
+              "input_tokens": 2322,
+              "reasoning_tokens": 262,
+              "total_tokens": 2612
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 1939,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 275,
+              "input_tokens": 2236,
+              "reasoning_tokens": 251,
+              "total_tokens": 2511
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 1076,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 255,
+              "input_tokens": 2319,
+              "reasoning_tokens": 223,
+              "total_tokens": 2574
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 900,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 226,
+              "input_tokens": 2384,
+              "reasoning_tokens": 201,
+              "total_tokens": 2610
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 846,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "fireworks",
+          "outcome": "cancelled",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 1,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 221,
+              "input_tokens": 2463,
+              "reasoning_tokens": 196,
+              "total_tokens": 2684
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 842,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 30,
+              "input_tokens": 1521,
+              "reasoning_tokens": 0,
+              "total_tokens": 1551
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 1025,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 50,
+              "input_tokens": 1608,
+              "reasoning_tokens": 0,
+              "total_tokens": 1658
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 489,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 1690,
+              "reasoning_tokens": 0,
+              "total_tokens": 1713
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 944,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 1725,
+              "reasoning_tokens": 0,
+              "total_tokens": 1749
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 758,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1792,
+              "reasoning_tokens": 0,
+              "total_tokens": 1810
+            },
+            {
+              "output_tokens": 27,
+              "input_tokens": 1834,
+              "reasoning_tokens": 0,
+              "total_tokens": 1861
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 1587,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 1898,
+              "reasoning_tokens": 0,
+              "total_tokens": 1922
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 724,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 30,
+              "input_tokens": 1971,
+              "reasoning_tokens": 0,
+              "total_tokens": 2001
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 1135,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 2024,
+              "reasoning_tokens": 0,
+              "total_tokens": 2047
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 1120,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "openrouter",
+          "outcome": "cancelled",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 0,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 2092,
+              "reasoning_tokens": 0,
+              "total_tokens": 2116
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 819,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 269,
+              "input_tokens": 1772,
+              "reasoning_tokens": 225,
+              "total_tokens": 2041
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 1242,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 245,
+              "input_tokens": 1873,
+              "reasoning_tokens": 194,
+              "total_tokens": 2118
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 848,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 248,
+              "input_tokens": 1968,
+              "reasoning_tokens": 223,
+              "total_tokens": 2216
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 760,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 274,
+              "input_tokens": 2008,
+              "reasoning_tokens": 248,
+              "total_tokens": 2282
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 946,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 269,
+              "input_tokens": 2089,
+              "reasoning_tokens": 240,
+              "total_tokens": 2358
+            },
+            {
+              "output_tokens": 147,
+              "input_tokens": 2401,
+              "reasoning_tokens": 120,
+              "total_tokens": 2548
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 1712,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 425,
+              "input_tokens": 2236,
+              "reasoning_tokens": 401,
+              "total_tokens": 2661
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 1408,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 133,
+              "input_tokens": 2318,
+              "reasoning_tokens": 101,
+              "total_tokens": 2451
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 626,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 1090,
+              "input_tokens": 2383,
+              "reasoning_tokens": 1065,
+              "total_tokens": 3473
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 3041,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "fireworks",
+          "outcome": "cancelled",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 1,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 70,
+              "input_tokens": 2462,
+              "reasoning_tokens": 45,
+              "total_tokens": 2532
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "fireworks",
+          "outcome": "completed",
+          "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+          "elapsed_ms": 449,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 36,
+              "input_tokens": 1768,
+              "reasoning_tokens": 0,
+              "total_tokens": 1804
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 935,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 50,
+              "input_tokens": 1866,
+              "reasoning_tokens": 0,
+              "total_tokens": 1916
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 865,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 1953,
+              "reasoning_tokens": 0,
+              "total_tokens": 1976
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 906,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 1989,
+              "reasoning_tokens": 0,
+              "total_tokens": 2013
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 943,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 40,
+              "input_tokens": 2060,
+              "reasoning_tokens": 0,
+              "total_tokens": 2100
+            },
+            {
+              "output_tokens": 27,
+              "input_tokens": 2139,
+              "reasoning_tokens": 0,
+              "total_tokens": 2166
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 1496,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 2208,
+              "reasoning_tokens": 0,
+              "total_tokens": 2231
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 1040,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 30,
+              "input_tokens": 2280,
+              "reasoning_tokens": 0,
+              "total_tokens": 2310
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 789,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 2337,
+              "reasoning_tokens": 0,
+              "total_tokens": 2360
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 1138,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "deepseek",
+          "outcome": "cancelled",
+          "model": "deepseek-flash",
+          "elapsed_ms": 0,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 2409,
+              "reasoning_tokens": 0,
+              "total_tokens": 2433
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 1034,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 36,
+              "input_tokens": 1521,
+              "reasoning_tokens": 0,
+              "total_tokens": 1557
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 1104,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 50,
+              "input_tokens": 1648,
+              "reasoning_tokens": 0,
+              "total_tokens": 1698
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 12688,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 1696,
+              "reasoning_tokens": 0,
+              "total_tokens": 1719
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 1403,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 25,
+              "input_tokens": 1731,
+              "reasoning_tokens": 0,
+              "total_tokens": 1756
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 779,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1799,
+              "reasoning_tokens": 0,
+              "total_tokens": 1817
+            },
+            {
+              "output_tokens": 27,
+              "input_tokens": 1842,
+              "reasoning_tokens": 0,
+              "total_tokens": 1869
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 2312,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 1906,
+              "reasoning_tokens": 0,
+              "total_tokens": 1930
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 980,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 30,
+              "input_tokens": 1980,
+              "reasoning_tokens": 0,
+              "total_tokens": 2010
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 1221,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 2033,
+              "reasoning_tokens": 0,
+              "total_tokens": 2056
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 924,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "openrouter",
+          "outcome": "cancelled",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 0,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 2101,
+              "reasoning_tokens": 0,
+              "total_tokens": 2124
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "openrouter",
+          "outcome": "completed",
+          "model": "google/gemini-3.5-flash-lite",
+          "elapsed_ms": 840,
+          "streaming": true,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 36,
+              "input_tokens": 1768,
+              "reasoning_tokens": 0,
+              "total_tokens": 1804
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 887,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 50,
+              "input_tokens": 1866,
+              "reasoning_tokens": 0,
+              "total_tokens": 1916
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 905,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 1953,
+              "reasoning_tokens": 0,
+              "total_tokens": 1976
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 1129,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 25,
+              "input_tokens": 1989,
+              "reasoning_tokens": 0,
+              "total_tokens": 2014
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 821,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 40,
+              "input_tokens": 2061,
+              "reasoning_tokens": 0,
+              "total_tokens": 2101
+            },
+            {
+              "output_tokens": 27,
+              "input_tokens": 2141,
+              "reasoning_tokens": 0,
+              "total_tokens": 2168
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 1861,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 2210,
+              "reasoning_tokens": 0,
+              "total_tokens": 2234
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 1172,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 30,
+              "input_tokens": 2284,
+              "reasoning_tokens": 0,
+              "total_tokens": 2314
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 1253,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 2341,
+              "reasoning_tokens": 0,
+              "total_tokens": 2364
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 895,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "deepseek",
+          "outcome": "cancelled",
+          "model": "deepseek-flash",
+          "elapsed_ms": 1,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 25,
+              "input_tokens": 2413,
+              "reasoning_tokens": 0,
+              "total_tokens": 2438
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "deepseek",
+          "outcome": "completed",
+          "model": "deepseek-flash",
+          "elapsed_ms": 1180,
+          "streaming": false,
+          "tool_choice": "default",
+          "maximum_output_tokens": 4096,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        }
+      ]
+    },
+    {
+      "attempt": "envelope-primary1",
+      "description": "Strict four-field configured Google/OpenAI buffered and streaming conversations; dedicated tag excludes diagnostic strategy overrides.",
+      "result": "4 tests, 0 failures (12 excluded)",
+      "failures": [],
+      "passed_cases": [
+        {
+          "provider": "google",
+          "streaming": false
+        },
+        {
+          "provider": "google",
+          "streaming": true
+        },
+        {
+          "provider": "openai",
+          "streaming": false
+        },
+        {
+          "provider": "openai",
+          "streaming": true
+        }
+      ],
+      "steps": [
+        {
+          "usage": [
+            {
+              "output_tokens": 29,
+              "input_tokens": 1552,
+              "reasoning_tokens": 0,
+              "total_tokens": 1581
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 905,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 50,
+              "input_tokens": 1640,
+              "reasoning_tokens": 0,
+              "total_tokens": 1690
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 520,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 1724,
+              "reasoning_tokens": 0,
+              "total_tokens": 1747
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 521,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 1758,
+              "reasoning_tokens": 0,
+              "total_tokens": 1782
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 659,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1827,
+              "reasoning_tokens": 0,
+              "total_tokens": 1845
+            },
+            {
+              "output_tokens": 27,
+              "input_tokens": 1888,
+              "reasoning_tokens": 0,
+              "total_tokens": 1915
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1167,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 1954,
+              "reasoning_tokens": 0,
+              "total_tokens": 1978
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 671,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 30,
+              "input_tokens": 2030,
+              "reasoning_tokens": 0,
+              "total_tokens": 2060
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 492,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 2085,
+              "reasoning_tokens": 0,
+              "total_tokens": 2108
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 450,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 2151,
+              "reasoning_tokens": 0,
+              "total_tokens": 2174
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 698,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 61,
+              "input_tokens": 1533,
+              "reasoning_tokens": 25,
+              "total_tokens": 1594
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 3666,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 73,
+              "input_tokens": 1621,
+              "reasoning_tokens": 16,
+              "total_tokens": 1694
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 4177,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 29,
+              "input_tokens": 1705,
+              "reasoning_tokens": 0,
+              "total_tokens": 1734
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1665,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 72,
+              "input_tokens": 1739,
+              "reasoning_tokens": 40,
+              "total_tokens": 1811
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 3186,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 20,
+              "input_tokens": 1808,
+              "reasoning_tokens": 0,
+              "total_tokens": 1828
+            },
+            {
+              "output_tokens": 32,
+              "input_tokens": 1866,
+              "reasoning_tokens": 0,
+              "total_tokens": 1898
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 3079,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 49,
+              "input_tokens": 1932,
+              "reasoning_tokens": 18,
+              "total_tokens": 1981
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1611,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 55,
+              "input_tokens": 2006,
+              "reasoning_tokens": 19,
+              "total_tokens": 2061
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 2095,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 48,
+              "input_tokens": 2061,
+              "reasoning_tokens": 17,
+              "total_tokens": 2109
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "idle",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1653,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "openai_responses",
+          "step": "cancel",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 0,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 63,
+              "input_tokens": 2127,
+              "reasoning_tokens": 32,
+              "total_tokens": 2190
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "after_cancel",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1706,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 58,
+              "input_tokens": 1533,
+              "reasoning_tokens": 15,
+              "total_tokens": 1591
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "short",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 2239,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 74,
+              "input_tokens": 1628,
+              "reasoning_tokens": 17,
+              "total_tokens": 1702
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "long",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1879,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 29,
+              "input_tokens": 1712,
+              "reasoning_tokens": 0,
+              "total_tokens": 1741
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "silent",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1571,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 67,
+              "input_tokens": 1746,
+              "reasoning_tokens": 35,
+              "total_tokens": 1813
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "cue",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 2275,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 20,
+              "input_tokens": 1815,
+              "reasoning_tokens": 0,
+              "total_tokens": 1835
+            },
+            {
+              "output_tokens": 32,
+              "input_tokens": 1872,
+              "reasoning_tokens": 0,
+              "total_tokens": 1904
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "lookup",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 3024,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 65,
+              "input_tokens": 1938,
+              "reasoning_tokens": 34,
+              "total_tokens": 2003
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "unrelated",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1857,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 60,
+              "input_tokens": 2011,
+              "reasoning_tokens": 24,
+              "total_tokens": 2071
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "completion",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 2699,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 47,
+              "input_tokens": 2066,
+              "reasoning_tokens": 16,
+              "total_tokens": 2113
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "idle",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1723,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "openai_responses",
+          "step": "cancel",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 62,
+              "input_tokens": 2132,
+              "reasoning_tokens": 31,
+              "total_tokens": 2194
+            }
+          ],
+          "strategy": "openai_responses",
+          "step": "after_cancel",
+          "provider": "openai",
+          "model": "gpt-6-luna",
+          "streaming": true,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 2022,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 30,
+              "input_tokens": 1552,
+              "reasoning_tokens": 0,
+              "total_tokens": 1582
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "short",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 723,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 50,
+              "input_tokens": 1641,
+              "reasoning_tokens": 0,
+              "total_tokens": 1691
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "long",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 903,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 1725,
+              "reasoning_tokens": 0,
+              "total_tokens": 1748
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "silent",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 966,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 25,
+              "input_tokens": 1759,
+              "reasoning_tokens": 0,
+              "total_tokens": 1784
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "cue",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 551,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 18,
+              "input_tokens": 1829,
+              "reasoning_tokens": 0,
+              "total_tokens": 1847
+            },
+            {
+              "output_tokens": 27,
+              "input_tokens": 1890,
+              "reasoning_tokens": 0,
+              "total_tokens": 1917
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "lookup",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 1629,
+          "model_attempts": 2,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 1956,
+              "reasoning_tokens": 0,
+              "total_tokens": 1980
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "unrelated",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 488,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 30,
+              "input_tokens": 2032,
+              "reasoning_tokens": 0,
+              "total_tokens": 2062
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "completion",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 605,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 23,
+              "input_tokens": 2087,
+              "reasoning_tokens": 0,
+              "total_tokens": 2110
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "idle",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 788,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        },
+        {
+          "usage": [],
+          "strategy": "portable_json",
+          "step": "cancel",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "cancelled",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 0,
+          "model_attempts": 1,
+          "semantic_outcome": "not_applicable"
+        },
+        {
+          "usage": [
+            {
+              "output_tokens": 24,
+              "input_tokens": 2153,
+              "reasoning_tokens": 0,
+              "total_tokens": 2177
+            }
+          ],
+          "strategy": "portable_json",
+          "step": "after_cancel",
+          "provider": "google",
+          "model": "gemini-3.5-flash-lite",
+          "streaming": false,
+          "tool_choice": "default",
+          "outcome": "completed",
+          "maximum_output_tokens": 4096,
+          "elapsed_ms": 482,
+          "model_attempts": 1,
+          "semantic_outcome": "passed"
+        }
+      ]
     }
   ],
   "interpretation": "Attempts through examples1 used authored-only instructions, plain caller input and delayed pending-state updates. Retained as standalone diagnostic evidence, not configured-call acceptance. Subsequent protocol1 corrects fixture fidelity.",

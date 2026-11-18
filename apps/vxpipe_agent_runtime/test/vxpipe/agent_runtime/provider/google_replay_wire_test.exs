@@ -6,7 +6,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
 
   @tag capture_log: true
   test "signed public parts and empty streaming carriers retain their exact layout" do
-    text = ~s({"agent_mode":"speaker","message":"Café"})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Café"})
 
     layouts = [
       [%{"text" => text, "thoughtSignature" => "public-signature"}],
@@ -96,7 +96,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
         DialogueWireServer.start(self(), fn body ->
           output =
             if JSON.encode!(body) =~ "functionResponse",
-              do: [%{text: ~s({"agent_mode":"listener","message":null})}],
+              do: [%{text: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})}],
               else: parts
 
           payload =
@@ -161,7 +161,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
 
   @tag capture_log: true
   test "reasoning on an ordinary native dialogue reply remains private and replayable" do
-    text = ~s({"agent_mode":"speaker","message":"Hello."})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
 
     for streaming <- [false, true], strategy <- [:google_object, :portable_json] do
       url =
@@ -219,7 +219,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleReplayWireTest do
 
   @tag capture_log: true
   test "buffered and streamed private reasoning survives native tool continuation" do
-    text = ~s({"agent_mode":"listener","message":null})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
 
     for streaming <- [false, true], strategy <- [:google_object, :portable_json] do
       url =

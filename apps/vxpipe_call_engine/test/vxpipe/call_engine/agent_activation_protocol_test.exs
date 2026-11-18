@@ -43,6 +43,7 @@ defmodule Vxpipe.CallEngine.AgentActivationProtocolTest do
     assert {ModelContextCompactor, pinned} = config.context_preparation.compactor
     assert pinned.summary_prompt.text == text
     assert config.instructions =~ protocol["prompts"]["llm_dialogue"]["text"]
+    assert config.instructions =~ ~s(Current agent participant_id: "agent".)
   end
 
   test "activation rejects malformed known-version publication bundles" do

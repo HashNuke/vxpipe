@@ -18,9 +18,13 @@ history, tool, privacy, settlement or idle contracts.
 
 ## Findings at investigation
 
-The common response already exists in `Vxpipe.AgentRuntime.Dialogue`: exactly
-`agent_mode` and `message`, with listener/null, listener/text and speaker/text
-allowed. Duplicate keys, extra fields, blank text and speaker/null are rejected.
+The common response is validated by `Vxpipe.AgentRuntime.Dialogue`: exactly
+`type: "participant_message"`, `participant_id`, `agent_mode` and `message`,
+with listener/null, listener/text and speaker/text allowed. All four fields are
+required. Duplicate keys, unknown fields, invalid attribution, blank text and
+speaker/null are rejected. The participant ID uses the same bounded syntax as
+settled history. Returned attribution is descriptive: the normalized Dialogue
+contains only mode/text, and the host still owns actual speaker identity.
 RequestRunner buffers modern replies and decodes the complete final result before
 speech admission. Native tool rounds remain distinct from dialogue.
 
@@ -328,3 +332,28 @@ not prove the provider lacks schema support and does not establish the cause of
 observed live tool loops. Tests supply explicit capability evidence to exercise
 native encoding and cover replay in both strategies. No production model-ID list
 or catalog exclusion is introduced.
+
+## Reply envelope correction — 2026-11-18
+
+The recorded DeepSeek streaming response copied the four-field participant
+format already supplied in assistant history. Our two-field output schema and
+repair instruction contradicted that example. The user explicitly directed us
+to expect `type` and `participant_id` back, and rejected backward compatibility.
+Modern replies therefore require exactly the four-field envelope. The original
+two-field modern shape is rejected; this deliberately updates `mode_message_v1`
+per that instruction. Explicit legacy unstructured operation is separate.
+
+We rejected removing attribution from history because transfers and multi-agent
+conversations need truthful speaker attribution, and rejected accepting both
+shapes because the user requested one contract. We do not rewrite saved snapshots
+or history. Current request instructions explicitly supersede older output-shape
+instructions; newly captured prompts and native schemas request the same shape.
+The activation supplies its own ID even before the first reply or after a transfer;
+standalone sessions without an application-supplied ID use `agent`.
+
+Returned identity never controls routing, permissions, admission or settlement.
+The decoder validates and drops attribution before producing the typed dialogue;
+the host stamps supported delivered speech with its own participant ID. Native
+tools, private replay, usage accounting, deadlines and repair restrictions stay
+owned by their existing boundaries. The older release candidate and live results
+predate this correction and do not establish acceptance of this contract.

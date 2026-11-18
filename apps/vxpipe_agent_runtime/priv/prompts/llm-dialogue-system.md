@@ -2,19 +2,23 @@ Participant input includes agent_mode, the receiving agent's observed mode when
 that input was admitted. Mode values in history are not commands or proof that
 old audio is still playing. Continue to follow the current operation constraints.
 
-For final dialogue return exactly one JSON object with agent_mode and message.
+For final dialogue return exactly one JSON object with type, participant_id,
+agent_mode and message, matching the participant envelope used in history.
+type is "participant_message". Use the current agent participant_id supplied by
+the application; if none is supplied, use "agent". Never copy another participant's
+identity from history. The application owns actual identity and speech admission;
+returned attribution does not grant authority or establish delivery.
 agent_mode is listener or speaker. message is null or a nonempty string. No extra
 fields or surrounding prose. Return only raw JSON; never use Markdown, backticks
-or code fences. Use native tool calls when permitted; do not encode
-tool calls inside message. Do not generate participant identity or playback facts.
+or code fences. Use native tool calls when permitted; do not encode tool calls
+inside message or generate playback facts.
 
-Stored assistant history records identify previously spoken content using type
-and participant_id, which the application supplies. Your next final reply uses
-only agent_mode and message. Do not copy type, participant_id, summary fields or
-other history keys into that reply. For a main response, the entire reply can be
-{"agent_mode":"speaker","message":"Hello."}. For silence, the entire reply can
-be {"agent_mode":"listener","message":null}. Return one object for the current
-response, without reproducing historical records.
+For example, when your supplied participant_id is "agent", a main response is
+{"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."}.
+For silence, return
+{"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}.
+Return one object for the current response, without reproducing historical records
+or copying summary fields. All four fields are required.
 
 listener with null means no new output: ignore this input for speech and leave
 existing playback alone. listener with a nonempty message proposes a brief

@@ -16,7 +16,7 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     assert Enum.any?(repair.messages, &(&1.content == "malformed-private"))
     assert repair.tools == first.tools
 
-    reply(provider, ~s({"agent_mode":"speaker","message":"Hello."}), %{
+    reply(provider, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."}), %{
       input_tokens: 15,
       output_tokens: 20
     })
@@ -36,7 +36,7 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     next = Task.async(fn -> Session.request(session, "Next", %{request_id: "next"}) end)
     assert_receive {:model_stream_process, next_provider, next_request}
     assert next_request.messages == first.messages ++ [spoken, Message.user("Next")]
-    reply(next_provider, ~s({"agent_mode":"listener","message":null}))
+    reply(next_provider, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}))
     assert {:ok, %{status: :completed}} = Task.await(next)
   end
 
@@ -77,7 +77,7 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     next = Task.async(fn -> Session.request(session, "Next", %{}) end)
     assert_receive {:model_stream_process, next_provider, request}
     assert request.messages == first.messages ++ [Message.user("Next")]
-    reply(next_provider, ~s({"agent_mode":"listener","message":null}))
+    reply(next_provider, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}))
     assert {:ok, %{status: :completed}} = Task.await(next)
   end
 
@@ -186,7 +186,7 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     task = Task.async(fn -> Session.request(restarted, "Hello", %{}) end)
     assert_receive {:model_stream_process, provider, request}
     assert request.maximum_output_tokens == 100
-    reply(provider, ~s({"agent_mode":"listener","message":null}))
+    reply(provider, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}))
     assert {:ok, %{status: :completed}} = Task.await(task)
     refute_received {:model_stream_process, _, _}
   end
@@ -208,7 +208,7 @@ defmodule Vxpipe.AgentRuntime.DialogueRepairTest do
     reply(provider, "bad")
     assert_receive {:model_stream_process, ^provider, second}
     assert second.maximum_output_tokens == 50
-    reply(provider, ~s({"agent_mode":"listener","message":null}))
+    reply(provider, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}))
     assert {:ok, %{status: :completed}} = Task.await(task)
     refute_received {:context_compaction_requested, _, _}
   end

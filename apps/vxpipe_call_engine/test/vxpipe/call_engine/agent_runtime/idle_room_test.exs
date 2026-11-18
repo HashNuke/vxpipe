@@ -816,7 +816,13 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
   defp reply(provider, mode, message) do
     {:ok, response} =
       ModelResponse.new(
-        text: JSON.encode!(%{"agent_mode" => Atom.to_string(mode), "message" => message})
+        text:
+          JSON.encode!(%{
+            "type" => "participant_message",
+            "participant_id" => "agent",
+            "agent_mode" => Atom.to_string(mode),
+            "message" => message
+          })
       )
 
     send(provider, {:test_agent_runtime_response, {:ok, response}})

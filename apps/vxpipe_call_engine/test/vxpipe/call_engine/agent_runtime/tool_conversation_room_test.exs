@@ -146,15 +146,19 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
              )
            end)
 
-    reply_with_text(acknowledgment, ~s({"agent_mode":"speaker","message":"Checking."}))
+    reply_with_text(
+      acknowledgment,
+      ~s({"type":"participant_message","participant_id":"forged-speaker","agent_mode":"speaker","message":"Checking."})
+    )
+
     assert_receive {:vxpipe_event, %TextOutput{text: "Checking."}}
     first_correlation = first.correlation_id
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: ^first_correlation}}
     refute_received {:vxpipe_event, %TextOutput{text: "Native call prose"}}
 
     for text <- [
-          ~s({"agent_mode":"listener","message":null}),
-          ~s({"agent_mode":"listener","message":"okay"})
+          ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}),
+          ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":"okay"})
         ] do
       input = send_text(plan, room, caller, "structured-profile", "yeah")
       assert_receive {:test_agent_runtime_stream, next, _request}
@@ -167,13 +171,34 @@ defmodule Vxpipe.CallEngine.AgentRuntime.ToolConversationRoomTest do
     send(invocation, :release_test_tool)
     assert_receive {:test_agent_runtime_stream, completion, completion_request}, 1_000
     assert List.last(completion_request.messages).origin == :engine
+    receiver_id = Map.fetch!(plan.participants, "receiver").participant_id
+    assert system =~ "Current agent participant_id: " <> JSON.encode!(receiver_id) <> "."
+
+    assert Enum.any?(completion_request.messages, fn message ->
+             message.role == :assistant and
+               match?(
+                 {:ok,
+                  %{
+                    "type" => "participant_message",
+                    "participant_id" => ^receiver_id,
+                    "message" => "Checking."
+                  }},
+                 JSON.decode(message.content)
+               )
+           end)
+
+    refute Enum.any?(completion_request.messages, &String.contains?(&1.content, "forged-speaker"))
 
     refute Enum.any?(
              completion_request.messages,
              &(&1.role == :assistant and &1.content =~ ~s("message":null))
            )
 
-    reply_with_text(completion, ~s({"agent_mode":"speaker","message":"The lookup is ready."}))
+    reply_with_text(
+      completion,
+      ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"The lookup is ready."})
+    )
+
     assert_receive {:vxpipe_event, %TextOutput{text: "The lookup is ready."}}
   end
 

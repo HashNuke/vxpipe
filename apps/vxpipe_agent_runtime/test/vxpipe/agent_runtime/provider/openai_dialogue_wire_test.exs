@@ -6,7 +6,7 @@ defmodule Vxpipe.AgentRuntime.Provider.OpenAIDialogueWireTest do
 
   @tag capture_log: true
   test "Responses buffered and streaming wire retain schema, instructions and full tools" do
-    text = ~s({"agent_mode":"speaker","message":"Hello."})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
 
     payload = %{
       id: "resp_fixture",

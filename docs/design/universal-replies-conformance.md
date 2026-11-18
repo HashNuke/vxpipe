@@ -1,6 +1,6 @@
 # Universal reply conformance evidence
 
-Recorded on 2026-11-18 for the implementation through `bde23c93`. This distinguishes
+Updated on 2026-11-18 for the user-directed strict four-field reply correction. This distinguishes
 exercised behavior from successful live acceptance. The
 [milestone](../../labnotes/milestones/universal-agent-replies.md) remains incomplete;
 no deployment is claimed. Zenmux live acceptance is deferred by explicit user
@@ -12,16 +12,16 @@ direction, not reported as passed.
 | --- | --- | --- | --- |
 | Google AI Studio `gemini-3.5-flash-lite` | Portable instructed JSON for configured metadata; native schema with affirmative capability evidence | Both encodings and both modes; ordered Parts/signatures; exact native call/result pairing | `resume1`: configured and explicit portable conversations pass in both modes. `browser2`: editor publication and real Chrome/TTS call pass. |
 | OpenAI `gpt-6-luna` | Native Responses schema | Both modes; strict schema and full tools; source/model-bound replay | `resume1`: both modes pass. `browser2`: editor publication and real Chrome/TTS call pass. |
-| DeepSeek `deepseek-flash` | Portable instructed JSON | Both modes; unsigned reasoning replay and exact full-speech settlement | `remaining4`: buffered passes; streaming post-tool extra fields rejected. Earlier streaming success is historical. |
-| Fireworks `accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b` | Portable instructed JSON | Both modes; reasoning replay, usage provenance and settlement | `remaining4`: buffered passes; streaming correction returns valid dialogue with the wrong arithmetic answer. Earlier streaming success is historical. |
-| OpenRouter `google/gemini-3.5-flash-lite` | Portable instructed JSON | Both modes; raw reasoning details, reported-model provenance and pinned continuation routing | `remaining4`: buffered passes; streaming acknowledgment occurs without required native lookup submission. Earlier streaming success is historical. |
+| DeepSeek `deepseek-flash` | Portable instructed JSON | Both modes; unsigned reasoning replay and exact full-speech settlement | `envelope1`: buffered and streaming full conversations pass after fixing our reply/history inconsistency. |
+| Fireworks `accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b` | Portable instructed JSON | Both modes; reasoning replay, usage provenance and settlement | `envelope1`: buffered and streaming full conversations pass with unchanged semantic assertions. |
+| OpenRouter `google/gemini-3.5-flash-lite` | Portable instructed JSON | Both modes; raw reasoning details, reported-model provenance and pinned continuation routing | `envelope1`: buffered and streaming full conversations pass, including the required native lookup. |
 | Zenmux `openai/gpt-4o` | Portable instructed JSON | Both modes; raw reasoning details and model-bound continuation; same terminal matrix | Live deferred. Missing credential attempt retained; no successful live result claimed. |
 
 Native encoding is a transport choice, not protocol eligibility. All six use the
 same strict `Dialogue` decoder. The terminal matrix is registry-checked and covers
 speaker, cue, null silence, duplicate keys, unknown mode, invalid speaker/null,
-malformed/oversized text, refusal and truncation through actual local HTTP and
-public Session admission: **121 tests pass**. It also checks exact failure reasons,
+four-field envelopes, missing attribution, invalid type, malformed/oversized text, refusal and truncation through actual local HTTP and
+public Session admission: **157 tests pass**. It also checks exact failure reasons,
 no public raw-text delta/result, and one HTTP request. Zenmux participates fully.
 
 ## Tools, history and lifecycle evidence
@@ -71,17 +71,26 @@ For the remaining-provider fixed runs:
 | `remaining3a` | 6 | 4 | Invalid 8,192-token fixture cap rejects both Fireworks cases before HTTP |
 | `remaining3b` | 6 | 4 | Second preplanned repetition; same fixture-cap rejection |
 | `remaining4` | 6 | 3 | Validated 4,096-token cap and reviewed lifecycle/refusal implementation |
+| `envelope1` | 6 | 0 | User-directed four-field contract consistent with history; same models, cap, tools and semantic assertions |
 
-These heterogeneous runs contain 14 passes in 30 cases, including four
-configuration failures. They are not a model reliability estimate and cannot be
-combined into one clean current-revision acceptance run. The latest three streamed
-scenarios remain failing acceptance under the existing milestone policy. Historical
-streamed passes precede usage/lifecycle/budget changes. No automatic retry-until-green
-or weakened semantic assertion is used to close that gap.
+The five earlier heterogeneous runs contain 14 passes in 30 cases, including
+four configuration failures. They are not a model reliability estimate.
+`envelope1` is a separate, fixed six-case run after a concrete implementation
+correction. All six full conversations pass; 60 step metrics are retained. No
+acceptance waiver, weakened semantic assertion or automatic retry was used.
 
-The latest failures demonstrate three distinct outcomes: invalid post-tool JSON is
-rejected without repeating the tool; a valid reply can be semantically wrong; and
-a model can acknowledge a tool without calling it. They do not establish a new
-runtime invariant violation. A model's stochastic behavior is not guaranteed by
-protocol admission. Release policy must nevertheless honor the milestone's
-explicit acceptance requirements unless the user changes them.
+The prior DeepSeek rejection exposed our inconsistent reply/history formats.
+The decoder previously rejected a valid participant envelope we had shown the
+model in assistant history. That diagnosis is corrected below; historical logs
+remain intact. The prior Fireworks and OpenRouter semantic failures are also
+retained, without treating a single passing run as a reliability guarantee.
+
+## Reply-envelope correction supersedes the earlier diagnosis
+
+The user identified that our assistant history already used type/participant_id.
+DeepSeek's `remaining4` response copied that format, while our decoder expected
+only mode/message. The user directed one strict four-field reply contract. The
+earlier result remains a historical failed run but is not evidence that DeepSeek
+was wrong to mirror our own history. The corrected remaining-provider live run passes. Primary transport verification
+and a new release candidate are still required; the earlier candidate predates
+this change.

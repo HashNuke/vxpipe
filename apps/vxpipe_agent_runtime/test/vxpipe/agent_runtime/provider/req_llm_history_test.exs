@@ -48,7 +48,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMHistoryTest do
 
   test "structured dialogue uses one native strict schema with or without native tools" do
     owner = self()
-    text = ~s({"agent_mode":"speaker","message":"Hello."})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
 
     Req.Test.expect(__MODULE__, 2, fn connection ->
       body = connection |> Req.Test.raw_body() |> JSON.decode!()
@@ -107,7 +107,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMHistoryTest do
   test "portable Google dialogue runs through Session with real encoded HTTP and host settlement" do
     alias Vxpipe.AgentRuntime.{Event, Session}
     owner = self()
-    text = ~s({"agent_mode":"speaker","message":"Hello."})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
 
     Req.Test.expect(__MODULE__, fn connection ->
       send(owner, {:portable_wire, connection |> Req.Test.raw_body() |> JSON.decode!()})
@@ -188,7 +188,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMHistoryTest do
           %{
             content: %{
               role: "model",
-              parts: [%{text: ~s({"agent_mode":"listener","message":null})}]
+              parts: [%{text: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})}]
             },
             finishReason: "STOP"
           }

@@ -38,9 +38,9 @@ defmodule Vxpipe.AgentRuntime.Provider.ChatUsageRepairTest do
         DialogueWireServer.start(self(), fn body ->
           text =
             if JSON.encode!(body) =~ "invalid-usage-fixture",
-              do: ~s({"agent_mode":"listener","message":null}),
+              do: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}),
               else:
-                ~s({"agent_mode":"speaker","message":"invalid-usage-fixture","participant_id":"agent","type":"participant_message"})
+                ~s({"agent_mode":"speaker","message":"invalid-usage-fixture","participant_id":"agent","type":"invalid_usage_fixture"})
 
           field = if streaming, do: :delta, else: :message
 

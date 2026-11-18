@@ -17,7 +17,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
             content: %{
               role: "model",
               parts: [
-                %{text: ~s({"agent_mode":"listener","message":null})}
+                %{text: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})}
               ]
             },
             finishReason: "STOP"
@@ -69,7 +69,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
 
   @tag capture_log: true
   test "private thinking does not contaminate native dialogue text" do
-    text = ~s({"agent_mode":"listener","message":null})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
 
     for streaming <- [false, true] do
       url =
@@ -185,7 +185,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
   test "raw invalid JSON survives native decoding for the shared strict validator" do
     for text <- [
           "```json\n{}\n```",
-          ~s({"agent_mode":"speaker","agent_mode":"listener","message":null})
+          ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","agent_mode":"listener","message":null})
         ],
         streaming <- [false, true] do
       url =
@@ -229,7 +229,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleDialogueWireTest do
 
   @tag capture_log: true
   test "Google native schema and complete tools share buffered and streaming wire contracts" do
-    text = ~s({"agent_mode":"listener","message":null})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})
 
     response = fn _body ->
       payload = %{

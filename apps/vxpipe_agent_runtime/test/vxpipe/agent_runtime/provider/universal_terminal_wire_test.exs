@@ -7,17 +7,22 @@ defmodule Vxpipe.AgentRuntime.Provider.UniversalTerminalWireTest do
 
   @providers ~w(google openai deepseek fireworks openrouter zenmux)
   @cases [
-    {:speaker, ~s({"agent_mode":"speaker","message":"Hello."}), :completed},
-    {:silence, ~s({"agent_mode":"listener","message":null}), :completed},
-    {:cue, ~s({"agent_mode":"listener","message":"Go ahead."}), :completed},
-    {:duplicate, ~s({"agent_mode":"speaker","message":"One","message":"Two"}), :failed},
-    {:unknown_mode, ~s({"agent_mode":"other","message":"Hello."}), :failed},
-    {:speaker_null, ~s({"agent_mode":"speaker","message":null}), :failed},
+    {:missing_attribution, ~s({"agent_mode":"speaker","message":"Hello."}), :failed},
+    {:invalid_type, ~s({"type":"conversation_summary","participant_id":"agent","agent_mode":"speaker","message":"Hello."}), :failed},
+    {:envelope,
+     ~s({"agent_mode":"speaker","message":"The lookup is running.","participant_id":"agent","type":"participant_message"}),
+     :completed},
+    {:speaker, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."}), :completed},
+    {:silence, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}), :completed},
+    {:cue, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":"Go ahead."}), :completed},
+    {:duplicate, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"One","message":"Two"}), :failed},
+    {:unknown_mode, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"other","message":"Hello."}), :failed},
+    {:speaker_null, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":null}), :failed},
     {:malformed, "Not JSON", :failed},
-    {:oversized, JSON.encode!(%{agent_mode: "speaker", message: String.duplicate("x", 512)}),
+    {:oversized, JSON.encode!(%{type: "participant_message", participant_id: "agent", agent_mode: "speaker", message: String.duplicate("x", 512)}),
      :failed},
-    {:refusal, ~s({"agent_mode":"speaker","message":"Hello."}), :failed},
-    {:truncation, ~s({"agent_mode":"speaker","message":"Hello."}), :failed}
+    {:refusal, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."}), :failed},
+    {:truncation, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."}), :failed}
   ]
 
   test "the terminal wire matrix includes every installed LLM integration" do
@@ -85,10 +90,13 @@ defmodule Vxpipe.AgentRuntime.Provider.UniversalTerminalWireTest do
   defp assert_reason(result, :oversized), do: assert(result.reason == :output_too_large)
 
   defp assert_reason(result, kind)
-       when kind in [:duplicate, :unknown_mode, :speaker_null, :malformed],
+       when kind in [:duplicate, :unknown_mode, :speaker_null, :malformed, :missing_attribution, :invalid_type],
        do: assert(result.reason == :invalid_dialogue)
 
   defp assert_reason(_result, _kind), do: :ok
+
+  defp assert_dialogue(%{dialogue: dialogue}, :envelope),
+    do: assert(%{agent_mode: :speaker, message: "The lookup is running."} = dialogue)
 
   defp assert_dialogue(%{dialogue: dialogue}, :speaker),
     do: assert(%{agent_mode: :speaker, message: "Hello."} = dialogue)

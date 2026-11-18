@@ -5,7 +5,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMArtifactTest do
   alias Vxpipe.AgentRuntime.Provider.ReqLLM.ResponseNormalizer
 
   test "native structured_output calls remain tool calls rather than dialogue artifacts" do
-    text = ~s({"agent_mode":"speaker","message":"Hello."})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
     call = ToolCall.new("real-buffered-call", "structured_output", text)
 
     response = %Response{

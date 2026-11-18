@@ -35,6 +35,10 @@ defmodule Vxpipe.AgentRuntime.Integration.UniversalRepliesTest do
       streaming <- [false, true] do
     @tag tag
     @tag :live_universal_replies
+    if provider in ["google", "openai"] do
+      @tag :live_universal_primary
+    end
+
     if provider in ["deepseek", "fireworks", "openrouter"] do
       @tag :live_universal_remaining
     end

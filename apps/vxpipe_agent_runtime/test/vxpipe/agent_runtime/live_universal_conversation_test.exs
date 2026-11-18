@@ -157,10 +157,10 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversationTest do
   end
 
   defp dialogue(step, mode, _text, step, bad),
-    do: %{text: JSON.encode!(%{agent_mode: mode, message: bad})}
+    do: %{text: JSON.encode!(%{type: "participant_message", participant_id: "agent", agent_mode: mode, message: bad})}
 
   defp dialogue(_step, mode, text, _bad_step, _bad),
-    do: %{text: JSON.encode!(%{agent_mode: mode, message: text})}
+    do: %{text: JSON.encode!(%{type: "participant_message", participant_id: "agent", agent_mode: mode, message: text})}
 
   defp evidence(output) do
     for line <- String.split(output, "\n"),

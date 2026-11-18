@@ -29,8 +29,8 @@ defmodule Vxpipe.AgentRuntime.DialogueSessionTest do
 
       assert_receive {:model_stream_process, provider, request}
       assert request.reply_protocol == :mode_message_v1
-      send(provider, {:test_stream_delta, ~s({"agent_mode":"speaker",)})
-      text = ~s({"agent_mode":"speaker","message":"Hello"})
+      send(provider, {:test_stream_delta, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker",)})
+      text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello"})
       reply(provider, text)
 
       assert {:ok,
@@ -49,10 +49,10 @@ defmodule Vxpipe.AgentRuntime.DialogueSessionTest do
     session = start_session()
 
     for {text, expected} <- [
-          {~s({"agent_mode":"listener","message":null}), :completed},
-          {~s({"agent_mode":"listener","message":"okay"}), :completed},
-          {~s({"agent_mode":"speaker","message":null}), :failed},
-          {~s({"agent_mode":"listener","message":), :failed},
+          {~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}), :completed},
+          {~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":"okay"}), :completed},
+          {~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":null}), :failed},
+          {~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":), :failed},
           {"Sorry, I cannot", :failed}
         ] do
       correlation = %{request_id: make_ref()}
@@ -69,7 +69,7 @@ defmodule Vxpipe.AgentRuntime.DialogueSessionTest do
     session = start_session()
     task = Task.async(fn -> Session.request(session, "hello", %{request_id: "failed"}) end)
     assert_receive {:model_stream_process, provider, _request}
-    send(provider, {:test_stream_delta, ~s({"agent_mode":"speaker","message":"Hi)})
+    send(provider, {:test_stream_delta, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hi)})
     send(provider, {:test_stream_response, {:error, :upstream_failed}})
     assert {:ok, %{status: :failed}} = Task.await(task)
     refute_received {:agent_runtime_event, %Event{kind: :text_delta}}
@@ -81,7 +81,7 @@ defmodule Vxpipe.AgentRuntime.DialogueSessionTest do
     task = Task.async(fn -> Session.request(session, "keep this human input", correlation) end)
     assert_receive {:model_stream_process, provider, _request}
     monitor = Process.monitor(provider)
-    send(provider, {:test_stream_delta, ~s({"agent_mode":"speaker",)})
+    send(provider, {:test_stream_delta, ~s({"type":"participant_message",)})
     assert :ok = Session.cancel(session)
     assert {:ok, %{status: :cancelled}} = Task.await(task)
     assert_receive {:DOWN, ^monitor, :process, ^provider, _}
@@ -90,7 +90,7 @@ defmodule Vxpipe.AgentRuntime.DialogueSessionTest do
     task = Task.async(fn -> Session.request(session, "next", correlation) end)
     assert_receive {:model_stream_process, provider, request}
     assert Enum.any?(request.messages, &(&1.content == "keep this human input"))
-    reply(provider, JSON.encode!(%{agent_mode: "speaker", message: String.duplicate("a", 61)}))
+    reply(provider, JSON.encode!(%{type: "participant_message", participant_id: "agent", agent_mode: "speaker", message: String.duplicate("a", 61)}))
     assert {:ok, %{status: :failed, reason: :output_too_large}} = Task.await(task)
     refute_received {:agent_runtime_event, %Event{kind: :text_delta}}
   end
@@ -100,7 +100,7 @@ defmodule Vxpipe.AgentRuntime.DialogueSessionTest do
     task = Task.async(fn -> Session.request(session, "hello", %{request_id: "timeout"}) end)
     assert_receive {:model_stream_process, provider, _}
     monitor = Process.monitor(provider)
-    send(provider, {:test_stream_delta, ~s({"agent_mode":"speaker",)})
+    send(provider, {:test_stream_delta, ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker",)})
     assert {:ok, %{status: :failed, reason: :request_timeout}} = Task.await(task)
     assert_receive {:DOWN, ^monitor, :process, ^provider, _}
     refute_received {:agent_runtime_event, %Event{kind: :text_delta}}

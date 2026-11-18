@@ -287,7 +287,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
       id: "reply",
       model: "google:gemini-3.5-flash-lite",
       context: Context.new(),
-      message: Context.assistant(~s({"agent_mode":"speaker","message":"Hello."})),
+      message: Context.assistant(~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})),
       finish_reason: :stop
     }
 
@@ -305,7 +305,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLMTest do
   end
 
   test "modern replies preserve native calls regardless of names or accompanying prose" do
-    text = ~s({"agent_mode":"speaker","message":"Hello."})
+    text = ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})
     artifact = Elixir.ReqLLM.ToolCall.new("native-json-tool", "structured_output", text)
 
     response = %Response{

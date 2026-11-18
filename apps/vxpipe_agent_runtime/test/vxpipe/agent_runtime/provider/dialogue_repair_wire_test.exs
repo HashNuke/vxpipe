@@ -65,7 +65,7 @@ defmodule Vxpipe.AgentRuntime.Provider.DialogueRepairWireTest do
 
       text =
         if JSON.encode!(body) =~ "malformed-wire",
-          do: ~s({"agent_mode":"listener","message":null}),
+          do: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}),
           else: "malformed-wire"
 
       Req.Test.json(connection, %{
@@ -121,7 +121,7 @@ defmodule Vxpipe.AgentRuntime.Provider.DialogueRepairWireTest do
 
       parts =
         if JSON.encode!(body) =~ "functionResponse",
-          do: [%{text: ~s({"agent_mode":"speaker","message":"Checking."})}],
+          do: [%{text: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Checking."})}],
           else: [
             %{
               functionCall: %{name: "lookup", args: %{}},
@@ -185,7 +185,7 @@ defmodule Vxpipe.AgentRuntime.Provider.DialogueRepairWireTest do
             id: "m",
             role: "assistant",
             status: "completed",
-            content: [%{type: "output_text", text: ~s({"agent_mode":"listener","message":null})}]
+            content: [%{type: "output_text", text: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null})}]
           }
         ]
       })

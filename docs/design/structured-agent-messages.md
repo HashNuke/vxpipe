@@ -18,7 +18,7 @@ call_state_changed, uses agent_mode/message for assistant replies, and allows
 listener-mode backchannels. Playback/classifier diagnostics stay internal and
 existing tool formats stay unchanged. The subsequent user clarification resolves stop-and-wait through an idle tool,
 with optional spoken acknowledgment before the quiet interval. Ordinary dialogue
-returns only agent_mode/message; interrupt_agent is no longer required. This is
+returns type, participant_id, agent_mode and message; interrupt_agent is not required. This is
 a specification of the full protocol; its native idle and audible listener-cue
 sections retain their separate implementation milestones.
 
@@ -39,7 +39,7 @@ and the existing engine completion observation retain their original encoding.
 | --- | --- |
 | Participant input | Runtime constructs `type: "participant_message"`, `participant_id`, nonempty `message`, `agent_mode`. |
 | Proposed platform input | Runtime constructs `type: "platform_event"`, `event`, `data`, `agent_mode` only for an explained application input. These event names are proposed, not current wire types. |
-| Common assistant dialogue response | Exactly `agent_mode` and nullable `message`; listener text is a cue, speaker text is a main reply. Stop-and-wait is the native idle tool. Runtime supplies identity/type in history. |
+| Common assistant dialogue response | Exactly `type: "participant_message"`, bounded `participant_id`, `agent_mode` and nullable `message`; listener text is a cue, speaker text is a main reply. Stop-and-wait is the native idle tool. Runtime supplies identity/type in history. |
 | Assistant speech in history | Same dialogue content with runtime-supplied `participant_id` and supported spoken `message` plus output mode; no playback metadata. |
 | Native tool exchange | Original call/result roles, content, IDs, arguments and opaque metadata, unchanged. No agent_mode. |
 | Async application completion | Existing engine-origin user message containing the tool_invocation_completion payload and trust preamble, unchanged. No agent_mode or replacement tool_result envelope. |
@@ -473,26 +473,19 @@ these labels are not permission to expose arbitrary call state.
 
 ### Mode-based assistant replies
 
-The model returns exactly agent_mode and message for final dialogue. Use message
-consistently for participant dialogue content too; native tool results and
-conversation_summary retain their separate formats. Runtime supplies identity
-and historical content type; no model-authored type, participant_id, turn or
-interrupt_agent field is required for the final dialogue object.
+The model returns exactly type, participant_id, agent_mode and message for final
+dialogue, matching the envelope in assistant history. This is the user-directed
+2026-11-18 correction: two-field modern replies are rejected. Use
+`type: "participant_message"` and the application-supplied current agent identity
+(`agent` for standalone sessions without one). Native tool results and
+conversation_summary retain their separate formats. Returned attribution does
+not override runtime identity or prove delivery.
 
 ```json
 [
-  {
-    "agent_mode": "listener",
-    "message": null
-  },
-  {
-    "agent_mode": "listener",
-    "message": "okayyy"
-  },
-  {
-    "agent_mode": "speaker",
-    "message": "I'll look into your order details."
-  }
+  {"type":"participant_message","participant_id":"agent-1","agent_mode":"listener","message":null},
+  {"type":"participant_message","participant_id":"agent-1","agent_mode":"listener","message":"okayyy"},
+  {"type":"participant_message","participant_id":"agent-1","agent_mode":"speaker","message":"I'll look into your order details."}
 ]
 ```
 

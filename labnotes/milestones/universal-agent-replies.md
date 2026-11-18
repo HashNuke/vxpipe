@@ -192,7 +192,7 @@ acceptance evidence, with no excluded integration and no remaining allowlist.
   submitted schema/JSON strategy, immutable history and absence of repeated side
   effects. Include the exact Google model reported by the user. Define a fixed
   scenario/repetition plan before running, and retain failed attempts.
-- [x] Run required root format, compile-with-warnings-as-errors, strict Credo,
+- [ ] Run required root format, compile-with-warnings-as-errors, strict Credo,
   umbrella tests and unused-dependency checks; relevant frontend/type checks and
   rendered inspection; Lean if source-cutover or speech-state behavior changes.
   Resolve project-owned failures and distinguish unrelated failures in evidence.
@@ -205,7 +205,7 @@ future LLM integrations inherit the same contract and conformance requirements.
 - [x] Update the durable design, integration authoring guide, usage documentation,
   prior profile-policy notices and this milestone/index together. Explain generic
   support versus actual upstream request failures without promising infallible JSON.
-- [x] Verify the release contains no provider/model reply allowlist, no substitute
+- [ ] Verify the release contains no provider/model reply allowlist, no substitute
   catalog exclusion and no implicit legacy fallback. Retain ordinary model and
   credential validation and the shared strict decoder.
 - [ ] Commit the accepted implementation before building/deploying `vxpipe.service`;
@@ -515,3 +515,14 @@ pass. Rendered editor/call desktop and phone checks and independent packaged
 release inspection are recorded above. No production speech/source-cutover state
 changed in the verification repair, so no additional Lean lane is required.
 E4 is complete; C3/E2 live acceptance and F3/F4 deployment/evidence remain open.
+
+## User-directed reply envelope correction — verification reopened
+
+The user identified that DeepSeek returned the same type/participant_id envelope
+we supplied in prior assistant messages. This is an implementation inconsistency,
+not grounds for asking to waive that failure. User directs exactly four required
+reply fields and explicitly rejects backward compatibility. See
+[correction notes](../20261118-2109-consistent-reply-envelope.md). E4 and F2 are
+reopened until the changed contract passes root verification and a new release
+candidate is audited. C3/E2 remain open pending corrected live acceptance; no
+acceptance-policy waiver is being inferred. Zenmux live deferral still applies.

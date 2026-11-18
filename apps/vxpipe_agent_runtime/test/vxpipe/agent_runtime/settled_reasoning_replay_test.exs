@@ -99,7 +99,7 @@ defmodule Vxpipe.AgentRuntime.SettledReasoningReplayTest do
   end
 
   defp payload(body, _provider, streaming) do
-    message = %{role: "assistant", content: ~s({"agent_mode":"speaker","message":"Hello."})}
+    message = %{role: "assistant", content: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})}
 
     message = Map.put(message, :reasoning_content, "Private reasoning")
 

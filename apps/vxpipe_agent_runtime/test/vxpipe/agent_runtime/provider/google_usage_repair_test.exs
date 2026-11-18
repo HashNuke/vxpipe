@@ -121,7 +121,7 @@ defmodule Vxpipe.AgentRuntime.Provider.GoogleUsageRepairTest do
       DialogueWireServer.start(self(), fn body ->
         text =
           if JSON.encode!(body) =~ "malformed-usage",
-            do: ~s({"agent_mode":"listener","message":null}),
+            do: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"listener","message":null}),
             else: "malformed-usage"
 
         if streaming do

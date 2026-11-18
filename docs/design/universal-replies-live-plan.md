@@ -260,3 +260,25 @@ post-tool behavior after the replay lifecycle work. It does not presume that
 DeepSeek's previously invalid replies are fixed. Retain all earlier failures and
 all outcomes from this run; Zenmux live acceptance remains deferred. No automatic
 rerun is authorized by this plan.
+
+## Four-field reply contract correction
+
+User directs requiring the same type/participant_id fields already shown in
+assistant history, with no two-field compatibility. Following deterministic
+verification and review, run the six `live_universal_remaining` conversations
+once (DeepSeek, Fireworks, OpenRouter, each buffered and streamed) with the
+existing models, 4096 output cap, tools, scenario and semantic assertions. This
+is a justified implementation correction, not an acceptance-policy waiver or
+retry-until-green. Preserve all previous outcomes and record this attempt as
+`envelope1`; Zenmux remains explicitly deferred.
+
+Also run exactly four configured `live_universal_primary` cases once (Google and
+OpenAI, each buffered and streamed) as `envelope-primary1`. This dedicated tag
+excludes diagnostic Google strategy overrides and validates the changed shared
+contract across both primary transports. All prior evidence is retained.
+
+After both runtime runs pass, refresh the configured Google/OpenAI real Hangup
+and Chrome/TTS call checks once under the four-field contract (`envelope-room1`).
+Run only universal_reply_hangup_test.exs and structured_agent_browser_test.exs
+through the live runner: four synthetic configured-room cases total, with no
+external telephone call or user record modification.

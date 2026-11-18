@@ -62,7 +62,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ChatRefusalWireTest do
   end
 
   defp response(body, streaming, outcome) do
-    message = %{role: "assistant", content: ~s({"agent_mode":"speaker","message":"Hello."})}
+    message = %{role: "assistant", content: ~s({"type":"participant_message","participant_id":"agent","agent_mode":"speaker","message":"Hello."})}
 
     marker =
       case outcome do
