@@ -4,7 +4,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
   alias Elixir.ReqLLM.Context
 
   alias Vxpipe.AgentRuntime.{Message, ModelRequest, ModelTool}
-  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{Config, Replay, ReplyStrategy}
+  alias Vxpipe.AgentRuntime.Provider.ReqLLM.{Config, Replay, ReplyStrategy, RouterReplay}
 
   @spec prepare(Config.t(), ModelRequest.t()) :: {term(), Context.t(), keyword()}
   def prepare(%Config{} = config, %ModelRequest{} = request) do
@@ -20,7 +20,7 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
       request.messages
       |> ReplyStrategy.instruct(request.reply_protocol)
       |> add_runtime_context(request.model_context)
-      |> Enum.map(&to_req_llm_message(&1, config.model))
+      |> Enum.map(&to_req_llm_message(&1, config.model, config.generation_options))
       |> Context.new()
 
     options =
@@ -29,8 +29,10 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
       |> Keyword.put(:api_key, config.api_key)
       |> put_tools(request.tools)
       |> ReplyStrategy.options(request.reply_protocol, config.reply_strategy)
+      |> RouterReplay.native_tools(config.model, request.reply_protocol)
 
-    {config.model, context, options}
+    {model, options} = RouterReplay.project(config.model, options, request.messages)
+    {model, context, options}
   end
 
   defp add_runtime_context(messages, model_context) when map_size(model_context) == 0,
@@ -52,18 +54,22 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
       JSON.encode!(model_context)
   end
 
-  defp to_req_llm_message(%Message{role: :system, content: content}, _model),
+  defp to_req_llm_message(%Message{role: :system, content: content}, _model, _options),
     do: Context.system(content)
 
-  defp to_req_llm_message(%Message{role: :user, content: content}, _model),
+  defp to_req_llm_message(%Message{role: :user, content: content}, _model, _options),
     do: Context.user(content)
 
   defp to_req_llm_message(
          %Message{role: :assistant, content: content, tool_calls: calls} = message,
-         model
+         model,
+         options
        ) do
     tool_calls = Enum.map(calls, &to_req_llm_tool_call/1)
-    content |> Context.assistant(tool_calls: tool_calls) |> Replay.restore(message, model)
+
+    content
+    |> Context.assistant(tool_calls: tool_calls)
+    |> Replay.restore(message, model, options)
   end
 
   defp to_req_llm_message(
@@ -73,7 +79,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.RequestProjection do
            name: name,
            tool_call_id: tool_call_id
          },
-         _model
+         _model,
+         _options
        ) do
     Context.tool_result(tool_call_id, name, content)
   end

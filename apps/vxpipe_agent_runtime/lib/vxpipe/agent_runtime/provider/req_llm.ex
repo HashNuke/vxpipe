@@ -9,7 +9,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
     Config,
     DialogueOptions,
     RequestProjection,
-    ResponseNormalizer
+    ResponseNormalizer,
+    RouterReplay
   }
 
   @spec new(keyword()) :: {:ok, Config.t()} | {:error, :invalid_configuration}
@@ -43,7 +44,12 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
 
     case Elixir.ReqLLM.generate_text(model, context, options) do
       {:ok, %Response{} = response} ->
-        ResponseNormalizer.normalize(response, request.reply_protocol, config.model)
+        ResponseNormalizer.normalize(
+          response,
+          request.reply_protocol,
+          config.model,
+          RouterReplay.context(config, request)
+        )
 
       {:error, _reason} ->
         {:error, :provider_unavailable}
@@ -60,7 +66,12 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
 
     case Elixir.ReqLLM.stream_text(model, context, options) do
       {:ok, %StreamResponse{} = response} ->
-        consume_stream(response, emit, request.reply_protocol)
+        consume_stream(
+          response,
+          emit,
+          request.reply_protocol,
+          {config.model, RouterReplay.context(config, request)}
+        )
 
       {:error, _reason} ->
         {:error, :provider_unavailable}
@@ -74,11 +85,17 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM do
   @doc false
   @spec consume_stream(StreamResponse.t(), (String.t() -> :ok | {:error, atom()})) ::
           {:ok, Vxpipe.AgentRuntime.ModelResponse.t()} | {:error, atom()}
-  def consume_stream(%StreamResponse{} = stream_response, emit, protocol \\ :legacy)
+  def consume_stream(
+        %StreamResponse{} = stream_response,
+        emit,
+        protocol \\ :legacy,
+        replay_source \\ nil
+      )
       when is_function(emit, 1) do
     case StreamResponse.process_stream(stream_response, on_result: &emit_chunk(&1, emit)) do
       {:ok, %Response{} = response} ->
-        ResponseNormalizer.normalize(response, protocol, stream_response.model)
+        {model, context} = replay_source || {stream_response.model, %{}}
+        ResponseNormalizer.normalize(response, protocol, model, context)
 
       {:error, _reason} ->
         {:error, :provider_unavailable}

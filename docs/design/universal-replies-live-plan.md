@@ -161,3 +161,29 @@ recovery, without stale idle output. Make the caller's resumption explicit:
 resume answering in speaker mode with exactly READY. Retain the same mode/output
 assertion, cancellation timing and full tools. Run all six cases once; preserve
 configured1's two failures rather than treating them as successful recovery.
+# Router provenance diagnostic — router-provenance1
+
+Before implementing private router replay affinity, run exactly four synthetic
+requests: configured OpenRouter and Zenmux selections, buffered and streamed once
+each. Ask for one native `lookup` call with an empty object; do not execute it or
+continue the conversation. Record only configured/reported model identifiers,
+explicit provider identity fields, and booleans indicating private reasoning.
+Do not log raw response bodies, reasoning, signatures, credentials or headers.
+Retain all four outcomes, including transport failures. This diagnostic is not
+conversation acceptance and does not close any milestone task.
+
+Result: both OpenRouter requests completed and returned private details plus one
+native lookup. Buffered metadata identified provider `Google`; streaming retained
+the explicit model but not that provider field. Both Zenmux cases stopped before
+HTTP because `ZENMUX_API_KEY` was absent. User direction afterward: defer Zenmux
+live checks for now and continue the other five integrations. Preserve its
+deterministic coverage and record this as a deferral rather than passing evidence.
+
+## Remaining enabled integrations — remaining1
+
+After direct and router transport tests pass, run six cases under
+`--only live_universal_remaining`: DeepSeek, Fireworks and OpenRouter, one buffered
+and one streamed conversation each, using the identical ten-step fixture and
+reviewed LiveModels selections. Do not alter instructions or expected outcomes
+during this run. Retain every step and failure. This extends the already passing
+Google/OpenAI matrix; Zenmux live cases remain explicitly deferred by the user.

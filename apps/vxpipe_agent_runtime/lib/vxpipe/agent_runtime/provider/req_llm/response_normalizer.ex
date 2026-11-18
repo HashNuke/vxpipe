@@ -7,12 +7,13 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ResponseNormalizer do
 
   @spec normalize(Response.t(), :legacy | :mode_message_v1) ::
           {:ok, ModelResponse.t()} | {:error, atom()}
-  def normalize(%Response{} = response, protocol \\ :legacy, model \\ nil) do
+  def normalize(%Response{} = response, protocol \\ :legacy, model \\ nil, replay_context \\ %{}) do
     classified = Response.classify(response)
 
     with :ok <- validate_completion(response, classified, protocol),
          {:ok, calls} <- normalize_tool_calls(classified.tool_calls),
-         {:ok, replay} <- capture_replay(protocol, model, response, classified.text, calls) do
+         {:ok, replay} <-
+           capture_replay(protocol, model, response, classified.text, calls, replay_context) do
       metadata = Response.call_metadata(response)
       usage = Map.get(metadata, :usage) || %{}
 
@@ -32,10 +33,10 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.ResponseNormalizer do
     _kind, _reason -> {:error, :invalid_provider_response}
   end
 
-  defp capture_replay(:mode_message_v1, model, response, text, calls),
-    do: Replay.capture(model, response, text, calls)
+  defp capture_replay(:mode_message_v1, model, response, text, calls, context),
+    do: Replay.capture(model, response, text, calls, context)
 
-  defp capture_replay(_protocol, _model, _response, _text, _calls), do: {:ok, %{}}
+  defp capture_replay(_protocol, _model, _response, _text, _calls, _context), do: {:ok, %{}}
 
   defp validate_completion(_response, _classified, :legacy), do: :ok
 

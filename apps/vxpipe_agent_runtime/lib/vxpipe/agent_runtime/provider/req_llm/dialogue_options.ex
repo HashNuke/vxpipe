@@ -20,7 +20,8 @@ defmodule Vxpipe.AgentRuntime.Provider.ReqLLM.DialogueOptions do
       :previous_response_id,
       :conversation,
       :context_management,
-      :tool_outputs
+      :tool_outputs,
+      :vxpipe_native_tool_calls_only
     ]
 
     absent?(options, owned) and

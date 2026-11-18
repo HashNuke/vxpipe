@@ -18,6 +18,17 @@ defmodule Vxpipe.AgentRuntime.LiveUniversalConversation do
   @long_reply "The Northstar office opens at 9 in the morning. " <>
                 "It closes at 5 in the afternoon. These hours apply Monday through Friday."
 
+  def providers do
+    [
+      {"google", :live_gemini},
+      {"openai", :live_openai},
+      {"deepseek", :live_deepseek},
+      {"fireworks", :live_fireworks},
+      {"openrouter", :live_openrouter},
+      {"zenmux", :live_zenmux}
+    ]
+  end
+
   def run(provider, streaming, strategy \\ :configured, generation_overrides \\ []) do
     handler = {__MODULE__, make_ref()}
 

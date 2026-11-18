@@ -5,6 +5,13 @@ and controlled Hangup acceptance recorded. Checkpoints C–F and release remain 
 owns ordering. User direction, 2026-11-18: no structured-response allowlist;
 every LLM integration must support the common agent reply contract.
 
+Approved scope change, 2026-11-18: after the live runner reported a missing
+`ZENMUX_API_KEY`, the user directed “skip zenmax for now. continue with the rest”.
+Defer Zenmux live acceptance and continue the other five integrations. Zenmux stays
+in deterministic conformance and implementation coverage. Report its live result
+as deferred, never passed; references below to all-six live evidence have this
+explicit exception for the current run.
+
 ## Runnable outcome
 
 An author selects any configured LLM integration, saves and publishes a valid
@@ -127,7 +134,7 @@ request counts, failures, latency and usage; do not select only passing runs.
 **Exit:** DeepSeek, Fireworks, OpenRouter and Zenmux each run the same modern
 conversation without a new per-model permission entry.
 
-- [ ] Apply the common strategy boundary to all four integrations. Audit actual
+- [x] Apply the common strategy boundary to all four integrations. Audit actual
   transport capabilities and native routing options rather than assuming their
   OpenAI-compatible endpoints share all OpenAI semantics.
 - [ ] Preserve each integration's required reasoning/signature/tool metadata across
@@ -136,7 +143,7 @@ conversation without a new per-model permission entry.
 - [ ] Exercise a representative configured model for each integration and the
   portable path independently of native schema support. Test unavailable native
   metadata without a save/publish rejection or silent legacy downgrade.
-- [ ] Make the common harness fail if any registered LLM integration is omitted.
+- [x] Make the common harness fail if any registered LLM integration is omitted.
   Record native/JSON-mode/portable paths actually exercised, model/transport
   identifiers and dependency versions; model names in fixtures are evidence,
   never production eligibility configuration.
@@ -345,3 +352,22 @@ changed source/model replay. Initial four field-loss failures and a later pair o
 stream-chunk failures were reproduced before their fixes. Router replay, ordinary
 host-settled reasoning, full lifecycle coverage and configured live acceptance
 remain pending; no C task is checked off by this incremental change.
+
+## Implementation evidence — C, router transport and registry coverage
+
+All four remaining transports now have actual buffered/streamed HTTP coverage.
+Router replay preserves exact ordered metadata, binds source/options, pins the
+reported model before subsequent requests and disables alternate-model fallback
+while private history remains. Modern decoding cannot invent native calls from
+quoted private reasoning. The shared six-provider harness is registry-checked;
+its [transport matrix](../../docs/design/universal-replies-chat-replay.md) records
+model IDs, strategies, dependency version and current live outcomes. C tasks 1 and
+4 are complete; lifecycle and full enabled live acceptance remain open.
+
+Final Astra xhigh review is clean after reproduced fixes for malformed fields,
+quoted tool syntax, blank origins and nullable text carriers. Independent checks:
+54 adversarial cases, 16 final regression controls, two legacy cases and all five
+prior patch upgrades pass. Runtime suite: 240 tests, zero failures, 25 live
+exclusions. Root static gates pass. The prior full umbrella's WebRTC teardown
+race is fixed and reviewed separately; its intermittent phone recovery timeout
+remains under investigation. No full-green umbrella or release claim is made.

@@ -77,3 +77,13 @@ in buffered and streamed tool continuations. See the
 [transport investigation](../../docs/design/universal-replies-chat-replay.md).
 The historical patch filenames remain stable; the manifest now covers Fireworks
 as well as Google and upgrades all four previously prepared source states.
+
+Router continuation extends the same manifest to generic chat decoding/building,
+OpenRouter and Zenmux. Exact raw reasoning maps survive both modes, explicit
+reported-model provenance survives streaming, and malformed private fields remain
+invalid instead of disappearing. Raw Zenmux details are now re-encoded. The modern
+runtime-owned `vxpipe_native_tool_calls_only` option disables SDK parsing of tool
+syntax quoted in private reasoning; the default retains legacy behavior. No flag
+is sent in provider JSON. All five preceding prepared source states upgrade to
+the same final hashes. See `router_replay_wire_test.exs` and
+`router_native_call_test.exs` for real HTTP regressions.

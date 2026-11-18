@@ -1,5 +1,16 @@
 defmodule Vxpipe.AgentRuntime.LiveUniversalConversationTest do
   use ExUnit.Case, async: false
+
+  test "the shared conversation harness covers every installed LLM integration" do
+    installed =
+      for {provider, capabilities} <- Vxpipe.Providers.Registry.catalog(),
+          :llm in capabilities,
+          do: provider
+
+    covered = Enum.map(Vxpipe.AgentRuntime.LiveUniversalConversation.providers(), &elem(&1, 0))
+    assert Enum.sort(covered) == Enum.sort(installed)
+  end
+
   import ExUnit.CaptureIO
   alias Vxpipe.AgentRuntime.{DialogueWireServer, LiveUniversalConversation}
 

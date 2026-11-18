@@ -31,10 +31,14 @@ defmodule Vxpipe.AgentRuntime.Integration.UniversalRepliesTest do
     end
   end
 
-  for {provider, tag} <- [{"google", :live_gemini}, {"openai", :live_openai}],
+  for {provider, tag} <- Vxpipe.AgentRuntime.LiveUniversalConversation.providers(),
       streaming <- [false, true] do
     @tag tag
     @tag :live_universal_replies
+    if provider in ["deepseek", "fireworks", "openrouter"] do
+      @tag :live_universal_remaining
+    end
+
     test "#{provider} modern receptionist conversation streaming=#{streaming}" do
       Vxpipe.AgentRuntime.LiveUniversalConversation.run(unquote(provider), unquote(streaming))
     end

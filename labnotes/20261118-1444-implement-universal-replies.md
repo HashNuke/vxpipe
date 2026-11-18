@@ -405,3 +405,52 @@ dependency gates pass. No speech/source state-machine implementation changed.
   lifecycle or speech-state code changed; no Lean lane needed for this test repair.
 - The phone recovery timeout remains unresolved. Full umbrella acceptance must be
   rerun after the ongoing router checkpoint and this repair; no all-green claim.
+
+### Router replay and remaining-provider evidence
+
+- Initial router wire matrix: twelve cases, ten failures. Both routers lost raw
+  details on continuation; streamed responses also reported the configured model
+  instead of the actual returned model. Added an exact-source SDK patch for raw
+  maps and explicit consistent model provenance. Zenmux also needed raw detail
+  encoding; generic encoder previously discarded its own buffered raw maps.
+- Astra design review rejected response-only origin checks: native fallback can
+  already have sent an old blob to a different model. Record/model-pin all retained
+  replay, remove alternate-model routing and disable Zenmux fallback with string
+  false before HTTP. Preserve other configuration and original ordinary routing.
+  Conflicting origins or changed source/options fail before HTTP. The initial
+  mismatch-rejection test was revised to this documented affinity behavior; four
+  contradictory later-response cases failed before adding their admission guard.
+- Do not invent provider slug mappings or a universal endpoint-identity gate.
+  Review found documented cross-platform compatibility for some signatures and
+  no general same-model incompatibility reproduction. Model affinity remains
+  necessary; additional provider compatibility constraints need evidence.
+- Review proved malformed private fields were silently dropped (four cases),
+  whitespace origins admitted tools (four cases), and buffered textual reasoning
+  could overwrite/invent native calls (four permanent cases). Added each proof to
+  the wire suite before fixing it. Guards retain invalid-present markers, validate
+  known payload types and require nonblank origins. Removed buffered reattachment
+  that could overwrite markers in mixed-field responses. Modern native-only SDK
+  flag disables textual tool parsing while preserving legacy defaults.
+- Focused final matrix: 32 tests pass. Patch fresh/repeat/all-five-upgrade checks
+  pass. Registry coverage test failed before adding the shared six-provider list;
+  eight helper cases now pass. Full runtime before final guard additions: 223
+  tests pass, 17 live exclusions. Final independent review/static checks pending.
+- Fixed identity diagnostic ran four cases: both OpenRouter requests completed;
+  both Zenmux cases failed before HTTP because the child lacked ZENMUX_API_KEY.
+  No protected environment file was accessed. User explicitly directed skipping
+  Zenmux for now; recorded live-only deferral while retaining deterministic tests.
+- Fixed remaining1 conversation run: six cases, four pass, two fail. DeepSeek
+  streaming, Fireworks streaming, and OpenRouter in both modes pass all ten steps.
+  Fireworks buffered added type/participant_id on unrelated arithmetic and did not
+  correct despite finite output usage; provenance review is investigating. DeepSeek
+  buffered returned listener/null at the requested cue. All rows/failures retained
+  in live evidence; no checkbox claims these failures as acceptance.
+- Final shape review proved valid null/absent reasoning.text carriers were being
+  rejected. Added a null carrier to the permanent exact-sequence test: four red
+  cases before allowing nullable text/signature; malformed present types still
+  fail. Independent final review is clean: 54 adversarial checks, 16 final controls,
+  two legacy cases, all five patch upgrades, and whitespace check pass. Final
+  runtime: 240 tests, zero failures (25 excluded). Root static gates pass.
+- Checked C tasks 1 and 4 based on reviewed transport audit and registry/matrix
+  evidence. C lifecycle and remaining enabled live acceptance stay open; milestone
+  index stays unchecked. The approved Zenmux deferral is explicit, not a pass.

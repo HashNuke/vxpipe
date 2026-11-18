@@ -216,3 +216,265 @@
 -    :reasoning_content,
 -    "reasoning_content"
 +    "reasoning_details"
+--- a/lib/req_llm/provider/defaults.ex
++++ b/lib/req_llm/provider/defaults.ex
+@@ -1009,0 +1010,4 @@
++  defp encode_reasoning_detail_for_openai(%{"type" => type} = detail)
++       when is_binary(type) and type != "" and not is_struct(detail),
++       do: detail
++
+@@ -1248 +1252,3 @@
+-    chunks = content_chunks ++ openai_reasoning_details_chunks(raw_message, model.provider)
++    chunks =
++      router_model_chunks(data, model.provider) ++
++        content_chunks ++ openai_reasoning_details_chunks(raw_message, model.provider)
+@@ -1319,8 +1325 @@
+-              case delta do
+-                %{"reasoning_details" => details} when is_list(details) and details != [] ->
+-                  reasoning_details = decode_openai_reasoning_details(details, model.provider)
+-                  [ReqLLM.StreamChunk.meta(%{reasoning_details: reasoning_details})]
+-
+-                _ ->
+-                  []
+-              end
++              openai_reasoning_details_chunks(delta, model.provider)
+@@ -1378 +1377 @@
+-    choices_chunks ++ usage_chunks
++    router_model_chunks(data, model.provider) ++ choices_chunks ++ usage_chunks
+@@ -1478,0 +1478,10 @@
++  defp openai_reasoning_details_chunks(%{"reasoning" => value}, provider)
++       when provider in [:openrouter, :zenmux] and not is_nil(value) and not is_binary(value) do
++    [ReqLLM.StreamChunk.meta(%{reasoning_details: [%{"invalid_reasoning_details" => true}]})]
++  end
++
++  defp openai_reasoning_details_chunks(%{"reasoning_content" => value}, provider)
++       when provider in [:openrouter, :zenmux] and not is_nil(value) and not is_binary(value) do
++    [ReqLLM.StreamChunk.meta(%{reasoning_details: [%{"invalid_reasoning_details" => true}]})]
++  end
++
+@@ -1486,0 +1496,5 @@
++  defp openai_reasoning_details_chunks(%{"reasoning_details" => value}, provider)
++       when provider in [:openrouter, :zenmux] and not is_nil(value) and not is_list(value) do
++    [ReqLLM.StreamChunk.meta(%{reasoning_details: [%{"invalid_reasoning_details" => true}]})]
++  end
++
+@@ -1487,0 +1502,14 @@
++
++  defp router_model_chunks(data, provider) when provider in [:openrouter, :zenmux] do
++    if Map.has_key?(data, "model") do
++      [ReqLLM.StreamChunk.meta(%{router_response_model: Map.get(data, "model")})]
++    else
++      []
++    end
++  end
++
++  defp router_model_chunks(_data, _provider), do: []
++
++  defp decode_openai_reasoning_details(details, provider)
++       when is_list(details) and provider in [:openrouter, :zenmux],
++       do: details
+--- a/lib/req_llm/providers/openrouter.ex
++++ b/lib/req_llm/providers/openrouter.ex
+@@ -57,0 +58,5 @@
++    vxpipe_native_tool_calls_only: [
++      type: :boolean,
++      default: false,
++      doc: "Preserve native tool calls without interpreting quoted reasoning as tool syntax"
++    ],
+@@ -975,2 +979,0 @@
+-        reasoning_details = extract_reasoning_details(body)
+-
+@@ -978,3 +981,7 @@
+-          case extract_deepseek_tool_calls(body) do
+-            {:ok, updated_body} -> updated_body
+-            :no_tool_calls -> body
++          if req.options[:vxpipe_native_tool_calls_only] do
++            body
++          else
++            case extract_deepseek_tool_calls(body) do
++              {:ok, updated_body} -> updated_body
++              :no_tool_calls -> body
++            end
+@@ -983,8 +990,3 @@
+-        {req, resp_with_decoded} =
+-          ReqLLM.Provider.Defaults.default_decode_response(
+-            {req, %{resp | body: body_with_tool_calls}}
+-          )
+-
+-        updated_resp = attach_reasoning_details_to_response(resp_with_decoded, reasoning_details)
+-
+-        {req, updated_resp}
++        ReqLLM.Provider.Defaults.default_decode_response(
++          {req, %{resp | body: body_with_tool_calls}}
++        )
+@@ -1047,24 +1048,0 @@
+-  defp extract_reasoning_details(body) when is_map(body) do
+-    with %{"choices" => [first_choice | _]} <- body,
+-         %{"message" => %{"reasoning_details" => details}} when is_list(details) <- first_choice do
+-      if Enum.all?(details, &is_map/1) do
+-        details
+-        |> Enum.with_index()
+-        |> Enum.map(&normalize_reasoning_detail/1)
+-      end
+-    else
+-      _ -> nil
+-    end
+-  end
+-
+-  defp extract_reasoning_details(_), do: nil
+-
+-  defp normalize_reasoning_detail({raw, fallback_index}) do
+-    ReqLLM.Message.ReasoningDetails.from_openai_compatible(
+-      raw,
+-      :openrouter,
+-      fallback_index,
+-      "openrouter-v1"
+-    )
+-  end
+-
+@@ -1196,34 +1173,0 @@
+-  defp attach_reasoning_details_to_response(resp, nil), do: resp
+-
+-  defp attach_reasoning_details_to_response(%Req.Response{body: body} = resp, details)
+-       when is_struct(body, ReqLLM.Response) do
+-    case body.message do
+-      nil ->
+-        resp
+-
+-      message ->
+-        updated_message = Map.put(message, :reasoning_details, details)
+-
+-        updated_context =
+-          case body.context.messages do
+-            [] ->
+-              %{body.context | messages: [updated_message]}
+-
+-            msgs ->
+-              {init, [last]} = Enum.split(msgs, -1)
+-
+-              if is_struct(last, ReqLLM.Message) and last.role == message.role do
+-                updated_last = Map.put(last, :reasoning_details, details)
+-                %{body.context | messages: init ++ [updated_last]}
+-              else
+-                %{body.context | messages: msgs}
+-              end
+-          end
+-
+-        updated_body = %{body | message: updated_message, context: updated_context}
+-        %{resp | body: updated_body}
+-    end
+-  end
+-
+-  defp attach_reasoning_details_to_response(resp, _details), do: resp
+-
+--- a/lib/req_llm/provider/defaults/response_builder.ex
++++ b/lib/req_llm/provider/defaults/response_builder.ex
+@@ -99,0 +100 @@
++      |> put_router_model(chunks, model.provider)
+@@ -103 +104 @@
+-      model: materialize_model(profile, metadata, model),
++      model: provider_meta[:router_response_model] || materialize_model(profile, metadata, model),
+@@ -120,0 +122,21 @@
++
++  defp put_router_model(provider_meta, chunks, provider)
++       when provider in [:openrouter, :zenmux] do
++    models =
++      chunks
++      |> Enum.flat_map(fn
++        %StreamChunk{type: :meta, metadata: %{router_response_model: model}} -> [model]
++        _chunk -> []
++      end)
++      |> Enum.uniq()
++
++    reported =
++      case models do
++        [model] when is_binary(model) and model != "" -> model
++        _unknown_or_inconsistent -> nil
++      end
++
++    Map.put(provider_meta, :router_response_model, reported)
++  end
++
++  defp put_router_model(provider_meta, _chunks, _provider), do: provider_meta
+--- a/lib/req_llm/providers/zenmux.ex
++++ b/lib/req_llm/providers/zenmux.ex
+@@ -50,0 +51,5 @@
++    vxpipe_native_tool_calls_only: [
++      type: :boolean,
++      default: false,
++      doc: "Preserve native tool calls without interpreting quoted reasoning as tool syntax"
++    ],
+@@ -230,2 +234,0 @@
+-        reasoning_details = extract_reasoning_details(body)
+-
+@@ -233,3 +236,7 @@
+-          case extract_deepseek_tool_calls(body) do
+-            {:ok, updated_body} -> updated_body
+-            :no_tool_calls -> body
++          if req.options[:vxpipe_native_tool_calls_only] do
++            body
++          else
++            case extract_deepseek_tool_calls(body) do
++              {:ok, updated_body} -> updated_body
++              :no_tool_calls -> body
++            end
+@@ -238,8 +245,3 @@
+-        {req, resp_with_decoded} =
+-          ReqLLM.Provider.Defaults.default_decode_response(
+-            {req, %{resp | body: body_with_tool_calls}}
+-          )
+-
+-        updated_resp = attach_reasoning_details_to_response(resp_with_decoded, reasoning_details)
+-
+-        {req, updated_resp}
++        ReqLLM.Provider.Defaults.default_decode_response(
++          {req, %{resp | body: body_with_tool_calls}}
++        )
+@@ -302,47 +303,0 @@
+-  defp extract_reasoning_details(body) when is_map(body) do
+-    with %{"choices" => [first_choice | _]} <- body,
+-         %{"message" => %{"reasoning_details" => details}} when is_list(details) <- first_choice do
+-      if Enum.all?(details, &is_map/1) do
+-        details
+-      end
+-    else
+-      _ -> nil
+-    end
+-  end
+-
+-  defp extract_reasoning_details(_), do: nil
+-
+-  defp attach_reasoning_details_to_response(resp, nil), do: resp
+-
+-  defp attach_reasoning_details_to_response(%Req.Response{body: body} = resp, details)
+-       when is_struct(body, ReqLLM.Response) do
+-    case body.message do
+-      nil ->
+-        resp
+-
+-      message ->
+-        updated_message = Map.put(message, :reasoning_details, details)
+-
+-        updated_context =
+-          case body.context.messages do
+-            [] ->
+-              %{body.context | messages: [updated_message]}
+-
+-            msgs ->
+-              {init, [last]} = Enum.split(msgs, -1)
+-
+-              if is_struct(last, ReqLLM.Message) and last.role == message.role do
+-                updated_last = Map.put(last, :reasoning_details, details)
+-                %{body.context | messages: init ++ [updated_last]}
+-              else
+-                %{body.context | messages: msgs}
+-              end
+-          end
+-
+-        updated_body = %{body | message: updated_message, context: updated_context}
+-        %{resp | body: updated_body}
+-    end
+-  end
+-
+-  defp attach_reasoning_details_to_response(resp, _details), do: resp
+-
