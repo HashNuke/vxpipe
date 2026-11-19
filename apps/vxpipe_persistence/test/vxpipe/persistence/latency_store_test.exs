@@ -56,6 +56,82 @@ defmodule Vxpipe.Persistence.LatencyStoreTest do
              LatencyStore.list_turns(Repo, run.tenant_key, run.call_id, run.id, 50, nil)
   end
 
+  test "versioned turn and unattached segments survive storage revisions and legacy reads", %{
+    call: call
+  } do
+    segment = %{
+      epoch: 0,
+      start_sample: 0,
+      end_sample: 512,
+      start_us: 0,
+      end_us: 32_000,
+      start_confirmed_us: 96_000,
+      end_confirmed_us: 544_000,
+      uncertainty_us: 100,
+      reasons: []
+    }
+
+    evidence = %{version: 1, entries: [segment], omitted_count: 1, reasons: [:segment_limit]}
+    original = run(call)
+    assert {:ok, ^original} = LatencyStore.put_run(Repo, original)
+    old_turn = turn(original)
+    assert {:ok, ^old_turn} = put_turn(original, old_turn)
+    # Simulate a pre-extension stored record: absence is not an empty observed list.
+    import Ecto.Query
+
+    from(r in Vxpipe.Persistence.Schema.LatencyRun, where: r.public_id == ^original.id)
+    |> Repo.update_all(
+      set: [
+        record:
+          Map.delete(
+            Vxpipe.Persistence.LatencyRecordCodec.encode(original),
+            "unattached_segments"
+          )
+      ]
+    )
+
+    from(t in Vxpipe.Persistence.Schema.TurnDiagnostic, where: t.turn_id == ^old_turn.turn_id)
+    |> Repo.update_all(
+      set: [
+        record:
+          Map.delete(Vxpipe.Persistence.LatencyRecordCodec.encode(old_turn), "acoustic_segments")
+      ]
+    )
+
+    assert {:ok, ^original} =
+             LatencyStore.fetch_run(Repo, original.tenant_key, original.call_id, original.id)
+
+    assert {:ok, [^old_turn]} =
+             LatencyStore.list_turns(
+               Repo,
+               original.tenant_key,
+               original.call_id,
+               original.id,
+               50,
+               nil
+             )
+
+    revised_run = %{original | revision: 2, unattached_segments: evidence}
+    revised_turn = %{old_turn | revision: 2, acoustic_segments: evidence}
+    assert {:ok, ^revised_run} = LatencyStore.put_run(Repo, revised_run)
+    assert {:ok, ^revised_turn} = put_turn(revised_run, revised_turn)
+
+    assert {:ok, ^revised_run} =
+             LatencyStore.fetch_run(Repo, original.tenant_key, original.call_id, original.id)
+
+    assert {:ok, [^revised_turn]} =
+             LatencyStore.list_turns(
+               Repo,
+               original.tenant_key,
+               original.call_id,
+               original.id,
+               50,
+               nil
+             )
+
+    assert {:error, :stale_revision} = put_turn(original, old_turn)
+  end
+
   test "provider acknowledgements survive storage and cannot change with a later revision", %{
     call: call
   } do

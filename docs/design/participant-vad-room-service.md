@@ -81,3 +81,31 @@ This revision is based on source review, not a new runtime validation. The exist
 node-level limits remain implementation evidence until migrated and reverified.
 Global effective-settings status remains an explicit open acceptance item; room
 ownership alone does not resolve it.
+
+## Segment record contract
+
+The record extension uses `TurnDiagnostic.acoustic_segments` and
+`LatencyRun.unattached_segments`. Both default to `nil` for legacy/unavailable
+segment evidence. A version-1 collection has exactly `version`, `entries`,
+`omitted_count` and `reasons`; at most 32 entries are retained per collection.
+A positive omitted count requires `segment_limit`. An empty collection means the
+producer supplied an observed empty set; it must not be substituted for legacy nil.
+
+Each segment records an inference `epoch`, nullable `start_sample`/`end_sample`,
+nullable `start_us`/`end_us`, separate `start_confirmed_us`/`end_confirmed_us`,
+`uncertainty_us` and explicit `reasons`. Sample positions use the enclosing run's
+normalized 16 kHz source; microsecond offsets use its clock origin. These are local
+acoustic observations, never provider turn markers or wall-clock timestamps.
+Missing boundaries have all three corresponding fields null. A retained boundary
+requires a sample and confirmation; its mapped estimate can be absent with a
+quality reason. Complete unqualified segments require both mapped boundaries and
+uncertainty. Reversed estimates/confirmation order, repeated boundary identities, overlapping
+same-epoch intervals and unknown fields/reasons are invalid. Separate inference
+epochs may reuse sample positions. No audio or text is accepted.
+
+The envelope is independently versioned and additive in the existing JSON records;
+no table migration or replacement of legacy timing fields is needed. Existing
+scalar timing quality continues to describe those metrics; segment reasons describe
+the segment evidence separately. Producing these fields from LiveReport/Collector,
+assigning segments without ambiguous overlap, and exposing them in the authorized
+API/UI remain subsequent work, not implied by record round-trip tests.

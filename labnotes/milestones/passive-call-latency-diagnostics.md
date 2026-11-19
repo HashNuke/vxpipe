@@ -1649,3 +1649,24 @@ retires on agent changes; room ownership, segment persistence, cutover and later
 acceptance remain open. No operational STT policy, provider behavior, Telnyx code
 or deployment changed. Full umbrella testing remains deferred until implementation
 of the milestone is complete.
+
+## Migration step 2 record foundation — 2026-11-19
+
+Calls turn/run records now accept independently versioned acoustic segment
+collections (32 entries maximum) with explicit omitted counts/reasons. Each entry
+retains inference epoch, start/end samples, nullable mapped estimates, separate
+confirmation times and uncertainty. Missing legacy fields remain nil; an empty
+observed list is distinct. Partial segments require reasons. Repeated boundaries,
+same-epoch overlap, reversed ordering, unknown fields and arbitrary payloads fail
+validation. Different epochs may reuse sample positions.
+
+The existing JSON storage round-trips turn and unattached run evidence, revisions,
+and legacy records without a table migration. Domain/diagnostics tests pass 62/62;
+storage tests pass 18/18. Astra reproduced two contradictory-history validation
+cases, now rejected by retained tests and independent green probes (2/2); final
+scoped review and root static gates are clean.
+
+This is a record/storage foundation only. LiveReport/Collector segment production,
+canonical-turn assignment, bounded unattached retention and API/UI presentation
+are not implemented by this checkpoint. Step 2 and B/D extension checkboxes remain
+open. No live provider, Telnyx code, source state machine or deployment changed.

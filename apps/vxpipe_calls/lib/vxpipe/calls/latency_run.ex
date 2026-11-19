@@ -56,6 +56,7 @@ defmodule Vxpipe.Calls.LatencyRun do
   ]
   @fields @identity_fields ++
             [
+              :unattached_segments,
               :schema_version,
               :settings_revision,
               :revision,
@@ -72,6 +73,7 @@ defmodule Vxpipe.Calls.LatencyRun do
   @derive {Inspect, only: [:id, :revision, :state]}
   defstruct @enforce_keys ++
               [
+                unattached_segments: nil,
                 schema_version: 1,
                 revision: 1,
                 state: :running,
@@ -102,7 +104,8 @@ defmodule Vxpipe.Calls.LatencyRun do
 
   defp valid?(run) do
     run.schema_version == 1 and positive?(run.revision) and positive?(run.settings_revision) and
-      profile?(run.profile) and counts?(run.counts) and reasons?(run.reasons) and timestamps?(run)
+      profile?(run.profile) and counts?(run.counts) and reasons?(run.reasons) and timestamps?(run) and
+      Vxpipe.Calls.AcousticSegments.valid?(run.unattached_segments)
   end
 
   defp timestamps?(run) do

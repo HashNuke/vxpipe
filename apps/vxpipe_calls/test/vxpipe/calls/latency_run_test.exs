@@ -17,6 +17,36 @@ defmodule Vxpipe.Calls.LatencyRunTest do
     assert run.profile.inference_source == :benchmark_only
   end
 
+  test "unattached acoustic evidence stays on the run without becoming an observed turn" do
+    evidence = %{
+      version: 1,
+      entries: [
+        %{
+          epoch: 0,
+          start_sample: 0,
+          end_sample: 512,
+          start_us: 0,
+          end_us: 32_000,
+          start_confirmed_us: 96_000,
+          end_confirmed_us: 544_000,
+          uncertainty_us: 100,
+          reasons: []
+        }
+      ],
+      omitted_count: 0,
+      reasons: []
+    }
+
+    assert {:ok, run} = LatencyRun.new(Map.put(attributes(), :unattached_segments, evidence))
+    assert run.unattached_segments == evidence
+    assert run.counts.observed_turns == 0
+    assert {:ok, legacy} = LatencyRun.new(attributes())
+    assert legacy.unattached_segments == nil
+
+    assert {:error, :invalid_latency_run} =
+             LatencyRun.new(Map.put(attributes(), :unattached_segments, %{evidence | version: 2}))
+  end
+
   test "rejects arbitrary payload/configuration rather than persisting secrets or audio" do
     assert {:error, :invalid_latency_run} =
              LatencyRun.new(Map.put(attributes(), :audio, <<1, 2>>))
