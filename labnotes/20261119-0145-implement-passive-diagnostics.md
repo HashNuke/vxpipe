@@ -127,3 +127,59 @@
   open for async storage, coverage and exact replay. Full persistence child suite
   `/tmp/vxpipe-B-persistence-suite.log` is running; earlier root foundation suite
   remains live in tmux `vxdiag-foundations`. Do not mistake either for completion.
+
+## Checkpoint B — asynchronous storage in progress
+
+- Storage checkpoint committed/pushed as `974995bc`; full persistence child suite
+  passed 565 tests, zero failures (68 excluded).
+- Earlier root foundation run ended exit 2: existing MCP cancellation test timed
+  out, agent-idle acknowledgment test timed out, and later-discovered storage tests
+  ran against an already-loaded older LatencyRun module. This mixed-source run is
+  not acceptance evidence. Focused rechecks pass: MCP 3 tests, IdleRoom 18 tests;
+  current persistence suite includes the UTC regression and passes. Run final root
+  verification against a fixed source state after B is implemented.
+- Added separately owned diagnostics writer, validated write envelopes, count/byte
+  admission handoff, and bounded Task/Dynamic supervisors (not yet wired to app).
+  Six tests red then green; abrupt writer death reproduced an orphaned unlinked
+  task, fixed using a linked supervised task and trap_exit. Saturated task capacity
+  also reproduced a writer crash; now finite retry/discard handles launch failure.
+- All 11 async writer/supervision tests pass: blocked DB, byte/count saturation,
+  retries retaining reservations, task timeout/crash, concurrent producers, bounded
+  drain and abrupt owner death. Strict Credo passes. Astra xhigh review is running.
+- Byte budget charges serialized validated payload three times plus envelope overhead
+  for message, queued original and task copy; it is a retained-payload accounting
+  bound, not a claim about total VM/driver heap memory.
+- Future live wiring still needs dedicated settings ownership and collectors. Existing
+  ConversationalSTT.push_frame retains AudioFrame metadata and normalizes via
+  STTActivityPCM; provider settlement resets its operational inference epoch. Reuse
+  must tap probability/sample evidence while preserving those resets. Installation
+  currently has a whole-page superadmin guard, which must become section-specific.
+- Astra xhigh proved retained sub-binary backing storage bypassed byte limits and
+  Task.Supervisor.async startup could block drain indefinitely. Retained red tests;
+  accepted strings are now copied, and a linked admission helper keeps writer
+  responsive under an attempt deadline covering startup and execution.
+- Follow-up review proved expired helpers left unbounded startup requests in a
+  suspended task supervisor mailbox. Added a shared admission gate injected by
+  the owning DynamicSupervisor; unresolved startup retains its permit across
+  writer lifetimes until full pool restart. A regression spans five replacement
+  writers with capacity one. No late repository write occurs after resume.
+- Byte charge now covers four copies plus 512 bytes, superseding the earlier
+  three-copy note. Unexpected success responses must equal the queued record.
+  Final focused suite is 16 tests, zero failures; review of gate is ongoing.
+- Current async writer is not registered in the application or used by live calls.
+  It will be owned by enabled diagnostics lifecycle in C. Unknown admission debt
+  intentionally degrades diagnostics until that dedicated pool resets.
+- Final Astra xhigh review returned no remaining async-writer findings; all 16
+  diagnostics tests pass. Final format, warnings-as-errors compile, strict Credo
+  and unused-lock checks pass. Whole Calls suite had one existing 100ms billing
+  lookup assertion timeout while concurrent static checks ran; rerunning it alone
+  in `/tmp/vxpipe-B-calls-writer-suite-final.log` before claiming the child gate.
+- Isolated Calls rerun exposed a new timeout-test assumption: a 20ms whole-attempt
+  deadline can expire during admission before the repository receives work. The
+  implementation correctly discarded it, but the test required repository startup.
+  Corrected the assertion to verify discard and capacity release for either timing
+  path; task teardown remains covered separately by drain/owner-death tests.
+  Full Calls rerun: `/tmp/vxpipe-B-calls-writer-suite-final2.log`.
+- Final Calls suite passes 418 tests, zero failures. Astra xhigh approved the
+  timeout-test correction and returned no new findings. Async writer subcheckpoint
+  is ready to commit; full B coverage/replay/live wiring remains unfinished.

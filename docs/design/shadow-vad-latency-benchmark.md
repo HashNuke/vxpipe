@@ -205,3 +205,26 @@ Neutral run and turn records reject arbitrary configuration and payload fields.
 Turn durations are derived from allowlisted landmarks rather than accepted from
 callers. This prevents a supplied latency value from contradicting its evidence;
 it does not replace repository ownership, revision or lifecycle enforcement.
+
+## Persistence admission and failure isolation
+
+The diagnostic writer reserves a count and retained-payload byte allowance before
+sending a non-suspending message. Validated strings are copied so small slices
+cannot retain unexpectedly large backing binaries. The byte charge covers four
+payload copies plus an envelope allowance; it does not claim to bound total VM or
+database-driver heap usage. Queued, executing and retrying writes retain the same
+reservation. Attempts and final draining have finite deadlines.
+
+A linked helper keeps the writer responsive while the database task is admitted
+through its dedicated Task.Supervisor. The deadline includes admission. Killing
+the writer or helper also retires linked database work; a late admission cannot
+invoke the repository for a dead helper. This avoids relying on terminate callbacks.
+
+Task-supervisor startup itself uses an infinite call in the dependency. A separate
+pool-owned gate therefore bounds unresolved startup requests across writer
+lifetimes. A killed helper with unknown startup outcome retains its admission
+permit until the whole diagnostics pool is restarted. Releasing that permit on
+timeout would allow a suspended supervisor's mailbox to grow without bound.
+This conservative degradation affects diagnostics only and must be exposed as
+unavailable/incomplete coverage; it must never change call behavior or claim a
+complete latency sample. The pool is not yet connected to runtime capture.

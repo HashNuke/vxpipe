@@ -478,3 +478,19 @@ The final migration passed fresh and populated-upgrade checks in isolated test
 databases; separate-process verification preserved the existing admitted call.
 Root format, compile and Credo pass; full umbrella verification remains in progress.
 No runtime capture, settings UI, async storage or deployment is claimed by these checks.
+
+## Checkpoint B partial asynchronous-writer evidence — 2026-11-19
+
+The separate writer reserves count and retained-payload bytes before non-suspending
+admission. In-flight work and retries retain reservations; execution and drain
+have finite deadlines. Linked helpers bound dependency startup waits, and a shared
+pool admission gate prevents unresolved starts accumulating across writer lifetimes.
+Unknown startup permits remain reserved until full pool restart. This deliberately
+degrades diagnostics without changing calls.
+
+Sixteen diagnostics tests pass, including reviewer-proven backing-binary retention,
+blocked admission, and cross-writer queued-admission regressions. Astra xhigh final
+review is clean. Full Calls suite: 418 tests, zero failures. Format, compile, Credo
+and unused-lock checks pass. The pool is not
+yet wired to live settings/capture. Coverage classification and deterministic replay
+remain open, so the combined asynchronous-report checklist item stays unchecked.
