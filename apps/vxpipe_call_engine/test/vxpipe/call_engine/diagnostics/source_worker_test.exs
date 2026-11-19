@@ -217,6 +217,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
     {:ok, output} = CaptureHandoff.new(self(), projection: __MODULE__.Projection)
 
     options = [
+      agent:
+        struct(Vxpipe.CallEngine.ResolvedCallPlan.Participant,
+          kind: :agent,
+          capabilities: %Vxpipe.CallEngine.ResolvedCallPlan.Capabilities{
+            model_inference:
+              struct(Vxpipe.CallEngine.CallSpec.CapabilitySelection, kind: :model_inference)
+          }
+        ),
       owner: self(),
       output: output,
       projection: __MODULE__.Projection,

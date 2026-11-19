@@ -82,6 +82,11 @@ ports. Persistence owns migrations, adapters and queries. Console and core/react
 packages own authorized presentation and browser state. Preserve Mix dependency
 direction; no Ecto or Phoenix dependency in engine measurement code.
 
+Eligibility is restricted to agents using the STT → LLM → TTS pipeline. Native
+speech-to-speech agents are excluded from benchmark capture, worker admission and
+inference, not merely labelled unsupported in the UI. Enforce this before creating
+an observer; the application setting does not override this exclusion.
+
 First supported live profile: human ElevenLabs Scribe v2 realtime input over browser
 WebRTC and Telnyx. Exercise operational local VAD both off and on without changing
 it. Manual/historical Scribe is covered by protocol fixtures; label unsupported
@@ -736,3 +741,10 @@ close-reason and Twilio media-harness failures; those remain unresolved acceptan
 evidence. Automatic call/source attachment, operational-reuse consumption, raw
 Opus decode and collector persistence/correlation remain open. The combined C
 worker/isolation and on/off tasks are not yet complete.
+
+
+LLM-only admission follow-up: the source factory now rejects speech-to-speech,
+mixed LLM/STS, human and unknown agent declarations before consulting diagnostic
+resources. Eligible LLM capacity and real-model correspondence tests remain green
+(11/0); Astra xhigh review is clean and static root gates pass. Automatic capture
+and reuse attachment are still pending and must retain this eligibility boundary.

@@ -1,5 +1,7 @@
 defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisorTest do
   use ExUnit.Case, async: false
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
+  alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, Participant}
   alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor, SourceSupervisor}
 
   test "isolated worker capacity is enforced and retired children release their slots" do
@@ -33,6 +35,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisorTest do
     {:ok, output} = CaptureHandoff.new(self(), projection: __MODULE__.Projection)
 
     options = [
+      agent: llm_agent(),
       owner: self(),
       output: output,
       projection: __MODULE__.Projection,
@@ -54,5 +57,38 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisorTest do
 
     assert {:ok, _replacement} =
              SourceSupervisor.start_source(options, __MODULE__.Workers, __MODULE__.Runtime)
+  end
+
+  test "speech-to-speech and unknown agents are rejected before touching diagnostic resources" do
+    llm = struct(CapabilitySelection, kind: :model_inference)
+    sts = struct(CapabilitySelection, kind: :speech_to_speech)
+
+    for agent <- [
+          nil,
+          %{},
+          struct(Participant, kind: :agent, capabilities: %Capabilities{speech_to_speech: sts}),
+          struct(Participant,
+            kind: :agent,
+            capabilities: %Capabilities{model_inference: llm, speech_to_speech: sts}
+          ),
+          struct(Participant, kind: :human, capabilities: %Capabilities{model_inference: llm}),
+          struct(Participant, kind: :agent, capabilities: %Capabilities{model_inference: sts})
+        ] do
+      assert {:error, :unsupported_agent} =
+               SourceSupervisor.start_source(
+                 [agent: agent],
+                 __MODULE__.AbsentWorkers,
+                 __MODULE__.AbsentRuntime
+               )
+    end
+  end
+
+  defp llm_agent do
+    struct(Participant,
+      kind: :agent,
+      capabilities: %Capabilities{
+        model_inference: struct(CapabilitySelection, kind: :model_inference)
+      }
+    )
   end
 end

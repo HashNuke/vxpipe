@@ -1,6 +1,8 @@
 defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
   @moduledoc "Separate bounded source and inference supervision; model initialization is lazy."
   use Supervisor
+  alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
+  alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, Participant}
   alias Vxpipe.CallEngine.Diagnostics.{InferenceAdmission, SourceWorker}
   alias Vxpipe.CallEngine.Speech.{ActivityRuntime, ActivitySupervisor, Silero}
 
@@ -17,6 +19,22 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
 
   @doc "Coordinator-only lifecycle operation; never invoke on the voice admission path."
   def start_source(options, workers, runtime) do
+    {agent, options} = Keyword.pop(options, :agent)
+    start_eligible_source(agent, options, workers, runtime)
+  end
+
+  defp start_eligible_source(
+         %Participant{
+           kind: :agent,
+           capabilities: %Capabilities{
+             model_inference: %CapabilitySelection{kind: :model_inference},
+             speech_to_speech: nil
+           }
+         },
+         options,
+         workers,
+         runtime
+       ) do
     case ActivityRuntime.diagnostic_admission(runtime) do
       %InferenceAdmission{} = admission ->
         DynamicSupervisor.start_child(
@@ -30,6 +48,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
   catch
     :exit, _ -> {:error, :unavailable}
   end
+
+  defp start_eligible_source(_agent, _options, _workers, _runtime),
+    do: {:error, :unsupported_agent}
 
   @impl true
   def init(options) do
