@@ -311,4 +311,29 @@ response landmarks in both reuse and fallback modes. Configured Scribe-to-Morse
 external/hybrid STS control also preserves canonical human diagnostic rows, with
 real activity-start/completion checks and no diagnostic ownership of agent audio.
 Native STS-only admitted input allocates no observer. Routing-induced STT replacement
-and run-boundary integration remains a separate acceptance requirement.
+and run-boundary integration are covered below.
+
+
+## Diagnostic source-boundary provenance
+
+A routing change that replaces the human STT allocation retires its acoustic run,
+even when participant, connection and capability PID survive. The two capture
+handoffs share a first-closure provenance atomic while retaining independent
+bounded queues, tokens and open gates. A source retirement records
+`source_changed`; expired or revoked settings authority records `lease_expired`.
+Later cleanup cannot overwrite that first observed cause. Explicit retirement
+checks the existing settings deadline before classifying the closure.
+
+SourceAttachment closes capture before cancelling its attachment lease. SourceWorker
+shares the collector handoff's provenance with its input, so a producer-side source
+boundary remains visible even if the worker is killed before `terminate/2`.
+Collector uses this evidence when draining an invalidated source. Unclassified
+attachment cancellation retains the existing lease-expiry fallback.
+
+Rejected alternatives were labelling every closed capture as lease expiry (loses
+real source boundaries), relying on worker termination to forward a reason (lost
+on kill), and sharing queue/open state (unnecessary change to independent drains).
+Focused regressions exercise both closure orders, expiry before explicit close,
+queued evidence discard and input closure while a worker is suspended. Configured
+external/hybrid routing cases exercise a real fresh STT generation and durable run
+boundary with local Silero enabled and disabled.

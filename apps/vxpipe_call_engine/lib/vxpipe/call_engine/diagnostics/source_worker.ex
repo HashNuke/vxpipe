@@ -38,6 +38,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     capture_options =
       Keyword.take(options, [:projection, :maximum_count, :maximum_bytes])
       |> Keyword.put(:owner, owner)
+      |> Keyword.put(:provenance, output)
 
     with true <- AttachmentLease.current?(lease) and SourcePort.current?(source_port),
          true <- is_nil(coordinator) or (is_pid(coordinator) and node(coordinator) == node()),

@@ -93,7 +93,7 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
   def handle_call(:handoff, _from, state) do
     if AttachmentLease.current?(state.attachment_lease) and CaptureHandoff.current?(state.capture),
       do: {:reply, state.capture, state},
-      else: {:reply, {:error, :unavailable}, begin_finish(state, :lease_expired)}
+      else: {:reply, {:error, :unavailable}, begin_finish(state, closure_reason(state))}
   end
 
   def handle_call({:close, reason}, _from, state)
@@ -105,10 +105,13 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
 
   @impl true
   def handle_info({:vxpipe_diagnostic_capture, _, _, _, _} = message, state) do
-    unless AttachmentLease.current?(state.attachment_lease),
-      do: CaptureHandoff.close(state.capture)
-
-    observe(message, state)
+    if AttachmentLease.current?(state.attachment_lease) do
+      observe(message, state)
+    else
+      reason = closure_reason(state)
+      CaptureHandoff.close(state.capture)
+      observe(message, begin_finish(state, reason))
+    end
   end
 
   def handle_info(:check, %{finishing: reason} = state) when not is_nil(reason),
@@ -118,7 +121,7 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
     cond do
       not AttachmentLease.current?(state.attachment_lease) or
           not CaptureHandoff.current?(state.capture) ->
-        {:noreply, begin_finish(state, :lease_expired)}
+        {:noreply, begin_finish(state, closure_reason(state))}
 
       CaptureHandoff.stats(state.capture).overflow > 0 ->
         {:noreply, begin_finish(state, :observer_overloaded)}
@@ -137,8 +140,10 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
   def handle_info({:DOWN, _, :process, writer, _}, %{writer: writer} = state),
     do: {:stop, :normal, state}
 
-  def handle_info({:DOWN, _, :process, _, _}, state),
-    do: {:noreply, begin_finish(state, :source_changed)}
+  def handle_info({:DOWN, _, :process, _, _}, state) do
+    CaptureHandoff.close(state.capture)
+    {:noreply, begin_finish(state, closure_reason(state))}
+  end
 
   def handle_info({:diagnostic_settled, writer, outcome} = message, %{writer: writer} = state)
       when outcome in [:stored, :discarded] and state.unsettled > 0 do
@@ -177,6 +182,9 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
       |> Map.put(:reason, :redacted)
       |> Map.put(:log, [])
 
+  defp closure_reason(state),
+    do: CaptureHandoff.closed_reason(state.capture) || :lease_expired
+
   defp observe(message, state) do
     case CaptureHandoff.message(state.capture, message) do
       {:ok, packet, charge} ->
@@ -190,7 +198,7 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
         end
 
       {:error, :revoked} ->
-        {:noreply, begin_finish(state, :lease_expired)}
+        {:noreply, begin_finish(state, closure_reason(state))}
 
       :error ->
         {:noreply, state}

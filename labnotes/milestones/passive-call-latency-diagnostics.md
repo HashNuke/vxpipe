@@ -1,8 +1,8 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: records/replay and room-service cutover implemented; eligibility/UI acceptance pending, 2026-11-19.
+Status: records/replay, room-service cutover and STT eligibility implemented; continuity/UI acceptance pending, 2026-11-19.
 A, B and existing D functionality are implemented. C now uses participant-owned
-observation managed by a room service; broader eligibility and continuity acceptance remain.
+observation managed by a room service; broader lifecycle and continuity acceptance remain.
 The new D segment/participant extensions, remaining C acceptance, E and F remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
 
@@ -583,7 +583,7 @@ Migration tasks (revised architecture; ordered as in the migration steps above):
   `SourceCoordinator`, then remove scan and agent-identity checks from
   `SourceAttachment`, `DiagnosticSources` and `SourceSupervisor.eligible_agent?/1`.
   Port the configured tests, including the crash/hang parity tests.
-- [ ] Derive eligibility from accepted human STT sources, including two participants,
+- [x] Derive eligibility from accepted human STT sources, including two participants,
   no selected agent and mixed-room cases; no work for sources without STT. STT that
   drives STS `external`/`hybrid` turn control is observed, and its session
   replacement on routing change produces an explicit run boundary.
@@ -1965,3 +1965,39 @@ tests and documentation. It completes canonical-input diagnostic instrumentation
 acceptance together with the preceding no-agent checkpoint. The broader eligibility
 checkbox stays open for actual routing-induced STT replacement/run-boundary proof.
 No live provider tests, Telnyx code, full umbrella suite or deployment changed.
+
+
+## Migration step 5 — routing-induced STT replacement, 2026-11-19
+
+Four configured external/hybrid cases with local Silero on/off now change actual
+room audio policy while retaining transcript demand. Fresh Scribe allocations
+replace the old input: the old worker exits and capture is revoked, the old run
+closes with source_changed, and the same participant/connection obtains a distinct
+run and STT allocation ID. Both canonical input rows retain their original
+correlation. Retired-generation completion cannot settle a real fresh turn; a
+review positive control changing only the generation to current fails all four
+cases at that assertion. Actual Scribe completion still persists the new row.
+
+This exposed a diagnostic closure-provenance defect. Input and collector-output
+handoffs now share the first terminal cause, independently of their queue/open
+state. Source replacement remains distinguishable from settings expiry even if
+the worker cannot terminate. Collector owner-DOWN handling preserves already
+observed expiry and classifies expiry first observed during shutdown. These defects
+were reproduced before their fixes and are covered by retained focused regressions.
+Design review rejected forwarding the cause only through terminate/2 (kill loses
+it), conflating every closure with expiry, and sharing queue state unnecessarily.
+
+Engine diagnostics pass 231/231, Calls diagnostics 51/51 and the full configured
+selection 21/21. Root format, warnings-as-errors compile, strict Credo, unused-lock
+and Lean checks pass. The configured drain helper retries a reproduced supervisor
+lookup/termination race; unexpected failures are still surfaced. Independent
+review and final checkpoint status are recorded in the
+[checkpoint labnotes](../20261119-1800-routed-stt-boundaries.md).
+
+Together with the preceding two-human/no-agent and mixed/native checkpoints, this
+closes the accepted-STT eligibility task. Continuous input during agent-only
+transfer, remaining lifecycle/settings acceptance, D extensions and E/F remain
+open. A separate [native STS tool-transfer issue](../issues/external-sts-tool-transfer-authority.md)
+was reproduced using the exact documented synthetic fixture; policy-routing
+acceptance does not claim that operational transfer succeeds. No Telnyx changes,
+live provider tests, full umbrella run or deployment occurred.

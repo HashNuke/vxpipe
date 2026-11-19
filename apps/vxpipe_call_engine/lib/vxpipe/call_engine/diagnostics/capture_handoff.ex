@@ -15,6 +15,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
     :token,
     :counters,
     :deadline,
+    :provenance,
     :maximum_count,
     :maximum_bytes
   ]
@@ -27,6 +28,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
            Keyword.validate(options,
              projection: SettingsProjection,
              owner: receiver,
+             provenance: nil,
              maximum_count: 64,
              maximum_bytes: 262_144
            ),
@@ -38,7 +40,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
          bytes when is_integer(bytes) and bytes in 1_024..8_388_608 <-
            Keyword.fetch!(options, :maximum_bytes),
          {:ok, grant, _now, expires_at} <- SettingsProjection.grant_snapshot(projection),
-         true <- Process.alive?(receiver) do
+         true <- Process.alive?(receiver),
+         {:ok, provenance} <-
+           provenance(Keyword.fetch!(options, :provenance), owner, projection, grant) do
       deadline = :atomics.new(1, signed: true)
       :atomics.put(deadline, 1, expires_at)
       counters = :atomics.new(5, signed: false)
@@ -53,6 +57,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
          token: make_ref(),
          counters: counters,
          deadline: deadline,
+         provenance: provenance,
          maximum_count: count,
          maximum_bytes: bytes
        }}
@@ -93,7 +98,25 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
   def message(_handoff, _message), do: :error
 
   @doc "Irreversibly closes this epoch; the consumer must discard its queued audio."
-  def close(handoff), do: :atomics.put(handoff.counters, @open, 0)
+  def close(handoff) do
+    deadline = :atomics.get(handoff.deadline, 1)
+    reason = if renew_before_expiry?(handoff, deadline), do: 1, else: 2
+    retire(handoff, reason)
+  end
+
+  @doc "The first observed terminal cause; later checks cannot overwrite it."
+  def closed_reason(handoff) do
+    case :atomics.get(handoff.provenance, 1) do
+      0 -> nil
+      1 -> :source_changed
+      2 -> :lease_expired
+    end
+  end
+
+  defp retire(handoff, reason) do
+    _ = :atomics.compare_exchange(handoff.provenance, 1, 0, reason)
+    :atomics.put(handoff.counters, @open, 0)
+  end
 
   @doc false
   def release(handoff, charge, outcome) when outcome in [:processed, :discarded] do
@@ -119,14 +142,36 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
   def current?(handoff) do
     previous_deadline = :atomics.get(handoff.deadline, 1)
 
-    current =
-      :atomics.get(handoff.counters, @open) == 1 and Process.alive?(handoff.receiver) and
-        Process.alive?(handoff.owner) and
-        renew_before_expiry?(handoff, previous_deadline)
+    cond do
+      :atomics.get(handoff.counters, @open) != 1 ->
+        false
 
-    if not current, do: close(handoff)
-    current
+      not Process.alive?(handoff.receiver) or not Process.alive?(handoff.owner) ->
+        close(handoff)
+        false
+
+      renew_before_expiry?(handoff, previous_deadline) ->
+        true
+
+      true ->
+        retire(handoff, 2)
+        false
+    end
   end
+
+  defp provenance(nil, _owner, _projection, _grant),
+    do: {:ok, :atomics.new(1, signed: false)}
+
+  defp provenance(
+         %__MODULE__{owner: owner, projection: projection, grant: grant} = handoff,
+         owner,
+         projection,
+         grant
+       ) do
+    if current?(handoff), do: {:ok, handoff.provenance}, else: {:error, :unavailable}
+  end
+
+  defp provenance(_, _, _, _), do: {:error, :unavailable}
 
   defp renew_before_expiry?(handoff, previous_deadline) do
     case SettingsProjection.grant_snapshot(handoff.projection) do
@@ -148,7 +193,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
     pending = :atomics.get(handoff.counters, @pending)
 
     cond do
-      :atomics.get(handoff.counters, @open) == 0 ->
+      :atomics.get(handoff.counters, @open) != 1 ->
         {:error, :unavailable}
 
       attempts == 0 or div(pending, @stride) >= handoff.maximum_count or

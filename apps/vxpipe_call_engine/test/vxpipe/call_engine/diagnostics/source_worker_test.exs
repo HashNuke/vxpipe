@@ -95,6 +95,25 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
     }
   end
 
+  test "input retirement publishes its cause even if the worker cannot terminate", ctx do
+    :ok = :sys.suspend(ctx.worker)
+
+    try do
+      assert :ok = CaptureHandoff.close(ctx.input)
+      assert CaptureHandoff.closed_reason(ctx.output) == :source_changed
+      monitor = Process.monitor(ctx.worker)
+      Process.exit(ctx.worker, :kill)
+      assert_receive {:DOWN, ^monitor, :process, _, :killed}
+      assert CaptureHandoff.closed_reason(ctx.output) == :source_changed
+    after
+      try do
+        :sys.resume(ctx.worker)
+      catch
+        :exit, _ -> :ok
+      end
+    end
+  end
+
   test "timing landmarks reach the collector while acoustic inference is pending", ctx do
     assert :ok = CaptureHandoff.offer(ctx.input, {:audio, frame(ctx.epoch, 0, 512, -968)})
     assert_receive {:infer, _task, _}

@@ -43,6 +43,29 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoffTest do
              CaptureHandoff.stats(handoff)
   end
 
+  test "explicit retirement retains its source boundary after settings expire", ctx do
+    assert {:ok, handoff} = new_handoff()
+    assert :ok = CaptureHandoff.close(handoff)
+    :atomics.put(ctx.clock, 1, 3_000)
+    refute CaptureHandoff.current?(handoff)
+    assert CaptureHandoff.closed_reason(handoff) == :source_changed
+  end
+
+  test "retirement after authority expiry does not report a source change", ctx do
+    assert {:ok, handoff} = new_handoff()
+    :atomics.put(ctx.clock, 1, 3_000)
+    assert :ok = CaptureHandoff.close(handoff)
+    assert CaptureHandoff.closed_reason(handoff) == :lease_expired
+  end
+
+  test "settings expiry retains its reason after explicit retirement", ctx do
+    assert {:ok, handoff} = new_handoff()
+    :atomics.put(ctx.clock, 1, 3_000)
+    refute CaptureHandoff.current?(handoff)
+    assert :ok = CaptureHandoff.close(handoff)
+    assert CaptureHandoff.closed_reason(handoff) == :lease_expired
+  end
+
   test "count and bytes remain reserved until queued or in-flight evidence is released" do
     assert {:ok, handoff} = new_handoff(maximum_count: 1)
     assert :ok = CaptureHandoff.offer(handoff, {:audio, frame()})

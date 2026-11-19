@@ -890,6 +890,229 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     await_diagnostic_drain(identity)
   end
 
+  for mode <- ["external", "hybrid"], vad <- [false, true] do
+    @tag matrix: true, mixed_sts: true, stt_replacement: true, mode: mode, vad: vad
+    test "#{mode} audio-policy routing replaces STT and creates a new diagnostic run, Silero #{vad}",
+         c do
+      {call, _connection, attachment, wire, identity} =
+        call(c.options, c.vad, {:sts_routing, c.mode})
+
+      pace(32)
+      epoch = make_ref()
+      _ = discover_with_audio(attachment, identity, epoch, wire)
+      await(fn -> RoomService.status(RoomService.address(identity)).active_sources == 1 end)
+
+      [{_, worker, _, _}] =
+        DynamicSupervisor.which_children(RoomSupervisor.address(identity, :workers))
+
+      input_handoff = CallEngine.Diagnostics.SourceWorker.handoff(worker)
+      worker_down = Process.monitor(worker)
+      original = :sys.get_state(attachment.room_authority)
+      stt = original.connections[identity.connection_id].speech_to_text.capability
+
+      assert {:ok, %{allocation_generation: old_generation}} =
+               CallEngine.Capability.SpeechToText.input_binding(stt)
+
+      old_run =
+        await(fn ->
+          case LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil) do
+            {:ok, %{entries: [%{run: run}]}} -> run
+            _ -> nil
+          end
+        end)
+
+      emit_scribe_turn(wire, "Input before routing.")
+      assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = before_input}, 2_000
+
+      await(fn ->
+        case LatencyStore.list_turns(Repo, call.tenant_key, call.id, old_run.id, 50, nil) do
+          {:ok, [row]} -> row.turn_id == before_input.correlation_id
+          _ -> false
+        end
+      end)
+
+      privacy = Map.fetch!(call.plan.participants, "privacy")
+
+      assert {:ok, _} =
+               CallEngine.MediaPolicy.Authority.admit(
+                 original.media_policy_authority,
+                 privacy.participant_id
+               )
+
+      assert_receive {:scribe_started, restricted_wire}, 5_000
+
+      :ok =
+        Wire.deliver_frame(
+          restricted_wire,
+          JSON.encode!(%{
+            "message_type" => "session_started",
+            "session_id" => "restricted-scribe",
+            "config" => echoed_settings()
+          })
+        )
+
+      assert_receive {:DOWN, ^worker_down, :process, ^worker, _}, 2_000
+      refute CallEngine.Diagnostics.CaptureHandoff.current?(input_handoff)
+
+      assert {:ok, _} =
+               CallEngine.MediaPolicy.Authority.leave(
+                 original.media_policy_authority,
+                 privacy.participant_id
+               )
+
+      assert_receive {:scribe_started, new_wire}, 5_000
+      refute new_wire in [wire, restricted_wire]
+
+      :ok =
+        Wire.deliver_frame(
+          new_wire,
+          JSON.encode!(%{
+            "message_type" => "session_started",
+            "session_id" => "routed-scribe",
+            "config" => echoed_settings()
+          })
+        )
+
+      fresh =
+        await(fn ->
+          state = :sys.get_state(attachment.room_authority)
+          if state.speech_to_speech_capability != nil, do: state
+        end)
+
+      new_stt = fresh.connections[identity.connection_id].speech_to_text.capability
+
+      assert {:ok, %{allocation_generation: new_generation}} =
+               CallEngine.Capability.SpeechToText.input_binding(new_stt)
+
+      refute new_generation == old_generation
+
+      closed_run =
+        await(fn ->
+          case LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil) do
+            {:ok, %{entries: entries}} ->
+              Enum.find_value(entries, fn %{run: run} ->
+                if run.id == old_run.id and run.closed_at != nil, do: run
+              end)
+
+            _ ->
+              nil
+          end
+        end)
+
+      assert :source_changed in closed_run.reasons
+
+      assert {:error, :unavailable} =
+               CallEngine.Diagnostics.CaptureHandoff.offer(
+                 input_handoff,
+                 {:room_turn_completed, old_generation, make_ref(), "stale-turn", "stale-command",
+                  System.monotonic_time(:microsecond)}
+               )
+
+      fresh_attachment = CallEngine.TestTransferConnection.attachment(identity)
+      pace(32)
+      _ = discover_with_audio(fresh_attachment, identity, make_ref(), new_wire)
+
+      :ok =
+        Wire.deliver_frame(
+          new_wire,
+          JSON.encode!(%{
+            "message_type" => "partial_transcript",
+            "text" => "Input after routing."
+          })
+        )
+
+      active_turn =
+        await(fn ->
+          state = :sys.get_state(attachment.room_authority)
+          state.connections[identity.connection_id].speech_to_text.turn
+        end)
+
+      assert active_turn.allocation_generation == new_generation
+
+      assert {:ok, %{audio_origin: origin}} =
+               CallEngine.Capability.SpeechToText.input_binding(new_stt)
+
+      stale = %CallEngine.Provider.SpeechToText.Signal{
+        kind: :turn_ended,
+        provider_sequence: 999,
+        allocation_generation: old_generation,
+        turn_ref: active_turn.turn_ref,
+        provider_turn_index: active_turn.provider_turn_index,
+        policy_revision: active_turn.policy_revision,
+        audio_input_interval: origin.audio_input_interval,
+        audio_output_interval: origin.audio_output_interval,
+        text: "Stale routing input."
+      }
+
+      send(
+        attachment.room_authority,
+        {:vxpipe_stt_signal, new_stt,
+         Map.take(identity, [
+           :tenant_id,
+           :room_id,
+           :incarnation_id,
+           :participant_id,
+           :connection_id
+         ]), stale, nil}
+      )
+
+      after_stale = :sys.get_state(attachment.room_authority)
+      assert after_stale.connections[identity.connection_id].speech_to_text.turn == active_turn
+      refute_received {:vxpipe_event, %ParticipantTranscription{text: "Stale routing input."}}
+
+      emit_scribe_turn(new_wire, "Input after routing.")
+      assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = after_input}, 2_000
+
+      new_run =
+        await(fn ->
+          case LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil) do
+            {:ok, %{entries: entries}} ->
+              Enum.find_value(entries, fn %{run: run} -> if run.id != old_run.id, do: run end)
+
+            _ ->
+              nil
+          end
+        end)
+
+      assert new_run.participant_id == old_run.participant_id
+      assert new_run.connection_id == old_run.connection_id
+      refute new_run.id == old_run.id
+
+      new_row =
+        await(fn ->
+          case LatencyStore.list_turns(Repo, call.tenant_key, call.id, new_run.id, 50, nil) do
+            {:ok, [row]} -> if row.turn_id == after_input.correlation_id, do: row
+            _ -> nil
+          end
+        end)
+
+      assert {:ok, [old_row]} =
+               LatencyStore.list_turns(Repo, call.tenant_key, call.id, old_run.id, 50, nil)
+
+      assert old_row.turn_id == before_input.correlation_id
+      refute old_row.turn_id == after_input.correlation_id
+      refute new_row.stt_allocation_id == old_row.stt_allocation_id
+
+      assert {:ok, %{entries: entries}} =
+               LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+      assert length(entries) == 2
+      assert %{active_sources: 1} = RoomService.status(RoomService.address(identity))
+
+      assert {:ok, completion} =
+               CallEngine.monitor_room_completion(
+                 identity.tenant_id,
+                 identity.room_id,
+                 identity.incarnation_id
+               )
+
+      GenServer.stop(attachment.room_authority, :shutdown)
+      assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+      await_diagnostic_drain(identity)
+      refute_received {:scribe_commit, _}
+    end
+  end
+
   @tag matrix: true, routing: true
   test "configured agent transfer preserves input identity through text and acknowledged audio",
        c do
@@ -1059,9 +1282,13 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       Enum.all?(
         [RoomSupervisor.address(identity, :workers), __MODULE__.Collectors, __MODULE__.Writers],
         fn supervisor ->
-          case GenServer.whereis(supervisor) do
-            nil -> true
-            pid -> DynamicSupervisor.count_children(pid).active == 0
+          try do
+            case GenServer.whereis(supervisor) do
+              nil -> true
+              pid -> DynamicSupervisor.count_children(pid).active == 0
+            end
+          catch
+            :exit, {:noproc, _} -> false
           end
         end
       )
@@ -1113,6 +1340,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     sts_mode =
       case scenario do
         {:sts, mode} -> mode
+        {:sts_routing, mode} -> mode
         :native_sts -> "provider"
         _ -> nil
       end
@@ -1216,6 +1444,18 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         if scenario == :native_sts,
           do: update_in(source, [:defaults, :capabilities], &Map.delete(&1, :speech_to_text)),
           else: source
+      else
+        source
+      end
+
+    source =
+      if match?({:sts_routing, _}, scenario) do
+        put_in(source, [:participants, "privacy"], %{
+          type: "human",
+          connection: %{service: "web", mode: "receive", admission: "start_call"},
+          capabilities: %{},
+          while_present: %{audio_routes: %{}}
+        })
       else
         source
       end

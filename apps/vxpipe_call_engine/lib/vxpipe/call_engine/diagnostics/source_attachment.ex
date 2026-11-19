@@ -66,9 +66,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
   def current?(entry), do: current_candidate?(entry.candidate)
 
   def close(entry) do
-    AttachmentLease.cancel(entry.context.attachment_lease)
     CaptureHandoff.close(entry.input)
     CaptureHandoff.close(entry.output)
+    AttachmentLease.cancel(entry.context.attachment_lease)
     :ok
   end
 
