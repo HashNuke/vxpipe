@@ -4,8 +4,21 @@ defmodule Vxpipe.CallEngine.Speech.ActivityBoundary do
   @frame_samples 512
   @start_frames 4
   @stop_frames 16
+  @onset_threshold 0.5
+  @offset_threshold 0.35
 
   defstruct samples: 0, speaking?: false, speech_frames: 0, silence_frames: 0
+
+  def profile do
+    %{
+      algorithm_version: 1,
+      sample_rate: 16_000,
+      onset_threshold: @onset_threshold,
+      offset_threshold: @offset_threshold,
+      onset_frames: @start_frames,
+      offset_frames: @stop_frames
+    }
+  end
 
   def new, do: %__MODULE__{}
   def reset(%__MODULE__{}), do: new()
@@ -18,7 +31,7 @@ defmodule Vxpipe.CallEngine.Speech.ActivityBoundary do
 
   def push(%__MODULE__{}, _probability), do: {:error, :invalid_probability}
 
-  defp classify(%{speaking?: false} = state, probability) when probability >= 0.5 do
+  defp classify(%{speaking?: false} = state, probability) when probability >= @onset_threshold do
     frames = state.speech_frames + 1
 
     if frames == @start_frames do
@@ -32,7 +45,7 @@ defmodule Vxpipe.CallEngine.Speech.ActivityBoundary do
   defp classify(%{speaking?: false} = state, _probability),
     do: {%{state | speech_frames: 0}, []}
 
-  defp classify(%{speaking?: true} = state, probability) when probability < 0.35 do
+  defp classify(%{speaking?: true} = state, probability) when probability < @offset_threshold do
     frames = state.silence_frames + 1
 
     if frames == @stop_frames do

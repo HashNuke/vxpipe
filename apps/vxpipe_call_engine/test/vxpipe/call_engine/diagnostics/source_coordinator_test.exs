@@ -180,6 +180,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
     assert_receive {:collector_started, context}, 1_000
     assert context.identity.call_id == "call"
+    assert %DateTime{time_zone: "Etc/UTC"} = context.anchor_utc
     assert context.mode == :benchmark_only
     assert context.provider_profile.acknowledged == echoed_settings()
     assert context.provider_profile.missing == []

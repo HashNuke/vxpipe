@@ -973,3 +973,21 @@ sample rate. Engine752/0, Calls39/0 and Persistence17/0 pass; root static gates 
 Lean pass. Both Engine and Calls/Persistence Astra final reviews are clean
 after the reproduced fixes. Production application/collector wiring, configured-call acceptance and
 manual commit timing remain open, so the combined C checklist stays unchecked.
+
+## Checkpoint C live factory and startup leases — 2026-11-19
+
+The Calls-owned factory now constructs immutable runs from acknowledged Scribe
+profiles and source context, including the UTC anchor and pinned observer metadata.
+A mandatory bounded startup lease prevents unclaimed factory collectors from
+remaining active indefinitely. Collector and source worker initialization use the
+remaining startup budget; cancelled/expired provisional consumers reject handoffs
+and evidence. Unresolved nested supervisor admission retains its capacity debt
+rather than allowing repeated timed-out starts to accumulate queued work.
+
+Retained red/green regressions cover stale handoffs, expired workers, blocked writer
+startup, discarded packet accounting, absent factory leases and cancellation during
+writer handoff. Calls diagnostics42/0; Engine lease/worker Astra review is clean.
+Collector Astra re-review is also clean (16 independent tests/probes), final static
+checks and Lean pass; the full root suite remains pending. Production composition,
+coordinator helper/adoption and configured-call acceptance remain unimplemented;
+this checkpoint does not close any combined C acceptance item.

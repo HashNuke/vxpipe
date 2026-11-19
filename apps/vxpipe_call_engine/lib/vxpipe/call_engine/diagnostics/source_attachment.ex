@@ -36,6 +36,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
         source_id: id("source"),
         clock_id: id("clock"),
         origin_us: System.monotonic_time(:microsecond),
+        anchor_utc: DateTime.utc_now(),
         mode: mode,
         media_format: %{codec: codec, sample_rate: rate, channels: channels}
       }

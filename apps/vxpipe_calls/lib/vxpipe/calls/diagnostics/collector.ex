@@ -1,11 +1,16 @@
 defmodule Vxpipe.Calls.Diagnostics.Collector do
   @moduledoc "Source-owned live timing collection with bounded capture, reports and persistence drain."
   use GenServer
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, LiveReport}
+  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, CaptureHandoff, LiveReport}
   alias Vxpipe.Calls.{LatencyRun, TurnDiagnostic}
   alias Vxpipe.Calls.Diagnostics.{Handoff, Supervisor, Writer}
 
-  def start_link(options), do: GenServer.start_link(__MODULE__, options)
+  def start_link(options) do
+    case AttachmentLease.remaining(Keyword.get(options, :attachment_lease)) do
+      0 -> {:error, :unavailable}
+      timeout -> GenServer.start_link(__MODULE__, options, timeout: timeout)
+    end
+  end
 
   def child_spec(options),
     do: %{id: __MODULE__, start: {__MODULE__, :start_link, [options]}, restart: :temporary}
@@ -15,7 +20,10 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
 
   @impl true
   def init(options) do
-    with {:ok, run} <- LatencyRun.new(Map.from_struct(Keyword.fetch!(options, :run))),
+    lease = Keyword.get(options, :attachment_lease)
+
+    with true <- AttachmentLease.current?(lease),
+         {:ok, run} <- LatencyRun.new(Map.from_struct(Keyword.fetch!(options, :run))),
          run = compact(run),
          {:ok, capture} <-
            CaptureHandoff.new(self(),
@@ -24,13 +32,16 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
            ),
          true <- elem(capture.grant, 0) == run.settings_revision,
          {:ok, writer} <-
-           Supervisor.start_writer(
-             Keyword.merge(Keyword.fetch!(options, :writer_options),
-               owner: self(),
-               observer: self()
-             ),
-             Keyword.fetch!(options, :writer_supervisor)
-           ) do
+           AttachmentLease.operation(lease, fn ->
+             Supervisor.start_writer(
+               Keyword.merge(Keyword.fetch!(options, :writer_options),
+                 owner: self(),
+                 observer: self()
+               ),
+               Keyword.fetch!(options, :writer_supervisor)
+             )
+           end),
+         true <- AttachmentLease.current?(lease) do
       Process.monitor(writer)
 
       Enum.each(
@@ -42,6 +53,7 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
 
       state = %{
         run: run,
+        attachment_lease: lease,
         capture: capture,
         writer: writer,
         writes: writes,
@@ -64,10 +76,10 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
         utc_now: Keyword.get(options, :utc_now, &DateTime.utc_now/0)
       }
 
-      case Handoff.offer(writes, {:run, run}) do
-        :ok ->
-          {:ok, schedule(state)}
-
+      with true <- AttachmentLease.current?(lease) and CaptureHandoff.current?(capture),
+           :ok <- Handoff.offer(writes, {:run, run}) do
+        {:ok, schedule(state)}
+      else
         _ ->
           CaptureHandoff.close(capture)
           {:stop, :storage_unavailable}
@@ -78,7 +90,11 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
   end
 
   @impl true
-  def handle_call(:handoff, _from, state), do: {:reply, state.capture, state}
+  def handle_call(:handoff, _from, state) do
+    if AttachmentLease.current?(state.attachment_lease) and CaptureHandoff.current?(state.capture),
+      do: {:reply, state.capture, state},
+      else: {:reply, {:error, :unavailable}, begin_finish(state, :lease_expired)}
+  end
 
   def handle_call({:close, reason}, _from, state)
       when reason in [:disabled, :call_ended, :source_changed] do
@@ -89,22 +105,10 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
 
   @impl true
   def handle_info({:vxpipe_diagnostic_capture, _, _, _, _} = message, state) do
-    case CaptureHandoff.message(state.capture, message) do
-      {:ok, packet, charge} ->
-        result = LiveReport.observe(state.reports, packet)
-        CaptureHandoff.release(state.capture, charge, :processed)
+    unless AttachmentLease.current?(state.attachment_lease),
+      do: CaptureHandoff.close(state.capture)
 
-        case result do
-          {:ok, reports} -> persist(record_loss(%{state | reports: reports}, packet))
-          _ -> {:noreply, begin_finish(state, :observer_overloaded)}
-        end
-
-      {:error, :revoked} ->
-        {:noreply, begin_finish(state, :lease_expired)}
-
-      :error ->
-        {:noreply, state}
-    end
+    observe(message, state)
   end
 
   def handle_info(:check, %{finishing: reason} = state) when not is_nil(reason),
@@ -112,7 +116,8 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
 
   def handle_info(:check, state) do
     cond do
-      not CaptureHandoff.current?(state.capture) ->
+      not AttachmentLease.current?(state.attachment_lease) or
+          not CaptureHandoff.current?(state.capture) ->
         {:noreply, begin_finish(state, :lease_expired)}
 
       CaptureHandoff.stats(state.capture).overflow > 0 ->
@@ -171,6 +176,25 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
       |> Map.put(:message, :redacted)
       |> Map.put(:reason, :redacted)
       |> Map.put(:log, [])
+
+  defp observe(message, state) do
+    case CaptureHandoff.message(state.capture, message) do
+      {:ok, packet, charge} ->
+        result = LiveReport.observe(state.reports, packet)
+        CaptureHandoff.release(state.capture, charge, :processed)
+
+        case result do
+          {:ok, reports} -> persist(record_loss(%{state | reports: reports}, packet))
+          _ -> {:noreply, begin_finish(state, :observer_overloaded)}
+        end
+
+      {:error, :revoked} ->
+        {:noreply, begin_finish(state, :lease_expired)}
+
+      :error ->
+        {:noreply, state}
+    end
+  end
 
   defp persist(state) do
     result =

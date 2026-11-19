@@ -1,13 +1,26 @@
 defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
   @moduledoc "Isolated acoustic source consumer; never emits speech-control events."
   use GenServer
-  alias Vxpipe.CallEngine.Diagnostics.{AudioTimeline, CaptureHandoff, InferenceAdmission}
+
+  alias Vxpipe.CallEngine.Diagnostics.{
+    AttachmentLease,
+    AudioTimeline,
+    CaptureHandoff,
+    InferenceAdmission
+  }
+
   alias Vxpipe.CallEngine.Speech.{ActivityBoundary, Silero}
 
   def child_spec(options),
     do: %{id: __MODULE__, start: {__MODULE__, :start_link, [options]}, restart: :temporary}
 
-  def start_link(options), do: GenServer.start_link(__MODULE__, options)
+  def start_link(options) do
+    case AttachmentLease.remaining(Keyword.get(options, :attachment_lease)) do
+      0 -> {:error, :unavailable}
+      timeout -> GenServer.start_link(__MODULE__, options, timeout: timeout)
+    end
+  end
+
   def handoff(worker, timeout \\ 5_000), do: GenServer.call(worker, :handoff, timeout)
 
   @impl true
@@ -18,12 +31,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     admission = Keyword.get(options, :admission)
     mode = Keyword.get(options, :mode, :benchmark_only)
     coordinator = Keyword.get(options, :coordinator)
+    lease = Keyword.get(options, :attachment_lease)
 
     capture_options =
       Keyword.take(options, [:projection, :maximum_count, :maximum_bytes])
       |> Keyword.put(:owner, owner)
 
-    with true <- is_nil(coordinator) or (is_pid(coordinator) and node(coordinator) == node()),
+    with true <- AttachmentLease.current?(lease),
+         true <- is_nil(coordinator) or (is_pid(coordinator) and node(coordinator) == node()),
          true <- output.owner == owner and CaptureHandoff.current?(output),
          true <- valid_admission?(mode, admission),
          {:ok, input} <- CaptureHandoff.new(self(), capture_options),
@@ -45,6 +60,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
          input: input,
          output: output,
          coordinator: coordinator,
+         attachment_lease: lease,
          admission: admission,
          mode: mode,
          reused: :queue.new(),
@@ -67,7 +83,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
   end
 
   @impl true
-  def handle_call(:handoff, _from, state), do: {:reply, state.input, state}
+  def handle_call(:handoff, _from, state) do
+    if current?(state),
+      do: {:reply, state.input, state},
+      else: {:stop, :normal, {:error, :unavailable}, state}
+  end
 
   @impl true
   def handle_info({:vxpipe_diagnostic_capture, _, _, _, _} = message, state) do
@@ -461,7 +481,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
   defp current?(state) do
     stats = CaptureHandoff.stats(state.input)
 
-    stats.overflow == 0 and stats.invalid == 0 and
+    AttachmentLease.current?(state.attachment_lease) and
+      stats.overflow == 0 and stats.invalid == 0 and
       CaptureHandoff.current?(state.input) and CaptureHandoff.current?(state.output)
   end
 

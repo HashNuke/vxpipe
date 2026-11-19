@@ -1,10 +1,17 @@
 defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor, SourceWorker}
+
+  alias Vxpipe.CallEngine.Diagnostics.{
+    AttachmentLease,
+    CaptureHandoff,
+    SettingsSupervisor,
+    SourceWorker
+  }
+
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Speech.{ActivityRuntime, ActivitySupervisor}
 
-  setup do
+  setup context do
     parent = self()
 
     start_supervised!(
@@ -45,11 +52,23 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
       CaptureHandoff.new(self(), projection: __MODULE__.Projection, maximum_count: 1)
 
     epoch = make_ref()
+    startup_clock = :atomics.new(1, signed: true)
+
+    lease =
+      if context[:startup_lease] do
+        {:ok, lease} =
+          AttachmentLease.reserve(AttachmentLease.gate(1), self(),
+            clock: fn -> :atomics.get(startup_clock, 1) end
+          )
+
+        lease
+      end
 
     worker =
       start_supervised!(
         {SourceWorker,
          owner: self(),
+         attachment_lease: lease,
          output: output,
          projection: __MODULE__.Projection,
          admission: ActivityRuntime.diagnostic_admission(__MODULE__.Runtime),
@@ -62,7 +81,44 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
       )
 
     input = SourceWorker.handoff(worker)
-    %{worker: worker, input: input, output: output, epoch: epoch}
+
+    %{
+      worker: worker,
+      input: input,
+      output: output,
+      epoch: epoch,
+      lease: lease,
+      startup_clock: startup_clock
+    }
+  end
+
+  @tag startup_lease: true
+  test "cancelled attachment cannot return a handoff and retires its worker", ctx do
+    monitor = Process.monitor(ctx.worker)
+    AttachmentLease.cancel(ctx.lease)
+    assert {:error, :unavailable} = SourceWorker.handoff(ctx.worker)
+    assert_receive {:DOWN, ^monitor, :process, _, :normal}
+    refute CaptureHandoff.current?(ctx.input)
+  end
+
+  @tag startup_lease: true
+  test "unadopted attachment expires without starting inference", ctx do
+    monitor = Process.monitor(ctx.worker)
+    :atomics.put(ctx.startup_clock, 1, 500)
+    send(ctx.worker, :check_grant)
+    assert_receive {:DOWN, ^monitor, :process, _, :normal}
+    refute CaptureHandoff.current?(ctx.input)
+    refute_receive {:infer, _, _}
+  end
+
+  @tag startup_lease: true
+  test "adopted attachment remains available after the startup deadline", ctx do
+    assert AttachmentLease.adopt(ctx.lease)
+    AttachmentLease.finish(ctx.lease)
+    :atomics.put(ctx.startup_clock, 1, 500)
+    send(ctx.worker, :check_grant)
+    assert SourceWorker.handoff(ctx.worker) == ctx.input
+    assert CaptureHandoff.current?(ctx.input)
   end
 
   test "sequential inference retains bounded input reservations and emits mapped boundaries",

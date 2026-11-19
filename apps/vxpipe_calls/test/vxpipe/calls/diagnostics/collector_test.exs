@@ -1,6 +1,6 @@
 defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, CaptureHandoff, SettingsSupervisor}
   alias Vxpipe.Calls.Diagnostics.{Collector, Supervisor}
 
   setup do
@@ -50,6 +50,83 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
     ]
 
     %{options: options, generation: generation}
+  end
+
+  test "blocked writer admission cannot outlive the collector startup budget", c do
+    gate = AttachmentLease.gate(1)
+    {:ok, lease} = AttachmentLease.reserve(gate, self(), timeout_ms: 100)
+    writers = Process.whereis(__MODULE__.Writers)
+    :ok = :sys.suspend(writers)
+    tasks = start_supervised!({Task.Supervisor, []})
+
+    task =
+      Task.Supervisor.async_nolink(tasks, fn ->
+        Supervisor.start_collector(
+          Keyword.put(c.options, :attachment_lease, lease),
+          __MODULE__.Collectors
+        )
+      end)
+
+    try do
+      assert {:ok, {:error, :timeout}} = Task.yield(task, 1_000)
+      AttachmentLease.cancel(lease)
+      AttachmentLease.finish(lease)
+      assert AttachmentLease.pending(gate) == 1
+      assert {:error, :unavailable} = AttachmentLease.reserve(gate, self())
+    after
+      :sys.resume(writers)
+      Task.shutdown(task, :brutal_kill)
+    end
+  end
+
+  test "expired startup does not allocate a writer or persist a run", c do
+    {:ok, lease} = AttachmentLease.reserve(AttachmentLease.gate(1), self())
+    AttachmentLease.cancel(lease)
+    options = Keyword.put(c.options, :attachment_lease, lease)
+    assert {:error, :unavailable} = Supervisor.start_collector(options, __MODULE__.Collectors)
+    assert DynamicSupervisor.which_children(__MODULE__.Writers) == []
+    refute_received {:diagnostic_write, _, _}
+  end
+
+  test "cancelled startup rejects its handoff and drains already admitted writes", c do
+    {:ok, lease} = AttachmentLease.reserve(AttachmentLease.gate(1), self())
+    collector = start_supervised!({Collector, Keyword.put(c.options, :attachment_lease, lease)})
+    handoff = Collector.handoff(collector)
+    assert_receive {:diagnostic_write, task, run}
+    AttachmentLease.cancel(lease)
+    monitor = Process.monitor(collector)
+    assert {:error, :unavailable} = Collector.handoff(collector)
+    refute CaptureHandoff.current?(handoff)
+    send(task, {:finish, {:ok, run}})
+    assert_receive {:DOWN, ^monitor, :process, _, :normal}
+    assert_receive {:diagnostic_write, task, closed}
+    assert closed.state == :incomplete
+    send(task, {:finish, {:ok, closed}})
+  end
+
+  test "cancelled startup discards queued evidence before correlation", c do
+    {:ok, lease} = AttachmentLease.reserve(AttachmentLease.gate(1), self())
+    collector = start_supervised!({Collector, Keyword.put(c.options, :attachment_lease, lease)})
+    handoff = Collector.handoff(collector)
+    assert_receive {:diagnostic_write, task, run}
+    send(task, {:finish, {:ok, run}})
+    :ok = :sys.suspend(collector)
+
+    assert :ok =
+             CaptureHandoff.offer(
+               handoff,
+               {:room_turn_completed, c.generation, make_ref(), "turn", "command", -29_000}
+             )
+
+    AttachmentLease.cancel(lease)
+    monitor = Process.monitor(collector)
+    :ok = :sys.resume(collector)
+    assert_receive {:DOWN, ^monitor, :process, _, :normal}, 1_000
+    assert_receive {:diagnostic_write, task, closed}
+    assert closed.counts.observed_turns == 0
+    assert %{pending_count: 0, pending_bytes: 0, discarded: 1} = CaptureHandoff.stats(handoff)
+    send(task, {:finish, {:ok, closed}})
+    refute_received {:diagnostic_turn_write, _, _, _}
   end
 
   test "collectors start through a bounded owner and release their slot after drain", c do
