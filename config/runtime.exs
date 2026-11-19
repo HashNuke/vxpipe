@@ -145,6 +145,9 @@ database_enabled? = not is_nil(database_url) or (config_env() == :dev and not is
 if database_enabled? do
   config :vxpipe_persistence, :enabled, true
 
+  config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
+    diagnostics_settings_loader: &Vxpipe.Persistence.DiagnosticsSettingsStore.snapshot/0
+
   config :vxpipe_identity,
     oauth_store: Vxpipe.Persistence.OAuth.Store,
     oauth_browser_store: Vxpipe.Persistence.OAuth.Browser

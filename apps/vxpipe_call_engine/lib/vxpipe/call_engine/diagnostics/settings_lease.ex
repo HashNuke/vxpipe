@@ -18,6 +18,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.SettingsLease do
 
   def duration_ms, do: @lease_ms
 
+  @doc "Revokes local authority without forgetting revision-conflict evidence."
+  def revoke(%__MODULE__{} = lease, reason)
+      when reason in [:settings_unavailable, :read_timeout, :invalidated],
+      do: %{lease | expires_at: nil, reason: reason}
+
   def accept(%__MODULE__{} = lease, snapshot, started, now, clock_id) do
     cond do
       clock_id != lease.clock_id ->

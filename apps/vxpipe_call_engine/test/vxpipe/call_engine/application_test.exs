@@ -7,6 +7,39 @@ defmodule Vxpipe.CallEngine.ApplicationTest do
   alias Vxpipe.CallEngine.RemoteMCP.CatalogRefresher
   alias Vxpipe.Providers.ElevenLabs.AgentLeaseSupervisor
 
+  test "diagnostic settings reader is optional, named and cannot restart the engine on exhaustion" do
+    settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+    parent = self()
+
+    loader = fn ->
+      send(parent, :unexpected_settings_read)
+      {:error, :unavailable}
+    end
+
+    configured = Keyword.put(settings, :diagnostics_settings_loader, loader)
+    alias Vxpipe.CallEngine.Diagnostics.{SettingsProjection, SettingsReader, SettingsSupervisor}
+
+    {SettingsSupervisor, options} =
+      Enum.find(Application.child_specs(configured), fn
+        {SettingsSupervisor, _} -> true
+        _ -> false
+      end)
+
+    assert Keyword.fetch!(options, :projection) == SettingsProjection
+    assert Keyword.fetch!(options, :reader) == SettingsReader
+    assert Keyword.fetch!(options, :loader) == loader
+    assert SettingsSupervisor.child_spec(options).restart == :temporary
+    refute_received :unexpected_settings_read
+
+    refute Enum.any?(
+             Application.child_specs(Keyword.delete(settings, :diagnostics_settings_loader)),
+             fn
+               {SettingsSupervisor, _} -> true
+               _ -> false
+             end
+           )
+  end
+
   test "agent cleanup supervisor outlives room teardown and has an explicit name" do
     settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
     children = Application.child_specs(settings)

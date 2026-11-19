@@ -375,3 +375,75 @@
 - Final UI cleanup review is clean. Typecheck rerun before commit. No additional
   browser polishing was needed after the bounded second pass. Production runtime
   status/polling and actual capture are still unimplemented; no deployment.
+
+## Checkpoint C — runtime settings projection in progress
+
+- Added an isolated named settings supervisor, permanent reader IO slot and
+  direct-ETS projection. Reader initialization does not touch the database. The
+  projector polls at1s intervals with at most one outstanding read and a1s result
+  deadline; enabled authority still expires3s after read start. Status reads never
+  call a GenServer or database and expire even while the projector is suspended.
+- A timed-out operation retains the sole reader slot until actual completion,
+  preventing refresh jobs from accumulating behind a stalled dependency. Late
+  results are discarded. The pool is temporary at its parent boundary so exhausted
+  internal restarts can degrade diagnostics without restarting unrelated children.
+  Production startup wiring is not added yet.
+- Invalidation uses a coalescing atomics flag before sending; a suspended projector
+  receives one hint even after1000calls. Handling invalidation revokes local
+  authority and fences any earlier read. Only a new durable read can enable again.
+- Six projection tests were added red/green. A separate red case reproduced a late
+  response beating its queued deadline message; result handling now checks elapsed
+  time explicitly. Combined projection/lease13tests/0failures:
+  `/tmp/vxpipe-C-settings-projection-final.log`.
+- Full diagnostic subset, static gates and Astra review are in progress. No audio
+  capture, distributed invalidation, application startup wiring or model work yet.
+
+- Follow-up: database-enabled startup now injects the internal snapshot loader;
+  no IO occurs in child composition or reader initialization. Startup contract
+  test was red for the missing child, then green. Application/projection12/0;
+  actual Persistence snapshot integration8/0 covers off0/on1/off2 revisions.
+  Engine owns no Persistence dependency. Cross-node hints, consumers and effective
+  status remain pending; startup alone does not enable audio collection.
+- Astra xhigh independently reviewed the projection and startup/integration:
+  no findings,13lease/projectiontests,12application/projectiontests and8storetests
+  passing. Full diagnostics subset51/0. Root format, compile warnings-as-errors,
+  Credo strict and unused-lock checks pass. Full fixed-source umbrella run is
+  active at `/tmp/vxpipe-C-projection-root.log`; do not claim its result yet.
+
+### Next capture integration research
+
+- `Capability.SpeechToText.State.send_audio/2` validates frame identity and
+  format, and returns successful provider admission. Its state already knows
+  tenant/room/incarnation/participant/connection and allocation generation;
+  policy interval validation lives in the same boundary. This is a candidate
+  accepted-frame hook, not permission to bypass source observation policy.
+- `ConversationalSTT` preserves the frame only until normalization, drops its
+  sample timestamp, and sends accepted PCM through one operational inference
+  stream. Reuse needs metadata alongside pending/inflight PCM and explicit
+  recognition-epoch reset notices. Do not infer sample continuity from the
+  probability count alone or alter existing discarded-result behavior.
+- Browser and telephony frames retain monotonic-ms receipts. WebRTC's
+  `SpeechInput` also carries decoded activity PCM for Opus, while the supported
+  Scribe profile is linear16. Normalize the diagnostic copy in its worker;
+  existing `STTActivityPCM` caps normalized chunks at96000bytes.
+- Scribe socket messages presently have no receipt field. ContinuousSTT knows
+  the actual settlement branch and provider turn reference. Any timed envelope
+  must retain ordinary fixture/transport behavior and distinguish unavailable
+  receipt evidence from a fabricated later callback timestamp. No production
+  receipt/audio/correlation code was changed during this inspection.
+
+### Root verification investigation
+
+- The fixed-source root run reported one Engine failure in the existing
+  `IdleRoomTest` expiry case: `idle_wait` was nil before its manually injected
+  deadline (seed52109). The same focused test/seed passed in isolation. Engine
+  completed2576tests/1failure; this root run is not passing acceptance evidence.
+- Astra reproduced a separate pre-existing cross-sender ordering race: delaying
+  the idle Task's room request until after silent acknowledgment completion causes
+  authorization to reject the now-missing origin turn. The reproduction uses300s
+  idle duration, so it is independent of the test's competing1s timer. The root
+  failure alone does not establish which ordering occurred. Diagnostics settings
+  are unconfigured in default test startup and no speech control code changed.
+- Preserve that production race separately; any narrowed expiry-test setup must
+  explicitly establish admission before testing expiry. Do not report a test-only
+  synchronization change as fixing the production admission race.

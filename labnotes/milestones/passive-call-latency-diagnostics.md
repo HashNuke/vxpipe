@@ -600,3 +600,24 @@ C Installation UI acceptance task stays unchecked until that integration passes.
 Installation UI checkpoint final evidence: full frontend suite1169/0, affected
 lint/type checks pass, and Astra cleanup re-review clean. Runtime-backed applying
 status/refresh remains explicitly pending; the combined C UI task is still open.
+
+## Checkpoint C runtime projection evidence — 2026-11-19
+
+Database-backed startup now composes one isolated asynchronous settings reader
+with a direct local ETS projection. Polling is at most once per second; read
+results expire after one second and enabled leases after three seconds from read
+start. A blocked read retains its sole IO slot until completion. Result handling
+checks elapsed time independently of deadline-message order. Coalesced invalidation
+fences old results; exhausted pool restarts leave diagnostics unavailable.
+
+Focused projection/lease13tests, application/projection12tests and actual store
+integration8tests pass. The store integration follows durable off/on/off revisions.
+Full Engine diagnostic subset51/0; root static gates pass. Astra xhigh review is
+clean, including startup/configuration and snapshot integration. Full umbrella
+verification is in progress. Cross-node hints, audio consumers, queue revocation
+and truthful UI effective status remain pending; the combined C task stays open.
+
+The broader run has reported an existing idle-room expiry-test failure (nil idle
+state), while the same focused test/seed passes alone. Independent review has
+reproduced a distinct idle-admission ordering race. This run is not passing root
+acceptance evidence; investigation is recorded in the implementation labnotes.

@@ -294,3 +294,28 @@ rows are unavailable rather than implicitly recreated. Read/write operations loc
 the current user, role and session, and recheck expiry after settings-lock waits
 before returning data or changing the setting. The internal snapshot read is for
 the future projection only; it does not provide a public unauthenticated endpoint.
+
+## Local projection IO isolation
+
+A dedicated reader process owns one settings-read slot. The projection starts it
+asynchronously, polls no more often than once per second, and stops accepting a
+result at the one-second deadline. Elapsed time is checked when a result arrives,
+not only by a timer message. Timeout revokes authority but retains the slot until
+the read actually settles; it does not start replacement work behind a blocked
+dependency. This trades temporary diagnostic unavailability for bounded work.
+
+Consumers read a small protected ETS projection and evaluate the three-second
+lease against the current local monotonic clock. They never wait for the reader
+or projection process. An invalidation hint is coalesced before messaging and
+fences the outstanding result when processed; it cannot grant authority. The
+reader/projection supervisor shares lifecycle and is temporary at its parent
+boundary. Exhausted retries therefore leave diagnostics unavailable rather than
+forcing the containing application's unrelated children to restart.
+
+Database-backed application startup now injects the Persistence snapshot loader
+into this pool. The Engine owns no database dependency and startup does not await
+the first read; a not-yet-started Repo leaves diagnostics unavailable until a
+later refresh succeeds. This composition is not an alternate enable authority.
+Actual snapshot-port tests cover durable off/on/off revisions. Cross-node hints,
+consumer revocation/queue fencing and UI propagation status remain required
+before claiming configured-call capture.
