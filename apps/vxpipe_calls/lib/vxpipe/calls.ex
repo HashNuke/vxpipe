@@ -360,6 +360,12 @@ defmodule Vxpipe.Calls do
   def fetch_usage_report(principal, call_id, options \\ []),
     do: UsageProjections.fetch_report(principal, call_id, options)
 
+  def fetch_latency_report(authority, call_id, options \\ []),
+    do: Vxpipe.Calls.LatencyReports.fetch(authority, call_id, options)
+
+  def fetch_latency_turns(authority, call_id, run_id, options \\ []),
+    do: Vxpipe.Calls.LatencyReports.turns(authority, call_id, run_id, options)
+
   def operator_call_access(authority, tenant_key),
     do: CallReadAccess.for_operator(authority, tenant_key)
 

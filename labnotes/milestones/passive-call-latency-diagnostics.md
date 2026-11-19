@@ -1092,3 +1092,12 @@ Full-suite runs are deferred until milestone implementation is complete per user
 instruction. The prior f5a20d3b root run ended with two failures (a local Telnyx
 startup fixture and this corrected discovery fixture); it is not a passing gate.
 No Telnyx code or live-provider tests were used for this checkpoint.
+
+## Checkpoint D authorized report read boundary — 2026-11-19
+
+Calls now exposes separate tenant-authorized report and run-turn reads through the
+existing diagnostic repository port. Run pages carry honest freshness/loss coverage;
+summary queries cover the entire authorized call independently of pagination.
+Turn pages retain revisions, default to50 and cap at100 rows. A full last turn page
+may have an empty successor. No Console route or core/UI consumer is claimed yet;
+D acceptance stays open until those pieces and their checks are implemented.
