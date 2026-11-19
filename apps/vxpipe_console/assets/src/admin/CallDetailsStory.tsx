@@ -1,3 +1,4 @@
+import { createLatencyFixture } from "../../../../../packages/react/stories/latencyFixtures";
 import { StoryCallBreadcrumbs } from "./stories/StoryCallBreadcrumbs";
 import { AdminJourneyStory } from "./AdminJourneyStory";
 import { adminStoryRoute } from "./adminStoryRoute";
@@ -14,12 +15,19 @@ export function CallDetailsStory({
   scenario,
   theme,
   initialTab = "chat",
+  latency = false,
 }: {
   scenario: CallDetailsFixtureScenario;
+  latency?: boolean;
   theme: "dark" | "light";
   initialTab?: "chat" | "variables" | "metrics" | "participants";
 }) {
-  const state = useMemo(() => callDetailsFixture(scenario), [scenario]);
+  const state = useMemo(() => {
+    const value = callDetailsFixture(scenario);
+    return latency && value.status === "ready"
+      ? { ...value, controller: { ...value.controller, latency: createLatencyFixture() } }
+      : value;
+  }, [scenario, latency]);
   if (adminStoryRoute(window.location.hash).page === "call-details") return <AdminJourneyStory theme={theme} />;
   return (
     <CallDetailsPage

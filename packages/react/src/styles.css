@@ -1866,3 +1866,35 @@ button.vx-tool-summary:hover {
 .vx-timeline-pages button { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .vx-timeline-pages button:disabled { cursor: default; opacity: 0.5; text-decoration: none; }
 .vx-timeline-pages button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+
+.vx-call-metrics { flex: 1; min-height: 0; overflow: auto; }
+.vx-latency { border-bottom: 1px solid var(--vx-line); font-size: 13px; }
+.vx-latency-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; color: var(--vx-ink); background: var(--vx-panel); border: 0; font: inherit; font-weight: 600; cursor: pointer; }
+.vx-latency-toggle:hover { background: var(--vx-soft); }
+.vx-latency-body { padding: 0 16px 16px; }
+.vx-latency-body p { margin: 12px 0; line-height: 1.6; max-width: 78ch; }
+.vx-latency-description, .vx-latency small { color: var(--vx-muted); }
+.vx-latency-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+.vx-latency-toolbar label { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.vx-latency button:not(.vx-latency-toggle):not(.vx-latency-row-toggle), .vx-latency select { color: var(--vx-ink); background: var(--vx-panel); border: 1px solid var(--vx-control-line); border-radius: 4px; padding: 6px 9px; font: inherit; max-width: 100%; }
+.vx-latency button { cursor: pointer; }
+.vx-latency button:disabled, .vx-latency select:disabled { opacity: .55; cursor: default; }
+.vx-latency :is(button, select, summary):focus-visible { outline: 2px solid var(--vx-blue); outline-offset: 3px; }
+.vx-latency-table-scroll { overflow-x: auto; }
+.vx-latency table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.vx-latency th, .vx-latency td { text-align: left; padding: 12px; vertical-align: top; border-bottom: 1px solid var(--vx-line); }
+.vx-latency thead th { color: var(--vx-muted); font-weight: 500; white-space: nowrap; }
+.vx-latency td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vx-latency small { display: block; font-weight: 400; max-width: 20ch; overflow: hidden; text-overflow: ellipsis; }
+.vx-latency-row-toggle { white-space: nowrap; display: flex; width: 100%; justify-content: space-between; gap: 16px; align-items: center; border: 0; background: transparent; color: var(--vx-ink); padding: 0 0 4px; font: inherit; font-weight: 600; }
+.vx-latency td.vx-latency-evidence { white-space: normal; background: var(--vx-panel); overflow-wrap: anywhere; }
+.vx-latency-evidence dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 24px; margin: 16px 0; }
+.vx-latency-evidence dt { color: var(--vx-muted); }
+.vx-latency-evidence dd { margin: 4px 0 0; font-family: var(--vx-mono); }
+.vx-latency-summary { border-top: 1px solid var(--vx-line); padding-top: 12px; }
+.vx-latency-summary summary { cursor: pointer; }
+@media (max-width: 640px) {
+  .vx-latency-body { padding: 0 12px 12px; }
+  .vx-latency-toolbar label { flex-direction: column; align-items: flex-start; width: 100%; }
+  .vx-latency-evidence dl { grid-template-columns: 1fr; }
+}

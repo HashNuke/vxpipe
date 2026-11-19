@@ -43,3 +43,8 @@ export const MalformedResponse: Story = { args: { scenario: "malformed-response"
 export const Narrow: Story = {
   globals: { viewport: { value: "390px-844px", isRotated: false } },
 };
+
+export const Latency: Story = {
+  args: { scenario: "metrics", initialTab: "metrics", latency: true },
+  parameters: { docs: { description: { story: "Synthetic optional latency diagnostics. Opens collapsed and fetches only when expanded; complete and partial turn evidence remain distinct." } } },
+};

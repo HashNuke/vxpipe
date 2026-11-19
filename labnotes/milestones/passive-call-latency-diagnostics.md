@@ -1111,3 +1111,15 @@ provenance. Missing scope and unavailable storage have separate generic errors.
 Endpoint/runtime tests pass20/0; Astra xhigh source review is clean. Local Chrome
 confirmed signed-out401 and signed-in200 report/turn reads with private/no-store.
 Core state, lazy report UI and live refresh still remain; D tasks stay unchecked.
+
+## Checkpoint D Storybook-first shared latency view — 2026-11-19
+
+The shared Metrics view accepts an optional diagnostic loader and starts its section
+collapsed. Typed core pages retain newer turn revisions; the view fetches lazily,
+polls serially only while open/live, aborts on close, times out and exposes retry.
+Synthetic Storybook states show complete/partial evidence, absent collection and
+loading/outage. Technical rows and whole-call profile summaries stay opt-in.
+Astra paging findings were reproduced and fixed, with four independent probes now
+green. Desktop/mobile Chrome and keyboard disclosure were inspected. Real HTTP
+loader/decoder composition, transcript links and remaining D acceptance are open;
+this preview is not a claim of production diagnostic presentation.

@@ -42,3 +42,9 @@ export type {
   RevisionedEntity,
   UnavailableReason,
 } from "./callDetails.js";
+
+export { latencyMetrics, latencyLandmarks, mergeLatencyTurns } from "./callLatency.js";
+export type {
+  LatencyMetric, LatencyLandmark, LatencyProfile, LatencyCoverage, LatencyRun,
+  LatencyTurn, LatencySummary, LatencyReport, LatencyTurnPage, LatencyLoader,
+} from "./callLatency.js";

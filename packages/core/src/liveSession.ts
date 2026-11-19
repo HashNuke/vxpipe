@@ -1,3 +1,4 @@
+import type { LatencyLoader } from "./callLatency.js";
 import type { CallDetailsController, CallDetailsReader } from "./callDetails.js";
 
 export interface LocalSessionSnapshot {
@@ -31,4 +32,5 @@ export interface CallConsoleController {
   details: CallDetailsReader;
   history?: Pick<CallDetailsController, "refresh">;
   live?: LiveCallControls;
+  latency?: LatencyLoader;
 }
