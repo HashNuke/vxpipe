@@ -1230,3 +1230,15 @@ separately from the implementation and found no mismatch. The final code review
 is clean. The C supervision/projection/limits task is checked. Effective-status UI,
 broader settings failure transitions, measured load/accuracy and live acceptance
 remain open; no deployment or live provider use occurred.
+
+## Checkpoint C settings recovery authority — 2026-11-19
+
+Focused loader-boundary acceptance now queues PCM before a settings read failure
+or reader/projection crash, then verifies that new handoffs are denied while the
+setting is unavailable/unknown. Recovery at the same saved revision admits fresh
+capture but cannot revive pre-failure queued audio; rejected audio releases its
+retained count/byte charge. The projection/handoff/peer selection passes 21 tests.
+These fixtures establish local recovery and capture fencing, not a real database
+outage or full configured-call parity. The broader settings-failure task stays open.
+Astra's review is clean, with an independent 13-test projection run. Recovery is
+before the old lease deadline, isolating failure/restart fencing from expiry.

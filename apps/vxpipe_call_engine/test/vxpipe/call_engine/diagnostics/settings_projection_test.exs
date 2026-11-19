@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.Diagnostics.SettingsProjectionTest do
   use ExUnit.Case, async: false
-  alias Vxpipe.CallEngine.Diagnostics.{SettingsProjection, SettingsSupervisor}
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsProjection, SettingsSupervisor}
+  alias Vxpipe.CallEngine.Media.AudioFrame
   @projection __MODULE__.Projection
   @reader __MODULE__.Reader
 
@@ -175,6 +176,75 @@ defmodule Vxpipe.CallEngine.Diagnostics.SettingsProjectionTest do
     stop_supervised!({SettingsSupervisor, __MODULE__.Pool})
     assert_receive {:DOWN, ^monitor, :process, _, _}
     assert {:unavailable, :settings_unavailable} = SettingsProjection.status(@projection)
+  end
+
+  test "a settings outage and recovery cannot revive queued audio from the old enable", ctx do
+    settle(ctx.reader, {:ok, %{enabled: true, revision: 1}})
+    {handoff, queued} = queue_audio()
+    :atomics.put(ctx.clock, 1, 1_000)
+    fire(:poll)
+    assert_receive {:read_started, reader}
+    settle(reader, {:error, :unavailable})
+    assert {:error, :unavailable} = CaptureHandoff.new(self(), projection: @projection)
+
+    # Recover at the same saved revision, without touching the old handoff first.
+    :atomics.put(ctx.clock, 1, 2_000)
+    fire(:poll)
+    assert_receive {:read_started, reader}
+    settle(reader, {:ok, %{enabled: true, revision: 1}})
+    assert_fresh_capture_only(handoff, queued)
+  end
+
+  for component <- [:reader, :projection] do
+    @component component
+    test "#{@component} restart requires a fresh durable read and fences old queued audio", ctx do
+      settle(ctx.reader, {:ok, %{enabled: true, revision: 1}})
+      {handoff, queued} = queue_audio()
+      victim = if @component == :reader, do: ctx.reader, else: Process.whereis(@projection)
+      monitor = Process.monitor(victim)
+      Process.exit(victim, :kill)
+      assert_receive {:DOWN, ^monitor, :process, ^victim, :killed}
+      assert_receive {:read_started, reader}
+      refute reader == ctx.reader
+      assert {:unavailable, :unknown_settings} = SettingsProjection.status(@projection)
+      assert {:error, :unavailable} = CaptureHandoff.new(self(), projection: @projection)
+
+      settle(reader, {:ok, %{enabled: true, revision: 1}})
+      assert_fresh_capture_only(handoff, queued)
+    end
+  end
+
+  defp queue_audio do
+    frame = %AudioFrame{
+      tenant_id: "tenant",
+      room_id: "room",
+      incarnation_id: "incarnation",
+      participant_id: "human",
+      connection_id: "connection",
+      track_id: "audio",
+      codec: :linear16,
+      sample_rate: 16_000,
+      channels: 1,
+      sequence_number: 1,
+      timestamp: 0,
+      payload: :binary.copy(<<1, 0>>, 320),
+      received_at: 0,
+      source_epoch: make_ref()
+    }
+
+    assert {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+    assert :ok = CaptureHandoff.offer(handoff, {:audio, frame})
+    assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = queued
+    {handoff, queued}
+  end
+
+  defp assert_fresh_capture_only(handoff, queued) do
+    assert {:error, :revoked} = CaptureHandoff.message(handoff, queued)
+    assert %{pending_count: 0, pending_bytes: 0, discarded: 1} = CaptureHandoff.stats(handoff)
+    refute CaptureHandoff.current?(handoff)
+    {fresh, message} = queue_audio()
+    assert {:ok, {:audio, _}, charge} = CaptureHandoff.message(fresh, message)
+    assert :ok = CaptureHandoff.release(fresh, charge, :processed)
   end
 
   defp settle(reader, result) do
