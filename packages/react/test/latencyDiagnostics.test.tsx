@@ -181,3 +181,60 @@ test("pending fixture does not contradict its stored run reasons", async () => {
   expect(run.coverage.reasons).toEqual(expect.arrayContaining(nonTerminal));
   expect(run.coverage.terminationReasons).toEqual([]);
 });
+
+test("late evidence revises an incomplete row without resetting expansion or keyboard focus", async () => {
+  vi.useFakeTimers();
+  const view = render(<LatencyDiagnostics loader={createLatencyFixture("late")} live={true} participants={[]} />);
+  try {
+    open();
+    await act(async () => {});
+    expect(screen.getByText(/1 pending/)).toBeVisible();
+    expect(screen.queryByText("425 ms")).not.toBeInTheDocument();
+    const turn = screen.getByRole("button", { name: "Turn 1" });
+    fireEvent.click(turn);
+    turn.focus();
+    expect(screen.getByText(/Revision 1/)).toBeVisible();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(screen.getByText("425 ms")).toBeVisible();
+    expect(screen.getByText(/0 pending/)).toBeVisible();
+    expect(screen.getByText(/Revision 2/)).toBeVisible();
+    expect(turn).toHaveFocus();
+    expect(turn).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Latency diagnostics" })).toHaveAttribute("aria-expanded", "true");
+  } finally { view.unmount(); vi.useRealTimers(); }
+});
+
+test("the recoverable outage fixture loads evidence only after an explicit retry", async () => {
+  render(<LatencyDiagnostics loader={createLatencyFixture("retry")} live={false} participants={[]} />);
+  open();
+  expect(await screen.findByRole("alert")).toHaveTextContent("could not be loaded");
+  expect(screen.queryByText(/Not collected/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Retry diagnostics" }));
+  expect(await screen.findByText("425 ms")).toBeVisible();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+test.each([401, 403, 404])("turn read denial %s removes previously loaded summaries and rows", async status => {
+  const turns = vi.fn().mockResolvedValueOnce(latencyTurns).mockRejectedValue({ status });
+  render(<LatencyDiagnostics loader={{ report: async () => latencyReport, turns }} live={false} participants={[]} />);
+  open();
+  expect(await screen.findByText("425 ms")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh diagnostics" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("do not have access");
+  expect(screen.queryByText("425 ms")).not.toBeInTheDocument();
+  expect(screen.queryByText("Whole-call summaries")).not.toBeInTheDocument();
+});
+
+test("a failed turn refresh retains labelled previous evidence and can recover", async () => {
+  const turns = vi.fn().mockResolvedValueOnce(latencyTurns).mockRejectedValueOnce({ status: 503 }).mockResolvedValue(latencyTurns);
+  render(<LatencyDiagnostics loader={{ report: async () => latencyReport, turns }} live={false} participants={[]} />);
+  open();
+  expect(await screen.findByText("425 ms")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh diagnostics" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Showing previously loaded evidence");
+  expect(screen.getByText("425 ms")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Retry diagnostics" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  expect(screen.getByText("425 ms")).toBeVisible();
+  expect(turns).toHaveBeenCalledTimes(3);
+});

@@ -367,7 +367,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
   revision-safe updates. Diagnostic read failure must not fail the conversation.
 - [x] Build the collapsed section and per-turn breakdown with quality explanations,
   partial stages and existing authorized transcript links. No raw benchmark timeline events.
-- [ ] Cover old calls, disabled/unsupported capture, pending/late rows, incomplete
+- [x] Cover old calls, disabled/unsupported capture, pending/late rows, incomplete
   coverage, denied reads, storage outage/retry and zero valid samples in fixtures/tests.
 - [x] Verify summaries use all report rows, exclude invalid durations, and preserve
   units/provenance; prevent pure-inference or remote-hearing labels.
@@ -1242,3 +1242,21 @@ These fixtures establish local recovery and capture fencing, not a real database
 outage or full configured-call parity. The broader settings-failure task stays open.
 Astra's review is clean, with an independent 13-test projection run. Recovery is
 before the old lease deadline, isolating failure/restart fencing from expiry.
+
+## Checkpoint D evidence-state acceptance — 2026-11-19
+
+The fixture/test matrix now includes late revision of an existing incomplete turn
+and explicit retry after a temporary outage. Live refresh retains the expanded,
+focused row while revision 1 advances to revision 2 with acoustic evidence.
+Turn-read 401/403/404 clears loaded rows and summaries; 503 preserves labelled
+previous evidence until retry. Existing cases cover absent collection (without
+inventing old/disabled provenance), unsupported capture, incomplete coverage,
+pending counts and zero valid samples.
+
+Frontend/core checks passed 30/30; Console loader checks passed 8/8. TypeScript and
+root static gates pass. Astra reproduced two fixture issues, both corrected with
+passing independent probes (2/2); final review is clean. Chrome confirmed late
+revision on desktop and outage/retry plus keyboard expansion on mobile. The D
+fixture/test task is checked; comprehensive both-host rendered acceptance remains
+open. Storybook exposes Late Evidence and Retry After Outage through its existing
+Tailscale preview. No production deployment or provider use occurred.

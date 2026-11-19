@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { LatencyDiagnostics } from "../src/LatencyDiagnostics.js";
 import { createLatencyFixture } from "./latencyFixtures.js";
@@ -21,3 +22,12 @@ export const Pending: Story = { args: { loader: createLatencyFixture("pending"),
 export const Unsupported: Story = { args: { loader: createLatencyFixture("unsupported") } };
 export const ZeroValidSamples: Story = { args: { loader: createLatencyFixture("zero-valid") } };
 export const LargeReport: Story = { args: { loader: createLatencyFixture("large") } };
+
+export const LateEvidence: Story = { render: function Render(args) {
+  const loader = useMemo(() => createLatencyFixture("late"), []);
+  return <LatencyDiagnostics {...args} loader={loader} />;
+} };
+export const RetryAfterOutage: Story = { render: function Render(args) {
+  const loader = useMemo(() => createLatencyFixture("retry"), []);
+  return <LatencyDiagnostics {...args} loader={loader} />;
+} };

@@ -28,10 +28,14 @@ export const latencyTurns: LatencyTurnPage = {
       metricReasons: { speech_end_to_provider_end: "partial_start", room_to_first_text: "missing_evidence", text_to_first_audio: "missing_evidence" } },
   ],
 };
-export type LatencyFixtureMode = "available" | "empty" | "unavailable" | "loading" | "denied" | "pending" | "unsupported" | "zero-valid" | "large";
+export type LatencyFixtureMode = "available" | "empty" | "unavailable" | "loading" | "denied" | "pending" | "unsupported" | "zero-valid" | "large" | "late" | "retry";
 export function createLatencyFixture(mode: LatencyFixtureMode = "available"): LatencyLoader {
+  let reads = 0;
   return {
     async report() {
+      reads++;
+      if (mode === "retry" && reads === 1) throw new Error("Fixture temporary outage");
+      if (mode === "late" && reads === 1) return { ...latencyReport, summary: [], runs: [{ ...latencyReport.runs[0]!, revision: 1, state: "running", closedAt: null, reasons: [], coverage: { ...latencyReport.runs[0]!.coverage, status: "collecting", recordedState: "running", reasons: [], terminationReasons: [], storedTurns: 1, pendingTurns: 1 } }] };
       if (mode === "loading") return new Promise(() => {});
       if (mode === "denied") throw { status: 403 };
       if (mode === "pending") return { ...latencyReport, summary: [], runs: [{ ...latencyReport.runs[0]!, state: "running", closedAt: null, reasons: [], coverage: { ...latencyReport.runs[0]!.coverage, status: "collecting", recordedState: "running", reasons: [], terminationReasons: [], storedTurns: 0, pendingTurns: 2 } }] };
@@ -42,6 +46,8 @@ export function createLatencyFixture(mode: LatencyFixtureMode = "available"): La
       return mode === "empty" ? { runs: [], summary: [], nextCursor: null } : latencyReport;
     },
     async turns(_runId, cursor) {
+      if (mode === "late" && reads === 1) return { ...latencyTurns, turns: [{ ...latencyTurns.turns[0]!, revision: 1, quality: "incomplete", acousticReason: "missing_evidence", acousticSample: null, uncertaintyUs: null,
+        landmarksUs: { provider_end_received: 3425000, room_turn_completed: 3437000 }, durationsUs: { speech_end_to_provider_end: null, provider_to_room: 12000 }, metricReasons: { speech_end_to_provider_end: "missing_evidence" } }] };
       if (mode === "pending" || mode === "unsupported") return { ...latencyTurns, turns: [] };
       if (mode === "large") return { ...latencyTurns, nextCursor: cursor ? null : "turn-100", turns: Array.from({ length: 100 }, (_, index) => ({ ...latencyTurns.turns[index % 2]!, turnId: `turn-${index + 1 + (cursor ? 100 : 0)}` })) };
       if (mode === "zero-valid") return { ...latencyTurns, turns: [{ ...latencyTurns.turns[1]!, turnId: "turn-one" }, latencyTurns.turns[1]!] };
