@@ -831,3 +831,20 @@ Astra xhigh review is clean (eight independent probes). The preceding full umbre
 run passed but predates this checkpoint and the final provider-link correction.
 Response association, automatic source attachment and collector persistence remain
 open; the combined C correlation tasks remain unchecked.
+
+
+## Checkpoint C response timing association — 2026-11-19
+
+Accepted audio input carries its observation into the existing agent turn. The first
+nonempty text actually published to recipients and first authorized playback-start
+acknowledgement emit bounded command/correlation/output IDs with monotonic times.
+The latter is the room's receipt of acknowledged server egress, not remote hearing.
+Observations retire with the turn; unrelated commands/continuations do not inherit
+them. Revocation, saturation and stale callbacks cannot borrow a later output.
+
+The initial regression was red for missing response evidence, then green. Broader
+room/diagnostic tests passed391/0 on a same-seed rerun after one STS source-arm
+timeout (also passing1/0 in isolation). Static gates and Lean pass. Astra xhigh
+review is clean with27 independent tests. A full umbrella run is still in progress.
+Collector correlation/persistence, automatic attachment and configured-call
+acceptance remain open; combined C tasks are not yet complete.

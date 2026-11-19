@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   alias Vxpipe.CallEngine.Archive.Recorder, as: ArchiveRecorder
   alias Vxpipe.CallEngine.Capability.{ModelInference, TextToSpeech}
   alias Vxpipe.CallEngine.Command.{ContinueAgent, SendText}
+  alias Vxpipe.CallEngine.Diagnostics.ResponseTiming
 
   alias Vxpipe.CallEngine.Event.{
     AgentSpeechProgressed,
@@ -74,8 +75,13 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
         occurred_at: occurred_at
       }
 
-      {state, source_policy} =
-        EventPublisher.publish_transcript(state, connection.pid, output)
+      {state, source_policy, recipients} =
+        EventPublisher.publish_transcript_with_recipients(state, connection.pid, output)
+
+      state =
+        if text != "" and (recipients == :legacy or MapSet.size(recipients) > 0),
+          do: ResponseTiming.observe(state, command, output.id, :first_response_text),
+          else: state
 
       state = %{state | next_sequence: state.next_sequence + 1}
       state = TurnState.admit_output(state, command)
@@ -349,6 +355,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.AgentOutput do
   end
 
   defp emit_speech_started(request, connection, state) do
+    state = ResponseTiming.observe(state, request, request.output_id, :first_audio_start)
     event = struct!(AgentSpeechStarted, event_fields(request, state))
 
     state =

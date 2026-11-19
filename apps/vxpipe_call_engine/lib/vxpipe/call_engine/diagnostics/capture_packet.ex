@@ -33,6 +33,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
     do:
       {:room_turn_completed, generation, reference, :binary.copy(turn), :binary.copy(command), at}
 
+  def copy({:response_landmark, turn, command, output, kind, at}),
+    do:
+      {:response_landmark, :binary.copy(turn), :binary.copy(command), :binary.copy(output), kind,
+       at}
+
   def copy(packet), do: packet
 
   defp valid?({:audio, %AudioFrame{codec: :linear16, channels: 1, activity_pcm: nil} = frame})
@@ -88,6 +93,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
   defp valid?({:room_turn_completed, generation, reference, turn, command, at}) do
     is_reference(generation) and is_reference(reference) and identifier?(turn) and
       identifier?(command) and signed?(at)
+  end
+
+  defp valid?({:response_landmark, turn, command, output, kind, at}) do
+    identifier?(turn) and identifier?(command) and identifier?(output) and signed?(at) and
+      kind in [:first_response_text, :first_audio_start]
   end
 
   defp valid?({:turn_link, source_generation, source_turn, generation, turn}) do

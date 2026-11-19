@@ -5,7 +5,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
   alias Vxpipe.CallEngine.Event.{ParticipantTurnStarted, ParticipantTurnCompleted}
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
   alias Vxpipe.CallEngine.Room.Snapshot
-  alias Vxpipe.CallEngine.RoomAuthority.{InputTurns, State}
+  alias Vxpipe.CallEngine.RoomAuthority.{AgentOutput, InputTurns, State, TurnState}
+  alias Vxpipe.CallEngine.TextToSpeechRequest
 
   @identity %{
     tenant_id: "tenant-input-turn",
@@ -139,6 +140,109 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
     end
 
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  test "first published response and acknowledged audio retain the input command identity", ctx do
+    {state, command} = response_turn(ctx.handoff)
+    before = System.monotonic_time(:microsecond)
+    state = AgentOutput.text(self(), command, "first sentence", state)
+    assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.TextOutput{id: output}}
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _,
+                    {:response_landmark, turn, id, ^output, :first_response_text, at}, _}
+
+    assert turn == command.correlation_id and id == command.id
+    assert at >= before and at <= System.monotonic_time(:microsecond)
+    state = AgentOutput.text(self(), command, "second sentence", state)
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:response_landmark, _, _, _, _, _}, _}
+
+    request = %TextToSpeechRequest{
+      tenant_id: command.tenant_id,
+      room_id: command.room_id,
+      incarnation_id: command.incarnation_id,
+      participant_id: "agent",
+      source_participant_id: command.participant_id,
+      connection_id: command.connection_id,
+      command_id: command.id,
+      correlation_id: command.correlation_id,
+      output_id: output,
+      text: "first sentence",
+      output_sink: self()
+    }
+
+    state = put_in(state.connections[command.connection_id].output_sink, self())
+    state = %{state | text_to_speech_capability: %{pid: self(), participant_id: "agent"}}
+    state = TurnState.begin_speech(state, request)
+    before = System.monotonic_time(:microsecond)
+    state = AgentOutput.playback(self(), request, :started, state)
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _,
+                    {:response_landmark, ^turn, ^id, ^output, :first_audio_start, at}, _}
+
+    assert at >= before and at <= System.monotonic_time(:microsecond)
+    _ = AgentOutput.playback(self(), request, :started, state)
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:response_landmark, _, _, _, _, _}, _}
+  end
+
+  test "empty text does not consume the first response landmark", ctx do
+    {state, command} = response_turn(ctx.handoff)
+    state = AgentOutput.text(self(), command, "", state)
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:response_landmark, _, _, _, _, _}, _}
+    _ = AgentOutput.text(self(), command, "actual response", state)
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _,
+                    {:response_landmark, _, _, _, :first_response_text, _}, _}
+  end
+
+  test "revoked capture cannot suppress response delivery or observe a later output", ctx do
+    {state, command} = response_turn(ctx.handoff)
+    CaptureHandoff.close(ctx.handoff)
+    _ = AgentOutput.text(self(), command, "still delivered", state)
+    assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.TextOutput{text: "still delivered"}}
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:response_landmark, _, _, _, _, _}, _}
+  end
+
+  test "unrelated commands do not inherit the observed input", ctx do
+    {state, command} = response_turn(ctx.handoff)
+    other = %{command | id: "unrelated-command", correlation_id: "other-turn"}
+    state = TurnState.put(state, other)
+    _ = AgentOutput.text(self(), other, "unrelated", state)
+    assert_receive {:vxpipe_event, %Vxpipe.CallEngine.Event.TextOutput{text: "unrelated"}}
+    refute_received {:vxpipe_diagnostic_capture, _, _, {:response_landmark, _, _, _, _, _}, _}
+  end
+
+  def respond(receiver, command) do
+    send(receiver, {:diagnostic_response_command, command})
+    :ok
+  end
+
+  defp response_turn(handoff) do
+    signal = %{turn_started(0) | allocation_generation: make_ref(), turn_ref: make_ref()}
+
+    current = %{
+      state(self())
+      | text_capability: %{module: __MODULE__, pid: self(), participant_id: "agent"}
+    }
+
+    current = InputTurns.speech_to_text(self(), @identity, signal, current)
+
+    current =
+      InputTurns.speech_to_text(
+        self(),
+        @identity,
+        %{signal | kind: :turn_ended, text: "hello"},
+        current,
+        handoff
+      )
+
+    assert_receive {:diagnostic_response_command, command}
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:room_turn_completed, _, _, _, _, _}, _} =
+                     message
+
+    {:ok, _, charge} = CaptureHandoff.message(handoff, message)
+    CaptureHandoff.release(handoff, charge, :processed)
+    {current, command}
   end
 
   defp state(capability) do

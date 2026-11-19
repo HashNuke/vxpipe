@@ -7,8 +7,9 @@ defmodule Vxpipe.CallEngine.RoomAuthority.TurnState do
   alias Vxpipe.CallEngine.Tool.Context
 
   @spec put(State.t(), SendText.t() | ContinueAgent.t()) :: State.t()
-  def put(%State{} = state, command) do
+  def put(%State{} = state, command, observation \\ nil) do
     turn = %{
+      diagnostic_response: Vxpipe.CallEngine.Diagnostics.ResponseTiming.new(observation),
       active_tool_calls: %{},
       command: command,
       generation_complete?: false,

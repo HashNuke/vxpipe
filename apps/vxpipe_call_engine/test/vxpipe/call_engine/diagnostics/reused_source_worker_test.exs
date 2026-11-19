@@ -154,6 +154,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
     assert ^completion = packet(ctx)
   end
 
+  test "response landmarks preserve their original time and exact output IDs", ctx do
+    for kind <- [:first_response_text, :first_audio_start] do
+      response = {:response_landmark, "turn", "command", "output", kind, -123}
+      offer(ctx, response)
+      assert ^response = packet(ctx)
+    end
+  end
+
   defp offer(ctx, packet), do: assert(:ok == CaptureHandoff.offer(ctx.input, packet))
 
   defp packet(ctx) do

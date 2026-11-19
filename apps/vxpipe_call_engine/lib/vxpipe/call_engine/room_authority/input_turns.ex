@@ -234,7 +234,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     turn = connection.speech_to_text.turn
 
     if matching_active_turn?(turn, signal) and is_binary(signal.text) do
-      observe_completion(observation, turn, state)
+      observation = observe_completion(observation, turn, state)
       turn = %{turn | last_text: signal.text}
 
       state =
@@ -245,7 +245,14 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
         |> put_connection_turn(connection_id, nil)
         |> ActivityControl.finish(connection_id, signal)
 
-      dispatch_committed_audio_turn(connection_id, connection, turn, signal.text, state)
+      dispatch_committed_audio_turn(
+        connection_id,
+        connection,
+        turn,
+        signal.text,
+        state,
+        observation
+      )
     else
       state
     end
@@ -255,18 +262,18 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     if state.text_capability != nil and state.speech_to_speech_runtime == nil and
          state.speech_to_speech_capability == nil and is_reference(turn.allocation_generation) and
          is_reference(turn.turn_ref) do
-      _ =
-        CaptureHandoff.offer(
-          handoff,
-          {:room_turn_completed, turn.allocation_generation, turn.turn_ref, turn.id,
-           turn.command_id, System.monotonic_time(:microsecond)}
-        )
+      case CaptureHandoff.offer(
+             handoff,
+             {:room_turn_completed, turn.allocation_generation, turn.turn_ref, turn.id,
+              turn.command_id, System.monotonic_time(:microsecond)}
+           ) do
+        :ok -> handoff
+        _ -> nil
+      end
     end
-
-    :ok
   end
 
-  defp observe_completion(_observation, _turn, _state), do: :ok
+  defp observe_completion(_observation, _turn, _state), do: nil
 
   defp emit_participant_transcription(connection_id, turn, text, final, state) do
     connection = Map.fetch!(state.connections, connection_id)
@@ -316,7 +323,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     %{state | next_sequence: state.next_sequence + 1}
   end
 
-  defp dispatch_committed_audio_turn(connection_id, connection, turn, text, state) do
+  defp dispatch_committed_audio_turn(connection_id, connection, turn, text, state, observation) do
     content = String.trim(text)
 
     result =
@@ -363,7 +370,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
                 state
                 |> Map.put(:archive_recorder, archive_recorder)
                 |> confirm_user(command)
-                |> TurnState.put(command)
+                |> TurnState.put(command, observation)
 
               {:error, reason} ->
                 reject_audio_turn(state, command, reason)
