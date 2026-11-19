@@ -684,7 +684,7 @@ The plan alone does not satisfy measured load or acoustic accuracy acceptance.
   Offline transport evidence is recorded in the
   [transport timing checkpoint](../20261119-1944-diagnostics-transport-timing.md).
   This uses local fixtures only and does not claim live Telnyx support.
-- [ ] Stress deterministic on/off calls with slow inference, full queues, writer
+- [x] Stress deterministic on/off calls with slow inference, full queues, writer
   crashes, blocked storage and repeated settings revocation/re-enable/teardown. Check bounded retained
   bytes, tasks, mailboxes, retries and absence of call-control differences.
   The [repeated configured lifecycle subcase](../20261119-1953-diagnostics-repeat-lifecycle.md)
@@ -702,7 +702,10 @@ The plan alone does not satisfy measured load or acoustic accuracy acceptance.
   adds complete public traces for 40 rooms/120 turns and post-drain process RSS:
   median growth is -18700 KiB (fallback) and 3728 KiB (reuse), both within 16 MiB.
   Inference is deterministic; actual-model load/accuracy remain separate. The
-  remaining stress coverage audit, including reported mailbox maxima, stays open.
+  [stress acceptance audit](../20261119-2114-diagnostics-stress-audit.md) maps
+  finite retries, concurrent admission, stale-result rejection and resource drain
+  to focused component evidence. Its configured sampled mailbox maxima are
+  25–64 messages (bound 72); deterministic stress acceptance is complete.
 - [ ] Establish before running load: hardware, concurrency, duration, warm/cold
   runs and numerical CPU/memory/p95 latency regression budgets. Run repeated
   paired on/off measurements; publish measured results and limits. Any missed

@@ -861,8 +861,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           {worker, handoff, Process.monitor(worker)}
         end
 
-      first_overflow =
-        Enum.reduce(1..96, nil, fn index, first_overflow ->
+      {queue_samples, first_overflow} =
+        Enum.map_reduce(1..96, nil, fn index, first_overflow ->
           pcm = :binary.copy(<<index, 0>>, c.frame_samples)
 
           send_audio(
@@ -880,10 +880,10 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           case held do
             {worker, handoff, _} ->
               stats = assert_saturated_worker_bounds(worker, handoff)
-              first_overflow || if(stats.overflow > 0, do: stats)
+              {stats, first_overflow || if(stats.overflow > 0, do: stats)}
 
             nil ->
-              first_overflow
+              {nil, first_overflow}
           end
         end)
 
@@ -917,7 +917,27 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       if held do
         {worker, handoff, monitor} = held
-        assert_saturated_worker_bounds(worker, handoff)
+        final_sample = assert_saturated_worker_bounds(worker, handoff)
+
+        if System.get_env("VXPIPE_DIAGNOSTIC_STRESS_REPORT") == "1" do
+          samples = [final_sample | queue_samples]
+
+          IO.puts(
+            "DIAGNOSTIC_STRESS_QUEUE " <>
+              Jason.encode!(%{
+                operational_vad: c.vad,
+                frame_samples: c.frame_samples,
+                sample_count: length(samples),
+                maximum_pending_count: Enum.max(Enum.map(samples, & &1.pending_count)),
+                maximum_pending_bytes: Enum.max(Enum.map(samples, & &1.pending_bytes)),
+                maximum_mailbox_count: Enum.max(Enum.map(samples, & &1.mailbox_count)),
+                count_limit: handoff.maximum_count,
+                byte_limit: handoff.maximum_bytes,
+                mailbox_limit: handoff.maximum_count + 8
+              })
+          )
+        end
+
         change_diagnostics(false, c.settings_revision)
         refute CaptureHandoff.current?(handoff)
         assert :ok = :sys.resume(worker)
@@ -2200,7 +2220,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     assert {:message_queue_len, count} = Process.info(worker, :message_queue_len)
     # Captured packets plus bounded timer/lifecycle messages, while sys-suspended.
     assert count <= handoff.maximum_count + 8
-    stats
+    Map.put(stats, :mailbox_count, count)
   end
 
   defp lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, cycle, phase) do
