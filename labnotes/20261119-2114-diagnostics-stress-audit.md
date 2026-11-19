@@ -70,4 +70,3 @@ Independent Astra xhigh closure review is clean; its saturation selection passes
 milestone deterministic stress checkbox and index are synchronized; remaining
 real-model performance, accuracy, distributed effective status and live/final gates
 are still open.
-
