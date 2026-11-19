@@ -539,9 +539,15 @@ stages remain visible independently.
 
 Acoustic availability additionally requires an explicit mapping from cumulative
 provider samples to the same source's normalized16kHz sample positions. Receipt
-ordering alone is insufficient. The mapping packet and downstream consumer are
-implemented; adapter production of verified anchors remains pending. Until then,
-real collection cannot claim available acoustic durations from these modules.
+ordering alone is insufficient. Continuous Scribe emits a prospective anchor after
+accepting the full input frame, including through the conversational wrapper with operational VAD on or
+off. The anchor records the cumulative provider sample prefix and original source
+position; enabling capture mid-call does not assume a zero origin. STT descriptors
+explicitly declare optional frame input; other recognizers retain raw-byte input.
+Only compact source identity and continuity counters are retained. Invalid metadata,
+raw input after anchoring, gaps or source changes retire diagnostics without
+rejecting accepted provider audio. A replacement handoff establishes a new anchor.
+Manual Scribe and other provider profiles do not yet produce verified anchors.
 Late unmapped boundaries conservatively invalidate uncertain estimates. Resets,
 partial intervals, resumed speech and conflicting provenance remain nullable.
 
@@ -557,7 +563,7 @@ unconfirmed, rather than claiming that failure counters were durably delivered.
 Writers monitor collector ownership, so abrupt collector loss starts finite drain.
 
 This supplies a directly testable durable collector, not production activation.
-Acknowledged provider profiles, actual sample-anchor emission, application wiring,
+Acknowledged provider profiles, application wiring,
 per-turn finalization policy and configured Scribe acceptance remain required.
 
 Finalization uses explicit writer acknowledgments, not a transient zero-pending

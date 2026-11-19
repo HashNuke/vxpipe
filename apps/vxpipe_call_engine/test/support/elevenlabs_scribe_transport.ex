@@ -17,6 +17,8 @@ defmodule Vxpipe.CallEngine.TestElevenLabsScribeTransport do
      %{
        owner: Keyword.fetch!(options, :owner),
        observer: observer,
+       audio_count: 0,
+       fail_audio_at: Keyword.get(Keyword.fetch!(options, :transport_options), :fail_audio_at),
        diagnostic_handoff: Keyword.get(options, :diagnostic_handoff),
        model: Keyword.get(options, :model, "scribe_v2_realtime"),
        commit_strategy: Keyword.get(options, :commit_strategy, :manual)
@@ -26,7 +28,9 @@ defmodule Vxpipe.CallEngine.TestElevenLabsScribeTransport do
   @impl true
   def handle_call({:audio, audio}, _from, state) do
     send(state.observer, {:scribe_audio, self(), audio})
-    {:reply, :ok, state}
+    count = state.audio_count + 1
+    result = if count == state.fail_audio_at, do: {:error, :transport_failed}, else: :ok
+    {:reply, result, %{state | audio_count: count}}
   end
 
   def handle_call(:commit, _from, state) do

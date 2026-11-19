@@ -149,7 +149,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   end
 
   defp push_frame(
-         %__MODULE__{provider_module: Vxpipe.CallEngine.Speech.ConversationalSTT} = state,
+         %__MODULE__{descriptor: %{frame_input?: true}} = state,
          frame
        ),
        do: Session.push_frame(state.session, frame)

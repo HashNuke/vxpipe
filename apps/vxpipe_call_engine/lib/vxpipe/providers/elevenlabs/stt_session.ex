@@ -110,6 +110,8 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   @impl true
   def push_audio(pid, audio), do: GenServer.call(pid, {:push_audio, audio}, 5_000)
   @impl true
+  def push_frame(pid, frame), do: GenServer.call(pid, {:push_frame, frame}, 5_000)
+  @impl true
   def close(pid) do
     GenServer.call(pid, :close, 5_000)
   catch

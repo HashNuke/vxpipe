@@ -11,7 +11,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   """
   use GenServer
   @behaviour Vxpipe.CallEngine.Speech.STTProvider
-  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, ProviderTiming}
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, ProviderSamples, ProviderTiming}
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, SessionTree, STTProvider}
   alias Vxpipe.Providers.ElevenLabs.{Scribe, ScribeSocket}
 
@@ -30,6 +30,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
          :vad <- public.commit_strategy do
       Descriptor.new(
         kind: :stt,
+        frame_input?: true,
         settings: public,
         format: %{
           encoding: :linear16,
@@ -58,6 +59,8 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   def start_link(options), do: STTProvider.start_link(__MODULE__, options)
   @impl true
   def push_audio(pid, audio), do: GenServer.call(pid, {:push_audio, audio}, 5_000)
+  @impl true
+  def push_frame(pid, frame), do: GenServer.call(pid, {:push_frame, frame}, 5_000)
   @impl true
   def close(pid), do: GenServer.stop(pid, :normal, 5_000)
 
@@ -89,6 +92,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
        %{
          allocation: Keyword.fetch!(options, :allocation),
          diagnostic_handoff: Keyword.get(private, :diagnostic_handoff),
+         diagnostic_samples: nil,
          channel: channel,
          config: config,
          wire_module: Keyword.get(private, :wire_module, ScribeSocket),
@@ -141,20 +145,12 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   @impl true
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, state}
 
-  def handle_call({:push_audio, audio}, _from, %{ready?: true} = state)
-      when is_binary(audio) and byte_size(audio) in 2..@maximum_audio_bytes and
-             rem(byte_size(audio), 2) == 0 do
-    case forward(state, audio) do
-      :ok ->
-        {:reply, :ok,
-         %{state | accepted_samples: state.accepted_samples + div(byte_size(audio), 2)}}
+  def handle_call({:push_audio, audio}, _from, state), do: accept_audio(state, audio, nil)
 
-      _failure ->
-        {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
-    end
-  end
+  def handle_call({:push_frame, %Vxpipe.CallEngine.Media.AudioFrame{} = frame}, _from, state),
+    do: accept_audio(state, frame.payload, frame)
 
-  def handle_call({:push_audio, _audio}, _from, state),
+  def handle_call({:push_frame, _frame}, _from, state),
     do: {:reply, {:error, :session_failed}, state}
 
   @impl true
@@ -164,7 +160,14 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
          true <- function_exported?(state.wire_module, :observe, 2),
          {:ok, handoff} <- ProviderTiming.replace(state.diagnostic_handoff, handoff) do
       state.wire_module.observe(state.wire, handoff)
-      {:noreply, %{state | diagnostic_handoff: handoff}}
+
+      mapping =
+        case state.diagnostic_handoff do
+          %{token: token} when token == handoff.token -> state.diagnostic_samples
+          _ -> nil
+        end
+
+      {:noreply, %{state | diagnostic_handoff: handoff, diagnostic_samples: mapping}}
     else
       _ -> {:noreply, state}
     end
@@ -313,6 +316,38 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
       _failure -> {:error, :session_failed}
     end
   end
+
+  defp accept_audio(%{ready?: true} = state, audio, frame)
+       when is_binary(audio) and byte_size(audio) in 2..@maximum_audio_bytes and
+              rem(byte_size(audio), 2) == 0 do
+    case forward(state, audio) do
+      :ok ->
+        mapping =
+          if frame do
+            ProviderSamples.accept(
+              state.diagnostic_samples,
+              state.diagnostic_handoff,
+              state.allocation.generation,
+              state.accepted_samples,
+              frame
+            )
+          else
+            ProviderSamples.raw(state.diagnostic_samples, state.diagnostic_handoff)
+          end
+
+        {:reply, :ok,
+         %{
+           state
+           | accepted_samples: state.accepted_samples + div(byte_size(audio), 2),
+             diagnostic_samples: mapping
+         }}
+
+      _failure ->
+        {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
+    end
+  end
+
+  defp accept_audio(state, _audio, _frame), do: {:reply, {:error, :session_failed}, state}
 
   defp settle(state, receipt) do
     duration = div((state.accepted_samples - state.settled_samples) * 1_000, 16_000)

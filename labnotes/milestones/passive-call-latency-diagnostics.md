@@ -926,3 +926,25 @@ fixture races now fixed, an unreproduced briefing-voice recovery deadline, and a
 new persistence fixture using an old loaded capture-packet module. It is not root
 acceptance evidence. Production profile/mapping/wiring and configured-call
 acceptance remain open; combined C tasks are intentionally still unchecked.
+
+Frozen collector-baseline follow-up: root mix test at e260bee4 finished with exit0
+and every application passing, including Engine2715, Calls434, Gateway891,
+Persistence579 and Console591. The prior briefing-voice timeout did not recur.
+This is baseline evidence before subsequent sample-mapping changes; C remains open.
+
+
+## Checkpoint C continuous Scribe source anchors — 2026-11-19
+
+Continuous Scribe now produces verified prospective provider/source sample anchors
+after complete frame acceptance, directly and through the conversational wrapper.
+An explicit STT frame-input capability preserves manual/other-provider raw fallback.
+Capture enabled mid-call accounts for the existing provider sample prefix. Gaps,
+invalid optional metadata and changed sources retire diagnostics, preserving
+accepted audio. Replacement handoffs establish fresh correspondence.
+
+Retained red/green regressions cover missing mapping and missing identity metadata.
+Affected tests762/0 (9 excluded), root static gates and Lean pass. Astra xhigh
+review is clean with22 independent probe cases. The frozen collector baseline
+passed the full umbrella suite; a full root run for this new checkpoint remains
+required. Acknowledged provider profiles, application wiring and configured-call
+acceptance remain open, so combined C tasks stay unchecked.

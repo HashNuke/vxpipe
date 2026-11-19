@@ -252,4 +252,27 @@ defmodule Vxpipe.CallEngine.Speech.DescriptorTest do
     assert_receive {:vxpipe_speech, %Event{kind: :turn_ended} = event}, 500
     assert :ok = Session.ack(allocation, event)
   end
+
+  test "frame input is an explicit STT-only capability, not inferred from VAD settings" do
+    alias Vxpipe.CallEngine.Speech.STSInput
+    {:ok, descriptor} = MorseSession.configure([])
+    operation = %{operation: {:stt_frame, :fixture}}
+    refute STSInput.supported?(descriptor, operation)
+    declared = Map.put(descriptor, :frame_input?, true)
+    assert :ok = Descriptor.validate(declared)
+    assert STSInput.supported?(declared, operation)
+
+    assert {:error, :invalid_descriptor} =
+             Descriptor.validate(Map.put(descriptor, :frame_input?, :maybe))
+
+    {:ok, generator} = Vxpipe.Providers.MorseCode.STSSession.configure([])
+
+    assert {:error, :invalid_descriptor} =
+             Descriptor.validate(Map.put(generator, :frame_input?, true))
+
+    refute STSInput.supported?(
+             %{descriptor | settings: Map.put(descriptor.settings, :vad, true)},
+             operation
+           )
+  end
 end

@@ -28,6 +28,9 @@ defmodule Vxpipe.CallEngine.Speech.STTProvider do
   responsiveness. Never return success merely for an unbounded mailbox enqueue.
   """
   @callback push_audio(pid(), binary()) :: :ok | {:error, :busy | :session_failed}
+  @doc "Accept a source frame through the same bounded input slot without altering its provider bytes."
+  @callback push_frame(pid(), Vxpipe.CallEngine.Media.AudioFrame.t()) ::
+              :ok | {:error, :busy | :session_failed}
   @callback close(pid()) :: :ok | {:error, atom()}
 
   @doc """
@@ -48,5 +51,5 @@ defmodule Vxpipe.CallEngine.Speech.STTProvider do
   """
   @callback finish_input(pid()) :: :ok | {:error, atom()}
 
-  @optional_callbacks finish_input: 1
+  @optional_callbacks finish_input: 1, push_frame: 2
 end

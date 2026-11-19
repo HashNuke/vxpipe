@@ -8,6 +8,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
               [
                 input_format: nil,
                 finite_input?: false,
+                frame_input?: false,
                 speech_start?: false,
                 speech_start_evidence: nil,
                 response_start?: false,
@@ -32,6 +33,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
             [
               :input_format,
               :finite_input?,
+              :frame_input?,
               :speech_start?,
               :speech_start_evidence,
               :response_start?,
@@ -59,6 +61,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
           format: map(),
           input_format: map() | nil,
           finite_input?: boolean(),
+          frame_input?: boolean(),
           usage_identity: map(),
           readiness: :initialized | :provider_acknowledged,
           endpointing:
@@ -108,8 +111,7 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
          is_boolean(descriptor.response_start?) and
          (not descriptor.response_start? or descriptor.kind == :sts) and
          is_boolean(descriptor.resume?) and
-         is_boolean(descriptor.finite_input?) and
-         (not descriptor.finite_input? or descriptor.kind == :stt) and
+         valid_input_capabilities?(descriptor) and
          (not descriptor.eager_end? or
             descriptor.endpointing in [:provider_semantic, :provider_gap]) and
          valid_kind?(descriptor) do
@@ -143,6 +145,12 @@ defmodule Vxpipe.CallEngine.Speech.Descriptor do
   end
 
   def validate_conversational_stt(_descriptor), do: {:error, :invalid_descriptor}
+
+  defp valid_input_capabilities?(%{kind: :stt} = descriptor),
+    do: is_boolean(descriptor.frame_input?) and is_boolean(descriptor.finite_input?)
+
+  defp valid_input_capabilities?(descriptor),
+    do: descriptor.frame_input? == false and descriptor.finite_input? == false
 
   defp valid_start_evidence?(%{speech_start_evidence: nil}), do: true
 

@@ -47,6 +47,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          descriptor
          | settings: Map.put(descriptor.settings, :vad, vad),
            finite_input?: false,
+           frame_input?: true,
            speech_start_evidence: if(vad, do: :local_acoustic, else: :transcript)
        }}
     else
@@ -60,7 +61,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   def start_link(options), do: STTProvider.start_link(__MODULE__, options)
   @impl true
   def push_audio(pid, audio), do: GenServer.call(pid, {:audio, audio}, 5_000)
-  @doc false
+  @impl true
   def push_frame(pid, frame), do: GenServer.call(pid, {:frame, frame}, 5_000)
 
   @doc false
@@ -76,6 +77,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     private = Keyword.fetch!(options, :private)
     channel = Keyword.fetch!(options, :channel)
     boundary_timeout = Keyword.get(private, :boundary_timeout_ms, @orphan_timeout_ms)
+    recognizer = Keyword.fetch!(private, :recognizer)
 
     with {:ok, expected} <-
            configure(
@@ -84,6 +86,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
              vad: descriptor.settings.vad
            ),
          true <- expected == descriptor,
+         {:ok, inner_descriptor} <-
+           recognizer.configure(Keyword.fetch!(private, :recognizer_options)),
          true <- is_integer(boundary_timeout) and boundary_timeout in 1..@orphan_timeout_ms,
          :ok <- Channel.bind(channel) do
       {:ok,
@@ -93,6 +97,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          private: private,
          channel: channel,
          inner: nil,
+         inner_frame_input?: inner_descriptor.frame_input?,
          inner_monitor: nil,
          runtime: nil,
          runtime_monitor: nil,
@@ -155,7 +160,7 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
   def handle_call({:frame, frame}, _from, state) do
     with {:ok, pcm, timestamp} <- frame_pcm(state, frame) do
-      accept_input(state, frame.payload, pcm, timestamp)
+      accept_input(state, frame.payload, pcm, timestamp, frame)
     else
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
     end
@@ -416,11 +421,16 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     end
   end
 
-  defp accept_input(state, audio, pcm, timestamp \\ nil) do
+  defp accept_input(state, audio, pcm, timestamp \\ nil, frame \\ nil) do
     if byte_size(state.pending_pcm) + byte_size(pcm) > @maximum_pcm_bytes do
       {:reply, {:error, :busy}, state}
     else
-      case Session.push_audio(state.inner, audio) do
+      result =
+        if frame != nil and state.inner_frame_input?,
+          do: Session.push_frame(state.inner, frame),
+          else: Session.push_audio(state.inner, audio)
+
+      case result do
         :ok ->
           pending_epoch =
             if state.pending_pcm == "", do: state.recognition_epoch, else: state.pending_epoch
