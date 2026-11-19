@@ -447,3 +447,24 @@
 - Preserve that production race separately; any narrowed expiry-test setup must
   explicitly establish admission before testing expiry. Do not report a test-only
   synchronization change as fixing the production admission race.
+
+- Root run completed with exit2: Engine2576tests/1failure, all other application
+  suites passed, including Calls424, Gateway891, Persistence575 and Console591.
+  Review-clean diagnostic projection was committed/pushed as `fe864aa2`; full
+  milestone acceptance remains open.
+- Narrow expiry-test stabilization now waits for the actual idle request and
+  confirms armed state before replying silently; its manually injected deadline
+  uses300s duration to avoid a competing1s timer. All original completion/input
+  assertions remain. Focused test passes; Astra final test/doc review is clean.
+  The independent production race is preserved, unresolved, in
+  [idle admission issue](issues/idle-admission-after-silent-acknowledgment.md).
+- Full idle-file run overlapped the root suite and found a second failure in the
+  unchanged ordinary-idle test (early model request during850ms absence check).
+  Its cause is not proved. An isolated full-file rerun is now active after the
+  root suite finished. No production idle state-machine code was changed.
+
+- Isolated full idle-file rerun passes18tests/0failures at the same seed:
+  `/tmp/vxpipe-C-idle-room-isolated.log`. Final format, warnings-as-errors compile,
+  strict Credo and unused-lock checks pass. Test/doc review is clean. This does
+  not fix the independently reproduced production race or turn the earlier root
+  run into a passing run; retain both limitations for final milestone verification.

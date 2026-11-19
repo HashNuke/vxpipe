@@ -621,3 +621,12 @@ The broader run has reported an existing idle-room expiry-test failure (nil idle
 state), while the same focused test/seed passes alone. Independent review has
 reproduced a distinct idle-admission ordering race. This run is not passing root
 acceptance evidence; investigation is recorded in the implementation labnotes.
+
+The run finished with only that Engine failure; all other applications passed,
+including Persistence575 and Console591 tests. The manually driven expiry test
+now establishes idle admission before acknowledgment and avoids its competing
+short timer. The isolated full idle-file rerun passes18/0; independent review and
+static gates pass. A separate, reproduced production admission race remains
+[unresolved](../issues/idle-admission-after-silent-acknowledgment.md). No production
+idle behavior was changed. A complete current-source root pass remains a final
+acceptance gate; the earlier failed run is not relabelled as passing.

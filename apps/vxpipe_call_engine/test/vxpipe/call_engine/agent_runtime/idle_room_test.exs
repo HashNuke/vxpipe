@@ -447,10 +447,17 @@ defmodule Vxpipe.CallEngine.AgentRuntime.IdleRoomTest do
   test "fresh input after expiry waits for the real completion and replaces the queued timeout" do
     {plan, room, caller, _voice, _sink} = start_call()
     submit(room, caller, "Wait", "expiry-origin")
-    {acknowledgment, _request} = invoke_idle(1)
+    [{room_pid, _}] = Registry.lookup(CallEngine.RoomRegistry, {room.tenant_id, room.room_id})
+
+    # This case starts with an admitted hold and injects its deadline explicitly.
+    # Admission racing silent acknowledgment is tracked separately in labnotes/issues.
+    :erlang.trace(room_pid, true, [:receive])
+    {acknowledgment, _request} = invoke_idle(300)
+    assert_receive {:trace, ^room_pid, :receive, {:"$gen_call", _, {:idle, _}}}
+    :erlang.trace(room_pid, false, [:receive])
+    assert %{phase: :armed} = :sys.get_state(room_pid).idle_wait
     reply(acknowledgment, :listener, nil)
     assert_receive {:vxpipe_event, %AgentTurnCompleted{correlation_id: "expiry-origin"}}
-    [{room_pid, _}] = Registry.lookup(CallEngine.RoomRegistry, {room.tenant_id, room.room_id})
 
     registry =
       CallEngine.AgentActivationSupervisor.child_ref(
