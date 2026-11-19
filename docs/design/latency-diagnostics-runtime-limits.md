@@ -64,6 +64,12 @@ These limits apply to their named boundaries; they are not a total process-memor
 budget. Copied payloads, model tensors, allocator overhead and multiple workers
 require the separate measured load gate. Saturation drops or marks diagnostics
 incomplete rather than changing provider input, commits or call-control decisions.
+Linked input and collector handoffs share a sticky overflow flag, independently
+of their local count/byte counters and first retirement cause. Input saturation
+therefore persists `observer_overloaded` even if settings expire before the
+collector finishes. The flag is published before local overflow can trigger
+worker retirement; it adds no queue or retry. Unrelated/new runs have separate
+flags. Queue release/re-admission semantics remain unchanged.
 Shared inference and persistence are outside the room lifecycle. The optional
 room diagnostics subtree owns its source workers and stops with its room.
 Callbacks offer bounded work and do not wait for model initialization or database

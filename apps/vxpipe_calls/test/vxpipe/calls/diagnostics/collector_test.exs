@@ -80,6 +80,45 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
     end
   end
 
+  test "upstream overflow remains explicit when the run later loses settings authority", c do
+    collector = start_supervised!({Collector, c.options})
+    capture = Collector.handoff(collector)
+    assert_receive {:diagnostic_write, task, run}
+    send(task, {:finish, {:ok, run}})
+    :ok = :sys.suspend(collector)
+
+    try do
+      assert {:ok, upstream} =
+               CaptureHandoff.new(self(),
+                 owner: self(),
+                 projection: __MODULE__.Projection,
+                 provenance: capture,
+                 maximum_count: 1
+               )
+
+      assert :ok = CaptureHandoff.offer(upstream, {:reset, 0, :partial_start, 0})
+      assert {:error, :full} = CaptureHandoff.offer(upstream, {:reset, 0, :partial_start, 0})
+      assert CaptureHandoff.stats(capture).overflow == 0
+      :atomics.put(c.clock, 1, 3_000)
+      assert :ok = CaptureHandoff.close(upstream)
+      monitor = Process.monitor(collector)
+      :ok = :sys.resume(collector)
+      send(collector, :check)
+      assert_receive {:diagnostic_write, task, closed}
+      assert closed.state == :incomplete
+      assert :lease_expired in closed.reasons
+      assert :observer_overloaded in closed.reasons
+      send(task, {:finish, {:ok, closed}})
+      assert_receive {:DOWN, ^monitor, :process, ^collector, :normal}
+    after
+      try do
+        :sys.resume(collector)
+      catch
+        :exit, _ -> :ok
+      end
+    end
+  end
+
   test "expired startup does not allocate a writer or persist a run", c do
     {:ok, lease} = AttachmentLease.reserve(AttachmentLease.gate(1), self())
     AttachmentLease.cancel(lease)

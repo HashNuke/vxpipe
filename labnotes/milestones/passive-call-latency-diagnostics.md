@@ -672,8 +672,12 @@ The plan alone does not satisfy measured load or acoustic accuracy acceptance.
   bytes, tasks, mailboxes, retries and absence of call-control differences.
   The [repeated configured lifecycle subcase](../20261119-1953-diagnostics-repeat-lifecycle.md)
   passes 20 complete room lifecycles in each local VAD mode, with exact final
-  persisted turns and released source/inference/writer capacity. Saturation,
-  mailbox high-water and measured memory acceptance remain open.
+  persisted turns and released source/inference/writer capacity. The
+  [queue saturation checkpoint](../20261119-2006-diagnostics-queue-saturation.md)
+  verifies configured count/byte saturation, held-worker mailbox bounds and
+  uninterrupted call responses. It also fixes missing persisted upstream-overload
+  evidence. Writer-crash/control-trace stress and measured memory acceptance
+  remain open.
 - [ ] Establish before running load: hardware, concurrency, duration, warm/cold
   runs and numerical CPU/memory/p95 latency regression budgets. Run repeated
   paired on/off measurements; publish measured results and limits. Any missed

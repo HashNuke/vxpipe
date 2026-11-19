@@ -8,6 +8,8 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   alias Vxpipe.CallEngine.Diagnostics.{
     AgentRuntimeModelProvider,
     ModelFixture,
+    CaptureHandoff,
+    SourceWorker,
     SettingsSupervisor,
     RoomService,
     RoomSupervisor
@@ -571,6 +573,137 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       refute_received {:scribe_audio, ^wire, ^off_pcm}
       refute_received {:scribe_audio, ^wire, ^on_pcm}
       refute_received {:scribe_commit, ^wire}
+    end
+  end
+
+  for vad <- [false, true], enabled <- [false, true], samples <- [512, 4_096] do
+    @tag matrix: true,
+         vad: vad,
+         diagnostics_enabled: enabled,
+         saturation: true,
+         frame_samples: samples
+    test "full diagnostic queue preserves calls with Silero #{vad}, collection #{enabled}, #{samples} samples",
+         c do
+      {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
+      epoch = make_ref()
+
+      sequence =
+        if c.diagnostics_enabled,
+          do: discover_with_audio(attachment, identity, epoch, wire),
+          else: 0
+
+      warmup = :binary.copy(<<230, 0>>, 512)
+      send_audio(attachment, identity, epoch, sequence, sequence * 512, warmup)
+      assert_receive {:scribe_audio, ^wire, ^warmup}, 2_000
+      if c.vad, do: assert_receive({:matrix_inference, :operational, _, ^warmup}, 2_000)
+
+      held =
+        if c.diagnostics_enabled do
+          [{_, worker, _, _}] =
+            DynamicSupervisor.which_children(RoomSupervisor.address(identity, :workers))
+
+          handoff = SourceWorker.handoff(worker)
+          await(fn -> CaptureHandoff.stats(handoff).pending_count == 0 end)
+          assert :ok = :sys.suspend(worker)
+          on_exit(fn -> resume_diagnostic_worker(worker) end)
+          {worker, handoff, Process.monitor(worker)}
+        end
+
+      first_overflow =
+        Enum.reduce(1..96, nil, fn index, first_overflow ->
+          pcm = :binary.copy(<<index, 0>>, c.frame_samples)
+
+          send_audio(
+            attachment,
+            identity,
+            epoch,
+            sequence + index,
+            (sequence + 1) * 512 + (index - 1) * c.frame_samples,
+            pcm
+          )
+
+          assert_receive {:scribe_audio, ^wire, ^pcm}, 2_000
+          if c.vad, do: assert_receive({:matrix_inference, :operational, _, ^pcm}, 2_000)
+
+          case held do
+            {worker, handoff, _} ->
+              stats = assert_saturated_worker_bounds(worker, handoff)
+              first_overflow || if(stats.overflow > 0, do: stats)
+
+            nil ->
+              first_overflow
+          end
+        end)
+
+      if held do
+        {worker, handoff, _} = held
+        assert first_overflow != nil
+        assert assert_saturated_worker_bounds(worker, handoff).overflow > 0
+
+        if c.frame_samples == 512 do
+          assert first_overflow.pending_count == handoff.maximum_count
+        else
+          assert first_overflow.pending_count < handoff.maximum_count
+          assert first_overflow.pending_bytes > handoff.maximum_bytes - 16_384
+        end
+      end
+
+      for index <- 1..2 do
+        text = "Continue during queue saturation #{index}."
+        emit_scribe_turn(wire, text)
+        assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = input}, 2_000
+        assert input.text == text
+        assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
+        assert output.text == "Acknowledged."
+        assert output.correlation_id == input.correlation_id
+      end
+
+      if held do
+        {worker, handoff, monitor} = held
+        assert_saturated_worker_bounds(worker, handoff)
+        change_diagnostics(false, c.settings_revision)
+        refute CaptureHandoff.current?(handoff)
+        assert :ok = :sys.resume(worker)
+        assert_receive {:DOWN, ^monitor, :process, ^worker, _}, 2_000
+        await_diagnostic_drain(identity)
+
+        assert %{pending_count: 0, pending_bytes: 0, discarded: discarded} =
+                 CaptureHandoff.stats(handoff)
+
+        assert discarded > 0
+      end
+
+      assert {:ok, completion} =
+               CallEngine.monitor_room_completion(
+                 identity.tenant_id,
+                 identity.room_id,
+                 identity.incarnation_id
+               )
+
+      GenServer.stop(attachment.room_authority, :shutdown)
+      assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+      await_diagnostic_drain(identity)
+      assert_diagnostic_slots_released()
+
+      assert {:ok, %{entries: entries}} =
+               LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+      if c.diagnostics_enabled do
+        assert [%{run: run}] = entries
+        assert run.state == :incomplete
+        assert :observer_overloaded in run.reasons
+      else
+        assert entries == []
+      end
+
+      for index <- 1..96 do
+        pcm = :binary.copy(<<index, 0>>, c.frame_samples)
+        refute_received {:scribe_audio, ^wire, ^pcm}
+        refute_received {:matrix_inference, _, _, ^pcm}
+      end
+
+      refute_received {:scribe_commit, ^wire}
+      refute_received {:vxpipe_connection_unavailable, _}
     end
   end
 
@@ -1614,6 +1747,22 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       refute Map.has_key?(tool_only.landmarks_us, :first_response_text)
       refute Map.has_key?(tool_only.landmarks_us, :first_audio_started)
     end
+  end
+
+  defp resume_diagnostic_worker(worker) do
+    :sys.resume(worker)
+  catch
+    :exit, _ -> :ok
+  end
+
+  defp assert_saturated_worker_bounds(worker, handoff) do
+    stats = CaptureHandoff.stats(handoff)
+    assert stats.pending_count <= handoff.maximum_count
+    assert stats.pending_bytes <= handoff.maximum_bytes
+    assert {:message_queue_len, count} = Process.info(worker, :message_queue_len)
+    # Captured packets plus bounded timer/lifecycle messages, while sys-suspended.
+    assert count <= handoff.maximum_count + 8
+    stats
   end
 
   defp lifecycle_turn(c, call, attachment, wire, identity, epoch, sequence, cycle, phase) do

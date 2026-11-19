@@ -113,6 +113,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
     end
   end
 
+  @doc "Loss in any linked capture stage, independent of the first retirement cause."
+  def overflowed?(handoff), do: :atomics.get(handoff.provenance, 2) == 1
+
   defp retire(handoff, reason) do
     _ = :atomics.compare_exchange(handoff.provenance, 1, 0, reason)
     :atomics.put(handoff.counters, @open, 0)
@@ -160,7 +163,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
   end
 
   defp provenance(nil, _owner, _projection, _grant),
-    do: {:ok, :atomics.new(1, signed: false)}
+    do: {:ok, :atomics.new(2, signed: false)}
 
   defp provenance(
          %__MODULE__{owner: owner, projection: projection, grant: grant} = handoff,
@@ -198,6 +201,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
 
       attempts == 0 or div(pending, @stride) >= handoff.maximum_count or
           rem(pending, @stride) + charge > handoff.maximum_bytes ->
+        # Publish shared loss before the local counter can trigger worker retirement.
+        :atomics.put(handoff.provenance, 2, 1)
         :atomics.add(handoff.counters, @overflow, 1)
         {:error, :full}
 

@@ -88,6 +88,33 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoffTest do
     assert %{pending_count: 0, pending_bytes: 0} = CaptureHandoff.stats(bytes_limited)
   end
 
+  for limit <- [:count, :bytes] do
+    @limit limit
+    test "#{limit} overflow is shared with its collector without changing local queue accounting",
+         c do
+      assert {:ok, collector} = new_handoff()
+      options = if @limit == :count, do: [maximum_count: 1], else: [maximum_bytes: 1_024]
+      assert {:ok, input} = new_handoff(Keyword.put(options, :provenance, collector))
+      assert {:ok, unrelated} = new_handoff()
+      refute CaptureHandoff.overflowed?(collector)
+
+      if @limit == :count, do: assert(:ok = CaptureHandoff.offer(input, {:audio, frame()}))
+      assert {:error, :full} = CaptureHandoff.offer(input, {:audio, frame()})
+      assert CaptureHandoff.overflowed?(input)
+      assert CaptureHandoff.overflowed?(collector)
+      refute CaptureHandoff.overflowed?(unrelated)
+      assert CaptureHandoff.stats(collector).overflow == 0
+      assert CaptureHandoff.closed_reason(collector) == nil
+
+      :atomics.put(c.clock, 1, 3_000)
+      assert :ok = CaptureHandoff.close(input)
+      assert CaptureHandoff.closed_reason(collector) == :lease_expired
+      assert CaptureHandoff.overflowed?(collector)
+      assert :ok = CaptureHandoff.close(collector)
+      assert CaptureHandoff.overflowed?(collector)
+    end
+  end
+
   test "accepted audio is detached from large backing binaries before delivery" do
     backing = :binary.copy(<<1, 0>>, 1_000_000)
     pcm = binary_part(backing, 0, 640)

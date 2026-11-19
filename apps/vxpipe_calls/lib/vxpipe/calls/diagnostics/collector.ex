@@ -123,7 +123,7 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
           not CaptureHandoff.current?(state.capture) ->
         {:noreply, begin_finish(state, closure_reason(state))}
 
-      CaptureHandoff.stats(state.capture).overflow > 0 ->
+      CaptureHandoff.overflowed?(state.capture) ->
         {:noreply, begin_finish(state, :observer_overloaded)}
 
       Handoff.stats(state.writes).discarded > 0 ->
@@ -322,7 +322,7 @@ defmodule Vxpipe.Calls.Diagnostics.Collector do
         else: state
 
     state =
-      if CaptureHandoff.stats(state.capture).overflow > 0,
+      if CaptureHandoff.overflowed?(state.capture),
         do: add_reason(state, :observer_overloaded),
         else: state
 
