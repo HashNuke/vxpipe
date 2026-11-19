@@ -3,6 +3,51 @@ defmodule Vxpipe.CallEngine.Speech.ActivityBoundaryTest do
 
   alias Vxpipe.CallEngine.Speech.ActivityBoundary
 
+  test "finalized samples exclude windows that can still produce backdated boundaries" do
+    state = ActivityBoundary.new()
+    assert ActivityBoundary.finalized_samples(state) == 0
+    assert {:ok, state, []} = ActivityBoundary.push(state, 0.1)
+
+    state =
+      Enum.reduce(1..3, state, fn _, current ->
+        assert {:ok, current, []} = ActivityBoundary.push(current, 0.8)
+        assert ActivityBoundary.finalized_samples(current) == 512
+        current
+      end)
+
+    assert {:ok, state, [{:speech_started, 512}]} = ActivityBoundary.push(state, 0.8)
+    assert ActivityBoundary.finalized_samples(state) == 2_560
+
+    state =
+      Enum.reduce(1..15, state, fn _, current ->
+        assert {:ok, current, []} = ActivityBoundary.push(current, 0.1)
+        assert ActivityBoundary.finalized_samples(current) == 2_560
+        current
+      end)
+
+    assert {:ok, state, [{:speech_ended, 2_560}]} = ActivityBoundary.push(state, 0.1)
+    assert ActivityBoundary.finalized_samples(state) == 10_752
+    assert ActivityBoundary.finalized_samples(ActivityBoundary.reset(state)) == 0
+  end
+
+  test "discarded onset and silence candidates release their finalized prefix" do
+    assert {:ok, state, []} = ActivityBoundary.push(ActivityBoundary.new(), 0.8)
+    assert ActivityBoundary.finalized_samples(state) == 0
+    assert {:ok, state, []} = ActivityBoundary.push(state, 0.1)
+    assert ActivityBoundary.finalized_samples(state) == 1_024
+
+    state =
+      Enum.reduce(1..4, state, fn _, current ->
+        {:ok, current, _events} = ActivityBoundary.push(current, 0.8)
+        current
+      end)
+
+    assert {:ok, state, []} = ActivityBoundary.push(state, 0.1)
+    assert ActivityBoundary.finalized_samples(state) == 3_072
+    assert {:ok, state, []} = ActivityBoundary.push(state, 0.8)
+    assert ActivityBoundary.finalized_samples(state) == 4_096
+  end
+
   test "speech onset and endpoint require confirmed classified PCM" do
     boundary = ActivityBoundary.new()
 

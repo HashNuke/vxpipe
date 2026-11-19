@@ -23,6 +23,12 @@ defmodule Vxpipe.CallEngine.Speech.ActivityBoundary do
   def new, do: %__MODULE__{}
   def reset(%__MODULE__{}), do: new()
 
+  # A candidate can still emit a boundary at its first window. Only the prefix
+  # before that window is final until the candidate is confirmed or discarded.
+  def finalized_samples(%__MODULE__{} = state) do
+    state.samples - @frame_samples * max(state.speech_frames, state.silence_frames)
+  end
+
   def push(%__MODULE__{} = state, probability)
       when is_number(probability) and probability >= 0 and probability <= 1 do
     {state, events} = classify(state, probability)

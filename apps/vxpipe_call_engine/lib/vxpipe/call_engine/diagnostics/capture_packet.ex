@@ -97,6 +97,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
       ]
   end
 
+  defp valid?({:acoustic_progress, epoch, origin, finalized}) do
+    unsigned?(epoch) and unsigned?(origin) and unsigned?(finalized) and finalized >= origin
+  end
+
   defp valid?({:acoustic_boundary, epoch, kind, sample, offset, confirmed, uncertainty, reason}) do
     unsigned?(epoch) and kind in [:speech_started, :speech_ended] and unsigned?(sample) and
       offset?(confirmed) and

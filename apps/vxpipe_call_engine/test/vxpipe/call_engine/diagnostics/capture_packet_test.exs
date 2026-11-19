@@ -3,6 +3,25 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacketTest do
   alias Vxpipe.CallEngine.Diagnostics.CapturePacket
   alias Vxpipe.CallEngine.Media.AudioFrame
 
+  test "acoustic progress contains only a bounded epoch and contiguous finalized interval" do
+    for packet <- [{:acoustic_progress, 0, 0, 0}, {:acoustic_progress, 2, 512, 2_560}] do
+      assert {:ok, charge} = CapturePacket.charge(packet)
+      assert charge > 0
+      assert CapturePacket.copy(packet) == packet
+    end
+
+    for packet <- [
+          {:acoustic_progress, -1, 0, 512},
+          {:acoustic_progress, 0, -1, 512},
+          {:acoustic_progress, 0, 512, 511},
+          {:acoustic_progress, 0, 0, 512.0},
+          {:acoustic_progress, 0, 0, 9_223_372_036_854_775_808},
+          {:acoustic_progress, 0, 0, 512, "private text"}
+        ] do
+      assert {:error, :invalid_evidence} = CapturePacket.charge(packet)
+    end
+  end
+
   test "a malformed frame cannot retain arbitrary metadata or crash the admission boundary" do
     frame = %AudioFrame{
       tenant_id: "tenant",

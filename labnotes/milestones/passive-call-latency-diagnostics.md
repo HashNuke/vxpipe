@@ -1026,3 +1026,16 @@ review is clean, including independent restart/factory/capacity probes. Static r
 gates pass and Engine Lean verification remains current. A new frozen full root suite is
 running for this composition. Actual configured Scribe call persistence, full
 on/off/transport acceptance and combined C checklist items remain open.
+
+## Checkpoint C finalized acoustic coverage prerequisite — 2026-11-19
+
+The configured Scribe fixture exposed delayed provider timing behind diagnostic
+inference. A detector-owned finalized sample position now excludes pending onset
+and silence candidates, whose eventual boundaries can be backdated. The bounded
+capture protocol accepts an epoch and contiguous finalized interval. Worker
+emission and report consumption remain to be implemented before timing can safely
+overtake inference; no combined acceptance task is newly complete.
+
+Both contracts were red before implementation and pass8/0 focused tests. Astra
+xhigh review is clean, including20 reachable detector states and60 transitions.
+Static root checks and Lean pass; the frozen full suite remains in progress.
