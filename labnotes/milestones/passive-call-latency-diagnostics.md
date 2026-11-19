@@ -1177,3 +1177,22 @@ rather than an invented endpoint. All 14 reuse tests pass. These two C tasks are
 checked; the separate full on/off/configured matrix, distributed effective status,
 revocation/load/accuracy gates and final deployment remain unchecked. Earlier
 partial-checkpoint notes are historical evidence, not the current task status.
+
+## Checkpoint C configured VAD/diagnostics matrix — 2026-11-19
+
+The local configured Scribe fixture now covers all four initial VAD/diagnostics
+combinations, plus active-call enable and disable/re-enable. Classifier probes
+verify the selected inference path and exact continuous operational sample cursor;
+provider bytes remain identical and no extra commit is emitted. Disabled cases
+have no diagnostic worker/report. Re-enable records a distinct source epoch while
+retaining the prior run. Negative checks follow complete diagnostic drain.
+The focused configured selection passed 5 tests, including the original actual
+Silero late-confirmation/durable-shutdown fixture. These are offline acceptance
+tests, not live-provider evidence. The combined matrix checkbox remains open until
+source/model compatibility, replacement and late-result coverage are consolidated;
+distributed status and the later load/accuracy/deployment gates also remain open.
+
+Review additionally strengthened provider-delivery uniqueness: injected duplicate
+marker delivery fails all four cases. Final serial configured run passed 5/5;
+Astra scoped re-review and static checks are clean. Concurrent DB review execution
+is excluded from acceptance because it caused settings setup contention.
