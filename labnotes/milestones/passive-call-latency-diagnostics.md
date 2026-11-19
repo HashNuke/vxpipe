@@ -2130,3 +2130,19 @@ is recorded in the labnotes and is not claimed fixed. This test-only checkpoint
 leaves ordinary call persistence and provider code unchanged; the combined
 failure-parity task remains open. See
 [checkpoint labnotes](../20261119-1856-diagnostic-storage-isolation.md).
+
+## Checkpoint D — acoustic segment API/client contracts, 2026-11-19
+
+Existing authorized report/turn reads now expose the stored versioned acoustic
+segment collections: per-run unattached evidence and per-turn segments. Shared
+client types and the Console decoder preserve source/clock context, sample
+positions, estimated and confirmed start/end times, uncertainty, loss reasons and
+omitted counts. Legacy absent/null evidence stays unavailable, distinct from an
+explicit observed empty collection. The outer API schema remains version 1.
+
+Red tests failed on the missing keys/ignored evidence; the focused endpoint and
+client selections now pass 10/10 and 11/11. Independent Astra review is clean;
+8,307 backend/decoder parity cases agree through both report and turn decoding.
+Root static checks, workspace/Console typechecks, focused lint and 26 shared
+latency tests pass. D's participant/segment presentation and both-host rendered
+acceptance remain unchecked. See [checkpoint labnotes](../20261119-1908-acoustic-segment-contracts.md).

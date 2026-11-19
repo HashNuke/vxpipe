@@ -12,6 +12,7 @@ defmodule Vxpipe.Console.CallLatencyPresenter do
     :profile,
     :state,
     :counts,
+    :unattached_segments,
     :reasons
   ]
   @turn_fields [
@@ -29,7 +30,8 @@ defmodule Vxpipe.Console.CallLatencyPresenter do
     :quality,
     :acoustic_reason,
     :acoustic_sample,
-    :uncertainty_us
+    :uncertainty_us,
+    :acoustic_segments
   ]
   @summary_fields [:profile, :metric, :valid_count, :excluded_count, :p50_us, :p95_us]
 

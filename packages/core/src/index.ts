@@ -46,5 +46,5 @@ export type {
 export { latencyMetrics, latencyLandmarks, mergeLatencyTurns } from "./callLatency.js";
 export type {
   LatencyMetric, LatencyLandmark, LatencyProfile, LatencyCoverage, LatencyRun,
-  LatencyTurn, LatencySummary, LatencyReport, LatencyTurnPage, LatencyLoader,
+  LatencyAcousticSegment, LatencyAcousticSegments, LatencyTurn, LatencySummary, LatencyReport, LatencyTurnPage, LatencyLoader,
 } from "./callLatency.js";

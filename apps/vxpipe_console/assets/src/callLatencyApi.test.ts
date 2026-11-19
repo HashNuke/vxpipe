@@ -75,3 +75,60 @@ test.each(Object.entries(serverContracts))("decodes the server-constructed %s pr
   const report = parseLatencyReport(wire, "call-1");
   expect(report.runs[0]?.profile).toEqual(wire.runs[0]!.profile);
 });
+
+const acousticEvidence = () => ({ version: 1, omitted_count: 2, reasons: ["segment_limit"],
+  entries: [
+    { epoch: 2, start_sample: 0, end_sample: 512, start_us: 0, end_us: 32000,
+      start_confirmed_us: 128000, end_confirmed_us: 544000, uncertainty_us: 32000, reasons: [] },
+    { epoch: 3, start_sample: null, end_sample: 512, start_us: null, end_us: null,
+      start_confirmed_us: null, end_confirmed_us: 600000, uncertainty_us: null, reasons: ["partial_start", "clock_uncertain"] },
+  ] });
+function parseSegmentEvidence(evidence: unknown) {
+  const page = latencyTurnsFixture();
+  return parseLatencyTurns({ ...page, turns: [{ ...page.turns[0], acoustic_segments: evidence }] }, "call-public-id", "run-one").turns[0];
+}
+
+test("preserves segment boundaries, confirmations, loss and missing evidence in the enclosing source clock", () => {
+  const evidence = acousticEvidence();
+  const decoded = { version: 1, omittedCount: 2, reasons: ["segment_limit"], entries: [
+    { epoch: 2, startSample: 0, endSample: 512, startUs: 0, endUs: 32000,
+      startConfirmedUs: 128000, endConfirmedUs: 544000, uncertaintyUs: 32000, reasons: [] },
+    { epoch: 3, startSample: null, endSample: 512, startUs: null, endUs: null,
+      startConfirmedUs: null, endConfirmedUs: 600000, uncertaintyUs: null, reasons: ["partial_start", "clock_uncertain"] },
+  ] };
+  expect(parseSegmentEvidence(evidence)).toMatchObject({ acousticSegments: decoded, clockId: "clock-one", sourceEpoch: "source-one" });
+  const report = latencyResponseFixture();
+  expect(parseLatencyReport({ ...report, runs: [{ ...report.runs[0], unattached_segments: evidence }] }, "call-public-id").runs[0])
+    .toMatchObject({ participantId: "caller", unattachedSegments: decoded });
+  expect(parseSegmentEvidence({ version: 1, entries: [], omitted_count: 0, reasons: [] }))
+    .toMatchObject({ acousticSegments: { version: 1, entries: [], omittedCount: 0, reasons: [] } });
+});
+
+test("legacy omitted and null segment fields stay unavailable", () => {
+  expect(parseLatencyReport(latencyResponseFixture(), "call-public-id").runs[0]).toHaveProperty("unattachedSegments", null);
+  expect(parseLatencyTurns(latencyTurnsFixture(), "call-public-id", "run-one").turns[0]).toHaveProperty("acousticSegments", null);
+  expect(parseSegmentEvidence(null)).toHaveProperty("acousticSegments", null);
+});
+
+test("rejects unsupported, unbounded or contradictory acoustic evidence", () => {
+  const base = acousticEvidence();
+  const complete = base.entries[0]!;
+  for (const evidence of [
+    { ...base, version: 2 }, { ...base, omitted_count: -1 }, { ...base, omitted_count: 0.5 },
+    { ...base, reasons: [] }, { ...base, reasons: ["unknown"] },
+    { ...base, entries: Array(33).fill(complete) },
+    { ...base, entries: [{ ...complete, end_us: -1 }] },
+    { ...base, entries: [{ ...complete, start_confirmed_us: null }] },
+    { ...base, entries: [{ ...complete, end_sample: null }] },
+    { ...base, entries: [{ ...complete, start_sample: 513 }] },
+    { ...base, entries: [{ ...complete, end_confirmed_us: 1 }] },
+    { ...base, entries: [{ ...complete, epoch: Number.MAX_SAFE_INTEGER + 1 }] },
+    { ...base, entries: [{ ...complete, uncertainty_us: 604800000001 }] },
+    { ...base, entries: [{ ...complete, start_us: null }] },
+    { ...base, entries: [complete, { ...complete, end_sample: 1024 }] },
+  ]) {
+    expect(() => parseSegmentEvidence(evidence)).toThrow(/malformed/i);
+    const report = latencyResponseFixture();
+    expect(() => parseLatencyReport({ ...report, runs: [{ ...report.runs[0], unattached_segments: evidence }] }, "call-public-id")).toThrow(/malformed/i);
+  }
+});

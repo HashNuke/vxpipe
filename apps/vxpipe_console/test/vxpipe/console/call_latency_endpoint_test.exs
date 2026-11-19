@@ -120,6 +120,70 @@ defmodule Vxpipe.Console.CallLatencyEndpointTest do
     assert_received {:list_turns, "AAAAAAAAAAAAAAAA", "call-1", "run-1", 50, nil}
   end
 
+  test "authorized reads preserve versioned acoustic segments and unattached evidence", c do
+    segment = %{
+      epoch: 2,
+      start_sample: 0,
+      end_sample: 512,
+      start_us: 0,
+      end_us: 32_000,
+      start_confirmed_us: 128_000,
+      end_confirmed_us: 544_000,
+      uncertainty_us: 32_000,
+      reasons: []
+    }
+
+    evidence = %{
+      version: 1,
+      entries: [
+        segment,
+        %{
+          segment
+          | epoch: 3,
+            start_sample: nil,
+            start_us: nil,
+            start_confirmed_us: nil,
+            reasons: [:partial_start]
+        }
+      ],
+      omitted_count: 2,
+      reasons: [:segment_limit]
+    }
+
+    assert Vxpipe.Calls.AcousticSegments.valid?(evidence)
+    [turn] = c.context.turns
+
+    configure(%{
+      c.context
+      | run: %{c.context.run | unattached_segments: evidence},
+        turns: [%{turn | acoustic_segments: evidence}]
+    })
+
+    expected = evidence |> JSON.encode!() |> JSON.decode!()
+
+    for prefix <- ["/api/tenants/", "/tenants/"] do
+      report = login() |> recycle() |> get(String.replace(report_path(), "/api/tenants/", prefix))
+      assert [run] = json_response(report, 200)["runs"]
+      assert run["participant_id"] == c.context.run.participant_id
+      assert Map.fetch!(run, "unattached_segments") == expected
+
+      response =
+        login() |> recycle() |> get(String.replace(turns_path(), "/api/tenants/", prefix))
+
+      assert [row] = json_response(response, 200)["turns"]
+      assert Map.fetch!(row, "acoustic_segments") == expected
+      assert row["clock_id"] == run["clock_id"]
+      assert row["source_epoch"] == run["source_epoch"]
+    end
+  end
+
+  test "legacy records expose absent segments as null rather than empty evidence" do
+    report = login() |> recycle() |> get(report_path()) |> json_response(200)
+    turns = login() |> recycle() |> get(turns_path()) |> json_response(200)
+    assert Map.fetch!(hd(report["runs"]), "unattached_segments") == nil
+    assert Map.fetch!(hd(turns["turns"]), "acoustic_segments") == nil
+  end
+
   test "member without tenant call-read permission cannot reach the repository" do
     principal = %{
       FakeUserIdentity.principal()

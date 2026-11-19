@@ -24,6 +24,24 @@ export interface LatencyCoverage {
   droppedAudioFrames: number;
   unmatchedProviderEvents: number;
 }
+/** Acoustic segments belong to the enclosing run's source/clock, not to a response agent. */
+export interface LatencyAcousticSegment {
+  epoch: number;
+  startSample: number | null;
+  endSample: number | null;
+  startUs: number | null;
+  endUs: number | null;
+  startConfirmedUs: number | null;
+  endConfirmedUs: number | null;
+  uncertaintyUs: number | null;
+  reasons: readonly string[];
+}
+export interface LatencyAcousticSegments {
+  version: 1;
+  entries: readonly LatencyAcousticSegment[];
+  omittedCount: number;
+  reasons: readonly string[];
+}
 export interface LatencyRun {
   id: string;
   revision: number;
@@ -39,6 +57,8 @@ export interface LatencyRun {
   closedAt: string | null;
   reasons: readonly string[];
   coverage: LatencyCoverage;
+  /** Absent/null on legacy reports; an empty evidence object means observed with no segments. */
+  unattachedSegments?: LatencyAcousticSegments | null;
 }
 export interface LatencyTurn {
   runId: string;
@@ -56,6 +76,7 @@ export interface LatencyTurn {
   acousticReason: string | null;
   acousticSample: number | null;
   uncertaintyUs: number | null;
+  acousticSegments?: LatencyAcousticSegments | null;
 }
 export interface LatencySummary {
   profile: LatencyProfile;

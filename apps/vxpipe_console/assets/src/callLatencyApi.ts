@@ -1,5 +1,5 @@
 import { latencyLandmarks, latencyMetrics } from "@vxpipe/core";
-import type { JsonValue, LatencyCoverage, LatencyLoader, LatencyProfile, LatencyReport,
+import type { JsonValue, LatencyAcousticSegment, LatencyAcousticSegments, LatencyCoverage, LatencyLoader, LatencyProfile, LatencyReport,
   LatencyRun, LatencySummary, LatencyTurn, LatencyTurnPage } from "@vxpipe/core";
 
 type ObjectValue = Record<string, unknown>;
@@ -78,7 +78,7 @@ function run(value: unknown): LatencyRun {
     participantId: text(input.participant_id), connectionId: text(input.connection_id), sourceEpoch: text(input.source_epoch),
     clockId: text(input.clock_id), profile: profile(input.profile), state: member(input.state, states),
     anchorUtc: instant(input.anchor_utc), heartbeatAt: instant(input.heartbeat_at), closedAt: nullable(input.closed_at, instant),
-    reasons: strings(input.reasons), coverage: coverage(input.coverage) };
+    reasons: strings(input.reasons), coverage: coverage(input.coverage), unattachedSegments: acousticSegments(input.unattached_segments) };
 }
 function summary(value: unknown): LatencySummary {
   const input = object(value);
@@ -97,6 +97,57 @@ function offset(value: unknown): number {
   const result = integer(value);
   return result <= 604_800_000_000 ? result : invalid();
 }
+const segmentReasons = ["partial_start", "audio_gap", "inference_reset", "source_changed", "clock_uncertain",
+  "ambiguous_boundary", "observer_overloaded", "pending"] as const;
+function evidenceReasons(value: unknown, allowed: readonly string[]): string[] {
+  return unique(array(value, allowed.length).map(item => member(item, allowed)), item => item);
+}
+function ordered(first: number | null, last: number | null): boolean {
+  return first === null || last === null || first <= last;
+}
+function acousticSegment(value: unknown): LatencyAcousticSegment {
+  const input = object(value);
+  const fields = ["epoch", "start_sample", "end_sample", "start_us", "end_us", "start_confirmed_us", "end_confirmed_us", "uncertainty_us", "reasons"];
+  if (Object.keys(input).length !== fields.length || Object.keys(input).some(key => !fields.includes(key))) return invalid();
+  const segment: LatencyAcousticSegment = {
+    epoch: offset(input.epoch), startSample: nullable(input.start_sample, offset), endSample: nullable(input.end_sample, offset),
+    startUs: nullable(input.start_us, offset), endUs: nullable(input.end_us, offset),
+    startConfirmedUs: nullable(input.start_confirmed_us, offset), endConfirmedUs: nullable(input.end_confirmed_us, offset),
+    uncertaintyUs: nullable(input.uncertainty_us, offset), reasons: evidenceReasons(input.reasons, segmentReasons),
+  };
+  for (const [sample, at, confirmed] of [
+    [segment.startSample, segment.startUs, segment.startConfirmedUs],
+    [segment.endSample, segment.endUs, segment.endConfirmedUs],
+  ] as const) {
+    if (sample === null ? at !== null || confirmed !== null : confirmed === null || !ordered(at, confirmed)) return invalid();
+  }
+  if ((segment.startSample === null && segment.endSample === null) ||
+      !ordered(segment.startSample, segment.endSample) || !ordered(segment.startUs, segment.endUs) ||
+      !ordered(segment.startConfirmedUs, segment.endConfirmedUs)) return invalid();
+  if (segment.reasons.length === 0 && [segment.startSample, segment.endSample, segment.startUs, segment.endUs, segment.uncertaintyUs].includes(null)) return invalid();
+  return segment;
+}
+function acousticSegments(value: unknown): LatencyAcousticSegments | null {
+  if (value === undefined || value === null) return null;
+  const input = object(value);
+  if (input.version !== 1 || Object.keys(input).length !== 4) return invalid();
+  const entries = array(input.entries, 32).map(acousticSegment);
+  const omittedCount = offset(input.omitted_count);
+  const reasons = evidenceReasons(input.reasons, ["segment_limit", ...segmentReasons]);
+  if (omittedCount > 0 && !reasons.includes("segment_limit")) return invalid();
+  for (const epoch of new Set(entries.map(entry => entry.epoch))) {
+    const group = entries.filter(entry => entry.epoch === epoch).sort((a, b) => (a.startSample ?? -1) - (b.startSample ?? -1));
+    for (const key of ["startSample", "endSample"] as const) {
+      const values = group.map(entry => entry[key]).filter(value => value !== null);
+      if (new Set(values).size !== values.length) return invalid();
+    }
+    for (let index = 1; index < group.length; index++) {
+      const previous = group[index - 1]!, next = group[index]!;
+      if (previous.endSample === null || next.startSample === null || previous.endSample > next.startSample) return invalid();
+    }
+  }
+  return { version: 1, entries, omittedCount, reasons };
+}
 function turn(value: unknown, runId: string): LatencyTurn {
   const input = object(value);
   if (input.run_id !== runId) return invalid();
@@ -106,7 +157,7 @@ function turn(value: unknown, runId: string): LatencyTurn {
     durationsUs: mapping(input.durations_us, latencyMetrics, value => nullable(value, offset)),
     metricReasons: mapping(input.metric_reasons, latencyMetrics, value => nullable(value, text)),
     quality: member(input.quality, ["available", "incomplete", "unavailable"]), acousticReason: nullable(input.acoustic_reason, text),
-    acousticSample: nullable(input.acoustic_sample, integer), uncertaintyUs: nullable(input.uncertainty_us, offset) };
+    acousticSample: nullable(input.acoustic_sample, integer), uncertaintyUs: nullable(input.uncertainty_us, offset), acousticSegments: acousticSegments(input.acoustic_segments) };
 }
 function envelope(value: unknown, callId: string): ObjectValue {
   const input = object(value);
