@@ -574,7 +574,9 @@ Migration tasks (revised architecture; ordered as in the migration steps above):
   `AttachmentLease.gate` and `InferenceAdmission`; record `capacity_unavailable`
   and attach late as partial coverage when a slot frees. Test two rooms at the cap.
 - [ ] Resolve the Calls-composed node pool and collector by registered name; with
-  the port absent or down, report `unavailable` coverage and do no work.
+  the port absent or down, report `unavailable` coverage and do no work. Preserve
+  gate debt on tracker restart; before publishing a fresh gate, prove termination
+  of old room-owned workers (including reuse mode) and resolve outstanding starts.
 - [ ] Re-prove reuse/fallback through the room service: one inference execution per
   eligible frame, all local Silero/collection combinations, mid-call mode change,
   join/leave, reconnect, disable/re-enable and stale/late work.
@@ -1721,3 +1723,27 @@ final review is clean and two independent probes pass. See
 Together with the preceding storage and live-correlation checkpoints, this closes
 B's records/replay extension and migration step 2. Room-service work, D extensions,
 E/F and deployment remain incomplete; the milestone index stays unchecked.
+
+
+## Migration step 3 admission foundation — 2026-11-19
+
+Source inspection established that the old node worker supervisor supplies the
+live-worker cap: AttachmentLease.finish releases even adopted startup reservations.
+The new, directly tested SourceAdmission component retains the existing shared gate
+through room-owned worker termination. It starts and tracks each worker once before
+binding/adoption; cancellation and owner death cannot reclaim a still-running
+worker's slot. Unknown startup outcomes retain bounded debt. Two independent room
+worker supervisors contend correctly at capacity one, including suspended workers.
+
+Astra reproduced delayed adoption after timeout and unresponsive cancellation;
+retained red/green tests now prove atomic revocation independent of tracker
+responsiveness. Final scoped component review is clean, including 16 focused tests
+with independent timeout probes. The Engine diagnostics selection passes 205/205,
+and root static checks pass. See
+[checkpoint labnotes](../20261119-1610-room-source-admission.md).
+
+This is an uncomposed admission primitive, not completion of any C task. Room
+supervision/service, accepted-STT discovery, Calls port resolution and cutover
+remain pending. Tracker restart must retain gate debt; creating a fresh gate still
+requires a proven teardown barrier for old workers and unresolved starts. No
+existing coordinator/room composition, provider behavior or deployment changed.

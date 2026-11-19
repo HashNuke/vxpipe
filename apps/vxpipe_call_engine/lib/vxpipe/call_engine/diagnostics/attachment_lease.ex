@@ -88,6 +88,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.AttachmentLease do
     end
   end
 
+  @doc "Retains bounded debt when an in-flight admission exits without a known child outcome."
+  def abandon(lease) do
+    :atomics.add(lease.state, @operations, 1)
+    cancel(lease)
+    finish(lease)
+  end
+
   def finish(lease) do
     :atomics.put(lease.state, @finished, 1)
     release_if_resolved(lease)

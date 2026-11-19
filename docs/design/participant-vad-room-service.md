@@ -138,3 +138,29 @@ uses that exact sample range, and writes both segment collections through the
 existing bounded writer. Fresh-process reads expose complete pairs and unattached
 partial/gap evidence. Authorized API/UI presentation remains pending; these
 records/replay checks do not accept the room-service migration.
+
+
+## Room worker admission lifetime
+
+The old node-owned worker DynamicSupervisor supplies the live-worker limit;
+AttachmentLease's gate alone bounds unresolved startup, because `finish/1` releases
+a successfully adopted lease. Moving workers into separate room subtrees therefore
+requires a node admission owner that retains each reservation through worker DOWN.
+`SourceAdmission` provides that primitive and is tested directly before composition.
+It uses the existing injected gate, claims each worker start once, tracks the
+returned worker before binding/adoption, and retains tracked capacity through
+cancellation or owner death. Cancellation revokes the lease before contacting the
+tracker; failed or timed-out adoption also revokes atomically so a queued request
+cannot later grant authority. Failed tracking kills that newly started worker and
+waits for DOWN while the startup operation still holds its charge. Unknown startup
+outcomes retain bounded debt rather than guessing that no worker exists.
+
+Tracker restart must reuse its gate. Lost monitor ownership leaves conservative
+debt; it cannot reclaim capacity merely because a replacement tracker has an empty
+map. A fresh gate requires a confirmed teardown barrier for old room-owned workers,
+including operational-reuse workers and unresolved starts. That replacement barrier
+and node-pool/room-service wiring remain prerequisites for cutover. Rejected
+alternatives are using `finish/1` immediately after adoption (releases too early),
+counting only per-room supervisor children (multiplies the node cap), and creating
+a fresh gate on tracker restart (can admit over surviving old workers). No running
+coordinator or room composition changes in the admission primitive checkpoint.
