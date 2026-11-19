@@ -66,6 +66,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
       ]
   end
 
+  defp valid?({:acoustic_boundary, epoch, kind, sample, offset, confirmed, uncertainty, reason}) do
+    unsigned?(epoch) and kind in [:speech_started, :speech_ended] and unsigned?(sample) and
+      offset?(confirmed) and
+      reason in [nil, :partial_start, :clock_uncertain, :unobserved_audio, :before_run] and
+      ((offset?(offset) and offset <= confirmed and unsigned?(uncertainty)) or
+         (offset == nil and uncertainty == nil and reason not in [nil, :partial_start]))
+  end
+
   defp valid?({:provider_landmark, generation, turn, kind, observed_at, samples}) do
     is_reference(generation) and is_reference(turn) and signed?(observed_at) and
       unsigned?(samples) and
@@ -101,6 +109,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
        do: probabilities?(rest, remaining - 1)
 
   defp probabilities?(_values, _remaining), do: false
+  defp offset?(value), do: is_integer(value) and value in 0..604_800_000_000
   defp identifier?(value), do: is_binary(value) and byte_size(value) in 1..256
   defp unsigned?(value), do: is_integer(value) and value in 0..@maximum_integer
 

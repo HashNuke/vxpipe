@@ -445,3 +445,32 @@ default); expired or unobserved positions stay unavailable. Uncertainty includes
 receipt-clock jitter plus a conservative source/output sample-period allowance.
 This is server receipt mapping, not microphone capture time. Automatic source
 worker composition and end-to-end transport acceptance remain pending.
+
+### Benchmark-only source worker
+
+`SourceWorker` composes accepted-audio mapping with sequential async inference and
+its own acoustic boundary state. A coordinator supplies a source/run-specific
+output handoff and matching capture owner/grant; the worker emits only fixed,
+bounded acoustic boundary tuples and provider landmarks. The output handoff must
+not be reused across source/run associations. First-turn coverage remains partial
+through the first completed endpoint. Missing or uncertain mappings have null
+positions, not fabricated durations. Provider settlement leaves this standalone
+recurrence untouched; source gaps and inference failures advance its diagnostic
+epoch and reset only its private detector.
+
+Queued input and the active inference packet keep capture reservations until
+processed or discarded. Output saturation stops the worker. Owner, collector or
+runtime death and250ms authority checks retire it; runtime owner monitoring
+cancels its model job and keeps native capacity until actual termination. Graceful
+supervised shutdown discards queued audio and releases its reservations. Hard
+process death still fences offers and frees queued payloads without relying on
+`terminate/2`; an interrupted producer can conservatively leave old-handle counters
+occupied, so counters are not a guaranteed durable loss ledger.
+
+`SourceSupervisor` is a separate temporary diagnostic subtree, with16 sources and
+one model task by default (maximum32 sources/eight tasks). Its pinned model loads
+lazily in its own runtime, not through operational model-cache initialization.
+Lifecycle startup is coordinator-only and must not be invoked on the voice path.
+This composition has fixture acceptance but is not automatically attached to
+configured calls yet. Reused-inference consumption, collector correlation,
+production attachment and the full operational/benchmark on/off matrix remain open.

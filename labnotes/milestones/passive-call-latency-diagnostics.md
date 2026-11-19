@@ -719,3 +719,20 @@ are retained green. Affected suite95/0; Astra xhigh re-review clean (independent
 static root gates and Lean pass. The existing umbrella run predates this change.
 Automatic source workers, raw Opus decode without an existing decoded copy and
 configured-call transport acceptance remain pending; the combined C task stays open.
+
+## Checkpoint C benchmark-only worker — 2026-11-19
+
+A separately supervised source worker now combines bounded capture, accepted-audio
+mapping, sequential async model work and private acoustic boundary state. It emits
+bounded diagnostic tuples, keeps input reservations through inference, preserves
+standalone recurrence across provider settlement, and retires on revocation or
+collector saturation. Its first endpoint remains partial; uncertain/missing timing
+is nullable. The real packaged model preserves fixture onset4096/end34816 across
+partial model windows. Graceful cleanup and crash fencing are separately tested.
+
+Affected suite109/0; Astra xhigh review clean (19independent tests/probes), static
+root gates and Lean pass. The preceding umbrella run finished with Cartesia startup
+close-reason and Twilio media-harness failures; those remain unresolved acceptance
+evidence. Automatic call/source attachment, operational-reuse consumption, raw
+Opus decode and collector persistence/correlation remain open. The combined C
+worker/isolation and on/off tasks are not yet complete.
