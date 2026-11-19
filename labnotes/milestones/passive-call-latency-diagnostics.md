@@ -665,3 +665,14 @@ Astra xhigh review is clean (independent85/0 including additional semantics prob
 root static gates and Lean verification pass. Automatic subscription, manual Scribe,
 manual commit sent, room/response correlation and report persistence remain open;
 the combined C instrumentation task is not yet complete.
+
+## Checkpoint C partial accepted-audio evidence — 2026-11-19
+
+The STT capability now has an internal allocation/policy/source-fenced observation
+attachment. Raw PCM reaches it only after successful provider admission. Policy
+changes, source mismatch and capability death revoke old queued evidence; capture
+saturation leaves the provider result intact. Automatic observer admission,
+decoded-Opus/normalized mapping and operational inference reuse remain pending.
+Affected suite99/0, static root gates and Lean verification pass. Astra xhigh
+re-review is clean, including retained preparation/discard and rejected-policy
+regressions. The combined task stays open pending the complete observer lifecycle.

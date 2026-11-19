@@ -1,6 +1,7 @@
 defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @moduledoc false
 
+  alias Vxpipe.CallEngine.Diagnostics.AudioTap
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.Capability.SpeechToText.PrivateAllocation
   alias Vxpipe.CallEngine.MediaPolicy.{Snapshot, SpeechToTextDemand}
@@ -31,6 +32,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   ]
   defstruct @enforce_keys ++
               [
+                diagnostic_tap: nil,
                 activity_agent_id: nil,
                 readiness_generation: nil,
                 readiness_status: :preparing,
@@ -118,9 +120,21 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
       true ->
         case push_frame(state, frame) do
-          :ok -> :ok
-          {:error, reason} when reason in [:not_ready, :closed] -> {:error, :policy_denied}
-          {:error, _reason} -> {:error, :unavailable}
+          :ok ->
+            AudioTap.offer(
+              state.diagnostic_tap,
+              state.session.generation,
+              state.policy && state.policy.revision,
+              frame
+            )
+
+            :ok
+
+          {:error, reason} when reason in [:not_ready, :closed] ->
+            {:error, :policy_denied}
+
+          {:error, _reason} ->
+            {:error, :unavailable}
         end
     end
   end
@@ -248,6 +262,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
       %{
         state
         | usage: nil,
+          diagnostic_tap: nil,
           pending_policy: nil,
           turn_indexes: %{},
           next_turn_index: 0
@@ -305,9 +320,18 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   @doc false
   def retire_active(%__MODULE__{session: session} = state, deadline)
       when not is_nil(session) do
+    AudioTap.close(state.diagnostic_tap)
+
     case Session.retire(session, deadline) do
       :ok ->
-        retired = %{state | session: nil, turn_indexes: %{}, next_turn_index: 0}
+        retired = %{
+          state
+          | session: nil,
+            diagnostic_tap: nil,
+            turn_indexes: %{},
+            next_turn_index: 0
+        }
+
         {:ok, invalidate_readiness(retired)}
 
       {:error, _reason} = error ->
@@ -319,9 +343,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
 
   @spec close(t()) :: t()
   def close(%__MODULE__{session: session} = state) when not is_nil(session) do
+    AudioTap.close(state.diagnostic_tap)
     _ = Session.close(session)
 
-    %{state | session: nil, turn_indexes: %{}, next_turn_index: 0}
+    %{state | session: nil, diagnostic_tap: nil, turn_indexes: %{}, next_turn_index: 0}
     |> invalidate_readiness()
   end
 

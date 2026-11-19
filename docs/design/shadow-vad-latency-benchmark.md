@@ -359,3 +359,22 @@ results, discard queued audio on revocation, and report loss/partial coverage.
 Source identity/privacy checks, worker admission, native inference isolation and
 bounded shutdown remain required for live capture. None of these APIs override
 the durable app setting or initialize a model on their own.
+
+### Accepted-input observation boundary
+
+A diagnostic audio tap attaches to a ready STT capability's exact native allocation,
+installed media-policy revision and transport track/source epoch. Private/prepared
+allocations and unknown policy cannot grant observation. The tap runs only after
+normal provider input admission succeeds, so diagnostic work cannot broaden the
+source inputs already permitted by the call's media policy. This is transient
+observation, not an audio recording or a change to recording/transcript settings.
+
+Handoffs carry an owning capability PID as well as their receiving consumer PID;
+receipt checks fail when either dies. A successful policy installation closes the old handle before acknowledgment;
+native allocation retirement closes it before teardown. A source mismatch closes
+it before any diagnostic copy. Old queued evidence cannot cross those transitions.
+Rejected policy commands preserve the active tap, and prepared replacements do
+not inherit it. The binding uses the global installed policy revision, not the
+source STT interval. Exact repeat attachment is idempotent;
+a different source/allocation needs a fresh handle. The current hook accepts raw
+PCM only; decoded-Opus mapping and automatic observer lifecycle remain pending.

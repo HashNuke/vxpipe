@@ -6,6 +6,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   @behaviour Vxpipe.CallEngine.Readiness.Adapter
 
   alias Vxpipe.CallEngine.Capability.SpeechToText.{PolicyPreparation, PrivateAllocation, Usage}
+  alias Vxpipe.CallEngine.Diagnostics.AudioTap
   alias Vxpipe.CallEngine.Media.AudioFrame
   alias Vxpipe.CallEngine.MediaPolicy.Snapshot
   alias Vxpipe.CallEngine.Provider.SpeechToText.Signal
@@ -37,6 +38,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   def input_binding(capability, resource) do
     GenServer.call(capability, {:input_binding, resource}, @call_timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @doc false
+  def attach_diagnostics(capability, generation, source, handoff) do
+    GenServer.call(capability, {:attach_diagnostics, generation, source, handoff}, @call_timeout)
   catch
     :exit, _reason -> {:error, :unavailable}
   end
@@ -127,6 +135,19 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   def handle_call({:input_binding, resource}, _from, state),
     do: {:reply, PolicyPreparation.input_binding(state, resource), state}
 
+  def handle_call({:attach_diagnostics, generation, source, handoff}, _from, state) do
+    with nil <- state.private_allocation,
+         %Snapshot{} <- state.policy,
+         {:ok, %{status: :ready, allocation_generation: ^generation}} <-
+           State.input_binding(state),
+         {:ok, tap} <- AudioTap.new(handoff, generation, state.policy.revision, source),
+         :ok <- AudioTap.replace(state.diagnostic_tap, tap) do
+      {:reply, :ok, %{state | diagnostic_tap: tap}}
+    else
+      _ -> {:reply, {:error, :unavailable}, state}
+    end
+  end
+
   def handle_call({:push_audio, frame}, _from, state) do
     case State.send_audio(state, frame) do
       :ok -> {:reply, :ok, Usage.accept_input(state)}
@@ -143,6 +164,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
              state.identity.participant_id
            ),
          {:ok, updated} <- PolicyPreparation.install(state, snapshot) do
+      AudioTap.policy_change(state.diagnostic_tap, updated.policy.revision)
       {:reply, :ok, adopt_private_allocation(state, updated)}
     else
       {:error, reason} ->

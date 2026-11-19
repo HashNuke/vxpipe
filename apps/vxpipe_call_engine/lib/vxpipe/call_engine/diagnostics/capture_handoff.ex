@@ -9,6 +9,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
   @invalid 5
   @enforce_keys [
     :receiver,
+    :owner,
     :projection,
     :grant,
     :token,
@@ -25,9 +26,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
          {:ok, options} <-
            Keyword.validate(options,
              projection: SettingsProjection,
+             owner: receiver,
              maximum_count: 64,
              maximum_bytes: 262_144
            ),
+         owner when is_pid(owner) <- Keyword.fetch!(options, :owner),
+         true <- node(owner) == node() and Process.alive?(owner),
          projection when is_atom(projection) <- Keyword.fetch!(options, :projection),
          count when is_integer(count) and count in 1..128 <-
            Keyword.fetch!(options, :maximum_count),
@@ -43,6 +47,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
       {:ok,
        %__MODULE__{
          receiver: receiver,
+         owner: owner,
          projection: projection,
          grant: grant,
          token: make_ref(),
@@ -116,6 +121,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.CaptureHandoff do
 
     current =
       :atomics.get(handoff.counters, @open) == 1 and Process.alive?(handoff.receiver) and
+        Process.alive?(handoff.owner) and
         renew_before_expiry?(handoff, previous_deadline)
 
     if not current, do: close(handoff)
