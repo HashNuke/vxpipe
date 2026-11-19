@@ -50,6 +50,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
     end
   end
 
+  defp valid?(
+         {:mapped_probabilities, epoch, first_sample, source_sample, probabilities, observed_at}
+       ) do
+    unsigned?(source_sample) and
+      valid?({:probabilities, epoch, first_sample, probabilities, observed_at})
+  end
+
   defp valid?({:probabilities, epoch, first_sample, probabilities, observed_at}) do
     unsigned?(epoch) and unsigned?(first_sample) and signed?(observed_at) and
       probabilities?(probabilities, 32)

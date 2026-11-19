@@ -152,8 +152,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     do: {:reply, {:error, :busy}, state}
 
   def handle_call({:frame, frame}, _from, state) do
-    with {:ok, pcm} <- frame_pcm(state, frame) do
-      accept_input(state, frame.payload, pcm)
+    with {:ok, pcm, timestamp} <- frame_pcm(state, frame) do
+      accept_input(state, frame.payload, pcm, timestamp)
     else
       _failure -> {:stop, {:shutdown, :session_failed}, {:error, :session_failed}, state}
     end
@@ -367,16 +367,16 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
   defp activate(state), do: {:noreply, state}
 
-  defp frame_pcm(%{runtime: nil}, _frame), do: {:ok, ""}
+  defp frame_pcm(%{runtime: nil}, _frame), do: {:ok, "", nil}
 
   defp frame_pcm(_state, frame) do
     case Vxpipe.CallEngine.Speech.STTActivityPCM.normalize(frame) do
-      {:ok, pcm, _timestamp} -> {:ok, pcm}
+      {:ok, pcm, timestamp} -> {:ok, pcm, timestamp}
       _failure -> {:error, :unsupported_audio}
     end
   end
 
-  defp accept_input(state, audio, pcm) do
+  defp accept_input(state, audio, pcm, timestamp \\ nil) do
     if byte_size(state.pending_pcm) + byte_size(pcm) > @maximum_pcm_bytes do
       {:reply, {:error, :busy}, state}
     else
@@ -387,7 +387,14 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
           case advance_detector(%{
                  state
-                 | pending_pcm: state.pending_pcm <> pcm,
+                 | diagnostic_tap:
+                     InferenceTap.accept(
+                       state.diagnostic_tap,
+                       state.recognition_epoch,
+                       timestamp,
+                       div(byte_size(pcm), 2)
+                     ),
+                   pending_pcm: state.pending_pcm <> pcm,
                    pending_epoch: pending_epoch
                }) do
             {:ok, next} -> {:reply, :ok, next}

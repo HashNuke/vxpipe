@@ -748,3 +748,16 @@ mixed LLM/STS, human and unknown agent declarations before consulting diagnostic
 resources. Eligible LLM capacity and real-model correspondence tests remain green
 (11/0); Astra xhigh review is clean and static root gates pass. Automatic capture
 and reuse attachment are still pending and must retain this eligibility boundary.
+
+
+## Checkpoint C reused-inference source correspondence — 2026-11-19
+
+Operational inference evidence now includes its absolute normalized source sample
+alongside reset-relative position. Accepted frame continuity is checked without
+copying audio or running another detector. Gaps and raw byte input leave mapping
+unavailable until a fresh operational epoch; late results retain their original
+submission epoch and source position. Provider resets and control remain unchanged.
+Affected tests111/0, static gates and Lean pass. Astra xhigh review is clean with
+five additional buffering/resampling/reset probes. The earlier umbrella run is
+still in progress and does not verify this newer source state. Reuse consumption,
+automatic source attachment and report correlation remain open; C is incomplete.

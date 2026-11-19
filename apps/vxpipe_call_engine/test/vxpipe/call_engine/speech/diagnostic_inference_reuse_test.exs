@@ -143,6 +143,114 @@ defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
     assert {:reset, 1, :partial_start, _} = packet(handoff)
   end
 
+  test "reused probabilities retain absolute source samples across provider resets" do
+    {session, recognizer} = session(false)
+    handoff = handoff()
+    assert :ok = ConversationalSTT.observe(session, handoff)
+    _ = :sys.get_state(Session.provider(session))
+    pcm = :binary.copy(<<5, 0>>, 2_048)
+
+    frame =
+      struct(Vxpipe.CallEngine.Media.AudioFrame,
+        codec: :linear16,
+        sample_rate: 16_000,
+        channels: 1,
+        timestamp: 32_000,
+        payload: pcm
+      )
+
+    assert :ok = Session.push_frame(session, frame)
+    assert_receive {:classified, _, 0, ^pcm}
+    _ = event(session, :speech_started)
+    assert {:mapped_probabilities, 0, 0, 32_000, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
+
+    assert :ok =
+             GenServer.call(
+               recognizer,
+               {:emit, :turn_ended,
+                [turn_ref: make_ref(), text: "first", endpointing: :provider_gap]}
+             )
+
+    _ = event(session, :transcript)
+    _ = event(session, :turn_ended)
+    assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
+    assert :ok = Session.push_frame(session, %{frame | timestamp: 34_048})
+    assert_receive {:classified, _, 0, ^pcm}
+    _ = event(session, :speech_started)
+    assert {:mapped_probabilities, 1, 0, 34_048, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
+    refute_received {:classified, _, _, _}
+  end
+
+  test "a source gap removes mapping without changing operational inference" do
+    {session, _recognizer} = session(false)
+    handoff = handoff()
+    assert :ok = ConversationalSTT.observe(session, handoff)
+    _ = :sys.get_state(Session.provider(session))
+    pcm = :binary.copy(<<6, 0>>, 2_048)
+
+    frame =
+      struct(Vxpipe.CallEngine.Media.AudioFrame,
+        codec: :linear16,
+        sample_rate: 16_000,
+        channels: 1,
+        timestamp: 32_000,
+        payload: pcm
+      )
+
+    assert :ok = Session.push_frame(session, frame)
+    assert_receive {:classified, _, 0, ^pcm}
+    _ = event(session, :speech_started)
+    assert {:mapped_probabilities, 0, 0, 32_000, _, _} = packet(handoff)
+    assert :ok = Session.push_frame(session, %{frame | timestamp: 40_000})
+    assert_receive {:classified, _, 2_048, ^pcm}
+    assert {:reset, 0, :audio_gap, _} = packet(handoff)
+    assert {:probabilities, 0, 2_048, _, _} = packet(handoff)
+    assert :ok = Session.push_frame(session, %{frame | timestamp: 42_048})
+    assert_receive {:classified, _, 4_096, ^pcm}
+    assert {:probabilities, 0, 4_096, _, _} = packet(handoff)
+    refute_received {:classified, _, _, _}
+  end
+
+  test "in-flight evidence keeps its source mapping when provider settlement resets the stream" do
+    {session, recognizer} = session(true)
+    handoff = handoff()
+    assert :ok = ConversationalSTT.observe(session, handoff)
+    _ = :sys.get_state(Session.provider(session))
+    pcm = :binary.copy(<<8, 0>>, 2_048)
+
+    frame =
+      struct(Vxpipe.CallEngine.Media.AudioFrame,
+        codec: :linear16,
+        sample_rate: 16_000,
+        channels: 1,
+        timestamp: 32_000,
+        payload: pcm
+      )
+
+    assert :ok = Session.push_frame(session, frame)
+    assert_receive {:classified, worker, 0, ^pcm}
+
+    assert :ok =
+             GenServer.call(
+               recognizer,
+               {:emit, :turn_ended,
+                [turn_ref: make_ref(), text: "first", endpointing: :provider_gap]}
+             )
+
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+    _ = event(session, :turn_ended)
+    assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
+    assert :ok = Session.push_frame(session, %{frame | timestamp: 34_048})
+    send(worker, :finish)
+    assert {:mapped_probabilities, 0, 0, 32_000, _, _} = packet(handoff)
+    assert_receive {:classified, next, 0, ^pcm}
+    send(next, :finish)
+    _ = event(session, :speech_started)
+    assert {:mapped_probabilities, 1, 0, 34_048, _, _} = packet(handoff)
+    refute_received {:classified, _, _, _}
+  end
+
   defp session(hold?, prepared? \\ false) do
     parent = self()
 
