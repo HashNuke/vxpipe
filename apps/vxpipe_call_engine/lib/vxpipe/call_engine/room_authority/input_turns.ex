@@ -234,7 +234,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     turn = connection.speech_to_text.turn
 
     if matching_active_turn?(turn, signal) and is_binary(signal.text) do
-      observation = observe_completion(observation, turn, state)
+      observation = observe_completion(observation, turn)
       turn = %{turn | last_text: signal.text}
 
       state =
@@ -258,10 +258,8 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     end
   end
 
-  defp observe_completion(%CaptureHandoff{} = handoff, turn, state) do
-    if state.text_capability != nil and state.speech_to_speech_runtime == nil and
-         state.speech_to_speech_capability == nil and is_reference(turn.allocation_generation) and
-         is_reference(turn.turn_ref) do
+  defp observe_completion(%CaptureHandoff{} = handoff, turn) do
+    if is_reference(turn.allocation_generation) and is_reference(turn.turn_ref) do
       case CaptureHandoff.offer(
              handoff,
              {:room_turn_completed, turn.allocation_generation, turn.turn_ref, turn.id,
@@ -273,7 +271,7 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurns do
     end
   end
 
-  defp observe_completion(_observation, _turn, _state), do: nil
+  defp observe_completion(_observation, _turn), do: nil
 
   defp emit_participant_transcription(connection_id, turn, text, final, state) do
     connection = Map.fetch!(state.connections, connection_id)

@@ -53,10 +53,10 @@ continues normally when diagnostic collection is disabled.
   `SourceWorker` already supports reuse and fallback. Adapt these, preserve their
   no-duplicate-inference and bounded-work guarantees, and avoid rewriting them
   without a demonstrated need.
-- `InputTurns.observe_completion/3` also requires a text capability and excludes
-  room-level STS, while `LiveReport` builds rows from its completion packets. Remove
-  this diagnostic gate without changing dispatch/control rules; assert persisted
-  canonical STT input timing with nullable responses for no-agent and mixed rooms.
+- Canonical completion observation now has no response-agent gate; `LiveReport`
+  builds rows from accepted STT completion packets. Configured human-only calls
+  persist canonical input timing with nullable responses for two humans. Full
+  mixed-room STT/STS control and replacement acceptance remains pending.
 - `ActivityBoundary` identifies starts and ends. `LiveReport` uses starts for
   ambiguity checks but the durable report emphasizes end timing. Add bounded,
   versioned start/end segment evidence through records, API and fixtures, preserving
@@ -296,3 +296,15 @@ Real planned-room tests establish that room completion waits for admitted worker
 termination and retains its slot until DOWN. Exhausting diagnostic restarts leaves
 the authority open. The full fresh-Engine-root unresolved-start replacement proof
 and broader participant/turn acceptance remain separate open milestone checks.
+
+
+## Canonical input completion independent of response selection
+
+Diagnostic completion no longer requires a selected text agent or the absence of
+an STS response capability. An accepted STT turn carries its allocation, reference
+and canonical room IDs into the existing report pipeline. Ownership, current-source
+and turn matching still precede this observation. Normal dispatch retains its
+separate eligibility rules; no response is synthesized to obtain diagnostic rows.
+A human-only configured call persists two independent input runs/rows with missing
+response landmarks in both reuse and fallback modes. Full mixed STT/STS control
+and replacement integration remains a separate acceptance requirement.

@@ -71,6 +71,38 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
   end
 
+  for response_side <- [:none, :sts] do
+    @tag response_side: response_side
+    test "accepted STT completion is observed with #{response_side} response selection", ctx do
+      signal = %{turn_started(0) | allocation_generation: make_ref(), turn_ref: make_ref()}
+      initial = %{state(self()) | text_capability: nil}
+
+      initial =
+        if ctx.response_side == :sts,
+          do: %{initial | speech_to_speech_capability: %{pid: self()}},
+          else: initial
+
+      current = InputTurns.speech_to_text(self(), @identity, signal, initial)
+
+      assert_receive {:vxpipe_event,
+                      %ParticipantTurnStarted{correlation_id: turn, command_id: command}}
+
+      ended = %{signal | kind: :turn_ended, provider_sequence: 2, text: "Human input"}
+      next = InputTurns.speech_to_text(self(), @identity, ended, current, ctx.handoff)
+
+      assert_receive {:vxpipe_event,
+                      %ParticipantTurnCompleted{correlation_id: ^turn, command_id: ^command}}
+
+      assert_receive {:vxpipe_diagnostic_capture, _, _,
+                      {:room_turn_completed, generation, reference, ^turn, ^command, _}, _}
+
+      assert generation == signal.allocation_generation
+      assert reference == signal.turn_ref
+      assert next.agent_turns == %{}
+      refute_received {:diagnostic_response_command, _}
+    end
+  end
+
   test "stale turn, wrong identity and revoked capture do not publish room evidence", ctx do
     signal = %{turn_started(0) | allocation_generation: make_ref(), turn_ref: make_ref()}
     state = InputTurns.speech_to_text(self(), @identity, signal, state(self()))
@@ -116,14 +148,12 @@ defmodule Vxpipe.CallEngine.RoomAuthority.InputTurnDiagnosticsTest do
     assert %{overflow: 1, pending_count: 1} = CaptureHandoff.stats(handoff)
   end
 
-  test "unowned capture and a room without an LLM never receive evidence", ctx do
+  test "unowned capture never receives evidence" do
     {:ok, unowned} =
       CaptureHandoff.new(self(), projection: __MODULE__.Projection, owner: Process.whereis(:init))
 
-    for {handoff, current} <- [
-          {unowned, state(self())},
-          {ctx.handoff, %{state(self()) | text_capability: nil}}
-        ] do
+    for current <- [state(self()), %{state(self()) | text_capability: nil}] do
+      handoff = unowned
       signal = %{turn_started(0) | allocation_generation: make_ref(), turn_ref: make_ref()}
       current = InputTurns.speech_to_text(self(), @identity, signal, current)
 

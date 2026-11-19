@@ -140,7 +140,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
        writer_supervisor: __MODULE__.Writers,
        collector_supervisor: __MODULE__.Collectors,
        task_supervisor: __MODULE__.Writes,
-       maximum_collectors: 1,
+       maximum_collectors: if(Map.get(tags, :input_only, false), do: 2, else: 1),
        source_options: [
          name: __MODULE__.Sources,
          inference: __MODULE__.Inference,
@@ -175,7 +175,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       registries: %{host_tools: %{}}
     ]
 
-    %{options: options, settings_revision: settings_revision}
+    %{options: options, settings_revision: settings_revision, model: model}
   end
 
   test "configured Scribe call persists pending timing then late acoustic confirmation", c do
@@ -625,6 +625,107 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  for vad <- [false, true] do
+    @tag matrix: true, input_only: true, vad: vad
+    test "two human STT inputs persist isolated rows without an agent, local Silero #{vad}", c do
+      assert :ok = ModelFixture.arm(c.model, :failure)
+      {call, connection, attachment, wire, identity} = call(c.options, c.vad, false, true)
+
+      assert_receive {:diagnostic_peer, peer_connection, peer_attachment, peer_wire,
+                      peer_identity}
+
+      assert Enum.all?(Map.values(call.plan.participants), &(&1.kind == :human))
+      assert :sys.get_state(attachment.room_authority).text_capability == nil
+      epoch = make_ref()
+
+      for {input_attachment, input_wire, input_identity, marker} <- [
+            {attachment, wire, identity, 7},
+            {peer_attachment, peer_wire, peer_identity, 9}
+          ] do
+        sequence = discover_with_audio(input_attachment, input_identity, epoch, input_wire)
+        pcm = :binary.copy(<<marker, 0>>, 512)
+        send_audio(input_attachment, input_identity, epoch, sequence, sequence * 512, pcm)
+        assert_receive {:scribe_audio, ^input_wire, ^pcm}, 2_000
+        inference = if c.vad, do: :operational, else: :benchmark
+        assert_receive {:matrix_inference, ^inference, _, ^pcm}, 2_000
+        refute_received {:matrix_inference, _, _, ^pcm}
+        emit_scribe_turn(input_wire, "Human conversation #{marker}.")
+        participant = input_identity.participant_id
+
+        assert_receive {:vxpipe_event,
+                        %ParticipantTranscription{final: true, participant_id: ^participant} =
+                          input},
+                       2_000
+
+        run =
+          await(fn ->
+            case LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil) do
+              {:ok, %{entries: entries}} ->
+                Enum.find_value(entries, fn %{run: run} ->
+                  if run.participant_id == participant, do: run
+                end)
+
+              _ ->
+                nil
+            end
+          end)
+
+        row =
+          await(fn ->
+            case LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil) do
+              {:ok, [row]} -> row
+              _ -> nil
+            end
+          end)
+
+        assert run.connection_id == input_identity.connection_id
+
+        assert run.profile.inference_source ==
+                 if(c.vad, do: :operational_reuse, else: :benchmark_only)
+
+        assert row.turn_id == input.correlation_id
+        assert row.landmarks_us[:provider_end_received] != nil
+        assert row.landmarks_us[:room_turn_completed] != nil
+        assert row.landmarks_us[:first_response_text] == nil
+        assert row.landmarks_us[:first_audio_started] == nil
+      end
+
+      assert %{active_sources: 2} = RoomService.status(RoomService.address(identity))
+
+      assert {:ok, %{entries: entries}} =
+               LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+      assert length(entries) == 2
+      assert length(Enum.uniq_by(entries, & &1.run.participant_id)) == 2
+      assert length(Enum.uniq_by(entries, & &1.run.id)) == 2
+      refute_received {:scribe_commit, _}
+      assert SpeechConnection.attachment(connection).media_ingress == attachment.media_ingress
+
+      assert SpeechConnection.attachment(peer_connection).media_ingress ==
+               peer_attachment.media_ingress
+
+      assert {:ok, completion} =
+               CallEngine.monitor_room_completion(
+                 identity.tenant_id,
+                 identity.room_id,
+                 identity.incarnation_id
+               )
+
+      GenServer.stop(attachment.room_authority, :shutdown)
+      assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+      await_diagnostic_drain(identity)
+      assert %{next_scenario: :failure, default_scenario: :success} = ModelFixture.status(c.model)
+
+      for marker <- [7, 9] do
+        pcm = :binary.copy(<<marker, 0>>, 512)
+        refute_received {:matrix_inference, _, _, ^pcm}
+        refute_received {:scribe_audio, _, ^pcm}
+      end
+
+      refute_received {:scribe_commit, _}
+    end
+  end
+
   @tag matrix: true, routing: true
   test "configured agent transfer preserves input identity through text and acknowledged audio",
        c do
@@ -841,7 +942,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
-  defp call(options, vad \\ false, routing? \\ false) do
+  defp call(options, vad \\ false, routing? \\ false, input_only? \\ false) do
     {:ok, tenant, key} = Administration.bootstrap_tenant("Diagnostic fixture", [:calls], options)
     {:ok, actor} = Calls.authenticate(tenant.key, key.secret, :calls, options)
 
@@ -882,6 +983,18 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         }
       }
     }
+
+    source =
+      if input_only? do
+        source
+        |> update_in([:defaults, :capabilities], &Map.delete(&1, :model_inference))
+        |> put_in([:participants, "assistant"], %{
+          type: "human",
+          connection: %{service: "web", mode: "receive", admission: "start_call"}
+        })
+      else
+        source
+      end
 
     source =
       if routing? do
@@ -980,6 +1093,50 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           "config" => echoed_settings()
         })
       )
+
+    if input_only? do
+      peer = Map.fetch!(claim.call.plan.participants, claim.call.plan.entry_receiver)
+
+      assert {:ok, peer_command} =
+               AttachConnection.new(
+                 tenant_id: tenant.key,
+                 actor_id: claim.call.plan.actor_id,
+                 room_id: prepared.room_id,
+                 incarnation_id: room.incarnation_id,
+                 participant_id: peer.participant_id,
+                 connection_id: "diagnostic-peer",
+                 deadline: DateTime.add(DateTime.utc_now(), 20, :second)
+               )
+
+      peer_connection =
+        start_supervised!(
+          Supervisor.child_spec(
+            {SpeechConnection, command: peer_command, observer: self()},
+            id: :diagnostic_peer
+          )
+        )
+
+      assert {:ok, _} = SpeechConnection.attach(peer_connection)
+      assert_receive {:scribe_started, peer_wire}, 5_000
+
+      :ok =
+        Wire.deliver_frame(
+          peer_wire,
+          JSON.encode!(%{
+            "message_type" => "session_started",
+            "session_id" => "synthetic-peer",
+            "config" => echoed_settings()
+          })
+        )
+
+      assert_receive {:configured_speech_ready, ^peer_connection}, 5_000
+
+      send(
+        self(),
+        {:diagnostic_peer, peer_connection, SpeechConnection.attachment(peer_connection),
+         peer_wire, peer_command}
+      )
+    end
 
     assert_receive {:configured_speech_ready, ^connection}, 5_000
     {claim.call, connection, SpeechConnection.attachment(connection), wire, command}

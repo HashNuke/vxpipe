@@ -1910,3 +1910,31 @@ The broad fresh-root/unresolved-start proof, complete source matrix, durable no-
 and mixed-room input rows, two-participant/API/UI extensions, distributed effective
 settings, E/F and final gates remain open. No live provider tests or deployment ran;
 the milestone index remains unchecked.
+
+
+## Migration step 5 — canonical input without an agent, 2026-11-19
+
+InputTurns now emits diagnostic completion for every accepted canonical STT turn
+with owned capture and valid allocation/turn references, independent of selected
+text or STS response capabilities. Existing signal/source authorization and actual
+LLM dispatch/STS activity rules are unchanged. The private helper no longer needs
+room response state. Two unit regressions failed before this diagnostic-only change;
+the retained ownership/stale/saturation/response selection passes 15/15.
+
+A published human-only incoming call, with both real synthetic Scribe connections
+ready, previously produced a run and final transcript but no durable turn row. It
+now persists separate participant/connection runs and exact canonical input rows
+for both humans, with provider and room timing but nullable response landmarks.
+Both local-Silero modes are exercised: reuse on, fallback off, exact distinct marker
+bytes and one expected inference path. The full configured selection passes 12/12;
+final two-human cases pass 2/2 after room completion and diagnostic drain checks.
+Independent review reproduced an ineffective model-request message assertion. Its
+replacement proves the configured model fixture remains unconsumed, and review's
+actual-adapter positive control consumes that fixture as expected. Final scoped
+review is clean; root static gates and Lean pass. See
+[checkpoint labnotes](../20261119-1742-participant-input-completion.md).
+
+The broader eligibility and completion checkboxes remain open for configured mixed
+STT/STS activity-control, actual replacement and no-STT allocation acceptance. The
+small STS-capability unit case is not evidence for that full integration. No live
+provider test, Telnyx change, full umbrella suite or deployment occurred.
