@@ -1,6 +1,6 @@
 # Participant VAD observation owned by the room
 
-Status: design revision, not implemented. 2026-11-19.
+Status: input-interval fence implemented; room-service migration pending. 2026-11-19.
 
 The implementation and acceptance plan is in
 [Passive call latency diagnostics and readable timelines](../../labnotes/milestones/passive-call-latency-diagnostics.md#architecture-revision--participant-owned-vad-2026-11-19).
@@ -39,11 +39,11 @@ continues normally when diagnostic collection is disabled.
 
 - `RoomAuthority.DiagnosticSources` currently requires a selected text agent and
   rejects room-level STS. Replace this with accepted human STT source eligibility.
-- `AudioTap.policy_change/2`, `guard_input/4` and `offer/4` currently fence on
-  global policy revision. Transfer can increment this revision while STT retains
-  its allocation. Replace the blanket fence with source-specific permission and
-  interval revalidation; unrelated revisions preserve observation, real revocation
-  or unknown authority fails closed.
+- Migration step 1 now fences `AudioTap`, discovery, attachment and completion
+  forwarding on the STT/audio-input interval pair plus allocation generation.
+  Unrelated revisions preserve observation; relevant interval changes invalidate
+  it. Legacy snapshots use global-revision fallback. Focused and configured tests,
+  independent review and Lean pass; agent-dependent lifecycle still needs migration.
 - `SourceAttachment.current?/1` compares agent identity; the configured transfer
   test currently expects retirement/rediscovery. Replace both with input continuity.
 - `SourceCoordinator` scans rooms from a node-owned subtree. Replace its ownership

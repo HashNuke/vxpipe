@@ -562,7 +562,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 
 Migration tasks (revised architecture; ordered as in the migration steps above):
 
-- [ ] Replace the global policy-revision fence in `AudioTap`, `SourceDiscovery` and
+- [x] Replace the global policy-revision fence in `AudioTap`, `SourceDiscovery` and
   `attach_diagnostics/5` with the source's STT allocation generation plus
   `:speech_to_text`/`:audio_input` intervals. Unrelated revisions preserve the tap;
   interval change or `intervals: nil` authority change closes it.
@@ -1627,3 +1627,25 @@ passing the initial assertions; the corrected checks reject that mutation in all
 four cases, and independent baseline is 4/4. Final scoped review and root static
 gates are clean. This is retained old-coordinator evidence to port at cutover,
 not completion of any new room-service task or full failure/load acceptance.
+
+## Migration step 1 — participant input intervals, 2026-11-19
+
+Diagnostic capture, source announcement/profile proof, attachment and canonical
+completion forwarding now use the participant's STT/audio-input interval pair,
+with the STT allocation generation checked separately. Unrelated room revisions
+preserve observation. Either relevant permission interval changing invalidates it;
+legacy snapshots without scoped intervals fall back to their global revision.
+The bounded internal source-ready message carries the pair, not a global revision.
+
+Two regressions failed before implementation (existing tap closure and missing
+source announcement after unrelated presence changes). The focused selection now
+passes 54/54 and configured Scribe selection 10/10. Independent Astra review is
+clean, with two extra probes for completion continuity and pre-next-frame rejection
+of stale profile/attachment proof after same-allocation revocation. Root format,
+compile warnings-as-errors, strict Credo, unused-lock and Lean checks pass.
+
+This completes only the input-fence migration task. The current coordinator still
+retires on agent changes; room ownership, segment persistence, cutover and later
+acceptance remain open. No operational STT policy, provider behavior, Telnyx code
+or deployment changed. Full umbrella testing remains deferred until implementation
+of the milestone is complete.

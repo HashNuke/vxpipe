@@ -38,9 +38,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
       {:response_landmark, :binary.copy(turn), :binary.copy(command), :binary.copy(output), kind,
        at}
 
-  def copy({:source_ready, generation, revision, track, epoch, codec, rate, channels, mode}),
+  def copy({:source_ready, generation, intervals, track, epoch, codec, rate, channels, mode}),
     do:
-      {:source_ready, generation, revision, :binary.copy(track), epoch, codec, rate, channels,
+      {:source_ready, generation, intervals, :binary.copy(track), epoch, codec, rate, channels,
        mode}
 
   def copy({:provider_profile, canonical, provider, %{acknowledged: fields, missing: missing}}) do
@@ -54,6 +54,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
   end
 
   def copy(packet), do: packet
+
+  defp source_intervals?({stt, input}), do: unsigned?(stt) and unsigned?(input)
+  defp source_intervals?(_), do: false
 
   defp valid?({:audio, %AudioFrame{codec: :linear16, channels: 1, activity_pcm: nil} = frame})
        when map_size(frame) == @frame_fields do
@@ -114,8 +117,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
       identifier?(command) and signed?(at)
   end
 
-  defp valid?({:source_ready, generation, revision, track, epoch, codec, rate, channels, mode}) do
-    is_reference(generation) and unsigned?(revision) and identifier?(track) and
+  defp valid?({:source_ready, generation, intervals, track, epoch, codec, rate, channels, mode}) do
+    is_reference(generation) and source_intervals?(intervals) and identifier?(track) and
       is_reference(epoch) and codec in [:linear16, :opus] and rate in [8_000, 16_000, 48_000] and
       channels == 1 and mode in [:benchmark_only, :operational_reuse]
   end

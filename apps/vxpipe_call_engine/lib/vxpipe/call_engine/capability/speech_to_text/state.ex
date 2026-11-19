@@ -124,7 +124,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
         AudioTap.guard_input(
           state.diagnostic_tap,
           state.session.generation,
-          state.policy && state.policy.revision,
+          diagnostic_intervals(state),
           frame
         )
 
@@ -133,7 +133,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
             AudioTap.offer(
               state.diagnostic_tap,
               state.session.generation,
-              state.policy && state.policy.revision,
+              diagnostic_intervals(state),
               frame
             )
 
@@ -195,6 +195,14 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
   end
 
   def audio_delivery_current?(%__MODULE__{}, _intervals), do: false
+
+  @doc false
+  def diagnostic_intervals(%__MODULE__{policy: nil}), do: nil
+
+  def diagnostic_intervals(%__MODULE__{policy: policy, identity: identity}) do
+    {Snapshot.interval(policy, :speech_to_text, identity.participant_id),
+     Snapshot.interval(policy, :audio_input, identity.participant_id)}
+  end
 
   defp delivery_intervals_current?(policy, source, stt, input, output) do
     stt == Snapshot.interval(policy, :speech_to_text, source) and

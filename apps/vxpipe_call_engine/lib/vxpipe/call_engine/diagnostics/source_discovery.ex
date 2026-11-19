@@ -16,7 +16,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceDiscovery do
         handoff: handoff,
         token: token,
         generation: generation,
-        revision: state.policy.revision,
+        intervals: State.diagnostic_intervals(state),
         deadline: System.monotonic_time(:millisecond) + @timeout_ms,
         timer: Process.send_after(self(), {:diagnostic_probe_expired, token}, @timeout_ms)
       }
@@ -33,7 +33,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceDiscovery do
     with true <- state.private_allocation == nil and state.policy != nil and state.session != nil,
          {:ok, evidence} <- profile_evidence(state, handoff),
          true <-
-           state.policy.revision == evidence.revision and
+           State.diagnostic_intervals(state) == evidence.intervals and
              state.session.generation == evidence.generation do
       Vxpipe.CallEngine.Speech.DiagnosticSubscription.request_profile(state.session, handoff)
     else
@@ -49,7 +49,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceDiscovery do
   defp profile_evidence(%{diagnostic_probe: nil, diagnostic_source: proof} = state, handoff)
        when not is_nil(proof) do
     if handoff.token == proof.token and CaptureHandoff.current?(handoff) and
-         validate(state, proof.generation, proof.revision, proof.source, handoff, proof.token),
+         validate(state, proof.generation, proof.intervals, proof.source, handoff, proof.token),
        do: {:ok, proof},
        else: :error
   end
@@ -61,18 +61,20 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceDiscovery do
     announce(state, frame)
   end
 
-  def validate(state, generation, revision, source, handoff, token) do
+  def validate(state, generation, intervals, source, handoff, token) do
     case state.diagnostic_source do
       %{
         generation: ^generation,
-        revision: ^revision,
+        intervals: ^intervals,
         source: ^source,
         token: ^token,
         grant: grant,
         projection: projection,
         deadline: deadline
       } ->
-        handoff.grant == grant and handoff.projection == projection and
+        state.session != nil and state.session.generation == generation and
+          state.policy != nil and State.diagnostic_intervals(state) == intervals and
+          handoff.grant == grant and handoff.projection == projection and
           System.monotonic_time(:millisecond) < deadline and
           SettingsProjection.grant(projection) == {:ok, grant}
 
@@ -85,7 +87,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceDiscovery do
 
   defp check_source(%{diagnostic_source: proof} = state, frame) do
     if state.session != nil and state.session.generation == proof.generation and
-         state.policy != nil and state.policy.revision == proof.revision and
+         state.policy != nil and State.diagnostic_intervals(state) == proof.intervals and
          proof.source == %{
            track_id: Map.get(frame, :track_id),
            source_epoch: Map.get(frame, :source_epoch)
@@ -101,7 +103,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceDiscovery do
   defp announce(%{diagnostic_probe: probe} = state, frame) do
     proof =
       if pending?(probe) and state.private_allocation == nil and state.policy != nil and
-           state.policy.revision == probe.revision and state.session != nil and
+           State.diagnostic_intervals(state) == probe.intervals and state.session != nil and
            state.session.generation == probe.generation do
         announce_source(state, probe, frame)
       else
@@ -123,14 +125,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceDiscovery do
     source = %{track_id: Map.get(frame, :track_id), source_epoch: Map.get(frame, :source_epoch)}
 
     packet =
-      {:source_ready, probe.generation, probe.revision, Map.get(frame, :track_id),
+      {:source_ready, probe.generation, probe.intervals, Map.get(frame, :track_id),
        source.source_epoch, frame.codec, frame.sample_rate, frame.channels, mode}
 
     case CaptureHandoff.offer(probe.handoff, packet) do
       :ok ->
         %{
           generation: probe.generation,
-          revision: probe.revision,
+          intervals: probe.intervals,
           source: %{source | track_id: :binary.copy(source.track_id)},
           token: probe.handoff.token,
           grant: probe.handoff.grant,

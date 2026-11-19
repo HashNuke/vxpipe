@@ -67,11 +67,11 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     :exit, _reason -> {:error, :unavailable}
   end
 
-  @doc "Attach only if the discovery's global policy revision is still installed."
-  def attach_diagnostics(capability, generation, revision, source, handoff) do
+  @doc "Attach only if the discovery's source policy intervals are still installed."
+  def attach_diagnostics(capability, generation, intervals, source, handoff) do
     GenServer.call(
       capability,
-      {:attach_diagnostics, generation, revision, source, handoff},
+      {:attach_diagnostics, generation, intervals, source, handoff},
       @call_timeout
     )
   catch
@@ -82,7 +82,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   def attach_diagnostics(
         capability,
         generation,
-        revision,
+        intervals,
         source,
         handoff,
         token,
@@ -90,7 +90,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
       ) do
     GenServer.call(
       capability,
-      {:attach_discovered_source, generation, revision, source, handoff, token},
+      {:attach_discovered_source, generation, intervals, source, handoff, token},
       timeout
     )
   catch
@@ -194,13 +194,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   def handle_call(
-        {:attach_discovered_source, generation, revision, source, %CaptureHandoff{} = handoff,
+        {:attach_discovered_source, generation, intervals, source, %CaptureHandoff{} = handoff,
          token},
         from,
         state
       ) do
-    if SourceDiscovery.validate(state, generation, revision, source, handoff, token) do
-      case handle_call({:attach_diagnostics, generation, revision, source, handoff}, from, state) do
+    if SourceDiscovery.validate(state, generation, intervals, source, handoff, token) do
+      case handle_call({:attach_diagnostics, generation, intervals, source, handoff}, from, state) do
         {:reply, :ok, next} -> {:reply, :ok, %{next | diagnostic_source: nil}}
         result -> result
       end
@@ -212,11 +212,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   def handle_call({:attach_discovered_source, _, _, _, _, _}, _from, state),
     do: {:reply, {:error, :unavailable}, state}
 
-  def handle_call({:attach_diagnostics, generation, revision, source, handoff}, from, state) do
-    if is_integer(revision) and revision >= 0 and
-         match?(%Snapshot{revision: ^revision}, state.policy),
-       do: handle_call({:attach_diagnostics, generation, source, handoff}, from, state),
-       else: {:reply, {:error, :unavailable}, state}
+  def handle_call({:attach_diagnostics, generation, intervals, source, handoff}, from, state) do
+    if state.policy != nil and intervals == State.diagnostic_intervals(state),
+      do: handle_call({:attach_diagnostics, generation, source, handoff}, from, state),
+      else: {:reply, {:error, :unavailable}, state}
   end
 
   def handle_call({:attach_diagnostics, generation, source, handoff}, _from, state) do
@@ -224,7 +223,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
          %Snapshot{} <- state.policy,
          {:ok, %{status: :ready, allocation_generation: ^generation}} <-
            State.input_binding(state),
-         {:ok, tap} <- AudioTap.new(handoff, generation, state.policy.revision, source),
+         {:ok, tap} <-
+           AudioTap.new(handoff, generation, State.diagnostic_intervals(state), source),
          :ok <- AudioTap.replace(state.diagnostic_tap, tap) do
       Vxpipe.CallEngine.Speech.Channel.observe(state.session, handoff)
 
@@ -250,7 +250,7 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
              state.identity.participant_id
            ),
          {:ok, updated} <- PolicyPreparation.install(state, snapshot) do
-      AudioTap.policy_change(state.diagnostic_tap, updated.policy.revision)
+      AudioTap.policy_change(state.diagnostic_tap, State.diagnostic_intervals(updated))
       {:reply, :ok, adopt_private_allocation(state, updated)}
     else
       {:error, reason} ->
@@ -401,14 +401,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
          %{
            diagnostic_tap: %AudioTap{
              generation: generation,
-             policy_revision: revision,
+             policy_intervals: intervals,
              handoff: handoff
-           },
-           policy: %Snapshot{revision: revision}
+           }
          } = state,
          %Signal{kind: :turn_ended, allocation_generation: generation} = signal
        ) do
-    if CaptureHandoff.current?(handoff) do
+    if intervals == State.diagnostic_intervals(state) and CaptureHandoff.current?(handoff) do
       send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal, handoff})
     else
       send(state.owner, {:vxpipe_stt_signal, self(), state.identity, signal})

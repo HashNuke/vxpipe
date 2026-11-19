@@ -1,18 +1,19 @@
 defmodule Vxpipe.CallEngine.Diagnostics.AudioTap do
-  @moduledoc "Observation of accepted PCM fenced by allocation, policy revision and exact media source."
+  @moduledoc "Observation of accepted PCM fenced by allocation, source policy intervals and exact media source."
   alias Vxpipe.CallEngine.Diagnostics.CaptureHandoff
   alias Vxpipe.CallEngine.Media.AudioFrame
-  @enforce_keys [:handoff, :generation, :policy_revision, :track_id, :source_epoch]
-  @derive {Inspect, only: [:policy_revision]}
+  @enforce_keys [:handoff, :generation, :policy_intervals, :track_id, :source_epoch]
+  @derive {Inspect, only: [:policy_intervals]}
   defstruct @enforce_keys
 
   def new(
         %CaptureHandoff{} = handoff,
         generation,
-        revision,
+        {stt, input} = intervals,
         %{track_id: track, source_epoch: epoch} = source
       )
-      when is_reference(generation) and is_integer(revision) and revision >= 0 and
+      when is_reference(generation) and is_integer(stt) and stt >= 0 and is_integer(input) and
+             input >= 0 and
              is_binary(track) and byte_size(track) in 1..256 and is_reference(epoch) and
              map_size(source) == 2 do
     if handoff.owner == self() and CaptureHandoff.current?(handoff) do
@@ -20,7 +21,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.AudioTap do
        %__MODULE__{
          handoff: handoff,
          generation: generation,
-         policy_revision: revision,
+         policy_intervals: intervals,
          track_id: :binary.copy(track),
          source_epoch: epoch
        }}
@@ -33,8 +34,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.AudioTap do
 
   def guard_input(nil, _generation, _revision, _frame), do: :ok
 
-  def guard_input(tap, generation, revision, %AudioFrame{track_id: track, source_epoch: epoch})
-      when generation == tap.generation and revision == tap.policy_revision and
+  def guard_input(tap, generation, intervals, %AudioFrame{track_id: track, source_epoch: epoch})
+      when generation == tap.generation and intervals == tap.policy_intervals and
              track == tap.track_id and epoch == tap.source_epoch,
       do: :ok
 
@@ -42,8 +43,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.AudioTap do
 
   def offer(nil, _generation, _revision, _frame), do: :ok
 
-  def offer(tap, generation, revision, %AudioFrame{track_id: track, source_epoch: epoch} = frame) do
-    if generation == tap.generation and revision == tap.policy_revision and
+  def offer(tap, generation, intervals, %AudioFrame{track_id: track, source_epoch: epoch} = frame) do
+    if generation == tap.generation and intervals == tap.policy_intervals and
          track == tap.track_id and epoch == tap.source_epoch do
       _ = CaptureHandoff.offer(tap.handoff, {:audio, frame})
       :ok
@@ -65,6 +66,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.AudioTap do
   def close(%__MODULE__{handoff: handoff}), do: CaptureHandoff.close(handoff)
 
   def policy_change(nil, _revision), do: :ok
-  def policy_change(%__MODULE__{policy_revision: revision}, revision), do: :ok
+  def policy_change(%__MODULE__{policy_intervals: intervals}, intervals), do: :ok
   def policy_change(tap, _revision), do: close(tap)
 end

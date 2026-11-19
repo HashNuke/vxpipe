@@ -94,6 +94,90 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     :ok = CaptureHandoff.release(handoff, charge, :processed)
   end
 
+  for permission <- [:record_audio, :save_transcripts] do
+    @permission permission
+    test "changing #{@permission} fences installed observation and pending discovery" do
+      {capability, generation, frame} = capability(:ok)
+      installed = handoff(capability)
+      assert :ok = attach(capability, generation, frame, installed)
+      probe = handoff(capability)
+      assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+      changed = policy(1, ["human"])
+      changed = %{changed | effective: Map.put(changed.effective, @permission, false)}
+      assert :ok = Enforcer.apply(capability, changed, 1_000)
+      refute CaptureHandoff.current?(installed)
+
+      if @permission == :save_transcripts do
+        assert_receive {:probe_initializing, _, _}
+        assert_receive {:vxpipe_stt_signal, ^capability, _, %Signal{kind: :connected}}
+      end
+
+      assert :ok = SpeechToText.push_audio(capability, frame)
+      assert_receive {:probe_input, _}
+      refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+    end
+  end
+
+  test "legacy snapshots without scoped intervals remain fenced by global revision" do
+    alias Vxpipe.CallEngine.Capability.SpeechToText.State
+    alias Vxpipe.CallEngine.Diagnostics.AudioTap
+    generation = make_ref()
+    observer = handoff(self())
+    source = %{track_id: "legacy", source_epoch: make_ref()}
+    state = struct(State, policy: policy(0, ["human"]), identity: %{participant_id: "human"})
+
+    assert {:ok, tap} =
+             AudioTap.new(observer, generation, State.diagnostic_intervals(state), source)
+
+    changed = %{state | policy: policy(1, ["human", "another"])}
+    AudioTap.policy_change(tap, State.diagnostic_intervals(changed))
+    refute CaptureHandoff.current?(observer)
+  end
+
+  test "unrelated room presence changes preserve accepted-source observation" do
+    {:ok, initial} = Snapshot.prepare(policy(0, ["human"]), nil)
+    {capability, generation, frame} = capability(:ok, initial_policy: initial)
+    handoff = handoff(capability)
+    assert :ok = attach(capability, generation, frame, handoff)
+    assert :ok = Enforcer.apply(capability, policy(1, ["human", "another"]), 1_000)
+    assert {:ok, %{allocation_generation: ^generation}} = SpeechToText.input_binding(capability)
+    assert CaptureHandoff.current?(handoff)
+    assert :ok = SpeechToText.push_audio(capability, frame)
+    assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
+    assert {:ok, {:audio, ^frame}, charge} = CaptureHandoff.message(handoff, message)
+    CaptureHandoff.release(handoff, charge, :processed)
+  end
+
+  test "discovery proof survives unrelated revisions before and after source announcement" do
+    {:ok, initial} = Snapshot.prepare(policy(0, ["human"]), nil)
+    {capability, generation, frame} = capability(:ok, initial_policy: initial)
+    probe = handoff(capability)
+    assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), probe)
+    assert :ok = Enforcer.apply(capability, policy(1, ["human", "another"]), 1_000)
+    assert :ok = SpeechToText.push_audio(capability, frame)
+    assert_receive {:vxpipe_diagnostic_capture, _, _, packet, _} = message
+    assert {:source_ready, ^generation, fence, track, epoch, _, _, _, _} = packet
+    assert {:ok, ^packet, charge} = CaptureHandoff.message(probe, message)
+    CaptureHandoff.release(probe, charge, :processed)
+    assert :ok = Enforcer.apply(capability, policy(2, ["human", "another", "third"]), 1_000)
+    output = handoff(capability)
+
+    assert :ok =
+             SpeechToText.attach_diagnostics(
+               capability,
+               generation,
+               fence,
+               %{track_id: track, source_epoch: epoch},
+               output,
+               probe.token
+             )
+
+    assert :ok = SpeechToText.push_audio(capability, %{frame | sequence_number: 2})
+    assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = observed
+    assert {:ok, {:audio, _}, charge} = CaptureHandoff.message(output, observed)
+    CaptureHandoff.release(output, charge, :processed)
+  end
+
   test "reapplying the same installed policy does not retire its tap" do
     {capability, generation, frame} = capability(:ok)
     installed = policy(1, ["human"])
@@ -242,7 +326,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     assert_receive {:probe_input, _}
     assert_receive {:vxpipe_diagnostic_capture, _, _, packet, _} = message
 
-    assert {:source_ready, ^generation, 0, track, epoch, :linear16, 16_000, 1, :benchmark_only} =
+    assert {:source_ready, ^generation, {0, 0}, track, epoch, :linear16, 16_000, 1,
+            :benchmark_only} =
              packet
 
     assert track == frame.track_id and epoch == frame.source_epoch
@@ -273,7 +358,8 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
     next = handoff(capability)
     assert :ok = SpeechToText.discover_diagnostics(capability, llm_agent(), next)
-    assert :ok = Enforcer.apply(capability, policy(1, ["human"]), 1_000)
+    changed = put_in(policy(1, ["human"]).effective.record_audio, false)
+    assert :ok = Enforcer.apply(capability, changed, 1_000)
     assert :ok = SpeechToText.push_audio(capability, frame)
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
   end
@@ -490,19 +576,20 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToTextDiagnosticsTest do
     )
   end
 
-  test "automatic attachment rejects the policy revision captured before a transition" do
+  test "automatic attachment rejects the source intervals captured before a transition" do
     {capability, generation, frame} = capability(:ok)
     source = %{track_id: frame.track_id, source_epoch: frame.source_epoch}
-    assert :ok = Enforcer.apply(capability, policy(1, ["human"]), 1_000)
+    changed = put_in(policy(1, ["human"]).effective.record_audio, false)
+    assert :ok = Enforcer.apply(capability, changed, 1_000)
     stale = handoff(capability)
 
     assert {:error, :unavailable} =
-             SpeechToText.attach_diagnostics(capability, generation, 0, source, stale)
+             SpeechToText.attach_diagnostics(capability, generation, {0, 0}, source, stale)
 
     assert :ok = SpeechToText.push_audio(capability, frame)
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
     current = handoff(capability)
-    assert :ok = SpeechToText.attach_diagnostics(capability, generation, 1, source, current)
+    assert :ok = SpeechToText.attach_diagnostics(capability, generation, {0, 1}, source, current)
     assert :ok = SpeechToText.push_audio(capability, %{frame | sequence_number: 2})
     assert_receive {:vxpipe_diagnostic_capture, _, _, {:audio, _}, _}
   end

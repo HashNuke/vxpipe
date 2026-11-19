@@ -14,7 +14,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
 
   def start(
         candidate,
-        {:source_ready, generation, revision, track, epoch, codec, rate, channels, mode},
+        {:source_ready, generation, intervals, track, epoch, codec, rate, channels, mode},
         options
       ) do
     with true <- AttachmentLease.current?(options.attachment_lease),
@@ -32,7 +32,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
         generation: generation,
         provider_generation: candidate.provider_generation,
         provider_profile: candidate.provider_profile,
-        policy_revision: revision,
+        policy_intervals: intervals,
         settings_revision: elem(grant, 0),
         source_epoch: epoch,
         run_id: id("run"),
@@ -152,7 +152,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
            SpeechToText.attach_diagnostics(
              context.capability,
              context.generation,
-             context.policy_revision,
+             context.policy_intervals,
              source,
              input,
              candidate.discovery_token,
