@@ -563,8 +563,8 @@ unconfirmed, rather than claiming that failure counters were durably delivered.
 Writers monitor collector ownership, so abrupt collector loss starts finite drain.
 
 This supplies a directly testable durable collector, not production activation.
-Acknowledged provider profiles, application wiring,
-per-turn finalization policy and configured Scribe acceptance remain required.
+Production application wiring, per-turn finalization policy and configured Scribe
+acceptance remain required.
 
 Finalization uses explicit writer acknowledgments, not a transient zero-pending
 counter snapshot. The observed-turn count includes storage-admission failures.
@@ -572,3 +572,32 @@ Unmatched-provider counts describe retained landmarks without one unambiguous
 reportable provider identity (including suppressed many-to-one associations), not
 raw wire-message traffic. Known losses prevent complete coverage even when the
 remaining stored-row count matches.
+
+
+## Acknowledged Scribe settings
+
+Continuous Scribe retains only its nine checked handshake fields, with an explicit list of
+omitted echoes. Missing fields still allow ordinary speech readiness; diagnostics
+never substitute requested defaults for provider acknowledgement. Unknown keys and
+raw configuration are discarded. The compact snapshot is cached before readiness
+even while capture is off, so prospective enablement can query the original evidence.
+
+The separate asynchronous profile request follows the existing consumer, allocation,
+channel and current capture-authority checks. It preserves the canonical discovery
+generation through a conversational wrapper and returns the actual inner provider
+generation. It does not replace observer subscriptions. Manual Scribe replies
+unsupported without changing its existing inference or input.
+
+The coordinator retains at most one source reply and one profile reply under its
+existing discovery deadline. It joins either arrival order and requires complete
+Scribe v2 VAD acknowledgement before invoking the collector factory or starting an
+observer. A source announced between the two capability requests remains eligible
+only under the original live proof, including token, owner, policy, generation,
+source, grant and deadline fences. Unknown or conflicting profile evidence is rejected before collector admission;
+stale source proofs cannot establish an active attachment. This gate does not establish live transport acceptance.
+
+Calls profiles can retain a closed typed provider_acknowledgement map, distinct
+from observer thresholds and inference provenance. Persistence round-trips these
+settings as immutable run identity. Legacy runs without acknowledgement remain
+readable and do not acquire invented provider evidence. Production collector
+construction and configured-call persistence acceptance remain required.

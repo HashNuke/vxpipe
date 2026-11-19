@@ -43,6 +43,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
       {:source_ready, generation, revision, :binary.copy(track), epoch, codec, rate, channels,
        mode}
 
+  def copy({:provider_profile, canonical, provider, %{acknowledged: fields, missing: missing}}) do
+    fields =
+      Map.new(fields, fn {key, value} ->
+        {:binary.copy(key), if(is_binary(value), do: :binary.copy(value), else: value)}
+      end)
+
+    {:provider_profile, canonical, provider,
+     %{acknowledged: fields, missing: Enum.map(missing, &:binary.copy/1)}}
+  end
+
   def copy(packet), do: packet
 
   defp valid?({:audio, %AudioFrame{codec: :linear16, channels: 1, activity_pcm: nil} = frame})
@@ -123,6 +133,20 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
     is_reference(generation) and is_reference(turn) and signed?(observed_at) and
       unsigned?(samples) and
       kind in [:provider_text_commit, :provider_end_evidence, :adapter_end_emission]
+  end
+
+  defp valid?({:provider_profile, canonical, provider, status})
+       when status in [:unsupported, :unavailable],
+       do: is_reference(canonical) and is_reference(provider)
+
+  defp valid?({:provider_profile, canonical, provider, profile}) do
+    is_reference(canonical) and is_reference(provider) and
+      Enum.any?(["scribe_v2_realtime", "scribe_v3_live"], fn model ->
+        match?(
+          {:ok, _},
+          Vxpipe.Providers.ElevenLabs.Scribe.validate_acknowledgement(profile, :vad, model)
+        )
+      end)
   end
 
   defp valid?(_packet), do: false

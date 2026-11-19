@@ -54,6 +54,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
   end
 
   @doc false
+  def request_diagnostic_profile(capability, handoff, timeout \\ @call_timeout) do
+    GenServer.call(capability, {:diagnostic_profile, handoff}, timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
+  @doc false
   def attach_diagnostics(capability, generation, source, handoff) do
     GenServer.call(capability, {:attach_diagnostics, generation, source, handoff}, @call_timeout)
   catch
@@ -175,6 +182,9 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
 
   def handle_call({:input_binding, resource}, _from, state),
     do: {:reply, PolicyPreparation.input_binding(state, resource), state}
+
+  def handle_call({:diagnostic_profile, handoff}, _from, state),
+    do: {:reply, SourceDiscovery.request_profile(state, handoff), state}
 
   def handle_call({:discover_diagnostics, handoff}, _from, state) do
     case SourceDiscovery.arm(state, handoff) do

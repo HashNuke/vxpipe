@@ -7,6 +7,14 @@ defmodule Vxpipe.Persistence.LatencyRecordCodec do
           Map.keys(TurnDiagnostic.__struct__()) ++
           [
             :provider,
+            :provider_acknowledgement,
+            :model_id,
+            :audio_format,
+            :vad_silence_threshold_secs,
+            :vad_threshold,
+            :min_speech_duration_ms,
+            :min_silence_duration_ms,
+            :keepalive_interval_ms,
             :model,
             :commit_strategy,
             :inference_source,

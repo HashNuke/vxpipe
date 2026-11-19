@@ -82,6 +82,44 @@ defmodule Vxpipe.Calls.LatencyRunTest do
              LatencyRun.new(Map.merge(attrs, %{state: :closed, closed_at: local}))
   end
 
+  test "acknowledged provider settings remain distinct from observer settings" do
+    attributes = attributes()
+
+    acknowledgement = %{
+      model_id: "scribe_v2_realtime",
+      sample_rate: 16_000,
+      audio_format: "pcm_16000",
+      commit_strategy: :vad,
+      vad_silence_threshold_secs: 1.5,
+      vad_threshold: 0.4,
+      min_speech_duration_ms: 100,
+      min_silence_duration_ms: 100,
+      keepalive_interval_ms: 500
+    }
+
+    profile = Map.put(attributes.profile, :provider_acknowledgement, acknowledgement)
+    assert {:ok, run} = LatencyRun.new(%{attributes | profile: profile})
+    assert run.profile.provider_acknowledgement == acknowledgement
+    assert run.profile.onset_threshold == 0.5
+
+    for invalid <- [
+          Map.put(acknowledgement, :api_key, "not retained"),
+          Map.delete(acknowledgement, :vad_threshold),
+          %{acknowledgement | model_id: "other"},
+          %{acknowledgement | sample_rate: 16_000.0},
+          %{acknowledgement | commit_strategy: :manual},
+          %{acknowledgement | vad_threshold: "0.4"},
+          %{acknowledgement | vad_silence_threshold_secs: -1},
+          %{acknowledgement | keepalive_interval_ms: 0}
+        ] do
+      assert {:error, :invalid_latency_run} =
+               LatencyRun.new(%{
+                 attributes
+                 | profile: %{profile | provider_acknowledgement: invalid}
+               })
+    end
+  end
+
   defp attributes do
     %{
       id: "run-1",

@@ -58,12 +58,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
     case CaptureHandoff.message(pending.handoff, message) do
       {:ok, packet, charge} ->
         CaptureHandoff.release(pending.handoff, charge, :processed)
-        state = clear_pending(state)
 
         if System.monotonic_time(:millisecond) < pending.deadline do
-          finish_discovery(state, pending.candidate, packet)
+          accept_discovery(state, packet)
         else
-          {:noreply, %{state | last_reason: :source_timeout}}
+          {:noreply, %{clear_pending(state) | last_reason: :source_timeout}}
         end
 
       {:error, :revoked} ->
@@ -105,6 +104,54 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
       |> Map.put(:message, :redacted)
       |> Map.put(:reason, :redacted)
       |> Map.put(:log, [])
+
+  defp accept_discovery(state, {:provider_profile, canonical, provider, profile} = packet) do
+    supported? =
+      match?(%{acknowledged: %{"model_id" => "scribe_v2_realtime"}, missing: []}, profile) and
+        match?(
+          {:ok, _},
+          Vxpipe.Providers.ElevenLabs.Scribe.validate_acknowledgement(
+            profile,
+            :vad,
+            "scribe_v2_realtime"
+          )
+        )
+
+    if supported? and state.pending.profile in [nil, packet] do
+      pending = %{state.pending | profile: {:provider_profile, canonical, provider, profile}}
+      finish_ready(%{state | pending: pending})
+    else
+      {:noreply, %{clear_pending(state) | last_reason: :profile_unavailable}}
+    end
+  end
+
+  defp accept_discovery(state, {:source_ready, _, _, _, _, _, _, _, _} = packet) do
+    if state.pending.source in [nil, packet],
+      do: finish_ready(%{state | pending: %{state.pending | source: packet}}),
+      else: {:noreply, %{clear_pending(state) | last_reason: :stale_source}}
+  end
+
+  defp accept_discovery(state, _packet),
+    do: {:noreply, %{clear_pending(state) | last_reason: :invalid_source}}
+
+  defp finish_ready(%{pending: %{source: nil}} = state), do: {:noreply, state}
+  defp finish_ready(%{pending: %{profile: nil}} = state), do: {:noreply, state}
+
+  defp finish_ready(state) do
+    pending = state.pending
+    {:source_ready, generation, _, _, _, _, _, _, _} = pending.source
+    {:provider_profile, canonical, provider, profile} = pending.profile
+    state = clear_pending(state)
+
+    if generation == canonical do
+      candidate =
+        Map.merge(pending.candidate, %{provider_generation: provider, provider_profile: profile})
+
+      finish_discovery(state, candidate, pending.source)
+    else
+      {:noreply, %{state | last_reason: :stale_source}}
+    end
+  end
 
   defp finish_discovery(state, candidate, packet) do
     case SourceAttachment.start(candidate, packet, state) do
@@ -231,11 +278,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
   end
 
   defp discover(state, candidate) do
+    deadline = System.monotonic_time(:millisecond) + 500
+
     with {:ok, handoff} <-
            CaptureHandoff.new(self(),
              owner: candidate.source.capability,
              projection: state.projection,
-             maximum_count: 1,
+             maximum_count: 2,
              maximum_bytes: 4_096
            ) do
       if handoff.grant == candidate.grant and
@@ -244,13 +293,17 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinator do
              candidate.agent,
              handoff,
              250
-           ) == :ok do
+           ) == :ok and
+           SpeechToText.request_diagnostic_profile(candidate.source.capability, handoff, 250) ==
+             :ok do
         %{
           state
           | pending: %{
               handoff: handoff,
               candidate: Map.put(candidate, :discovery_token, handoff.token),
-              deadline: System.monotonic_time(:millisecond) + 500
+              deadline: deadline,
+              source: nil,
+              profile: nil
             },
             last_reason: :discovering
         }

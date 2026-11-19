@@ -23,7 +23,19 @@ defmodule Vxpipe.Calls.LatencyRun do
     :onset_threshold,
     :offset_threshold,
     :onset_frames,
-    :offset_frames
+    :offset_frames,
+    :provider_acknowledgement
+  ]
+  @acknowledgement_fields [
+    :model_id,
+    :sample_rate,
+    :audio_format,
+    :commit_strategy,
+    :vad_silence_threshold_secs,
+    :vad_threshold,
+    :min_speech_duration_ms,
+    :min_silence_duration_ms,
+    :keepalive_interval_ms
   ]
   @count_fields [:observed_turns, :dropped_audio_frames, :unmatched_provider_events]
   @reasons [
@@ -122,10 +134,27 @@ defmodule Vxpipe.Calls.LatencyRun do
       profile[:inference_source] in [:operational_reuse, :benchmark_only] and
       positive?(profile[:algorithm_version]) and profile[:sample_rate] == 16_000 and
       threshold?(profile[:onset_threshold]) and threshold?(profile[:offset_threshold]) and
-      frames?(profile[:onset_frames]) and frames?(profile[:offset_frames])
+      frames?(profile[:onset_frames]) and frames?(profile[:offset_frames]) and
+      acknowledgement?(profile[:provider_acknowledgement], profile)
   end
 
   defp profile?(_profile), do: false
+
+  defp acknowledgement?(nil, _profile), do: true
+
+  defp acknowledgement?(ack, profile)
+       when is_map(ack) and not is_struct(ack) and map_size(ack) == 9 do
+    Map.keys(ack) -- @acknowledgement_fields == [] and
+      profile.provider == "elevenlabs" and ack[:model_id] == profile.model and
+      ack[:commit_strategy] == :vad and profile.commit_strategy == :vad and
+      ack[:sample_rate] === 16_000 and ack[:audio_format] == "pcm_16000" and
+      threshold?(ack[:vad_threshold]) and seconds?(ack[:vad_silence_threshold_secs]) and
+      ack[:min_speech_duration_ms] in 0..60_000 and ack[:min_silence_duration_ms] in 0..60_000 and
+      ack[:keepalive_interval_ms] in 1..60_000
+  end
+
+  defp acknowledgement?(_ack, _profile), do: false
+  defp seconds?(value), do: is_number(value) and value >= 0 and value <= 60
 
   defp counts?(counts) when is_map(counts) and map_size(counts) == 3 do
     Enum.all?(@count_fields, fn key ->

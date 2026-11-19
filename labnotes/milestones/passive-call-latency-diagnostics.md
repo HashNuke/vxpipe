@@ -948,3 +948,28 @@ review is clean with22 review cases, including seven additional probes. The froz
 passed the full umbrella suite; a full root run for this new checkpoint remains
 required. Acknowledged provider profiles, application wiring and configured-call
 acceptance remain open, so combined C tasks stay unchecked.
+
+Frozen sample-mapping umbrella verification completed at3bb91f18 (docs-only
+8ec197f3 followed during the run): exit0, all applications pass. Engine2731/0,
+Calls434/0, Gateway891/0, Persistence579/0, Console591/0; other applications
+106/222/35/567/20. No runtime/test/build files changed during the run. This closes
+that checkpoint's root-suite gate, not the remaining milestone acceptance gates.
+
+
+## Checkpoint C acknowledged Scribe profile — 2026-11-19
+
+The socket preserves a bounded allowlist of acknowledged settings without inventing
+omitted echoes or changing speech readiness. Authorized asynchronous direct/wrapped
+queries retain canonical and provider generation identity and preserve existing
+observation. The coordinator pairs this profile with its accepted source proof
+before collector creation, rejecting unknown/unsupported/conflicting evidence.
+Manual Scribe returns unsupported promptly. Calls/Persistence can store the closed
+provider acknowledgement separately from observer configuration as immutable run
+identity; legacy profiles remain readable.
+
+Retained red/green review regressions cover audio arriving between discovery and
+profile request, missing manual replies, and an incorrectly accepted floating
+sample rate. Engine752/0, Calls39/0 and Persistence17/0 pass; root static gates and
+Lean pass. Both Engine and Calls/Persistence Astra final reviews are clean
+after the reproduced fixes. Production application/collector wiring, configured-call acceptance and
+manual commit timing remain open, so the combined C checklist stays unchecked.

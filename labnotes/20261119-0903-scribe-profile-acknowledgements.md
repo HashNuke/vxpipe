@@ -42,3 +42,65 @@ profile plus observer configuration into Calls-owned run construction and exerci
 real configured-call persistence. A missing config object remains a protocol error;
 only omitted fields within an existing config retain speech compatibility. The root suite for
 source-sample mapping must finish before these runtime/test edits begin.
+
+While the umbrella suite remained source-frozen, isolated temporary probes used
+already-built modules in a separate Elixir VM (no Mix compilation, repository edits
+or build writes). The initial API probe failed4/4 for discarded acknowledgement;
+adding a socket-forwarding probe then failed1/5 for the missing profile message;
+a cache probe failed before its adapter handler was added. Candidate files remain
+under /tmp, not installed in the repository:
+- /tmp/vxpipe_scribe_profile_candidate.ex
+- /tmp/vxpipe_scribe_socket_profile_candidate.ex
+- /tmp/vxpipe_scribe_continuous_profile_candidate.ex
+- /tmp/vxpipe_scribe_profile_red_test.exs
+
+Candidate probes7/0 and existing Scribe/protocol socket tests12/0 pass. The proposed
+socket sends one separate bounded profile message before its unchanged ready event;
+manual adapters ignore this unrelated optional message. Continuous Scribe caches
+only validated canonical values before readiness, independent of capture state,
+and ignores malformed/stale/repeated profile messages. These are prototype checks,
+not configured runtime acceptance. Transfer the tests and repeat repository red
+before installing the candidate once the frozen root run finishes. Authorization,
+wrapper forwarding, coordinator pairing, Calls schema and actual session acceptance
+are not yet implemented. Logs: /tmp/vxpipe-scribe-profile-cache-green.log and
+/tmp/vxpipe-scribe-profile-compatibility.log; red logs use the corresponding
+profile-red, profile-socket-red, profile-validation-red and profile-cache-red names.
+
+The frozen mapping umbrella suite completed exit0 before transferring any runtime
+or test changes. All applications pass, including Engine2731, Calls434, Gateway891,
+Persistence579 and Console591. Repository acknowledgement/session tests are now
+being added before installing the candidate implementation.
+
+Implementation now includes the compact handshake cache, separate authorized query
+through direct/wrapped sessions, source/profile join before collector admission,
+and typed immutable Calls/Persistence acknowledgement fields. Source-only discovery
+keeps its original API; the coordinator requests profile metadata separately while
+retaining one bounded pending discovery. The query is owned by the existing
+DiagnosticSubscription module; a convenience Channel delegate was removed to keep
+Channel under its enforced size limit.
+
+Repository red8/8 (missing API/message) progressed to green. Real Scribe coordinator
+fixtures failed14/2 for missing context and incorrectly admitting empty echoes.
+Review reproduced audio arriving between the discovery and profile requests; the
+retained regression failed15/1. The matching announced-proof fallback now requires
+original token/owner, current handoff/grant, source proof, policy/generation and
+deadline; replacement or consumed proofs cannot recover an old query.
+
+Manual direct/wrapped probes failed6/2 for absent unsupported replies, then passed
+with explicit replies while ordinary manual inference/input continued. Existing
+capture subscription preservation is retained. A new fixture's one-second real
+poll boundary was replaced with the existing injected clock and explicit poll/
+reader/projection barriers; no production timeout was relaxed.
+
+Calls schema red7/1 and real storage red17/1 (decoder missing the new keys) became
+green. Review then reproduced floating sample_rate acceptance; a retained red7/1
+regression now passes with strict integer equality. New provider acknowledgement
+fields remain optional for legacy records, closed to arbitrary metadata and
+immutable across revisions.
+
+Current evidence: Engine affected matrix752/0 (9 excluded), Calls schema/diagnostics
+39/0, real persistence17/0, root static gates and Lean model/replay pass. Engine
+Astra final review is clean with coordinator25/0 and session/authorization9/0.
+Calls/Persistence Astra final re-review is clean with28/0 after the integer-rate fix. The full umbrella
+pass recorded above predates this checkpoint and is not claimed as its acceptance.
+Production composition, configured-call acceptance and remaining C tasks stay open.

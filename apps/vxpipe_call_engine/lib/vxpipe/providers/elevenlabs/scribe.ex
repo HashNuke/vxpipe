@@ -94,12 +94,19 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
 
   def decode(payload, commit_strategy \\ :manual, model \\ @model)
 
-  def decode(payload, strategy, model)
+  def decode(payload, strategy, model) do
+    case decode_with_profile(payload, strategy, model) do
+      {:ok, {:ready, session_id, _profile}} -> {:ok, {:ready, session_id}}
+      event -> event
+    end
+  end
+
+  def decode_with_profile(payload, strategy, model)
       when strategy in [:manual, :vad] and model in [@model, @live_model] do
     case STTProtocol.decode(payload) do
       {:ok, {:ready, session_id, config}} ->
         if matching_configuration?(config, strategy, model),
-          do: {:ok, {:ready, session_id}},
+          do: {:ok, {:ready, session_id, acknowledged_configuration(config, strategy, model)}},
           else: {:error, :invalid_message}
 
       event ->
@@ -107,23 +114,42 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
     end
   end
 
-  def decode(_payload, _strategy, _model), do: {:error, :invalid_message}
+  def decode_with_profile(_payload, _strategy, _model), do: {:error, :invalid_message}
+
+  def validate_acknowledgement(
+        %{acknowledged: fields, missing: missing} = profile,
+        strategy,
+        model
+      )
+      when map_size(profile) == 2 and is_map(fields) and map_size(fields) <= 9 and
+             not is_struct(fields) and
+             is_list(missing) and strategy in [:manual, :vad] and model in [@model, @live_model] do
+    keys = Enum.map(expected_configuration(strategy, model), &elem(&1, 0))
+
+    if Map.keys(fields) -- keys == [] and missing == keys -- Map.keys(fields) and
+         matching_configuration?(fields, strategy, model),
+       do: {:ok, acknowledged_configuration(fields, strategy, model)},
+       else: :error
+  end
+
+  def validate_acknowledgement(_profile, _strategy, _model), do: :error
 
   defp unique_options?(options),
     do: length(options) == length(Enum.uniq(Keyword.keys(options)))
 
-  defp matching_configuration?(config, strategy, model) do
-    expected =
-      [
-        {"model_id", model},
-        {"sample_rate", 16_000},
-        {"audio_format", "pcm_16000"},
-        {"commit_strategy", wire_strategy(strategy)}
-      ] ++
-        Enum.map(vad_options(strategy), fn {field, value} -> {Atom.to_string(field), value} end)
+  defp expected_configuration(strategy, model) do
+    [
+      {"model_id", model},
+      {"sample_rate", 16_000},
+      {"audio_format", "pcm_16000"},
+      {"commit_strategy", wire_strategy(strategy)}
+    ] ++
+      Enum.map(vad_options(strategy), fn {field, value} -> {Atom.to_string(field), value} end)
+  end
 
+  defp matching_configuration?(config, strategy, model) do
     Enum.all?(
-      expected,
+      expected_configuration(strategy, model),
       fn {field, expected} ->
         case Map.fetch(config, field) do
           {:ok, ^expected} -> true
@@ -132,6 +158,15 @@ defmodule Vxpipe.Providers.ElevenLabs.Scribe do
         end
       end
     )
+  end
+
+  defp acknowledged_configuration(config, strategy, model) do
+    {present, missing} =
+      Enum.split_with(expected_configuration(strategy, model), fn {field, _value} ->
+        Map.has_key?(config, field)
+      end)
+
+    %{acknowledged: Map.new(present), missing: Enum.map(missing, &elem(&1, 0))}
   end
 
   defp wire_strategy(:manual), do: "manual"

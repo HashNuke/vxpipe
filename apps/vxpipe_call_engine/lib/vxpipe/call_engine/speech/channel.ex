@@ -596,6 +596,9 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   end
 
   @impl true
+  def handle_info({:diagnostic_profile_request, _, _, _, _} = request, state),
+    do: {:noreply, Vxpipe.CallEngine.Speech.DiagnosticSubscription.forward(request, state)}
+
   def handle_info({:diagnostic_observer_request, _, _, _} = request, state),
     do: {:noreply, Vxpipe.CallEngine.Speech.DiagnosticSubscription.forward(request, state)}
 

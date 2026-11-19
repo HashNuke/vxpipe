@@ -56,6 +56,33 @@ defmodule Vxpipe.Persistence.LatencyStoreTest do
              LatencyStore.list_turns(Repo, run.tenant_key, run.call_id, run.id, 50, nil)
   end
 
+  test "provider acknowledgements survive storage and cannot change with a later revision", %{
+    call: call
+  } do
+    run = run(call)
+
+    acknowledgement = %{
+      model_id: "scribe_v2_realtime",
+      sample_rate: 16_000,
+      audio_format: "pcm_16000",
+      commit_strategy: :vad,
+      vad_silence_threshold_secs: 1.5,
+      vad_threshold: 0.4,
+      min_speech_duration_ms: 100,
+      min_silence_duration_ms: 100,
+      keepalive_interval_ms: 500
+    }
+
+    profile = Map.put(run.profile, :provider_acknowledgement, acknowledgement)
+    assert {:ok, run} = LatencyRun.new(Map.from_struct(%{run | profile: profile}))
+    assert {:ok, ^run} = LatencyStore.put_run(Repo, run)
+    assert {:ok, ^run} = LatencyStore.fetch_run(Repo, run.tenant_key, run.call_id, run.id)
+    changed = put_in(profile, [:provider_acknowledgement, :vad_threshold], 0.45)
+
+    assert {:error, :run_identity_conflict} =
+             LatencyStore.put_run(Repo, %{run | revision: 2, profile: changed})
+  end
+
   test "same revision is idempotent but conflicting and stale updates are rejected", %{call: call} do
     run = run(call)
     assert {:ok, ^run} = LatencyStore.put_run(Repo, run)

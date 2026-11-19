@@ -2,6 +2,8 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   @moduledoc false
   use GenServer
   @behaviour Vxpipe.CallEngine.Speech.STTProvider
+  alias Vxpipe.CallEngine.Diagnostics.CaptureHandoff
+
   alias Vxpipe.CallEngine.Speech.{
     ActivityRuntime,
     ActivitySupervisor,
@@ -249,6 +251,21 @@ defmodule Vxpipe.Providers.ElevenLabs.STTSession do
   end
 
   @impl true
+  def handle_info(
+        {:diagnostic_profile, generation, canonical, %CaptureHandoff{} = handoff, channel},
+        state
+      )
+      when generation == state.allocation.generation and channel == state.channel do
+    if state.ready? and CaptureHandoff.current?(handoff),
+      do:
+        CaptureHandoff.offer(
+          handoff,
+          {:provider_profile, canonical, generation, :unsupported}
+        )
+
+    {:noreply, state}
+  end
+
   def handle_info({ref, :ok}, %{model_task: %Task{ref: ref}} = state) do
     Process.demonitor(ref, [:flush])
     activate(%{state | model_task: nil, model_ready?: true})

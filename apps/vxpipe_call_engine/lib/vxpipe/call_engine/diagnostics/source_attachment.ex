@@ -27,6 +27,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
         capability: candidate.source.capability,
         coordinator: self(),
         generation: generation,
+        provider_generation: candidate.provider_generation,
+        provider_profile: candidate.provider_profile,
         policy_revision: revision,
         settings_revision: elem(grant, 0),
         source_epoch: epoch,

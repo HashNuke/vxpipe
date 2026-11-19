@@ -183,6 +183,23 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   end
 
   @impl true
+  def handle_info(
+        {:diagnostic_profile, generation, canonical, %CaptureHandoff{} = handoff, channel},
+        state
+      )
+      when generation == state.allocation.generation do
+    if channel == GenServer.whereis(state.channel) and state.inner != nil and
+         CaptureHandoff.current?(handoff),
+       do:
+         Vxpipe.CallEngine.Speech.DiagnosticSubscription.request_profile(
+           state.inner,
+           handoff,
+           canonical
+         )
+
+    {:noreply, state}
+  end
+
   def handle_info({:diagnostic_observer, generation, %CaptureHandoff{} = handoff, channel}, state)
       when generation == state.allocation.generation do
     with true <- channel == GenServer.whereis(state.channel),

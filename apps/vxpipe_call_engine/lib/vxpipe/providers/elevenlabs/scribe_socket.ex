@@ -33,7 +33,11 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
   def handle_frame({:text, payload}, state) do
     receipt = ProviderTiming.stamp(Map.get(state, :diagnostic_handoff))
 
-    case Scribe.decode(payload, state.commit_strategy, state.model) do
+    case Scribe.decode_with_profile(payload, state.commit_strategy, state.model) do
+      {:ok, {:ready, session_id, profile}} ->
+        send(state.owner, {:vxpipe_scribe_profile, self(), profile})
+        notify(state, {:event, {:ready, session_id}})
+
       {:ok, {kind, _text} = event} when kind in [:partial, :segment] and receipt != nil ->
         notify(state, {:event, event, receipt})
 

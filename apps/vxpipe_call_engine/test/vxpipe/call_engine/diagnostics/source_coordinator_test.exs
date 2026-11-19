@@ -10,7 +10,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
   }
 
   alias Vxpipe.CallEngine.Capability.SpeechToText
-  alias Vxpipe.CallEngine.{DiagnosticRoomProbe, ResolvedCallPlan, SpeechSessionProbe}
+  alias Vxpipe.CallEngine.{DiagnosticRoomProbe, ResolvedCallPlan}
+  alias Vxpipe.CallEngine.TestElevenLabsScribeTransport, as: Wire
+  alias Vxpipe.Providers.ElevenLabs.{Scribe, STTSession}
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, Participant}
   alias Vxpipe.CallEngine.RoomAuthority.{State, ParticipantTransfer.Runtime}
@@ -64,6 +66,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
       }
     }
 
+    {:ok, config} = Scribe.new(api_key: "synthetic", commit_strategy: :vad)
+
     capability =
       start_supervised!(
         {SpeechToText,
@@ -74,12 +78,22 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
          participant_id: "human",
          connection_id: "connection",
          speech_scope: Vxpipe.CallEngine.Speech.CapabilityTree.scope(tree),
-         provider: {SpeechSessionProbe, [sample_rate: 16_000]},
-         provider_private: [observer: self(), input_result: :ok],
+         provider: {STTSession, [commit_strategy: :vad]},
+         provider_private: [config: config, wire_module: Wire, wire_options: [observer: self()]],
          initial_policy: policy}
       )
 
-    assert_receive {:probe_initializing, _, _}
+    assert_receive {:scribe_started, wire}
+
+    Wire.deliver_frame(
+      wire,
+      JSON.encode!(%{
+        "message_type" => "session_started",
+        "session_id" => "synthetic",
+        "config" => Map.get(context, :echoes, echoed_settings())
+      })
+    )
+
     assert_receive {:vxpipe_stt_signal, ^capability, _, _}
     assert :ok = Enforcer.apply(capability, policy, 1_000)
 
@@ -133,6 +147,30 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     %{settings: settings, capability: capability, room: room, pool: pool, frame: frame}
   end
 
+  test "profile request survives source announcement between coordinator requests", ctx do
+    enable(ctx.settings, true, 2)
+    {:ok, page} = Vxpipe.CallEngine.RoomAuthority.DiagnosticSources.query(ctx.room)
+
+    {:ok, handoff} =
+      CaptureHandoff.new(self(),
+        owner: ctx.capability,
+        projection: __MODULE__.Projection,
+        maximum_count: 2,
+        maximum_bytes: 4_096
+      )
+
+    assert :ok = SpeechToText.discover_diagnostics(ctx.capability, page.agent, handoff, 250)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:source_ready, _, _, _, _, _, _, _, _}, _} =
+                     source
+
+    assert {:ok, _, charge} = CaptureHandoff.message(handoff, source)
+    CaptureHandoff.release(handoff, charge, :processed)
+    assert :ok = SpeechToText.request_diagnostic_profile(ctx.capability, handoff, 250)
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:provider_profile, _, _, _}, _}
+  end
+
   test "enabled scanning discovers and attaches once; disable leaves provider input unchanged",
        ctx do
     assert %{active_sources: 0, pending?: false} = SourceCoordinator.scan(__MODULE__.Coordinator)
@@ -143,6 +181,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert_receive {:collector_started, context}, 1_000
     assert context.identity.call_id == "call"
     assert context.mode == :benchmark_only
+    assert context.provider_profile.acknowledged == echoed_settings()
+    assert context.provider_profile.missing == []
 
     assert %{active_sources: 1, pending?: false} =
              SourceCoordinator.status(__MODULE__.Coordinator)
@@ -157,7 +197,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
     refute CaptureHandoff.current?(input)
     assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
-    assert_receive {:probe_input, _}
+    assert_receive {:scribe_audio, _, _}
   end
 
   test "source retirement permits a fresh attachment with distinct run identity", ctx do
@@ -196,7 +236,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
     _ = Supervisor.which_children(ctx.pool)
     refute CaptureHandoff.current?(input)
     assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
-    assert_receive {:probe_input, _}
+    assert_receive {:scribe_audio, _, _}
     refute_received {:vxpipe_stt_signal, _, _, %{kind: :failed}}
   end
 
@@ -433,6 +473,37 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceCoordinatorTest do
 
     _ = SourceCoordinator.scan(__MODULE__.Coordinator)
     assert CaptureHandoff.current?(input)
+  end
+
+  @tag echoes: %{}
+  test "unacknowledged settings cannot create a collector or observer", ctx do
+    enable(ctx.settings, true, 2)
+    assert %{pending?: true} = SourceCoordinator.scan(__MODULE__.Coordinator)
+    assert :ok = SpeechToText.push_audio(ctx.capability, ctx.frame)
+    session = :sys.get_state(ctx.capability).session
+    _ = :sys.get_state(Vxpipe.CallEngine.Speech.Channel.address(session))
+    _ = :sys.get_state(Vxpipe.CallEngine.Speech.Session.provider(session))
+
+    assert %{active_sources: 0, pending?: false, last_reason: :profile_unavailable} =
+             SourceCoordinator.status(__MODULE__.Coordinator)
+
+    refute_received {:collector_started, _}
+    assert :ok = SpeechToText.push_audio(ctx.capability, %{ctx.frame | sequence_number: 2})
+    assert_receive {:scribe_audio, _, _}
+  end
+
+  defp echoed_settings do
+    %{
+      "model_id" => "scribe_v2_realtime",
+      "sample_rate" => 16_000,
+      "audio_format" => "pcm_16000",
+      "commit_strategy" => "vad",
+      "vad_silence_threshold_secs" => 1.5,
+      "vad_threshold" => 0.4,
+      "min_speech_duration_ms" => 100,
+      "min_silence_duration_ms" => 100,
+      "keepalive_interval_ms" => 500
+    }
   end
 
   defp enable(settings, enabled, revision) do

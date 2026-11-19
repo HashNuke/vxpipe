@@ -29,6 +29,33 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceDiscovery do
 
   def arm(_state, _handoff), do: {:error, :unavailable}
 
+  def request_profile(state, %CaptureHandoff{owner: owner} = handoff) when owner == self() do
+    with true <- state.private_allocation == nil and state.policy != nil and state.session != nil,
+         {:ok, evidence} <- profile_evidence(state, handoff),
+         true <-
+           state.policy.revision == evidence.revision and
+             state.session.generation == evidence.generation do
+      Vxpipe.CallEngine.Speech.DiagnosticSubscription.request_profile(state.session, handoff)
+    else
+      _ -> {:error, :unavailable}
+    end
+  end
+
+  def request_profile(_state, _handoff), do: {:error, :unavailable}
+
+  defp profile_evidence(%{diagnostic_probe: %{handoff: handoff} = probe}, handoff),
+    do: if(pending?(probe), do: {:ok, probe}, else: :error)
+
+  defp profile_evidence(%{diagnostic_probe: nil, diagnostic_source: proof} = state, handoff)
+       when not is_nil(proof) do
+    if handoff.token == proof.token and CaptureHandoff.current?(handoff) and
+         validate(state, proof.generation, proof.revision, proof.source, handoff, proof.token),
+       do: {:ok, proof},
+       else: :error
+  end
+
+  defp profile_evidence(_state, _handoff), do: :error
+
   def accept(state, frame) do
     state = check_source(state, frame)
     announce(state, frame)

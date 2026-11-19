@@ -93,6 +93,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
          allocation: Keyword.fetch!(options, :allocation),
          diagnostic_handoff: Keyword.get(private, :diagnostic_handoff),
          diagnostic_samples: nil,
+         acknowledged_profile: nil,
          channel: channel,
          config: config,
          wire_module: Keyword.get(private, :wire_module, ScribeSocket),
@@ -154,6 +155,38 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     do: {:reply, {:error, :session_failed}, state}
 
   @impl true
+  def handle_info(
+        {:vxpipe_scribe_profile, wire, profile},
+        %{wire: wire, ready?: false, acknowledged_profile: nil} = state
+      ) do
+    case Scribe.validate_acknowledgement(
+           profile,
+           state.config.commit_strategy,
+           state.config.model
+         ) do
+      {:ok, acknowledged} -> {:noreply, %{state | acknowledged_profile: acknowledged}}
+      :error -> {:noreply, state}
+    end
+  end
+
+  def handle_info({:vxpipe_scribe_profile, _wire, _profile}, state), do: {:noreply, state}
+
+  def handle_info(
+        {:diagnostic_profile, generation, canonical, %CaptureHandoff{} = handoff, channel},
+        state
+      )
+      when generation == state.allocation.generation do
+    if channel == GenServer.whereis(state.channel) and state.ready? and
+         CaptureHandoff.current?(handoff),
+       do:
+         CaptureHandoff.offer(
+           handoff,
+           {:provider_profile, canonical, generation, state.acknowledged_profile || :unavailable}
+         )
+
+    {:noreply, state}
+  end
+
   def handle_info({:diagnostic_observer, generation, %CaptureHandoff{} = handoff, channel}, state)
       when generation == state.allocation.generation do
     with true <- channel == GenServer.whereis(state.channel),
