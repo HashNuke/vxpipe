@@ -1,3 +1,5 @@
+import type { CallConsoleController } from "@vxpipe/core";
+import { latencyResponseFixture } from "./test/latencyResponseFixture";
 import { modelCatalogFixture } from "./admin/modelCatalogFixtures";
 import {
   act,
@@ -17,13 +19,16 @@ vi.mock("@vxpipe/react", () => ({
   CallConsole: ({
     header,
     headerContext,
+    controller,
   }: {
+    controller?: CallConsoleController;
     header?: ReactNode;
     headerContext?: ReactNode;
   }) => (
     <div data-testid="call-console">
       {header}
       {headerContext}
+      {controller?.latency && <button onClick={() => void controller.latency!.report(null, new AbortController().signal).catch(() => {})}>Load latency report</button>}
     </div>
   ),
 }));
@@ -1295,3 +1300,22 @@ function dashboard(key: string) {
 function rolePage(roles: unknown[]) {
   return { roles, pagination: { page: 1, page_size: 25, total: roles.length, total_pages: roles.length ? 1 : 0 } };
 }
+
+
+test("call details supplies a lazy scoped diagnostics loader without changing conversation loading", async () => {
+  window.history.replaceState({}, "", "/admin/tenants/AAAAAAAAAAAAAAAA/calls/call-public-id");
+  const fetchImpl = vi.fn((input: RequestInfo | URL) => {
+    if (String(input) === "/admin/api/session") return response(operationalSession);
+    if (String(input).endsWith("/latency")) return response(latencyResponseFixture());
+    return response(callDetailsResponse());
+  });
+  render(<App csrfToken="csrf" fetchImpl={fetchImpl} />);
+  expect(await screen.findByRole("heading", { name: "Call details" })).toBeVisible();
+  expect(fetchImpl.mock.calls.some(([url]) => String(url).includes("/latency"))).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Load latency report" }));
+  await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(
+    "/api/tenants/AAAAAAAAAAAAAAAA/calls/call-public-id/latency",
+    expect.objectContaining({ credentials: "same-origin", cache: "no-store", signal: expect.any(AbortSignal) }),
+  ));
+  expect(screen.getByRole("heading", { name: "Call details" })).toBeVisible();
+});

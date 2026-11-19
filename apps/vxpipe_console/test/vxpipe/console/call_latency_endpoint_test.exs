@@ -79,6 +79,7 @@ defmodule Vxpipe.Console.CallLatencyEndpointTest do
     response = login() |> recycle() |> get(report_path() <> "?limit=1&cursor=previous")
     body = json_response(response, 200)
     assert body["schema_version"] == 1
+    assert body["call_id"] == "call-1"
 
     assert [
              %{
@@ -100,6 +101,7 @@ defmodule Vxpipe.Console.CallLatencyEndpointTest do
     response = login() |> recycle() |> get(turns_path())
     body = json_response(response, 200)
     assert body["schema_version"] == 1
+    assert body["call_id"] == "call-1"
     assert body["run_id"] == "run-1"
 
     assert [

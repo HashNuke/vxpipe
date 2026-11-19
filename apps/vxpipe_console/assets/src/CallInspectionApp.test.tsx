@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { latencyResponseFixture } from "./test/latencyResponseFixture";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import type {
   CallConsoleController,
@@ -14,6 +15,7 @@ vi.mock("@vxpipe/react", () => ({
       <main>
         <p>{details.call.state === "ended" ? "Call ended" : "In progress"}</p>
         <p>{message?.value.text}</p>
+        {controller.latency && <button onClick={() => void controller.latency!.report(null, new AbortController().signal).catch(() => {})}>Load latency report</button>}
       </main>
     );
   },
@@ -110,3 +112,20 @@ function snapshot(state: "running" | "ended"): CallDetailsSnapshot {
     },
   };
 }
+
+
+test("remote inspection provides diagnostics lazily and independently from its history loader", async () => {
+  const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(latencyResponseFixture())));
+  vi.stubGlobal("fetch", fetchImpl);
+  try {
+    const loader = { refresh: vi.fn(async () => snapshot("ended")) };
+    render(<CallInspectionApp tenantKey="tenant-key" callId="call-public-id" loader={loader} />);
+    expect(await screen.findByText("Loaded from call history")).toBeVisible();
+    expect(fetchImpl).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Load latency report" }));
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/tenants/tenant-key/calls/call-public-id/latency", expect.objectContaining({ cache: "no-store" }),
+    ));
+    expect(loader.refresh).toHaveBeenCalledTimes(1);
+  } finally { vi.unstubAllGlobals(); }
+});

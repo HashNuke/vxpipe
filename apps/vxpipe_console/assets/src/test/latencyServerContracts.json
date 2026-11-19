@@ -1,0 +1,159 @@
+{
+  "null_acknowledgement": {
+    "summary": [],
+    "next_cursor": null,
+    "call_id": "call-1",
+    "schema_version": 1,
+    "runs": [
+      {
+        "connection_id": "connection-1",
+        "id": "run-1",
+        "profile": {
+          "commit_strategy": "vad",
+          "provider_acknowledgement": null,
+          "algorithm_version": 1,
+          "inference_source": "benchmark_only",
+          "model": "scribe_v2_realtime",
+          "offset_frames": 16,
+          "offset_threshold": 0.35,
+          "onset_frames": 4,
+          "onset_threshold": 0.5,
+          "provider": "elevenlabs",
+          "sample_rate": 16000,
+          "vad_model": "silero_v6.2.3"
+        },
+        "state": "running",
+        "revision": 1,
+        "coverage": {
+          "status": "collecting",
+          "reasons": [],
+          "dropped_audio_frames": 0,
+          "observed_turns": 0,
+          "unmatched_provider_events": 0,
+          "pending_turns": 0,
+          "recorded_state": "running",
+          "stored_turns": 0,
+          "termination_reasons": []
+        },
+        "heartbeat_at": "2026-11-19T12:00:00Z",
+        "anchor_utc": "2026-11-19T12:00:00Z",
+        "clock_id": "clock-1",
+        "participant_id": "human-1",
+        "settings_revision": 1,
+        "source_epoch": "source-1",
+        "closed_at": null,
+        "schema_version": 1,
+        "counts": {
+          "dropped_audio_frames": 0,
+          "observed_turns": 0,
+          "unmatched_provider_events": 0
+        },
+        "reasons": []
+      }
+    ]
+  },
+  "provider_semantic": {
+    "summary": [],
+    "next_cursor": null,
+    "call_id": "call-1",
+    "schema_version": 1,
+    "runs": [
+      {
+        "connection_id": "connection-1",
+        "id": "run-1",
+        "profile": {
+          "commit_strategy": "provider_semantic",
+          "algorithm_version": 1,
+          "inference_source": "benchmark_only",
+          "model": "scribe_v2_realtime",
+          "offset_frames": 16,
+          "offset_threshold": 0.35,
+          "onset_frames": 4,
+          "onset_threshold": 0.5,
+          "provider": "elevenlabs",
+          "sample_rate": 16000,
+          "vad_model": "silero_v6.2.3"
+        },
+        "state": "running",
+        "revision": 1,
+        "coverage": {
+          "status": "collecting",
+          "reasons": [],
+          "dropped_audio_frames": 0,
+          "observed_turns": 0,
+          "unmatched_provider_events": 0,
+          "pending_turns": 0,
+          "recorded_state": "running",
+          "stored_turns": 0,
+          "termination_reasons": []
+        },
+        "heartbeat_at": "2026-11-19T12:00:00Z",
+        "anchor_utc": "2026-11-19T12:00:00Z",
+        "clock_id": "clock-1",
+        "participant_id": "human-1",
+        "settings_revision": 1,
+        "source_epoch": "source-1",
+        "closed_at": null,
+        "schema_version": 1,
+        "counts": {
+          "dropped_audio_frames": 0,
+          "observed_turns": 0,
+          "unmatched_provider_events": 0
+        },
+        "reasons": []
+      }
+    ]
+  },
+  "unknown": {
+    "summary": [],
+    "next_cursor": null,
+    "call_id": "call-1",
+    "schema_version": 1,
+    "runs": [
+      {
+        "connection_id": "connection-1",
+        "id": "run-1",
+        "profile": {
+          "commit_strategy": "unknown",
+          "algorithm_version": 1,
+          "inference_source": "benchmark_only",
+          "model": "scribe_v2_realtime",
+          "offset_frames": 16,
+          "offset_threshold": 0.35,
+          "onset_frames": 4,
+          "onset_threshold": 0.5,
+          "provider": "elevenlabs",
+          "sample_rate": 16000,
+          "vad_model": "silero_v6.2.3"
+        },
+        "state": "running",
+        "revision": 1,
+        "coverage": {
+          "status": "collecting",
+          "reasons": [],
+          "dropped_audio_frames": 0,
+          "observed_turns": 0,
+          "unmatched_provider_events": 0,
+          "pending_turns": 0,
+          "recorded_state": "running",
+          "stored_turns": 0,
+          "termination_reasons": []
+        },
+        "heartbeat_at": "2026-11-19T12:00:00Z",
+        "anchor_utc": "2026-11-19T12:00:00Z",
+        "clock_id": "clock-1",
+        "participant_id": "human-1",
+        "settings_revision": 1,
+        "source_epoch": "source-1",
+        "closed_at": null,
+        "schema_version": 1,
+        "counts": {
+          "dropped_audio_frames": 0,
+          "observed_turns": 0,
+          "unmatched_provider_events": 0
+        },
+        "reasons": []
+      }
+    ]
+  }
+}

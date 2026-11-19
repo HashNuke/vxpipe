@@ -9,7 +9,7 @@ defmodule Vxpipe.Console.CallLatencyController do
       with {:ok, options} <- page_options(params),
            {:ok, report} <-
              Calls.fetch_latency_report(conn.assigns.call_read_access, call_id, options) do
-        {:ok, CallLatencyPresenter.report(report)}
+        {:ok, Map.put(CallLatencyPresenter.report(report), :call_id, call_id)}
       end
 
     respond(conn, result)
@@ -20,7 +20,7 @@ defmodule Vxpipe.Console.CallLatencyController do
       with {:ok, options} <- page_options(params),
            {:ok, page} <-
              Calls.fetch_latency_turns(conn.assigns.call_read_access, call_id, run_id, options) do
-        {:ok, CallLatencyPresenter.turns(run_id, page)}
+        {:ok, Map.put(CallLatencyPresenter.turns(run_id, page), :call_id, call_id)}
       end
 
     respond(conn, result)

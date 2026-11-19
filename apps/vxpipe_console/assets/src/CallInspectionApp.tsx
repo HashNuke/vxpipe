@@ -1,3 +1,4 @@
+import { createCallLatencyLoader } from "./callLatencyApi";
 import { useEffect, useState } from "react";
 import {
   createCallDetailsController,
@@ -39,7 +40,7 @@ export function CallInspectionApp({
         history = createCallDetailsController({ store, loader: source });
         setLoadState({
           state: "ready",
-          controller: { details: history, history },
+          controller: { details: history, history, latency: createCallLatencyLoader(tenantKey, callId) },
         });
       },
       (error: unknown) => {

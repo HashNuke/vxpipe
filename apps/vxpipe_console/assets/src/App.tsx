@@ -1,3 +1,4 @@
+import { createCallLatencyLoader } from "./callLatencyApi";
 import { ApiKeysRoute } from "./admin/apiKeys/ApiKeysRoute";
 import { callSpecSearch } from "./admin/callSpecSearch";
 import { TenantCreationPage } from "./admin/navigation/TenantCreationPage";
@@ -2130,7 +2131,11 @@ async function loadCallDetails(
       callSpec: result.callSpec,
       callSpecRevision: result.callSpecRevision,
       callId: selected.callId,
-      controller: { details: controller, history: controller },
+      controller: { details: controller, history: controller,
+        latency: createCallLatencyLoader(selected.tenantKey, selected.callId, {
+          fetchImpl, onSessionExpired: () => { if (isCurrent()) onSessionExpired(); },
+        }),
+      },
       completeness: result.snapshot.completeness.state,
     },
   };

@@ -1123,3 +1123,18 @@ Astra paging findings were reproduced and fixed, with four independent probes no
 green. Desktop/mobile Chrome and keyboard disclosure were inspected. Real HTTP
 loader/decoder composition, transcript links and remaining D acceptance are open;
 this preview is not a claim of production diagnostic presentation.
+
+## Checkpoint D real HTTP host composition — 2026-11-19
+
+Both authorized call-inspection hosts now compose the lazy diagnostics loader.
+The decoder validates response version, requested call/run identity, bounded pages,
+raw nullable timings and profile provenance. Active session expiry is propagated;
+aborted responses cannot trigger a stale redirect. Three real server profile
+compatibility failures found by Astra were reproduced, fixed and retained as
+regressions; re-review is clean. Focused frontend checks passed 42 tests and
+endpoint checks passed 8 tests. A rendered local browser using dummy identity and
+repository fixtures verified zero diagnostic requests while collapsed, then both
+real authenticated endpoints returning HTTP 200 and displaying 20 ms dispatch
+values after expansion. Asset build and static checks passed. Transcript references
+and remaining D acceptance remain open; full-suite and deployment gates are deferred
+until milestone implementation is complete.
