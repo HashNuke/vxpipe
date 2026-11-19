@@ -26,5 +26,19 @@ defmodule Vxpipe.Persistence.MCP.RepositoryBoundary do
        ),
        do: {:error, unavailable}
 
+  # Registry cleanup follows the repository DOWN asynchronously. Its metadata can
+  # briefly outlive the query cache owned by that repository.
+  defp repository_error(
+         %ArgumentError{} = error,
+         [{:ets, :lookup, [cache, _key], _}, {Ecto.Query.Planner, :query_lookup, _, _} | _] =
+           trace,
+         unavailable
+       )
+       when is_reference(cache) do
+    if :ets.info(cache) == :undefined,
+      do: {:error, unavailable},
+      else: reraise(error, trace)
+  end
+
   defp repository_error(error, trace, _unavailable), do: reraise(error, trace)
 end
