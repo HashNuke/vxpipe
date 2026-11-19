@@ -8,9 +8,15 @@ defmodule Vxpipe.CallEngine.Diagnostics.SettingsProjection do
     do: GenServer.start_link(__MODULE__, options, name: Keyword.fetch!(options, :projection))
 
   def status(name) do
-    case :ets.lookup(name, :lease) do
-      [{:lease, lease, clock, epoch}] -> observed_status(lease, clock.(), epoch)
-      [] -> {:unavailable, :settings_unavailable}
+    # Read the hint first: publishing its revocation clears the flag only after
+    # replacing the lease. Reading the lease first could pair old data with zero.
+    with [{:invalidation, _owner, flag}] <- :ets.lookup(name, :invalidation),
+         0 <- :atomics.get(flag, 1),
+         [{:lease, lease, clock, epoch}] <- :ets.lookup(name, :lease) do
+      observed_status(lease, clock.(), epoch)
+    else
+      1 -> {:unavailable, :invalidated}
+      _ -> {:unavailable, :settings_unavailable}
     end
   rescue
     _ -> {:unavailable, :settings_unavailable}
@@ -28,9 +34,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.SettingsProjection do
 
   @doc "One local authority snapshot with sampled monotonic time and its finite deadline."
   def grant_snapshot(name) do
-    with [{:lease, lease, clock, epoch}] <- :ets.lookup(name, :lease),
-         [{:invalidation, _owner, flag}] <- :ets.lookup(name, :invalidation),
+    with [{:invalidation, _owner, flag}] <- :ets.lookup(name, :invalidation),
          0 <- :atomics.get(flag, 1),
+         [{:lease, lease, clock, epoch}] <- :ets.lookup(name, :lease),
          now = clock.(),
          {:enabled, revision} <- observed_status(lease, now, epoch),
          0 <- :atomics.get(epoch, 1) do

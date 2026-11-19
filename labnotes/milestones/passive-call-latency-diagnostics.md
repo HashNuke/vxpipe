@@ -2,7 +2,7 @@
 
 Status: implementation in progress, 2026-11-19. Checkpoint A code, focused tests,
 rendered checks, Astra xhigh review and all root gates pass. Checkpoint B now has a reviewed, durable offline replay and passing root gates.
-C settings foundations are in progress; C–F acceptance remains open. The index owns implementation order.
+C passive capture and the offline matrix are implemented; C–F acceptance remains open. The index owns implementation order.
 
 ## Runnable outcome
 
@@ -42,6 +42,7 @@ Read these completed foundations before implementation:
 - [Structured messages](structured-agent-messages.md) and
   [universal replies](universal-agent-replies.md): retain correlation and generated
   text meaning; published text is not necessarily the first model token.
+- [Implemented runtime limits](../../docs/design/latency-diagnostics-runtime-limits.md): authority expiry, resource bounds and verification limits.
 - [Passive benchmark design](../../docs/design/shadow-vad-latency-benchmark.md),
   [speech runtime](../../docs/en/development/speech-runtime.md),
   [testing guidance](../../docs/en/development/testing.md), and the
@@ -345,7 +346,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 - [ ] Build the Installation Diagnostics section and Benchmark using Silero VAD toggle with saved/applying/error states and
   role-appropriate navigation. Verify persistence across reload, failed saves,
   stale concurrent edits and desktop/mobile keyboard operation in rendered Chrome.
-- [ ] Add isolated supervision/capacity and versioned settings projection. Specify
+- [x] Add isolated supervision/capacity and versioned settings projection. Specify
   bounded cross-node propagation/leases, byte/count limits, concurrency, inference
   timeouts and retry/drain deadlines. No resource initialization gates calls.
 - [ ] Prove on/off transitions for active/new calls, unknown settings, DB outage,
@@ -1211,3 +1212,21 @@ there is no supported alternative-model negotiation path. Mid-stream reuse stays
 partial until a clean inference epoch. Astra's final scoped acceptance review found
 no gap, so the combined C matrix task is checked. Distributed status, settings
 failure transitions, load/accuracy and live acceptance remain separate open gates.
+
+## Checkpoint C settings status and runtime bounds — 2026-11-19
+
+Status now rejects a pending invalidation even while its projection is stalled.
+Astra also reproduced an old-lease/cleared-flag interleaving in status and grant
+reads. Both now read the invalidation flag before the lease; the two deterministic
+scheduler probes pass after the fix. Two isolated BEAM peers with independent
+controlled clocks prove immediate hint rejection, missed-hint expiry at 3,000 ms,
+stale-revision rejection and later valid re-enable. Their loader snapshots are
+controlled fixtures, not a database/network propagation measurement.
+
+Focused Engine checks passed 38/38 and Calls writer/supervision checks 21/21.
+The runtime-limits design note records actual defaults, authority semantics,
+rejected alternatives and verification boundaries; Astra reviewed that document
+separately from the implementation and found no mismatch. The final code review
+is clean. The C supervision/projection/limits task is checked. Effective-status UI,
+broader settings failure transitions, measured load/accuracy and live acceptance
+remain open; no deployment or live provider use occurred.

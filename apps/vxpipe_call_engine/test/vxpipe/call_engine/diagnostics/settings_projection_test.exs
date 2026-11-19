@@ -51,6 +51,26 @@ defmodule Vxpipe.CallEngine.Diagnostics.SettingsProjectionTest do
     end
   end
 
+  for enabled <- [true, false] do
+    @enabled enabled
+    test "status immediately reports invalidation of enabled=#{@enabled} while projection is stalled",
+         ctx do
+      settle(ctx.reader, {:ok, %{enabled: @enabled, revision: 1}})
+      :sys.suspend(@projection)
+
+      try do
+        assert :ok = SettingsProjection.invalidate(@projection)
+        assert {:error, :unavailable} = SettingsProjection.grant(@projection)
+        assert {:unavailable, :invalidated} = SettingsProjection.status(@projection)
+      after
+        :sys.resume(@projection)
+      end
+
+      _ = :sys.get_state(@projection)
+      assert {:unavailable, :invalidated} = SettingsProjection.status(@projection)
+    end
+  end
+
   test "timeout closes authority and retains the one reader slot until it settles", ctx do
     fire(:read_timeout)
     _ = :sys.get_state(@projection)
