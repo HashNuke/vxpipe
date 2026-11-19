@@ -675,6 +675,9 @@ Open tasks (unchanged in scope; verify on the room-service path):
 The [predeclared measurement plan](../../docs/design/latency-diagnostics-measurement-plan.md)
 records the reference hardware, paired warm/cold workloads and numerical budgets.
 The plan alone does not satisfy measured load or acoustic accuracy acceptance.
+The [resource measurement foundation](../20261119-2118-diagnostics-measurement-harness.md)
+adds tested external process CPU/RSS accounting; the configured workload driver
+and complete paired measurements remain outstanding.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint

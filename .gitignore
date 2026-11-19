@@ -53,3 +53,4 @@ sounds/*.wav
 /.vxpipe/
 /bin/lib/__pycache__/
 /bin/__pycache__/
+/scripts/diagnostics/__pycache__/

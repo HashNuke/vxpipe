@@ -111,6 +111,24 @@ samples and phase summaries. Include cold loading and all diagnostic workers in
 the measured process. Report database CPU separately and isolate its per-phase
 statistics; host-wide CPU is supplementary evidence, not a substitute.
 
+Resource interval clarification, before measurements: reset the isolated test VM's
+Linux RSS high-water counter at the measurement boundary (`clear_refs` value 5),
+after warm-up for warm phases and immediately before room preparation for cold
+phases. Resetting the counter does not free memory. Record both sampled RSS and
+that interval's OS high water; apply the peak-RSS budget to the latter so a peak
+between samples is retained. A lifetime high water from VM startup/warm-up must
+not mask the measured phase. Missing reset support/permission invalidates the
+phase; do not silently substitute a lifetime counter. Linux documents this reset
+in [procfs](https://www.kernel.org/doc/html/latest/filesystems/proc.html).
+
+The external Python helper in `scripts/diagnostics/measurement.py` reads aggregate
+process CPU ticks, resident memory and thread counts; it fences PID reuse using
+process start ticks and rejects missing, nonfinite or nonmonotonic samples. Its
+resource comparison alone cannot establish a passing workload: correctness,
+coverage, generator timing, readiness and all latency budgets below remain
+mandatory. The configured workload driver, watchdog and paired report integration
+remain to be completed.
+
 Compare each matched pair separately. All valid repetitions must pass; also
 publish the worst result. Let N be the number of accepted human STT inputs:
 
