@@ -319,3 +319,43 @@ later refresh succeeds. This composition is not an alternate enable authority.
 Actual snapshot-port tests cover durable off/on/off revisions. Cross-node hints,
 consumer revocation/queue fencing and UI propagation status remain required
 before claiming configured-call capture.
+
+## Capture admission and authority continuity
+
+An enabled saved revision is accompanied by a local publication epoch and finite
+lease deadline. Refreshing a still-valid snapshot preserves its epoch. Observed
+expiry, failed reads, invalidation, projector restart or a different revision
+retires it. Readers irreversibly poison an observed-expired epoch so a delayed
+publication cannot restore it. The epoch alone is not a continuity guarantee:
+each handoff independently retains its last validated lease deadline and can
+renew only when its next sampled authority check precedes that deadline. A late
+publication therefore cannot revive queued work on an expired handoff, even if
+no reader observed the old projection's expiry. An idle consumer that fails to
+renew within its lease must start fresh; a worker should check during its bounded
+lifecycle tick as well as before inference/results. Pending invalidation denies
+new grants before projector processing.
+
+Checks linearize at their monotonic clock sample, not the wall-clock instant a
+preempted function returns. A concurrent observed expiry irreversibly closes the
+handoff; renewal never clears that close. Consumer deadline extension uses one
+compare/exchange attempt, never a blocking lock or retry loop. A check delayed
+across its sampled prior deadline may conservatively retire the handoff even
+when another check renewed it meanwhile; restart with partial coverage rather
+than preserve uncertain continuity. Producers and
+consumers recheck at delivery, processing and result acceptance boundaries.
+
+The separate capture handoff defaults to64pending items and262144charged bytes,
+including admitted work still processing. Hard configurable maxima are128items
+and8388608bytes. Charge includes two serialized payload copies plus512bytes of
+envelope allowance. A bounded reservation precedes detached binary copies and
+non-suspending send; saturation drops evidence and increments loss counters.
+Allowed transient packets are linear16 audio frames, bounded probability batches
+with inference epoch/sample cursor, and fixed reset notices. Text and unrestricted
+provider metadata are excluded. These packets are not ordinary archive events.
+
+This is a handoff primitive, not the complete observer lifecycle. Its consumer
+must own exactly-once release, check the same grant before processing and accepting
+results, discard queued audio on revocation, and report loss/partial coverage.
+Source identity/privacy checks, worker admission, native inference isolation and
+bounded shutdown remain required for live capture. None of these APIs override
+the durable app setting or initialize a model on their own.

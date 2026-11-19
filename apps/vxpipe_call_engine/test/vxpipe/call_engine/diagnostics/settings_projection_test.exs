@@ -109,6 +109,47 @@ defmodule Vxpipe.CallEngine.Diagnostics.SettingsProjectionTest do
     assert {:unavailable, :settings_unavailable} = SettingsProjection.status(@projection)
   end
 
+  test "capture grants survive continuous refresh but cannot bridge an expired interval", ctx do
+    settle(ctx.reader, {:ok, %{enabled: true, revision: 1}})
+    assert {:ok, first} = SettingsProjection.grant(@projection)
+    :atomics.put(ctx.clock, 1, 1_000)
+    fire(:poll)
+    assert_receive {:read_started, reader}
+    settle(reader, {:ok, %{enabled: true, revision: 1}})
+    assert {:ok, ^first} = SettingsProjection.grant(@projection)
+
+    # Nobody queried status during the expired interval. A later successful read
+    # must still retire the old capture epoch, even at the same saved revision.
+    :atomics.put(ctx.clock, 1, 4_000)
+    fire(:poll)
+    assert_receive {:read_started, reader}
+    settle(reader, {:ok, %{enabled: true, revision: 1}})
+    assert {:ok, next} = SettingsProjection.grant(@projection)
+    refute next == first
+  end
+
+  test "revocation fences capture grants even if the saved revision stays enabled", ctx do
+    settle(ctx.reader, {:ok, %{enabled: true, revision: 1}})
+    assert {:ok, first} = SettingsProjection.grant(@projection)
+    :sys.suspend(@projection)
+
+    try do
+      assert :ok = SettingsProjection.invalidate(@projection)
+      assert {:error, :unavailable} = SettingsProjection.grant(@projection)
+    after
+      :sys.resume(@projection)
+    end
+
+    _ = :sys.get_state(@projection)
+    assert {:error, :unavailable} = SettingsProjection.grant(@projection)
+    :atomics.put(ctx.clock, 1, 1_000)
+    fire(:poll)
+    assert_receive {:read_started, reader}
+    settle(reader, {:ok, %{enabled: true, revision: 1}})
+    assert {:ok, next} = SettingsProjection.grant(@projection)
+    refute next == first
+  end
+
   test "pool teardown removes authority and ends the outstanding reader", ctx do
     monitor = Process.monitor(ctx.reader)
     stop_supervised!({SettingsSupervisor, __MODULE__.Pool})

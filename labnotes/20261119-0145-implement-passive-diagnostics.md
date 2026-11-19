@@ -468,3 +468,67 @@
   strict Credo and unused-lock checks pass. Test/doc review is clean. This does
   not fix the independently reproduced production race or turn the earlier root
   run into a passing run; retain both limitations for final milestone verification.
+
+## Checkpoint C — bounded capture admission
+
+- Previous goal turn made concrete progress: committed/pushed the runtime settings
+  projection and preserved an independently reproduced unrelated idle race. The
+  worktree was clean at the start of this checkpoint; no deployment occurred.
+- Added continuous local capture grants. A saved revision alone is insufficient:
+  a projector may expire and later recover at the same revision. Grants retain
+  their epoch only across continuously valid enabled reads, rotate after expiry,
+  revocation or revision change, and fail closed while invalidation is pending.
+  Two new grant tests were red for the missing API and then passed.
+- New capture handoff reserves count and charged bytes before copying/sending,
+  retains reservations during processing, bounds reservation attempts, and uses
+  non-suspending local delivery. Defaults:64pending items/262144charged bytes per
+  handoff; configurable hard maxima128items/8388608bytes. Close is an irreversible
+  atomic flag. Receivers must handle each admitted message/release exactly once,
+  recheck authority before inference/results, and drain/discard queued audio on
+  revocation. The consumer lifecycle is not implemented by this primitive.
+- Transient packet allowlist accepts bounded linear16 frames with copied identity
+  and PCM binaries, at most32probabilities with inference epoch/sample cursor,
+  and fixed reset notices. No transcript or arbitrary metadata payload is accepted.
+  A red malformed-list test found unbounded `length/1` validation could raise;
+  bounded recursive probability validation now rejects improper/oversized lists.
+- Tests cover reserved in-flight work, count/byte saturation, detached backing
+  binaries, concurrent producers against a stalled projector, expiry/recovery at
+  the same revision and rejected payloads. Diagnostics subset59/0 and actual
+  settings-store integration8/0 pass. Static root gates pass; final review pending.
+  No production audio tap, inference worker, source-policy association, cross-node
+  status or queue-drain lifecycle is claimed by these tests.
+
+### Capture admission review follow-up
+
+- Resumed after committing the user-requested collapsed Metrics Storybook preview
+  as `abfd250a`; its Astra review was clean and tailnet access was verified.
+- Retained the prior review's two reproductions: a same-size malformed AudioFrame
+  raised KeyError and delayed publication resurrected a grant after observed
+  expiry. Both failed before fixes (`/tmp/vxpipe-capture-retained-red2.log`).
+- Frame admission now validates every expected key before field access. Readers
+  irreversibly retire a shared authority epoch when observing invalid authority,
+  so delayed publication cannot restore that retired epoch. A pending publication
+  may fail closed until the next successful read. Diagnostic subset:61/0.
+- Fresh Astra review is active. Specifically requested scrutiny of delayed
+  publication without any expiry reader; continuous authority is not considered
+  review-complete yet. No audio consumers have been connected.
+- The fresh full frontend rerun exited143 without results; the earlier complete
+  1169/0 run remains recorded separately. Root umbrella run is still active and
+  has one MCP ConnectionCheckTest startup-ack timeout; it is not passing evidence.
+
+- Astra proved the additional unobserved-expiry case with queued evidence:
+  `/tmp/vxpipe-capture-consumer-red.log` returned an accepted reset packet instead
+  of revocation. Retained `capture_handoff_expiry_test.exs`; handoffs now keep
+  independent deadlines, renew only before their sampled deadline, and cannot
+  reopen after close. Publication epochs alone are no longer described as proof
+  of uninterrupted consumer authority. Renewals use a single bounded CAS.
+- Static root checks passed after the first two fixes; rerunning after the consumer
+  deadline change. The unrelated umbrella timeout was in MCP, not Providers.
+
+- Final capture checkpoint:62diagnostic tests/0 failures; Astra xhigh re-review
+  clean, independently passing17focused tests. Conservative retirement under a
+  concurrent renewal race is documented: restart partial rather than infer
+  uninterrupted evidence. Root format, compile warnings-as-errors, strict Credo
+  and unused-lock checks pass after consumer-deadline changes. Full umbrella
+  run remains active with its earlier MCP startup-ack timeout; source changed
+  during that run, so it is not final current-source acceptance evidence.

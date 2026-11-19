@@ -630,3 +630,26 @@ static gates pass. A separate, reproduced production admission race remains
 [unresolved](../issues/idle-admission-after-silent-acknowledgment.md). No production
 idle behavior was changed. A complete current-source root pass remains a final
 acceptance gate; the earlier failed run is not relabelled as passing.
+
+## Checkpoint C capture-admission evidence — 2026-11-19
+
+Capture grants carry a publication epoch and consumers retain a finite lease
+deadline; a saved revision or publication epoch alone cannot prove continuity. The
+bounded capture handoff reserves count and bytes before detached copying, keeps
+in-flight reservations, and rechecks authority at receipt. Its fixed packet
+allowlist excludes transcripts and unrestricted metadata. Focused diagnostics59/0
+and database snapshot integration8/0 pass; static gates pass, review is pending.
+
+This is not live capture acceptance. Source-policy association, actual workers,
+queue draining, reuse taps and provider/response correlation remain open. The
+combined C tasks stay unchecked until their runnable configured-call gates pass.
+
+Capture-admission review follow-up: retained malformed-frame and delayed-publication
+regressions failed before fixes. Frame admission validates its exact key set.
+Observed expiry irreversibly retires the publication epoch; each handoff also
+retains and renews its own deadline, preventing queued work from resuming after
+unobserved expiry during delayed publication. Checks linearize at their clock
+sample, and consumers must recheck before work/results. Diagnostic tests pass62/0;
+Astra xhigh re-review is clean (independent focused selection17/0), and root static
+gates pass. The active umbrella run has an MCP startup-ack timeout and cannot be
+counted as passing. These primitive tests do not complete configured-call C gates.

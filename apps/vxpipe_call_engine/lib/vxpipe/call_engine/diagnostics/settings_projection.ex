@@ -9,13 +9,39 @@ defmodule Vxpipe.CallEngine.Diagnostics.SettingsProjection do
 
   def status(name) do
     case :ets.lookup(name, :lease) do
-      [{:lease, lease, clock}] -> SettingsLease.status(lease, clock.(), lease.clock_id)
+      [{:lease, lease, clock, epoch}] -> observed_status(lease, clock.(), epoch)
       [] -> {:unavailable, :settings_unavailable}
     end
   rescue
     _ -> {:unavailable, :settings_unavailable}
   catch
     _, _ -> {:unavailable, :settings_unavailable}
+  end
+
+  @doc "An enabled revision and publication epoch; consumers must also retain their lease deadline."
+  def grant(name) do
+    case grant_snapshot(name) do
+      {:ok, grant, _now, _expires_at} -> {:ok, grant}
+      error -> error
+    end
+  end
+
+  @doc "One local authority snapshot with sampled monotonic time and its finite deadline."
+  def grant_snapshot(name) do
+    with [{:lease, lease, clock, epoch}] <- :ets.lookup(name, :lease),
+         [{:invalidation, _owner, flag}] <- :ets.lookup(name, :invalidation),
+         0 <- :atomics.get(flag, 1),
+         now = clock.(),
+         {:enabled, revision} <- observed_status(lease, now, epoch),
+         0 <- :atomics.get(epoch, 1) do
+      {:ok, {revision, epoch}, now, lease.expires_at}
+    else
+      _ -> {:error, :unavailable}
+    end
+  rescue
+    _ -> {:error, :unavailable}
+  catch
+    _, _ -> {:error, :unavailable}
   end
 
   @doc "Coalesced revocation hint. Only a subsequent durable read may grant authority."
@@ -90,11 +116,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.SettingsProjection do
   end
 
   def handle_info(:invalidate_settings, state) do
-    :atomics.put(state.flag, 1, 0)
     job = if state.job, do: %{state.job | discard?: true}
 
-    {:noreply,
-     publish(%{state | job: job, lease: SettingsLease.revoke(state.lease, :invalidated)})}
+    next = publish(%{state | job: job, lease: SettingsLease.revoke(state.lease, :invalidated)})
+    :atomics.put(state.flag, 1, 0)
+    {:noreply, next}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, %{reader_ref: ref} = state),
@@ -149,8 +175,31 @@ defmodule Vxpipe.CallEngine.Diagnostics.SettingsProjection do
     do: SettingsLease.revoke(state.lease, :settings_unavailable)
 
   defp publish(state) do
-    :ets.insert(state.name, {:lease, state.lease, state.clock})
+    epoch = continuous_epoch(state)
+    :ets.insert(state.name, {:lease, state.lease, state.clock, epoch})
     state
+  end
+
+  defp continuous_epoch(state) do
+    now = state.clock.()
+    current = SettingsLease.status(state.lease, now, state.lease.clock_id)
+
+    with {:enabled, revision} <- current,
+         [{:lease, previous, _clock, epoch}] <- :ets.lookup(state.name, :lease),
+         {:enabled, ^revision} <- observed_status(previous, now, epoch),
+         0 <- :atomics.get(epoch, 1) do
+      epoch
+    else
+      _ -> :atomics.new(1, signed: false)
+    end
+  end
+
+  defp observed_status(lease, now, epoch) do
+    status = SettingsLease.status(lease, now, lease.clock_id)
+    # Retire shared authority before returning expiry to a reader. A publisher
+    # preempted after sampling time cannot make this epoch valid again.
+    if not match?({:enabled, _}, status), do: :atomics.put(epoch, 1, 1)
+    status
   end
 
   defp schedule(state) do
