@@ -50,6 +50,30 @@ class SmokeRunnerTest(unittest.TestCase):
             ['sudo', '-n', 'systemctl', 'stop', owned.scope],
             ['systemctl', '--user', 'stop', name]])
 
+    def test_aborted_database_creation_remains_identified_until_drop_is_acknowledged(self):
+        owned = OwnedUnits(RUN)
+        database = f'vxdiag_{RUN}_12345678'
+        owned.observe('DIAGNOSTIC_DATABASE_RESERVED ' + database)
+        self.assertEqual(owned.pending_databases, {database})
+        for other in ['vxpipe_test', database.replace(RUN, 'a' * 32)]:
+            with self.assertRaises(ValueError):
+                owned.observe('DIAGNOSTIC_DATABASE_RESERVED ' + other)
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'workload.log'
+            log.write_text(''.join('DIAGNOSTIC_EXTERNAL_SMOKE ' + json.dumps(r) + '\n'
+                                   for r in reports()))
+            process = Mock(pid=123, returncode=0)
+            process.poll.side_effect = [None, 0]
+            with patch('smoke_runner.stop_unit'):
+                result = watch(process, owned, log, sample=lambda _: sample(900, 10),
+                               sleep=lambda _: None)
+            self.assertFalse(result['completed'])
+            self.assertEqual(result['retained_databases'], [database])
+        owned.observe('DIAGNOSTIC_DATABASE_DROPPED ' + database)
+        self.assertEqual(owned.pending_databases, set())
+        with self.assertRaises(ValueError):
+            owned.observe('DIAGNOSTIC_DATABASE_DROPPED ' + database)
+
     def test_watchdog_never_accepts_memory_cpu_escape_or_timeout(self):
         good = dict(rss_kib=100_000, thread_cpu_masks=['0-1', '1'])
         self.assertIsNone(violation([good], available_kib=800_000, elapsed=20))
@@ -89,6 +113,17 @@ class SmokeRunnerTest(unittest.TestCase):
         self.assertFalse(smoke_complete(reports, samples))
         reports[0]['generator']['p95_lateness_ns'] = 2_000_001
         self.assertFalse(smoke_complete(reports, samples))
+
+    def test_committed_mode_requires_independent_write_evidence_from_every_case(self):
+        evidence = reports()
+        samples = [dict(beams=[dict(rss_kib=100)])]
+        self.assertFalse(smoke_complete(evidence, samples, committed_writes=True))
+        for report in evidence:
+            report['persistence'] = 'committed'
+            report['database_pool_size'] = 10
+        self.assertTrue(smoke_complete(evidence, samples, committed_writes=True))
+        evidence[0]['persistence'] = 'sandbox'
+        self.assertFalse(smoke_complete(evidence, samples, committed_writes=True))
 
     def test_sampler_failure_still_cleans_owned_units_and_cannot_pass(self):
         owned = OwnedUnits(RUN)

@@ -31,8 +31,21 @@ class OwnedUnits:
         self.run_id = run_id
         self.scope = f'vxpipe-diagnostic-smoke-{run_id}.scope'
         self.generators = set()
+        self.pending_databases = set()
 
     def observe(self, line):
+        for marker in ('DIAGNOSTIC_DATABASE_RESERVED ', 'DIAGNOSTIC_DATABASE_DROPPED '):
+            if marker in line:
+                database = line.split(marker, 1)[1].strip()
+                if not re.fullmatch(rf'vxdiag_{self.run_id}_[0-9a-f]{{8}}', database):
+                    raise ValueError('unowned measurement database in workload output')
+                if marker == 'DIAGNOSTIC_DATABASE_RESERVED ':
+                    self.pending_databases.add(database)
+                elif database in self.pending_databases:
+                    self.pending_databases.remove(database)
+                else:
+                    raise ValueError('unregistered database drop acknowledgement')
+                return
         if MARKER not in line:
             return
         unit = line.split(MARKER, 1)[1].strip()
@@ -127,11 +140,14 @@ def stop_unit(unit, *, system=False):
             raise RuntimeError('could not stop owned transient unit')
 
 
-def smoke_complete(reports, samples):
+def smoke_complete(reports, samples, *, committed_writes=False):
     expected = {(False, False), (False, True), (True, False), (True, True)}
     if len(reports) != 4 or {(r['operational_vad'], r['collection']) for r in reports} != expected:
         return False
     if not any(sample['beams'] for sample in samples):
+        return False
+    if committed_writes and any(r.get('persistence') != 'committed' or
+                                r.get('database_pool_size') != 10 for r in reports):
         return False
     return all(type(r['operational_vad']) is bool and type(r['collection']) is bool and
                r['generator']['frames_sent'] == 64 and
@@ -140,7 +156,8 @@ def smoke_complete(reports, samples):
                r['generator']['elapsed_ns'] >= 2_048_000_000 for r in reports)
 
 
-def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sleep=time.sleep):
+def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sleep=time.sleep,
+          committed_writes=False):
     samples, reports, cleanup_errors = [], [], []
     abort, pending = None, ''
     identity = None
@@ -211,18 +228,21 @@ def watch(process, owned, log_path, *, sample=snapshot, clock=time.monotonic, sl
             except Exception as error:
                 cleanup_errors.append(type(error).__name__ + ': generator cleanup failed')
     try:
-        complete = smoke_complete(reports, samples)
+        complete = smoke_complete(reports, samples, committed_writes=committed_writes)
     except (KeyError, TypeError, ValueError):
         complete = False
     return dict(run_id=owned.run_id, exit_code=process.returncode, abort=abort,
-                cleanup_errors=cleanup_errors, samples=samples, smoke_reports=reports,
-                completed=process.returncode == 0 and abort is None and not cleanup_errors and complete)
+                cleanup_errors=cleanup_errors, retained_databases=sorted(owned.pending_databases),
+                samples=samples, smoke_reports=reports,
+                completed=process.returncode == 0 and abort is None and not cleanup_errors and
+                not owned.pending_databases and complete)
 
 
 def provenance():
     paths = ['scripts/diagnostics/smoke_runner.py', 'scripts/diagnostics/measurement.py',
              'scripts/diagnostics/pcm_generator.py', 'mix.lock',
              'apps/vxpipe_console/test/integration/configured_latency_diagnostics_test.exs',
+             'apps/vxpipe_console/test/support/diagnostics_database.ex',
              'apps/vxpipe_call_engine/lib/vxpipe/call_engine/speech/silero/model.ex',
              'apps/vxpipe_call_engine/priv/speech/silero_v6.2.3.onnx']
     return dict(
@@ -236,6 +256,8 @@ def provenance():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path, help='new directory; never overwrite evidence')
+    parser.add_argument('--committed-writes', action='store_true',
+                        help='use a fresh migrated database and real commits for each case')
     args = parser.parse_args()
     if os.getuid() == 0:
         parser.error('invoke as the checkout user, not root')
@@ -255,6 +277,7 @@ def main():
                'ERL_FLAGS=+S 2:2 +SDcpu 1 +SDio 1 +A 2',
                'VXPIPE_DIAGNOSTIC_GENERATOR_CPUS=2,3', 'VXPIPE_DIAGNOSTIC_GENERATOR_SYSTEMD=1',
                'VXPIPE_DIAGNOSTIC_RUN_ID=' + owned.run_id,
+               'VXPIPE_DIAGNOSTIC_COMMITTED_WRITES=' + ('1' if args.committed_writes else '0'),
                'mix', 'test', 'test/integration/configured_latency_diagnostics_test.exs',
                '--only', 'external_pcm', '--seed', '0', '--max-cases', '1']
     def interrupted(_signal, _frame):
@@ -264,11 +287,11 @@ def main():
     with log_path.open('w') as log:
         process = subprocess.Popen(command, cwd=ROOT / 'apps/vxpipe_console',
                                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        report = watch(process, owned, log_path)
+        report = watch(process, owned, log_path, committed_writes=args.committed_writes)
     report['provenance'] = source
     report['scope'] = 'functional smoke watchdog; not paired performance acceptance'
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps({key: report[key] for key in ('run_id', 'completed', 'exit_code', 'abort', 'cleanup_errors')}))
+    print(json.dumps({key: report[key] for key in ('run_id', 'completed', 'exit_code', 'abort', 'cleanup_errors', 'retained_databases')}))
     raise SystemExit(0 if report['completed'] else 1)
 
 

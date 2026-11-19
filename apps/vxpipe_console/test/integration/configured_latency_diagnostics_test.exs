@@ -43,9 +43,18 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     actual? = Map.get(tags, :actual_inference, false)
     routing? = Map.get(tags, :routing, false)
     enabled = Map.get(tags, :diagnostics_enabled, true)
-    if Process.whereis(Repo) == nil, do: start_supervised!(Repo)
-    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
+
+    measurement_database =
+      if Map.get(tags, :external_pcm, false) and
+           System.get_env("VXPIPE_DIAGNOSTIC_COMMITTED_WRITES") == "1" do
+        Vxpipe.Console.Test.DiagnosticsDatabase.start!()
+      else
+        if Process.whereis(Repo) == nil, do: start_supervised!(Repo)
+        owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
+        on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
+        nil
+      end
+
     original = Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
 
     on_exit(fn ->
@@ -231,7 +240,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       registries: %{host_tools: %{}}
     ]
 
-    %{options: options, settings_revision: settings_revision, model: model}
+    %{
+      options: options,
+      settings_revision: settings_revision,
+      model: model,
+      measurement_database: measurement_database
+    }
   end
 
   for vad <- [false, true], enabled <- [false, true] do
@@ -370,6 +384,26 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         assert runs == []
       end
 
+      if System.get_env("VXPIPE_DIAGNOSTIC_COMMITTED_WRITES") == "1" do
+        options = c.measurement_database || Repo.config()
+        reader_options = Keyword.drop(options, [:name, :pool, :pool_size])
+        reader = start_supervised!({Postgrex, reader_options})
+
+        assert %{rows: [[1]]} =
+                 Postgrex.query!(reader, "SELECT count(*) FROM calls WHERE public_id = $1", [
+                   Ecto.UUID.dump!(call.id)
+                 ])
+
+        expected_rows = if c.diagnostics_enabled, do: 2, else: 0
+
+        assert %{rows: [[^expected_rows]]} =
+                 Postgrex.query!(
+                   reader,
+                   "SELECT count(*) FROM call_turn_diagnostics d JOIN call_latency_runs r ON r.id = d.run_id JOIN calls c ON c.id = r.call_id WHERE c.public_id = $1",
+                   [Ecto.UUID.dump!(call.id)]
+                 )
+      end
+
       evidence = actual_inference_evidence()
       non_silent = result.offered |> Enum.reject(&(&1 == :binary.copy(<<0>>, 1024)))
       fingerprints = MapSet.new(non_silent, &:crypto.hash(:sha256, &1))
@@ -401,6 +435,9 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
           Jason.encode!(%{
             operational_vad: c.vad,
             collection: c.diagnostics_enabled,
+            persistence: if(c.measurement_database, do: "committed", else: "sandbox"),
+            database_pool_size:
+              if(c.measurement_database, do: Keyword.fetch!(c.measurement_database, :pool_size)),
             generator:
               Map.take(result.report, [
                 "frames_sent",

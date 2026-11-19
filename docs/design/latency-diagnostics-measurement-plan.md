@@ -72,7 +72,16 @@ Measure the actual pinned Silero model, not a fake probability classifier.
 ## Paired workload
 
 Use the configured room/STT/diagnostic collector/writer path with deterministic
-local provider and response fixtures. Persistence uses an isolated test database.
+local provider and response fixtures. Persistence uses a fresh migrated disposable
+PostgreSQL database for each phase, with an ordinary ten-connection pool matching
+the deployment default. Do not wrap the workload in SQL Sandbox's outer rollback
+transaction: that would exclude per-transaction commit costs and serialize otherwise independent
+writers through a shared connection. Complete database creation/migrations before
+the resource interval; room preparation and diagnostic writes stay within their
+specified warm/cold intervals. Verify call and diagnostic rows from an independent
+connection after drain. The ordinary sandbox smoke remains functional evidence
+only. The committed-write smoke mode exercises this database contract before the
+full paired driver is implemented.
 No benchmark bypass of room service, settings authority, capture admission or
 durable writes is allowed. The generator runs outside the measured VM; report its
 CPU separately. Operational VAD configuration stays fixed within each pair.
@@ -147,8 +156,21 @@ coverage, generator timing, readiness and all latency budgets below remain
 mandatory. The four-case smoke watchdog is available with:
 
 ```shell
-python3 scripts/diagnostics/smoke_runner.py --output /tmp/diagnostics-smoke-unique
+python3 scripts/diagnostics/smoke_runner.py --committed-writes --output /tmp/diagnostics-smoke-unique
 ```
+
+`--committed-writes` creates a separate migrated database for each of the four
+cases and verifies committed rows through an independent connection. Normal ExUnit
+cleanup drops each database. A forced VM termination can bypass that cleanup:
+the runner reports exact pending database reservations in `retained_databases`
+and refuses a passing result. Each four-case run reserves at most four scratch
+databases; a reservation may precede successful creation. Stop after an invalid
+run and inspect those exact names before another run; do not accumulate retries
+or delete databases by a wildcard. This mode does not promise database deletion
+after a killed VM. Omit the option for
+the original rollback-sandbox functional smoke. Both modes use the same audio,
+real model and correctness assertions; only committed mode is suitable as the
+foundation for database-write overhead measurement.
 
 Use a new output directory; existing evidence is never overwritten. It requires
 noninteractive sudo for its uniquely named transient system scope, while the
