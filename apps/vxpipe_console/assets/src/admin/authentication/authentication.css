@@ -710,3 +710,10 @@
 .access-revoke-confirm > p { color: var(--admin-muted); font-size: 14px; line-height: 1.65; max-width: 65ch; }
 .access-revoke-confirm .access-actions { justify-content: flex-end; flex-wrap: wrap; }
 .access-revoke-confirm .access-danger { color: var(--admin-red); border-color: var(--admin-red); }
+
+.installation-diagnostics { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--admin-line); }
+.installation-diagnostics h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+.installation-benchmark-control { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
+.installation-benchmark-control input { flex: 0 0 auto; width: 18px; height: 18px; accent-color: var(--admin-ink); }
+.installation-benchmark-control input:focus-visible { outline: 2px solid var(--admin-ink); outline-offset: 4px; }
+.installation-benchmark-control:has(input:disabled) { cursor: default; opacity: .65; }

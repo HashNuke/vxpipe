@@ -18,6 +18,7 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
+import { DiagnosticsSettingsControl } from "./admin/authentication/DiagnosticsSettingsControl";
 import { InstallationSettingsPage } from "./admin/authentication/InstallationSettingsPage";
 import type { InstallationSettings } from "./admin/authentication/authenticationApi";
 import {
@@ -271,8 +272,9 @@ function InstallationRoute(props: AppProps) {
     return () => { active = false; };
   }, [api, sessionState, session?.role.kind, onSessionExpired, retry]);
   if (!session) return <div className="access-ui"><main className="access-page" role="status">{sessionState === "unavailable" ? "Installation settings could not be loaded." : "Loading installation settings…"}</main></div>;
-  return <div className="access-ui"><InstallationSettingsPage key={state === "ready" ? "ready" : state}
+  return <div className="access-ui"><InstallationSettingsPage
     roleKind={session.role.kind} publicUrl={settings?.public_url ?? ""} state={state}
+    diagnostics={<DiagnosticsSettingsControl api={api} onSessionExpired={onSessionExpired} />}
     onRetry={() => { setState("loading"); setRetry(value => value + 1); }}
     onSave={async url => {
       try {

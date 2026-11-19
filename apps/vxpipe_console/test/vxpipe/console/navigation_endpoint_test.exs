@@ -31,6 +31,16 @@ defmodule Vxpipe.Console.NavigationEndpointTest do
     :ok
   end
 
+  test "Installation is offered to admins and superadmins but not members" do
+    for kind <- [:admin, :superadmin, :member] do
+      principal = %{FakeUserIdentity.principal() | account_kind: kind}
+      Application.put_env(:vxpipe_console, :navigation_test_principal, {:ok, principal})
+      projection = login() |> recycle() |> get("/admin/api/navigation") |> json_response(200)
+      visible? = Enum.any?(projection["platform_destinations"], &(&1["id"] == "installation"))
+      assert visible? == kind in [:admin, :superadmin]
+    end
+  end
+
   test "Settings API-key endpoints return scoped metadata and one-time issuance secrets" do
     settings = Application.fetch_env!(:vxpipe_calls, Vxpipe.Calls)
 

@@ -28,7 +28,7 @@ test("changing the URL requires confirmation and preserves the draft after a fai
   expect(screen.getByRole("status")).toHaveTextContent("Vxpipe URL updated");
 });
 
-test.each(["admin", null] as const)("%s cannot access installation settings", roleKind => {
+test.each([null] as const)("%s cannot access installation settings", roleKind => {
   render(<InstallationSettingsPage roleKind={roleKind} publicUrl="https://calls.example.test" onSave={vi.fn()} />);
   expect(screen.getByRole("heading", { name: "Access unavailable" })).toBeVisible();
   expect(screen.queryByLabelText("Vxpipe URL")).not.toBeInTheDocument();
@@ -44,4 +44,12 @@ test("invalid edits and a normalized unchanged URL never trigger a save", () => 
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(save).not.toHaveBeenCalled();
+});
+
+test("admins see Diagnostics without the superadmin URL controls", () => {
+  render(<InstallationSettingsPage roleKind="admin" publicUrl="https://private.example.test" onSave={vi.fn()} diagnostics={<p>Benchmark control</p>} />);
+  expect(screen.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
+  expect(screen.getByText("Benchmark control")).toBeVisible();
+  expect(screen.queryByLabelText("Vxpipe URL")).not.toBeInTheDocument();
+  expect(screen.queryByText("https://private.example.test")).not.toBeInTheDocument();
 });

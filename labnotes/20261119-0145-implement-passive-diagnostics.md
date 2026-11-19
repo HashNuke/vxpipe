@@ -330,3 +330,48 @@
   Full Console suite590tests/0failures (127excluded), static gates all pass. Evidence:
   `/tmp/vxpipe-C-console-api-suite.log`, `/tmp/vxpipe-review-settings-api.log`.
   Durable settings/API task marked complete; UI and runtime tasks remain open.
+
+## Checkpoint C — Installation Diagnostics UI in progress
+
+- Added the exact Diagnostics section and Benchmark using Silero VAD control. Admin
+  presentation excludes the URL form; both production navigation projection and
+  Storybook navigation now offer Installation to admin/superadmin only.
+- Production route calls the dedicated session API with CSRF and saved revision;
+  admin route never requests URL settings. React integration verifies a save and
+  remount reread. URL settings load independently without remounting Diagnostics.
+- Loading, unavailable/retry, saving and conflict/reload states are explicit. The
+  checkbox retains the last confirmed value until persistence responds. Optional
+  applying/applied evidence is presentation-ready, but the backend currently emits
+  neither; actual application displays collection status unavailable. Runtime
+  status refresh/propagation is still pending and C UI acceptance stays open.
+- Red/green: component/role, production route and prototype navigation tests;
+  backend navigation endpoint failed for missing admin destination then passed22/0.
+  Initial frontend focused checks42/0 and typecheck pass.
+- Astra reproduced a committed PATCH followed by a lost response being falsely
+  described as unchanged. Fixed with uncertain-result wording, last-confirmed
+  state, and mandatory reload before further writes. Retained regression and
+  affected frontend tests37/0 pass; typecheck passes. Full frontend run overlapped
+  reviewer-added red regression and reported that one failure (1168passed), so
+  a fixed-source full rerun is now active.
+- Bounded Chrome fixture inspection:1440x1000 desktop and390x844 mobile default;
+  admin mobile without URL controls, keyboard Space toggle; failed save retains
+  unchecked last-confirmed value and readable error. Initial browser selector
+  raced Storybook loading; waiting for the checkbox resolved it. Astra independently
+  checked admin desktop/mobile and superadmin mobile without horizontal overflow.
+  Browser checks are simulated fixtures, not live call/runtime acceptance.
+
+- Final Astra UI re-review clean;37focusedtests/0 independently. Second bounded
+  Chrome pass confirms uncertain-save error, disabled checkbox and Reload on
+  desktop/mobile; keyboard Enter reload restores editable confirmed state. No
+  horizontal overflow. Evidence `/tmp/vxpipe-review-settings-ui-final.log`.
+  Current source typecheck and root static gates pass. Full frontend rerun pending.
+
+- Fixed-source full frontend rerun passes1169tests across149files:
+  `/tmp/vxpipe-C-settings-frontend-suite-final.log`. New control/fixture lint exposed
+  captured async fixture reassignment and a cleanup-ref warning; replaced fixture
+  storage with a ref and extracted stable invalidation callback. Lint then passed,
+  control tests5/0, independent affected suite37/0. These nonvisual changes do not
+  alter production request invalidation; fixture saved state now survives knobs.
+- Final UI cleanup review is clean. Typecheck rerun before commit. No additional
+  browser polishing was needed after the bounded second pass. Production runtime
+  status/polling and actual capture are still unimplemented; no deployment.

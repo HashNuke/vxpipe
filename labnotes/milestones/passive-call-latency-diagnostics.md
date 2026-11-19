@@ -576,3 +576,27 @@ Console suite590tests/0failures (127excluded); static root gates pass. Astra xhi
 review is clean. This completes the durable settings/API task, not the frontend
 section or live projection. No frontend/browser acceptance or active capture is
 claimed; those separate C tasks remain unchecked.
+
+## Checkpoint C Installation UI evidence — 2026-11-19
+
+Installation now contains Diagnostics and the exact Benchmark using Silero VAD
+control. Admins/superadmins have production and fixture navigation; admins see no
+URL controls and never fetch URL settings. The production React route saves with
+CSRF and revision and rereads on remount. Errors preserve last-confirmed state;
+conflicts and uncertain save outcomes require reload before another write.
+
+A reviewer-proven lost-response case was fixed: a committed write with a lost
+response is no longer falsely described as unchanged. The regression is retained.
+Affected frontend tests37/0 and typecheck pass; navigation endpoint22/0; Astra
+xhigh review is clean. Desktop/mobile Chrome fixtures cover role separation,
+keyboard toggle/reload and failed-save layouts. The full frontend fixed-source
+rerun is pending. These browser fixtures do not establish real call capture.
+
+The component can render applying/applied status but the API does not yet produce
+runtime status. It truthfully shows collection status unavailable in that case.
+Projection-backed status and bounded live refresh remain pending, so the combined
+C Installation UI acceptance task stays unchecked until that integration passes.
+
+Installation UI checkpoint final evidence: full frontend suite1169/0, affected
+lint/type checks pass, and Astra cleanup re-review clean. Runtime-backed applying
+status/refresh remains explicitly pending; the combined C UI task is still open.

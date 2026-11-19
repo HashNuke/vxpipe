@@ -3,9 +3,10 @@ import { roles, tenants, users } from "../authentication/fixtures";
 import { landingPath, visibleTenants, navigationItems } from "./navigationPolicy";
 import type { Role } from "../authentication/types";
 
-test("only Superadmins see Installation in the Settings prototype", () => {
+test("Admins and Superadmins see Installation in the Settings prototype", () => {
   expect(navigationItems(roles[0], users[0]).platform).toContainEqual({ label: "Installation", href: "/platform/installation" });
-  for (const role of roles.slice(1)) {
+  expect(navigationItems(roles[1], users[1]).platform).toContainEqual({ label: "Installation", href: "/platform/installation" });
+  for (const role of roles.slice(2)) {
     expect(navigationItems(role, users[1]).platform.some(item => item.href === "/platform/installation")).toBe(false);
   }
 });

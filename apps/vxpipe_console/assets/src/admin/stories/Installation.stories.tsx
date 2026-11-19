@@ -33,8 +33,19 @@ export const Saving: Story = { args: { saveBehavior: "pending" }, play: async co
   await userEvent.click(within(context.canvasElement).getByRole("button", { name: "Change URL" }));
 } };
 export const NotConfigured: Story = { args: { initialPublicUrl: "" } };
-export const AdminDenied: Story = { args: { actor: "admin" } };
+export const AdminDiagnostics: Story = { args: { actor: "admin" } };
 export const MemberDenied: Story = { args: { actor: "member" } };
 export const Loading: Story = { args: { state: "loading" } };
 export const Unavailable: Story = { args: { state: "unavailable" } };
 export const Light: Story = { args: { theme: "light" } };
+
+export const BenchmarkEnabled: Story = { play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.click(await canvas.findByRole("checkbox", { name: "Benchmark using Silero VAD" }));
+  await expect(canvas.getByRole("checkbox")).toBeChecked();
+} };
+export const BenchmarkSaveFailure: Story = { args: { saveBehavior: "failure" }, play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.click(await canvas.findByRole("checkbox", { name: "Benchmark using Silero VAD" }));
+  await expect(canvas.getByRole("alert")).toBeVisible();
+} };

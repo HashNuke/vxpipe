@@ -51,6 +51,30 @@ test("production Installation settings load and save through the session API wit
   expect(fetchImpl).toHaveBeenCalledWith("/api/installation", expect.objectContaining({ method: "PATCH", headers: expect.objectContaining({ "x-csrf-token": "csrf-token" }), body: JSON.stringify({ public_url: "https://new.example.test", revision: 2 }) }));
 });
 
+test("an admin saves Diagnostics with a revision without fetching URL settings", async () => {
+  window.history.replaceState({}, "", "/platform/installation");
+  const base = sessionFetch(adminRole);
+  let saved = { enabled: false, revision: 2 };
+  const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) === "/api/installation/diagnostics") {
+      if (init?.method === "PATCH") saved = { enabled: true, revision: 3 };
+      return response(saved);
+    }
+    return base(input, init);
+  });
+  const mounted = render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
+  const toggle = await screen.findByRole("checkbox", { name: "Benchmark using Silero VAD" });
+  expect(toggle).not.toBeChecked();
+  expect(screen.queryByLabelText("Vxpipe URL")).not.toBeInTheDocument();
+  fireEvent.click(toggle);
+  await waitFor(() => expect(toggle).toBeChecked());
+  expect(fetchImpl).toHaveBeenCalledWith("/api/installation/diagnostics", expect.objectContaining({ method: "PATCH", headers: expect.objectContaining({ "x-csrf-token": "csrf-token" }), body: JSON.stringify({ enabled: true, revision: 2 }) }));
+  expect(fetchImpl.mock.calls.some(([path]) => path === "/api/installation")).toBe(false);
+  mounted.unmount();
+  render(<App csrfToken="csrf-token" fetchImpl={fetchImpl} />);
+  expect(await screen.findByRole("checkbox", { name: "Benchmark using Silero VAD" })).toBeChecked();
+});
+
 test("local Superadmin recovery signs in after a valid proof", async () => {
   window.history.replaceState({}, "", "/auth/recover");
   const fetchImpl = vi.fn((input: RequestInfo | URL) => {

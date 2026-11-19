@@ -8,6 +8,8 @@ export type ConnectedClient = {
   expires_at: string;
 };
 
+export type DiagnosticsSettings = { enabled: boolean; revision: number; collection_status?: "applying" | "applied" | "unavailable" };
+
 export type InstallationSettings = { public_url: string | null; revision: number };
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -152,6 +154,12 @@ export class AuthenticationApi {
 
   login(email: string, password: string) {
     return this.request<void>("/auth/api/login", "POST", { email, password });
+  }
+
+  diagnosticsSettings() { return this.request<DiagnosticsSettings>("/api/installation/diagnostics"); }
+
+  updateDiagnosticsSettings(enabled: boolean, revision: number) {
+    return this.request<DiagnosticsSettings>("/api/installation/diagnostics", "PATCH", { enabled, revision });
   }
 
   installation() { return this.request<InstallationSettings>("/api/installation"); }

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type ReactNode, type FormEvent } from "react";
 import { Button } from "../Button";
 import { SetupDialog } from "../SetupDialog";
 import { FormField, FormMessage } from "./FormField";
@@ -6,9 +6,9 @@ import { normalizeInstanceUrl } from "./instanceUrl";
 import type { PageState, SaveResult, SystemKind } from "./types";
 
 /** Shared presentation for persisted settings and interactive Storybook fixtures. */
-export function InstallationSettingsPage({ roleKind, publicUrl, onSave, state = "ready", onRetry }: {
+export function InstallationSettingsPage({ roleKind, publicUrl, onSave, state = "ready", onRetry, diagnostics }: {
   roleKind: SystemKind; publicUrl: string; onSave: (url: string) => Promise<SaveResult>;
-  state?: PageState; onRetry?: () => void;
+  state?: PageState; onRetry?: () => void; diagnostics?: ReactNode;
 }) {
   const [savedUrl, setSavedUrl] = useState(publicUrl);
   const [draft, setDraft] = useState(publicUrl);
@@ -17,9 +17,11 @@ export function InstallationSettingsPage({ roleKind, publicUrl, onSave, state = 
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
 
-  if (roleKind !== "superadmin") return <main className="access-page">
+  useEffect(() => { setSavedUrl(publicUrl); setDraft(publicUrl); }, [publicUrl]);
+
+  if (roleKind !== "superadmin" && roleKind !== "admin") return <main className="access-page">
     <h1>Access unavailable</h1>
-    <p className="access-lead">Only Superadmins can manage installation settings.</p>
+    <p className="access-lead">Only Admins and Superadmins can manage installation settings.</p>
   </main>;
 
   async function save(url: string) {
@@ -45,6 +47,7 @@ export function InstallationSettingsPage({ roleKind, publicUrl, onSave, state = 
 
   return <main className="access-page access-narrow installation-settings">
     <h1>Installation</h1>
+    {roleKind === "superadmin" ? <>
     <p className="access-lead">Manage the address used by this VxPipe installation. This URL is used by users to access this app and by integrations within the app, such as Telephony and MCPs.</p>
     {state === "loading" ? <p role="status" className="access-message">Loading installation settings…</p> : state === "unavailable" ? <>
       <FormMessage error>Installation settings could not be loaded.</FormMessage>
@@ -72,5 +75,10 @@ export function InstallationSettingsPage({ roleKind, publicUrl, onSave, state = 
         </div>
       </div>
     </SetupDialog> : null}
+    </> : null}
+    <section className="installation-diagnostics" aria-labelledby="installation-diagnostics-heading">
+      <h2 id="installation-diagnostics-heading">Diagnostics</h2>
+      {diagnostics ?? <p className="access-muted">Diagnostics settings are unavailable.</p>}
+    </section>
   </main>;
 }
