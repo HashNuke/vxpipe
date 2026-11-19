@@ -310,6 +310,107 @@ defmodule Vxpipe.CallEngine.Diagnostics.RoomServiceTest do
     refute CaptureHandoff.current?(input)
   end
 
+  for local_vad <- [false, true] do
+    @tag local_vad: local_vad, pending_departure: true
+    test "late collector result cannot bind a removed source, local VAD #{local_vad}", ctx do
+      parent = self()
+      attempts = :atomics.new(1, signed: false)
+
+      start_port(fn context ->
+        {:ok, output} =
+          CaptureHandoff.new(parent, owner: context.capability, projection: __MODULE__.Projection)
+
+        if :atomics.add_get(attempts, 1, 1) == 1 do
+          send(parent, {:held_collector, self(), context, output})
+
+          receive do
+            :release -> :ok
+          end
+        else
+          send(parent, {:collector_started, context})
+        end
+
+        {:ok, output}
+      end)
+
+      supervisor = start_room(ctx)
+      frame = %{ctx.frame | payload: :binary.copy(<<0, 0>>, 512)}
+      assert %{pending?: true} = RoomService.scan(__MODULE__.Service)
+      assert :ok = SpeechToText.push_audio(ctx.capability, frame)
+      assert_receive {:held_collector, runner, old, output}, 1_000
+      connections = :sys.get_state(ctx.room).connections
+
+      try do
+        :sys.replace_state(ctx.room, &%{&1 | connections: %{}})
+        RoomService.notify(__MODULE__.Service)
+        assert %{active_sources: 0} = RoomService.scan(__MODULE__.Service)
+        assert %{occupied_slots: 1} = SourceAdmission.status(__MODULE__.Admission)
+        assert AttachmentLease.current?(old.attachment_lease)
+      after
+        send(runner, :release)
+      end
+
+      _ = :sys.get_state(runner)
+      assert %{active_sources: 0, pending?: false} = settled()
+      refute CaptureHandoff.current?(output)
+      assert :sys.get_state(ctx.capability).diagnostic_tap == nil
+      assert DynamicSupervisor.which_children(__MODULE__.RoomWorkers) == []
+      assert %{occupied_slots: 0} = SourceAdmission.status(__MODULE__.Admission)
+      assert {:error, :unavailable} = CaptureHandoff.offer(output, {:reset, 0, :audio_gap, 0})
+
+      :sys.replace_state(ctx.room, &%{&1 | connections: connections})
+      RoomService.notify(__MODULE__.Service)
+
+      fresh =
+        attach(%{
+          ctx
+          | frame: %{
+              frame
+              | sequence_number: 2,
+                timestamp: 512,
+                received_at: System.monotonic_time(:millisecond) + 32
+            }
+        })
+
+      refute fresh.run_id == old.run_id
+      refute fresh.clock_id == old.clock_id
+      assert fresh.participant_id == old.participant_id
+      assert fresh.mode == if(ctx.local_vad, do: :operational_reuse, else: :benchmark_only)
+      input = :sys.get_state(ctx.capability).diagnostic_tap.handoff
+      monitor = Process.monitor(input.receiver)
+      wire = ctx.wire
+      silence = frame.payload
+      assert_receive {:scribe_audio, ^wire, ^silence}, 1_000
+      assert_receive {:scribe_audio, ^wire, ^silence}, 1_000
+      pcm = :binary.copy(<<32, 0>>, 512)
+
+      assert :ok =
+               SpeechToText.push_audio(ctx.capability, %{
+                 frame
+                 | payload: pcm,
+                   sequence_number: 3,
+                   timestamp: 1_024,
+                   received_at: System.monotonic_time(:millisecond) + 32
+               })
+
+      assert_receive {:scribe_audio, ^wire, ^pcm}, 1_000
+      mode = if ctx.local_vad, do: :operational, else: :benchmark
+      assert_receive {:matrix_inference, ^mode, _, ^pcm}, 1_000
+      :sys.replace_state(ctx.room, &%{&1 | connections: %{}})
+      RoomService.notify(__MODULE__.Service)
+      _ = RoomService.scan(__MODULE__.Service)
+      send(input.receiver, :check_grant)
+      assert_receive {:DOWN, ^monitor, :process, _, _}, 1_000
+      refute CaptureHandoff.current?(input)
+      assert %{active_sources: 0} = RoomService.status(__MODULE__.Service)
+      assert %{occupied_slots: 0} = SourceAdmission.status(__MODULE__.Admission)
+      assert :ok = Supervisor.stop(supervisor, :shutdown, 1_000)
+      refute_received {:scribe_audio, _, _}
+      refute_received {:matrix_inference, _, _, ^pcm}
+      refute_received {:scribe_commit, _}
+    end
+  end
+
   test "stalled collector stays outside service callbacks and is owned by the room", ctx do
     parent = self()
 

@@ -1,8 +1,8 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: records/replay, room-service cutover and STT eligibility implemented; lifecycle/UI acceptance pending, 2026-11-19.
+Status: records/replay, room-service cutover and STT eligibility implemented; settings/UI acceptance pending, 2026-11-19.
 A, B and existing D functionality are implemented. C now uses participant-owned
-observation managed by a room service; broader lifecycle acceptance remains.
+observation managed by a room service; settings and failure-parity acceptance remain.
 The new D segment/participant extensions, remaining C acceptance, E and F remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
 
@@ -576,7 +576,7 @@ Migration tasks (revised architecture; ordered as in the migration steps above):
   the port absent or down, report `unavailable` coverage and do no work. Preserve
   gate debt on tracker restart; before publishing a fresh gate, prove termination
   of old room-owned workers (including reuse mode) and resolve outstanding starts.
-- [ ] Re-prove reuse/fallback through the room service: one inference execution per
+- [x] Re-prove reuse/fallback through the room service: one inference execution per
   eligible frame, all local Silero/collection combinations, mid-call mode change,
   join/leave, reconnect, disable/re-enable and stale/late work.
 - [x] Cut over in one checkpoint: compose the room service, stop starting
@@ -2060,3 +2060,33 @@ this closes the node admission/real-root teardown task. Remaining room-service
 lifecycle/stale-work, settings, UI and E/F gates stay open. This checkpoint changes
 only tests and documentation; no live provider, Telnyx, full umbrella suite or
 deployment action occurred.
+
+
+## Migration step 3 acceptance — room-service lifecycle matrix, 2026-11-19
+
+An evidence audit maps the retained room-service and configured tests to all local
+Silero/collection combinations, one inference path, mode changes/reconnect,
+settings disable/re-enable and stale/late work. Existing source-worker tests remain
+the boundary for acoustic-reset/retired-result permutations. The new cases cover
+the missing pending and active accepted-input withdrawal/re-admission race in both
+Silero modes; they do not claim live transport join/leave acceptance.
+
+Collector creation is held after allocating its output. With the attachment lease
+still current, the accepted source is removed. The returned output must close,
+leave no bound tap or worker and release its slot. Re-admission creates fresh
+run/clock IDs and preserves exact provider PCM and the expected inference path.
+A second removal retires the active worker while RoomService stays available;
+worker DOWN precedes zero-active/zero-capacity assertions. Subtree termination
+precedes final duplicate-byte/inference/commit checks.
+
+Focused Engine diagnostics pass 234/234; final strengthened cases and independent
+review pass 2/2. A review control restoring the accepted source before callback
+return fails both rejection assertions with an attached worker, proving source
+withdrawal rather than timeout causes rejection. Static gates and scoped Astra
+review are clean. See [checkpoint labnotes](../20261119-1839-room-lifecycle-acceptance.md)
+for the evidence map and corrected asynchronous-retirement assertion.
+
+This closes the room-service reuse/fallback migration checklist. Installation
+settings/effective-status and failure-parity acceptance, remaining response/report
+checks, D extensions and E/F stay open. Only tests/documentation changed; no live
+provider, Telnyx, full umbrella suite or deployment action occurred.
