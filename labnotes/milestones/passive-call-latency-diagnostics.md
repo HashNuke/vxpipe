@@ -1613,3 +1613,17 @@ mutation emits playback-start before acknowledgement. Together with the prior
 response-boundary checkpoint this completes the C matching-landmarks task.
 This checkpoint changes tests and documentation only. No live provider, Telnyx
 code or deployment changed.
+
+## Retained configured failure parity — 2026-11-19
+
+Before room-service cutover, four synthetic configured cases verify collection
+on/off with diagnostic inference crashing or held while two conversational turns
+complete. Provider marker bytes arrive once; responses keep input correlation;
+disable drains diagnostic work without extra commits or connection failure.
+An owned acknowledgement proves inference remains held through both turns.
+
+The full configured selection passes 10/10. Astra reproduced duplicate delivery
+passing the initial assertions; the corrected checks reject that mutation in all
+four cases, and independent baseline is 4/4. Final scoped review and root static
+gates are clean. This is retained old-coordinator evidence to port at cutover,
+not completion of any new room-service task or full failure/load acceptance.

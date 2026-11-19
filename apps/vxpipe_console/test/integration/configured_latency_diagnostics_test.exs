@@ -149,7 +149,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
          poll_interval_ms: 250,
          classify:
            if(matrix?,
-             do: matrix_classifier(parent, :benchmark),
+             do: benchmark_classifier(parent, Map.get(tags, :diagnostic_failure)),
              else: fn model, stream, pcm ->
                if byte_size(pcm) == 1_024 do
                  Silero.push(stream, model, pcm)
@@ -545,6 +545,85 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  for failure <- [:crash, :hang], enabled <- [false, true] do
+    @tag matrix: true, diagnostics_enabled: enabled, diagnostic_failure: failure
+    @failure failure
+    @enabled enabled
+    test "configured call continues with diagnostic #{@failure} and enabled #{@enabled}", c do
+      {_call, _connection, attachment, wire, identity} = call(c.options)
+      epoch = make_ref()
+
+      sequence =
+        if @enabled do
+          discover_with_audio(attachment, identity, epoch, wire)
+        else
+          0
+        end
+
+      pcm = :binary.copy(<<9, 0>>, 512)
+      send_audio(attachment, identity, epoch, sequence, sequence * 512, pcm)
+      assert_receive {:scribe_audio, ^wire, ^pcm}, 2_000
+
+      inference =
+        if @enabled do
+          failure = @failure
+          assert_receive {:diagnostic_failure_started, ^failure, task}, 2_000
+          {task, Process.monitor(task)}
+        end
+
+      # Identical provider bytes and turn/output behavior with collection off,
+      # inference crashed, or inference still blocked on its first frame.
+      for index <- 1..2 do
+        text = "Continue the call #{index}."
+        emit_scribe_turn(wire, text)
+        assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = input}, 2_000
+        assert input.text == text
+        assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
+        assert output.text == "Acknowledged."
+        assert output.correlation_id == input.correlation_id
+
+        next_pcm = :binary.copy(<<index, 0>>, 512)
+
+        send_audio(
+          attachment,
+          identity,
+          epoch,
+          sequence + index,
+          (sequence + index) * 512,
+          next_pcm
+        )
+
+        assert_receive {:scribe_audio, ^wire, ^next_pcm}, 2_000
+      end
+
+      if @enabled and @failure == :hang do
+        {task, _monitor} = inference
+        reference = make_ref()
+        send(task, {:diagnostic_still_blocked, self(), reference})
+        assert_receive {:diagnostic_still_blocked, ^task, ^reference}, 1_000
+      end
+
+      change_diagnostics(false, c.settings_revision)
+      await_diagnostic_drain()
+
+      if inference do
+        {task, monitor} = inference
+        assert_receive {:DOWN, ^monitor, :process, ^task, _reason}, 2_000
+      else
+        refute_received {:diagnostic_failure_started, _, _}
+      end
+
+      for marker <- [9, 1, 2] do
+        delivered = :binary.copy(<<marker, 0>>, 512)
+        refute_received {:scribe_audio, ^wire, ^delivered}
+      end
+
+      refute_received {:scribe_commit, ^wire}
+      refute_received {:vxpipe_connection_unavailable, _}
+      GenServer.stop(attachment.room_authority, :shutdown)
+    end
+  end
+
   @tag matrix: true, routing: true
   test "configured agent transfer preserves input identity through text and acknowledged audio",
        c do
@@ -688,6 +767,36 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
         DynamicSupervisor.count_children(supervisor).active == 0
       end)
     end)
+  end
+
+  defp benchmark_classifier(parent, nil), do: matrix_classifier(parent, :benchmark)
+
+  defp benchmark_classifier(parent, failure) do
+    normal = matrix_classifier(parent, :benchmark)
+
+    fn model, stream, pcm ->
+      if pcm == :binary.copy(<<9, 0>>, 512) do
+        send(parent, {:diagnostic_failure_started, failure, self()})
+
+        case failure do
+          :crash -> exit(:synthetic_diagnostic_failure)
+          :hang -> hold_diagnostic_inference(fn -> normal.(model, stream, pcm) end)
+        end
+      else
+        normal.(model, stream, pcm)
+      end
+    end
+  end
+
+  defp hold_diagnostic_inference(release) do
+    receive do
+      {:diagnostic_still_blocked, observer, reference} ->
+        send(observer, {:diagnostic_still_blocked, self(), reference})
+        hold_diagnostic_inference(release)
+
+      :release_diagnostic_inference ->
+        release.()
+    end
   end
 
   defp matrix_classifier(parent, mode) do
