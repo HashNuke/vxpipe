@@ -183,6 +183,28 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAdmissionTest do
     end
   end
 
+  test "node hard capacity permits an explicit limit while default admission stops at sixteen",
+       c do
+    gate = AttachmentLease.gate(32)
+    pool = start_supervised!({SourceAdmission, name: via(), gate: gate}, id: :configured_pool)
+
+    for _ <- 1..16 do
+      {:ok, lease} = SourceAdmission.reserve(pool, self())
+      {:ok, _worker} = SourceAdmission.start_worker(pool, lease, c.first, worker_spec())
+      :ok = SourceAdmission.adopt(pool, lease)
+    end
+
+    assert {:error, :capacity_unavailable} = SourceAdmission.reserve(pool, self())
+    assert {:error, :capacity_unavailable} = SourceAdmission.reserve(pool, self(), 8)
+    assert {:ok, next} = SourceAdmission.reserve(pool, self(), 32)
+    :ok = SourceAdmission.cancel(pool, next)
+    assert AttachmentLease.pending(gate) == 16
+
+    for invalid <- [0, 33, nil] do
+      assert {:error, :invalid_capacity} = SourceAdmission.reserve(pool, self(), invalid)
+    end
+  end
+
   defp stop_worker(supervisor, worker) do
     monitor = Process.monitor(worker)
     :ok = DynamicSupervisor.terminate_child(supervisor, worker)

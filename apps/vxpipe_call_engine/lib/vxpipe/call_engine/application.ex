@@ -4,6 +4,7 @@ defmodule Vxpipe.CallEngine.Application do
   use Application
 
   alias Vxpipe.CallEngine.OpeningAudio.AssetCache
+  alias Vxpipe.CallEngine.Diagnostics.{AdmissionSupervisor, AttachmentLease, SourceAdmission}
 
   @impl true
   def start(_type, _args) do
@@ -44,7 +45,15 @@ defmodule Vxpipe.CallEngine.Application do
        sample_interval_ms: Keyword.fetch!(telemetry, :sample_interval_ms)}
     ]
 
+    # Allocate outside AdmissionSupervisor.init so tracker restarts retain capacity.
+    # Explicit replacement of this temporary subtree must reuse the original gate.
+    admission_children = [
+      {AdmissionSupervisor,
+       name: AdmissionSupervisor, admission: SourceAdmission, gate: AttachmentLease.gate(32)}
+    ]
+
     base_children ++
+      admission_children ++
       diagnostic_settings_children(settings) ++
       model_fixture_children(settings) ++ remote_mcp_children(settings) ++ runtime_children
   end

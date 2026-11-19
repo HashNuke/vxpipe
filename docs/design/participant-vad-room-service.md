@@ -189,3 +189,24 @@ Missing admission ports fail closed; the composed path must not manufacture a ne
 fallback gate. A fresh Engine-root gate is safe only after confirmed teardown of
 old room subtrees and unresolved starts. The root composition/restart tests remain
 pending; the query checkpoint is not evidence of that lifetime property.
+
+
+## Engine admission subtree
+
+The Engine application now allocates the node gate once while constructing its
+root child specifications, before RoomSupervisor. AdmissionSupervisor receives
+that gate explicitly; neither its init nor the tracker creates a replacement.
+The node hard ceiling is 32; SourceAdmission defaults each reservation to the
+approved 16-source limit and accepts an explicit configured limit from 1 to 32,
+always against the same node counter. Room wiring must pass the current Calls
+source-pool limit, never a participant-supplied value.
+
+The subtree is temporary/non-significant with a two-restarts-in-five-seconds
+budget. Tracker restarts reuse the gate and preserve lost-monitor debt. Exhaustion
+removes the temporary subtree and leaves admission unavailable; there is no
+automatic subtree recreation. Any explicit re-add must retain the original gate
+and must not reconstruct Application.child_specs to manufacture fresh capacity.
+Controlled Engine-root teardown stops room workers before allocating a fresh root
+gate. The composition harness verifies worker DOWN before that reallocation;
+unresolved-start teardown with the real room diagnostics subtree remains a cutover
+gate. No Calls/source path uses this new admission port until room-service wiring.

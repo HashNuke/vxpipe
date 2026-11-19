@@ -6,7 +6,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAdmission do
   def start_link(options),
     do: GenServer.start_link(__MODULE__, options, name: Keyword.fetch!(options, :name))
 
-  def reserve(pool, owner), do: call(pool, {:reserve, owner})
+  def reserve(pool, owner, maximum \\ 16)
+
+  def reserve(pool, owner, maximum) when is_integer(maximum) and maximum in 1..32,
+    do: call(pool, {:reserve, owner, maximum})
+
+  def reserve(_, _, _), do: {:error, :invalid_capacity}
 
   def adopt(pool, lease) do
     case call(pool, {:adopt, lease}) do
@@ -88,10 +93,11 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAdmission do
   def init(options), do: {:ok, %{gate: Keyword.fetch!(options, :gate), entries: %{}}}
 
   @impl true
-  def handle_call({:reserve, owner}, _from, state) do
+  def handle_call({:reserve, owner, maximum}, _from, state) do
     state = prune(state)
+    gate = %{state.gate | capacity: min(maximum, state.gate.capacity)}
 
-    case AttachmentLease.reserve(state.gate, owner) do
+    case AttachmentLease.reserve(gate, owner) do
       {:ok, lease} ->
         entry = %{
           lease: lease,

@@ -1767,3 +1767,26 @@ See [checkpoint labnotes](../20261119-1626-room-diagnostic-inputs.md).
 No additional C checkbox is complete: room service/subtree, stable node admission
 composition, attachment, notifications, persisted no-agent turns and cutover remain
 pending. No operational dispatch, provider behavior or deployment changed.
+
+
+## Migration step 3 Engine admission lifetime — 2026-11-19
+
+Engine root child specs now allocate the shared gate before RoomSupervisor and
+supply it to a temporary, non-significant AdmissionSupervisor. The tracker has its
+own two-in-five-seconds restart budget. Tracker restarts and explicit re-add with
+the original gate preserve capacity debt over surviving suspended workers. When
+that optional subtree exhausts its budget, calls remain responsive and admission
+is unavailable; it is not automatically recreated with fresh capacity.
+
+The hard ceiling remains 32; reservations default to 16 and can use a bounded
+configured source-pool limit against the same counter. A controlled root teardown
+fixture confirms old room worker DOWN before allocating fresh capacity. Actual
+room-subtree unresolved-start teardown still needs verification at wiring/cutover.
+Scoped review is clean with 23 focused cases including independent timeout probes.
+The Engine diagnostics/application selection passes 216/216 and root static gates pass;
+see [checkpoint labnotes](../20261119-1635-engine-admission-lifetime.md).
+
+This installs only admission bookkeeping. Existing Calls/source coordinator
+composition is unchanged, and no additional C checkbox is complete. The room
+service/subtree, Calls port lookup, notifications, attachment and cutover remain
+pending. No deployment or live provider tests were performed.

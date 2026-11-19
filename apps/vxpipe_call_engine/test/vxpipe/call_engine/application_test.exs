@@ -7,6 +7,31 @@ defmodule Vxpipe.CallEngine.ApplicationTest do
   alias Vxpipe.CallEngine.RemoteMCP.CatalogRefresher
   alias Vxpipe.Providers.ElevenLabs.AgentLeaseSupervisor
 
+  test "diagnostic admission retains a root-allocated gate before room supervision" do
+    alias Vxpipe.CallEngine.Diagnostics.{AdmissionSupervisor, AttachmentLease, SourceAdmission}
+    settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
+    children = Application.child_specs(settings)
+
+    assert {AdmissionSupervisor, options} =
+             Enum.find(children, fn
+               {AdmissionSupervisor, _} -> true
+               _ -> false
+             end)
+
+    assert Keyword.fetch!(options, :name) == AdmissionSupervisor
+    assert Keyword.fetch!(options, :admission) == SourceAdmission
+    gate = Keyword.fetch!(options, :gate)
+    assert gate.capacity == 32
+    assert AttachmentLease.pending(gate) == 0
+    spec = AdmissionSupervisor.child_spec(options)
+    assert spec.restart == :temporary
+    assert spec.significant == false
+    assert {AdmissionSupervisor, :start_link, [^options]} = spec.start
+
+    assert Enum.find_index(children, &(&1 == {AdmissionSupervisor, options})) <
+             Enum.find_index(children, &(&1 == Vxpipe.CallEngine.RoomSupervisor))
+  end
+
   test "diagnostic settings reader is optional, named and cannot restart the engine on exhaustion" do
     settings = Elixir.Application.fetch_env!(:vxpipe_call_engine, Vxpipe.CallEngine.Application)
     parent = self()
