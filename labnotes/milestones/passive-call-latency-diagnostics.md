@@ -1,8 +1,10 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: implementation in progress, 2026-11-19. Checkpoint A code, focused tests,
-rendered checks, Astra xhigh review and all root gates pass. Checkpoint B now has a reviewed, durable offline replay and passing root gates.
-C passive capture and the offline matrix are implemented; C–F acceptance remains open. The index owns implementation order.
+Status: architecture revised, implementation migration pending, 2026-11-19.
+A and existing B/D functionality remain implemented. C must migrate from agent-selected
+background discovery to participant-owned observation managed by a room service.
+New start/end evidence and B/D extensions, C migration, E and F are incomplete.
+The index owns implementation order. Earlier checkpoint notes describe the old path.
 
 ## Runnable outcome
 
@@ -25,7 +27,229 @@ provider tests, or change Telnyx code for this milestone. Live acceptance is lim
 to the VAD/Scribe browser path. Existing local Telnyx fixtures may run as part of the
 unchanged umbrella suite; they are not real calls or evidence of live Telnyx support.
 
+## Architecture revision — participant-owned VAD, 2026-11-19
+
+This revision follows the user's request to rethink the milestone. It supersedes
+agent-selected source discovery and agent-owned acoustic runs in the earlier
+implementation notes. Those notes remain historical evidence, not acceptance of
+the revised architecture. This is a specification change; the runtime migration
+has not been implemented. Implementation resumed after the user reviewed and
+updated this plan; the migration order below now governs the next checkpoints.
+
+### Local VAD and provider endpointing are different signals
+
+**Operational VAD means local Silero already running on the human participant's
+accepted STT input.** It does not mean ElevenLabs/provider-side VAD, transcript
+commits, provider turn markers or the agent's speech-to-speech capability.
+
+Observe local acoustic speech-start and speech-end boundaries, sample positions,
+confirmation times and reset/gap evidence. These are acoustic segments: a pause
+can create multiple segments inside one provider/canonical conversational turn.
+Do not make local VAD decide when STT commits or the room ends a turn. Retain the
+existing separate provider/adapter/room landmarks to measure their delays against
+local acoustic evidence. Missing local end evidence remains missing even when the
+provider has emitted an end marker.
+
+### Target ownership and mode selection
+
+One optional **room diagnostics service**, owned by the room incarnation, manages
+observation for its STT-using human participants. It selects each input independently:
+
+| Participant input | Diagnostic behavior while collection is enabled |
+| --- | --- |
+| STT with local operational Silero | Subscribe to existing Silero evidence; no second model execution. |
+| STT without local operational Silero | Room service owns one passive Silero observer for this participant's accepted input stream. |
+| No STT input, including native speech-to-speech-only input | No observer and no model work. |
+
+The rule is the human's STT input, whatever the response side is. A human whose STT
+also drives an STS agent's `external`/`hybrid` turn control (`activity_agent_id`
+set) is still an STT-using participant and is observed like any other; the STS
+model's own audio is never observed. For these sessions, routing changes can
+replace the STT session (`SpeechToTextDemand.activity_authority_changed?/4`); that
+is a real STT replacement and ends the run with an explicit boundary, so transfer
+continuity is only claimed when the STT session survives. Input rows exist for
+completed canonical STT turns; response stages stay nullable.
+
+Two humans with separate STT streams have two independent VAD states. One human
+routed to multiple agents still has one VAD state for that accepted STT stream.
+Key ownership by room incarnation, participant, accepted connection/source and STT
+allocation; never by selected response agent. Preserve existing source-policy
+permissions before observing audio. Do not combine participants or run VAD over
+mixed room output, agent audio or the TTS playback stream. If a participant has
+multiple simultaneous independently admitted STT sources, each needs its own
+source identity and detector state; never merge their PCM or recurrent state.
+
+A response-agent transfer alone does not restart VAD, detach observation or create
+an acoustic run. Actual input/STT replacement, clock discontinuity, local VAD mode
+change, revocation or participant departure does create an explicit boundary.
+Response correlation remains per canonical input and output command; a turn may
+have no response or multiple destinations without changing input ownership.
+
+Continuity also requires input-scoped policy authority. The current audio tap closes
+on any global room-policy revision, even when STT preserves its allocation and the
+source remains permitted. Replace that blanket revision fence with the
+participant-scoped intervals STT already tracks: fence on the tuple (STT allocation
+generation, the source's `Snapshot.interval/3` for `:speech_to_text`, and for
+`:audio_input`), reusing the helpers behind `State.delivery_intervals_current?/5`.
+Apply the same tuple to `AudioTap` guard/offer/policy_change, the `SourceDiscovery`
+arm/probe/validate path and `SpeechToText.attach_diagnostics/5`, which all compare
+the global `policy.revision` today. Unrelated presence/routing changes must not
+reset the stream. An interval change, source replacement or an unprovable authority
+change must fail closed. Snapshots with `intervals: nil` fall back to the global
+revision and therefore stay fail-closed. Never preserve continuity merely by
+ignoring policy updates.
+
+The room service owns subscriptions and per-source lifecycle, not inference inside
+RoomAuthority. `RoomIncarnationSupervisor` is `one_for_one` with default intensity
+and `auto_shutdown: :any_significant`, so add exactly one `restart: :temporary`,
+non-significant diagnostics child supervisor with its own explicit restart
+intensity. Inside it the service may restart and reconcile; once its own intensity
+is exhausted the subtree stays down and the rest of the call reports incomplete
+coverage. Initialization must be cheap and asynchronous: model/DB readiness is
+never a room readiness resource. One VAD instance means independent stream state,
+not one model-weight copy or operating-system process per participant.
+
+Per-source `SourceWorker` processes start inside that room diagnostics subtree so
+room teardown bounds their lifetime. Admission stays node-wide: every worker,
+including reuse-mode workers that run no inference, takes a slot from the existing
+`AttachmentLease.gate` sized by `maximum_sources` (default 16, at most 32);
+benchmark-only workers also take `InferenceAdmission` from the shared inference
+pool, and model loading stays outside the room. When no slot is available, record
+an explicit `capacity_unavailable` coverage reason; bounded reconciliation may
+attach the source later when a slot frees, with the late start shown as partial
+coverage. Two rooms contending at the cap must both remain correct; add a per-room
+share only if that test shows one room can starve the others.
+
+Umbrella dependency direction is preserved: the collector factory and node source
+pool are composed by `vxpipe_calls` (`Calls.Diagnostics.Supervisor`), which depends
+on the call engine, so the room service must not reference Calls. It resolves the
+node-level `SourceSupervisor` (with its injected collector) by registered name at
+reconciliation time. When that port is absent or down, the service reports
+`unavailable` coverage and does nothing else.
+
+Use room-local lifecycle notifications plus a bounded current-source snapshot to
+handle startup, enable on an existing room, join/leave and reconnect races. Reconcile
+on service restart against authoritative accepted sources. Retire the node-wide
+room-scanning coordinator after cutover; do not keep two competing owners. A
+settings projection may remain shared infrastructure. Normal call lifecycle events
+must not synchronously wait for diagnostic attachment, inference or persistence.
+
+For local Silero reuse, existing `InferenceTap` already exports probabilities,
+sample mapping and resets. Reuse that work and derive both boundaries without
+re-running inference; publishing already-computed local boundary evidence is also
+acceptable if it preserves sample/epoch provenance. Preserve operational resets
+and failures. Provider settlement currently resets operational Silero, so complete
+local endpoints are not always available; never fill these gaps with a duplicate
+fallback detector. If local Silero fails while configured, diagnostics reports the
+gap rather than silently switching modes or changing operational failure handling.
+
+Acoustic segments are attached to the canonical turn whose source interval contains
+them, bounded per turn with an omitted count. Segments outside every turn (noise,
+uncommitted or dropped speech) go into a bounded per-run unattached-segment record
+with its own omitted count; they are never dropped silently or promoted to turns.
+
+The fallback observer runs continuously across provider turn settlements. Its
+acoustic state belongs to the input stream until a real source/lifecycle boundary.
+When the local Silero mode changes, fence the old subscription/work before selecting
+the new mode; permit no overlap of duplicate inference for the same input.
+
+Retain the existing default-off installation setting and authorization as the
+collection gate. Existing operational Silero continues independently while debug
+collection is off. This revision does not authorize always-on debug persistence,
+provider configuration changes, a new provider, or speech-to-speech integration.
+Eligibility is determined by the human's accepted STT input, not by requiring a
+selected LLM/TTS agent or rejecting an entire mixed room because it contains STS.
+No speech-to-speech model, input or output is ever a diagnostic source.
+
+### Review of implemented work and required changes
+
+Source review covers the A–F checkpoints and the committed implementation through
+`f46267e4`; the uncommitted configured crash/hang tests are unfinished work, not
+accepted milestone evidence. No existing implementation changes were discarded.
+
+| Area and source evidence | Disposition and required work |
+| --- | --- |
+| A: Console presenter, shared core/react technical-event filtering and rendered host fixtures | Keep. Readable timelines and opt-in technical events are independent of observer ownership. |
+| B: `AudioTimeline`, `SampleClock`, `ActivityBoundary`, replay/correlation, Calls diagnostic records and Persistence adapters | Keep clock, revision, isolation and storage contracts. Current report emphasizes acoustic end; explicitly carry speech-start/end segment evidence through durable records and authorized reads. Add a versioned additive representation with bounded segment count, omitted-count/loss reasons and old-row compatibility; reopening this extension does not erase existing B evidence. |
+| C: `InferenceTap`, `AudioTap`, `SourceWorker`, `InferenceAdmission`, `CaptureHandoff` | Keep local reuse, per-stream state, bounded handoff and shared inference admission. Adapt lifecycle to the room service. `AudioTap` guard/offer/policy_change, `SourceDiscovery` and `attach_diagnostics/5` currently fence on global policy revision; replace this with the source's STT/audio-input interval tuple before claiming transfer continuity. Keep reset/late-result fences and no-duplicate-inference tests. |
+| C: `SourceCoordinator`, `SourceAttachment`, `SourceDiscovery`, `RoomAuthority.DiagnosticSources`, `SourceSupervisor.eligible_agent?/1` | Replace global room discovery/agent admission with room-owned STT source registration/reconciliation. `DiagnosticSources` currently requires a selected text agent and rejects room-level STS; `SourceAttachment.current?/1` compares agent identity. Remove those as acoustic eligibility/lifetime conditions. Retain useful source proofs and attachment fencing only where the room-local path needs them. |
+| C: `RoomIncarnationSupervisor` and Calls diagnostics composition | Add one temporary, non-significant room diagnostics subtree hosting the service and its source workers; keep node-wide admission gate, bounded inference/settings and asynchronous Calls collector/writer infrastructure, reached by registered name. Compose the room service and stop starting the old coordinator in the same checkpoint. No generic room-service framework is required. |
+| C: `ProviderTiming`, `InputTurns.observe_completion/3`, `ResponseTiming`, `LiveReport` | Keep distinct provider and response landmarks. Remove the diagnostic completion gate requiring a text capability and excluding room-level STS: `LiveReport` currently creates rows only from completion packets. Persist accepted canonical STT input timing even without an LLM response; leave response stages nullable. Preserve actual dispatch/control eligibility. Correlate late responses to participant-owned runs rather than making agent identity own the stream. |
+| C: installation settings/API/projection and bounded polling UI | Keep default-off, roles, saved revisions, fail-closed leases and finite polling. Room service consumes changes. Effective distributed status remains unresolved; do not add a new cluster-membership system solely for this migration or claim applied from a saved value. |
+| C: configured matrix and transfer tests | Preserve provider-byte, no-extra-commit, reuse, pending/late, playback-ack and drain assertions. Replace the latest transfer test's expected diagnostic retirement/rediscovery with continuous same-input observation across transfer. Add two-STT-participant and STT-without-selected-agent cases. The uncommitted crash/hang parity tests use `discover_with_audio`/`SourceCoordinator.status`: keep them as old-path evidence until cutover, then port them with their provider-byte and turn/output assertions unchanged. |
+| D: authorized report APIs, core paging, collapsed diagnostics and browser stories | Keep. Extend contracts/stories for acoustic starts/ends, participant-owned run continuity and two distinct STT participants; do not create per-agent STT rows. Existing rendering evidence does not verify these new states. |
+| E: isolation, accuracy and overhead acceptance | Still open. Measure the new room-service path, both reuse and fallback, multiple participants and operational-reset gaps. Prior bounded-worker tests remain component evidence, not measured end-to-end overhead. |
+| F: live acceptance, handbook and final gates | Still open. Run Scribe/browser only, local Silero off/on, after migration. Update ownership docs and run full gates only after milestone implementation; no Telnyx changes/live tests or early deployment. |
+
+### Migration order and acceptance gates
+
+These are new requirements, not completed implementation. Keep A and unaffected
+B/D checks as historical successes; reopen the affected C checks and add explicit
+B/D extensions below. Do not restart finished unrelated UI/storage work.
+
+The order keeps exactly one owner per input at every checkpoint: the room service
+is exercised directly in tests and is never composed beside the old coordinator.
+
+1. Input-scoped fence. Replace the global-revision fence in `AudioTap`,
+   `SourceDiscovery` and `attach_diagnostics/5` with the STT/audio-input interval
+   tuple. Red-test that an unrelated presence/routing revision preserves the tap and
+   that an STT or audio-input interval change closes it; keep `intervals: nil`
+   fail-closed. This is safe under the current coordinator, which still retires on
+   agent change.
+2. Segment representation. Red-test bounded acoustic start/end evidence: multiple
+   segments in one canonical turn, unattached noise segments in a per-run record,
+   omitted counts/loss reasons and legacy rows.
+3. Room service, tested directly. Build the temporary diagnostics subtree, the
+   service, room-local notifications plus bounded snapshot reconciliation, workers
+   inside the subtree, node-wide gate admission with `capacity_unavailable`, and
+   registered-name resolution of the node pool. Test reuse and fallback, all local
+   Silero/collection combinations, mid-call mode changes, join/leave, reconnect,
+   service crash and intensity exhaustion with the call still open,
+   disable/re-enable, stale work, absent Calls pool and two rooms at the cap. No
+   duplicate inference or operational reset/control changes.
+4. Cutover in one checkpoint. Compose the room service into
+   `RoomIncarnationSupervisor`, stop starting `SourceCoordinator`, then delete the
+   scan/discovery-by-agent path (`SourceCoordinator`, agent checks in
+   `SourceAttachment`, `DiagnosticSources` and `SourceSupervisor.eligible_agent?/1`).
+   Port the configured tests, including the crash/hang parity tests.
+5. Eligibility and continuity on the new path. Derive eligibility from accepted
+   human STT sources, including STT that drives STS turn control. Remove the
+   diagnostic-only gate in `InputTurns.observe_completion/3`; require persisted
+   canonical STT input rows with nullable response stages in no-agent and
+   mixed-room tests, not merely worker startup. Prove two humans are isolated and
+   no-STT sources allocate nothing. Preserve acoustic continuity through
+   response-agent transfer with input continuing during the transfer, matching late
+   output, missing endpoints after operational resets and bounded teardown. Re-run
+   configured failure parity. Do not change model dispatch or operational turn
+   acceptance to make diagnostic tests pass.
+6. Persistence/API/UI. Extend authorized reads and both hosts' fixtures for
+   participant-owned runs, segments and two STT participants; inspect both hosts.
+7. Complete the existing E/F accuracy, load, browser/live, handbook and final gates
+   against the new path. Review each checkpoint; only then consider deployment.
+
+Design review: the selected architecture makes room lifecycle and participant STT
+identity authoritative. Rejected alternatives are agent-owned observers (unnecessary
+transfer resets), a second Silero beside operational Silero (duplicate work),
+provider markers standing in for acoustic VAD (different evidence), and inference
+inside RoomAuthority (call-blocking risk). Existing bounded queues and async writers
+remain necessary; a room service changes ownership, not permission to block calls.
+
+Independent scoped Astra design review is clean after adding the source-proven
+policy-revision and input-completion instrumentation dependencies. This is design
+acceptance only; no reopened implementation task is checked by this review.
+
+A follow-up source review of this revision
+([labnotes](../20261119-1452-latency-plan-review.md)) added the concrete fence
+tuple, supervision shape, worker placement and capacity, Calls port resolution,
+STT-for-STS-turn-control boundaries, unattached segments, the single-owner migration
+order and the split of retained versus reopened C checks. Design changes only; no
+implementation task is checked by it.
+
 ## Prerequisites and design sources
+
+The current ownership decision is recorded in
+[Participant VAD observation owned by the room](../../docs/design/participant-vad-room-service.md).
+It supersedes conflicting ownership language in the earlier design/evidence below.
 
 Read these completed foundations before implementation:
 
@@ -88,16 +312,16 @@ ports. Persistence owns migrations, adapters and queries. Console and core/react
 packages own authorized presentation and browser state. Preserve Mix dependency
 direction; no Ecto or Phoenix dependency in engine measurement code.
 
-Eligibility is restricted to agents using the STT → LLM → TTS pipeline. Native
-speech-to-speech agents are excluded from benchmark capture, worker admission and
-inference, not merely labelled unsupported in the UI. Enforce this before creating
-an observer; the application setting does not override this exclusion.
+Eligibility follows each human participant's accepted STT input, as specified in
+the architecture revision above. A selected LLM/TTS agent is not a prerequisite.
+Native speech-to-speech-only inputs have no STT source to observe; mixed rooms do
+not suppress otherwise eligible STT participants. Never observe agent output audio.
 
 First supported live profile: human ElevenLabs Scribe v2 realtime input over browser
 WebRTC. Live Telnyx acceptance is excluded by the user's scope correction. Exercise
 operational local VAD both off and on without changing it. Manual/historical Scribe
 is covered by protocol fixtures; label unsupported
-profiles explicitly, including native speech-to-speech. Do not claim a new live
+profiles explicitly. Native speech-to-speech-only input is outside this scope. Do not claim a new live
 provider/transport is supported from common fixtures alone.
 
 Benchmarking defaults off and runs only while the durable installation-wide
@@ -146,6 +370,7 @@ Keep these nullable landmarks, each with provenance and clock/session identity:
 
 | Landmark | Meaning |
 | --- | --- |
+| Acoustic speech start | Local Silero onset sample and mapped receipt-time estimate, with confirmation time and segment identity. |
 | Acoustic end estimate | Backdated media-sample boundary, mapped to server receipt-time basis. |
 | Observer confirmation | When the observer confirmed that boundary; includes silence window and observer lag. |
 | Provider text commit | Receipt of committed transcript segment(s); not necessarily end of turn. |
@@ -199,7 +424,8 @@ These measurements share operational VAD evidence and must not be described as a
 independent detector evaluation. They still compare acoustic evidence to provider
 turn-end timing.
 
-When no operational Silero exists, create one isolated benchmark-only stream while
+When no operational Silero exists, the room diagnostics service owns one isolated
+benchmark-only stream per accepted STT participant/source while
 the Installation setting is enabled. With the setting off, no benchmark consumer,
 benchmark-only model work or new diagnostic collection exists, but call-spec VAD
 continues normally. Disabling detaches only diagnostics; it must never cancel or
@@ -292,10 +518,10 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 | --- | --- | --- |
 | A — Readable conversation | Both existing views hide routine facts by default; operators can reveal them. | Completed inspection/UI foundations only. |
 | B — Durable timing report | Deterministic replay produces a stored, tenant-safe per-turn report across restart. | Existing Calls/Persistence; independent of A. |
-| C — Passive configured call | Selected Scribe calls produce real stored timing records without control effects. | B; timing correlation fixtures. |
+| C — Passive configured call | Room-owned, per-STT-participant observation produces stored timing without control effects. | B; timing correlation fixtures. |
 | D — Latency details UI | An authorized live or ended call exposes a truthful collapsed timing report. | A–C; fixtures may start after B. |
 | E — Isolation and accuracy | Failure/load tests and labelled replay establish honest error and overhead bounds. | B–D. |
-| F — Live acceptance and handbook | Browser and telephone pilot evidence plus documentation and root gates. | A–E. |
+| F — Live acceptance and handbook | Scribe/browser evidence plus documentation and root gates. | A–E. |
 
 ### A — Readable conversation
 
@@ -310,6 +536,12 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 - [x] Document filter meanings and retain focused tests with this usable checkpoint.
 
 ### B — Durable timing report
+
+- [ ] Extend the existing versioned records/replay with bounded acoustic speech-start
+  and speech-end segment evidence, confirmation provenance and reset/loss reasons;
+  preserve old rows and null/partial semantics without conflating segments with turns.
+  Bound segments per turn with an omitted count, and keep segments outside every
+  turn in a bounded per-run unattached record with its own omitted count.
 
 - [x] Red-test acoustic/confirmation separation and exact Scribe end evidence;
   fixtures include committed segment before empty partial, outstanding draft,
@@ -328,39 +560,85 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 
 ### C — Passive configured call
 
+Migration tasks (revised architecture; ordered as in the migration steps above):
+
+- [ ] Replace the global policy-revision fence in `AudioTap`, `SourceDiscovery` and
+  `attach_diagnostics/5` with the source's STT allocation generation plus
+  `:speech_to_text`/`:audio_input` intervals. Unrelated revisions preserve the tap;
+  interval change or `intervals: nil` authority change closes it.
+- [ ] Build the temporary, non-significant room diagnostics subtree with its own
+  restart intensity, the room service and room-local notification plus bounded
+  snapshot reconciliation. Intensity exhaustion leaves the call open with
+  incomplete coverage.
+- [ ] Start source workers inside that subtree, admitted through the node-wide
+  `AttachmentLease.gate` and `InferenceAdmission`; record `capacity_unavailable`
+  and attach late as partial coverage when a slot frees. Test two rooms at the cap.
+- [ ] Resolve the Calls-composed node pool and collector by registered name; with
+  the port absent or down, report `unavailable` coverage and do no work.
+- [ ] Re-prove reuse/fallback through the room service: one inference execution per
+  eligible frame, all local Silero/collection combinations, mid-call mode change,
+  join/leave, reconnect, disable/re-enable and stale/late work.
+- [ ] Cut over in one checkpoint: compose the room service, stop starting
+  `SourceCoordinator`, then remove scan and agent-identity checks from
+  `SourceAttachment`, `DiagnosticSources` and `SourceSupervisor.eligible_agent?/1`.
+  Port the configured tests, including the crash/hang parity tests.
+- [ ] Derive eligibility from accepted human STT sources, including two participants,
+  no selected agent and mixed-room cases; no work for sources without STT. STT that
+  drives STS `external`/`hybrid` turn control is observed, and its session
+  replacement on routing change produces an explicit run boundary.
+- [ ] Decouple diagnostic room-completion instrumentation from selected text/STS
+  agent gates; prove durable canonical input timing with nullable response stages
+  for no-agent and mixed-room STT without changing operational dispatch.
+- [ ] Preserve acoustic observation across agent-only transfers with input
+  continuing during the transfer; isolate real source, mode and settings
+  transitions and fence late results without duplicate inference.
+
+Retained component evidence (from the earlier path; still valid, see the dated
+evidence sections):
+
 - [x] Instrument socket receipt and actual adapter settlement with monotonic
   timestamps, distinguishing committed text from provider end evidence. Record
   effective acknowledged settings and optional manual-commit send evidence.
-- [x] Add independent accepted-audio observation preserving per-source sample
-  identity and transport receipt mapping; normalize only the observer copy.
-- [x] Reuse timestamped probability/sample evidence from existing operational Silero
-  when present; otherwise start one isolated benchmark-only stream. Preserve
-  operational reset/failure semantics, report gaps and record inference provenance.
-- [x] Prove exactly one inference execution per eligible source frame with call-spec
-  VAD on and benchmarking on. Cover the full on/off matrix, mid-call enable/disable,
-  source replacement, model/epoch compatibility and late results. Disabling diagnostics
-  must not cancel/reset operational VAD or alter its control trace.
+- [x] Accepted-audio observation inside the STT capability preserves per-source
+  sample identity and transport receipt mapping and normalizes only the observer
+  copy. Its fence is replaced by the first migration task.
+- [x] `InferenceTap` reuse of operational Silero probabilities/samples/resets and
+  the isolated benchmark-only `SourceWorker`, with reset/failure gaps and inference
+  provenance. Lifecycle ownership moves to the room service above.
+- [x] Component proofs of one inference execution per eligible source frame,
+  on/off matrix, source replacement, model/epoch compatibility and late results;
+  disabling diagnostics leaves operational VAD and its control trace unchanged.
+  End-to-end re-proof on the room-service path is the reuse/fallback task above.
 - [x] Add durable default-off app setting, dedicated admin/superadmin authorization,
   revision conflict handling and update audit. Test member/custom-role/machine denial
   through direct requests and preserve superadmin-only installation URL controls.
+- [x] Versioned settings projection, fail-closed leases, byte/count limits,
+  inference timeouts and retry/drain deadlines; no resource initialization gates
+  calls. Supervision and capacity move to the migration tasks above.
+
+Open tasks (unchanged in scope; verify on the room-service path):
+
 - [ ] Build the Installation Diagnostics section and Benchmark using Silero VAD toggle with saved/applying/error states and
   role-appropriate navigation. Verify persistence across reload, failed saves,
   stale concurrent edits and desktop/mobile keyboard operation in rendered Chrome.
-- [x] Add isolated supervision/capacity and versioned settings projection. Specify
-  bounded cross-node propagation/leases, byte/count limits, concurrency, inference
-  timeouts and retry/drain deadlines. No resource initialization gates calls.
+- [ ] Specify bounded cross-node settings propagation and effective-status reporting
+  without a new cluster-membership system; never report applied from a saved value.
 - [ ] Prove on/off transitions for active/new calls, unknown settings, DB outage,
   stale enabled cache, restart, worker disconnect and re-enable. Environment/call
   options cannot bypass off; stop observation and queued audio on revocation;
   preserve only pre-disable summaries and distinguish partially observed turns.
 - [ ] Red-test saturation, observer crash/hang, absent model, DB failure and teardown;
   compare identical provider bytes, commits and production control traces on/off.
-- [x] Capture matching text/audio landmarks without intercepting output or delaying
+- [ ] Capture matching text/audio landmarks without intercepting output or delaying
   model dispatch; handle silent/tool-only responses, interruption and multi-agent routing.
-- [x] Demonstrate a configured Scribe fixture call persists the report, including
+- [ ] Demonstrate a configured Scribe fixture call persists the report, including
   late confirmation after turn end and call termination while diagnostics drain.
 
 ### D — Latency details UI
+
+- [ ] Extend authorized reads and both hosts' fixtures for participant-owned runs,
+  acoustic start/end evidence and two STT participants; preserve collapsed defaults
+  and verify transfer continuity and legacy-row display in rendered Chrome.
 
 - [x] Add Calls-backed authorized diagnostic reads to Console and typed core report
   state; lazy fetch when opened, bounded refresh while live, cursor paging and
@@ -448,6 +726,13 @@ or implementation acceptance claimed. Resolutions:
 
 No code, migrations, runtime configuration or UI behavior changed during planning.
 All implementation boxes above remain unchecked until their evidence exists.
+
+## Historical implementation evidence
+
+The following dated checkpoints record what passed before the participant-owned
+architecture revision. They do not override the revised contracts or reopened
+checklist above. Keep their component evidence and replace old ownership assertions
+as the migration lands.
 
 ## Implementation evidence — checkpoint A
 

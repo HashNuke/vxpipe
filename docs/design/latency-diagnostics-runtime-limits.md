@@ -1,5 +1,10 @@
 # Passive diagnostics runtime limits
 
+> Architecture revision, 2026-11-19: [participant-owned room service](participant-vad-room-service.md)
+> supersedes agent-selected discovery/ownership described here. This document retains
+> prior implementation evidence; the revised runtime is not yet implemented. See the
+> [milestone](../../labnotes/milestones/passive-call-latency-diagnostics.md) for current acceptance.
+
 These are implemented defaults and authority rules, not measured capacity or an
 accuracy claim. The [milestone](../../labnotes/milestones/passive-call-latency-diagnostics.md)
 tracks the remaining load, accuracy, effective-status UI and live acceptance gates.

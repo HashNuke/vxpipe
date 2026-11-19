@@ -1,5 +1,10 @@
 # Passive speech-end latency benchmark
 
+> Architecture revision, 2026-11-19: [participant-owned room service](participant-vad-room-service.md)
+> supersedes agent-selected discovery/ownership described here. This document retains
+> prior implementation evidence; the revised runtime is not yet implemented. See the
+> [milestone](../../labnotes/milestones/passive-call-latency-diagnostics.md) for current acceptance.
+
 Status: implementation in progress. 2026-11-19. Remaining acceptance tasks live
 in [Passive call latency diagnostics and readable timelines](../../labnotes/milestones/passive-call-latency-diagnostics.md).
 
