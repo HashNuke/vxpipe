@@ -10,7 +10,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
     SourceWorker
   }
 
-  alias Vxpipe.CallEngine.RoomAuthority.DiagnosticSources
+  alias Vxpipe.CallEngine.RoomAuthority.{DiagnosticInputs, DiagnosticSources}
+
+  @doc "Attach a room-owned accepted STT input without assigning acoustic ownership to an agent."
+  def start_input(candidate, packet, options) do
+    AttachmentLease.operation(options.attachment_lease, fn ->
+      start(Map.put(candidate, :ownership, :participant_input), packet, options)
+    end)
+  end
 
   def start(
         candidate,
@@ -25,7 +32,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
         identity: candidate.identity,
         participant_id: candidate.source.participant_id,
         connection_id: candidate.source.connection_id,
-        agent_id: candidate.agent.participant_id,
         capability: candidate.source.capability,
         coordinator: options.coordinator,
         attachment_lease: options.attachment_lease,
@@ -43,6 +49,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
         mode: mode,
         media_format: %{codec: codec, sample_rate: rate, channels: channels}
       }
+
+      context =
+        case candidate do
+          %{ownership: :participant_input} -> context
+          %{agent: agent} -> Map.put(context, :agent_id, agent.participant_id)
+        end
 
       attach(candidate, context, track, options)
     else
@@ -63,6 +75,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
     CaptureHandoff.close(entry.input)
     CaptureHandoff.close(entry.output)
     :ok
+  end
+
+  defp current_candidate?(%{ownership: :participant_input} = candidate) do
+    case DiagnosticInputs.for_connection(candidate.room, candidate.source.connection_id) do
+      {:ok, page} -> page.identity == candidate.identity and candidate.source in page.sources
+      _ -> false
+    end
   end
 
   defp current_candidate?(candidate) do
@@ -97,7 +116,6 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
 
   defp start_worker(candidate, context, track, output, options) do
     worker_options = [
-      agent: candidate.agent,
       owner: context.capability,
       coordinator: context.coordinator,
       attachment_lease: context.attachment_lease,
@@ -110,8 +128,27 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceAttachment do
       origin_us: context.origin_us
     ]
 
-    case SourceSupervisor.start_source(worker_options, options.workers, options.runtime) do
+    result =
+      case candidate do
+        %{ownership: :participant_input} ->
+          SourceSupervisor.start_input_source(
+            worker_options,
+            options.workers,
+            options.runtime,
+            options.source_admission
+          )
+
+        %{agent: agent} ->
+          SourceSupervisor.start_source(
+            Keyword.put(worker_options, :agent, agent),
+            options.workers,
+            options.runtime
+          )
+      end
+
+    case result do
       {:ok, worker} -> finish(worker, candidate, context, track, output, options.workers)
+      {:error, _} = error when candidate.ownership == :participant_input -> error
       _ -> {:error, :source_capacity}
     end
   end

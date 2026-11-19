@@ -210,3 +210,26 @@ Controlled Engine-root teardown stops room workers before allocating a fresh roo
 gate. The composition harness verifies worker DOWN before that reallocation;
 unresolved-start teardown with the real room diagnostics subtree remains a cutover
 gate. No Calls/source path uses this new admission port until room-service wiring.
+
+
+## Participant input attachment
+
+The directly exercised `SourceAttachment.start_input/3` path revalidates the exact
+accepted human STT binding through DiagnosticInputs before collector allocation,
+after it returns, and before binding capture. Its context has no agent owner.
+Source discovery still requires accepted source audio, current input-policy
+intervals, allocation generation, collection authority and provider profile proof.
+The new discovery wrapper removes only the selected-agent precondition.
+
+The whole input attachment attempt holds a lease operation, including collector
+allocation, so cancellation cannot release capacity while a collector callback is
+still unresolved. Input workers start in the supplied room worker supervisor through SourceAdmission;
+reuse workers also consume a node slot but never request inference admission.
+Fallback workers use the shared ActivityRuntime admission. Successful attachment
+still requires explicit adoption by the future room service; it must not finish
+the lease after adoption. Retirement closes capture and leaves capacity charged
+until worker termination. Missing admission fails closed.
+
+The old coordinator retains its original discovery and agent checks until cutover.
+These attachment primitives do not create a room service, start two owners, change
+operational turn dispatch or enable no-agent canonical-turn persistence.

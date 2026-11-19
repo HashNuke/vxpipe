@@ -1790,3 +1790,27 @@ This installs only admission bookkeeping. Existing Calls/source coordinator
 composition is unchanged, and no additional C checkbox is complete. The room
 service/subtree, Calls port lookup, notifications, attachment and cutover remain
 pending. No deployment or live provider tests were performed.
+
+
+## Migration step 3 participant input attachment — 2026-11-19
+
+The new directly tested input attachment entry point uses the accepted human STT
+binding without selected-agent ownership. It preserves prospective audio/profile,
+allocation, input-policy and settings proof. Agent changes and unrelated STS
+capabilities do not invalidate that input. Source removal or revoked collection
+authority prevents binding. Workers start in the supplied room supervisor through
+SourceAdmission; reuse consumes source capacity without inference admission.
+
+Review reproduced early capacity release while a collector callback remained
+blocked after cancellation. The complete input attachment now holds a lease
+operation until that callback resolves. A retained regression proves capacity
+remains unavailable while blocked and is released after completion. Missing
+admission retains its unavailable reason rather than being labelled capacity loss.
+Focused diagnostics pass 218/218; root static gates pass. Final scoped Astra review
+is clean with 18 independent/retained cases. See
+[checkpoint labnotes](../20261119-1644-participant-input-attachment.md).
+
+The old coordinator remains the only composed owner. RoomService/subtree, named
+Calls port resolution, notifications, canonical no-agent turns and cutover remain
+pending; no additional migration checkbox is complete. No live provider tests,
+Telnyx changes or deployment occurred.

@@ -3,7 +3,14 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
   use Supervisor
   alias Vxpipe.CallEngine.CallSpec.CapabilitySelection
   alias Vxpipe.CallEngine.ResolvedCallPlan.{Capabilities, Participant}
-  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, InferenceAdmission, SourceWorker}
+
+  alias Vxpipe.CallEngine.Diagnostics.{
+    AttachmentLease,
+    InferenceAdmission,
+    SourceAdmission,
+    SourceWorker
+  }
+
   alias Vxpipe.CallEngine.Speech.{ActivityRuntime, ActivitySupervisor, Silero}
 
   def child_spec(options),
@@ -29,6 +36,17 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
       else: {:error, :unsupported_agent}
   end
 
+  @doc "Room-owned input worker; the caller must prove its accepted STT binding before attachment."
+  def start_input_source(options, workers, runtime, admission) do
+    lease = Keyword.fetch!(options, :attachment_lease)
+
+    with {:ok, options} <- inference_options(options, runtime) do
+      SourceAdmission.start_worker(admission, lease, workers, {SourceWorker, options})
+    end
+  catch
+    :exit, _ -> {:error, :unavailable}
+  end
+
   def eligible_agent?(%Participant{
         kind: :agent,
         capabilities: %Capabilities{
@@ -41,33 +59,25 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceSupervisor do
   def eligible_agent?(_agent), do: false
 
   defp start_eligible_source(options, workers, runtime) do
-    case Keyword.get(options, :mode, :benchmark_only) do
-      :operational_reuse ->
-        DynamicSupervisor.start_child(
-          workers,
-          {SourceWorker, Keyword.delete(options, :admission)}
-        )
-
-      :benchmark_only ->
-        start_benchmark(options, workers, runtime)
-
-      _ ->
-        {:error, :unsupported_mode}
+    with {:ok, options} <- inference_options(options, runtime) do
+      DynamicSupervisor.start_child(workers, {SourceWorker, options})
     end
   catch
     :exit, _ -> {:error, :unavailable}
   end
 
-  defp start_benchmark(options, workers, runtime) do
-    case ActivityRuntime.diagnostic_admission(runtime) do
-      %InferenceAdmission{} = admission ->
-        DynamicSupervisor.start_child(
-          workers,
-          {SourceWorker, Keyword.put(options, :admission, admission)}
-        )
+  defp inference_options(options, runtime) do
+    case Keyword.get(options, :mode, :benchmark_only) do
+      :operational_reuse -> {:ok, Keyword.delete(options, :admission)}
+      :benchmark_only -> benchmark_options(options, runtime)
+      _ -> {:error, :unsupported_mode}
+    end
+  end
 
-      _ ->
-        {:error, :unavailable}
+  defp benchmark_options(options, runtime) do
+    case ActivityRuntime.diagnostic_admission(runtime) do
+      %InferenceAdmission{} = admission -> {:ok, Keyword.put(options, :admission, admission)}
+      _ -> {:error, :unavailable}
     end
   end
 

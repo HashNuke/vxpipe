@@ -53,6 +53,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
     :exit, _reason -> {:error, :unavailable}
   end
 
+  @doc "Room-service discovery for an accepted human STT input; retains source and settings proof."
+  def discover_input_diagnostics(capability, handoff, timeout \\ @call_timeout) do
+    GenServer.call(capability, {:discover_diagnostics, handoff}, timeout)
+  catch
+    :exit, _reason -> {:error, :unavailable}
+  end
+
   @doc false
   def request_diagnostic_profile(capability, handoff, timeout \\ @call_timeout) do
     GenServer.call(capability, {:diagnostic_profile, handoff}, timeout)
