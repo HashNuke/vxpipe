@@ -32,7 +32,7 @@ export const accessMeta = {
   },
   render: (args) => (
     <AuthenticationStory
-      key={`${args.actor}-${args.initialPath}-${args.theme}-${args.state}-${args.saveBehavior}`}
+      key={`${args.actor}-${args.initialPath}-${args.theme}-${args.state}-${args.saveBehavior}-${args.diagnosticsScenario}`}
       {...args}
     />
   ),

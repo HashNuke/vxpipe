@@ -4,7 +4,7 @@ import { AccountPage } from "./AccountPage";
 import { ConnectedClientsPage } from "./ConnectedClientsPage";
 import { connectedClientsFixture, type ConnectionsScenario } from "./connectedClientsFixture";
 import { AuthPage } from "./AuthPage";
-import { DiagnosticsSettingsFixture } from "./DiagnosticsSettingsFixture";
+import { DiagnosticsSettingsFixture, type DiagnosticsScenario } from "./DiagnosticsSettingsFixture";
 import { InstallationSettingsPage } from "./InstallationSettingsPage";
 import { FormMessage } from "./FormField";
 import { ResetPasswordPage } from "./ResetPasswordPage";
@@ -27,6 +27,7 @@ export function AuthenticationJourney({
   followLocation = true,
   initialPublicUrl = "https://calls.example.test",
   connectionsScenario = "connected",
+  diagnosticsScenario,
   renderFrame,
 }: {
   actor?: Actor;
@@ -37,6 +38,7 @@ export function AuthenticationJourney({
   followLocation?: boolean;
   initialPublicUrl?: string;
   connectionsScenario?: ConnectionsScenario;
+  diagnosticsScenario?: DiagnosticsScenario;
   renderFrame?: (children: ReactNode, path: string, session: { user?: User; role?: Role; navigate: (path: string) => void; logout: () => void }) => ReactNode;
 }) {
   const [roles, setRoles] = useState<Role[]>(structuredClone(seedRoles));
@@ -141,7 +143,7 @@ export function AuthenticationJourney({
     );
   } else if (path === "/platform/installation") {
     page = <InstallationSettingsPage roleKind={currentRole.kind} publicUrl={publicUrl} state={installationState}
-      diagnostics={<DiagnosticsSettingsFixture behavior={saveBehavior} state={state} />}
+      diagnostics={<DiagnosticsSettingsFixture behavior={saveBehavior} state={state} scenario={diagnosticsScenario} />}
       onRetry={() => setInstallationState("ready")} onSave={async url => {
         const error = await result();
         if (error) return { error };

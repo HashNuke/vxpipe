@@ -49,3 +49,18 @@ export const BenchmarkSaveFailure: Story = { args: { saveBehavior: "failure" }, 
   await userEvent.click(await canvas.findByRole("checkbox", { name: "Benchmark using Silero VAD" }));
   await expect(canvas.getByRole("alert")).toBeVisible();
 } };
+
+
+export const BenchmarkSavedOnly: Story = { args: { actor: "admin", diagnosticsScenario: "saved-only" } };
+export const BenchmarkSaving: Story = { args: { actor: "admin", saveBehavior: "pending" }, play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.click(await canvas.findByRole("checkbox", { name: "Benchmark using Silero VAD" }));
+  await expect(canvas.getByRole("checkbox")).toBeDisabled();
+  await expect(canvas.getByText("Saving diagnostics setting…")).toBeVisible();
+} };
+export const BenchmarkConflict: Story = { args: { actor: "admin", diagnosticsScenario: "conflict" }, play: async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.click(await canvas.findByRole("checkbox", { name: "Benchmark using Silero VAD" }));
+  await expect(canvas.getByRole("alert")).toHaveTextContent("changed elsewhere");
+  await expect(canvas.getByRole("checkbox")).toBeDisabled();
+} };

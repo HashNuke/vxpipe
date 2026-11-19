@@ -622,6 +622,10 @@ Open tasks (unchanged in scope; verify on the room-service path):
 - [ ] Build the Installation Diagnostics section and Benchmark using Silero VAD toggle with saved/applying/error states and
   role-appropriate navigation. Verify persistence across reload, failed saves,
   stale concurrent edits and desktop/mobile keyboard operation in rendered Chrome.
+  [Settings review states](../20261119-2040-diagnostics-settings-review.md) add
+  saved-only, conflict/reload and pending stories with desktop/mobile Chrome and
+  focused frontend/endpoint evidence. Real browser reload against persisted backend
+  state and production effective-status integration remain unverified.
 - [ ] Specify bounded cross-node settings propagation and effective-status reporting
   without a new cluster-membership system; never report applied from a saved value.
 - [ ] Prove on/off transitions for active/new calls, unknown settings, DB outage,

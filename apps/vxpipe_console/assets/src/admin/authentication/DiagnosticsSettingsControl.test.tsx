@@ -172,3 +172,26 @@ test("the Storybook fixture confirms only on a subsequent status read", async ()
     expect(screen.getByText(/Setting applied/)).toBeVisible();
   } finally { view.unmount(); vi.useRealTimers(); }
 });
+
+test("the conflict story reloads the other operator's saved revision before retrying", async () => {
+  render(<DiagnosticsSettingsFixture scenario="conflict" />);
+  fireEvent.click(await screen.findByRole("checkbox"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("changed elsewhere");
+  expect(screen.getByRole("checkbox")).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Reload diagnostics settings" }));
+  await waitFor(() => expect(screen.getByRole("checkbox")).toBeEnabled());
+  expect(screen.getByRole("checkbox")).toBeChecked();
+  fireEvent.click(screen.getByRole("checkbox"));
+  await waitFor(() => expect(screen.getByRole("checkbox")).not.toBeChecked());
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+test("the saved-only story matches production without inventing effective status", async () => {
+  render(<DiagnosticsSettingsFixture scenario="saved-only" />);
+  await screen.findByRole("checkbox");
+  expect(screen.getByText(/Collection status unavailable/)).toBeVisible();
+  fireEvent.click(screen.getByRole("checkbox"));
+  await waitFor(() => expect(screen.getByRole("checkbox")).toBeChecked());
+  expect(screen.getByText(/Collection status unavailable/)).toBeVisible();
+  expect(screen.queryByText(/Setting applied|Applying setting/)).not.toBeInTheDocument();
+});
