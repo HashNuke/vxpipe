@@ -177,17 +177,23 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
 
   @impl true
   def handle_info({:diagnostic_observer, generation, %CaptureHandoff{} = handoff, channel}, state)
-      when generation == state.allocation.generation and state.runtime != nil do
+      when generation == state.allocation.generation do
     if channel == GenServer.whereis(state.channel) do
+      Channel.observe(state.inner, handoff)
+
       tap =
-        InferenceTap.attach(
-          state.diagnostic_tap,
-          handoff,
-          state.recognition_epoch,
-          state.stream,
-          state.inference != nil,
-          state.pending_pcm == "" and state.odd_pcm == ""
-        )
+        if state.runtime != nil do
+          InferenceTap.attach(
+            state.diagnostic_tap,
+            handoff,
+            state.recognition_epoch,
+            state.stream,
+            state.inference != nil,
+            state.pending_pcm == "" and state.odd_pcm == ""
+          )
+        else
+          nil
+        end
 
       {:noreply, %{state | diagnostic_tap: tap}}
     else

@@ -3,6 +3,7 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
 
   use GenServer
 
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, ProviderTiming}
   alias Vxpipe.CallEngine.Speech.SocketConnection
 
   @typedoc """
@@ -43,6 +44,10 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
 
   def send_frame(socket, frame), do: request(socket, {:send, frame})
   def close(socket, payload), do: request(socket, {:close, payload})
+
+  def observe(socket, %CaptureHandoff{} = handoff),
+    do: Process.send(socket, {:diagnostic_socket_observer, self(), handoff}, [:nosuspend])
+
   def retire(socket), do: GenServer.cast(socket, :retire)
 
   @impl true
@@ -146,6 +151,21 @@ defmodule Vxpipe.CallEngine.Speech.Socket do
   end
 
   @impl true
+  def handle_info(
+        {:diagnostic_socket_observer, owner, %CaptureHandoff{} = handoff},
+        %{callback_state: %{owner: owner, diagnostic_handoff: previous} = callback} = state
+      ) do
+    case ProviderTiming.replace(previous, handoff) do
+      {:ok, handoff} ->
+        {:noreply, %{state | callback_state: %{callback | diagnostic_handoff: handoff}}}
+
+      _ ->
+        {:noreply, state}
+    end
+  end
+
+  def handle_info({:diagnostic_socket_observer, _, _}, state), do: {:noreply, state}
+
   def handle_info({:vxpipe_tts_audio_result, owner, reference, result}, state) do
     case state.awaiting do
       {^reference, timer} when owner == state.callback_state.owner ->

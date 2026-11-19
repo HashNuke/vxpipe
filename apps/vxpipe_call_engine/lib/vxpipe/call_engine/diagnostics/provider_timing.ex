@@ -2,6 +2,15 @@ defmodule Vxpipe.CallEngine.Diagnostics.ProviderTiming do
   @moduledoc "Transient same-VM provider landmarks, fenced by diagnostic authority and free of text."
   alias Vxpipe.CallEngine.Diagnostics.CaptureHandoff
 
+  def replace(previous, %CaptureHandoff{} = handoff) do
+    if CaptureHandoff.current?(handoff) do
+      if previous != nil and previous.token != handoff.token, do: CaptureHandoff.close(previous)
+      {:ok, handoff}
+    else
+      {:error, :unavailable}
+    end
+  end
+
   def stamp(%CaptureHandoff{} = handoff) do
     received_us = System.monotonic_time(:microsecond)
     if CaptureHandoff.current?(handoff), do: {handoff.token, received_us}

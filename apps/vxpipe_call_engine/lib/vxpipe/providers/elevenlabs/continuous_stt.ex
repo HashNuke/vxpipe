@@ -11,7 +11,7 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
   """
   use GenServer
   @behaviour Vxpipe.CallEngine.Speech.STTProvider
-  alias Vxpipe.CallEngine.Diagnostics.ProviderTiming
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, ProviderTiming}
   alias Vxpipe.CallEngine.Speech.{Channel, Descriptor, Event, SessionTree, STTProvider}
   alias Vxpipe.Providers.ElevenLabs.{Scribe, ScribeSocket}
 
@@ -158,6 +158,18 @@ defmodule Vxpipe.Providers.ElevenLabs.ContinuousSTT do
     do: {:reply, {:error, :session_failed}, state}
 
   @impl true
+  def handle_info({:diagnostic_observer, generation, %CaptureHandoff{} = handoff, channel}, state)
+      when generation == state.allocation.generation do
+    with true <- channel == GenServer.whereis(state.channel),
+         true <- function_exported?(state.wire_module, :observe, 2),
+         {:ok, handoff} <- ProviderTiming.replace(state.diagnostic_handoff, handoff) do
+      state.wire_module.observe(state.wire, handoff)
+      {:noreply, %{state | diagnostic_handoff: handoff}}
+    else
+      _ -> {:noreply, state}
+    end
+  end
+
   def handle_info(
         {:vxpipe_scribe_transport, wire, {:event, {:ready, request_id}}},
         %{wire: wire, ready?: false} = state

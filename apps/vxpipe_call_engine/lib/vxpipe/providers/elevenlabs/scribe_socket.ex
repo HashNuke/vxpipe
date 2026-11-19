@@ -22,6 +22,8 @@ defmodule Vxpipe.Providers.ElevenLabs.ScribeSocket do
          do: Socket.send_frame(socket, {:text, payload})
   end
 
+  def observe(socket, handoff), do: Socket.observe(socket, handoff)
+
   def commit(socket), do: Socket.send_frame(socket, {:text, Scribe.commit()})
 
   @impl true

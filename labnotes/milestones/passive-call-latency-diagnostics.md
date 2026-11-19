@@ -781,3 +781,20 @@ an independently reproduced OAuth repository-shutdown race, now fixed/reviewed
 with33focused tests. A new umbrella run is active. Automatic source attachment,
 provider/response correlation, report persistence and full configured-call on/off
 acceptance remain pending; combined C tasks stay unchecked.
+
+
+## Checkpoint C running Scribe subscription — 2026-11-19
+
+The existing speech-channel observer request now reaches already-running direct
+Scribe sessions and recognizers behind the optional VAD wrapper. Forwarding keeps
+the original capture owner/lease; readiness, consumer and generation checks remain.
+Sockets update only their optional handoff from their owner. Replacement revokes
+old capture without restarting recognition. Fixture wires execute the real receipt
+callback with their current subscription state. Inner provider identity is retained;
+canonical-turn correlation is not yet implemented.
+
+Affected tests288/0 (5excluded), static gates and Lean pass. Astra xhigh review is
+clean (13independent tests/probes). Automatic source discovery/attachment, manual
+instrumentation and report correlation remain pending. The prior umbrella run has
+a live-inspection projection timeout under investigation and is not passing root
+acceptance evidence for this checkpoint. Combined C tasks remain unchecked.
