@@ -142,6 +142,10 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText do
            State.input_binding(state),
          {:ok, tap} <- AudioTap.new(handoff, generation, state.policy.revision, source),
          :ok <- AudioTap.replace(state.diagnostic_tap, tap) do
+      if state.provider_module == Vxpipe.CallEngine.Speech.ConversationalSTT do
+        Vxpipe.CallEngine.Speech.ConversationalSTT.observe(state.session, handoff)
+      end
+
       {:reply, :ok, %{state | diagnostic_tap: tap}}
     else
       _ -> {:reply, {:error, :unavailable}, state}

@@ -378,3 +378,25 @@ not inherit it. The binding uses the global installed policy revision, not the
 source STT interval. Exact repeat attachment is idempotent;
 a different source/allocation needs a fresh handle. The current hook accepts raw
 PCM only; decoded-Opus mapping and automatic observer lifecycle remain pending.
+
+### Operational inference observation
+
+ConversationalSTT may receive a prospective diagnostic handoff for its exact native
+allocation and live channel consumer owner. Subscription requests pass through
+the channel asynchronously, including after prepared-allocation adoption. It tags an existing inference submission with that
+handoff, operational recognition epoch and first 16kHz model-window sample cursor.
+Completed probabilities are mirrored before existing stale-epoch suppression;
+no second model execution or recurrent state is created. Warmup is excluded.
+Source identity is fenced before provider admission starts, so reused inference
+cannot publish replacement-source probabilities into the old handoff while audio
+admission is still awaiting a reply. Provider settlement and failure emit bounded
+reset notices without changing the
+operational reset/failure path. Late results retain their original epoch.
+
+A mid-stream subscription with already processed, pending, odd-byte or in-flight input is
+partial and does not adopt that input. It waits for the next operational reset to
+mirror a fresh epoch. An operationally retained odd byte keeps the next epoch
+partial as well; diagnostics never change that retention. Per-epoch model cursors are not transport timestamps: the
+future run consumer must associate them with accepted-source mapping and report
+incomplete evidence when that association is absent or crosses a reset. This
+hook does not supply independent inference when call-spec VAD is off.

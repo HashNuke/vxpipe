@@ -119,6 +119,13 @@ defmodule Vxpipe.CallEngine.Capability.SpeechToText.State do
         {:error, :policy_denied}
 
       true ->
+        AudioTap.guard_input(
+          state.diagnostic_tap,
+          state.session.generation,
+          state.policy && state.policy.revision,
+          frame
+        )
+
         case push_frame(state, frame) do
           :ok ->
             AudioTap.offer(

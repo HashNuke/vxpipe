@@ -40,7 +40,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.CapturePacket do
 
   defp valid?({:reset, epoch, reason, observed_at}) do
     unsigned?(epoch) and signed?(observed_at) and
-      reason in [:provider_turn_settled, :source_replaced, :audio_gap, :inference_failed]
+      reason in [
+        :provider_turn_settled,
+        :source_replaced,
+        :audio_gap,
+        :inference_failed,
+        :partial_start
+      ]
   end
 
   defp valid?({:provider_landmark, generation, turn, kind, observed_at, samples}) do

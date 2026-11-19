@@ -1,0 +1,208 @@
+defmodule Vxpipe.CallEngine.Speech.DiagnosticInferenceReuseTest do
+  use ExUnit.Case, async: false
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, SettingsSupervisor}
+  alias Vxpipe.CallEngine.Speech.{CapabilityTree, ConversationalSTT, Event, Session}
+  alias Vxpipe.CallEngine.SpeechOnsetProbe
+  @projection __MODULE__.Projection
+
+  setup do
+    parent = self()
+
+    start_supervised!(
+      {SettingsSupervisor,
+       name: __MODULE__.Settings,
+       projection: @projection,
+       reader: __MODULE__.Reader,
+       loader: fn ->
+         send(parent, :loaded)
+         {:ok, %{enabled: true, revision: 1}}
+       end}
+    )
+
+    assert_receive :loaded
+    _ = :sys.get_state(__MODULE__.Reader)
+    _ = :sys.get_state(@projection)
+    :ok
+  end
+
+  test "reuse emits existing probability windows once and disabling never disables operational inference" do
+    {session, recognizer} = session(false)
+    handoff = handoff()
+    assert :ok = ConversationalSTT.observe(session, handoff)
+    _ = :sys.get_state(Session.provider(session))
+    pcm = :binary.copy(<<1, 0>>, 2_048)
+    assert :ok = Session.push_audio(session, pcm)
+    assert_receive {:classified, _, 0, ^pcm}
+    started = event(session, :speech_started)
+    assert {:probabilities, 0, 0, [0.9, 0.9, 0.9, 0.9], timestamp} = packet(handoff)
+    assert is_integer(timestamp)
+    refute_received {:classified, _, _, _}
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+
+    :ok = CaptureHandoff.close(handoff)
+    assert :ok = Session.push_audio(session, pcm)
+    assert_receive {:classified, _, 2_048, ^pcm}
+    native = make_ref()
+
+    assert :ok =
+             GenServer.call(
+               recognizer,
+               {:emit, :turn_ended,
+                [turn_ref: native, text: "answer", endpointing: :provider_gap]}
+             )
+
+    _ = event(session, :transcript)
+    assert event(session, :turn_ended).turn_ref == started.turn_ref
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  test "revocation during inference preserves its operational result but discards diagnostic evidence" do
+    {session, _recognizer} = session(true)
+    handoff = handoff()
+    assert :ok = ConversationalSTT.observe(session, handoff)
+    _ = :sys.get_state(Session.provider(session))
+    pcm = :binary.copy(<<2, 0>>, 2_048)
+    assert :ok = Session.push_audio(session, pcm)
+    assert_receive {:classified, worker, 0, ^pcm}
+    monitor = Process.monitor(worker)
+    :ok = CaptureHandoff.close(handoff)
+    send(worker, :finish)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}
+    _ = event(session, :speech_started)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+  end
+
+  test "mid-inference subscription reports partial coverage and never adopts pre-subscription work" do
+    {session, recognizer} = session(true)
+    pcm = :binary.copy(<<3, 0>>, 2_048)
+    assert :ok = Session.push_audio(session, pcm)
+    assert_receive {:classified, worker, 0, ^pcm}
+    handoff = handoff()
+    assert :ok = ConversationalSTT.observe(session, handoff)
+    _ = :sys.get_state(Session.provider(session))
+    assert {:reset, 0, :partial_start, _} = packet(handoff)
+    send(worker, :finish)
+    _ = event(session, :speech_started)
+    refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
+
+    assert :ok =
+             GenServer.call(
+               recognizer,
+               {:emit, :turn_ended,
+                [turn_ref: make_ref(), text: "first", endpointing: :provider_gap]}
+             )
+
+    _ = event(session, :transcript)
+    _ = event(session, :turn_ended)
+    assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
+    assert :ok = Session.push_audio(session, pcm)
+    assert_receive {:classified, next_worker, 0, ^pcm}
+    send(next_worker, :finish)
+    _ = event(session, :speech_started)
+    assert {:probabilities, 1, 0, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
+  end
+
+  test "an adopted prepared allocation can reuse inference for its current consumer" do
+    {session, _recognizer} = session(false, true)
+    assert session.consumer == nil
+    handoff = handoff()
+    assert :ok = ConversationalSTT.observe(session, handoff)
+    _ = :sys.get_state(Session.provider(session))
+    pcm = :binary.copy(<<4, 0>>, 2_048)
+    assert :ok = Session.push_audio(session, pcm)
+    assert_receive {:classified, _, 0, ^pcm}
+    _ = event(session, :speech_started)
+    assert {:probabilities, 0, 0, [0.9, 0.9, 0.9, 0.9], _} = packet(handoff)
+  end
+
+  test "a pre-subscription trailing byte makes the diagnostic stream partial" do
+    {session, _} = session(false)
+    assert :ok = Session.push_audio(session, <<7>>)
+    handoff = handoff()
+    assert :ok = ConversationalSTT.observe(session, handoff)
+    assert {:reset, 0, :partial_start, _} = packet(handoff)
+  end
+
+  test "operational reset retaining an odd byte does not claim a clean diagnostic epoch" do
+    {session, recognizer} = session(false)
+    handoff = handoff()
+    assert :ok = ConversationalSTT.observe(session, handoff)
+    assert :ok = Session.push_audio(session, <<7>>)
+
+    assert :ok =
+             GenServer.call(
+               recognizer,
+               {:emit, :turn_ended,
+                [turn_ref: make_ref(), text: "first", endpointing: :provider_gap]}
+             )
+
+    _ = event(session, :speech_started)
+    _ = event(session, :transcript)
+    _ = event(session, :turn_ended)
+    assert {:reset, 1, :provider_turn_settled, _} = packet(handoff)
+    assert {:reset, 1, :partial_start, _} = packet(handoff)
+  end
+
+  defp session(hold?, prepared? \\ false) do
+    parent = self()
+
+    classify = fn _model, stream, audio ->
+      if audio != :binary.copy(<<0>>, 1_024) do
+        send(parent, {:classified, self(), stream.samples, audio})
+
+        if hold?,
+          do:
+            (receive do
+               :finish -> :ok
+             end)
+      end
+
+      count = div(byte_size(audio), 1_024)
+      {:ok, %{stream | samples: stream.samples + count * 512}, List.duplicate(0.9, count)}
+    end
+
+    tree = start_supervised!({CapabilityTree, owner: self()})
+
+    assert {:ok, session, :starting} =
+             Session.start(CapabilityTree.scope(tree),
+               consumer: if(prepared?, do: nil, else: self()),
+               lease: if(prepared?, do: self(), else: nil),
+               provider: ConversationalSTT,
+               options: [provider: SpeechOnsetProbe, options: [sample_rate: 16_000], vad: true],
+               private: [
+                 recognizer: SpeechOnsetProbe,
+                 recognizer_options: [sample_rate: 16_000],
+                 recognizer_private: [observer: self()],
+                 activity_options: [load: fn -> {:ok, :model} end, classify: classify]
+               ]
+             )
+
+    assert_receive {:recognizer, recognizer, _}
+
+    if prepared? do
+      assert_receive {:vxpipe_speech_prepared, ^session, _}, 1_000
+      assert :ok = Session.adopt(session, self())
+    end
+
+    _ = event(session, :ready)
+    {session, recognizer}
+  end
+
+  defp handoff do
+    assert {:ok, handoff} = CaptureHandoff.new(self(), projection: @projection)
+    handoff
+  end
+
+  defp event(session, kind) do
+    assert_receive {:vxpipe_speech, %Event{session: ^session, kind: ^kind} = event}, 1_000
+    assert :ok = Session.ack(session, event)
+    event
+  end
+
+  defp packet(handoff) do
+    assert_receive {:vxpipe_diagnostic_capture, _, _, _, _} = message
+    assert {:ok, packet, charge} = CaptureHandoff.message(handoff, message)
+    :ok = CaptureHandoff.release(handoff, charge, :processed)
+    packet
+  end
+end

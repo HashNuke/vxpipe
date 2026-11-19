@@ -53,6 +53,11 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
          do: GenServer.call(channel, {:emit, event}, 5_000)
   end
 
+  @doc false
+  defdelegate observe(allocation, handoff),
+    to: Vxpipe.CallEngine.Speech.DiagnosticSubscription,
+    as: :request
+
   @impl true
   def init(allocation) do
     {:ok,
@@ -591,6 +596,9 @@ defmodule Vxpipe.CallEngine.Speech.Channel do
   end
 
   @impl true
+  def handle_info({:diagnostic_observer_request, _, _, _} = request, state),
+    do: {:noreply, Vxpipe.CallEngine.Speech.DiagnosticSubscription.forward(request, state)}
+
   def handle_info({:input_expired, reference}, %{input: %{command: %{ref: reference}}} = state) do
     if Allocation.valid?(state.allocation) and ChannelFailure.drainable_stt_failure?(state),
       do: {:noreply, ChannelFailure.begin_producer_failure_drain(state)},

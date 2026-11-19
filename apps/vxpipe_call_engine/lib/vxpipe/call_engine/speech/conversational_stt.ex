@@ -8,6 +8,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   use GenServer
   @behaviour Vxpipe.CallEngine.Speech.STTProvider
 
+  alias Vxpipe.CallEngine.Diagnostics.{CaptureHandoff, InferenceTap}
+
   alias Vxpipe.CallEngine.Speech.{
     ActivityBoundary,
     ActivityRuntime,
@@ -61,6 +63,9 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   @doc false
   def push_frame(pid, frame), do: GenServer.call(pid, {:frame, frame}, 5_000)
 
+  @doc false
+  def observe(allocation, %CaptureHandoff{} = handoff), do: Channel.observe(allocation, handoff)
+
   @impl true
   def close(pid), do: GenServer.stop(pid, :normal, 5_000)
 
@@ -92,6 +97,8 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
          runtime: nil,
          runtime_monitor: nil,
          inference: nil,
+         diagnostic_tap: nil,
+         diagnostic_inference: nil,
          inference_epoch: nil,
          recognition_epoch: 0,
          pending_epoch: nil,
@@ -169,6 +176,25 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   end
 
   @impl true
+  def handle_info({:diagnostic_observer, generation, %CaptureHandoff{} = handoff, channel}, state)
+      when generation == state.allocation.generation and state.runtime != nil do
+    if channel == GenServer.whereis(state.channel) do
+      tap =
+        InferenceTap.attach(
+          state.diagnostic_tap,
+          handoff,
+          state.recognition_epoch,
+          state.stream,
+          state.inference != nil,
+          state.pending_pcm == "" and state.odd_pcm == ""
+        )
+
+      {:noreply, %{state | diagnostic_tap: tap}}
+    else
+      {:noreply, state}
+    end
+  end
+
   def handle_info({:vxpipe_speech, %Event{session: inner} = event}, %{inner: inner} = state) do
     with :ok <- Session.ack(inner, event),
          {:ok, state} <- recognition(state, event) do
@@ -191,11 +217,14 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
         {:vxpipe_speech_activity, reference, {:ok, stream, probabilities}},
         %{inference: reference} = state
       ) do
+    InferenceTap.result(state.diagnostic_inference, probabilities)
+
     with {:ok, state} <-
            probabilities(
              %{
                state
                | inference: nil,
+                 diagnostic_inference: nil,
                  stream:
                    if(state.inference_epoch == state.recognition_epoch,
                      do: stream,
@@ -215,8 +244,10 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
   def handle_info(
         {:vxpipe_speech_activity, reference, _failure},
         %{inference: reference} = state
-      ),
-      do: fail(state)
+      ) do
+    InferenceTap.failed(state.diagnostic_inference)
+    fail(state)
+  end
 
   def handle_info({:orphan, token}, %{orphan: {_timer, token}} = state), do: fail(state)
 
@@ -307,6 +338,12 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
           %{
             state
             | recognition_epoch: state.recognition_epoch + 1,
+              diagnostic_tap:
+                InferenceTap.reset(
+                  state.diagnostic_tap,
+                  state.recognition_epoch + 1,
+                  state.odd_pcm == ""
+                ),
               pending_pcm: "",
               pending_epoch: nil,
               stream: if(state.runtime, do: Silero.new(), else: nil),
@@ -398,12 +435,16 @@ defmodule Vxpipe.CallEngine.Speech.ConversationalSTT do
     bytes = min(byte_size(state.pending_pcm), @chunk_bytes)
     <<chunk::binary-size(bytes), pending::binary>> = state.pending_pcm
 
+    diagnostic_inference =
+      InferenceTap.begin(state.diagnostic_tap, state.recognition_epoch, state.stream)
+
     with {:ok, reference} <- ActivityRuntime.submit(state.stream, chunk, state.runtime),
          do:
            {:ok,
             %{
               state
               | inference: reference,
+                diagnostic_inference: diagnostic_inference,
                 inference_epoch: state.pending_epoch,
                 pending_pcm: pending
             }}

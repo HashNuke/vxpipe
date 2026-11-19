@@ -676,3 +676,15 @@ decoded-Opus/normalized mapping and operational inference reuse remain pending.
 Affected suite99/0, static root gates and Lean verification pass. Astra xhigh
 re-review is clean, including retained preparation/discard and rejected-policy
 regressions. The combined task stays open pending the complete observer lifecycle.
+
+## Checkpoint C partial operational-reuse evidence — 2026-11-19
+
+Existing ConversationalSTT inference now supports a prospective bounded diagnostic
+consumer. It mirrors computed probabilities with per-epoch sample cursors and
+reset/failure notices; warmup is excluded and no second inference runs. Revocation
+leaves operational onset intact. Mid-stream subscriptions report partial coverage
+until a fresh operational epoch, excluding prior in-flight/pending work. Affected
+suite88/0; Astra xhigh re-review clean (independent34/0), final static gates pass
+and Lean behavior verification passes. Retained adoption, source-admission race
+and odd-byte coverage regressions are fixed. Standalone workers, automatic
+admission, complete source mapping and the full on/off/source matrix remain open.

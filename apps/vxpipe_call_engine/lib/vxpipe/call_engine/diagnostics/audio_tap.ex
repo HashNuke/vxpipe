@@ -31,6 +31,15 @@ defmodule Vxpipe.CallEngine.Diagnostics.AudioTap do
 
   def new(_handoff, _generation, _revision, _source), do: {:error, :unavailable}
 
+  def guard_input(nil, _generation, _revision, _frame), do: :ok
+
+  def guard_input(tap, generation, revision, %AudioFrame{track_id: track, source_epoch: epoch})
+      when generation == tap.generation and revision == tap.policy_revision and
+             track == tap.track_id and epoch == tap.source_epoch,
+      do: :ok
+
+  def guard_input(tap, _generation, _revision, _frame), do: close(tap)
+
   def offer(nil, _generation, _revision, _frame), do: :ok
 
   def offer(tap, generation, revision, %AudioFrame{track_id: track, source_epoch: epoch} = frame) do
