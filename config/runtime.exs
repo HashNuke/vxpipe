@@ -154,6 +154,7 @@ if database_enabled? do
     roles: Vxpipe.Persistence.IdentityRoleStore,
     sessions: Vxpipe.Persistence.IdentitySessionStore,
     installations: Vxpipe.Persistence.IdentityInstallationStore,
+    diagnostics_settings: Vxpipe.Persistence.DiagnosticsSettingsStore,
     installation_url_cache: Vxpipe.Identity.InstallationURLCache,
     attempts: Vxpipe.Persistence.IdentityAttemptStore,
     audit: Vxpipe.Persistence.IdentityAuditStore,

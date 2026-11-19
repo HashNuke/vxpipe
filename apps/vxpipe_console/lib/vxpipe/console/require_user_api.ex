@@ -33,6 +33,9 @@ defmodule Vxpipe.Console.RequireUserAPI do
 
   defp authorize(_principal, :authenticated), do: :ok
 
+  defp authorize(principal, :diagnostics_settings),
+    do: Vxpipe.Identity.DiagnosticsSettings.authorize(principal)
+
   defp authorize(principal, {:installation, permission}) do
     Authorization.authorize(principal.grants, permission, :installation)
   end

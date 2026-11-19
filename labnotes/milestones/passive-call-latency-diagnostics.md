@@ -328,7 +328,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
   VAD on and benchmarking on. Cover the full on/off matrix, mid-call enable/disable,
   source replacement, model/epoch compatibility and late results. Disabling diagnostics
   must not cancel/reset operational VAD or alter its control trace.
-- [ ] Add durable default-off app setting, dedicated admin/superadmin authorization,
+- [x] Add durable default-off app setting, dedicated admin/superadmin authorization,
   revision conflict handling and update audit. Test member/custom-role/machine denial
   through direct requests and preserve superadmin-only installation URL controls.
 - [ ] Build the Installation Diagnostics section and Benchmark using Silero VAD toggle with saved/applying/error states and
@@ -560,3 +560,19 @@ Durable settings final evidence: Astra xhigh re-review clean; full Persistence
 suite574tests/0failures (68excluded); format, compile warnings-as-errors, strict
 Credo and unused-lock checks pass. The local worktree test database migration
 completed after B's umbrella run. No runtime enable authority is wired yet.
+
+## Checkpoint C settings API evidence — 2026-11-19
+
+The configured Console API now exposes session-only GET/PATCH
+`/api/installation/diagnostics`. An exact route guard, domain validation and current
+stored authority protect it. Explicit Authorization headers are rejected by the
+existing product-session pipeline; custom roles cannot read or write. Saved values
+survive subsequent requests, stale revisions return409, invalid values422, and
+unavailable storage503. Installation page server access admits admins/superadmins;
+URL APIs retain their superadmin-only route and domain guards.
+
+Five new endpoint tests pass with the existing six setup/URL/account tests. Full
+Console suite590tests/0failures (127excluded); static root gates pass. Astra xhigh
+review is clean. This completes the durable settings/API task, not the frontend
+section or live projection. No frontend/browser acceptance or active capture is
+claimed; those separate C tasks remain unchecked.

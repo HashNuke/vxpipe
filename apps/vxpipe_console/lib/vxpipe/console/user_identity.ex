@@ -63,6 +63,13 @@ defmodule Vxpipe.Console.UserIdentity do
   def installation(actor),
     do: with_dependencies(&Vxpipe.Identity.InstallationSettings.fetch(&1, actor))
 
+  def diagnostics_settings(actor),
+    do: with_dependencies(&Vxpipe.Identity.DiagnosticsSettings.fetch(&1, actor))
+
+  def update_diagnostics_settings(actor, enabled, revision),
+    do:
+      with_dependencies(&Vxpipe.Identity.DiagnosticsSettings.update(&1, actor, enabled, revision))
+
   def update_installation(actor, url, revision),
     do: with_dependencies(&Vxpipe.Identity.InstallationSettings.update(&1, actor, url, revision))
 

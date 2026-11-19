@@ -4,6 +4,7 @@ defmodule Vxpipe.Console.RoutePermission do
   @type requirement ::
           :authenticated
           | :superadmin
+          | :diagnostics_settings
           | {:installation, String.t()}
           | {:tenant, String.t(), String.t()}
           | {:directory, String.t()}
@@ -12,6 +13,9 @@ defmodule Vxpipe.Console.RoutePermission do
   @spec for_request(String.t(), [String.t()]) :: requirement()
   def for_request(method, ["api", "installation"]) when method in ["GET", "PATCH"],
     do: :superadmin
+
+  def for_request(method, ["api", "installation", "diagnostics"])
+      when method in ["GET", "PATCH"], do: :diagnostics_settings
 
   def for_request("GET", ["oauth", "mcp", "callback"]), do: :authenticated
 

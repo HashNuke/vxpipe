@@ -211,6 +211,12 @@ defmodule Vxpipe.Console.Router do
     patch "/installation", Vxpipe.Console.InstallationController, :update,
       metadata: %{console_product_api: true}
 
+    get "/installation/diagnostics", Vxpipe.Console.DiagnosticsSettingsController, :show,
+      metadata: %{console_product_api: true}
+
+    patch "/installation/diagnostics", Vxpipe.Console.DiagnosticsSettingsController, :update,
+      metadata: %{console_product_api: true}
+
     post "/onboarding/demo-tenant", Vxpipe.Console.AdminOnboardingController, :ensure_demo_tenant,
       metadata: %{console_product_api: true}
 

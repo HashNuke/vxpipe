@@ -1,10 +1,10 @@
 defmodule Vxpipe.Console.InstallationController do
-  @moduledoc "Session-only Superadmin installation settings."
+  @moduledoc "Operator installation page with separate Superadmin-only URL operations."
   use Phoenix.Controller, formats: [:html, :json]
   alias Vxpipe.Console.UserIdentity
 
   def page(conn, params) do
-    case Vxpipe.Identity.InstallationSettings.authorize(conn.assigns.user_principal) do
+    case Vxpipe.Identity.DiagnosticsSettings.authorize(conn.assigns.user_principal) do
       :ok -> Vxpipe.Console.AdminPageController.index(conn, params)
       _ -> send_resp(conn, 403, "Access unavailable")
     end

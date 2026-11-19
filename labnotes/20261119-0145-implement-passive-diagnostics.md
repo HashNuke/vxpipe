@@ -306,3 +306,27 @@
   settings database: `/tmp/vxpipe-C-persistence-suite.log`. Default worktree test
   migration also completed successfully after B. Durable-settings checkpoint is
   reviewed and ready to commit; runtime configuration and UI remain separate work.
+
+## Checkpoint C — Console diagnostics API in progress
+
+- Added dedicated session-only GET/PATCH `/api/installation/diagnostics`, configured
+  the durable Identity port, and introduced the exact diagnostics-settings route
+  requirement. Admin/superadmin browser principals pass the route guard; the domain
+  and storage independently enforce authority. URL operations remain superadmin-only.
+- Expanded the Installation page's server-side guard to admit admins for the future
+  Diagnostics section. Frontend navigation, section and toggle are not changed yet;
+  rendered UI acceptance is explicitly deferred, not claimed by these API tests.
+- Five database-backed endpoint tests started red (missing routes), then exposed
+  the default-deny route permission and whole-page guard, which are now updated.
+  Combined with the existing URL/setup/auth tests:11tests/0failures. Covers reload
+  reads, stale revision conflict, invalid boolean, custom-role denial, anonymous/
+  explicit bearer denial, and missing-storage503. Existing tests preserve admin
+  denial of URL reads and writes. Initial scratch generation command used the wrong
+  cwd and created no files; corrected before the meaningful red test run.
+- Full Console suite and static gates are running; Astra API review requested.
+  Runtime projection and actual capture remain unwired, and nothing is deployed.
+
+- Final API review is clean; reviewer independently passed11endpoint/route tests.
+  Full Console suite590tests/0failures (127excluded), static gates all pass. Evidence:
+  `/tmp/vxpipe-C-console-api-suite.log`, `/tmp/vxpipe-review-settings-api.log`.
+  Durable settings/API task marked complete; UI and runtime tasks remain open.
