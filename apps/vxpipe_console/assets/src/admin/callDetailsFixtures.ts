@@ -110,6 +110,13 @@ function snapshot(
       },
     ],
     timeline: selectedCall.startedAt ? [
+      ...["usage_observed", "agent_output_delivery_progressed", "agent_output_delivered",
+        "agent_output_delivery_started", "participant_transcription_final",
+        "participant_turn_started", "agent_turn_completed"].map((eventKind, index) => ({
+        id: `technical-${index}`, revision: 1, sourceSequence: 20 + index,
+        kind: "activity" as const, value: { id: `technical-${index}`, eventKind,
+          occurredAt: occurredAt(11 + index), text: eventKind.replaceAll("_", " "), kind: "call" as const },
+      })),
       {
         id: "activity-1",
         revision: 1,

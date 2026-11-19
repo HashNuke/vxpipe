@@ -21,6 +21,15 @@ events than its persisted snapshot. `complete`, `incomplete` and `unconfirmed`
 describe evidence, not a guess. Missing usage is not zero cost; a captured empty
 tool result differs from a result that was not captured.
 
+The conversation hides routine usage observations, playback progress/start/completion,
+final transcription and turn-start/completion bookkeeping by default. Enable
+**Technical events** in the conversation filters to inspect those records; this
+works in both admin call details and the debug console. **Events** still controls
+ordinary lifecycle activity, while **Logs** controls raw RTVI protocol events.
+Messages, tool actions, failures and interruptions remain visible by default.
+Filtering changes presentation only: archived evidence and Usage totals remain
+intact. Large filtered conversations show 100 items per page.
+
 Recordings and immutable call-detail publications are separate artifacts. They
 require configured object storage and relevant capture permissions. A readable
 inspection page does not imply a recording exists.

@@ -317,3 +317,17 @@ function responseFixture(state: "running" | "ended") {
     },
   };
 }
+
+test("preserves canonical activity kinds and accepts legacy activities", () => {
+  const response = responseFixture("ended");
+  const activity = { id: "usage-1", revision: 8, kind: "activity", value: {
+    id: "usage-1", occurred_at: "2026-09-16T09:00:08.000Z", text: "Usage observed",
+    kind: "call", event_kind: "usage_observed",
+  }};
+  Object.assign(response, { timeline: [...response.timeline, activity] });
+  expect(parseCallInspectionResponse(response).timeline.find((entry) => entry.kind === "activity"))
+    .toMatchObject({ value: { eventKind: "usage_observed" } });
+  delete (activity.value as Record<string, unknown>).event_kind;
+  expect(parseCallInspectionResponse(response).timeline.find((entry) => entry.kind === "activity")?.value)
+    .not.toHaveProperty("eventKind");
+});

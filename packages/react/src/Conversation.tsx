@@ -1,3 +1,4 @@
+import { isTechnicalEvent } from "./conversationFilters.js";
 import { useId, useState } from "react";
 import type {
   ActivityEvent,
@@ -323,9 +324,11 @@ function timeline(
           value,
         })),
     );
-  if (filters.events)
+  if (filters.events || filters.technical)
     items.push(
-      ...snapshot.activities.map((value) => ({
+      ...snapshot.activities
+        .filter((value) => isTechnicalEvent(value.eventKind) ? filters.technical : filters.events)
+        .map((value) => ({
         kind: "events" as const,
         id: value.id,
         occurredAt: value.occurredAt,
@@ -353,10 +356,13 @@ function timeline(
           value,
         })),
     );
+  const order = new Map(snapshot.timelineOrder?.map((key, index) => [key, index]));
+  const entityKinds = { messages: "message", events: "activity", tools: "tool-call", logs: "protocol-event" };
+  const position = (item: TimelineItem) => order.get(`${entityKinds[item.kind]}:${item.id}`) ?? 0;
   return items.sort(
     (left, right) =>
       left.occurredAt.localeCompare(right.occurredAt) ||
-      left.id.localeCompare(right.id),
+      position(left) - position(right),
   );
 }
 
@@ -372,10 +378,28 @@ export function Conversation({
   onSelectParticipant?: (participantId: string) => void;
 }) {
   const items = timeline(snapshot, filters);
+  // A live viewer follows new items until they explicitly browse an older page.
+  const [requestedPage, setPage] = useState<number | null>(snapshot.state === "connected" ? null : 0);
+  const [hasConnected, setHasConnected] = useState(snapshot.state === "connected");
+  if (!hasConnected && snapshot.state === "connected") {
+    setHasConnected(true);
+    setPage(null);
+  }
+  const pageSize = 100;
+  const pages = Math.max(1, Math.ceil(items.length / pageSize));
+  const page = requestedPage === null ? pages - 1 : Math.min(requestedPage, pages - 1);
+  const visibleItems = items.slice(page * pageSize, (page + 1) * pageSize);
 
   return (
     <section className="vx-conversation" aria-label="Conversation">
       <div className="vx-transcript">
+        {pages > 1 && <nav className="vx-timeline-pages" aria-label="Conversation pages">
+          <button type="button" aria-label="Previous conversation page" disabled={page === 0}
+            onClick={() => setPage(page - 1)}>Previous</button>
+          <span role="status">Page {page + 1} of {pages}</span>
+          <button type="button" aria-label="Next conversation page" disabled={page === pages - 1}
+            onClick={() => setPage(snapshot.state === "connected" && page + 1 === pages - 1 ? null : page + 1)}>Next</button>
+        </nav>}
         {items.length === 0 && (
           <div className="vx-empty">
             <h2>
@@ -385,7 +409,7 @@ export function Conversation({
             </h2>
           </div>
         )}
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           if (item.kind === "messages")
             return (
               <MessageRow

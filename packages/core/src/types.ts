@@ -60,6 +60,8 @@ export interface ProtocolEvent {
 }
 
 export interface ActivityEvent {
+  /** Canonical archive kind; absent in legacy snapshots. Never infer from display text. */
+  eventKind?: string;
   id: string;
   /** UTC RFC 3339 instant when this item occurred. */
   occurredAt: string;

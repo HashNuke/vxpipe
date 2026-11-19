@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import {
   createCallDetailsController,
@@ -180,4 +180,51 @@ test("preserves repeated metric observations for the same target and label", () 
   expect(
     screen.getByRole("button", { name: "Input tokens for LLM, Assistant: 20 tokens" }),
   ).toBeVisible();
+});
+
+const technicalKinds = [
+  "usage_observed", "agent_output_delivery_progressed", "agent_output_delivered",
+  "agent_output_delivery_started", "participant_transcription_final",
+  "participant_turn_started", "agent_turn_completed",
+];
+
+test("technical archive facts are opt-in without hiding conversation or losing stored evidence", () => {
+  const response = mockEndpointResponse();
+  const kinds = [...technicalKinds, "agent_turn_failed", "agent_turn_interrupted", "future_event"];
+  response.timeline = [...response.timeline, ...kinds.map((eventKind, index) => ({
+    id: eventKind, revision: 1, sourceSequence: index + 2, kind: "activity" as const,
+    value: { id: eventKind, occurredAt: "2026-09-16T08:00:03.000Z", text: eventKind,
+      kind: "call" as const, eventKind },
+  }))];
+  const details = createCallDetailsStore(response);
+  render(<CallConsole controller={{ details }} />);
+  for (const kind of technicalKinds) expect(screen.queryByText(kind)).not.toBeInTheDocument();
+  for (const kind of kinds.slice(7)) expect(screen.getByText(kind)).toBeVisible();
+  expect(screen.getByText("Loaded from call history")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Show Technical events" }));
+  for (const kind of technicalKinds) expect(screen.getByText(kind)).toBeVisible();
+  const shown = screen.getAllByText(new RegExp(`^(${technicalKinds.join("|")})$`));
+  expect(shown.map((node) => node.textContent)).toEqual(technicalKinds);
+  fireEvent.click(screen.getByRole("button", { name: "Hide Technical events" }));
+  expect(details.getSnapshot().timeline).toHaveLength(kinds.length + 1);
+  for (const kind of technicalKinds) expect(screen.queryByText(kind)).not.toBeInTheDocument();
+});
+
+test("pages technical events after filtering so bookkeeping cannot conceal messages", () => {
+  const response = mockEndpointResponse();
+  response.timeline = [...Array.from({ length: 250 }, (_, index) => ({
+    id: `progress-${index}`, revision: 1, sourceSequence: index + 1, kind: "activity" as const,
+    value: { id: `progress-${index}`, occurredAt: "2026-09-16T08:00:01.000Z",
+      text: `Progress ${index}`, kind: "call" as const, eventKind: "agent_output_delivery_progressed" },
+  })), ...response.timeline];
+  render(<CallConsole controller={{ details: createCallDetailsStore(response) }} />);
+  expect(screen.getByText("Loaded from call history")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Show Technical events" }));
+  expect(screen.getAllByText(/^Progress /)).toHaveLength(100);
+  fireEvent.click(screen.getByRole("button", { name: "Next conversation page" }));
+  expect(screen.getAllByText(/^Progress /)).toHaveLength(100);
+  fireEvent.click(screen.getByRole("button", { name: "Next conversation page" }));
+  expect(screen.getByText("Loaded from call history")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Hide Technical events" }));
+  expect(screen.getByText("Loaded from call history")).toBeVisible();
 });

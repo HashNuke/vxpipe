@@ -27,6 +27,33 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
 
   @tenant_key "tenantkey1234567"
 
+  test "preserves canonical activity kinds for technical-event filtering" do
+    inspection = result()
+
+    kinds = [
+      :usage_observed,
+      :agent_output_delivery_progressed,
+      :agent_output_delivered,
+      :agent_output_delivery_started,
+      :participant_transcription_final,
+      :participant_turn_started,
+      :agent_turn_completed,
+      :agent_turn_failed
+    ]
+
+    facts =
+      Enum.with_index(kinds, 1)
+      |> Enum.map(fn {kind, sequence} ->
+        fact(kind, sequence, ~U[2026-09-16 09:00:00Z], payload: %{})
+      end)
+
+    history = CallHistory.new(facts, %VariableSnapshotHistory{snapshots: [], latest: nil})
+    response = CallInspectionPresenter.present(%{inspection | history: history})
+
+    assert Enum.map(response["timeline"], & &1["value"]["event_kind"]) ==
+             Enum.map(kinds, &Atom.to_string/1)
+  end
+
   test "projects typed and legacy speech without exposing control JSON or invented attribution" do
     inspection = result()
 

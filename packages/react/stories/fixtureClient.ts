@@ -10,6 +10,7 @@ import type { ConsoleSnapshot } from "../src/types.js";
 export type Scenario =
   | "ready"
   | "conversation"
+  | "technical-events"
   | "listening-cues"
   | "handoff"
   | "human-handoff"
@@ -425,6 +426,16 @@ export type ExampleScenario = "conversation" | "handoff" | "human-handoff";
 
 function fixtureSnapshot(scenario: Scenario): ConsoleSnapshot {
   let snapshot: ConsoleSnapshot = structuredClone(initial);
+  if (scenario === "technical-events") {
+    const kinds = ["usage_observed", "agent_output_delivery_progressed", "agent_output_delivered",
+      "agent_output_delivery_started", "participant_transcription_final", "participant_turn_started",
+      "agent_turn_completed"];
+    return { ...snapshot, activities: [...snapshot.activities, ...Array.from({ length: 210 }, (_, index) => ({
+      id: `technical-${index}`, eventKind: kinds[index % kinds.length],
+      occurredAt: "2026-09-16T08:01:00.000Z", kind: "call" as const,
+      text: `${kinds[index % kinds.length].replaceAll("_", " ")} (${index + 1})`,
+    }))] };
+  }
   if (scenario === "listening-cues")
     snapshot = {
       ...snapshot,

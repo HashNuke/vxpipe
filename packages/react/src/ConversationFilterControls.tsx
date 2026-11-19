@@ -28,6 +28,7 @@ const filterIcons = {
   messages: "message",
   logs: "log",
   events: "event",
+  technical: "log",
 } as const;
 
 function FilterIcon({ filter }: { filter: ConversationFilter }) {

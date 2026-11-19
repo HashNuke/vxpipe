@@ -262,6 +262,7 @@ function timelineEntity(value: unknown, path: string): CallDetailsTimelineEntity
 function activity(value: unknown, path: string): ActivityEvent {
   const item = object(value, path);
   return {
+    ...(item.event_kind === undefined ? {} : { eventKind: string(item.event_kind, `${path}.event_kind`) }),
     id: string(item.id, `${path}.id`),
     occurredAt: instant(item.occurred_at, `${path}.occurred_at`),
     text: string(item.text, `${path}.text`),

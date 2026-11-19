@@ -10,6 +10,8 @@ import type {
 
 /** Derived React view model; durable and browser-local state remain separate in Core. */
 export interface ConsoleSnapshot {
+  /** Canonical cross-kind order supplied by the details store. */
+  timelineOrder?: readonly string[];
   callId: string;
   state: "ready" | "connected" | "ended" | "failed";
   duration: string | null;

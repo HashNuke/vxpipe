@@ -76,6 +76,7 @@ function consoleSnapshot(
       : "unavailable";
 
   return {
+    timelineOrder: details.timeline.map((entity) => `${entity.kind}:${entity.value.id}`),
     callId: details.call.id,
     state,
     duration: formatDuration(details.call.durationMs),

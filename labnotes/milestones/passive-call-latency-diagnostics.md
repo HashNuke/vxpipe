@@ -1,7 +1,8 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: specification researched and locally reviewed, 2026-11-19. Implementation
-not started; all six checkpoints remain open. The index owns implementation order.
+Status: implementation in progress, 2026-11-19. Checkpoint A code, focused tests,
+rendered checks and Astra xhigh review are complete; final umbrella verification
+is running. B–F remain unimplemented. The index owns implementation order.
 
 ## Runnable outcome
 
@@ -285,15 +286,15 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 
 ### A — Readable conversation
 
-- [ ] Red-test the seven kinds hidden by default and visible on opt-in, preserving
+- [x] Red-test the seven kinds hidden by default and visible on opt-in, preserving
   messages, tools, failures, interruptions and unknown kinds in both consumers.
-- [ ] Carry typed classification through presenter, core decoder/store and live
+- [x] Carry typed classification through presenter, core decoder/store and live
   updates; add Technical events without reinterpreting RTVI Logs or deleting facts.
-- [ ] Verify legacy snapshots, reconnects, pagination through technical-only pages,
+- [x] Verify legacy snapshots, reconnects, pagination through technical-only pages,
   large histories, ordering, filter toggles and unchanged Usage totals.
-- [ ] Add realistic shared fixtures; inspect admin and debug views with headless
+- [x] Add realistic shared fixtures; inspect admin and debug views with headless
   Chrome via `agent-browser`, desktop/mobile, keyboard and empty/filter states.
-- [ ] Document filter meanings and retain focused tests with this usable checkpoint.
+- [x] Document filter meanings and retain focused tests with this usable checkpoint.
 
 ### B — Durable timing report
 
@@ -434,3 +435,26 @@ or implementation acceptance claimed. Resolutions:
 
 No code, migrations, runtime configuration or UI behavior changed during planning.
 All implementation boxes above remain unchecked until their evidence exists.
+
+## Implementation evidence — checkpoint A
+
+Canonical archive kind now survives Console JSON decoding into shared core/react
+views. Technical events defaults off for the seven specified kinds; records and
+Usage remain unchanged. Unknown/legacy activities stay visible. Filtered DOM pages
+contain at most 100 items; the existing full-history endpoint is unchanged.
+Canonical source ordering survives timestamp ties. Live views follow newest pages
+unless the operator explicitly browses earlier history.
+
+Red/green evidence covers presentation, decoding, classification, pagination and
+equal-timestamp ordering. Astra xhigh reproduced initially-connected and
+ready-to-connected pagination failures with failing tests; both are fixed and
+retained. Re-review returned no remaining findings. Shared UI suite: 50 passing;
+Console frontend suite: 1,163 passing; final affected frontend tests: 22 passing;
+presenter suite: 16 passing. Workspace and Console typechecks pass.
+
+Headless Chrome via agent-browser verified Workbench/debug and admin call details
+on desktop/mobile, default-hidden/technical-enabled states, keyboard filters and
+page controls. Format, warnings-as-errors compile and strict Credo pass. Initial
+umbrella run exited 143 without a result; persistent rerun and unused-lock gate
+are pending. Do not claim checkpoint exit or deployment until those pass.
+See [implementation labnotes](../20261119-0145-implement-passive-diagnostics.md).

@@ -300,6 +300,7 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
         "id" => entry.id,
         "occurred_at" => instant(entry.occurred_at),
         "text" => activity_text(entry, names),
+        "event_kind" => Atom.to_string(entry.kind),
         "kind" => activity_kind(entry.kind)
       }
     }
