@@ -304,11 +304,11 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 - [ ] Define typed observations, run/turn schema, clock mapping, correlation and
   quality reasons. Replay timestamped PCM plus provider events into one report;
   cover end receipt arriving before the observer confirms the boundary.
-- [ ] Implement Calls ports and Persistence migration, constraints/indexes and
+- [x] Implement Calls ports and Persistence migration, constraints/indexes and
   revision/idempotency rules; test fresh and populated migration paths.
 - [ ] Add separately bounded asynchronous persistence, restart-readable reports,
   run coverage, cursor reads and valid-only aggregates. Keep publication independent.
-- [ ] Prove two-tenant denial, wrong incarnation, late revisions, call deletion,
+- [x] Prove two-tenant denial, wrong incarnation, late revisions, call deletion,
   duplicate/conflicting delivery, missing run and DB outage behavior.
 - [ ] Provide a reproducible fixture/replay command and document clock assumptions;
   demonstrate one complete and one intentionally incomplete stored report.
@@ -459,3 +459,22 @@ umbrella run exited 143 without a result; the persistent rerun completed with
 zero failures (exit 0), followed by a passing unused-lock gate (exit 0).
 Checkpoint A is complete; deployment waits for B–F.
 See [implementation labnotes](../20261119-0145-implement-passive-diagnostics.md).
+
+## Checkpoint B partial storage evidence — 2026-11-19
+
+Timing foundations and the durable storage adapter are implemented and independently
+reviewed by Astra xhigh. The full runnable B slice remains incomplete: bounded async
+writes, coverage classification, exact Scribe replay and the fixture command are open.
+
+Storage passes 14 focused tests, including real two-tenant denial, wrong room/source/
+incarnation, missing parent, stale/conflicting revisions, call-deletion cascade,
+terminal run reopening, bounded cursor pages and full-report profile-separated
+aggregates. An unavailable Postgres connection returns a diagnostic error. Neutral
+records pass 10 focused tests. Reviewer regressions for 256-byte identifiers and
+second-precision UTC timestamps were reproduced red and retained green; non-UTC
+anchors are rejected before persistence. Final storage review returned no findings.
+
+The final migration passed fresh and populated-upgrade checks in isolated test
+databases; separate-process verification preserved the existing admitted call.
+Root format, compile and Credo pass; full umbrella verification remains in progress.
+No runtime capture, settings UI, async storage or deployment is claimed by these checks.

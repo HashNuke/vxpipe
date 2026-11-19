@@ -94,15 +94,15 @@ defmodule Vxpipe.Calls.LatencyRun do
   end
 
   defp timestamps?(run) do
-    with %DateTime{} <- run.anchor_utc,
-         %DateTime{} <- run.heartbeat_at,
+    with true <- utc?(run.anchor_utc),
+         true <- utc?(run.heartbeat_at),
          true <- DateTime.compare(run.heartbeat_at, run.anchor_utc) in [:eq, :gt] do
       case {run.state, run.closed_at} do
         {:running, nil} ->
           true
 
         {state, %DateTime{} = closed} when state in [:closed, :incomplete] ->
-          DateTime.compare(closed, run.heartbeat_at) in [:eq, :gt]
+          utc?(closed) and DateTime.compare(closed, run.heartbeat_at) in [:eq, :gt]
 
         _invalid ->
           false
@@ -111,6 +111,9 @@ defmodule Vxpipe.Calls.LatencyRun do
       _invalid -> false
     end
   end
+
+  defp utc?(%DateTime{time_zone: "Etc/UTC", utc_offset: 0, std_offset: 0}), do: true
+  defp utc?(_value), do: false
 
   defp profile?(profile) when is_map(profile) and not is_struct(profile) do
     Map.keys(profile) -- @profile_fields == [] and

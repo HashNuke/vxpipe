@@ -90,3 +90,40 @@
   `/tmp/vxpipe-B-foundation-unlock.exit`. Pending at this foundation commit.
 - This is a reviewed partial B checkpoint, not completion of the durable-report
   vertical slice. B checklist remains unchecked until persistence/replay gates pass.
+
+## Checkpoint B — durable storage in progress
+
+- Added tenant-scoped diagnostics storage and separate run/turn tables. Seven storage
+  tests failed with the missing adapter after correcting the fixture's admission
+  return shape, then passed. Two additional red tests exposed forged-input encoding
+  before validation and the missing full-report aggregate; all nine now pass.
+- Call locks serialize diagnostic writes with deletion and incarnation changes.
+  Existing bound call identity is required; diagnostics never bind or recreate a call.
+  Revision conflicts/stale writes, immutable run profile, terminal reopening,
+  cross-source turns, cursor bounds and cascading call deletion are covered.
+- Aggregates are SQL over the full call report (not the page), exclude null durations,
+  and group by complete provider/model/algorithm configuration. Timing data is
+  bounded allowlisted JSON; no transcript or audio fields are accepted.
+- Migration checks passed on two new isolated test databases: full fresh migration,
+  and upgrade from the previous schema after persisting one admitted/bound call.
+  Separate-process verification confirms the existing call is preserved and both
+  new tables are empty. Logs `/tmp/vxpipe-B-migration-{fresh,populated}.log`, exit 0.
+- Strict Credo passes; Astra xhigh storage review is ongoing. Async storage, run
+  coverage, replay, settings and runtime capture remain open; no B acceptance box checked.
+
+- Astra xhigh reproduced constructor-valid 256-byte IDs exceeding varchar(255) and
+  second-precision UTC timestamps rejected by Ecto's microsecond column. Tests
+  retained red/green; final migration uses text with byte-length constraints, and
+  the indexed heartbeat expands precision without changing its time value.
+- Independently reproduced non-UTC anchors accepted before persistence and rejected
+  by Ecto; neutral constructor now enforces UTC. Actual unavailable PostgreSQL
+  connection returns diagnostics_unavailable. Two-tenant test now uses a real second
+  tenant for read/write denial. Final storage suite 14 tests and records suite 10
+  tests pass; Astra xhigh re-review returned no remaining findings.
+- Final migration reverified fresh/populated with logs ending `-r2`, both exit 0.
+  A local test-schema alignment changed only the new tables' column types/constraints
+  after modifying the uncommitted migration; no tables or existing calls were dropped.
+- B migration/revision and isolation-test tasks are now checked; B overall remains
+  open for async storage, coverage and exact replay. Full persistence child suite
+  `/tmp/vxpipe-B-persistence-suite.log` is running; earlier root foundation suite
+  remains live in tmux `vxdiag-foundations`. Do not mistake either for completion.

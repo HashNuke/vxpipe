@@ -72,6 +72,16 @@ defmodule Vxpipe.Calls.LatencyRunTest do
              LatencyRun.new(%{attrs | counts: %{observed_turns: -1}})
   end
 
+  test "declared UTC anchors reject non-UTC timestamps" do
+    attrs = attributes()
+    local = %{attrs.anchor_utc | utc_offset: 3_600, time_zone: "Europe/Paris", zone_abbr: "CET"}
+    assert {:error, :invalid_latency_run} = LatencyRun.new(%{attrs | anchor_utc: local})
+    assert {:error, :invalid_latency_run} = LatencyRun.new(Map.put(attrs, :heartbeat_at, local))
+
+    assert {:error, :invalid_latency_run} =
+             LatencyRun.new(Map.merge(attrs, %{state: :closed, closed_at: local}))
+  end
+
   defp attributes do
     %{
       id: "run-1",
