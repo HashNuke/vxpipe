@@ -58,3 +58,18 @@ test("all-unavailable series stays unavailable instead of reporting zero", () =>
   expect(screen.getByRole("button", { name: "TTFT for LLM, Assistant: Unavailable" })).toBeVisible();
   expect(screen.queryByText("Total")).not.toBeInTheDocument();
 });
+
+test("STT stays one summarized row per participant when all other metrics expand", () => {
+  const stt = (participantId: string, value: number): Metric => ({ ...metric(value), label: "Final transcript latency",
+    scope: { kind: "participant-capability", participantId, capability: "STT" } });
+  const data = snapshot([stt("caller", 100), stt("caller", 300),
+    stt("second-caller", 200), stt("second-caller", 400), metric(100), metric(200)]);
+  data.participants = [...data.participants, { ...data.participants[0]!, id: "second-caller", name: "Second participant", role: "human" }];
+  render(<Metrics snapshot={data} theme="dark" />);
+  fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+  expect(screen.getByRole("group", { name: "Final transcript latency summary for STT, Caller" })).toHaveTextContent("Avg200 ms");
+  expect(screen.getByRole("group", { name: "Final transcript latency summary for STT, Second participant" })).toHaveTextContent("Avg300 ms");
+  expect(screen.getAllByRole("rowheader", { name: /^STT,/ })).toHaveLength(2);
+  expect(screen.queryByRole("button", { name: /(?:Expand|Collapse) metrics for STT/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "TTFT for LLM, Assistant: 100 ms" })).toBeVisible();
+});

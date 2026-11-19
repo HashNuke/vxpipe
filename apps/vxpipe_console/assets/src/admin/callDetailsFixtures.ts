@@ -110,6 +110,13 @@ function snapshot(
           ],
         },
       },
+      ...(content === "metrics" ? [{
+        id: "second-caller", revision: 1,
+        value: { id: "second-caller", name: "Second participant", role: "human" as const, state: "left" as const,
+          description: null, connection: { kind: "webrtc" as const },
+          capabilities: [{ name: "Speech to text", provider: "Deepgram", model: "flux-general-en" }],
+          systemPrompt: null, transferPolicies: [], tools: [] },
+      }] : []),
     ],
     timeline: selectedCall.startedAt ? [
       ...["usage_observed", "agent_output_delivery_progressed", "agent_output_delivered",

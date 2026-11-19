@@ -152,7 +152,9 @@ export function Metrics({
   const rows = metricRows(snapshot);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const tableId = useId();
-  const expandable = rows.filter((row) => [...row.metrics.values()].some((values) => values.length > 1));
+  const expandable = rows.filter((row) =>
+    !("capability" in row.scope && ["STT", "Agent STT"].includes(row.scope.capability)) &&
+    [...row.metrics.values()].some((values) => values.length > 1));
   const anyExpanded = expandable.some((row) => expanded.has(row.key));
   const allExpanded = expandable.every((row) => expanded.has(row.key));
 
@@ -203,16 +205,6 @@ export function Metrics({
               <tr key={row.key} id={`${tableId}-${rowIndex}`}>
                 <th scope="row" aria-label={row.accessibleName}>
                   <div className="vx-metric-target">
-                  {expandable.includes(row) && <button type="button" className="vx-metric-row-toggle"
-                    aria-label={`${expanded.has(row.key) ? "Collapse" : "Expand"} metrics for ${row.accessibleName}`}
-                    aria-expanded={expanded.has(row.key)} aria-controls={`${tableId}-${rowIndex}`}
-                    onClick={() => setExpanded((previous) => {
-                      const next = new Set(previous);
-                      if (next.has(row.key)) next.delete(row.key); else next.add(row.key);
-                      return next;
-                    })}>
-                    {expanded.has(row.key) ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
-                  </button>}
                   <div>
                   <strong>{row.target}</strong>
                   {row.participantName ? (
@@ -223,6 +215,16 @@ export function Metrics({
                     <small>{row.scopeLabel}</small>
                   )}
                   </div>
+                  {expandable.includes(row) && <button type="button" className="vx-metric-row-toggle"
+                    aria-label={`${expanded.has(row.key) ? "Collapse" : "Expand"} metrics for ${row.accessibleName}`}
+                    aria-expanded={expanded.has(row.key)} aria-controls={`${tableId}-${rowIndex}`}
+                    onClick={() => setExpanded((previous) => {
+                      const next = new Set(previous);
+                      if (next.has(row.key)) next.delete(row.key); else next.add(row.key);
+                      return next;
+                    })}>
+                    {expanded.has(row.key) ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+                  </button>}
                   </div>
                 </th>
                 {columns.map((column) => (
