@@ -146,10 +146,16 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
        name: __MODULE__.Diagnostics,
        projection: __MODULE__.Projection,
        repository:
-         if(matrix?,
-           do: {LatencyStore, Repo},
-           else: {Vxpipe.Console.Test.HeldLatencyStore, {Repo, parent}}
-         ),
+         cond do
+           Map.has_key?(tags, :storage_failure) ->
+             {Vxpipe.Console.Test.FailingLatencyStore, {parent, tags.storage_failure}}
+
+           matrix? ->
+             {LatencyStore, Repo}
+
+           true ->
+             {Vxpipe.Console.Test.HeldLatencyStore, {Repo, parent}}
+         end,
        writer_supervisor: __MODULE__.Writers,
        collector_supervisor: __MODULE__.Collectors,
        task_supervisor: __MODULE__.Writes,
@@ -643,6 +649,83 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
       refute_received {:scribe_commit, ^wire}
       refute_received {:vxpipe_connection_unavailable, _}
       GenServer.stop(attachment.room_authority, :shutdown)
+    end
+  end
+
+  for failure <- [:error, :blocked], vad <- [false, true], enabled <- [false, true] do
+    @tag matrix: true, storage_failure: failure, vad: vad, diagnostics_enabled: enabled
+    test "diagnostic storage #{failure} preserves calls with Silero #{vad} and collection #{enabled}",
+         c do
+      {call, _connection, attachment, wire, identity} = call(c.options, c.vad)
+      pace(32)
+      epoch = make_ref()
+
+      sequence =
+        if c.diagnostics_enabled,
+          do: discover_with_audio(attachment, identity, epoch, wire),
+          else: 0
+
+      failure = c.storage_failure
+
+      write =
+        if c.diagnostics_enabled do
+          assert_receive {:diagnostic_storage_attempt, ^failure, task}, 2_000
+          {task, Process.monitor(task)}
+        end
+
+      for index <- 1..2 do
+        pcm = :binary.copy(<<50 + index, 0>>, 512)
+        send_audio(attachment, identity, epoch, sequence + index, (sequence + index) * 512, pcm)
+        assert_receive {:scribe_audio, ^wire, ^pcm}, 2_000
+        if c.vad, do: assert_receive({:matrix_inference, :operational, _, ^pcm}, 2_000)
+
+        text = "Continue during diagnostic storage failure #{index}."
+        emit_scribe_turn(wire, text)
+        assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = input}, 2_000
+        assert input.text == text
+        assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
+        assert output.text == "Acknowledged."
+        assert output.correlation_id == input.correlation_id
+      end
+
+      # Prove both turns completed while the same repository attempt was held.
+      if c.diagnostics_enabled and failure == :blocked do
+        {task, _monitor} = write
+        reference = make_ref()
+        send(task, {:still_blocked, self(), reference})
+        assert_receive {:storage_still_blocked, ^task, ^reference}, 500
+      end
+
+      assert {:ok, completion} =
+               CallEngine.monitor_room_completion(
+                 identity.tenant_id,
+                 identity.room_id,
+                 identity.incarnation_id
+               )
+
+      GenServer.stop(attachment.room_authority, :shutdown)
+      assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+      await_diagnostic_drain(identity, 5_000)
+      await(fn -> Task.Supervisor.children(__MODULE__.Writes) == [] end)
+
+      if write do
+        {task, monitor} = write
+        assert_receive {:DOWN, ^monitor, :process, ^task, _}, 1_000
+      else
+        refute_received {:diagnostic_storage_attempt, _, _}
+      end
+
+      assert {:ok, %{entries: []}} =
+               LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+      for marker <- 51..52 do
+        pcm = :binary.copy(<<marker, 0>>, 512)
+        refute_received {:scribe_audio, _, ^pcm}
+        refute_received {:matrix_inference, :operational, _, ^pcm}
+      end
+
+      refute_received {:scribe_commit, _}
+      refute_received {:vxpipe_connection_unavailable, _}
     end
   end
 
@@ -1463,22 +1546,25 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end)
   end
 
-  defp await_diagnostic_drain(identity) do
-    await(fn ->
-      Enum.all?(
-        [RoomSupervisor.address(identity, :workers), __MODULE__.Collectors, __MODULE__.Writers],
-        fn supervisor ->
-          try do
-            case GenServer.whereis(supervisor) do
-              nil -> true
-              pid -> DynamicSupervisor.count_children(pid).active == 0
+  defp await_diagnostic_drain(identity, timeout \\ 2_000) do
+    await(
+      fn ->
+        Enum.all?(
+          [RoomSupervisor.address(identity, :workers), __MODULE__.Collectors, __MODULE__.Writers],
+          fn supervisor ->
+            try do
+              case GenServer.whereis(supervisor) do
+                nil -> true
+                pid -> DynamicSupervisor.count_children(pid).active == 0
+              end
+            catch
+              :exit, {reason, _} when reason in [:noproc, :shutdown] -> false
             end
-          catch
-            :exit, {reason, _} when reason in [:noproc, :shutdown] -> false
           end
-        end
-      )
-    end)
+        )
+      end,
+      timeout
+    )
   end
 
   defp benchmark_classifier(parent, nil), do: matrix_classifier(parent, :benchmark)

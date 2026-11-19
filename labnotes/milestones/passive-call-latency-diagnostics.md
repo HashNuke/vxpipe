@@ -2111,3 +2111,22 @@ The combined failure-parity task remains open for storage/saturation and remaini
 control-trace acceptance. Settings effective-status proof is also still open;
 no global confirmation is inferred from a saved value. No live provider, Telnyx,
 full umbrella suite or deployment action occurred.
+
+## Checkpoint C — configured diagnostic storage isolation, 2026-11-19
+
+The configured synthetic Scribe fixture now covers diagnostic repository errors
+and blocked writes with operational Silero off/on and collection off/on. Enabled
+cases require an actual write attempt; blocked cases confirm the same task remains
+blocked after two canonical turns and matching responses complete. Provider PCM,
+operational inference, correlation, no extra commit and connection availability
+remain asserted. Disabled cases never call the injected repository. Room shutdown
+and bounded diagnostic drain leave no source, collector, writer or write task.
+
+The focused selection and independent review pass 8/8; a fast-return control
+rejects both enabled blocked cases as expected. Root static checks pass. The full
+configured file passes 34/34 with tracing, but two untraced runs hit an unresolved
+mixed-STT/STS startup-readiness failure before diagnostic assertions. That failure
+is recorded in the labnotes and is not claimed fixed. This test-only checkpoint
+leaves ordinary call persistence and provider code unchanged; the combined
+failure-parity task remains open. See
+[checkpoint labnotes](../20261119-1856-diagnostic-storage-isolation.md).
