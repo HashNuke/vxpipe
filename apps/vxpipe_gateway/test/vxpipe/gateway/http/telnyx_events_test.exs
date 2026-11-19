@@ -104,17 +104,19 @@ defmodule Vxpipe.Gateway.HTTP.TelnyxEventsTest do
   end
 
   test "acknowledges authenticated ignored events for an existing leg", context do
+    leg_id = "ignored-leg-#{System.unique_integer([:positive])}"
+
     assert {:ok, service} =
              ServiceRegistry.fetch(context.endpoint.router.telephony.registry, @ingress_key)
 
     assert {:ok, _} =
              Vxpipe.Gateway.Telephony.IngressRegistration.register(
                service,
-               "call-leg-1",
+               leg_id,
                :incoming
              )
 
-    body = event_body("call.playback.ended", "voice-application-1")
+    body = event_body("call.playback.ended", "voice-application-1", %{"call_leg_id" => leg_id})
 
     conn = request(context.endpoint, body, context.private_key)
 
