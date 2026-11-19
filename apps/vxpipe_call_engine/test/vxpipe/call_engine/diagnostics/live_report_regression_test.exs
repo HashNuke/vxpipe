@@ -44,6 +44,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReportRegressionTest do
       observe(state, [
         {:acoustic_boundary, 0, :speech_started, 0, 10_000, 12_000, 1_000, nil},
         {:acoustic_boundary, 0, :speech_ended, 512, 40_000, 50_000, 1_000, nil},
+        {:acoustic_progress, 0, 0, 3_072},
         {:provider_landmark, g, t, :provider_end_evidence, 70_000, 3_000},
         {:room_turn_completed, g, t, "turn", "command", 71_000}
       ])
@@ -84,6 +85,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReportRegressionTest do
       observe(state, [
         {:acoustic_boundary, 0, :speech_started, 0, 10_000, 12_000, 1_000, nil},
         {:acoustic_boundary, 0, :speech_ended, 512, 40_000, 50_000, 1_000, nil},
+        {:acoustic_progress, 0, 0, 3_072},
         {:provider_landmark, g, t, :provider_end_evidence, 70_000, 3_000},
         {:room_turn_completed, g, t, "turn-1", "command-1", 71_000},
         {:room_turn_completed, g, other, "turn-2", "command-2", 72_000}

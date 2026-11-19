@@ -551,8 +551,24 @@ Only compact source identity and continuity counters are retained. Invalid metad
 raw input after anchoring, gaps or source changes retire diagnostics without
 rejecting accepted provider audio. A replacement handoff establishes a new anchor.
 Manual Scribe and other provider profiles do not yet produce verified anchors.
-Late unmapped boundaries conservatively invalidate uncertain estimates. Resets,
-partial intervals, resumed speech and conflicting provenance remain nullable.
+Acoustic progress records the contiguous finalized sample interval for one inference
+epoch. Pending onset/silence windows are excluded because a subsequent classification
+can backdate a boundary into them. Source workers emit progress after the associated
+boundaries. Provider, room and response timestamps can pass an outstanding inference
+job, allowing a pending durable row without waiting for the detector. Acoustic
+landmarks remain absent until the selected endpoint and mapped provider end share
+finalized coverage in the same epoch; later progress revises that logical row.
+
+Boundary selection, including uncertain mappings, is confined to the provider's
+mapped sample interval. An onset at its exclusive upper sample bound belongs to
+later audio. A reset closes already observed progress intervals without extending
+them through a gap; a reset opening a new epoch does not close future progress in
+that epoch. Duplicate reset delivery is idempotent. Closed-epoch bookkeeping is
+bounded with the retained packets and participates in the byte cap. Queued audio
+and reused-inference gaps retain their original receipt/observation timestamps.
+Late unmapped boundaries within the relevant interval conservatively invalidate
+uncertain estimates. Resets, partial intervals, resumed speech and conflicting
+provenance remain nullable.
 
 Calls owns the collector pool (default16, maximum32) alongside its existing writer
 and task supervisors. Each collector uses byte/count-bounded capture, a bounded
@@ -566,8 +582,12 @@ unconfirmed, rather than claiming that failure counters were durably delivered.
 Writers monitor collector ownership, so abrupt collector loss starts finite drain.
 
 The production application now wires this collector through the source attachment
-factory. Per-turn finalization policy and configured Scribe acceptance remain
-required; component persistence tests do not establish those acceptance gates.
+factory. A configured Scribe fixture now exercises the real socket callback,
+acknowledged profile, LLM room, pinned Silero and database repository: a prospective
+partial first turn is persisted while inference is held, revised after confirmation,
+followed by a fully observed turn with available latency and matching response-text
+timing, and reread after shutdown. This is fixture evidence; response-audio timing,
+per-turn finalization policy and full on/off/live transport acceptance remain open.
 
 Finalization uses explicit writer acknowledgments, not a transient zero-pending
 counter snapshot. The observed-turn count includes storage-admission failures.

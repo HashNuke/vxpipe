@@ -182,6 +182,8 @@ defmodule Vxpipe.Calls.Diagnostics.CollectorTest do
                {:acoustic_boundary, 0, :speech_ended, 512, 40_000, 90_000, 1_000, nil}
              )
 
+    assert :ok = CaptureHandoff.offer(handoff, {:acoustic_progress, 0, 0, 3_072})
+
     assert_receive {:diagnostic_turn_write, task, ^scope, after_boundary}
     assert after_boundary.turn_id == before.turn_id
     assert after_boundary.revision > before.revision

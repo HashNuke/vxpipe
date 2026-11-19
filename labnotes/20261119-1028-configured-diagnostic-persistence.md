@@ -34,12 +34,12 @@ inference is released (500ms assertion). Earlier fixture failures were harness
 errors, not product defects: ConnectionAttachment has no identity fields (use the
 AttachConnection command), frames must carry their explicit source epoch, and
 LatencyStore.list_runs returns a paginated entries map rather than a bare list.
-The working red fixture is /tmp/vxpipe_configured_latency_test.exs.
+The working red fixture is vxpipe_configured_latency_test.exs.
 
 Astra design review reproduced two hazards with naive timing overtaking: an earlier
 endpoint transiently yields an available500ms duration before resumed speech is
 processed; a gap detected after provider end is ignored by wall-time filtering.
-The temporary tests /tmp/vxpipe_live_report_overtaking_review_test.exs are red2/2.
+The temporary tests vxpipe_live_report_overtaking_review_test.exs are red2/2.
 Processing all model windows is also insufficient: pending onset frames can later
 backdate a boundary into processed audio (20992processed,20480finalized).
 
@@ -62,7 +62,7 @@ Format, compile warnings-as-errors, strict Credo, unused-lock and Lean pass.
 Astra xhigh review is clean: independent8/0 plus20 reachable detector states and60
 transitions confirm monotonic finalized progress and no later boundary below it.
 The finalized interval is half-open; a later boundary may equal its upper bound.
-Frozen root suite /tmp/vxpipe-progress-umbrella.log is active (session49144).
+Frozen root suite vxpipe-progress-umbrella.log is active (session49144).
 No SourceWorker emission or LiveReport consumption has changed yet. The temporary
 LiveProgressContractTest describes pending independent provider stages, late acoustic
 revision, bounded progress coalescing and conflicting epoch-origin rejection.

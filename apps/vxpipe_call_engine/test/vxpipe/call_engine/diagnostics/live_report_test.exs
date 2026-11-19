@@ -68,7 +68,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReportTest do
     state =
       observe(state, [
         {:acoustic_boundary, 0, :speech_started, 0, 10_000, 12_000, 1_000, nil},
-        {:acoustic_boundary, 0, :speech_ended, 512, 40_000, 90_000, 1_000, nil}
+        {:acoustic_boundary, 0, :speech_ended, 512, 40_000, 90_000, 1_000, nil},
+        {:acoustic_progress, 0, 0, 3_072}
       ])
 
     [report] = LiveReport.reports(state)

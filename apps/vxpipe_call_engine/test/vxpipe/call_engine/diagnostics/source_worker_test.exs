@@ -49,7 +49,10 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
     )
 
     {:ok, output} =
-      CaptureHandoff.new(self(), projection: __MODULE__.Projection, maximum_count: 1)
+      CaptureHandoff.new(self(),
+        projection: __MODULE__.Projection,
+        maximum_count: Map.get(context, :output_capacity, 8)
+      )
 
     epoch = make_ref()
     startup_clock = :atomics.new(1, signed: true)
@@ -90,6 +93,18 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
       lease: lease,
       startup_clock: startup_clock
     }
+  end
+
+  test "timing landmarks reach the collector while acoustic inference is pending", ctx do
+    assert :ok = CaptureHandoff.offer(ctx.input, {:audio, frame(ctx.epoch, 0, 512, -968)})
+    assert_receive {:infer, _task, _}
+    generation = make_ref()
+    turn = make_ref()
+    packet = {:provider_landmark, generation, turn, :provider_end_evidence, 0, 32_000}
+    assert :ok = CaptureHandoff.offer(ctx.input, packet)
+    assert_receive {:vxpipe_diagnostic_capture, _, _, ^packet, _} = message
+    consume(ctx.output, message)
+    assert %{pending_count: 1} = CaptureHandoff.stats(ctx.input)
   end
 
   @tag startup_lease: true
@@ -198,6 +213,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
                     {:acoustic_boundary, 0, :speech_ended, 2048, _, _, _, _}, _}
   end
 
+  @tag output_capacity: 1
   test "output saturation stops observation instead of growing the collector queue", ctx do
     assert :ok = CaptureHandoff.offer(ctx.output, {:reset, 0, :partial_start, 0})
     monitor = Process.monitor(ctx.worker)
@@ -340,6 +356,141 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorkerTest do
     assert :ok = stop_supervised(SourceWorker)
     assert_receive {:DOWN, ^monitor, :process, _, :killed}
     assert %{pending_count: 0, open?: false} = CaptureHandoff.stats(ctx.input)
+  end
+
+  test "all metadata kinds bypass pending inference while retaining only the audio charge", ctx do
+    assert :ok = CaptureHandoff.offer(ctx.input, {:audio, frame(ctx.epoch, 0, 512, -968)})
+    assert_receive {:infer, _task, _}
+    generation = make_ref()
+    turn = make_ref()
+
+    packets = [
+      {:provider_landmark, generation, turn, :provider_end_evidence, 0, 32_000},
+      {:provider_sample_mapping, generation, 0, 0},
+      {:turn_link, generation, turn, generation, turn},
+      {:room_turn_completed, generation, turn, "turn", "command", 0},
+      {:response_landmark, "turn", "command", "output", :first_response_text, 0}
+    ]
+
+    for packet <- packets do
+      assert :ok = CaptureHandoff.offer(ctx.input, packet)
+      assert_receive {:vxpipe_diagnostic_capture, _, _, ^packet, _} = message
+      consume(ctx.output, message)
+      assert %{pending_count: 1} = CaptureHandoff.stats(ctx.input)
+    end
+  end
+
+  @tag startup_lease: true
+  test "cancelled lease discards immediate metadata and releases pending inference charge", ctx do
+    assert AttachmentLease.adopt(ctx.lease)
+    AttachmentLease.finish(ctx.lease)
+    assert :ok = CaptureHandoff.offer(ctx.input, {:audio, frame(ctx.epoch, 0, 512, -968)})
+    assert_receive {:infer, task, _}
+    task_monitor = Process.monitor(task)
+    worker_monitor = Process.monitor(ctx.worker)
+    :ok = :sys.suspend(ctx.worker)
+    packet = {:provider_landmark, make_ref(), make_ref(), :provider_end_evidence, 0, 32_000}
+    assert :ok = CaptureHandoff.offer(ctx.input, packet)
+    AttachmentLease.cancel(ctx.lease)
+    :ok = :sys.resume(ctx.worker)
+    assert_receive {:DOWN, ^worker_monitor, :process, _, :normal}
+    assert_receive {:DOWN, ^task_monitor, :process, _, :killed}
+    assert %{pending_count: 0, pending_bytes: 0, discarded: 2} = CaptureHandoff.stats(ctx.input)
+    refute_receive {:vxpipe_diagnostic_capture, _, _, ^packet, _}
+  end
+
+  @tag output_capacity: 1
+  test "immediate metadata saturation releases pending inference and metadata charges", ctx do
+    assert :ok = CaptureHandoff.offer(ctx.output, {:reset, 0, :partial_start, 0})
+    assert :ok = CaptureHandoff.offer(ctx.input, {:audio, frame(ctx.epoch, 0, 512, -968)})
+    assert_receive {:infer, task, _}
+    task_monitor = Process.monitor(task)
+    worker_monitor = Process.monitor(ctx.worker)
+    packet = {:provider_landmark, make_ref(), make_ref(), :provider_end_evidence, 0, 32_000}
+    assert :ok = CaptureHandoff.offer(ctx.input, packet)
+    assert_receive {:DOWN, ^worker_monitor, :process, _, :normal}
+    assert_receive {:DOWN, ^task_monitor, :process, _, :killed}
+    assert %{pending_count: 0, pending_bytes: 0, discarded: 1} = CaptureHandoff.stats(ctx.input)
+    assert %{pending_count: 1, overflow: 1} = CaptureHandoff.stats(ctx.output)
+  end
+
+  test "progress follows confirmed boundaries and holds the prefix before unresolved silence",
+       ctx do
+    assert :ok = CaptureHandoff.offer(ctx.input, {:audio, frame(ctx.epoch, 0, 2048, -872)})
+    assert_receive {:infer, task, _}
+    send(task, {:finish, List.duplicate(0.9, 4)})
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _,
+                    {:acoustic_boundary, 0, :speech_started, 0, _, _, _, _}, _} = message
+
+    consume(ctx.output, message)
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:acoustic_progress, 0, 0, 2048}, _} =
+                     message
+
+    consume(ctx.output, message)
+
+    assert :ok =
+             CaptureHandoff.offer(
+               ctx.input,
+               {:audio, %{frame(ctx.epoch, 2048, 7680, -392) | sequence_number: 2}}
+             )
+
+    assert_receive {:infer, task, _}
+    send(task, {:finish, List.duplicate(0.0, 15)})
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:acoustic_progress, 0, 0, 2048}, _} =
+                     message
+
+    consume(ctx.output, message)
+
+    refute_received {:vxpipe_diagnostic_capture, _, _,
+                     {:acoustic_boundary, _, :speech_ended, _, _, _, _, _}, _}
+
+    assert :ok =
+             CaptureHandoff.offer(
+               ctx.input,
+               {:audio, %{frame(ctx.epoch, 9728, 512, -360) | sequence_number: 3}}
+             )
+
+    assert_receive {:infer, task, _}
+    send(task, {:finish, [0.0]})
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _,
+                    {:acoustic_boundary, 0, :speech_ended, 2048, _, _, _, _}, _} = message
+
+    consume(ctx.output, message)
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:acoustic_progress, 0, 0, 10240}, _} =
+                     message
+
+    consume(ctx.output, message)
+  end
+
+  test "audio gaps queued behind inference retain the frame receipt time", ctx do
+    assert :ok = CaptureHandoff.offer(ctx.input, {:audio, frame(ctx.epoch, 0, 512, -968)})
+    assert_receive {:infer, task, _}
+
+    assert :ok =
+             CaptureHandoff.offer(
+               ctx.input,
+               {:audio, %{frame(ctx.epoch, 1024, 512, -904) | sequence_number: 3}}
+             )
+
+    send(task, {:finish, [0.0]})
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:acoustic_progress, 0, 0, 512}, _} =
+                     message
+
+    consume(ctx.output, message)
+
+    assert_receive {:vxpipe_diagnostic_capture, _, _, {:reset, 1, :audio_gap, -904_000}, _} =
+                     message
+
+    consume(ctx.output, message)
+    assert_receive {:infer, task, _}
+    assert_receive {:stream, ^task, %{samples: 0, pending: ""}}
+    send(task, {:finish, [0.0]})
   end
 
   defp consume(handoff, message) do

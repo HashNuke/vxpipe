@@ -9,7 +9,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
   }
   @enforce_keys [:generation, :clock_id, :origin_us, :maximum_packets, :maximum_bytes]
   @derive {Inspect, only: [:maximum_packets, :maximum_bytes]}
-  defstruct @enforce_keys ++ [packets: %{}, reports: %{}]
+  defstruct @enforce_keys ++ [packets: %{}, reports: %{}, closed_epochs: %{}]
 
   def new(context, options \\ []) do
     %__MODULE__{
@@ -28,13 +28,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
          :ok <- generation(state, packet),
          :ok <- unique_room(state, packet),
          :ok <- unique_link(state, packet),
+         :ok <- current_progress(state, packet),
          {:ok, packet} <- merge(Map.get(state.packets, key), packet),
          packets = Map.put(state.packets, key, CapturePacket.copy(packet)),
          true <- map_size(packets) <= state.maximum_packets,
          next = %{state | packets: packets},
+         next = if(Map.has_key?(state.packets, key), do: next, else: close_epochs(next, packet)),
          next = %{next | reports: build(next)},
          true <-
-           4 * :erlang.external_size({next.packets, next.reports}) + 512 <= state.maximum_bytes do
+           4 * :erlang.external_size({next.packets, next.reports, next.closed_epochs}) + 512 <=
+             state.maximum_bytes do
       {:ok, next}
     else
       false -> {:error, :full}
@@ -74,6 +77,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
 
   defp key({:acoustic_boundary, epoch, kind, sample, _, _, _, _}),
     do: {:ok, {:acoustic, epoch, kind, sample}}
+
+  defp key({:acoustic_progress, epoch, _, _}), do: {:ok, {:progress, epoch}}
 
   defp key({:reset, epoch, reason, at}), do: {:ok, {:reset, epoch, reason, at}}
   defp key(_), do: {:error, :invalid_evidence}
@@ -135,6 +140,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
     end
   end
 
+  defp merge({:acoustic_progress, epoch, origin, old}, {:acoustic_progress, epoch, origin, new}),
+    do: {:ok, {:acoustic_progress, epoch, origin, max(old, new)}}
+
   defp merge(_, _), do: {:error, :conflicting_evidence}
 
   defp build(state) do
@@ -151,7 +159,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
       {:room_turn_completed, generation, reference, turn, command, _} = room
       finish = timing.landmarks_us[:provider_end_received]
       previous = Enum.filter(ends, &(finish != nil and &1 < finish)) |> Enum.max(fn -> -1 end)
-      {timing, endpoint} = acoustic(state, timing, packets, previous, finish)
+
+      {timing, endpoint} =
+        acoustic(
+          state,
+          timing,
+          packets,
+          previous,
+          finish,
+          source_bounds(provider_ids, packets, previous + state.origin_us)
+        )
 
       timing =
         if length(provider_ids) > 1 or (finish != nil and Enum.count(ends, &(&1 == finish)) > 1),
@@ -159,6 +176,9 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
           else: timing
 
       timing = validate_coverage(timing, endpoint, provider_ids, packets)
+
+      {timing, endpoint} =
+        finalize_coverage(timing, endpoint, provider_ids, packets, state.closed_epochs)
 
       report =
         timing
@@ -231,12 +251,13 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
     {room, timing, ids}
   end
 
-  defp acoustic(_state, timing, _packets, _previous, nil), do: {timing, nil}
+  defp acoustic(_state, timing, _packets, _previous, nil, _source_end), do: {timing, nil}
 
-  defp acoustic(state, timing, packets, previous, finish) do
+  defp acoustic(state, timing, packets, previous, finish, source_end) do
     boundaries =
       for {:acoustic_boundary, _, _, _, offset, _, _, _} = packet <- packets,
           is_integer(offset) and offset > previous and offset <= finish,
+          within_source?(packet, source_end),
           do: packet
 
     endpoint =
@@ -249,7 +270,16 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
           at - state.origin_us > previous and at - state.origin_us <= finish,
           do: reason
 
-    reason = acoustic_reason(packets, boundaries, endpoint, resets, previous, finish)
+    scoped_packets =
+      Enum.reject(packets, fn
+        {:acoustic_boundary, _, _, _, _, _, _, _} = packet ->
+          not within_source?(packet, source_end)
+
+        _ ->
+          false
+      end)
+
+    reason = acoustic_reason(scoped_packets, boundaries, endpoint, resets, previous, finish)
     timing = if reason, do: elem(TurnTiming.invalidate_acoustic(timing, reason), 1), else: timing
 
     if endpoint do
@@ -330,6 +360,137 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReport do
 
   defp validate_coverage(timing, _endpoint, _ids, _packets),
     do: elem(TurnTiming.invalidate_acoustic(timing, :ambiguous_boundary), 1)
+
+  defp finalize_coverage(timing, nil, _ids, _packets, _closed), do: {timing, nil}
+
+  defp finalize_coverage(timing, endpoint, [{g, t}], packets, closed) do
+    mapping = Enum.find(packets, &match?({:provider_sample_mapping, ^g, _, _}, &1))
+
+    provider =
+      Enum.find(packets, &match?({:provider_landmark, ^g, ^t, :provider_end_evidence, _, _}, &1))
+
+    epoch = elem(endpoint, 1)
+    progress = Enum.find(packets, &match?({:acoustic_progress, ^epoch, _, _}, &1))
+
+    covered? =
+      case {mapping, provider, progress} do
+        {{:provider_sample_mapping, ^g, provider_origin, source_origin},
+         {:provider_landmark, ^g, ^t, _, _, samples},
+         {:acoustic_progress, ^epoch, origin, finalized}} ->
+          source_end = source_origin + samples - provider_origin
+
+          samples >= provider_origin and origin <= elem(endpoint, 3) and
+            elem(endpoint, 3) <= source_end and source_end <= finalized
+
+        _ ->
+          false
+      end
+
+    if covered? do
+      {timing, endpoint}
+    else
+      reason = Map.get(closed, epoch)
+
+      timing =
+        if reason, do: elem(TurnTiming.invalidate_acoustic(timing, reason), 1), else: timing
+
+      {%{
+         timing
+         | landmarks_us: Map.drop(timing.landmarks_us, [:acoustic_end, :observer_confirmed])
+       }, nil}
+    end
+  end
+
+  defp finalize_coverage(timing, _endpoint, _ids, _packets, _closed),
+    do:
+      {%{
+         timing
+         | landmarks_us: Map.drop(timing.landmarks_us, [:acoustic_end, :observer_confirmed])
+       }, nil}
+
+  defp source_end([{g, t}], packets) do
+    mapping = Enum.find(packets, &match?({:provider_sample_mapping, ^g, _, _}, &1))
+
+    provider =
+      Enum.find(packets, &match?({:provider_landmark, ^g, ^t, :provider_end_evidence, _, _}, &1))
+
+    case {mapping, provider} do
+      {{:provider_sample_mapping, ^g, provider_origin, source_origin},
+       {:provider_landmark, ^g, ^t, _, _, samples}}
+      when samples >= provider_origin ->
+        source_origin + samples - provider_origin
+
+      _ ->
+        nil
+    end
+  end
+
+  defp source_end(_, _), do: nil
+
+  defp source_bounds([{g, _}] = ids, packets, previous) do
+    previous_ids =
+      for {:provider_landmark, ^g, t, :provider_end_evidence, ^previous, _} <- packets,
+          do: {g, t}
+
+    origin =
+      case Enum.find(packets, &match?({:provider_sample_mapping, ^g, _, _}, &1)) do
+        {:provider_sample_mapping, ^g, _, start} -> start
+        _ -> nil
+      end
+
+    start =
+      case {origin, source_end(previous_ids, packets)} do
+        {nil, previous_end} -> previous_end
+        {origin, nil} -> origin
+        {origin, previous_end} -> max(origin, previous_end)
+      end
+
+    {start, source_end(ids, packets)}
+  end
+
+  defp source_bounds(_, _, _), do: {nil, nil}
+
+  defp within_source?({:acoustic_boundary, _, kind, sample, _, _, _, _}, {start, finish}) do
+    after_start =
+      is_nil(start) or if(kind == :speech_started, do: sample >= start, else: sample > start)
+
+    before_end =
+      is_nil(finish) or if(kind == :speech_started, do: sample < finish, else: sample <= finish)
+
+    after_start and before_end
+  end
+
+  defp current_progress(state, {:acoustic_progress, epoch, _, finalized}) do
+    case {Map.has_key?(state.closed_epochs, epoch), Map.get(state.packets, {:progress, epoch})} do
+      {true, {:acoustic_progress, _, _, old}} when finalized > old ->
+        {:error, :conflicting_evidence}
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp current_progress(_state, _packet), do: :ok
+
+  defp close_epochs(state, {:reset, next, reason, _}) do
+    reason =
+      case reason do
+        :audio_gap -> :audio_gap
+        :source_replaced -> :source_changed
+        :partial_start -> :partial_start
+        _ -> :inference_reset
+      end
+
+    closed =
+      Enum.reduce(state.packets, state.closed_epochs, fn
+        {{:progress, epoch}, _}, acc when epoch <= next -> Map.put_new(acc, epoch, reason)
+        _, acc -> acc
+      end)
+
+    %{state | closed_epochs: closed}
+  end
+
+  defp close_epochs(state, _packet), do: state
 
   defp boundary_reason(:partial_start), do: :partial_start
   defp boundary_reason(_), do: :clock_uncertain

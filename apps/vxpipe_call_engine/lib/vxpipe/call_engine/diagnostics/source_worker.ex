@@ -92,9 +92,32 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
   @impl true
   def handle_info({:vxpipe_diagnostic_capture, _, _, _, _} = message, state) do
     case CaptureHandoff.message(state.input, message) do
-      {:ok, packet, charge} -> pump(%{state | queue: :queue.in({packet, charge}, state.queue)})
-      {:error, :revoked} -> {:stop, :normal, state}
-      :error -> {:noreply, state}
+      {:ok, packet, charge}
+      when elem(packet, 0) in [
+             :provider_landmark,
+             :provider_sample_mapping,
+             :turn_link,
+             :room_turn_completed,
+             :response_landmark
+           ] ->
+        if current?(state) do
+          case process(state, {packet, charge}) do
+            {:ok, next} -> {:noreply, next}
+            {:stop, next} -> {:stop, :normal, next}
+          end
+        else
+          CaptureHandoff.release(state.input, charge, :discarded)
+          {:stop, :normal, state}
+        end
+
+      {:ok, packet, charge} ->
+        pump(%{state | queue: :queue.in({packet, charge}, state.queue)})
+
+      {:error, :revoked} ->
+        {:stop, :normal, state}
+
+      :error ->
+        {:noreply, state}
     end
   end
 
@@ -191,7 +214,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
 
   defp process(
          %{mode: :operational_reuse} = state,
-         {{:mapped_probabilities, epoch, _, _, _, _} = packet, charge}
+         {{:mapped_probabilities, epoch, _, _, _, at} = packet, charge}
        ) do
     cond do
       epoch < state.epoch or (epoch == state.epoch and state.reuse_invalid?) ->
@@ -199,7 +222,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
         {:ok, state}
 
       epoch > state.epoch ->
-        case reuse_reset(state, epoch, :provider_turn_settled, state.clock.(), false) do
+        case reuse_reset(state, epoch, :provider_turn_settled, at, false) do
           {:ok, next} -> process(next, {packet, charge})
           {:stop, next} -> discard(next, charge)
         end
@@ -238,7 +261,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
       {:ok, timeline, pcm, notices} ->
         state = %{state | timeline: timeline}
 
-        case audio_notices(state, notices) do
+        case audio_notices(state, notices, frame.received_at * 1_000) do
           {:ok, %{mode: :operational_reuse} = state} ->
             CaptureHandoff.release(state.input, charge, :processed)
             reuse_drain(state)
@@ -259,7 +282,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
 
       {:error, _reason} ->
         CaptureHandoff.release(state.input, charge, :discarded)
-        audio_notices(state, [:audio_gap])
+        audio_notices(state, [:audio_gap], frame.received_at * 1_000)
     end
   end
 
@@ -296,12 +319,12 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
 
   defp process(state, {_packet, charge}), do: discard(state, charge)
 
-  defp audio_notices(state, []), do: {:ok, state}
+  defp audio_notices(state, [], _at), do: {:ok, state}
 
-  defp audio_notices(%{mode: :operational_reuse} = state, _notices),
-    do: reuse_reset(state, state.epoch, :audio_gap, state.clock.(), true)
+  defp audio_notices(%{mode: :operational_reuse} = state, _notices, at),
+    do: reuse_reset(state, state.epoch, :audio_gap, at, true)
 
-  defp audio_notices(state, _notices), do: reset(state, :audio_gap)
+  defp audio_notices(state, _notices, at), do: reset(state, :audio_gap, at)
 
   defp reuse_reset(state, epoch, reason, at, invalid?) do
     Enum.each(:queue.to_list(state.reused), fn {_, charge} ->
@@ -327,20 +350,20 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
       {:empty, _} ->
         {:ok, state}
 
-      {{:value, {{:mapped_probabilities, _, local, sample, probabilities, _}, charge}}, rest} ->
+      {{:value, {{:mapped_probabilities, _, local, sample, probabilities, at}, charge}}, rest} ->
         last = state.timeline.clock.last_input
         count = 512 * length(probabilities)
 
         cond do
           local != state.boundary.samples or
               (state.sample_origin != nil and sample != state.sample_origin + local) ->
-            reuse_reset(state, state.epoch, :audio_gap, state.clock.(), true)
+            reuse_reset(state, state.epoch, :audio_gap, at, true)
 
           last == nil or last.sample_timestamp + last.sample_count < sample + count ->
             {:ok, state}
 
           not captured_start?(state.timeline, sample) ->
-            reuse_reset(state, state.epoch, :audio_gap, state.clock.(), true)
+            reuse_reset(state, state.epoch, :audio_gap, at, true)
 
           true ->
             CaptureHandoff.release(state.input, charge, :processed)
@@ -421,6 +444,17 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
         {:stop, state} -> {:halt, {:stop, state}}
       end
     end)
+    |> case do
+      {:ok, next} ->
+        emit(
+          next,
+          {:acoustic_progress, next.epoch, next.sample_origin,
+           next.sample_origin + ActivityBoundary.finalized_samples(next.boundary)}
+        )
+
+      stopped ->
+        stopped
+    end
   end
 
   defp emit_boundaries(state, []), do: {:ok, state}
@@ -459,7 +493,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
     end
   end
 
-  defp reset(state, reason) do
+  defp reset(state, reason, at \\ nil) do
     state = %{
       state
       | stream: Silero.new(),
@@ -469,7 +503,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.SourceWorker do
         epoch: state.epoch + 1
     }
 
-    emit(state, {:reset, state.epoch, reason, state.clock.()})
+    emit(state, {:reset, state.epoch, reason, at || state.clock.()})
   end
 
   defp emit(state, packet) do

@@ -23,6 +23,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.LiveReportMappingTest do
       observe(state, [
         {:acoustic_boundary, 0, :speech_started, 100_000, 10_000, 12_000, 1_000, nil},
         {:acoustic_boundary, 0, :speech_ended, 100_512, 40_000, 90_000, 1_000, nil},
+        {:acoustic_progress, 0, 100_000, 101_024},
         {:provider_landmark, g, t, :provider_end_evidence, 70_000, 1_512},
         {:room_turn_completed, g, t, "turn", "command", 71_000}
       ])

@@ -1039,3 +1039,27 @@ overtake inference; no combined acceptance task is newly complete.
 Both contracts were red before implementation and pass8/0 focused tests. Astra
 xhigh review is clean, including20 reachable detector states and60 transitions.
 Static root checks and Lean pass; the frozen full suite remains in progress.
+
+Frozen finalized-coverage prerequisite40168099 completed the full root suite with
+exit0: Engine2760/0, Calls449/0, Gateway891/0, Persistence580/0, Console592/0,
+and remaining applications106/222/35/567/20. No runtime/test/build edits occurred
+during that run. This is baseline evidence before the delayed-timing integration.
+
+## Checkpoint C delayed observer timing — 2026-11-19
+
+Timing metadata can now reach the collector during acoustic inference. Finalized
+sample coverage gates acoustic fields, so an earlier endpoint cannot transiently
+produce a valid duration before resumed speech is inspected. Progress is bounded
+and coalesced by epoch; resets freeze old intervals, and sample bounds prevent
+uncertainty from unrelated earlier/later audio poisoning a turn. Queued gaps retain
+original receipt/observation timestamps. All reviewer findings were reproduced
+before correction; independent report13/0 and worker32/0 reviews are clean.
+
+The configured LLM/Scribe fixture now persists the prospective partial first turn
+before held Silero inference completes, revises it afterward, records a second
+fully observed turn with available latency and response-text timing, then rereads
+both rows after collector/writer shutdown. Calls46/0, Persistence17/0 and this
+configured fixture1/0 pass, as do Engine178/0, static root checks and Lean. The
+current-source frozen full root suite is running; its acceptance remains pending. Response audio, manual
+commit timing, full on/off/transport acceptance and per-turn finalization remain
+open; no combined C checklist item is newly complete.

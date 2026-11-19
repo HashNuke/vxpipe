@@ -52,11 +52,15 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
     assert {:acoustic_boundary, 0, :speech_started, 32_000, 0, 1_000_000, _, :partial_start} =
              packet(ctx)
 
+    assert {:acoustic_progress, 0, 32_000, 34_048} = packet(ctx)
+
     offer(ctx, {:audio, %{frame(ctx.epoch, 34_048, 8_192, -360) | sequence_number: 2}})
     offer(ctx, {:mapped_probabilities, 0, 2_048, 34_048, List.duplicate(0.0, 16), 0})
 
     assert {:acoustic_boundary, 0, :speech_ended, 34_048, 128_000, 1_000_000, _, :partial_start} =
              packet(ctx)
+
+    assert {:acoustic_progress, 0, 32_000, 42_240} = packet(ctx)
 
     _ = :sys.get_state(ctx.worker)
     assert %{pending_count: 0} = CaptureHandoff.stats(ctx.input)
@@ -73,6 +77,8 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
     assert {:acoustic_boundary, 1, :speech_started, 40_000, 0, 1_000_000, _, :partial_start} =
              packet(ctx)
 
+    assert {:acoustic_progress, 1, 40_000, 42_048} = packet(ctx)
+
     _ = :sys.get_state(ctx.worker)
     assert %{pending_count: 0} = CaptureHandoff.stats(ctx.input)
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
@@ -83,6 +89,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
     offer(ctx, {:audio, frame(ctx.epoch, 32_000, 8_192, -488)})
     offer(ctx, {:mapped_probabilities, 0, 0, 32_000, List.duplicate(0.9, 4), 0})
     assert {:acoustic_boundary, 0, :speech_started, _, _, _, _, _} = packet(ctx)
+    assert {:acoustic_progress, 0, 32_000, 34_048} = packet(ctx)
     offer(ctx, {:mapped_probabilities, 0, 4_096, 36_096, List.duplicate(0.0, 4), 0})
     assert {:reset, 0, :audio_gap, 0} = packet(ctx)
     offer(ctx, {:mapped_probabilities, 0, 2_048, 34_048, List.duplicate(0.0, 4), 0})
@@ -95,7 +102,7 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
     offer(ctx, {:audio, frame(ctx.epoch, 32_000, 512, -968)})
     offer(ctx, {:mapped_probabilities, 0, 0, 32_000, List.duplicate(0.9, 4), 0})
     offer(ctx, {:audio, %{frame(ctx.epoch, 40_000, 512, -468) | sequence_number: 2}})
-    assert {:reset, 0, :audio_gap, 0} = packet(ctx)
+    assert {:reset, 0, :audio_gap, -468_000} = packet(ctx)
     _ = :sys.get_state(ctx.worker)
     assert %{pending_count: 0} = CaptureHandoff.stats(ctx.input)
     refute_received {:vxpipe_diagnostic_capture, _, _, _, _}
@@ -166,6 +173,32 @@ defmodule Vxpipe.CallEngine.Diagnostics.ReusedSourceWorkerTest do
       offer(ctx, response)
       assert ^response = packet(ctx)
     end
+  end
+
+  test "delayed mismatched reuse windows retain their original observation time", ctx do
+    offer(ctx, {:audio, frame(ctx.epoch, 32_000, 8_192, -488)})
+    offer(ctx, {:mapped_probabilities, 0, 0, 32_000, List.duplicate(0.9, 4), -200_000})
+    assert {:acoustic_boundary, 0, :speech_started, _, _, _, _, _} = packet(ctx)
+    assert {:acoustic_progress, 0, 32_000, 34_048} = packet(ctx)
+    offer(ctx, {:mapped_probabilities, 0, 4_096, 36_096, List.duplicate(0.0, 4), -100_000})
+    assert {:reset, 0, :audio_gap, -100_000} = packet(ctx)
+  end
+
+  test "missing reuse prefix retains the probability observation time", ctx do
+    offer(ctx, {:audio, frame(ctx.epoch, 43_000, 10_000, -375)})
+
+    probabilities =
+      List.duplicate(0.9, 4) ++
+        List.duplicate(0.0, 16) ++ List.duplicate(0.9, 4) ++ List.duplicate(0.0, 8)
+
+    offer(ctx, {:mapped_probabilities, 0, 0, 32_000, probabilities, -100_000})
+    assert {:reset, 0, :audio_gap, -100_000} = packet(ctx)
+  end
+
+  test "implicit reuse epoch transition retains the probability observation time", ctx do
+    offer(ctx, {:audio, frame(ctx.epoch, 32_000, 8_192, -488)})
+    offer(ctx, {:mapped_probabilities, 1, 0, 32_000, List.duplicate(0.9, 4), -100_000})
+    assert {:reset, 1, :provider_turn_settled, -100_000} = packet(ctx)
   end
 
   defp offer(ctx, packet), do: assert(:ok == CaptureHandoff.offer(ctx.input, packet))
