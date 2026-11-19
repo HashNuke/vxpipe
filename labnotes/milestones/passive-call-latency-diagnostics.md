@@ -587,7 +587,7 @@ Migration tasks (revised architecture; ordered as in the migration steps above):
   no selected agent and mixed-room cases; no work for sources without STT. STT that
   drives STS `external`/`hybrid` turn control is observed, and its session
   replacement on routing change produces an explicit run boundary.
-- [ ] Decouple diagnostic room-completion instrumentation from selected text/STS
+- [x] Decouple diagnostic room-completion instrumentation from selected text/STS
   agent gates; prove durable canonical input timing with nullable response stages
   for no-agent and mixed-room STT without changing operational dispatch.
 - [ ] Preserve acoustic observation across agent-only transfers with input
@@ -1938,3 +1938,30 @@ The broader eligibility and completion checkboxes remain open for configured mix
 STT/STS activity-control, actual replacement and no-STT allocation acceptance. The
 small STS-capability unit case is not evidence for that full integration. No live
 provider test, Telnyx change, full umbrella suite or deployment occurred.
+
+
+## Migration step 5 — configured mixed STT/STS completion, 2026-11-19
+
+Four published-call cases now combine a human Scribe input with a real Morse STS
+response capability, exercising external/hybrid activity control and local Silero
+on/off. They verify the selected human activity origin, matching generation/source
+at activity start, clearing the activity turn at completion, and durable canonical
+human input rows with nullable response stages. Exact PCM markers reach Scribe and
+only the expected operational-reuse or fallback inference path; room completion and
+diagnostic drain precede duplicate-byte/inference/commit refutes.
+
+A native STS-only call admits audio through its real input path while allocating
+no STT observer, diagnostic worker/run or Silero inference. Review reproduced an
+initial false positive when held input returned :ok with an empty queue. The test
+now verifies the public Morse provider quiescence transition to prove it consumed
+input before claiming no diagnostic work.
+
+All 17 configured diagnostic cases pass, including the prior two-human and
+crash/hang/transfer controls; root static gates pass. Independent scoped review is
+clean with 5/5 passing cases and the held-input mutation rejected by the new
+provider-consumption assertion. See [checkpoint labnotes](../20261119-1751-mixed-stt-diagnostics.md).
+This checkpoint changes only
+tests and documentation. It completes canonical-input diagnostic instrumentation
+acceptance together with the preceding no-agent checkpoint. The broader eligibility
+checkbox stays open for actual routing-induced STT replacement/run-boundary proof.
+No live provider tests, Telnyx code, full umbrella suite or deployment changed.

@@ -55,8 +55,9 @@ continues normally when diagnostic collection is disabled.
   without a demonstrated need.
 - Canonical completion observation now has no response-agent gate; `LiveReport`
   builds rows from accepted STT completion packets. Configured human-only calls
-  persist canonical input timing with nullable responses for two humans. Full
-  mixed-room STT/STS control and replacement acceptance remains pending.
+  persist canonical input timing with nullable responses for two humans. Configured
+  mixed-room STT/STS completion is also verified; routing-induced replacement
+  acceptance remains pending.
 - `ActivityBoundary` identifies starts and ends. `LiveReport` uses starts for
   ambiguity checks but the durable report emphasizes end timing. Add bounded,
   versioned start/end segment evidence through records, API and fixtures, preserving
@@ -306,5 +307,8 @@ and canonical room IDs into the existing report pipeline. Ownership, current-sou
 and turn matching still precede this observation. Normal dispatch retains its
 separate eligibility rules; no response is synthesized to obtain diagnostic rows.
 A human-only configured call persists two independent input runs/rows with missing
-response landmarks in both reuse and fallback modes. Full mixed STT/STS control
-and replacement integration remains a separate acceptance requirement.
+response landmarks in both reuse and fallback modes. Configured Scribe-to-Morse
+external/hybrid STS control also preserves canonical human diagnostic rows, with
+real activity-start/completion checks and no diagnostic ownership of agent audio.
+Native STS-only admitted input allocates no observer. Routing-induced STT replacement
+and run-boundary integration remains a separate acceptance requirement.
