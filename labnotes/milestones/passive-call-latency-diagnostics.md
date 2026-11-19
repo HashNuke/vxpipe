@@ -335,7 +335,7 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 - [x] Reuse timestamped probability/sample evidence from existing operational Silero
   when present; otherwise start one isolated benchmark-only stream. Preserve
   operational reset/failure semantics, report gaps and record inference provenance.
-- [ ] Prove exactly one inference execution per eligible source frame with call-spec
+- [x] Prove exactly one inference execution per eligible source frame with call-spec
   VAD on and benchmarking on. Cover the full on/off matrix, mid-call enable/disable,
   source replacement, model/epoch compatibility and late results. Disabling diagnostics
   must not cancel/reset operational VAD or alter its control trace.
@@ -1196,3 +1196,18 @@ Review additionally strengthened provider-delivery uniqueness: injected duplicat
 marker delivery fails all four cases. Final serial configured run passed 5/5;
 Astra scoped re-review and static checks are clean. Concurrent DB review execution
 is excluded from acceptance because it caused settings setup contention.
+
+## Checkpoint C source/model/epoch matrix completion — 2026-11-19
+
+The configured fixture now also replaces the accepted source epoch while the call
+remains active. All four combinations retain old reports with closed_at set,
+create a distinct new epoch, deliver each marker once and preserve the exact
+operational sample cursor. Configured acceptance passed 5/5. Separately, the
+source/coordinator/reused-result/inference/Silero selection passed 49/49, covering
+replacement races, retired-epoch late results, revocation and fixed model behavior.
+Earlier 14/14 reuse tests cover operational failure and speech-event preservation.
+Both production modes use the same checksum-pinned 16 kHz/512-sample Silero model;
+there is no supported alternative-model negotiation path. Mid-stream reuse stays
+partial until a clean inference epoch. Astra's final scoped acceptance review found
+no gap, so the combined C matrix task is checked. Distributed status, settings
+failure transitions, load/accuracy and live acceptance remain separate open gates.

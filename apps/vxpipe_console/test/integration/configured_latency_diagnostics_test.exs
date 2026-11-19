@@ -455,9 +455,60 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
 
       assert Enum.all?(before_toggle, fn old -> Enum.any?(entries, &(&1.run.id == old.run.id)) end)
 
+      replacement_epoch = make_ref()
+      replacement_probe = :binary.copy(<<10, 0>>, 512)
+      send_audio(attachment, identity, replacement_epoch, 0, 0, replacement_probe)
+      assert_receive {:scribe_audio, ^wire, ^replacement_probe}, 2_000
+
+      if @vad do
+        assert_receive {:matrix_inference, :operational, samples, ^replacement_probe}, 2_000
+        assert samples == (next_sequence + 1) * 512
+      end
+
+      _ = SourceCoordinator.scan(__MODULE__.Coordinator)
+      await_diagnostic_drain()
+
+      replacement_sequence = discover_with_audio(attachment, identity, replacement_epoch, wire, 1)
+      replacement_pcm = :binary.copy(<<11, 0>>, 512)
+
+      send_audio(
+        attachment,
+        identity,
+        replacement_epoch,
+        replacement_sequence,
+        replacement_sequence * 512,
+        replacement_pcm
+      )
+
+      assert_receive {:scribe_audio, ^wire, ^replacement_pcm}, 2_000
+      assert_receive {:matrix_inference, ^enabled_mode, samples, ^replacement_pcm}, 2_000
+      if @vad, do: assert(samples == (next_sequence + 1 + replacement_sequence) * 512)
+
+      replacement_entries =
+        await(fn ->
+          case LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil) do
+            {:ok, %{entries: rows}} when length(rows) == length(entries) + 1 -> rows
+            _ -> nil
+          end
+        end)
+
+      assert length(Enum.uniq_by(replacement_entries, & &1.run.source_epoch)) ==
+               length(replacement_entries)
+
+      assert Enum.all?(entries, fn old ->
+               Enum.any?(
+                 replacement_entries,
+                 &(&1.run.id == old.run.id and not is_nil(&1.run.closed_at))
+               )
+             end)
+
       GenServer.stop(attachment.room_authority, :shutdown)
       await_diagnostic_drain()
 
+      refute_received {:matrix_inference, _, _, ^replacement_probe}
+      refute_received {:matrix_inference, _, _, ^replacement_pcm}
+      refute_received {:scribe_audio, ^wire, ^replacement_probe}
+      refute_received {:scribe_audio, ^wire, ^replacement_pcm}
       refute_received {:matrix_inference, _, _, ^pcm}
       refute_received {:matrix_inference, _, _, ^off_pcm}
       refute_received {:matrix_inference, _, _, ^on_pcm}
