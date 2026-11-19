@@ -41,6 +41,24 @@ Telnyx calls and no change/restart of `vxpipe.service`. Pin its entire process
 (including inherited native threads) to two CPUs and use two BEAM schedulers.
 Record dirty scheduler counts and native thread counts; scheduler flags alone
 are not a native-thread CPU cap. Both phases use identical affinity and flags.
+The [external-workload smoke](../../labnotes/20261119-2128-diagnostics-external-workload.md)
+exposed ONNX Runtime overriding inherited `taskset`
+affinity: native workers selected CPUs 2 and 3 despite a 0–1 launch mask. Enforce
+the measured VM's entire lifetime with an isolated cgroup `AllowedCPUs=0,1`, and
+audit every native thread's allowed mask. The reference host needs a transient
+system scope for that controller; run its workload as the ordinary checkout user.
+Do not modify production units or the model's thread settings to conceal this.
+
+The external generator must start outside that measured cgroup: a direct Port
+child inherits the restricted cpuset. The smoke uses a transient user-manager
+service with piped packet output, pins the Python generator to CPUs 2–3, and
+records its actual mask. Its lifetime is limited to 45 seconds with a two-second
+stop timeout, with an exact owned-unit stop on test cleanup. A reusable watchdog
+must also stop its owned generator units on abort. The fixed pacing method sleeps until two milliseconds before each
+absolute deadline, then spins for the remaining bounded interval; its CPU cost
+is reported separately. The original 2 ms p95 write-completion lateness limit
+still applies. Retain invalid attempts; neither the spin guard nor CPU placement
+is an increase to the acceptance budgets.
 Start only with at least 1,536 MiB available host memory. An external watchdog
 samples every 100 ms and aborts the test VM if its RSS exceeds 1,024 MiB or host
 available memory falls below 768 MiB. This is sampled protection, not a hard

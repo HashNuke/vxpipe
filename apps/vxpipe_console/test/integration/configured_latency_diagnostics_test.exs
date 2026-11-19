@@ -40,6 +40,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
   setup tags do
     parent = self()
     matrix? = Map.get(tags, :matrix, false)
+    actual? = Map.get(tags, :actual_inference, false)
     routing? = Map.get(tags, :routing, false)
     enabled = Map.get(tags, :diagnostics_enabled, true)
     if Process.whereis(Repo) == nil, do: start_supervised!(Repo)
@@ -67,13 +68,22 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             wire_module: Wire,
             wire_options: [observer: parent],
             activity_options:
-              if(matrix?,
-                do: [
-                  load: fn -> {:ok, :matrix_model} end,
-                  classify: matrix_classifier(parent, :operational)
-                ],
-                else: []
-              ),
+              cond do
+                actual? ->
+                  [
+                    load: actual_loader(parent, :operational),
+                    classify: actual_classifier(parent, :operational)
+                  ]
+
+                matrix? ->
+                  [
+                    load: fn -> {:ok, :matrix_model} end,
+                    classify: matrix_classifier(parent, :operational)
+                  ]
+
+                true ->
+                  []
+              end,
             media_ingress: [
               maximum_frames: 50,
               maximum_bytes: 262_144,
@@ -174,28 +184,40 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
          runtime: __MODULE__.Runtime,
          port: __MODULE__.Port,
          load:
-           if(Map.get(tags, :missing_diagnostic_model, false),
-             do: fn ->
-               send(parent, :diagnostic_model_missing)
-               {:error, :missing_model}
-             end,
-             else: &Silero.load/0
-           ),
-         classify:
-           if(matrix?,
-             do: benchmark_classifier(parent, Map.get(tags, :diagnostic_failure)),
-             else: fn model, stream, pcm ->
-               if byte_size(pcm) == 1_024 do
-                 Silero.push(stream, model, pcm)
-               else
-                 send(parent, {:classify, self(), byte_size(pcm)})
+           cond do
+             actual? ->
+               actual_loader(parent, :benchmark)
 
-                 receive do
-                   :finish -> Silero.push(stream, model, pcm)
+             Map.get(tags, :missing_diagnostic_model, false) ->
+               fn ->
+                 send(parent, :diagnostic_model_missing)
+                 {:error, :missing_model}
+               end
+
+             true ->
+               &Silero.load/0
+           end,
+         classify:
+           cond do
+             actual? ->
+               actual_classifier(parent, :benchmark)
+
+             matrix? ->
+               benchmark_classifier(parent, Map.get(tags, :diagnostic_failure))
+
+             true ->
+               fn model, stream, pcm ->
+                 if byte_size(pcm) == 1_024 do
+                   Silero.push(stream, model, pcm)
+                 else
+                   send(parent, {:classify, self(), byte_size(pcm)})
+
+                   receive do
+                     :finish -> Silero.push(stream, model, pcm)
+                   end
                  end
                end
-             end
-           )
+           end
        ]}
     )
 
@@ -210,6 +232,178 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     ]
 
     %{options: options, settings_revision: settings_revision, model: model}
+  end
+
+  for vad <- [false, true], enabled <- [false, true] do
+    @tag :integration
+    @tag matrix: true,
+         actual_inference: true,
+         external_pcm: true,
+         vad: vad,
+         diagnostics_enabled: enabled
+    test "externally paced actual Silero smoke, operational #{vad}, collection #{enabled}", c do
+      {call, connection, attachment, wire, identity} = call(c.options, c.vad, :llm, true)
+      pcm_path = Vxpipe.Providers.Deepgram.LiveFixture.pcm_path()
+      generator = Path.expand("../../../../scripts/diagnostics/pcm_generator.py", __DIR__)
+      python = System.find_executable("python3")
+      assert is_binary(python)
+
+      affinity_args =
+        case System.get_env("VXPIPE_DIAGNOSTIC_GENERATOR_CPUS") do
+          nil -> []
+          value -> ["--cpus", value]
+        end
+
+      generator_args =
+        [generator, "--pcm", pcm_path, "--inputs", "1", "--frames", "64"] ++ affinity_args
+
+      {executable, arguments} =
+        if System.get_env("VXPIPE_DIAGNOSTIC_GENERATOR_SYSTEMD") == "1" do
+          # A user-manager service starts outside the measured VM's strict CPU
+          # cgroup. A direct Port child would inherit that cgroup's CPU limit.
+          systemd = System.find_executable("systemd-run")
+          assert is_binary(systemd)
+          unit = "vxpipe-diagnostic-generator-#{Ecto.UUID.generate()}.service"
+
+          on_exit(fn ->
+            # It may already have exited and been collected; stop only our unit.
+            System.cmd("systemctl", ["--user", "stop", unit], stderr_to_stdout: true)
+            :ok
+          end)
+
+          {systemd,
+           [
+             "--user",
+             "--quiet",
+             "--pipe",
+             "--wait",
+             "--collect",
+             "--service-type=exec",
+             "--property=RuntimeMaxSec=45",
+             "--property=TimeoutStopSec=2",
+             "--unit=#{unit}",
+             "--",
+             python
+           ] ++ generator_args}
+        else
+          {python, generator_args}
+        end
+
+      port =
+        Port.open({:spawn_executable, executable}, [
+          :binary,
+          :exit_status,
+          {:packet, 4},
+          args: arguments
+        ])
+
+      result =
+        external_pcm_loop(%{
+          port: port,
+          attachment: attachment,
+          identity: identity,
+          wire: wire,
+          epoch: make_ref(),
+          frames: 0,
+          offered: [],
+          received: [],
+          completed: 0,
+          exited?: false,
+          manifest: nil,
+          report: nil
+        })
+
+      assert result.received == result.offered
+      assert result.frames == 64
+      assert result.manifest["inputs"] == 1
+      assert result.manifest["frames_per_input"] == 64
+      assert result.report["frames_sent"] == 64
+
+      IO.puts(
+        "DIAGNOSTIC_EXTERNAL_GENERATOR " <>
+          Jason.encode!(%{
+            operational_vad: c.vad,
+            collection: c.diagnostics_enabled,
+            manifest: result.manifest,
+            report: result.report
+          })
+      )
+
+      assert result.manifest["fixture_sha256"] ==
+               Base.encode16(:crypto.hash(:sha256, File.read!(pcm_path)), case: :lower)
+
+      assert {:ok, completion} =
+               CallEngine.monitor_room_completion(
+                 identity.tenant_id,
+                 identity.room_id,
+                 identity.incarnation_id
+               )
+
+      GenServer.stop(attachment.room_authority, :shutdown)
+      assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+      await_diagnostic_drain(identity)
+      assert_diagnostic_slots_released()
+
+      assert_complete_text_trace(connection, identity, [
+        "External PCM turn 1.",
+        "External PCM turn 2."
+      ])
+
+      assert {:ok, %{entries: runs}} =
+               LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+      if c.diagnostics_enabled do
+        assert [%{run: run}] = runs
+
+        assert {:ok, turns} =
+                 LatencyStore.list_turns(Repo, call.tenant_key, call.id, run.id, 50, nil)
+
+        assert length(turns) == 2
+      else
+        assert runs == []
+      end
+
+      evidence = actual_inference_evidence()
+      non_silent = result.offered |> Enum.reject(&(&1 == :binary.copy(<<0>>, 1024)))
+      fingerprints = MapSet.new(non_silent, &:crypto.hash(:sha256, &1))
+      assert MapSet.size(fingerprints) > 0
+
+      if c.vad or c.diagnostics_enabled do
+        expected = if c.vad, do: :operational, else: :benchmark
+
+        assert Enum.any?(evidence, fn {mode, count, fingerprint} ->
+                 mode == expected and count > 0 and MapSet.member?(fingerprints, fingerprint)
+               end),
+               "no actual inference of generated non-silent PCM"
+
+        assert Enum.all?(evidence, fn {mode, _, _} -> mode == expected end)
+      else
+        assert evidence == []
+        refute_received {:actual_model_load_started, _}
+      end
+
+      refute_received {:actual_inference_failed, _}
+      if c.vad, do: refute_received({:actual_model_load_started, :benchmark})
+      refute_received {:scribe_audio, ^wire, _}
+      refute_received {:scribe_commit, ^wire}
+      refute_received {:vxpipe_connection_unavailable, _}
+      assert result.report["timing_valid"]
+
+      IO.puts(
+        "DIAGNOSTIC_EXTERNAL_SMOKE " <>
+          Jason.encode!(%{
+            operational_vad: c.vad,
+            collection: c.diagnostics_enabled,
+            generator:
+              Map.take(result.report, [
+                "frames_sent",
+                "p95_lateness_ns",
+                "elapsed_ns",
+                "generator_cpu_seconds"
+              ])
+          })
+      )
+    end
   end
 
   test "configured Scribe call persists pending timing then late acoustic confirmation", c do
@@ -2375,6 +2569,41 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
+  defp actual_inference_evidence do
+    receive do
+      {:actual_inference, mode, count, fingerprint} ->
+        [{mode, count, fingerprint} | actual_inference_evidence()]
+    after
+      0 -> []
+    end
+  end
+
+  defp actual_loader(parent, mode) do
+    fn ->
+      send(parent, {:actual_model_load_started, mode})
+      Silero.load()
+    end
+  end
+
+  defp actual_classifier(parent, mode) do
+    fn model, stream, pcm ->
+      result = Silero.push(stream, model, pcm)
+
+      case result do
+        {:ok, _, probabilities} ->
+          send(
+            parent,
+            {:actual_inference, mode, length(probabilities), :crypto.hash(:sha256, pcm)}
+          )
+
+        _ ->
+          send(parent, {:actual_inference_failed, mode})
+      end
+
+      result
+    end
+  end
+
   defp matrix_classifier(parent, mode) do
     fn _model, stream, pcm ->
       send(parent, {:matrix_inference, mode, stream.samples, pcm})
@@ -2690,6 +2919,44 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     after
       max(deadline - System.monotonic_time(:millisecond), 0) ->
         flunk("specialist did not receive the input")
+    end
+  end
+
+  defp external_pcm_loop(
+         %{exited?: true, completed: 2, received: received, report: report} = state
+       )
+       when length(received) == 64 and not is_nil(report), do: state
+
+  defp external_pcm_loop(state) do
+    port = state.port
+    wire = state.wire
+
+    receive do
+      {^port, {:data, <<0, json::binary>>}} ->
+        external_pcm_loop(%{state | manifest: Jason.decode!(json)})
+
+      {^port, {:data, <<1, 0::16, sequence::32, pcm::binary-size(1024)>>}} ->
+        assert sequence == state.frames
+        send_audio(state.attachment, state.identity, state.epoch, sequence, sequence * 512, pcm)
+        external_pcm_loop(%{state | frames: sequence + 1, offered: [pcm | state.offered]})
+
+      {^port, {:data, <<2, json::binary>>}} ->
+        external_pcm_loop(%{state | report: Jason.decode!(json)})
+
+      {^port, {:exit_status, status}} ->
+        assert status == 0
+        external_pcm_loop(%{state | exited?: true})
+
+      {:scribe_audio, ^wire, pcm} ->
+        received = [pcm | state.received]
+        count = length(received)
+        if rem(count, 32) == 0, do: emit_scribe_turn(wire, "External PCM turn #{div(count, 32)}.")
+        external_pcm_loop(%{state | received: received})
+
+      {:vxpipe_event, %CallEngine.Event.AgentTurnCompleted{}} ->
+        external_pcm_loop(%{state | completed: state.completed + 1})
+    after
+      5_000 -> flunk("external PCM workload did not complete")
     end
   end
 

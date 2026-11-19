@@ -677,7 +677,10 @@ records the reference hardware, paired warm/cold workloads and numerical budgets
 The plan alone does not satisfy measured load or acoustic accuracy acceptance.
 The [resource measurement foundation](../20261119-2118-diagnostics-measurement-harness.md)
 adds tested external process CPU/RSS accounting; the configured workload driver
-and complete paired measurements remain outstanding.
+and complete paired measurements remain outstanding. The
+[external workload smoke](../20261119-2128-diagnostics-external-workload.md) verifies
+real Silero and durable configured calls in all four modes with enforced native
+CPU isolation; it is not the full topology/duration/latency matrix.
 
 - [ ] Replay labelled caller-only audio with pauses, quiet tails, noise, echo,
   overlapping agent speech and resumed speech. Quantify signed/absolute endpoint
