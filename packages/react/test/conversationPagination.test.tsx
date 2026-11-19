@@ -50,3 +50,27 @@ test("live updates preserve explicit browsing of an earlier page", () => {
   fireEvent.click(screen.getByRole("button", { name: "Next conversation page" }));
   expect(screen.getByText("Live message 102")).toBeVisible();
 });
+
+test("diagnostic transcript links open the matching participant turn on its bounded page", async () => {
+  const { createLatencyFixture } = await import("../stories/latencyFixtures.js");
+  const fixture = createFixtureController("conversation");
+  const timeline = Array.from({ length: 205 }, (_, index) => message(index + 1));
+  const target = timeline[150]!;
+  if (target.kind !== "message") throw new Error("Expected message");
+  target.value = { ...target.value, participantId: "caller", turnId: "turn-one" };
+  const wrong = timeline[0]!;
+  if (wrong.kind !== "message") throw new Error("Expected message");
+  wrong.value = { ...wrong.value, turnId: "turn-one" };
+  const details = createCallDetailsStore({ ...fixture.details.getSnapshot(), timeline });
+  render(<CallConsole controller={{ details, latency: createLatencyFixture() }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Hide Messages" }));
+  fireEvent.click(screen.getByRole("button", { name: "Metrics" }));
+  fireEvent.click(screen.getByRole("button", { name: "Latency diagnostics" }));
+  fireEvent.click(await screen.findByRole("button", { name: "View transcript for turn 1" }));
+  expect(screen.getByText("Live message 151")).toBeVisible();
+  expect(screen.getByText("Page 2 of 3")).toBeVisible();
+  expect(screen.getAllByRole("article")).toHaveLength(100);
+  expect(document.activeElement).toHaveTextContent("Live message 151");
+  fireEvent.click(screen.getByRole("button", { name: "Next conversation page" }));
+  expect(screen.getByText("Live message 205")).toBeVisible();
+});

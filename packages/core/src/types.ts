@@ -35,6 +35,8 @@ export interface ParticipantTool {
 
 export interface Message {
   id: string;
+  /** Canonical turn reference when retained by the authorized inspection. */
+  turnId?: string;
   participantId: string;
   text: string;
   /** UTC RFC 3339 instant when this item occurred. */

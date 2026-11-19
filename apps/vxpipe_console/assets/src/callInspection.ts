@@ -233,6 +233,7 @@ function timelineEntity(value: unknown, path: string): CallDetailsTimelineEntity
       value: {
         id: string(item.id, `${path}.value.id`),
         participantId: string(item.participant_id, `${path}.value.participant_id`),
+        ...(item.turn_id === undefined ? {} : { turnId: string(item.turn_id, `${path}.value.turn_id`) }),
         text: string(item.text, `${path}.value.text`),
         occurredAt: instant(item.occurred_at, `${path}.value.occurred_at`),
         state: member(

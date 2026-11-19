@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import type { LatencyLoader, LatencyMetric, LatencyTurn, Participant } from "@vxpipe/core";
+import type { LatencyLoader, LatencyMetric, LatencyTurn, Message, Participant } from "@vxpipe/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useLatencyReport } from "./useLatencyReport.js";
 
@@ -18,7 +18,7 @@ function ms(value: number | null | undefined) {
 }
 function reason(value: string | null | undefined) { return value?.replaceAll("_", " ") ?? "missing evidence"; }
 
-function TurnRow({ turn, index }: { turn: LatencyTurn; index: number }) {
+function TurnRow({ turn, index, onTranscript }: { turn: LatencyTurn; index: number; onTranscript?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const id = useId();
   return <>
@@ -26,7 +26,7 @@ function TurnRow({ turn, index }: { turn: LatencyTurn; index: number }) {
       <th scope="row"><button type="button" className="vx-latency-row-toggle" aria-expanded={expanded} aria-controls={id}
         onClick={() => setExpanded(value => !value)}>
         <span>Turn {index + 1}</span>{expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-      </button><small title={turn.turnId}>{turn.turnId}</small></th>
+      </button><small title={turn.turnId}>{turn.turnId}</small>{onTranscript && <button type="button" aria-label={`View transcript for turn ${index + 1}`} onClick={onTranscript}>View transcript</button>}</th>
       {stages.map(([key]) => <td key={key} title={turn.durationsUs[key] == null ? reason(turn.metricReasons[key]) : undefined}>
         {ms(turn.durationsUs[key])}
       </td>)}
@@ -43,7 +43,8 @@ function TurnRow({ turn, index }: { turn: LatencyTurn; index: number }) {
   </>;
 }
 
-export function LatencyDiagnostics({ loader, live, participants }: {
+export function LatencyDiagnostics({ loader, live, participants, messages = [], onTranscript }: {
+  messages?: readonly Message[]; onTranscript?: (messageId: string) => void;
   loader: LatencyLoader; live: boolean; participants: readonly Pick<Participant, "id" | "name">[];
 }) {
   const [open, setOpen] = useState(false);
@@ -74,7 +75,11 @@ export function LatencyDiagnostics({ loader, live, participants }: {
         <p className="vx-latency-description">{String(run.profile.provider)} · {String(run.profile.model)} · {reason(String(run.profile.inference_source))}. Coverage: {reason(run.coverage.status)}{run.coverage.reasons.length > 0 ? ` (${run.coverage.reasons.map(reason).join(", ")})` : ""}. {run.coverage.storedTurns} stored turns, {run.coverage.pendingTurns} pending.</p>
         <div className="vx-latency-table-scroll" tabIndex={0} role="region" aria-label="Per-turn latency, scroll for more stages"><table aria-label="Per-turn latency">
           <thead><tr><th scope="col">Human turn</th>{stages.map(([key, label]) => <th scope="col" key={key}>{label}</th>)}<th scope="col">Evidence</th></tr></thead>
-          <tbody>{data.turns?.runId === run.id && data.turns.turns.map((turn, index) => <TurnRow key={`${run.id}:${turn.turnId}`} turn={turn} index={index} />)}</tbody>
+          <tbody>{data.turns?.runId === run.id && data.turns.turns.map((turn, index) => <TurnRow key={`${run.id}:${turn.turnId}`} turn={turn} index={index}
+            onTranscript={(() => {
+              const message = messages.find(item => item.turnId === turn.turnId && item.participantId === run.participantId);
+              return message && onTranscript ? () => onTranscript(message.id) : undefined;
+            })()} />)}</tbody>
         </table></div>
         {!data.loading && data.turns?.runId === run.id && data.turns.turns.length === 0 && <p>{data.turnCursor ? "No more turns on this page." : "No turn summaries in this observation yet."}</p>}
         <div className="vx-latency-toolbar">

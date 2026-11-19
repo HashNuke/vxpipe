@@ -361,10 +361,10 @@ non-colour-only quality indicators. Ordinary call participants gain no new acces
 
 ### D — Latency details UI
 
-- [ ] Add Calls-backed authorized diagnostic reads to Console and typed core report
+- [x] Add Calls-backed authorized diagnostic reads to Console and typed core report
   state; lazy fetch when opened, bounded refresh while live, cursor paging and
   revision-safe updates. Diagnostic read failure must not fail the conversation.
-- [ ] Build the collapsed section and per-turn breakdown with quality explanations,
+- [x] Build the collapsed section and per-turn breakdown with quality explanations,
   partial stages and existing authorized transcript links. No raw benchmark timeline events.
 - [ ] Cover old calls, disabled/unsupported capture, pending/late rows, incomplete
   coverage, denied reads, storage outage/retry and zero valid samples in fixtures/tests.
@@ -1138,3 +1138,16 @@ real authenticated endpoints returning HTTP 200 and displaying 20 ms dispatch
 values after expansion. Asset build and static checks passed. Transcript references
 and remaining D acceptance remain open; full-suite and deployment gates are deferred
 until milestone implementation is complete.
+
+## Checkpoint D authorized transcript references — 2026-11-19
+
+Inspection messages now retain their canonical turn reference. Diagnostic rows link
+only to existing authorized messages matching both turn and observed participant;
+legacy/missing references do not fabricate links. The action opens the corresponding
+100-item conversation page, restores Messages and moves keyboard focus to the target.
+Presenter/decoder/UI red tests were observed before implementation. Focused checks
+passed 16 presenter, 13 decoder and 23 shared UI tests. Astra's independent review
+returned no findings. Desktop and mobile Chrome verified pointer/keyboard navigation
+and target focus in the admin preview, with no mobile document overflow. Static
+checks passed. The first two D tasks are now complete; remaining fixture/summary
+and both-host acceptance gates stay open, as do C/E/F and final deployment.

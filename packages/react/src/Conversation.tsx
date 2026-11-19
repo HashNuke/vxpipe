@@ -1,5 +1,5 @@
 import { isTechnicalEvent } from "./conversationFilters.js";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type {
   ActivityEvent,
   Message,
@@ -48,16 +48,22 @@ function MessageText({
 }
 
 function MessageRow({
+  focus = false,
   message,
   snapshot,
   theme,
   onSelectParticipant,
 }: {
+  focus?: boolean;
   message: Message;
   snapshot: ConsoleSnapshot;
   theme: "light" | "dark";
   onSelectParticipant?: (participantId: string) => void;
 }) {
+  const article = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (focus) { article.current?.focus(); article.current?.scrollIntoView({ block: "nearest" }); }
+  }, [focus]);
   const person = snapshot.participants.find(
     (item) => item.id === message.participantId,
   );
@@ -66,7 +72,7 @@ function MessageRow({
     ? () => onSelectParticipant?.(person.id)
     : undefined;
   return (
-    <article className={`vx-message vx-message-${person?.role ?? "unknown"}`}>
+    <article ref={article} tabIndex={-1} className={`vx-message vx-message-${person?.role ?? "unknown"}`}>
       {person && onSelectParticipant ? (
         <button
           aria-label={`Open ${displayName} participant`}
@@ -367,11 +373,13 @@ function timeline(
 }
 
 export function Conversation({
+  focusMessageId,
   filters,
   snapshot,
   theme = "dark",
   onSelectParticipant,
 }: {
+  focusMessageId?: string;
   filters: ConversationFilters;
   snapshot: ConsoleSnapshot;
   theme?: "light" | "dark";
@@ -379,7 +387,10 @@ export function Conversation({
 }) {
   const items = timeline(snapshot, filters);
   // A live viewer follows new items until they explicitly browse an older page.
-  const [requestedPage, setPage] = useState<number | null>(snapshot.state === "connected" ? null : 0);
+  const [requestedPage, setPage] = useState<number | null>(() => {
+    const target = items.findIndex(item => item.kind === "messages" && item.id === focusMessageId);
+    return target >= 0 ? Math.floor(target / 100) : snapshot.state === "connected" ? null : 0;
+  });
   const [hasConnected, setHasConnected] = useState(snapshot.state === "connected");
   if (!hasConnected && snapshot.state === "connected") {
     setHasConnected(true);
@@ -414,6 +425,7 @@ export function Conversation({
             return (
               <MessageRow
                 key={`message-${item.id}`}
+                focus={item.id === focusMessageId}
                 message={item.value}
                 snapshot={snapshot}
                 theme={theme}

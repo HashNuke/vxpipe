@@ -272,6 +272,11 @@ defmodule Vxpipe.Console.CallInspectionPresenter do
     metadata =
       content |> Map.drop([:text]) |> Map.new(fn {key, value} -> {Atom.to_string(key), value} end)
 
+    metadata =
+      if is_binary(entry.correlation_id),
+        do: Map.put(metadata, "turn_id", entry.correlation_id),
+        else: metadata
+
     %{
       "id" => entry.id,
       "revision" => revision(entry),

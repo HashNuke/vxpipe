@@ -22,6 +22,13 @@ test("decodes optional dialogue metadata while preserving literal display text",
   expect(() => parseCallInspectionResponse(response)).toThrow(CallInspectionResponseError);
 });
 
+test("retains canonical turn references without inventing them for legacy messages", () => {
+  const response = responseFixture("ended");
+  expect(parseCallInspectionResponse(response).timeline[0]?.value).not.toHaveProperty("turnId");
+  Object.assign(response.timeline[0]!.value, { turn_id: "human-turn-3" });
+  expect(parseCallInspectionResponse(response).timeline[0]).toMatchObject({ value: { turnId: "human-turn-3" } });
+});
+
 test("preserves both the phone caller ID and the SIP identity", () => {
   const response = responseFixture("ended");
   const caller = response.participants[0]!;

@@ -78,6 +78,7 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
       ),
       fact(:accepted_input, 3, base_time,
         participant_id: "caller-runtime",
+        correlation_id: "human-turn-3",
         payload: %{"content" => "{\"message\":\"literal\"}"}
       ),
       fact(:agent_output_generated, 4, base_time,
@@ -98,6 +99,8 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
       response["timeline"] |> Enum.filter(&(&1["kind"] == "message")) |> Enum.map(& &1["value"])
 
     assert Enum.map(messages, & &1["text"]) == ["okay", "{\"message\":\"literal\"}"]
+    assert List.last(messages)["turn_id"] == "human-turn-3"
+    refute Map.has_key?(hd(messages), "turn_id")
     assert hd(messages)["participant_id"] == "assistant-runtime"
     assert hd(messages)["agent_mode"] == "listener"
     assert hd(messages)["output_purpose"] == "backchannel"
@@ -658,6 +661,7 @@ defmodule Vxpipe.Console.CallInspectionPresenterTest do
         incarnation_id: "incarnation-public-id",
         participant_id: Keyword.get(options, :participant_id),
         tool_call_id: Keyword.get(options, :tool_call_id),
+        correlation_id: Keyword.get(options, :correlation_id),
         occurred_at: occurred_at,
         source_policy: %{"revision" => 1, "credential_name" => "private-value"},
         payload: Keyword.fetch!(options, :payload)

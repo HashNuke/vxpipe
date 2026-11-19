@@ -110,3 +110,14 @@ test("an empty later observation page can return to the first page without claim
   expect(screen.queryByText(/Not collected/)).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "First observations" })).toBeEnabled();
 });
+
+test("transcript actions require both a retained turn and the observed participant", async () => {
+  const onTranscript = vi.fn();
+  render(<LatencyDiagnostics loader={createLatencyFixture()} live={false} participants={[]}
+    messages={[{ id: "wrong", participantId: "other", turnId: "turn-one", text: "same words", occurredAt: "2026-11-19T12:00:00Z", state: "final" }]}
+    onTranscript={onTranscript} />);
+  open();
+  await screen.findByText("425 ms");
+  expect(screen.queryByRole("button", { name: /View transcript/ })).not.toBeInTheDocument();
+  expect(onTranscript).not.toHaveBeenCalled();
+});

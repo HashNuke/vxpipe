@@ -143,6 +143,7 @@ export function CallConsole({
   );
   const snapshot = consoleSnapshot(details, local, live !== undefined);
   const [tab, setTab] = useState<Tab>(initialTab);
+  const [transcriptTarget, setTranscriptTarget] = useState<{ callId: string | null; messageId: string } | null>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(
     defaultParticipantId(snapshot),
   );
@@ -293,7 +294,7 @@ export function CallConsole({
                   className={tab === item ? "vx-tab-active" : ""}
                   aria-current={tab === item ? "page" : undefined}
                   key={item}
-                  onClick={() => setTab(item)}
+                  onClick={() => { setTranscriptTarget(null); setTab(item); }}
                   ref={item === "participants" ? participantsTabRef : undefined}
                 >
                   {item === "chat"
@@ -315,6 +316,7 @@ export function CallConsole({
           </nav>
           {tab === "chat" && (
             <Conversation
+              focusMessageId={transcriptTarget?.callId === snapshot.callId ? transcriptTarget?.messageId : undefined}
               filters={conversationFilters}
               snapshot={snapshot}
               theme={theme}
@@ -324,7 +326,12 @@ export function CallConsole({
           {tab === "variables" && <Variables snapshot={snapshot.variables} />}
           {tab === "metrics" && <div className="vx-call-metrics" key={snapshot.callId}>
             {controller.latency && <LatencyDiagnostics loader={controller.latency}
-              live={details.call.state === "running" || details.call.state === "admitting"} participants={snapshot.participants} />}
+              live={details.call.state === "running" || details.call.state === "admitting"} participants={snapshot.participants}
+              messages={snapshot.messages} onTranscript={messageId => {
+                setTranscriptTarget({ callId: snapshot.callId, messageId });
+                setConversationFilters(current => ({ ...current, messages: true }));
+                setTab("chat");
+              }} />}
             <Metrics snapshot={snapshot} theme={theme} />
           </div>}
           {tab === "participants" && (

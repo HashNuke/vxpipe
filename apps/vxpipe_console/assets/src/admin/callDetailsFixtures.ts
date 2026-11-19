@@ -145,6 +145,7 @@ function snapshot(
         kind: "message",
         value: {
           id: "message-1",
+          turnId: "turn-one",
           participantId: "caller",
           text: "I'd like to reschedule my delivery.",
           occurredAt: occurredAt(8),
