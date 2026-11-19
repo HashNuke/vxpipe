@@ -2,7 +2,8 @@ defmodule Vxpipe.Calls.Diagnostics.Supervisor do
   @moduledoc "Independent capacity for diagnostic persistence, outside call control and publication."
   use Supervisor
 
-  alias Vxpipe.Calls.Diagnostics.{AdmissionGate, Collector, Writer}
+  alias Vxpipe.Calls.Diagnostics.{AdmissionGate, Attachment, Collector, Writer}
+  alias Vxpipe.CallEngine.Diagnostics.{AttachmentLease, SettingsProjection, SourceSupervisor}
 
   def start_link(options) do
     Supervisor.start_link(__MODULE__, options, name: Keyword.get(options, :name, __MODULE__))
@@ -44,6 +45,32 @@ defmodule Vxpipe.Calls.Diagnostics.Supervisor do
        max_children: collectors}
     ]
 
-    Supervisor.init(children, strategy: :one_for_all)
+    Supervisor.init(children ++ source_children(options, collectors), strategy: :one_for_all)
+  end
+
+  defp source_children(options, maximum) do
+    case Keyword.get(options, :source_options) do
+      nil ->
+        []
+
+      source_options when is_list(source_options) ->
+        repository = Keyword.fetch!(options, :repository)
+        projection = Keyword.get(options, :projection, SettingsProjection)
+
+        factory_options =
+          options
+          |> Keyword.take([:writer_supervisor, :collector_supervisor, :task_supervisor])
+          |> Keyword.put(:repository, repository)
+          |> Keyword.put(:projection, projection)
+
+        source_options =
+          source_options
+          |> Keyword.put(:projection, projection)
+          |> Keyword.put(:maximum_sources, maximum)
+          |> Keyword.put(:attachment_gate, AttachmentLease.gate(maximum))
+          |> Keyword.put(:collector, fn context -> Attachment.start(context, factory_options) end)
+
+        [Supervisor.child_spec({SourceSupervisor, source_options}, restart: :permanent)]
+    end
   end
 end

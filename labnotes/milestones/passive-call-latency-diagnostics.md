@@ -1010,3 +1010,19 @@ Engine diagnostics149/0 pass; Astra xhigh review is clean with20 independent cas
 including late results and gate debt across failure. Static root gates and Lean
 pass. The full root suite cited above predates this coordinator change. Calls parent
 and Application wiring, configured-call acceptance and combined C gates remain open.
+
+## Checkpoint C production diagnostics composition — 2026-11-19
+
+Database-backed hosts now install the Calls diagnostics parent through the normal
+Application tree. It supplies the real immutable-run collector factory, repository
+and persistence pools to the Engine source subtree. One parent-owned startup gate
+survives child restarts; replacing the whole parent replaces its gate and all old
+destinations together. Off/unknown settings start no collectors or model work.
+There is no new configuration switch that can override the durable setting.
+
+Parent/Application and runtime configuration regressions were red before wiring.
+Calls diagnostics46/0 and Console runtime12/0 pass. Astra xhigh runtime-inclusive
+review is clean, including independent restart/factory/capacity probes. Static root
+gates pass and Engine Lean verification remains current. A new frozen full root suite is
+running for this composition. Actual configured Scribe call persistence, full
+on/off/transport acceptance and combined C checklist items remain open.

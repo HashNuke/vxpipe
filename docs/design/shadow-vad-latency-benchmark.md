@@ -227,7 +227,8 @@ permit until the whole diagnostics pool is restarted. Releasing that permit on
 timeout would allow a suspended supervisor's mailbox to grow without bound.
 This conservative degradation affects diagnostics only and must be exposed as
 unavailable/incomplete coverage; it must never change call behavior or claim a
-complete latency sample. The pool is not yet connected to runtime capture.
+complete latency sample. The production composition below connects this pool to
+runtime capture; configured-call persistence acceptance remains open.
 
 ## Reproducible offline timing report
 
@@ -444,7 +445,7 @@ relative to the run origin. Normalized mapping history is bounded (256 frames by
 default); expired or unobserved positions stay unavailable. Uncertainty includes
 receipt-clock jitter plus a conservative source/output sample-period allowance.
 This is server receipt mapping, not microphone capture time. Automatic source
-worker composition and end-to-end transport acceptance remain pending.
+worker composition is installed; end-to-end transport acceptance remains pending.
 
 ### Benchmark-only source worker
 
@@ -467,13 +468,14 @@ process death still fences offers and frees queued payloads without relying on
 `terminate/2`; an interrupted producer can conservatively leave old-handle counters
 occupied, so counters are not a guaranteed durable loss ledger.
 
-`SourceSupervisor` is a separate temporary diagnostic subtree, with16 sources and
-one model task by default (maximum32 sources/eight tasks). Its pinned model loads
-lazily in its own runtime, not through operational model-cache initialization.
-Lifecycle startup is coordinator-only and must not be invoked on the voice path.
-This composition has fixture acceptance but is not automatically attached to
-configured calls yet. Reused-inference consumption, collector correlation,
-production attachment and the full operational/benchmark on/off matrix remain open.
+`SourceSupervisor` is a separate diagnostic subtree, with16 sources and one model
+task by default (maximum32 sources/eight tasks). Its standalone child specification
+is temporary; the Calls diagnostics parent installs it as a permanent child.
+Its pinned model loads lazily in its own runtime, not through operational model-cache
+initialization. Lifecycle startup is coordinator-owned and never runs on the voice
+path. Production composition is installed only for database-backed hosts; the durable
+setting remains the sole capture authority. Configured-call persistence acceptance
+and the full operational/benchmark on/off matrix remain open.
 
 
 ## Automatic source attachment runtime
@@ -482,9 +484,10 @@ The optional isolated source pool owns a node-local coordinator alongside its
 workers and inference runtime, under the same one-for-all supervision boundary.
 A coordinator crash retires that pool before a replacement starts. Workers also
 monitor their coordinator; none of these processes owns the operational speech
-allocation. The application must supply a collector factory before installing this
-coordinator. Production wiring waits for the live collector and configured-call
-acceptance; merely adding these modules does not enable capture.
+allocation. The Calls diagnostics parent supplies the live collector factory and
+shares its lifecycle with writer/collector/task destinations. Application startup
+installs this parent on database-backed hosts; unavailable or off settings prevent
+capture and model work. Configured-call acceptance is still required.
 
 The coordinator walks room registry identities and asks one room for a bounded
 page of current human STT sources. It retains only room/connection cursors, at most
@@ -509,8 +512,8 @@ identity snapshot, whose allocation scales with current registered rooms; the
 load gate must measure this cost rather than claiming constant-memory enumeration.
 No list of pending room work is retained.
 
-Collector creation, source-worker startup and capability attachment run only in
-the coordinator, never in a room/audio callback. The injected collector factory
+Collector creation, source-worker startup and capability attachment run in one
+coordinator-owned local helper, never in a room/audio callback. The injected collector factory
 receives bounded call/source identity, run/clock origin, mode and coordinator PID
 and returns a bounded CaptureHandoff owned by the STT capability. It must start
 under its bounded collector supervisor, monitor the coordinator and apply its own
@@ -562,9 +565,9 @@ coverage. A failed terminal write leaves the prior running record to become
 unconfirmed, rather than claiming that failure counters were durably delivered.
 Writers monitor collector ownership, so abrupt collector loss starts finite drain.
 
-This supplies a directly testable durable collector, not production activation.
-Production application wiring, per-turn finalization policy and configured Scribe
-acceptance remain required.
+The production application now wires this collector through the source attachment
+factory. Per-turn finalization policy and configured Scribe acceptance remain
+required; component persistence tests do not establish those acceptance gates.
 
 Finalization uses explicit writer acknowledgments, not a transient zero-pending
 counter snapshot. The observed-turn count includes storage-admission failures.
@@ -599,5 +602,43 @@ stale source proofs cannot establish an active attachment. This gate does not es
 Calls profiles can retain a closed typed provider_acknowledgement map, distinct
 from observer thresholds and inference provenance. Persistence round-trips these
 settings as immutable run identity. Legacy runs without acknowledgement remain
-readable and do not acquire invented provider evidence. Production collector
-construction and configured-call persistence acceptance remain required.
+readable and do not acquire invented provider evidence. The Calls attachment factory
+constructs these immutable runs; configured-call persistence acceptance remains
+required.
+
+
+## Production composition and startup deadlines
+
+Database-backed runtime configuration connects Calls.Application to the diagnostics
+parent with the Persistence LatencyStore adapter. Engine still owns no database
+dependency. The parent creates the source coordinator, its lazy inference pool and
+its real collector factory alongside the existing bounded persistence destinations.
+Calls source context includes the real coordinator PID, opaque persisted source ID,
+monotonic origin and UTC anchor; observer metadata comes from the pinned algorithm
+and model rather than duplicated factory constants.
+
+One attachment attempt has an absolute500ms startup lease. The coordinator remains
+responsive while its local helper waits, cancels before killing timed-out work, and
+adopts only current results before the deadline. Collector and SourceWorker
+initialization use the remaining budget. Provisional consumers retire on expiry;
+adopted consumers instead follow capture authority and coordinator lifetime.
+Only the coordinator owns active worker monitors. Normal shutdown explicitly
+retires its helper, and late helper results cannot establish an active source.
+
+The parent owns a startup admission gate with collector capacity (default16,
+maximum32). All nested supervisor operations retain their reservation until known
+completion. A killed caller can leave an unresolved queued request, so timeout alone
+does not release its capacity. Source/destination child restarts preserve the gate;
+replacing the entire parent removes all old destinations and creates a fresh gate.
+This deliberately trades diagnostic availability after ambiguous failures for a
+bounded supervisor queue. Operational calls continue. A new factory call requires
+an explicit lease, preventing an unclaimed collector from running indefinitely.
+
+Rejected alternatives were blocking the coordinator directly, placing admission
+behind another potentially suspended Task.Supervisor, or releasing capacity on a
+caller timeout without accounting for nested writer startup. Retained regressions
+cover those observed stalls, late adoption, shutdown, stale handoffs, discarded
+capture charges and cancellation while obtaining a writer handoff. Clean Astra
+reviews and focused tests verify these component contracts; they do not establish
+configured Scribe transport accuracy, end-to-end persistence or the full on/off
+acceptance matrix.

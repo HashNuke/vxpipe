@@ -50,6 +50,40 @@ defmodule Vxpipe.Console.DatabaseRuntimeConfigurationTest do
     %{runtime: runtime}
   end
 
+  test "durable hosts configure the passive diagnostics pipeline without a separate enable switch",
+       %{runtime: runtime} do
+    System.put_env("VXPIPE_DB_URL", "postgres://localhost/diagnostics_configuration")
+
+    for environment <- [:dev, :prod] do
+      configure_host(environment)
+
+      settings =
+        Config.Reader.read!(runtime, env: environment)
+        |> Keyword.fetch!(:vxpipe_calls)
+        |> Keyword.fetch!(Vxpipe.Calls.Application)
+        |> Keyword.fetch!(:diagnostics)
+
+      assert Keyword.fetch!(settings, :repository) ==
+               {Vxpipe.Persistence.LatencyStore, Vxpipe.Persistence.Repo}
+
+      assert settings |> Keyword.fetch!(:source_options) |> Keyword.fetch!(:coordinator) ==
+               Vxpipe.CallEngine.Diagnostics.SourceCoordinator
+
+      refute Keyword.has_key?(settings, :enabled)
+    end
+
+    System.delete_env("VXPIPE_DB_URL")
+
+    for environment <- [:prod, :test] do
+      settings =
+        Config.Reader.read!(runtime, env: environment)
+        |> Keyword.get(:vxpipe_calls, [])
+        |> Keyword.get(Vxpipe.Calls.Application, [])
+
+      refute Keyword.has_key?(settings, :diagnostics)
+    end
+  end
+
   test "operator HTTP authentication is enabled with hosted persistence in development and production",
        %{runtime: runtime} do
     System.put_env("VXPIPE_DB_URL", "postgres://localhost/operator_auth_configuration")

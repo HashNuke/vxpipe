@@ -148,6 +148,19 @@ if database_enabled? do
   config :vxpipe_call_engine, Vxpipe.CallEngine.Application,
     diagnostics_settings_loader: &Vxpipe.Persistence.DiagnosticsSettingsStore.snapshot/0
 
+  config :vxpipe_calls, Vxpipe.Calls.Application,
+    diagnostics: [
+      repository: {Vxpipe.Persistence.LatencyStore, Vxpipe.Persistence.Repo},
+      source_options: [
+        name: Vxpipe.CallEngine.Diagnostics.SourceSupervisor,
+        workers: Vxpipe.CallEngine.Diagnostics.SourceWorkerSupervisor,
+        inference: Vxpipe.CallEngine.Diagnostics.InferenceSupervisor,
+        tasks: Vxpipe.CallEngine.Diagnostics.InferenceTaskSupervisor,
+        runtime: Vxpipe.CallEngine.Diagnostics.InferenceRuntime,
+        coordinator: Vxpipe.CallEngine.Diagnostics.SourceCoordinator
+      ]
+    ]
+
   config :vxpipe_identity,
     oauth_store: Vxpipe.Persistence.OAuth.Store,
     oauth_browser_store: Vxpipe.Persistence.OAuth.Browser
