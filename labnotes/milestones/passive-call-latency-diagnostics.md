@@ -1,8 +1,8 @@
 # Passive call latency diagnostics and readable timelines
 
-Status: records/replay, room-service cutover and STT eligibility implemented; continuity/UI acceptance pending, 2026-11-19.
+Status: records/replay, room-service cutover and STT eligibility implemented; lifecycle/UI acceptance pending, 2026-11-19.
 A, B and existing D functionality are implemented. C now uses participant-owned
-observation managed by a room service; broader lifecycle and continuity acceptance remain.
+observation managed by a room service; broader lifecycle acceptance remains.
 The new D segment/participant extensions, remaining C acceptance, E and F remain incomplete.
 The index owns implementation order. Earlier checkpoint notes describe the old path.
 
@@ -590,7 +590,7 @@ Migration tasks (revised architecture; ordered as in the migration steps above):
 - [x] Decouple diagnostic room-completion instrumentation from selected text/STS
   agent gates; prove durable canonical input timing with nullable response stages
   for no-agent and mixed-room STT without changing operational dispatch.
-- [ ] Preserve acoustic observation across agent-only transfers with input
+- [x] Preserve acoustic observation across agent-only transfers with input
   continuing during the transfer; isolate real source, mode and settings
   transitions and fence late results without duplicate inference.
 
@@ -2001,3 +2001,32 @@ open. A separate [native STS tool-transfer issue](../issues/external-sts-tool-tr
 was reproduced using the exact documented synthetic fixture; policy-routing
 acceptance does not claim that operational transfer succeeds. No Telnyx changes,
 live provider tests, full umbrella run or deployment occurred.
+
+
+## Migration step 5 — continuous input during agent transfer, 2026-11-19
+
+The configured transfer acceptance now covers both operational Silero reuse and
+fallback. Existing synthetic TTS startup control holds destination preparation
+while the human remains dispatch-held. A processed pre-transfer frame anchors the
+observer; three distinct frames during preparation and one after completion retain
+the same worker, capture, timeline/source epoch, acoustic epoch and contiguous
+sample cursor. Exact Scribe bytes and expected inference are checked. The original
+run contains both canonical inputs; tool-only response timing remains absent and
+the destination's delayed playback acknowledgment retains its exact response IDs.
+
+Review reproduced a false positive: resetting fallback state at transfer entry
+still passed the initial held-phase-only baseline. The pre-transfer anchor now
+rejects that mutation at the epoch comparison. Polling tolerates an uninitialized
+timeline until the worker consumes audio. Actual room completion and diagnostic
+drain precede duplicate-byte/inference/commit refutes. An existing drain-helper
+shutdown race was reproduced and now retries only normal disappearance/shutdown;
+it never treats those exits alone as proof of successful drain.
+
+Final configured selection passes 22/22 and root static gates pass. Independent
+scoped Astra review is clean, with both normal modes passing and the entry-reset
+mutation rejected. No runtime behavior changed in this checkpoint; prior Lean
+verification remains applicable. See [checkpoint labnotes](../20261119-1820-transfer-vad-continuity.md).
+Together with the prior source/mode/settings boundary evidence, this closes the
+specific transfer-continuity task. Broader room-service lifecycle/stale-work,
+fresh-root admission, effective settings, UI and E/F acceptance remain open.
+No live provider test, Telnyx change, full umbrella suite or deployment occurred.

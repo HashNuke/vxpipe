@@ -337,3 +337,20 @@ Focused regressions exercise both closure orders, expiry before explicit close,
 queued evidence discard and input closure while a worker is suspended. Configured
 external/hybrid routing cases exercise a real fresh STT generation and durable run
 boundary with local Silero enabled and disabled.
+
+
+## Continuous observation through agent transfer
+
+Configured local-Silero reuse and fallback cases hold destination TTS preparation
+while the human remains dispatch-held. A processed marker before transfer anchors
+the observer epoch and timeline. Three distinct accepted PCM frames during the
+pending transfer and one after completion continue the same sample sequence,
+worker, capture and run. The operational and diagnostic paths each retain their
+expected inference ownership; provider bytes and commits remain unchanged.
+
+The destination's delayed playback acknowledgment attaches audio timing to its
+canonical input and output command in the original participant-owned run. The
+source tool-only turn stays response-null. Room completion and diagnostic drain
+precede checks for duplicate provider bytes, inference and commits. This proves
+agent-only transfer continuity for a surviving STT allocation; actual STT/source
+replacement still retires the run under the separate boundary contract above.

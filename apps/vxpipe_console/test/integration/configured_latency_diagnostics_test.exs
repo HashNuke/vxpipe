@@ -98,7 +98,12 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
             Vxpipe.Providers.Deepgram.TTSSession => [
               enabled: true,
               wire_module: CallEngine.TestTextToSpeechTransport,
-              wire_options: [observer: parent, ready_on_start: true],
+              wire_options: [
+                observer: parent,
+                ready_on_start: true,
+                start_counter: :atomics.new(1, signed: false),
+                block_after_starts: 1
+              ],
               maximum_requests: 2
             ]
           }
@@ -1113,138 +1118,236 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
     end
   end
 
-  @tag matrix: true, routing: true
-  test "configured agent transfer preserves input identity through text and acknowledged audio",
-       c do
-    {call, connection, attachment, wire, identity} = call(c.options, false, :transfer)
-    assert_receive {:test_tts_transport_started, source_voice, _}, 5_000
-    epoch = make_ref()
-    sequence = discover_with_audio(attachment, identity, epoch, wire)
-    await(fn -> RoomService.status(RoomService.address(identity)).active_sources == 1 end)
-    original_service = GenServer.whereis(RoomService.address(identity))
+  for vad <- [false, true] do
+    @tag matrix: true, routing: true, transfer_continuity: true, vad: vad
+    test "configured agent transfer preserves continuous input and acknowledged audio, Silero #{vad}",
+         c do
+      {call, connection, attachment, wire, identity} = call(c.options, c.vad, :transfer)
+      assert_receive {:test_tts_transport_started, source_voice, _}, 5_000
+      epoch = make_ref()
+      sequence = discover_with_audio(attachment, identity, epoch, wire)
+      await(fn -> RoomService.status(RoomService.address(identity)).active_sources == 1 end)
+      original_service = GenServer.whereis(RoomService.address(identity))
 
-    [{_, original_worker, _, _}] =
-      DynamicSupervisor.which_children(RoomSupervisor.address(identity, :workers))
+      [{_, original_worker, _, _}] =
+        DynamicSupervisor.which_children(RoomSupervisor.address(identity, :workers))
 
-    original_input = Vxpipe.CallEngine.Diagnostics.SourceWorker.handoff(original_worker)
+      original_input = Vxpipe.CallEngine.Diagnostics.SourceWorker.handoff(original_worker)
 
-    original_run =
-      await(fn ->
-        case LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil) do
-          {:ok, %{entries: [%{run: run}]}} -> run
-          _ -> nil
+      original_run =
+        await(fn ->
+          case LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil) do
+            {:ok, %{entries: [%{run: run}]}} -> run
+            _ -> nil
+          end
+        end)
+
+      emit_scribe_turn(wire, "Please transfer me.")
+      assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = first_input}, 2_000
+      assert_receive {:test_agent_runtime_stream, source_model, _}, 2_000
+
+      mode = if c.vad, do: :operational, else: :benchmark
+      before_pcm = :binary.copy(<<19, 0>>, 512)
+      pace(32)
+      send_audio(attachment, identity, epoch, sequence, sequence * 512, before_pcm)
+      assert_receive {:scribe_audio, ^wire, ^before_pcm}, 2_000
+      assert_receive {:matrix_inference, ^mode, before_samples, ^before_pcm}, 2_000
+
+      before_transfer =
+        await(fn ->
+          state = :sys.get_state(original_worker)
+
+          if state.timeline.clock.last_input != nil and
+               state.timeline.clock.last_input.sample_timestamp == sequence * 512 and
+               state.boundary.samples == before_samples + 512,
+             do: state
+        end)
+
+      sequence = sequence + 1
+
+      {:ok, transfer} =
+        Vxpipe.AgentRuntime.ToolCall.new(
+          id: "timing-transfer",
+          name: "transfer",
+          arguments: %{"destination" => "specialist"}
+        )
+
+      {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: "", tool_calls: [transfer])
+      send(source_model, {:test_agent_runtime_response, {:ok, response}})
+
+      assert_receive {:test_tts_transport_start_blocked, preparing_voice, _}, 5_000
+      preparing = :sys.get_state(attachment.room_authority)
+      assert preparing.pending_participant_transfer != nil
+      assert MapSet.member?(preparing.held_participant_ids, identity.participant_id)
+      before_audio = :sys.get_state(original_worker)
+      assert before_audio.epoch == before_transfer.epoch
+      assert before_audio.boundary.samples == before_transfer.boundary.samples
+      assert before_audio.timeline == before_transfer.timeline
+
+      during_samples =
+        for index <- 0..2 do
+          pace(32)
+          pcm = :binary.copy(<<20 + index, 0>>, 512)
+          send_audio(attachment, identity, epoch, sequence + index, (sequence + index) * 512, pcm)
+          assert_receive {:scribe_audio, ^wire, ^pcm}, 2_000
+          assert_receive {:matrix_inference, ^mode, samples, ^pcm}, 2_000
+
+          observed =
+            await(fn ->
+              state = :sys.get_state(original_worker)
+
+              if state.timeline.clock.last_input != nil and
+                   state.timeline.clock.last_input.sample_timestamp == (sequence + index) * 512 and
+                   state.boundary.samples == samples + 512,
+                 do: state
+            end)
+
+          assert observed.epoch == before_audio.epoch
+          assert observed.timeline.source_epoch == before_audio.timeline.source_epoch
+          assert CallEngine.Diagnostics.CaptureHandoff.current?(original_input)
+          assert :sys.get_state(attachment.room_authority).pending_participant_transfer != nil
+          samples
         end
+
+      [first_sample, second_sample, third_sample] = during_samples
+      assert first_sample == before_samples + 512
+      assert second_sample == first_sample + 512
+      assert third_sample == second_sample + 512
+      assert RoomService.status(RoomService.address(identity)).active_sources == 1
+
+      assert [{_, ^original_worker, _, _}] =
+               DynamicSupervisor.which_children(RoomSupervisor.address(identity, :workers))
+
+      send(preparing_voice, :release_test_tts_transport_start)
+
+      assert_receive {:vxpipe_event,
+                      %CallEngine.Event.ToolCallCompleted{tool_call_id: "timing-transfer"}},
+                     5_000
+
+      assert_receive {:test_tts_transport_started, destination_voice, _}, 5_000
+      refute source_voice == destination_voice
+      # Routing changes the agent, while the caller retains its STT session.
+      assert SpeechConnection.attachment(connection).media_ingress == attachment.media_ingress
+      refute_received {:scribe_started, _}
+      # Agent routing preserves the accepted input and its existing acoustic run.
+      assert GenServer.whereis(RoomService.address(identity)) == original_service
+      _ = RoomService.scan(RoomService.address(identity))
+
+      assert {:ok, %{entries: [%{run: after_transfer}]}} =
+               LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+
+      assert after_transfer.id == original_run.id
+      assert after_transfer.closed_at == nil
+
+      assert Vxpipe.CallEngine.Diagnostics.CaptureHandoff.current?(original_input)
+
+      pcm = :binary.copy(<<7, 0>>, 512)
+      send_audio(attachment, identity, epoch, sequence + 3, (sequence + 3) * 512, pcm)
+      assert_receive {:scribe_audio, ^wire, ^pcm}, 2_000
+      assert_receive {:matrix_inference, ^mode, samples, ^pcm}, 2_000
+      assert samples == third_sample + 512
+
+      await(fn ->
+        state = :sys.get_state(original_worker)
+        assert state.epoch == before_audio.epoch
+
+        state.timeline.clock.last_input != nil and
+          state.timeline.clock.last_input.sample_timestamp == (sequence + 3) * 512 and
+          state.boundary.samples == samples + 512
       end)
 
-    emit_scribe_turn(wire, "Please transfer me.")
-    assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = first_input}, 2_000
-    assert_receive {:test_agent_runtime_stream, source_model, _}, 2_000
+      refute_received {:scribe_observing, ^wire, _}
+      emit_scribe_turn(wire, "Please answer now.")
+      assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = second_input}, 2_000
+      refute second_input.correlation_id == first_input.correlation_id
+      {destination_model, request} = specialist_request()
+      assert hd(request.messages).content =~ "Handle specialist requests."
 
-    {:ok, transfer} =
-      Vxpipe.AgentRuntime.ToolCall.new(
-        id: "timing-transfer",
-        name: "transfer",
-        arguments: %{"destination" => "specialist"}
+      text =
+        JSON.encode!(%{
+          type: "participant_message",
+          participant_id: "agent",
+          agent_mode: "speaker",
+          message: "The specialist answers."
+        })
+
+      {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: text)
+      send(destination_model, {:test_agent_runtime_response, {:ok, response}})
+      assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
+      assert output.correlation_id == second_input.correlation_id
+      assert output.text == "The specialist answers."
+      assert_receive {:test_tts_control, ^destination_voice, _}, 2_000
+
+      CallEngine.TestTextToSpeechTransport.deliver_control(
+        destination_voice,
+        JSON.encode!(%{type: "SpeechStarted", speech_id: "diagnostic-spoken"})
       )
 
-    {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: "", tool_calls: [transfer])
-    send(source_model, {:test_agent_runtime_response, {:ok, response}})
+      CallEngine.TestTextToSpeechTransport.deliver_audio(destination_voice, <<1, 0, 2, 0>>)
+      correlation = second_input.correlation_id
+      assert_receive {:test_audio_output, sink, %{correlation_id: ^correlation} = audio}, 2_000
+      assert audio.command_id == output.command_id
 
-    assert_receive {:vxpipe_event,
-                    %CallEngine.Event.ToolCallCompleted{tool_call_id: "timing-transfer"}},
-                   5_000
+      text_only =
+        await(fn ->
+          case diagnostic_turn(call, second_input.correlation_id) do
+            %{landmarks_us: %{first_response_text: text}} = row when is_integer(text) -> row
+            _ -> nil
+          end
+        end)
 
-    assert_receive {:test_tts_transport_started, destination_voice, _}, 5_000
-    refute source_voice == destination_voice
-    # Routing changes the agent, while the caller retains its STT session.
-    assert SpeechConnection.attachment(connection).media_ingress == attachment.media_ingress
-    refute_received {:scribe_started, _}
-    # Agent routing preserves the accepted input and its existing acoustic run.
-    assert GenServer.whereis(RoomService.address(identity)) == original_service
-    _ = RoomService.scan(RoomService.address(identity))
+      assert is_integer(text_only.landmarks_us.first_response_text)
+      refute Map.has_key?(text_only.landmarks_us, :first_audio_started)
+      :ok = CallEngine.TestAudioOutputSink.playback_started(sink)
+      assert_receive {:vxpipe_event, %CallEngine.Event.AgentSpeechStarted{} = started}, 2_000
+      assert started.correlation_id == second_input.correlation_id
+      assert started.command_id == output.command_id
 
-    assert {:ok, %{entries: [%{run: after_transfer}]}} =
-             LatencyStore.list_runs(Repo, call.tenant_key, call.id, 50, nil)
+      row =
+        await(fn ->
+          case diagnostic_turn(call, second_input.correlation_id) do
+            %{landmarks_us: %{first_audio_started: started}} = row when is_integer(started) -> row
+            _ -> nil
+          end
+        end)
 
-    assert after_transfer.id == original_run.id
-    assert after_transfer.closed_at == nil
+      assert row.run_id == original_run.id
+      assert row.response_turn_id == output.command_id
+      assert is_integer(row.landmarks_us.first_response_text)
+      assert row.landmarks_us.first_audio_started >= row.landmarks_us.first_response_text
 
-    assert Vxpipe.CallEngine.Diagnostics.CaptureHandoff.current?(original_input)
+      CallEngine.TestTextToSpeechTransport.deliver_control(
+        destination_voice,
+        JSON.encode!(%{type: "SpeechMetadata", speech_id: "diagnostic-spoken"})
+      )
 
-    send_audio(attachment, identity, epoch, sequence, sequence * 512, :binary.copy(<<7, 0>>, 512))
-    assert_receive {:scribe_audio, ^wire, _}, 2_000
-    refute_received {:scribe_observing, ^wire, _}
-    emit_scribe_turn(wire, "Please answer now.")
-    assert_receive {:vxpipe_event, %ParticipantTranscription{final: true} = second_input}, 2_000
-    refute second_input.correlation_id == first_input.correlation_id
-    {destination_model, request} = specialist_request()
-    assert hd(request.messages).content =~ "Handle specialist requests."
+      assert_receive {:test_audio_output_finish, ^sink, ^correlation}, 2_000
+      :ok = CallEngine.TestAudioOutputSink.playback_completed(sink)
 
-    text =
-      JSON.encode!(%{
-        type: "participant_message",
-        participant_id: "agent",
-        agent_mode: "speaker",
-        message: "The specialist answers."
-      })
+      assert {:ok, completion} =
+               CallEngine.monitor_room_completion(
+                 identity.tenant_id,
+                 identity.room_id,
+                 identity.incarnation_id
+               )
 
-    {:ok, response} = Vxpipe.AgentRuntime.ModelResponse.new(text: text)
-    send(destination_model, {:test_agent_runtime_response, {:ok, response}})
-    assert_receive {:vxpipe_event, %CallEngine.Event.TextOutput{} = output}, 2_000
-    assert output.correlation_id == second_input.correlation_id
-    assert output.text == "The specialist answers."
-    assert_receive {:test_tts_control, ^destination_voice, _}, 2_000
+      GenServer.stop(attachment.room_authority, :shutdown)
+      assert_receive {:DOWN, ^completion, :process, _, _}, 2_000
+      await_diagnostic_drain(identity)
 
-    CallEngine.TestTextToSpeechTransport.deliver_control(
-      destination_voice,
-      JSON.encode!(%{type: "SpeechStarted", speech_id: "diagnostic-spoken"})
-    )
+      for marker <- [7, 19, 20, 21, 22] do
+        pcm = :binary.copy(<<marker, 0>>, 512)
+        refute_received {:scribe_audio, _, ^pcm}
+        refute_received {:matrix_inference, _, _, ^pcm}
+      end
 
-    CallEngine.TestTextToSpeechTransport.deliver_audio(destination_voice, <<1, 0, 2, 0>>)
-    correlation = second_input.correlation_id
-    assert_receive {:test_audio_output, sink, %{correlation_id: ^correlation} = audio}, 2_000
-    assert audio.command_id == output.command_id
-
-    text_only =
-      await(fn ->
-        case diagnostic_turn(call, second_input.correlation_id) do
-          %{landmarks_us: %{first_response_text: text}} = row when is_integer(text) -> row
-          _ -> nil
-        end
-      end)
-
-    assert is_integer(text_only.landmarks_us.first_response_text)
-    refute Map.has_key?(text_only.landmarks_us, :first_audio_started)
-    :ok = CallEngine.TestAudioOutputSink.playback_started(sink)
-    assert_receive {:vxpipe_event, %CallEngine.Event.AgentSpeechStarted{} = started}, 2_000
-    assert started.correlation_id == second_input.correlation_id
-    assert started.command_id == output.command_id
-
-    row =
-      await(fn ->
-        case diagnostic_turn(call, second_input.correlation_id) do
-          %{landmarks_us: %{first_audio_started: started}} = row when is_integer(started) -> row
-          _ -> nil
-        end
-      end)
-
-    assert row.response_turn_id == output.command_id
-    assert is_integer(row.landmarks_us.first_response_text)
-    assert row.landmarks_us.first_audio_started >= row.landmarks_us.first_response_text
-
-    CallEngine.TestTextToSpeechTransport.deliver_control(
-      destination_voice,
-      JSON.encode!(%{type: "SpeechMetadata", speech_id: "diagnostic-spoken"})
-    )
-
-    assert_receive {:test_audio_output_finish, ^sink, ^correlation}, 2_000
-    :ok = CallEngine.TestAudioOutputSink.playback_completed(sink)
-    GenServer.stop(attachment.room_authority, :shutdown)
-    await_diagnostic_drain(identity)
-    tool_only = diagnostic_turn(call, first_input.correlation_id)
-    assert tool_only.response_turn_id == nil
-    refute Map.has_key?(tool_only.landmarks_us, :first_response_text)
-    refute Map.has_key?(tool_only.landmarks_us, :first_audio_started)
+      refute_received {:scribe_commit, _}
+      tool_only = diagnostic_turn(call, first_input.correlation_id)
+      assert tool_only.run_id == original_run.id
+      assert tool_only.response_turn_id == nil
+      refute Map.has_key?(tool_only.landmarks_us, :first_response_text)
+      refute Map.has_key?(tool_only.landmarks_us, :first_audio_started)
+    end
   end
 
   defp diagnostic_turn(call, turn_id) do
@@ -1288,7 +1391,7 @@ defmodule Vxpipe.Console.Integration.ConfiguredLatencyDiagnosticsTest do
               pid -> DynamicSupervisor.count_children(pid).active == 0
             end
           catch
-            :exit, {:noproc, _} -> false
+            :exit, {reason, _} when reason in [:noproc, :shutdown] -> false
           end
         end
       )
