@@ -255,3 +255,54 @@
   Whole Identity suite106/0; all Engine diagnostics45/0. Root format, compile
   warnings-as-errors, strict Credo and unused-lock gates pass. Milestone/index
   retain C unchecked because durable settings, UI and runtime are not wired.
+
+## Checkpoint C — durable installation setting in progress
+
+- Added a dedicated singleton table and Persistence adapter; the migration seeds
+  disabled revision zero, with constraints tying revisions to updater/time metadata.
+  URL settings remain untouched. Updater public identity is retained as attribution
+  without storing email or session credentials in the setting.
+- Reads/writes revalidate the stored enabled user, current built-in admin/superadmin
+  role, matching unrevoked/unexpired browser session under row locks. The app-domain
+  guard is repeated at this adapter boundary. A snapshot read is internal-only and
+  currently unwired; no unauthenticated route was added.
+- The new tests were first run from a scratch path in the owning Persistence child
+  against a separate local test database to avoid injecting them into the still-live
+  B umbrella run. Five tests failed for the missing adapter, then passed. Two more
+  checks pass: database-enforced audit failure rolls back the setting/revision, and
+  a missing singleton remains unavailable instead of being silently recreated.
+  Evidence: `/tmp/vxpipe-C-settings-store-{red,green,atomic}.log`. Tests will move
+  into the owning application before commit.
+- Domain validation is shared with the adapter; it strictly rejects nonboolean
+  inputs and invalid/overflow revisions. No-op saves at the current revision return
+  the same state and create no duplicate audit; stale no-ops still conflict.
+- Isolated upgrade migration succeeded. Fresh-database verification and independent
+  Astra review are in progress. No configured runtime, Console route or UI added.
+
+- Review deterministically reproduced session expiry during an authority-row lock
+  wait: the pre-query timestamp authorized a session that had expired before the
+  lock was obtained. The retained regression coordinates two database connections
+  with `pg_blocking_pids`, without sleeps, rolls back the attempted settings write
+  and cleans up its synthetic user/session. The adapter now checks expiry against
+  fresh UTC after both authority and settings locks. Eight focused tests pass.
+- B's Persistence tests were already loaded/running before the new tests moved
+  into the owning application. Final paths: `diagnostics_settings_store_test.exs`
+  and `diagnostics_settings_session_test.exs`. All C database work remains on the
+  isolated settings database; default test DB has not been changed during B.
+- Fresh migration default-off read passes (one selected test) in
+  `/tmp/vxpipe-C-settings-fresh-migration.log`. Full Persistence suite on the new
+  schema is running; final Astra re-review requested.
+
+- B umbrella run finished exit0 (`/tmp/vxpipe-B-root-final.exit`); its tmux session
+  is terminal. All app suites passed, including Engine2562, Calls424, Gateway891,
+  Persistence566 and Console585. B root evidence is complete; C changes still need
+  their own integrated acceptance.
+- Final Astra durable-settings review is clean, independent eight-test rerun green
+  (`/tmp/vxpipe-review-settings-store-final.log`). Static root checks and changed
+  Markdown local links pass. Local default test database migration starts only
+  after the B run completed. Full C Persistence suite remains in progress.
+
+- Full Persistence suite passes574tests/0failures (68excluded), using the isolated
+  settings database: `/tmp/vxpipe-C-persistence-suite.log`. Default worktree test
+  migration also completed successfully after B. Durable-settings checkpoint is
+  reviewed and ready to commit; runtime configuration and UI remain separate work.

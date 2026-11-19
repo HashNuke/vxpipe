@@ -285,3 +285,12 @@ remain visibly applying until acknowledgements or the lease bound establish that
 previous grants have expired. Native inference already executing may outlive task
 cancellation; its late result must be fenced from any new run. No claim of zero
 overhead or instantaneous native cancellation follows from the three-second lease.
+
+The durable implementation uses a dedicated `installation_diagnostics_settings`
+singleton, keeping URL settings and their authorization unchanged. Migration
+creates disabled revision zero. Positive revisions require updater public identity
+and update time; the audit event and setting commit together. Missing singleton
+rows are unavailable rather than implicitly recreated. Read/write operations lock
+the current user, role and session, and recheck expiry after settings-lock waits
+before returning data or changing the setting. The internal snapshot read is for
+the future projection only; it does not provide a public unauthenticated endpoint.

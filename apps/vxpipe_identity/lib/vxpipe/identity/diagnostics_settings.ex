@@ -8,10 +8,14 @@ defmodule Vxpipe.Identity.DiagnosticsSettings do
 
   def update(deps, actor, enabled, revision) do
     with :ok <- authorize(actor),
-         :ok <- validate_enabled(enabled),
-         :ok <- validate_revision(revision) do
+         :ok <- validate_change(enabled, revision) do
       dispatch(deps, :update, [actor, enabled, revision])
     end
+  end
+
+  @doc false
+  def validate_change(enabled, revision) do
+    with :ok <- validate_enabled(enabled), do: validate_revision(revision)
   end
 
   def authorize(%Principal{

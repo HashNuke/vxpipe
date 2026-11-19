@@ -1,8 +1,8 @@
 # Passive call latency diagnostics and readable timelines
 
 Status: implementation in progress, 2026-11-19. Checkpoint A code, focused tests,
-rendered checks, Astra xhigh review and all root gates pass. Checkpoint B now has a reviewed, durable offline replay; its current root test
-rerun is pending. C–F acceptance remains open. The index owns implementation order.
+rendered checks, Astra xhigh review and all root gates pass. Checkpoint B now has a reviewed, durable offline replay and passing root gates.
+C settings foundations are in progress; C–F acceptance remains open. The index owns implementation order.
 
 ## Runnable outcome
 
@@ -16,8 +16,9 @@ Observer or database failure never controls speech, delays admission, or ends a 
 
 User-approved scope: separate durable diagnostic records; asynchronous bounded
 writes; optional call-details presentation; hide the seven named noisy event types
-by default while retaining their diagnostic/accounting value. This milestone is
-planning only and does not authorize deployment or claim measurements already exist.
+by default while retaining their diagnostic/accounting value. Implementation is
+authorized. Deploy `vxpipe.service` only after the complete milestone passes;
+o live measurements or deployment are claimed by the offline foundation.
 
 ## Prerequisites and design sources
 
@@ -531,3 +532,31 @@ read starts. Seven tests cover expiration, stalled/reordered reads, revision
 conflicts and clock mismatch. A reviewer-proven conflict-history regression was
 fixed and retained. The projection, cross-node invalidation and audio admission
 checks remain unimplemented; no live collection can be enabled by these modules.
+
+## Checkpoint C partial durable-settings evidence — 2026-11-19
+
+A dedicated default-off singleton now persists the boolean, revision, updater
+public identity and timestamp. The adapter revalidates current stored built-in
+roles and browser sessions on reads and writes and atomically includes an audit
+event. Current-revision no-ops are idempotent; stale no-ops conflict. Failed audit
+insertion rolls back the setting and revision. Missing singleton rows fail closed.
+
+Eight focused tests pass, including a reviewer-proven session-expiry race under
+real row-lock contention. Expiry is rechecked after all locks. Fresh and upgrade
+migration paths were exercised in isolated local databases. Final review and
+full Persistence checks are in progress. Console routes, runtime projection and
+Installation UI remain unwired, so C's combined settings task remains unchecked.
+
+## Checkpoint B root completion evidence — 2026-11-19
+
+The fixed-source B umbrella run completed with exit 0. All application suites
+passed, including Engine2562, Calls424, Gateway891, Persistence566 and Console585
+tests (their tagged integration/live exclusions remain in place). Together with
+the passing format, compile, Credo and unused-lock checks, this closes B's root
+verification. The subsequent isolated C settings code has its own focused review
+and checks; this run does not establish live settings or capture acceptance.
+
+Durable settings final evidence: Astra xhigh re-review clean; full Persistence
+suite574tests/0failures (68excluded); format, compile warnings-as-errors, strict
+Credo and unused-lock checks pass. The local worktree test database migration
+completed after B's umbrella run. No runtime enable authority is wired yet.
